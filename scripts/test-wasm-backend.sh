@@ -320,6 +320,8 @@ const cases = [
     let shortStructImportCalled = false;
     let hostServicesCheck = null;
     const imports = {};
+    if (relative.endsWith("wasm-cli-memory-filesystem.wasm"))
+      imports.haxeon_runtime = {__sys_args: () => []};
     if (relative.endsWith("wasm-gc-raw-pointer.wasm"))
       imports.fixture = {inspect_raw_pointer: pointer => pointer};
     if (relative.includes("wasm-utf8-result-")) {
@@ -712,6 +714,8 @@ const cases = [
       const compiled = new WebAssembly.Module(bytes);
       const ffiBytes = relative.endsWith("wasm-cli-gc-ffi-bytes.wasm");
       const utf8Results = relative.endsWith("utf8-result-wasm-gc.wasm");
+      // This fixture exercises Bytes through the Wasm GC target's linear-memory filesystem.
+      const memoryFilesystem = relative.endsWith("wasm-gc-cli-memory-filesystem.wasm");
       const shortStruct = relative.endsWith("wasm-cli-gc-ffi-short-struct.wasm");
       const borrowedArray = relative.endsWith("wasm-cli-gc-ffi-borrowed-array.wasm");
       const nestedArray = relative.endsWith("wasm-cli-gc-ffi-nested-array.wasm");
@@ -721,11 +725,12 @@ const cases = [
       const hasMemory = WebAssembly.Module.exports(compiled).some(entry => entry.name === "memory");
       if ((!ffiBytes && !shortStruct && !valueRecords && !utf8Results && !borrowedArray && !nestedArray && !rawPointer && WebAssembly.Module.imports(compiled).length !== 0)
           || (rawPointer && WebAssembly.Module.imports(compiled).length !== 1)
-          || (!ffiBytes && !shortStruct && !valueRecords && !utf8Results && !borrowedArray && !nestedArray && hasMemory)
+          || (!ffiBytes && !shortStruct && !valueRecords && !utf8Results && !memoryFilesystem && !borrowedArray && !nestedArray && hasMemory)
           || (utf8Results && (!hasMemory || WebAssembly.Module.imports(compiled).length !== 3))
           || (borrowedArray && (WebAssembly.Module.imports(compiled).length !== 2 || !hasMemory))
           || (nestedArray && (WebAssembly.Module.imports(compiled).length !== 1 || !hasMemory))
           || (valueRecords && !hasMemory)
+          || (memoryFilesystem && !hasMemory)
           || (ffiBytes && (WebAssembly.Module.imports(compiled).length !== 26 || !hasMemory))
           || (shortStruct && (WebAssembly.Module.imports(compiled).length !== 1 || !hasMemory))
           || WebAssembly.Module.customSections(compiled, "haxeon.gc.roots").length !== 0)

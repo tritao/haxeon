@@ -45,7 +45,7 @@ class HxiParserMain {
 		expectError(rawSource, "Output parameter");
 		var parsed = parseValidated("nativekit.hxi", valid);
 		var minimumIntCompiler = new Compiler();
-		minimumIntCompiler.addSourceRoot("stdlib");
+		minimumIntCompiler.addStandardLibrarySourceRoot("stdlib");
 		minimumIntCompiler.update("MinimumInt.hx",
 			"function main():Int return -2147483648; function hexadecimal():Int return -0x80000000; function hexadecimalPositive():Int return 0x80000000; function hexadecimalAllBits():Int return 0xFFFFFFFF;");
 		var minimumIntProgram = new Parser(new Lexer(new SourceFile("MinimumInt.hx", "function main():Int return 0x80000000;")).tokenize()).parseProgram();
@@ -118,7 +118,7 @@ class HxiParserMain {
 			&& flagWidthsNatives.length == 1,
 			"flags should project as bitwise-friendly nominal types for 8/16/32/64-bit ABI storage");
 		var flagsCompiler = new Compiler();
-		flagsCompiler.addSourceRoot("stdlib");
+		flagsCompiler.addStandardLibrarySourceRoot("stdlib");
 		flagsCompiler.addFfiInterface("flag-widths.hxi", flagWidthsSource);
 		var flagsMainSource = 'import flag_widths.*; function main():Int { var combined:WordFlags = WordFlags.First | WordFlags.Second; var unknown:WordFlags = cast 8; var preserved:WordFlags = combined | unknown; var wide:WideFlags = WideFlags.first().with(WideFlags.high()); return wide.contains(WideFlags.high()) && preserved == 11 ? 42 : 0; }';
 		flagsCompiler.update("FlagsMain.hx", flagsMainSource);
@@ -192,7 +192,7 @@ class HxiParserMain {
 			'{"interface":"result_policy","typePrefix":"nk_","enumValuePrefixes":["NK_"],"resultPolicies":{"nk_result":{"successValue":"NK_OK","diagnosticFunction":"nk_last_error","errorType":"ProjectionError"}}}');
 		resultPolicyCompiler.addFfiInterface("result-policy.hxi",
 			'interface result_policy @target("x86_64-linux-gnu") @library("result_policy") { enum nk_result : i32 { NK_OK = 0; NK_ERROR = -1; } extern fn nk_last_error() -> utf8 @borrowed; extern fn nk_run(seed: u32) -> nk_result; extern fn nk_create(seed: u32, output: ptr<u32> @out) -> nk_result; }');
-		resultPolicyCompiler.addSourceRoot("stdlib");
+		resultPolicyCompiler.addStandardLibrarySourceRoot("stdlib");
 		resultPolicyCompiler.update("ProjectionError.hx",
 			'class ProjectionError { public final result:result_policy.Result; public final operation:String; public final diagnostic:Null<String>; public function new(result:result_policy.Result, operation:String, diagnostic:Null<String>) { this.result = result; this.operation = operation; this.diagnostic = diagnostic; } }');
 		var resultPolicyMain = 'import result_policy; function main():Int { result_policy.nk_run_checked(1); return result_policy.nk_create_checked(1); }';
@@ -250,7 +250,7 @@ class HxiParserMain {
 			&& layoutNatives[0].name == "nativekit.ffi.style.lib_check_value",
 			"projection profiles should place generated declarations into configured package modules");
 		var layoutCompiler = new Compiler();
-		layoutCompiler.addSourceRoot("stdlib");
+		layoutCompiler.addStandardLibrarySourceRoot("stdlib");
 		layoutCompiler.addFfiProjection("layout.hxmap",
 			'{"interface":"style","package":"nativekit.ffi","typePrefix":"lib_","fieldCase":"camel","modules":{"types":"Types","constants":"Constants"}}');
 		layoutCompiler.addFfiInterface("style.hxi", HxiWriter.write(styleModel));
@@ -351,7 +351,7 @@ class HxiParserMain {
 		forkedProjectionCompiler.addFfiProjection("renamed.hxmap", '{"interface":"renamed","functionNames":{"check":"validate"}}');
 		forkedProjectionCompiler.addFfiInterface("renamed.hxi",
 			'interface renamed @target("x86_64-linux-gnu") @library("renamed") { extern fn check() -> i32; }');
-		forkedProjectionCompiler.addSourceRoot("stdlib");
+		forkedProjectionCompiler.addStandardLibrarySourceRoot("stdlib");
 		var forkedProjectionMain = "import renamed; function main():Int return renamed.validate();";
 		forkedProjectionCompiler.update("ProfileForkMain.hx", forkedProjectionMain);
 		forkedProjectionCompiler.analyze("ProfileForkMain");
@@ -664,7 +664,7 @@ class HxiParserMain {
 			&& createResourceNative.signature == ">6",
 			"value-handle ownership should not alter the raw 32-bit C ABI result");
 		var ownedHandleCompiler = new Compiler();
-		ownedHandleCompiler.addSourceRoot("stdlib");
+		ownedHandleCompiler.addStandardLibrarySourceRoot("stdlib");
 		ownedHandleCompiler.addFfiInterface("owned_values.hxi",
 			'interface owned_values @target("x86_64-linux-gnu") @library("owned_values") { handle resource : u32 @destroy("resource_destroy"); extern fn create_resource() -> resource @owned; extern fn lookup_resource() -> resource; extern fn create_resource_out(value: ptr<resource> @out @owned) -> i32; extern fn destroy_resource(value: resource) -> void @symbol("resource_destroy"); extern fn use_resource(value: resource) -> i32; }');
 		ownedHandleCompiler.update("OwnedValueHandleMain.hx",
@@ -726,14 +726,14 @@ class HxiParserMain {
 			&& abiBooleanSource.indexOf("getI32(this, 4) != 0") >= 0,
 			"32-bit ABI booleans should project as Bool and versioned struct_size fields should initialize from their HXI layout");
 		var abiBooleanCompiler = new Compiler();
-		abiBooleanCompiler.addSourceRoot("stdlib");
+		abiBooleanCompiler.addStandardLibrarySourceRoot("stdlib");
 		abiBooleanCompiler.addFfiInterface("abi_bool.hxi",
 			'interface abi_bool @target("x86_64-linux-gnu") @library("abi_bool") { type nk_bool = bool32; struct options @layout(8, 4) { struct_size: u32 @offset(0) @struct_size; enabled: nk_bool @offset(4); } extern fn get_enabled() -> nk_bool; extern fn set_enabled(value: nk_bool) -> i32; }');
 		abiBooleanCompiler.update("AbiBoolMain.hx",
 			"import abi_bool; function main():Int { var value:options = cast haxe.io.Bytes.alloc(8); value.set_enabled(true); return value.get_enabled() ? 1 : 0; }");
 		abiBooleanCompiler.compile("AbiBoolMain");
 		var opaqueCompiler = new Compiler();
-		opaqueCompiler.addSourceRoot("stdlib");
+		opaqueCompiler.addStandardLibrarySourceRoot("stdlib");
 		opaqueCompiler.addFfiInterface("opaque_handles.hxi",
 			'interface opaque_handles @target("x86_64-linux-gnu") @library("opaque_handles") { opaque Context; opaque Window; type ContextAlias = Context; extern fn create_context() -> ptr<Context> @borrowed; extern fn maybe_context(value: i32) -> nullable<ptr<Context>> @borrowed; extern fn create_owned_context() -> ptr<Context> @owned("destroy_context"); extern fn maybe_create_owned_context() -> nullable<ptr<Context>> @owned("destroy_context"); extern fn create_owned_out(result: ptr<nullable<ptr<Context>>> @out @owned("destroy_context")) -> void; extern fn create_borrowed_out(result: ptr<nullable<ptr<Context>>> @out @borrowed) -> void; extern fn create_owned_status(result: ptr<nullable<ptr<Context>>> @out @owned("destroy_context")) -> i32; extern fn destroy_context(value: ptr<void>) -> void @symbol("destroy_context"); extern fn use_context(value: ptr<ContextAlias>) -> void; extern fn use_window(value: ptr<Window>) -> void; extern fn create_window() -> ptr<Window> @borrowed; }');
 		opaqueCompiler.update("OpaqueMain.hx",

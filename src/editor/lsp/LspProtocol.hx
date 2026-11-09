@@ -550,9 +550,9 @@ class LspProtocol {
 				open = documents.forPath(diskPath);
 			if (published == fingerprint)
 				continue;
-			// A client holds no diagnostics for a file it was never sent any for: a clean module the
-			// editor has not opened (a runtime module the program loads, say) needs no publication.
-			if (published == null && state.diagnostics.length == 0 && open == null)
+			// A client needs diagnostics for open documents and workspace files. Clean unopened modules
+			// that have no previous publication need no empty notification.
+			if (open == null && (state.diagnostics.length == 0 || !project.hasDiskSource(diskPath)))
 				continue;
 			var params:Dynamic = {
 				uri: uri,

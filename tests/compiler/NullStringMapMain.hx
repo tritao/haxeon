@@ -10,7 +10,7 @@ class NullStringMapMain {
   Sys.println("PASS: String map null keys interpreter");
   var exports=["NullStringMapCensus.prepare","NullStringMapCensus.perform"];
   for(target in ["hl","wasm32","wasm-gc"]) for(inlining in [false,true]) {
-   var c=new Compiler(null,compiler.runtime.CompilerIntrinsics.configuration()); c.addSourceRoot("stdlib"); c.setExportedFunctions(exports);
+   var c=new Compiler(null,compiler.runtime.CompilerIntrinsics.configuration()); c.addStandardLibrarySourceRoot("stdlib"); c.setExportedFunctions(exports);
    c.configure("null-map-"+target+inlining,"null-map",CompilerDriver.targetDefines(target).concat(["haxeon-inline="+(inlining?1:0)]));
    var input=source;
    if(target=="hl") input+='function census():Int { NullStringMapCensus.prepare(); var before=hl.Gc.totalAllocated(); var small=NullStringMapCensus.perform(8); if(small!=8 || hl.Gc.totalAllocated()!=before) return 1; before=hl.Gc.totalAllocated(); var result=NullStringMapCensus.perform(1024); return result==1024 && hl.Gc.totalAllocated()==before ? 42 : 1; }';

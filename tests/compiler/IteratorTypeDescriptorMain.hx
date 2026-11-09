@@ -155,7 +155,7 @@ class IteratorTypeDescriptorMain {
 		var source = File.getContent("tests/programs/wasm-bytes-runtime-kinds.hx");
 		for (inlineEnabled in [false, true]) for (target in [Wasm32, WasmGc]) {
 			var runtime = new compiler.Compiler(null, compiler.runtime.CompilerIntrinsics.configuration());
-			runtime.addSourceRoot("stdlib");
+			runtime.addStandardLibrarySourceRoot("stdlib");
 			runtime.update("Main.hx", source);
 			var program = runtime.compile("Main").ir;
 			compiler.ir.IrInliner.run(program, new compiler.ir.IrInliner.IrInlineCache(), inlineEnabled);

@@ -16,6 +16,36 @@ class DockNodeTools {
 		};
 	}
 
+	/** Copies a layout while omitting selected panels, normalizing each node in the same traversal. */
+	public static function copyExcluding(node:DockNode, excluded:Array<String>):DockNode {
+		if (node == null)
+			return DockNode.Empty;
+		return switch node {
+			case Empty: Empty;
+			case Panel(id): id == null || id.length == 0 || containsId(excluded, id) ? Empty : Panel(id);
+			case Tabs(ids, active):
+				var filtered:Array<String> = [];
+				if (ids != null)
+					for (id in ids)
+						if (id != null && id.length > 0 && !containsId(excluded, id) && !containsId(filtered, id))
+							filtered.push(id);
+				if (filtered.length == 0)
+					Empty;
+				else if (filtered.length == 1)
+					Panel(filtered[0]);
+				else
+					Tabs(filtered, containsId(filtered, active) ? active : filtered[0]);
+			case Split(axis, ratio, first, second):
+				var copiedFirst = copyExcluding(first, excluded), copiedSecond = copyExcluding(second, excluded);
+				switch [copiedFirst, copiedSecond] {
+					case [Empty, Empty]: Empty;
+					case [Empty, other]: other;
+					case [other, Empty]: other;
+					default: Split(axis, clampRatio(ratio), copiedFirst, copiedSecond);
+				}
+		};
+	}
+
 	/** Removes redundant empty/single-child containers and clamps ratios. */
 	public static function normalize(node:DockNode):DockNode {
 		if (node == null)
@@ -121,13 +151,26 @@ class DockNodeTools {
 	public static function activate(node:DockNode, panelId:String):DockNode {
 		if (node == null || panelId == null)
 			return DockNode.Empty;
+		return isActive(node, panelId) ? node : activatePath(node, panelId);
+	}
+
+	static function activatePath(node:DockNode, panelId:String):DockNode {
 		return switch (node) {
-			case Empty: Empty;
-			case Panel(id): Panel(id);
-			case Tabs(ids, active):
-				Tabs(ids == null ? [] : ids.copy(), containsId(ids, panelId) ? panelId : active);
+			case Empty | Panel(_): node;
+			case Tabs(ids, _): containsId(ids, panelId) ? Tabs(ids.copy(), panelId) : node;
 			case Split(axis, ratio, first, second):
-				Split(axis, ratio, activate(first, panelId), activate(second, panelId));
+				if (contains(first, panelId)) Split(axis, ratio, activatePath(first, panelId), second);
+				else if (contains(second, panelId)) Split(axis, ratio, first, activatePath(second, panelId));
+				else node;
+		};
+	}
+
+	static function isActive(node:DockNode, panelId:String):Bool {
+		return switch (node) {
+			case Empty: false;
+			case Panel(id): id == panelId;
+			case Tabs(ids, active): active == panelId && containsId(ids, panelId);
+			case Split(_, _, first, second): isActive(first, panelId) || isActive(second, panelId);
 		};
 	}
 

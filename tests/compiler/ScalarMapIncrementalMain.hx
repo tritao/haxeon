@@ -5,7 +5,7 @@ import compiler.runtime.CompilerIntrinsics;
 class ScalarMapIncrementalMain {
 	static function main():Void {
 		var compiler = new Compiler(null, CompilerIntrinsics.configuration());
-		compiler.addSourceRoot("stdlib");
+		compiler.addStandardLibrarySourceRoot("stdlib");
 		compiler.update("Other.hx", "class Other { public static function code():Int return 42; }");
 		compiler.update("Main.hx", 'import haxeon.collections.HashMap; function main():Int { '
 			+ 'var map:Map<Float,Int> = new Map(); map.set(Math.NaN, 7); map.set(Math.NaN, 8); '

@@ -10,7 +10,7 @@ class NativeMemoryMain {
 	static function main():Void {
 		var compiler = new Compiler();
 		CompilerIntrinsics.register(compiler);
-		compiler.addSourceRoot("stdlib");
+		compiler.addStandardLibrarySourceRoot("stdlib");
 		compiler.update("NativeMemory.hx", File.getContent("tests/programs/native-memory.hx"));
 		var result = compiler.compile("NativeMemory"),
 			sawOffset = false,
@@ -58,7 +58,7 @@ class NativeMemoryMain {
 
 		var u32Compiler = new Compiler();
 		CompilerIntrinsics.register(u32Compiler);
-		u32Compiler.addSourceRoot("stdlib");
+		u32Compiler.addStandardLibrarySourceRoot("stdlib");
 		u32Compiler.update("NativeU32RuntimeValues.hx", File.getContent("tests/programs/NativeU32RuntimeValues.hx"));
 		var u32Result = u32Compiler.compile("NativeU32RuntimeValues"),
 			u32RoundTrip:Null<compiler.ir.IrFunction> = null,
@@ -96,7 +96,7 @@ class NativeMemoryMain {
 
 		var incrementalFlat = new Compiler();
 		CompilerIntrinsics.register(incrementalFlat);
-		incrementalFlat.addSourceRoot("stdlib");
+		incrementalFlat.addStandardLibrarySourceRoot("stdlib");
 		incrementalFlat.update("model/Packet.hx", "package model; struct Packet { public var value:Int32; }");
 		incrementalFlat.update("app/Reader.hx",
 			"package app; import model.Packet; import runtime.memory.NativeSpan; class Reader { public static function copy(span:NativeSpan<Packet>):Packet return span.get(0); }");
@@ -142,7 +142,7 @@ class NativeMemoryMain {
 	static function expectCompileError(source:String, expected:String):Void {
 		var compiler = new Compiler();
 		CompilerIntrinsics.register(compiler);
-		compiler.addSourceRoot("stdlib");
+		compiler.addStandardLibrarySourceRoot("stdlib");
 		compiler.update("Negative.hx", source);
 		try {
 			compiler.compile("Negative");

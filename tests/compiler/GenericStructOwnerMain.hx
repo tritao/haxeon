@@ -7,7 +7,7 @@ import sys.io.File;
 class GenericStructOwnerMain {
 	static function main():Void {
 		var referenceRuntime = new compiler.Compiler(null, compiler.runtime.CompilerIntrinsics.configuration());
-		referenceRuntime.addSourceRoot("stdlib");
+		referenceRuntime.addStandardLibrarySourceRoot("stdlib");
 		referenceRuntime.update("Main.hx", File.getContent("tests/programs/generic-erased-reference-checks.hx"));
 		if (new compiler.ir.IrInterpreter(referenceRuntime.compile("Main").ir).run("main") != 42)
 			throw "erased reference writes did not preserve checked value semantics in the interpreter";
@@ -23,7 +23,7 @@ class GenericStructOwnerMain {
 		pointerSource = pointerSource.substring(0, pointerSource.indexOf("function main():Int"))
 			+ "function main():Int return PointerBoundaryCensus.prepare(null);";
 		var pointerRuntime = new compiler.Compiler(null, compiler.runtime.CompilerIntrinsics.configuration());
-		pointerRuntime.addSourceRoot("stdlib");
+		pointerRuntime.addStandardLibrarySourceRoot("stdlib");
 		pointerRuntime.update("Main.hx", pointerSource);
 		if (new compiler.ir.IrInterpreter(pointerRuntime.compile("Main").ir).run("main") != 42)
 			throw "erased pointer writes and checked casts failed in the interpreter";
@@ -31,7 +31,7 @@ class GenericStructOwnerMain {
 		callbackSource = callbackSource.substring(0, callbackSource.indexOf("function main():Int"))
 			+ "function main():Int return checkCallback(null);";
 		var callbackRuntime = new compiler.Compiler(null, compiler.runtime.CompilerIntrinsics.configuration());
-		callbackRuntime.addSourceRoot("stdlib");
+		callbackRuntime.addStandardLibrarySourceRoot("stdlib");
 		callbackRuntime.update("Main.hx", callbackSource);
 		if (new compiler.ir.IrInterpreter(callbackRuntime.compile("Main").ir).run("main") != 42)
 			throw "erased callback writes and null handling failed in the interpreter";
@@ -40,7 +40,7 @@ class GenericStructOwnerMain {
 		var interfaceSource = File.getContent("tests/programs/generic-interface-value-carriers.hx");
 		interfaceSource = StringTools.replace(StringTools.replace(StringTools.replace(interfaceSource, "#if !wasm", ""), "#end", ""), "hl.Gc.totalAllocated()", "0");
 		var interfaceRuntime = new compiler.Compiler(null, compiler.runtime.CompilerIntrinsics.configuration());
-		interfaceRuntime.addSourceRoot("stdlib");
+		interfaceRuntime.addStandardLibrarySourceRoot("stdlib");
 		interfaceRuntime.update("Main.hx", interfaceSource);
 		if (new compiler.ir.IrInterpreter(interfaceRuntime.compile("Main").ir).run("main") != 42)
 			throw "typed generic interface calls lost their value carriers in the interpreter";
@@ -80,12 +80,12 @@ class GenericStructOwnerMain {
 		var staticSource = StringTools.replace(source.substring(0, start) + source.substring(end),
 			"return box.get().number + owner.id;", "return box.get().number * 2;");
 		var staticRuntime = new compiler.Compiler(null, compiler.runtime.CompilerIntrinsics.configuration());
-		staticRuntime.addSourceRoot("stdlib");
+		staticRuntime.addStandardLibrarySourceRoot("stdlib");
 		staticRuntime.update("Main.hx", staticSource);
 		var staticResult = GeneratedProgramRunner.exitCode(staticRuntime.compile("Main"));
 		if (staticResult != 42) throw 'HashLink static generic value owner returned $staticResult';
 		var runtime = new compiler.Compiler(null, compiler.runtime.CompilerIntrinsics.configuration());
-		runtime.addSourceRoot("stdlib");
+		runtime.addStandardLibrarySourceRoot("stdlib");
 		runtime.update("Main.hx", source);
 		var compiled = runtime.compile("Main"), optimized = new compiler.ir.IrInterpreter(compiled.ir).run("main");
 		if (optimized != 42) throw 'optimized generic value owner interpreter returned $optimized';

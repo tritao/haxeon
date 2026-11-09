@@ -5,7 +5,7 @@ import compiler.Diagnostic.CompileError;
 class MathRandomMain {
 	static function main():Void {
 		var compiler = new Compiler(null, CompilerIntrinsics.configuration());
-		compiler.addSourceRoot(Sys.getCwd() + "/stdlib");
+		compiler.addStandardLibrarySourceRoot(Sys.getCwd() + "/stdlib");
 		compiler.update("Main.hx",
 			'function sample():Float return Math.random(); function main():Int { var first=sample(); if (first<0 || first>=1) return 1; var different=false; for (_ in 0...128) { var value=sample(); if (value<0 || value>=1 || !Math.isFinite(value)) return 2; if (value != first) different=true; } return different ? 42 : 3; }');
 		var result = compiler.compile("Main");

@@ -177,11 +177,17 @@ class ScrollView implements View {
 				var transform = translatedContent.layout.style.transform;
 				controller.updateMetrics(viewportGeometry.width, viewportGeometry.height,
 					contentWidth, contentHeight);
-				if (contentRevision != null && context.buildFeedbackPass == 0 && (builtOffsetX != controller.offsetX
-					|| builtOffsetY != controller.offsetY || builtViewportWidth != controller.viewportWidth
-					|| builtViewportHeight != controller.viewportHeight)) {
+				var materializedViewportChanged = (axis != ScrollAxis.Horizontal &&
+					builtViewportHeight != controller.viewportHeight) || (axis != ScrollAxis.Vertical &&
+					builtViewportWidth != controller.viewportWidth);
+				var materializedOffsetChanged = (axis != ScrollAxis.Horizontal &&
+					builtOffsetY != controller.offsetY) || (axis != ScrollAxis.Vertical &&
+					builtOffsetX != controller.offsetX);
+				if (contentRevision != null && context.buildFeedbackPass == 0 &&
+					(materializedOffsetChanged || materializedViewportChanged)) {
 					// Layout may resize the viewport or clamp its offset: rebuild the window once before painting this
-					// frame. Content whose size depends on its own window (a viewport that fits its rows) can disagree
+					// frame when an axis used by the virtual window changes. Content whose size depends on its own window
+					// (a viewport that fits its rows) can disagree
 					// again after that rebuild; it is settled on the next frame rather than by unbounded rebuilds.
 					contentRevision.update(contentRevision.value + 1);
 					context.requestBuildFeedbackBeforeLayout();

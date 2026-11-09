@@ -8,7 +8,7 @@ class LanguageFeaturesMain {
 	static function main():Void {
 		var compiler = new Compiler();
 		CompilerIntrinsics.register(compiler);
-		compiler.addSourceRoot("stdlib");
+		compiler.addStandardLibrarySourceRoot("stdlib");
 		compiler.update("Main.hx",
 			"enum Value { Number(value:Int); Empty; }\n"
 			+ "class Constants { public static final names = ['a', 'b']; }\n"

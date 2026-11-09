@@ -9,11 +9,10 @@ import compiler.types.typing.EnumRuntimeType;
 class IrEnumDynamicDispatch {
 	public static inline final EQUAL = "$enum-dynamic-equal";
 	public static inline final REFLECT = "$enum-dynamic-reflect";
-	public static inline final COMPARE = "$enum-dynamic-order";
 
 	public static function rewrite(functions:Array<IrFunction>):Array<IrFunction> {
 		var requests:Map<String, IrType> = [], boxes:Map<String, Bool> = [], views:Map<String, Bool> = [],
-			functionNames:Map<String, Bool> = [for (fn in functions) fn.name => true], needsEqual = false, needsReflect = false, needsCompare = false;
+			functionNames:Map<String, Bool> = [for (fn in functions) fn.name => true], needsEqual = false, needsReflect = false;
 		function register(name:String, type:IrType):Void {
 			var previous = requests.get(name);
 			if (previous != null && !IrVerifier.sameType(previous, type)) throw 'Conflicting enum Dynamic descriptor "$name"';
@@ -41,7 +40,6 @@ class IrEnumDynamicDispatch {
 					register(EnumDynamicBox.PREFIX + parts[0], Enum(haxe.crypto.Base64.decode(parts[1]).toString())); views.set(name, true);
 				case Call(_, "__dynamic_equal", _): needsEqual = true;
 				case Call(_, REFLECT, _): needsReflect = true;
-				case Call(_, "Reflect.reflectCompare", _): needsCompare = true;
 				default:
 			}
 		}
@@ -73,8 +71,6 @@ class IrEnumDynamicDispatch {
 				for (located in block.instructions) switch located.value {
 					case Call(output, "__dynamic_equal", arguments) if (names.length > 0):
 						target.instructions.push(new Located(Call(output, EQUAL, arguments), located.provenance)); changed = true;
-					case Call(output, "Reflect.reflectCompare", arguments) if (names.length > 0):
-						target.instructions.push(new Located(Call(output, COMPARE, arguments), located.provenance)); changed = true;
 					case SafeCast(output, input) if (IrVerifier.sameType(input.type, Dyn) && isEnum(output.type)):
 						var helper = unboxName(output.type); unboxes.set(helper, output.type);
 						target.instructions.push(new Located(Call(output, helper, [input]), located.provenance)); changed = true;
@@ -95,7 +91,6 @@ class IrEnumDynamicDispatch {
 		for (name in testNames) { var test = typeTests.get(name); rewritten.push(typeTest(name, test.type, test.exact, names, requests)); }
 		if (needsEqual && names.length > 0) rewritten.push(dispatcher(EQUAL, false, names, requests, functionNames));
 		if (needsReflect) rewritten.push(dispatcher(REFLECT, true, names, requests, functionNames));
-		if (needsCompare && names.length > 0) rewritten.push(orderDispatcher(names, requests));
 		return rewritten;
 	}
 
@@ -151,20 +146,6 @@ class IrEnumDynamicDispatch {
 	}
 
 	/** Enums have equality but no declared ordering. Never order their boxed addresses. */
-	static function orderDispatcher(names:Array<String>, requests:Map<String, IrType>):IrFunction {
-		var builder = new IrBuilder(), left = builder.argument("left", Dyn), right = builder.argument("right", Dyn);
-		for (boxName in names) {
-			var type = requests.get(boxName), invalid = builder.createBlock(), checkRight = builder.createBlock(), next = builder.createBlock();
-			builder.branch(builder.call("__std_is_exact_type", [left, builder.typeValue(type)], Bool), invalid, checkRight);
-			builder.select(checkRight);
-			builder.branch(builder.call("__std_is_exact_type", [right, builder.typeValue(type)], Bool), invalid, next);
-			builder.select(invalid); builder.returnValue(builder.constInt(0xAABBCCDD));
-			builder.select(next);
-		}
-		builder.returnValue(builder.call("Reflect.reflectCompare", [left, right], I32));
-		return new IrFunction(COMPARE, builder.arguments, I32, builder.blocks);
-	}
-
 	static function dispatcher(name:String, reflective:Bool, names:Array<String>, requests:Map<String, IrType>, functionNames:Map<String, Bool>):IrFunction {
 		var builder = new IrBuilder(), left = builder.argument("left", Dyn), right = builder.argument("right", Dyn);
 		for (boxName in names) {

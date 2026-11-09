@@ -16,7 +16,7 @@ class HxiNativeKitSceneMain {
 			gpuHxi = File.getContent(Sys.args()[5]),
 			compiler = new Compiler();
 		CompilerIntrinsics.register(compiler);
-		compiler.addSourceRoot(Sys.getCwd() + "/stdlib");
+		compiler.addStandardLibrarySourceRoot(Sys.getCwd() + "/stdlib");
 		compiler.addSourceRoot(Sys.getCwd() + "/packages/platform/src");
 		compiler.addSourceRoot(Sys.getCwd() + "/packages/gpu/src");
 		compiler.addSourceRoot(nativekitRoot + "/modules/scene/bindings/haxe");

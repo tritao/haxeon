@@ -22,6 +22,9 @@ class SemanticSignature {
 	public static function isRecursiveAnonymousName(name:String):Bool
 		return StringTools.startsWith(name, '$' + 'anon:rec:');
 
+	public static function isAnonymousName(name:String):Bool
+		return StringTools.startsWith(name, '$' + 'anon:');
+
 	/**
 	 * How many anonymous shapes have been spelled out. Spelling costs time proportional to the shape's size,
 	 * so tests use this to check that a shape is spelled once per declaration, not once per mention.

@@ -544,7 +544,17 @@ class LspProtocolMain {
 				}
 			}
 		}));
-		if (opened.length != 1 || Json.parse(opened[0]).method != "textDocument/publishDiagnostics")
+		var openedDocumentDiagnostics = false;
+		for (message in opened) {
+			var notification:Dynamic = Json.parse(message);
+			if (notification.method == "textDocument/publishDiagnostics") {
+				if (notification.params.uri == uri)
+					openedDocumentDiagnostics = true;
+				else
+					throw "LSP didOpen published diagnostics for a file outside the open document and workspace";
+			}
+		}
+		if (!openedDocumentDiagnostics)
 			throw "LSP didOpen did not publish diagnostics";
 		if (service.compiler.publicationStatus().hasPendingRevision)
 			throw "LSP document analysis published a runtime candidate";
@@ -1121,11 +1131,8 @@ class LspProtocolMain {
 			method: "textDocument/didChange",
 			params: {textDocument: {uri: choiceUri, version: 5}, contentChanges: [{text: "package workspace.shape; enum Choice { One; Two; }"}]}
 		}));
-		if (closedDependent.length != 1)
-			throw "closed dependent diagnostic was not published";
-		var closedMessage:Dynamic = Json.parse(closedDependent[0]);
-		if (closedMessage.params.uri != consumerUri || Reflect.hasField(closedMessage.params, "version"))
-			throw "closed document diagnostic incorrectly included an LSP version";
+		if (closedDependent.length != 0)
+			throw "LSP published diagnostics for a closed file outside the workspace";
 		var scheduledService = new LanguageService(),
 			scheduledProtocol = new LspProtocol(scheduledService),
 			scheduledMessages:Array<String> = [],
@@ -1773,8 +1780,17 @@ class LspProtocolMain {
 	}
 
 	static function haxeonManifestWorkspace():Void {
-		var base = sys.FileSystem.absolutePath("out/lsp-haxeon-workspace");
+		var base = sys.FileSystem.fullPath("out") + "/lsp-haxeon-workspace-" + Date.now().getTime() + "-" + Std.random(0x7fffffff);
+		try {
+			haxeonManifestWorkspaceAt(base);
+		} catch (failure:Dynamic) {
+			deleteTree(base);
+			throw failure;
+		}
 		deleteTree(base);
+	}
+
+	static function haxeonManifestWorkspaceAt(base:String):Void {
 		for (directory in [
 			base,
 			base + "/app",
@@ -1831,8 +1847,12 @@ class LspProtocolMain {
 			foundDiagnostic = false;
 		for (raw in messages) {
 			var message:Dynamic = Json.parse(raw);
-			if (message.method == "textDocument/publishDiagnostics" && message.params.uri == uri && message.params.diagnostics.length > 0)
-				foundDiagnostic = true;
+			if (message.method == "textDocument/publishDiagnostics") {
+				if (!StringTools.startsWith(message.params.uri, "file://" + base + "/"))
+					throw "LSP published diagnostics for a file outside the workspace";
+				if (message.params.uri == uri && message.params.diagnostics.length > 0)
+					foundDiagnostic = true;
+			}
 		}
 		if (!foundDiagnostic)
 			throw "manifest-backed document did not diagnose a type error";
@@ -2068,8 +2088,6 @@ class LspProtocolMain {
 			throw "FFI reload reused stale declaration provenance: " + Json.stringify(reloadedDefinition);
 
 		Sys.println("PASS: manifest FFI interfaces, projections and reload preserve unsaved overlays");
-
-		deleteTree(base);
 	}
 
 	static function request(protocol:LspProtocol, message:String):Dynamic {

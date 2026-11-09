@@ -66,6 +66,10 @@ Both `--xml=docs/api.xml` and the standard two-argument form
 `--xml docs/api.xml` are accepted. Documentation generation does not change
 runtime fingerprints or hot-reload compatibility.
 
+## Language server workspace discovery
+
+Workspace discovery needs bounds for folders inside large trees. A test workspace rooted inside the checkout caused discovery to traverse the whole checkout for 49:48.88 and peak at 1,972,216 KB RSS; moving the fixture to the OS temp directory reduced the same run below one second. Opening a real editor folder inside a large tree can hit the same path. Follow up by stopping at project manifests, skipping `out`, build, `.git` and ignored directories, and capping or indexing large trees.
+
 ## Native build
 
 Haxeon uses CMake for its cross-platform native build and Ninja as the default

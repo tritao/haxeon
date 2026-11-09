@@ -11,7 +11,7 @@ class CxxStringViewMain {
 			functionsPath = Sys.args()[3],
 			compiler = new Compiler();
 		CompilerIntrinsics.register(compiler);
-		compiler.addSourceRoot(Sys.getCwd() + "/stdlib");
+		compiler.addStandardLibrarySourceRoot(Sys.getCwd() + "/stdlib");
 		compiler.addFfiInterface(hxiPath, File.getContent(hxiPath));
 		compiler.update("Text.hx", File.getContent(textPath));
 		compiler.update("cxx_viewFunctions.hx", File.getContent(functionsPath));

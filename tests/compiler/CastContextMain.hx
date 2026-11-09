@@ -16,7 +16,7 @@ class CastContextMain {
 
 	static function main():Void {
 		var result = new Compiler(null, CompilerIntrinsics.configuration());
-		result.addSourceRoot(Sys.getCwd() + "/stdlib");
+		result.addStandardLibrarySourceRoot(Sys.getCwd() + "/stdlib");
 		result.update("Main.hx", source);
 		if (GeneratedProgramRunner.exitCode(result.compile("Main")) != 2)
 			throw "cast context fixture execution failed";
@@ -33,7 +33,7 @@ class CastContextMain {
 		if (!rejected)
 			throw "opaque handle implicitly converted to managed bytes";
 		var cold = new Compiler(null, CompilerIntrinsics.configuration());
-		cold.addSourceRoot(Sys.getCwd() + "/stdlib");
+		cold.addStandardLibrarySourceRoot(Sys.getCwd() + "/stdlib");
 		cold.update("Main.hx", invalid);
 		rejected = false;
 		try

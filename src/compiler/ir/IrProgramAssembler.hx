@@ -25,6 +25,7 @@ import compiler.ir.Ir.IrInterface;
 import compiler.ir.Ir.IrEnum;
 import compiler.ir.Ir.IrStaticField;
 import compiler.ir.SourceProvenance.Located;
+import compiler.semantic.SemanticSignature;
 
 /** Builds complete IR programs and selects their required runtime surface. */
 class IrProgramAssembler {
@@ -584,7 +585,9 @@ class IrProgramAssembler {
 			reflectableObjects = reflectableObjects.copy();
 			var known:Map<String, Bool> = [for (name in reflectableObjects) name => true];
 			for (object in objects)
-				if ((object.isValue || StringTools.startsWith(object.name, IrValueInterfaceBoxes.BOX_PREFIX)) && !StringTools.startsWith(object.name, IrInlineEnumLayout.VALUE_PREFIX) && !known.exists(object.name)) {
+				if ((object.isValue || StringTools.startsWith(object.name, IrValueInterfaceBoxes.BOX_PREFIX)
+					|| SemanticSignature.isAnonymousName(object.name))
+					&& !StringTools.startsWith(object.name, IrInlineEnumLayout.VALUE_PREFIX) && !known.exists(object.name)) {
 					reflectableObjects.push(object.name);
 					known.set(object.name, true);
 				}
@@ -596,7 +599,7 @@ class IrProgramAssembler {
 		if (objects != null && allFunctions.length > beforeReflection) {
 			var existing = allFunctions.slice(0, beforeReflection);
 			allFunctions = existing.concat(IrCheckedDynamicCasts.rewrite(allFunctions.slice(beforeReflection), objects,
-				IrGenerator.usesNativeReflectionDispatch(), existing, true));
+				IrGenerator.usesNativeReflectionDispatch(), existing, true, true));
 		}
 		if (objects != null) {
 			var optionalStorage = new IrOptionalFieldStorage(objects);

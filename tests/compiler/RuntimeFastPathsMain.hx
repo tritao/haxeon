@@ -37,7 +37,7 @@ class RuntimeFastPathsMain {
 	static function create():Compiler {
 		var c = new Compiler();
 		CompilerIntrinsics.register(c);
-		c.addSourceRoot("stdlib");
+		c.addStandardLibrarySourceRoot("stdlib");
 		return c;
 	}
 }

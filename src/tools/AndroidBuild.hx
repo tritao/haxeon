@@ -75,7 +75,7 @@ class AndroidBuild {
 		defines = defines.concat(projectDefines);
 		compiler.configure("cli:android:" + defines.join("|"), "cli:android", defines);
 		compiler.enablePublicationTracking();
-		compiler.addSourceRoot(FileSystem.fullPath("stdlib"));
+		compiler.addStandardLibrarySourceRoot(FileSystem.fullPath("stdlib"));
 		for (root in roots)
 			compiler.addSourceRoot(root);
 		SourceManifestLoader.load(compiler, roots, sources, packageRoots);

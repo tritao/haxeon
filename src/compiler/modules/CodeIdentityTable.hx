@@ -38,7 +38,7 @@ class CodeIdentityTable {
 		if (text == state.source.text)
 			return;
 		state = context.writableState(MODULE, rollback);
-		state.render(new SourceFile(state.source.path, text));
+		state.render(new SourceFile(state.source.path, text, state.source.isStandardLibrarySource));
 		context.parse(state, entry, body, signatures, structural);
 		context.addTypeDependencies(state);
 	}
@@ -51,11 +51,13 @@ class CodeIdentityTable {
 		var path = Sys.getEnv("HAXEON_IDENTITY_GRAPH");
 		if (path == null || path == "")
 			return;
-		var lines = [];
+		var lines:Array<String> = [];
 		var members = [for (name in computed.keys()) name];
 		members.sort(Reflect.compare);
 		for (name in members) {
 			var state = modules.get(name);
+			if (state == null)
+				throw 'Missing module "$name" while writing the identity graph';
 			var imports = [for (dependency in state.dependencies) if (computed.exists(dependency)) dependency];
 			imports.sort(Reflect.compare);
 			lines.push(name + "\t" + imports.join(","));
@@ -88,8 +90,11 @@ class CodeIdentityTable {
 		for (name in members)
 			known.set(name, true);
 		for (name in members) {
-			var targets = [];
-			for (dependency in modules.get(name).dependencies)
+			var targets:Array<String> = [];
+			var state = modules.get(name);
+			if (state == null)
+				throw 'Missing module "$name" while building the identity graph';
+			for (dependency in state.dependencies)
 				if (known.exists(dependency) && targets.indexOf(dependency) < 0)
 					targets.push(dependency);
 			targets.sort(Reflect.compare);
@@ -103,14 +108,17 @@ class CodeIdentityTable {
 		for (root in members) {
 			if (index.exists(root))
 				continue;
-			var frames = [root], cursors = [0];
+			var frames:Array<String> = [root], cursors:Array<Int> = [0];
 			index.set(root, counter);
 			low.set(root, counter);
 			counter++;
 			stack.push(root);
 			onStack.set(root, true);
 			while (frames.length > 0) {
-				var top = frames.length - 1, current = frames[top], targets = edges.get(current);
+				var top = frames.length - 1, current = frames[top];
+				var targets = edges.get(current);
+				if (targets == null)
+					throw 'Missing module edges for "$current"';
 				if (cursors[top] < targets.length) {
 					var next = targets[cursors[top]++];
 					if (!index.exists(next)) {
@@ -122,10 +130,10 @@ class CodeIdentityTable {
 						frames.push(next);
 						cursors.push(0);
 					} else if (onStack.exists(next))
-						low.set(current, Std.int(Math.min(low.get(current), index.get(next))));
+						low.set(current, Std.int(Math.min(requiredIndex(low, current), requiredIndex(index, next))));
 				} else {
-					if (low.get(current) == index.get(current)) {
-						var component = [];
+					if (requiredIndex(low, current) == requiredIndex(index, current)) {
+						var component:Array<String> = [];
 						while (true) {
 							var member = stack.pop();
 							onStack.remove(member);
@@ -144,7 +152,7 @@ class CodeIdentityTable {
 					cursors.pop();
 					if (frames.length > 0) {
 						var parent = frames[frames.length - 1];
-						low.set(parent, Std.int(Math.min(low.get(parent), low.get(current))));
+						low.set(parent, Std.int(Math.min(requiredIndex(low, parent), requiredIndex(low, current))));
 					}
 				}
 			}
@@ -160,16 +168,40 @@ class CodeIdentityTable {
 		var text = new StringBuf(), outside:Map<String, Bool> = [];
 		text.add(salt);
 		for (member in component) {
-			text.add("\nmodule " + member + " " + modules.get(member).source.strongHash());
-			for (target in edges.get(member))
+			text.add("\nmodule " + member + " " + requiredState(modules, member).source.strongHash());
+			for (target in requiredEdges(edges, member))
 				if (!inside.exists(target))
-					outside.set(done.get(target), true);
+					outside.set(requiredIdentity(done, target), true);
 		}
 		var dependencies = [for (identity in outside.keys()) identity];
 		dependencies.sort(Reflect.compare);
 		for (identity in dependencies)
 			text.add("\nneeds " + identity);
 		return Sha256.encode(text.toString()).substr(0, 32);
+	}
+
+	static function requiredState(source:Map<String, ModuleState>, name:String):ModuleState {
+		if (!source.exists(name))
+			throw 'Identity graph is missing module "$name"';
+		return source.get(name);
+	}
+
+	static function requiredEdges(source:Map<String, Array<String>>, name:String):Array<String> {
+		if (!source.exists(name))
+			throw 'Identity graph is missing edges for "$name"';
+		return source.get(name);
+	}
+
+	static function requiredIdentity(source:Map<String, String>, name:String):String {
+		if (!source.exists(name))
+			throw 'Identity graph is missing completed dependency "$name"';
+		return source.get(name);
+	}
+
+	static function requiredIndex(source:Map<String, Int>, name:String):Int {
+		if (!source.exists(name))
+			throw 'Identity graph is missing an index for "$name"';
+		return source.get(name);
 	}
 
 	static var cachedVersion:Null<String>;

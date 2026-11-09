@@ -49,7 +49,7 @@ class StringEscapesMain {
 		source += "function main():Int return " + [for (index in 0...cases.length) 'case$index()'].join(" + ") + ";";
 		var compiler = new Compiler();
 		CompilerIntrinsics.register(compiler);
-		compiler.addSourceRoot("stdlib");
+		compiler.addStandardLibrarySourceRoot("stdlib");
 		compiler.update("Main.hx", source);
 		var result = compiler.compile("Main"),
 			live = Runtime.load(HlWriter.encode(result.module), result.runtimeIdentity);
@@ -83,7 +83,7 @@ class StringEscapesMain {
 			var rejected = false;
 			try {
 				var checker = new Compiler();
-				checker.addSourceRoot("stdlib");
+				checker.addStandardLibrarySourceRoot("stdlib");
 				checker.update("Main.hx", 'function main():Int { var s = $literal; return s.length; }');
 				checker.compile("Main");
 			} catch (error:Dynamic) {

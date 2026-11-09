@@ -8,7 +8,7 @@ class PureCallFlowMain {
 	static function main():Void {
 		var compiler = new Compiler();
 		CompilerIntrinsics.register(compiler);
-		compiler.addSourceRoot("stdlib");
+		compiler.addStandardLibrarySourceRoot("stdlib");
 		compiler.update("Main.hx",
 			"import Math;\n"
 			+ "typedef Limits = {var lower:Null<Float>; var upper:Null<Float>;};\n"

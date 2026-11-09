@@ -6,6 +6,10 @@ import sys.io.File;
 // The Wasm host shims: an empty environment, a "Web" system, and a session-only in-memory
 // filesystem behind sys.io.File, sys.io.AtomicFile, sys.FileSystem and the Sys path calls.
 function host():Int {
+	#if wasmgc
+	if (Sys.args().length != 0)
+		return 1;
+	#end
 	return Sys.getEnv("HOME") == null && Sys.getCwd() == "/" && Sys.systemName() == "Web" && Sys.executablePath() == "" && Sys.exists("/")
 		&& Sys.isDir("/") ? 0 : 1;
 }

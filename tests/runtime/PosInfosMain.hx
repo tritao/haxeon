@@ -9,7 +9,7 @@ class PosInfosMain {
 		var arguments = Sys.args();
 		var compiler = new Compiler();
 		CompilerIntrinsics.register(compiler);
-		compiler.addSourceRoot("stdlib");
+		compiler.addStandardLibrarySourceRoot("stdlib");
 		compiler.update("haxe/PosInfos.hx", File.getContent("stdlib/haxe/PosInfos.hx"));
 		var source = "import haxe.PosInfos;\nfunction position(?pos:PosInfos):PosInfos { if (pos == null) throw \"missing\"; return pos; }\nfunction main():Int {\n\treturn position().lineNumber;\n}\n";
 		compiler.update("Position.hx", source);

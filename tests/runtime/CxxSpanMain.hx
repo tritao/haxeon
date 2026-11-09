@@ -11,7 +11,7 @@ class CxxSpanMain {
 			functionsPath = Sys.args()[3],
 			compiler = new Compiler();
 		CompilerIntrinsics.register(compiler);
-		compiler.addSourceRoot(Sys.getCwd() + "/stdlib");
+		compiler.addStandardLibrarySourceRoot(Sys.getCwd() + "/stdlib");
 		compiler.addFfiInterface(hxiPath, File.getContent(hxiPath));
 		compiler.update("Buffer.hx", File.getContent(bufferPath));
 		compiler.update("cxx_spanFunctions.hx", File.getContent(functionsPath));

@@ -23,7 +23,7 @@ class BytesAsciiMain {
 			throw "Could not build byte snapshot guard";
 		var compiler = new Compiler();
 		CompilerIntrinsics.register(compiler);
-		compiler.addSourceRoot("stdlib");
+		compiler.addStandardLibrarySourceRoot("stdlib");
 		compiler.registerNative("armSnapshot", "bytes_decode_guards", "arm", [CompilerType.TBytes], CompilerType.TVoid);
 		compiler.registerNative("disarmSnapshot", "bytes_decode_guards", "disarm", [], CompilerType.TInt);
 		compiler.update("Main.hx", '

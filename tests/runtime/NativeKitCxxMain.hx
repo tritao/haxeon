@@ -11,7 +11,7 @@ class NativeKitCxxMain {
 			functionsPath = Sys.args()[3],
 			compiler = new Compiler();
 		CompilerIntrinsics.register(compiler);
-		compiler.addSourceRoot(Sys.getCwd() + "/stdlib");
+		compiler.addStandardLibrarySourceRoot(Sys.getCwd() + "/stdlib");
 		compiler.addFfiInterface(hxiPath, File.getContent(hxiPath));
 		compiler.update("DisplayList.hx", File.getContent(projectionPath));
 		compiler.update("NativeKitDisplayListFunctions.hx", File.getContent(functionsPath));

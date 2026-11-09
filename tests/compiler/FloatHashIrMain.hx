@@ -23,7 +23,7 @@ class FloatHashIrMain {
       || interpreted.run("hash", [negativeNaN]) != 0x7ff80000
       || interpreted.run("hash", [-0.0]) != 0) throw "IR Float hashing mishandled an IEEE edge value";
     var compiler = new Compiler(null, CompilerIntrinsics.configuration());
-    compiler.addSourceRoot("stdlib");
+    compiler.addStandardLibrarySourceRoot("stdlib");
     compiler.update("Other.hx", "class Other { public static function code():Int return 42; }");
     compiler.update("Main.hx", "function main():Int return Other.code();");
     if (GeneratedProgramRunner.exitCode(compiler.compile("Main")) != 42) throw "initial incremental program failed";

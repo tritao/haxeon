@@ -9,7 +9,7 @@ class WasmDynamicStringMain {
 		var compiler = new Compiler();
 		CompilerIntrinsics.register(compiler);
 		compiler.configure("wasm-dynamic-string", "wasm-dynamic-string", ["wasm", "target=wasm32"]);
-		compiler.addSourceRoot("stdlib");
+		compiler.addStandardLibrarySourceRoot("stdlib");
 		var source = File.getContent("tests/fixtures/dynamic-string-methods/Main.hx");
 		for (incremental in [false, true]) {
 			compiler.update("Main.hx", incremental ? StringTools.replace(source, "return 42;", "return 43;") : source);

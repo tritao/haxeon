@@ -180,7 +180,7 @@ class CompilerSession {
 					compiler.addFfiInterface(source.path, source.text);
 				}
 			}
-			compiler.addSourceRoot("stdlib");
+			compiler.addStandardLibrarySourceRoot("stdlib");
 			for (root in request.roots)
 				compiler.addSourceRoot(root);
 			for (root in request.packageRoots)

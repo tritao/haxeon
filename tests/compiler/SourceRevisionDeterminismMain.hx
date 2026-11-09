@@ -6,7 +6,7 @@ class SourceRevisionDeterminismMain {
 	static function create(source:String):Compiler {
 		var c = new Compiler();
 		CompilerIntrinsics.register(c);
-		c.addSourceRoot("stdlib");
+		c.addStandardLibrarySourceRoot("stdlib");
 		c.livePatching = false;
 		c.developmentMetadata = true;
 		c.update("Main.hx", source);

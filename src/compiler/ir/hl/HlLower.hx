@@ -1340,8 +1340,8 @@ class HlLower {
 	static function scopeEndPosition(binding:compiler.ir.IrFunction.IrDebugBinding, locations:Array<HlDebugLocation>, position:Int, instructionCount:Int,
 			lastByScope:Map<String, Int>):Int {
 		var key = binding.identity + ":" + binding.scopeStart + ":" + binding.scopeEnd,
-			lastInScope = lastByScope.get(key);
-		if (lastInScope == null) {
+			cached = lastByScope.get(key), lastInScope:Int;
+		if (cached == null) {
 			lastInScope = -1;
 			var index = locations.length - 1;
 			while (index >= 0) {
@@ -1356,7 +1356,8 @@ class HlLower {
 				index--;
 			}
 			lastByScope.set(key, lastInScope);
-		}
+		} else
+			lastInScope = cached;
 		var end = (lastInScope >= position ? lastInScope : position) + 1;
 		return end >= instructionCount ? -1 : end;
 	}

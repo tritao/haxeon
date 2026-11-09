@@ -7,7 +7,7 @@ class NullArrayContextMain {
 
 	static function compiler(body:String):Compiler {
 		var compiler = new Compiler();
-		compiler.addSourceRoot(Sys.getCwd() + "/stdlib");
+		compiler.addStandardLibrarySourceRoot(Sys.getCwd() + "/stdlib");
 		compiler.update("Main.hx",
 			prefix
 			+ 'function make():Holder { '
@@ -27,7 +27,7 @@ class NullArrayContextMain {
 			+ 'function main():Int return 0;';
 		result.update("Main.hx", source);
 		var fresh = new Compiler();
-		fresh.addSourceRoot(Sys.getCwd() + "/stdlib");
+		fresh.addStandardLibrarySourceRoot(Sys.getCwd() + "/stdlib");
 		fresh.update("Main.hx", source);
 		for (candidate in [result, fresh]) {
 			var rejected = false;

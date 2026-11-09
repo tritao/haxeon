@@ -14,7 +14,7 @@ class HxiSpanMain {
 			library = Sys.args()[1],
 			compiler = new Compiler();
 		CompilerIntrinsics.register(compiler);
-		compiler.addSourceRoot(Sys.getCwd() + "/stdlib");
+		compiler.addStandardLibrarySourceRoot(Sys.getCwd() + "/stdlib");
 		compiler.addFfiInterface("spans.hxi",
 			'interface Spans @target("x86_64-linux-gnu") @library("$library") {\n'
 			+ '\textern fn values(which: i32) -> nullable<ptr<const<f64>>> @span("native_fixture_span_values_count") @symbol("native_fixture_span_values");\n'

@@ -1,6 +1,7 @@
 package compiler.ir;
 
 import compiler.ir.Ir;
+import compiler.semantic.SemanticSignature;
 import compiler.types.typing.EnumRuntimeType;
 
 private typedef EnumUseNode = {final parents:Array<Int>; final bits:Array<Int>; var queued:Bool;}
@@ -9,20 +10,27 @@ private typedef EnumUseNode = {final parents:Array<Int>; final bits:Array<Int>; 
 class IrInlineEnumEligibility {
 	public final allowed:Map<String, Bool> = [];
 	public final reasons:Map<String, String> = [];
+	/** Type descriptors that describe a verified callable boundary for a selected enum. */
+	public final callableDescriptors:Map<String, Map<Int, Bool>> = [];
 
 	final objects:Map<String, IrObject>;
+	final contracts:Map<String, IrInterface>;
 	final declarations:Array<IrEnum>;
+	final planner:IrInlineEnumLayout;
 	final enumNodes:Map<String, Int> = [];
 	final objectNodes:Map<String, Int> = [];
 	final interfaceNodes:Map<String, Int> = [];
+	final dynamicObjectEscapes:Map<String, Bool> = [];
 	final names:Array<String>;
 	final nodes:Array<EnumUseNode> = [];
 	final words:Int;
 	final rejected:Array<Int>;
 
 	public function new(program:IrProgram, planner:IrInlineEnumLayout, ?reflectableObjects:Array<String>) {
+		this.planner = planner;
 		declarations = program.enums;
 		objects = [for (object in program.objects) object.name => object];
+		contracts = [for (contract in program.interfaces) contract.name => contract];
 		names = [for (declaration in program.enums) declaration.name];
 		words = (names.length + 31) >> 5;
 		rejected = [for (_ in 0...words) 0];
@@ -108,11 +116,16 @@ class IrInlineEnumEligibility {
 		if (ObjectReflection.usesObjectLayouts(program.natives)) {
 			var reflectedNames = reflectableObjects == null ? [] : reflectableObjects,
 				reflected = [for (name in reflectedNames) name => true];
-			for (object in program.objects)
-				if (reflected.exists(object.name)
-					|| object.isValue
-					|| StringTools.startsWith(object.name, IrValueInterfaceBoxes.BOX_PREFIX))
+			for (object in program.objects) {
+				// Anonymous records have runtime layouts too. A Dynamic/reflection edge can reach
+				// one even when it was created inside a Dynamic object literal.
+				if (!object.isValue && SemanticSignature.isAnonymousName(object.name))
+					reflected.set(object.name, true);
+				if (object.isValue || StringTools.startsWith(object.name, IrValueInterfaceBoxes.BOX_PREFIX))
 					mark(objectNodes.get(object.name), "registered reflection layout");
+			}
+			var unsupported = reflectedUnsupportedEnums(reflected, functions, program.staticFields);
+			for (name in unsupported.keys()) block(name, "registered reflection layout");
 		}
 		for (native in program.cNatives) {
 			for (argument in native.arguments)
@@ -127,6 +140,10 @@ class IrInlineEnumEligibility {
 			}
 			var descriptors:Map<Int, IrType> = [],
 				arrayDescriptors:Map<Int, Bool> = [],
+				callableDescriptorUses:Map<Int, Bool> = [],
+				referenceTypeDescriptorUses:Map<Int, Bool> = [],
+				logicalEnumDescriptorUses:Map<Int, Bool> = [],
+				descriptorUses:Map<Int, Int> = [],
 				otherDescriptors:Map<Int, Bool> = [],
 				factoryCasts:Map<Int, Bool> = [],
 				factoryErases:Map<Int, Bool> = [],
@@ -162,23 +179,49 @@ class IrInlineEnumEligibility {
 				for (located in block.instructions) {
 					var instruction = located.value;
 					for (input in IrOperands.inputs(instruction))
-						if (descriptors.exists(input.id))
+						if (descriptors.exists(input.id)) {
+							descriptorUses.set(input.id, (descriptorUses.exists(input.id) ? descriptorUses.get(input.id) : 0) + 1);
 							switch instruction {
+								case Call(_, "__closure_is_of_type", arguments) if (arguments.length == 2 && arguments[1].id == input.id
+									&& supportsCallableEscape(descriptors.get(input.id))):
+									callableDescriptorUses.set(input.id, true);
+							case Call(_, "__std_is_exact_type" | "__std_is_of_type", arguments) if (arguments.length == 2 && arguments[1].id == input.id
+								&& isReferenceTypeDescriptor(descriptors.get(input.id))):
+								referenceTypeDescriptorUses.set(input.id, true);
 								case Call(_, "__array_alloc_typed_ref", arguments) if (arguments.length == 2 && arguments[1].id == input.id):
 									arrayDescriptors.set(input.id, true);
+								case Call(_, "__std_is_exact_type" | "__std_is_of_type", arguments) if (arguments.length == 2 && arguments[1].id == input.id
+									&& logicalEnumDescriptorFunction(fn.name) && isSelectedEnumDescriptor(descriptors.get(input.id))):
+									logicalEnumDescriptorUses.set(input.id, true);
 								default:
 									otherDescriptors.set(input.id, true);
 							}
+						}
 					switch instruction {
-						case ToDyn(out, value) if (!factoryErases.exists(out.id)):
+						case Call(out, name, arguments) if (StringTools.startsWith(name, "__map_")
+							&& StringTools.contains(name, "_ref_")):
+							var operation = name.substr(name.lastIndexOf("_ref_") + 5);
+							switch operation {
+								case "set" if (arguments.length >= 3):
+								// A map stores the value reference itself. Classes, arrays and iterators keep their own object layout;
+								// a direct enum or value struct still needs its nominal boxed representation here.
+								escapeMapReference(arguments[arguments.length - 1].type, "native reference map storage");
+								case "get" | "values":
+								escapeMapReference(out.type, "native reference map storage");
+								default:
+							}
+						case ToDyn(out, value) if (!factoryErases.exists(out.id) && !supportsCallableEscape(value.type)):
 							escape(value.type, "Dynamic escape");
-						case SafeCast(out, value) if (!factoryCasts.exists(out.id)):
+						case SafeCast(out, value) if (!factoryCasts.exists(out.id)
+							&& !((switch (value.type) { case Dyn: true; default: false; }) && supportsCallableEscape(out.type))):
 							escape(out.type, "checked escape");
 							escape(value.type, "checked escape");
 						case Phi(_, inputs):
 							for (input in inputs)
-								if (descriptors.exists(input.value.id))
+								if (descriptors.exists(input.value.id)) {
+									descriptorUses.set(input.value.id, (descriptorUses.exists(input.value.id) ? descriptorUses.get(input.value.id) : 0) + 1);
 									otherDescriptors.set(input.value.id, true);
+								}
 						case MethodCall(out, receiver, _, arguments, _):
 							// Interface packets have a verified typed table; ordinary value calls do not yet share it.
 							switch receiver.type {
@@ -195,7 +238,7 @@ class IrInlineEnumEligibility {
 								case Obj(name) if (StringTools.startsWith(name, compiler.semantic.LambdaName.ENVIRONMENT_PREFIX)):
 								default:
 									value(receiver.type, "bound value receiver");
-									callableValue(out.type, "bound value method");
+									callableValue(out.type, "bound value method", true);
 							}
 						case Equal(_, left, right) if (!nulls.exists(left.id) && !nulls.exists(right.id)):
 							value(left.type, "unlowered enum comparison");
@@ -215,14 +258,44 @@ class IrInlineEnumEligibility {
 						default:
 					}
 			}
-			for (id => type in descriptors)
-				if (!arrayDescriptors.exists(id) || otherDescriptors.exists(id))
+			var validCallableDescriptors:Map<Int, Bool> = [];
+			for (id => type in descriptors) {
+				var singleUse = descriptorUses.get(id) == 1 && !otherDescriptors.exists(id);
+				if (referenceTypeDescriptorUses.exists(id) && singleUse && isReferenceTypeDescriptor(type))
+					continue;
+				if (logicalEnumDescriptorUses.exists(id) && singleUse && isSelectedEnumDescriptor(type))
+					continue;
+				if (callableDescriptorUses.exists(id) && singleUse && supportsCallableEscape(type))
+					validCallableDescriptors.set(id, true);
+				else if (!arrayDescriptors.exists(id) || otherDescriptors.exists(id) || descriptorUses.get(id) != 1)
+					{
 					escape(type, "runtime type descriptor");
+					}
+			}
+			if (validCallableDescriptors.keys().hasNext()) callableDescriptors.set(fn.name, validCallableDescriptors);
 		}
+		var dynamicUnsupported = reflectedUnsupportedEnums(dynamicObjectEscapes, functions, program.staticFields);
+		for (name in dynamicUnsupported.keys()) block(name, "Dynamic escape");
 		for (name in names)
 			if (!reasons.exists(name))
 				allowed.set(name, true);
 	}
+
+	static function logicalEnumDescriptorFunction(name:String):Bool
+		return name == IrEnumDynamicDispatch.EQUAL || name == IrEnumDynamicDispatch.REFLECT
+			|| StringTools.startsWith(name, "$enum-dynamic-test:");
+
+	function isSelectedEnumDescriptor(type:IrType):Bool
+		return switch type { case Enum(name): planner.shape(name) != null; default: false; };
+
+	/** A class type check consumes nominal identity without observing the class's field layout. */
+	function isReferenceTypeDescriptor(type:IrType):Bool
+		return switch type {
+			case Obj(name):
+				var object = objects.get(name);
+				object != null && !object.isValue;
+			default: false;
+		};
 
 	// Native structs need the independent canonical layout, not target-specific pointer offsets.
 	function nativePayload(type:IrType, seen:Array<String>):Bool
@@ -262,6 +335,10 @@ class IrInlineEnumEligibility {
 			case Enum(name):
 				edge(parent, named(enumNodes, name));
 			case Obj(name):
+			var object = objects.get(name);
+			// Ordinary classes are reference leaves in every value layout. Their fields and methods matter only when
+			// that class itself crosses a Dynamic/reflection or typed-call boundary.
+			if (object != null && object.isValue)
 				edge(parent, named(objectNodes, name));
 			case Virtual(name):
 				edge(parent, named(interfaceNodes, name));
@@ -311,30 +388,227 @@ class IrInlineEnumEligibility {
 				continue;
 			rejected[word] |= fresh;
 			for (bit in 0...32)
-				if ((fresh & (1 << bit)) != 0)
+				if ((fresh & (1 << bit)) != 0) {
 					reasons.set(names[(word << 5) + bit], reason);
+				}
 		}
+	}
+
+	/** Direct selected enum arguments/results can use the established scalar closure ABI and enum escape adapters. */
+	public function supportsCallableEscape(type:IrType):Bool {
+		var signature:Null<IrType> = switch type {
+			case Function(_, _): type;
+			case Nullable(inner): switch inner { case Function(_, _): inner; default: null; };
+			default: null;
+		};
+		if (signature == null) return false;
+		var parts:Array<IrType> = switch signature { case Function(arguments, result): arguments.concat([result]); default: []; };
+		var found = false;
+		for (part in parts)
+			switch part {
+				case Enum(name) if (planner.shape(name) != null && EnumRuntimeType.declaration(name) == name && !nativePayload(Enum(name), [])):
+					found = true;
+				default:
+					if (hasSelectedEnum(part, [])) return false;
+			}
+		return found;
+	}
+
+	function hasSelectedEnum(type:IrType, seenValues:Array<String>):Bool
+		return switch type {
+			case Enum(name): planner.shape(name) != null;
+			case Nullable(inner), Array(inner), Iterator(inner): hasSelectedEnum(inner, seenValues);
+			case Function(arguments, result): Lambda.exists(arguments, argument -> hasSelectedEnum(argument, seenValues)) || hasSelectedEnum(result, seenValues);
+			case Obj(name):
+				var object = objects.get(name);
+				object != null && object.isValue && !seenValues.contains(name)
+					&& Lambda.exists(object.fields, field -> hasSelectedEnum(field.type, seenValues.concat([name])));
+			default: false;
+		};
+
+	function selectedEnums(type:IrType, output:Map<String, Bool>, seenValues:Array<String>):Void
+		switch type {
+			case Enum(name) if (planner.shape(name) != null): output.set(name, true);
+			case Nullable(inner), Array(inner), Iterator(inner): selectedEnums(inner, output, seenValues);
+			case Function(arguments, result): for (argument in arguments) selectedEnums(argument, output, seenValues); selectedEnums(result, output, seenValues);
+			case Obj(name):
+				var object = objects.get(name);
+				if (object != null && object.isValue && !seenValues.contains(name))
+					for (field in object.fields) selectedEnums(field.type, output, seenValues.concat([name]));
+			default:
+		}
+
+	function reflectedUnsupportedEnums(reflected:Map<String, Bool>, functions:Map<String, IrFunction>, staticFields:Array<IrStaticField>):Map<String, Bool> {
+		var unsupported:Map<String, Bool> = [], visited:Map<String, Bool> = [], mapContents:Map<String, Array<IrType>> = [],
+			closureEnvironments:Map<String, Array<IrType>> = [], interfaceImplementers:Map<String, Array<IrObject>> = [],
+			interfaceClosures:Map<String, Map<String, Bool>> = [], objectClosures:Map<String, Map<String, Bool>> = [], implementersBuilt = false;
+		function interfaceClosure(name:String, path:Array<String>):Map<String, Bool> {
+			var existing = interfaceClosures.get(name);
+			if (existing != null) return existing;
+			if (path.contains(name)) return [];
+			var result:Map<String, Bool> = [name => true], contract = contracts.get(name), next = path.concat([name]);
+			if (contract != null)
+				for (base in contract.bases)
+					for (inherited in interfaceClosure(base, next).keys()) result.set(inherited, true);
+			interfaceClosures.set(name, result);
+			return result;
+		}
+		function objectClosure(name:String, path:Array<String>):Map<String, Bool> {
+			var existing = objectClosures.get(name);
+			if (existing != null) return existing;
+			if (path.contains(name)) return [];
+			var object = objects.get(name);
+			if (object == null) return [];
+			var result:Map<String, Bool> = [], next = path.concat([name]);
+			if (object.base != null)
+				for (inherited in objectClosure(object.base, next).keys()) result.set(inherited, true);
+			for (contract in object.interfaces)
+				for (inherited in interfaceClosure(contract, []).keys()) result.set(inherited, true);
+			objectClosures.set(name, result);
+			return result;
+		}
+		function buildInterfaceImplementers():Void {
+			if (implementersBuilt) return;
+			implementersBuilt = true;
+			for (object in objects)
+				if (!object.isValue)
+					for (name in objectClosure(object.name, []).keys()) {
+						var entries = interfaceImplementers.get(name);
+						if (entries == null) {
+							entries = [];
+							interfaceImplementers.set(name, entries);
+						}
+						entries.push(object);
+					}
+		}
+		for (fn in functions)
+			for (block in fn.blocks)
+				for (located in block.instructions)
+					switch located.value {
+						case InstanceClosure(output, _, receiver):
+							var key = Std.string(output.type), environments = closureEnvironments.get(key);
+							if (environments == null) {
+								environments = [];
+								closureEnvironments.set(key, environments);
+							}
+							environments.push(receiver.type);
+						case Call(_, name, arguments) if (StringTools.startsWith(name, "__map_")
+							&& StringTools.contains(name, "_ref_") && StringTools.endsWith(name, "_set") && arguments.length >= 3):
+							var key = Std.string(arguments[0].type), contents = mapContents.get(key);
+							if (contents == null) {
+								contents = [];
+								mapContents.set(key, contents);
+							}
+							contents.push(arguments[1].type);
+							contents.push(arguments[arguments.length - 1].type);
+						default:
+					}
+		function inspect(type:IrType, allowCallable:Bool):Void
+			{
+				if (!(allowCallable && supportsCallableEscape(type))) selectedEnums(type, unsupported, []);
+				switch type {
+					case Abstract(_):
+						var contents = mapContents.get(Std.string(type));
+						if (contents != null) for (content in contents) inspect(content, true);
+					default:
+				}
+			}
+		var walk:IrObject->Void = function(_) {};
+		function walkReferences(type:IrType):Void switch type {
+			case Obj(name):
+				var child = objects.get(name);
+				if (child != null) {
+					if (child.isValue) for (field in child.fields) walkReferences(field.type);
+					else walk(child);
+				}
+			case Nullable(inner), Array(inner), Iterator(inner): walkReferences(inner);
+			case Function(arguments, result):
+				for (argument in arguments) walkReferences(argument);
+				walkReferences(result);
+				var environments = closureEnvironments.get(Std.string(type));
+				if (environments != null) for (environment in environments) walkReferences(environment);
+			case Virtual(name):
+				var anonymous = objects.get(name);
+				if (anonymous != null && SemanticSignature.isAnonymousName(name))
+					walk(anonymous);
+				buildInterfaceImplementers();
+				var implementers = interfaceImplementers.get(name);
+				if (implementers != null) for (object in implementers) walk(object);
+			case Abstract(_):
+				var contents = mapContents.get(Std.string(type));
+				if (contents != null) for (content in contents) walkReferences(content);
+			default:
+		}
+		walk = function(current:IrObject):Void {
+			if (visited.exists(current.name)) return;
+			visited.set(current.name, true);
+			for (field in current.fields) {
+				inspect(field.type, true);
+				walkReferences(field.type);
+			}
+			for (field in staticFields) if (StringTools.startsWith(field.name, current.name + ".")) {
+				inspect(field.type, true);
+				walkReferences(field.type);
+			}
+			for (method in current.methods) {
+				var fn = functions.get(method.functionName);
+				if (fn != null) inspect(Function([for (argument in fn.arguments) argument.type], fn.result), false);
+			}
+			if (current.base != null) {
+				var base = objects.get(current.base);
+				if (base != null) walk(base);
+			}
+		};
+		for (object in objects) if (reflected.exists(object.name) && !object.isValue
+			&& !StringTools.startsWith(object.name, IrValueInterfaceBoxes.BOX_PREFIX)) walk(object);
+		return unsupported;
 	}
 
 	function block(name:String, reason:String):Void
 		mark(enumNodes.get(name), reason);
 
-	function escape(type:IrType, reason:String):Void
+	/** Map reference slots retain managed object pointers; only boxed value packets cross this boundary. */
+	function escapeMapReference(type:IrType, reason:String):Void
+		switch type {
+			case Enum(_): escapeType(type, reason);
+			case Nullable(inner): escapeMapReference(inner, reason);
+			case Obj(name):
+				var object = objects.get(name);
+				if (object != null && object.isValue) escapeType(type, reason);
+			case Function(_, _): escapeType(type, reason);
+			default:
+		}
+
+	function escape(type:IrType, reason:String):Void escapeType(type, reason);
+
+	function escapeType(type:IrType, reason:String):Void {
 		switch type {
 			case Enum(name):
 				block(name, reason);
 			case Obj(name):
-				mark(objectNodes.get(name), reason);
+				var object = objects.get(name);
+				// Checked casts to classes validate the managed reference type; they do not expose or re-layout its fields.
+				// Track the class for reflection checks, as with a Dynamic conversion, while keeping its field enums inline.
+				if ((reason == "Dynamic escape" || reason == "checked escape") && object != null && !object.isValue)
+					dynamicObjectEscapes.set(name, true);
+				else
+					mark(objectNodes.get(name), reason);
 			case Virtual(name):
-				mark(interfaceNodes.get(name), reason);
+				var anonymous = objects.get(name);
+				if (anonymous != null && SemanticSignature.isAnonymousName(name) && !anonymous.isValue)
+					dynamicObjectEscapes.set(name, true);
+				else
+					mark(interfaceNodes.get(name), reason);
 			case Nullable(inner), Array(inner), Iterator(inner):
-				escape(inner, reason);
+				escapeType(inner, reason);
 			case Function(arguments, result):
+				if (supportsCallableEscape(type)) return;
 				for (argument in arguments)
-					escape(argument, reason);
-				escape(result, reason);
+					escapeType(argument, reason);
+				escapeType(result, reason);
 			default:
 		}
+	}
 
 	function value(type:IrType, reason:String):Void
 		switch type {
@@ -350,9 +624,10 @@ class IrInlineEnumEligibility {
 			default:
 		}
 
-	function callableValue(type:IrType, reason:String):Void
+	function callableValue(type:IrType, reason:String, allowInlineEnumEscape:Bool = false):Void
 		switch type {
 			case Function(arguments, result):
+				if (allowInlineEnumEscape && supportsCallableEscape(type)) return;
 				for (argument in arguments)
 					value(argument, reason);
 				value(result, reason);

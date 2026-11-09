@@ -4011,3 +4011,274 @@ pending real-app decrease.
 Records: `haxeon-flat-work/enum-first-batch-gates/{artifact-comparison,paired-vm-manifest,final-tier2-progress}.json`,
 `paired-{actions,census,rss,web-core,web32-load}.jsonl` and the final gate logs. Raw captures and completed parity
 guests were deleted after recording their results.
+
+### Final batch validation after the 614024b2 rebase
+
+Control is Haxeon `614024b2`; candidate is `acdb8b7c`; the frozen outer app source is
+`2de94628c`. The outer source includes the local CAD collision-thickness fix and the read-only scene appearance
+change. The HashLink editor module hashes differ (`3946280685dbdb7e5646dc95683b3b9714a6ad7e17f1855488f2d7e60f407403`
+control, `ce3c52a1403c9b20a555cb64f005b28717f0c347bdb510fa6995de96b82bdb43` candidate; each about 97 MiB), so
+paired measurements were run. The table is one alternating control/candidate pair; allocation is the existing
+HashLink KiB counter, quantized by allocator buffer refills, and time is median frame time in milliseconds.
+
+| Action | Control KiB | Candidate KiB | Control ms | Candidate ms |
+|---|---:|---:|---:|---:|
+| console → telemetry | 74.5 | 74.4 | 1.00 | 1.01 |
+| hierarchy → sensors | 112.5 | 110.3 | 1.45 | 1.46 |
+| sensors → hierarchy | 77.8 | 79.6 | 1.11 | 1.12 |
+| telemetry → console | 92.9 | 88.8 | 1.07 | 1.07 |
+| hover away | 13.6 | 13.6 | 0.43 | 0.42 |
+| hover enter | 0.5 | 0.5 | 0.00 | 0.00 |
+| hover field | 10.9 | 12.4 | 0.43 | 0.43 |
+| hover inside | 0.5 | 0.5 | 0.00 | 0.00 |
+| hover other | 10.0 | 10.0 | 0.42 | 0.41 |
+| idle | 0.2 | 0.3 | 0.01 | 0.01 |
+| idle focused | 0.2 | 0.3 | 0.01 | 0.01 |
+| scroll inspector | 21.7 | 21.7 | 0.72 | 0.71 |
+| type backspace | 16.2 | 16.2 | 0.41 | 0.41 |
+| type character | 16.1 | 16.1 | 0.41 | 0.41 |
+
+The refill counter's `sensors → hierarchy` increase does not represent more allocated bytes in the selected action
+window: an exact census measured 1,806 objects / 138,136 bytes on control and 1,778 / 137,008 on candidate
+(-28 objects, -1,128 bytes). The same check for `hover field` measured 689 / 59,800 and 689 / 59,664
+(-136 bytes), despite the displayed 1.5 KiB increase. These two KiB readings crossed refill boundaries at different
+points. `idle` and `idle focused` each display +0.1 KiB; those windows did not receive an exact census, so the
+quantized readings alone do not establish a byte regression.
+
+Selection stress measured 2.79 → 2.41 ms per frame. Its 30-cycle exact census fell from 343,622 objects /
+24,092,200 bytes to 298,806 / 20,782,656 (-44,816 objects, -3,309,544 bytes). Largest byte reductions were arrays
+(-964,560), `LayoutStyle` (-815,280), `RenderNode` (-435,120), and `LayoutNode` (-172,800).
+
+Three paired headless runs (500 cycles) passed the memory gate. Median RSS growth windows in MiB were control
+`[30.62, 2.81, 0.94, 5.16]`, candidate `[30.16, 3.28, 0.94, 5.47]`; later windows are slightly higher on
+candidate. RSS after warmup was 8.91 → 9.84 MiB and frame p95 was 1.45 → 1.46 ms. The paired increases are recorded
+as findings; no run was retried.
+
+The Showcase Wasm GC guest changed from 5,820,369 bytes (SHA-256
+`e1278bce01b44055ba663184c2372fbe68214728ec202c7c2bffc8e60410024b`) to 5,855,816 bytes (`f79f290013151cda95e043e07b56c9dbcfd90e2634ccd3df26f34743c833ad8a`), +35,447 bytes. Its host Wasm
+(2,259,510 bytes) and JavaScript (177,128 bytes) are byte-identical. The opt-in Wasm GC object count tied in all
+four 120-frame scenes: full 4,440, static 4,440, text-heavy 4,440, editing 8,724. Each used 120 warmup frames;
+all had zero frames over budget. Guest frame median/p95 milliseconds were full 1.5/2.1 → 1.5/1.9, static
+1.3/1.8 → 1.3/1.8, text-heavy 1.4/2.0 → 1.4/2.2, and editing 1.6/2.3 → 1.5/2.3. The four runs are a single
+paired capture, not timing medians across repeated captures.
+
+The one-build compiler phase observations recorded BodyTyped (`bodies`) at 451.88 ms control and 120.38 ms
+candidate. Tier 2 passed: compiler suite (837 tests, zero failures), self-hosting fixed point, all ten UI scripts,
+Wasm backend parity, 521 cross-target fixtures (14 skipped), six UI snapshots, app suite, nine retention scenarios,
+editor budgets, and the headless memory gate. The Wasm GC UI snapshot is included in the parity gate.
+
+The app `MainWeb` Wasm GC guest initially failed on both control and candidate with
+`Duplicate IR function "$enum-equals:278a341efefc3146f489368a235f5603"`. A small incremental fixture reproduced the
+same class of failure: a cached struct equality helper retained its enum helper while a newly typed module requested
+that globally named helper under a different owner. The duplicate was at the final assembly boundary, where the same
+canonical function name cached in multiple modules was appended once per module. Sorting and uniquing the cached
+function names before resolving each body through the canonical owner fixes the duplicate; origin is `b2725626`
+(`Anchor shared equality helpers at their type declarations`), which added cross-module enum helper retention.
+
+The regression fixture passes on HashLink, Wasm32 and Wasm GC with inlining off/on, executes the updated program, and
+checks that exactly one enum equality helper reaches the backend. The `MainWeb` guest then compiled 3,353 sources to
+184,559,568 bytes (SHA-256
+`1ca68251980fa9f0d362cddb508f33a02272fafc6d509c58aabf435fb8882838`). This uses a temporary portable-ABI32 copy
+of the existing `machinekit-pendant.hxi` because the outer app does not package that interface for Wasm32; that
+packaging issue is outside Haxeon and does not block the compiler push. Guest compile and encode took 93,532 ms and
+167,079 ms respectively. The paired control still reproduces the duplicate-function failure.
+
+### Rejected payload sizing conversion (2026-11-09)
+
+Against `1fae06c3`, the directed `LayoutSizing` payload enum conversion passes the initial framework check and the
+final trial's six UI value snapshot checks, but is not allocation-neutral. An exact HashLink census of a typed class
+setter storing newly constructed `LayoutAxis.fixed(i)` values measures:
+
+| Updates | Committed representation | Payload sizing enum trial |
+|---:|---:|---:|
+| 8 | 0 objects / 0 bytes | 8 objects / 192 bytes |
+| 1,024 | 0 objects / 0 bytes | 1,024 objects / 24,576 bytes |
+
+Every additional allocation is `enum<haxeon.ui.LayoutSizing>`. The trial removes the redundant axis fields and
+preserves the native record mapping, but the current E3/E6/E7 classification keeps the nested enum boxed across
+`ComputedStyle.setAxis`/`getAxis`, style equality methods, reflection and descriptors. Correctness parity is therefore
+insufficient to land it. The complete reproduction and eligibility findings are recorded in `STRUCTS.md` under
+"UI sizing conversion: measured stop"; the patch is preserved on disk and the source was restored. No candidate editor
+or Web module from this rejected conversion is published, and no per-action allocation, RSS or binary-size win is
+claimed. Complete the documented transport and reflection prerequisites before retrying the payload sizing port.
+After restoring the source, `scripts/test-driver.sh 8` passes all 838 tests with zero failures.
+
+### Cache payload-free boxed enum cases on Wasm (2026-11-09)
+
+The host lifecycle plain-enum trial exposed a general compiler gap. HashLink reuses payload-free enum case values,
+but both Wasm backends emitted a new enum allocation at every case reference. This affected ordinary comparisons
+against a case as well as construction. The compiler now initializes one managed module-global cache per referenced
+case lazily. Wasm32 reserves and registers the cache roots before generating its collector; Wasm GC uses managed
+reference globals. Payload constructors retain their ordinary boxed allocation behavior.
+
+The small `NullaryEnumCacheMain` regression forces boxed storage with a by-value recursive case. Its measured loop
+references two payload-free cases, switches on them, compares declared equality and `Type.enumIndex`, and writes them
+through class methods into a field and a preallocated array. Setup and case initialization precede the allocation
+window. It clears every ordinary owner and array, churns payload values, collects, and reacquires the cases to check
+that the cache globals alone keep them alive. The Wasm32 run enables collection stress and checks that collection ran;
+the Wasm GC run forces an engine collection. Both inlining modes pass on all targets.
+
+| Target | Iterations | Before objects | After objects |
+|---|---:|---:|---:|
+| HashLink | 8 / 1,024 | 0 / 0 | 0 / 0 |
+| Wasm32 | 8 / 1,024 | 16 / 2,048 | 0 / 0 |
+| Wasm GC | 8 / 1,024 | 16 / 2,048 | 0 / 0 |
+
+The separately preserved lifecycle probe constructs sessions and performs stop/dispose transitions. These counts
+include the sessions and their two empty-array allocations, so they are not expected to be zero. Control uses the
+committed integer enum abstract; the trial uses the plain enum. All rows agree with inlining off and on:
+
+| Target | Session cycles | Integer control | Plain enum before fix | Plain enum after fix |
+|---|---:|---:|---:|---:|
+| Wasm32 | 8 | 27 | 88 | 27 |
+| Wasm32 | 1,024 | 3,075 | 10,248 | 3,075 |
+| Wasm GC | 8 | 28 | 89 | 28 |
+| Wasm GC | 1,024 | 3,076 | 10,249 | 3,076 |
+
+The probe includes one initial session per call; Wasm GC also counts its static callback closure. The exact HashLink
+census, which constructs its callback and initial session before the window, ties at 3,072 objects / 122,880 bytes for
+1,024 cycles, including 48-byte session objects. These are isolated form checks, not editor action measurements. The
+lifecycle source port remains separate from this compiler fix; editor/Web comparisons and Tier 2 run on the batch head.
+Tier 1 passes 839 compiler tests with zero failures, the six target/inlining combinations above, and self-hosting to a
+fixed point.
+
+### Host lifecycle as a closed enum (2026-11-09)
+
+`UiHostLifecycle` now names its six states with a plain `Equatable` enum. Its former integer values were not a native,
+wire or file contract, so implicit integer conversions have been removed. The transition switch is exhaustive;
+host callers already use named cases. The value snapshot parity gate checks startup, repeated transitions,
+stop/dispose idempotence, terminal states and invalid restarts, and rejects implicit conversions in both directions
+on HashLink, Wasm32 and Wasm GC, with inlining off and on (24 checks including the existing snapshot).
+
+The nullary-case cache prerequisite above makes the plain-enum lifecycle probe tie the integer control on both Wasm
+targets. The exact HashLink census also ties at 3,072 objects / 122,880 bytes for 1,024 session cycles; the session
+object remains 48 bytes. Tier 1 passes all 839 compiler tests with zero failures and the 24 parity checks above.
+These isolated checks establish the representation cost; paired editor/Web modules and full Tier 2 gates are
+assessed separately on the batch head.
+
+### Closed style tags (2026-11-09)
+
+`EffectKind`, `DecorationKind` and `EffectParameterType` are plain `Equatable` enums instead of implicitly
+convertible strings. Their lowercase/hyphenated spellings were display labels, not a native or serialized contract.
+Explicit exhaustive label switches preserve those descriptions without reflective enum formatting. Parameter
+component counts remain 1/2/4/4, including the existing zero result for a null parameter type.
+
+A stored-value probe constructs a record containing effect/decoration tags and an `EffectParameter` struct, reads
+the tags through the record and checks its scalar payload. Setup warms all referenced cases before counting:
+
+| Target | Iterations | String tags | Plain enums |
+|---|---:|---:|---:|
+| HashLink | 1,024 | 1,024 objects / 73,728 bytes | 1,024 objects / 65,536 bytes |
+| Wasm32 | 8 / 1,024 | 8 / 1,024 objects | 8 / 1,024 objects |
+| Wasm GC | 8 / 1,024 | 8 / 1,024 objects | 8 / 1,024 objects |
+
+Both inlining modes agree. HashLink's probe record shrinks from 72 to 64 bytes as eligible tags use scalar storage;
+there are no extra enum boxes in the loop. This is a representation probe, not an editor allocation claim. Editor
+and Showcase size/allocation comparisons belong to the batch-head measurements.
+Tier 1 passes 839 compiler tests, all 42 UI value parity/conversion checks and the framework test. No compiler
+sources change in this port; the cache prerequisite's self-hosting fixed point still applies.
+
+### Nullary enum cache and closed-tag batch: final measurements (2026-11-09)
+
+Control is `1fae06c3` (the following sizing-blocker commit is docs-only); candidate is `a3064590`, including the
+Wasm nullary-case cache and lifecycle/style-tag ports. Both use the same frozen outer app `2de94628c`, native
+libraries and checkout-built VM. Three paired captures alternate control/candidate order and use the same CPU
+set. The editor and Web modules differ, so no Tier 3 measurement was skipped. Captures and heavy builds live on
+DATA1; raw captures are deleted after their results are recorded.
+
+HashLink action medians below are the medians of three per-capture medians. KiB readings use the existing
+refill-quantized counter; the exact diagnostic windows below decide apparent increases.
+
+| Action | Control KiB | Candidate KiB | Control ms | Candidate ms |
+|---|---:|---:|---:|---:|
+| console->telemetry | 72.4 | 72.4 | 1.02 | 1.02 |
+| hierarchy->sensors | 110.3 | 112.3 | 1.48 | 1.48 |
+| sensors->hierarchy | 77.6 | 77.6 | 1.13 | 1.12 |
+| telemetry->console | 88.8 | 90.7 | 1.09 | 1.08 |
+| hover-away | 13.6 | 13.6 | 0.43 | 0.42 |
+| hover-enter | 0.5 | 0.5 | 0.00 | 0.00 |
+| hover-field | 12.4 | 12.4 | 0.44 | 0.43 |
+| hover-inside | 0.5 | 0.5 | 0.00 | 0.00 |
+| hover-other | 10.0 | 10.0 | 0.42 | 0.42 |
+| idle | 0.3 | 0.3 | 0.01 | 0.01 |
+| idle-focused | 0.3 | 0.3 | 0.01 | 0.01 |
+| scroll-inspector | 21.7 | 21.7 | 0.72 | 0.71 |
+| type-backspace | 16.2 | 16.2 | 0.42 | 0.42 |
+| type-char | 16.1 | 16.1 | 0.42 | 0.42 |
+| selection (exact window) | 571.03 | 571.03 | 2.47 | 2.44 |
+
+The selection row's KiB is one exact steady-state frame, not a refill-counter median. A measurement-only harness
+starts an exact one-byte-interval census on the second matching action and stops it immediately after the frame,
+before timeline serialization. It changes only the detached outer checkout. Control and candidate are rebuilt
+from their respective compiler/UI sources with the same instrumentation. All four tab windows and selection tie:
+
+| Exact action window | Objects, each side | Bytes, each side |
+|---|---:|---:|
+| hierarchy->sensors | 1,680 | 118,008 |
+| sensors->hierarchy | 1,152 | 80,376 |
+| console->telemetry | 1,181 | 79,376 |
+| telemetry->console | 1,716 | 93,952 |
+| selection | 8,624 | 584,736 |
+
+The displayed +2.0 KiB on hierarchy-to-sensors and +1.9 KiB on telemetry-to-console are buffer-refill granularity,
+not additional objects or requested bytes in those windows. No budget ceiling changes. Whole selection-stress
+captures (30 cycles) include timeline serialization; their only varying type is byte buffers. All other per-type
+counts and byte totals match. The UI-only selection window above ties exactly.
+
+| Pair | Control selection objects / bytes | Candidate selection objects / bytes |
+|---:|---:|---:|
+| 1 | 298,804 / 20,782,032 | 298,805 / 20,781,992 |
+| 2 | 298,802 / 20,781,400 | 298,804 / 20,781,680 |
+| 3 | 298,802 / 20,781,416 | 298,804 / 20,781,824 |
+
+Three paired 500-cycle headless captures pass the memory gate. Growth windows are MiB; RSS-after-warmup and p95
+are reported by the same gate:
+
+| Pair / version | RSS after warmup MiB | Growth windows MiB | Frame p95 ms |
+|---|---:|---|---:|
+| 1 / control | 9.69 | [30.16, 3.44, 0.78, 5.47] | 1.46 |
+| 1 / candidate | 10.00 | [29.22, 3.75, 0.78, 5.47] | 1.46 |
+| 2 / control | 13.75 | [29.84, 4.06, 0.78, 8.91] | 1.47 |
+| 2 / candidate | 10.00 | [30.0, 3.91, 0.62, 5.47] | 1.47 |
+| 3 / control | 10.47 | [29.53, 3.91, 0.94, 5.62] | 1.50 |
+| 3 / candidate | 9.69 | [30.16, 3.28, 0.94, 5.47] | 1.46 |
+
+Median growth windows are `[29.84, 3.91, 0.78, 5.62]` → `[30.00, 3.75, 0.78, 5.47]` MiB. The first window is
++0.16 MiB, a recorded finding; the later windows tie or decrease. Median RSS after warmup is 10.47 → 10.00 MiB.
+There was no retry to accept a memory result.
+
+Wasm GC uses 120 warmup and 120 measured frames. Every pair has the same object counts:
+
+| Scene | Control objects | Candidate objects | Control median / p95 ms | Candidate median / p95 ms |
+|---|---:|---:|---:|---:|
+| full | 4440 | 4320 | 1.40 / 2.70 | 1.40 / 2.50 |
+| static | 4440 | 4320 | 1.20 / 2.20 | 1.40 / 2.10 |
+| text-heavy | 4440 | 4320 | 1.40 / 2.50 | 1.40 / 2.20 |
+| editing | 8724 | 8604 | 1.50 / 3.50 | 1.50 / 2.70 |
+
+All scenes drop 120 objects, one per frame. The static scene's frame median rises 0.2 ms; its p95 falls 0.1 ms.
+These are the measured timings, not evidence of a general speedup. Wasm32 also builds and runs in three paired
+full-scene browser checks; its build does not enable an object counter, so no Wasm32 scene allocation count is claimed.
+
+| Module | Control bytes | Candidate bytes | Delta bytes |
+|---|---:|---:|---:|
+| HashLink editor | 102,185,950 | 102,216,099 | +30,149 |
+| Showcase Wasm32 | 11,850,962 | 11,868,822 | +17,860 |
+| Showcase Wasm GC | 5,855,815 | 5,861,190 | +5,375 |
+
+Editor SHA-256 is `2b627314132a2dae6580e6b5cf27c6ae7d50590d6e5d76888c43b7cd03f3cb13` →
+`57fa4883ec951d5d0a9d565fd43995085c99e51b8e9f874f1fb3fea8ff270b2d`. Showcase Wasm32 is
+`bfd12f3824d1bcca6de492b23b21f3d3da4c5d051391835f85ef5f558de8b654` →
+`66a442f51b4295425faf20bfffdbea91acb7721afbe11543bec930204b5d12c5`; Wasm GC is
+`bfe1db39c8dd4b91ac7f4e1700a0da89dec4933e15a220c3e27bf3599d4e295b` →
+`74888d82d5a58431a640557f886bd9753f1b6cc2bfe305904b4ac7b3a6832b01`.
+Serial exact-window builds report BodyTyped (`bodies`) at 111.90 → 111.51 ms, with no measurable increase.
+
+Tier 2 passes all ten UI scripts, full backend parity (521 fixtures; 14 skips), the 42 UI value checks, the app
+suite including CAD plate workflow, all nine retention scenarios, all three paired budget captures and all three
+paired memory captures. The compiler cache fix separately passed 839 compiler tests and self-hosting fixed point.
+Two detached-setup problems initially blocked the app gates: absent root `build/` for a generated test artifact,
+and materialized `.so` version aliases loading the simulation handle registry twice (also reproduced on control).
+The setup now creates that directory and preserves private version aliases with identical library bytes. A stale
+copied CAD library also lacked `cad_cut_many`; the replacement completed native build has source/ABI inputs identical
+to the frozen checkout. These setup fixes change no product source or assertions; their failures remain recorded.

@@ -6,7 +6,7 @@ import runtime.Runtime;
 class NominalInterfacePatchMain {
  static function configuredCompiler():Compiler {
   var result=new Compiler(null,compiler.runtime.CompilerIntrinsics.configuration());
-  result.addSourceRoot("stdlib");
+  result.addStandardLibrarySourceRoot("stdlib");
   return result;
  }
  static function contract(version:Int):String return

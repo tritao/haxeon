@@ -29,7 +29,7 @@ class ArrayWritePatchMain {
 		// The runtime fast paths also introduce Ref/Unref/Setref/RefOffset instructions and Ref types in patches.
 		var fastCompiler = new Compiler();
 		CompilerIntrinsics.register(fastCompiler);
-		fastCompiler.addSourceRoot("stdlib");
+		fastCompiler.addStandardLibrarySourceRoot("stdlib");
 		var fastProgram = (value:Int) ->
 			'import haxe.io.Bytes; function main():Int {var a=[0,0,0];a.resize(0);var b=Bytes.alloc(1);a.push($value);b.set(0,a[0]);return b.get(0);}';
 		fastCompiler.update("Main.hx", fastProgram(9));

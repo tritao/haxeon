@@ -10,7 +10,7 @@ class CxxOwnedMain {
 			projectionDirectory = Sys.args()[2],
 			compiler = new Compiler();
 		CompilerIntrinsics.register(compiler);
-		compiler.addSourceRoot(Sys.getCwd() + "/stdlib");
+		compiler.addStandardLibrarySourceRoot(Sys.getCwd() + "/stdlib");
 		compiler.addFfiInterface(hxiPath, File.getContent(hxiPath));
 		compiler.update("OwnedWidget.hx", File.getContent(projectionDirectory + "/OwnedWidget.hx"));
 		compiler.update("Widget.hx", File.getContent(projectionDirectory + "/Widget.hx"));

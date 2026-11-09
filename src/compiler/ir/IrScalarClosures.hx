@@ -8,6 +8,7 @@ import compiler.ir.SourceProvenance.Located;
 class IrScalarClosures {
 	final program:IrProgram;
 	final objects:Map<String, IrObject>;
+	final inlineEnums:Map<String, String> = [];
 	final layouts:IrInlineValueLayout;
 	final candidates:Map<String, IrType> = [];
 	final excluded:Map<String, Bool> = [];
@@ -29,6 +30,9 @@ class IrScalarClosures {
 	function new(program:IrProgram) {
 		this.program = program;
 		objects = [for (object in program.objects) object.name => object];
+		for (declaration in program.enums)
+			if (declaration.inlineStorage != null)
+				inlineEnums.set(declaration.inlineStorage, declaration.name);
 		layouts = new IrInlineValueLayout(IrObjectTable.of(objects));
 		functions = [for (fn in program.functions) fn.name => fn];
 	}
@@ -85,18 +89,20 @@ class IrScalarClosures {
 						case CallClosure(_, closure, _):
 							note(closure.type);
 						case ToDyn(_, input):
-							switch input.type {
-								case Function(_, _): note(input.type);
-								default: excludeNested(input.type);
-							}
+							var callable = functionType(input.type);
+							if (callable != null)
+								note(callable);
+							else
+								excludeNested(input.type);
 						case SafeCast(output, input):
-							switch output.type {
-								case Function(_, _) if ((switch (input.type) {
-									case Dyn: true;
-									default: false;
-								})): note(output.type);
-								default: excludeNested(output.type);
-							}
+							var callable = functionType(output.type);
+							if (callable != null && (switch (input.type) {
+								case Dyn: true;
+								default: false;
+							}))
+								note(callable);
+							else
+								excludeNested(output.type);
 							excludeNested(input.type);
 						case TypeValue(out, type) if (!signatureQueries.exists(out.id) || uses.get(out.id) != 1):
 							excludeNested(type);
@@ -231,8 +237,25 @@ class IrScalarClosures {
 	function needsBoundaryAdapter(type:IrType):Bool
 		return switch type {
 			case Function(arguments, result): candidates.exists(key(type)) || Lambda.exists(arguments, needsBoundaryAdapter) || needsBoundaryAdapter(result);
+			case Nullable(inner): needsBoundaryAdapter(inner);
 			default: false;
 		};
+
+	function inlineEnum(type:IrType):Null<String>
+		return switch type {
+			case Obj(name): inlineEnums.get(name);
+			default: null;
+		};
+
+	function toDynamic(builder:IrBuilder, value:IrValue, type:IrType):IrValue {
+		var enumName = inlineEnum(type);
+		return enumName == null ? builder.toDyn(value) : builder.call(IrInlineEnumEscapes.boxName(enumName), [value], Dyn);
+	}
+
+	function fromDynamic(builder:IrBuilder, value:IrValue, type:IrType):IrValue {
+		var enumName = inlineEnum(type);
+		return enumName == null ? builder.safeCast(value, type) : builder.call(IrInlineEnumEscapes.unboxName(enumName), [value], type);
+	}
 
 	function mapType(type:IrType):IrType
 		return switch type {
@@ -410,8 +433,10 @@ class IrScalarClosures {
 
 	/** A scalar closure escapes through a signature-specific adapter; only that target proves its original type. */
 	function ensureSignatureCheck(type:IrType):String {
-		var signatureKey = key(type),
-			existing = signatureChecks.get(signatureKey);
+		var callable = switch type {
+			case Nullable(inner): inner;
+			default: type;
+		}, signatureKey = key(callable), existing = signatureChecks.get(signatureKey);
 		if (existing != null)
 			return existing;
 		var suffix = haxe.crypto.Sha256.encode(signatureKey).substr(0, 32),
@@ -419,10 +444,10 @@ class IrScalarClosures {
 			environment = "$scalar-closure:environment:" + suffix,
 			wrapper = "$scalar-closure:erased-call:" + suffix;
 		signatureChecks.set(signatureKey, name);
-		ensureErasure(type);
+		ensureErasure(callable);
 		var b = new IrBuilder(),
 			closure = b.argument("closure", Dyn),
-			probeType:IrType = switch erasedType(type) {
+			probeType:IrType = switch erasedType(callable) {
 				case Function(args, result): Function([Obj(environment)].concat(args), result);
 				default: throw "Expected erased closure";
 			},
@@ -438,6 +463,35 @@ class IrScalarClosures {
 		var signature = key(type), existing = erasures.get(signature);
 		if (existing != null)
 			return existing;
+		switch type {
+			case Nullable(inner):
+				if (!(switch inner {
+					case Function(_, _): true;
+					default: false;
+				}))
+					throw "Nullable scalar closure erasure requires a function";
+				var innerErasure = ensureErasure(inner), suffix = haxe.crypto.Sha256.encode(signature).substr(0, 32),
+					maker = "$scalar-closure:erase-nullable:" + suffix, result = {
+						maker: maker,
+						environment: innerErasure.environment
+					};
+				erasures.set(signature, result);
+				var outputType = erasedType(type),
+					b = new IrBuilder(),
+					source = b.argument("closure", type),
+					absent = b.createBlock(),
+					present = b.createBlock();
+				b.branch(b.equal(source, b.constNull(type)), absent, present);
+				b.select(absent);
+				b.returnValue(b.constNull(outputType));
+				b.select(present);
+				b.returnValue(b.safeCast(b.call(innerErasure.maker, [b.safeCast(source, inner)], erasedType(inner)), outputType));
+				generatedMakers.push(new IrFunction(maker, b.arguments, outputType, b.blocks));
+				return result;
+			case Function(_, _):
+			default:
+				throw "Scalar closure erasure requires a function";
+		}
 		var suffix = haxe.crypto.Sha256.encode(signature).substr(0, 32), environment = "$scalar-closure:environment:" + suffix,
 			wrapper = "$scalar-closure:erased-call:" + suffix, maker = "$scalar-closure:erase:" + suffix, result = {
 				maker: maker,
@@ -456,8 +510,8 @@ class IrScalarClosures {
 						case Dyn: true;
 						default: false;
 					})
-				?arguments[index]:body.safeCast
-				(arguments[index], logical.arguments[index])
+				?arguments[index]:fromDynamic
+				(body, arguments[index], logical.arguments[index])
 			], closure = body.fieldGet(receiver, "closure", type), call = body.callClosure(closure, adapted, logical.result);
 		body.returnValue((switch (logical.result) {
 			case Void: true;
@@ -465,7 +519,7 @@ class IrScalarClosures {
 		}) ? body.constNull(Dyn) : (switch (logical.result) {
 			case Dyn: true;
 			default: false;
-		}) ? call : body.toDyn(call));
+		}) ? call : toDynamic(body, call, logical.result));
 		generatedFunctions.push(new IrFunction(wrapper, body.arguments, Dyn, body.blocks));
 		generatedObjects.push({
 			name: environment,
@@ -519,6 +573,7 @@ class IrScalarClosures {
 	function erasedType(type:IrType):IrType
 		return switch type {
 			case Function(arguments, _): Function([for (_ in arguments) Dyn], Dyn);
+			case Nullable(inner): Nullable(erasedType(inner));
 			default: throw "Scalar closure erasure requires a function";
 		};
 
@@ -528,6 +583,31 @@ class IrScalarClosures {
 			existing = restorations.get(signatureKey);
 		if (existing != null)
 			return existing;
+		switch type {
+			case Nullable(inner):
+				if (!(switch inner {
+					case Function(_, _): true;
+					default: false;
+				}))
+					throw "Nullable scalar closure restoration requires a function";
+				var innerMaker = ensureRestoration(inner),
+					maker = "$scalar-closure:restore-nullable:" + haxe.crypto.Sha256.encode(signatureKey).substr(0, 32),
+					b = new IrBuilder(),
+					original = b.argument("closure", Dyn),
+					missing = b.createBlock(),
+					present = b.createBlock();
+				restorations.set(signatureKey, maker);
+				b.branch(b.equal(original, b.constNull(Dyn)), missing, present);
+				b.select(missing);
+				b.returnValue(b.constNull(type));
+				b.select(present);
+				b.returnValue(b.safeCast(b.call(innerMaker, [original], inner), type));
+				generatedMakers.push(new IrFunction(maker, b.arguments, type, b.blocks));
+				return maker;
+			case Function(_, _):
+			default:
+				throw "Scalar closure restoration requires a function";
+		}
 		var suffix = haxe.crypto.Sha256.encode(signatureKey).substr(0, 32),
 			environment = "$scalar-closure:restored-environment:" + suffix,
 			wrapper = IrScalarArguments.PREFIX + "$scalar-closure:restored-call:" + suffix,
@@ -588,7 +668,7 @@ class IrScalarClosures {
 					} else (switch (argument.type) {
 						case Dyn: true;
 						default: false;
-					}) ? argument : call.toDyn(argument);
+					}) ? argument : toDynamic(call, argument, logicalType);
 				}
 			],
 			erasedResult = call.callClosure(closure, erasedArguments, Dyn),
@@ -599,7 +679,7 @@ class IrScalarClosures {
 				case Dyn: true;
 				default: false;
 			}) ? erasedResult : needsBoundaryAdapter(logical.result) ? call.call(ensureRestoration(logical.result), [erasedResult],
-				mapType(logical.result)) : call.safeCast(erasedResult, logical.result);
+				mapType(logical.result)) : fromDynamic(call, erasedResult, logical.result);
 		if (resultSlots.length == 0)
 			call.returnValue(result);
 		else {
@@ -668,6 +748,16 @@ class IrScalarClosures {
 					return field;
 		throw 'Missing scalar closure field $objectName.$name';
 	}
+
+	static function functionType(type:IrType):Null<IrType>
+		return switch type {
+			case Function(_, _): type;
+			case Nullable(inner): switch inner {
+					case Function(_, _): inner;
+					default: null;
+				};
+			default: null;
+		};
 
 	static function key(type:IrType):String
 		return Std.string(type);

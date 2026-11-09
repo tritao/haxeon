@@ -8,7 +8,7 @@ class ERegMain {
 	static function main():Void {
 		var compiler = new Compiler();
 		CompilerIntrinsics.register(compiler);
-		compiler.addSourceRoot("stdlib");
+		compiler.addStandardLibrarySourceRoot("stdlib");
 		compiler.update("Main.hx",
 			"function main():Int {\n"
 			+ "  var expression = ~/world/i;\n"

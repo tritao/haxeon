@@ -30,7 +30,7 @@ class EnumEqualityIncrementalMain {
 		arrayCompiler.update("Value.hx", genericSource("false"));
 		if (GeneratedProgramRunner.exitCode(arrayCompiler.compile("Main")) != 2) throw "incremental generic enum array view retained stale equality";
 		var reflectionCompiler = new Compiler(null, CompilerIntrinsics.configuration());
-		reflectionCompiler.addSourceRoot("stdlib");
+		reflectionCompiler.addStandardLibrarySourceRoot("stdlib");
 		reflectionCompiler.update("Equatable.hx", "interface Equatable {}");
 		reflectionCompiler.update("Value.hx", genericSource("true"));
 		reflectionCompiler.update("Other.hx", "class Other { public static function code():Int return 1; }");
@@ -48,7 +48,7 @@ class EnumEqualityIncrementalMain {
 		nativeCompiler.update("Value.hx", genericSource("false"));
 		if (GeneratedProgramRunner.exitCode(nativeCompiler.compile("Main")) != 2) throw "native enum escape retained stale equality";
 		var lateReflection = new Compiler(null, CompilerIntrinsics.configuration());
-		lateReflection.addSourceRoot("stdlib");
+		lateReflection.addStandardLibrarySourceRoot("stdlib");
 		lateReflection.update("Equatable.hx", "interface Equatable {}");
 		lateReflection.update("Value.hx", source("true"));
 		lateReflection.update("Holder.hx", "class Holder { public var value:Value; public function new() value=Value.Item(1); }");

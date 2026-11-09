@@ -5,7 +5,7 @@ import compiler.runtime.CompilerIntrinsics;
 class SpecializedMapIncrementalMain {
 	static function main():Void {
 		var compiler = new Compiler(null, CompilerIntrinsics.configuration());
-		compiler.addSourceRoot("stdlib");
+		compiler.addStandardLibrarySourceRoot("stdlib");
 		compiler.update("Value.hx", "struct Value { public var number:Int; public function new(number:Int) this.number = number; }");
 		compiler.update("Holder.hx", "class Holder { public var entries:Map<Int, Value>; public function new() {} }");
 		compiler.update("Main.hx", "class Main { static function main():Int { var h = new Holder(); return h == null ? 1 : 42; } }");

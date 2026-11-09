@@ -138,7 +138,7 @@ class LiveObjectLayoutMain {
 	static function compiler():Compiler {
 		var compiler = new Compiler();
 		CompilerIntrinsics.register(compiler);
-		compiler.addSourceRoot("stdlib");
+		compiler.addStandardLibrarySourceRoot("stdlib");
 		return compiler;
 	}
 

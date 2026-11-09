@@ -99,10 +99,19 @@ class IrVerifier {
 						if (arguments.length > 1 && arguments[1].id == value.id) {
 							if (symbol == "__value_array_alloc" || symbol == "__value_array_retype" || symbol == "__array_alloc_typed_ref")
 								valid = switch out.type {case Array(element): sameType(element, type); default:false;};
-							else if (symbol == "__std_is_exact_type") {
+							else if (symbol == "__std_is_exact_type" && StringTools.startsWith(original, "$value-array:bridge:")) {
 								var bridge = "$value-array:bridge:" + haxe.crypto.Base64.encode(compiler.ir.codec.IrTypeCodec.encode(type)) + ":accepts";
 								valid = original == bridge && fn.arguments.length == 1 && sameType(fn.arguments[0].type, Dyn) && sameType(fn.result, Bool);
 							}
+							else if ((symbol == "__std_is_exact_type" || symbol == "__std_is_of_type") && logicalEnumDescriptorFunction(original))
+								valid = switch type {
+									case Enum(name):
+										var expected = original == IrEnumDynamicDispatch.EQUAL || original == IrEnumDynamicDispatch.REFLECT ? 2 : 1,
+										allDynamic = fn.arguments.length == expected;
+										for (argument in fn.arguments) if (!sameType(argument.type, Dyn)) allDynamic = false;
+										selected.exists(name) && allDynamic && sameType(fn.result, Bool);
+									default: false;
+								};
 						}
 					default:
 				}
@@ -127,6 +136,10 @@ class IrVerifier {
 			}
 		}
 	}
+
+	static function logicalEnumDescriptorFunction(name:String):Bool
+		return name == IrEnumDynamicDispatch.EQUAL || name == IrEnumDynamicDispatch.REFLECT
+			|| StringTools.startsWith(name, "$enum-dynamic-test:");
 
 	public static function verify(program:IrProgram):Void {
 		verifySelected(program, null);
@@ -310,7 +323,7 @@ class IrVerifier {
 			var block = graph.block(id), ordinary = false;
 			for (position in 0...block.instructions.length) {
 				var instruction = block.instructions[position].value;
-				verifyScalarReferenceUse(instruction, scalarFunctions, carrierSlots, physicalValues);
+				verifyScalarReferenceUse(instruction, scalarFunctions, carrierSlots, physicalValues, fn, signatures);
 				switch instruction {
 					case Phi(_, _):
 						if (ordinary)
@@ -390,13 +403,67 @@ class IrVerifier {
 		default: IrValueLaneReference.isCarrier(type);
 	};
 
+	static function closureSignatureKey(type:IrType):String
+		return haxe.crypto.Sha256.encode(Std.string(type)).substr(0, 32);
+
+	/** A Wasm32 closure adapter casts its erased receiver through a generated signature checker. */
+	static function isGeneratedClosureAdapterCast(fn:IrFunction, output:IrValue, input:IrValue,
+			signatures:Map<String, {arguments:Array<IrType>, result:IrType}>):Bool {
+		if (!sameType(input.type, Dyn) || fn.arguments.length == 0 || !sameType(fn.arguments[0].type, Dyn)) return false;
+		var prefix = "__haxeon_closure_adapter_";
+		if (!StringTools.startsWith(fn.name, prefix)) return false;
+		var keys = fn.name.substr(prefix.length).split("_");
+		if (keys.length != 2) return false;
+		var targetType:IrType = Function([for (index in 1...fn.arguments.length) fn.arguments[index].type], fn.result),
+			sourceKey = closureSignatureKey(output.type), targetKey = closureSignatureKey(targetType);
+		if (keys[0] != sourceKey || keys[1] != targetKey) return false;
+		var castSignature = signatures.get("__haxeon_closure_cast_" + sourceKey);
+		if (castSignature == null || castSignature.arguments.length != 1 || !sameType(castSignature.arguments[0], Dyn)
+			|| !sameType(castSignature.result, Dyn)) return false;
+		for (block in fn.blocks) for (located in block.instructions) switch located.value {
+			case CallClosure(_, closure, _) if (closure.id == output.id): return true;
+			default:
+		}
+		return false;
+	}
+
+	static function isGeneratedClosureAdapterValue(fn:IrFunction, value:IrValue,
+			signatures:Map<String, {arguments:Array<IrType>, result:IrType}>):Bool {
+		var castPrefix = "__haxeon_closure_cast_";
+		if (!StringTools.startsWith(fn.name, castPrefix) || fn.arguments.length != 1 || !sameType(fn.arguments[0].type, Dyn)
+			|| !sameType(fn.result, Dyn)) return false;
+		var targetKey = closureSignatureKey(value.type);
+		if (fn.name != castPrefix + targetKey) return false;
+		var targetArguments = switch value.type { case Function(arguments, _): arguments; default: return false; },
+			targetResult = switch value.type { case Function(_, result): result; default: return false; };
+		for (block in fn.blocks) for (located in block.instructions) switch located.value {
+			case InstanceClosure(output, name, receiver) if (output.id == value.id && receiver.id == fn.arguments[0].id):
+				if (name != "__haxeon_varargs_adapter_" + Std.string(value.type)) {
+					var prefix = "__haxeon_closure_adapter_";
+					if (!StringTools.startsWith(name, prefix)) continue;
+					var keys = name.substr(prefix.length).split("_");
+					if (keys.length != 2 || keys[1] != targetKey) continue;
+				}
+				var adapter = signatures.get(name);
+				if (adapter == null || adapter.arguments.length != targetArguments.length + 1 || !sameType(adapter.arguments[0], Dyn)
+					|| !sameType(adapter.result, targetResult)) continue;
+			var matches = true;
+			for (index in 0...targetArguments.length) if (!sameType(adapter.arguments[index + 1], targetArguments[index])) matches = false;
+			if (matches) return true;
+			default:
+		}
+		return false;
+	}
+
 	static function verifyScalarReferenceUse(instruction:IrInstruction, scalarFunctions:Map<String, Bool>, carrierSlots:Map<String, Bool>,
-			physicalValues:Map<String, Bool>):Void {
+			physicalValues:Map<String, Bool>, fn:IrFunction, signatures:Map<String, {arguments:Array<IrType>, result:IrType}>):Void {
 		switch instruction {
-			case ToDyn(output, value) if (sameType(output.type, Dyn) && !IrValueLaneReference.isCarrier(value.type) && requiresLogicalValueAdapter(value.type, physicalValues)):
+			case ToDyn(output, value) if (sameType(output.type, Dyn) && !IrValueLaneReference.isCarrier(value.type) && requiresLogicalValueAdapter(value.type, physicalValues)
+				&& !isGeneratedClosureAdapterValue(fn, value, signatures)):
 				throw "Inline value storage requires a logical Dynamic adapter";
 			case SafeCast(output, value) if (sameType(output.type, Dyn) && !IrValueLaneReference.isCarrier(value.type) && requiresLogicalValueAdapter(value.type, physicalValues)
-				|| sameType(value.type, Dyn) && !IrValueLaneReference.isCarrier(output.type) && requiresLogicalValueAdapter(output.type, physicalValues)):
+				|| sameType(value.type, Dyn) && !IrValueLaneReference.isCarrier(output.type) && requiresLogicalValueAdapter(output.type, physicalValues)
+					&& !isGeneratedClosureAdapterCast(fn, output, value, signatures)):
 				throw "Inline value storage requires a logical cast adapter";
 			default:
 		}
@@ -624,8 +691,9 @@ class IrVerifier {
 						require(values,arg);
 						var valid = switch arg.type {
 							case Obj(name): var object = objects.get(name); object != null && !object.isValue;
-							// Erased class/interface owners already carry a reference; the operation never creates a box.
-							case Virtual(_), Dyn: true;
+							// Managed references retain identity at erased boundaries; the operation never creates a box.
+							case Bytes, ManagedBytes, Virtual(_), Dyn, Array(_), Iterator(_): true;
+							case Nullable(inner): isIdentityReference(inner, objects);
 							default: false;
 						};
 						if (!valid) throw 'Reference identity requires class or interface references, got ${Std.string(arg.type)}';
@@ -1004,6 +1072,14 @@ class IrVerifier {
 	static function isReference(type:IrType):Bool
 		return switch type {
 			case Bytes, RawPtr, ManagedBytes, Dyn, Nullable(_), Obj(_), Enum(_), Abstract(_), Virtual(_), Array(_), Iterator(_), Function(_, _): true;
+			default: false;
+		};
+
+	static function isIdentityReference(type:IrType, objects:Map<String, IrObject>):Bool
+		return switch type {
+			case Obj(name): var object = objects.get(name); object != null && !object.isValue;
+			case Bytes, ManagedBytes, Virtual(_), Dyn, Array(_), Iterator(_): true;
+			case Nullable(inner): isIdentityReference(inner, objects);
 			default: false;
 		};
 
