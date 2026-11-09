@@ -18,4 +18,4 @@ if [[ ! -f "$state_path" ]]; then
 fi
 
 export LD_LIBRARY_PATH="$root_dir/out:$("$root_dir/scripts/hashlink-path.sh")${LD_LIBRARY_PATH:+:$LD_LIBRARY_PATH}"
-"$haxe_bin" --cwd "$root_dir" -cp src --run tools.AndroidReload "$source_path" "$state_path" "$bundle_path"
+"$haxe_bin" --cwd "$root_dir" common.hxml --run tools.AndroidReload "$source_path" "$state_path" "$bundle_path"

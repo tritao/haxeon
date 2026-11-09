@@ -37,7 +37,7 @@ done
 # HXI records here use LP64 layouts; target the runner's ABI explicitly.
 export HAXEON_GC_BOUNDARY_TARGET=arm64-apple-darwin
 for generator in HxiCallMain HxiRetainedMain; do
- (cd "$root"; HAXEON_GC_BOUNDARY_STRESS=1 "$root/.tools/haxe/haxe" -cp src -cp tests/runtime --run "$generator" "$work/$generator.hl" "$work/fixture.dylib")
+ (cd "$root"; HAXEON_GC_BOUNDARY_STRESS=1 "$root/.tools/haxe/haxe" common.hxml -cp tests/runtime --run "$generator" "$work/$generator.hl" "$work/fixture.dylib")
  for threads in 1 4; do
   status=0
   HL_GC_THREADS=$threads "$vm" "$work/$generator.hl" || status=$?

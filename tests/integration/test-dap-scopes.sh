@@ -82,7 +82,7 @@ read_locals() {
 	"${dap[@]}" variables --name "$session" --variables-reference "$reference"
 }
 
-"$tools_dir/haxe/haxe" --cwd "$repo_dir" -cp src --run Main "$repo_dir/tests/dap/DapScopeProbe.hx" "$repo_dir/out/dap-scope-probe.hl" >/dev/null
+"$tools_dir/haxe/haxe" --cwd "$repo_dir" common.hxml --run Main "$repo_dir/tests/dap/DapScopeProbe.hx" "$repo_dir/out/dap-scope-probe.hl" >/dev/null
 "${dap[@]}" start >/dev/null
 launch_json=$(python3 - "$repo_dir" <<'PY'
 import json

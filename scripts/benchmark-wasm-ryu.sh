@@ -11,7 +11,7 @@ fi
 
 mkdir -p "$root_dir/out"
 for target in wasm32 wasm-gc; do
-	"$haxe_bin" --cwd "$root_dir" -cp src --run compiler.tools.HaxeonCompiler \
+	"$haxe_bin" --cwd "$root_dir" common.hxml --run compiler.tools.HaxeonCompiler \
 		--target="$target" --output="$root_dir/out/$target-ryu-benchmark.wasm" \
 		--entry=wasm-ryu-benchmark \
 		--export=wasm-ryu-benchmark.decimalChecksum \

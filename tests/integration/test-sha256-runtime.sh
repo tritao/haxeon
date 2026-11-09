@@ -5,7 +5,7 @@ cd "$repo_dir"
 temporary_dir=$(mktemp -d "${TMPDIR:-/tmp}/haxeon-sha256.XXXXXX")
 trap 'rm -rf -- "${temporary_dir:?}"' EXIT
 export LD_LIBRARY_PATH="$repo_dir/out:$("$repo_dir/scripts/hashlink-path.sh")${LD_LIBRARY_PATH:+:$LD_LIBRARY_PATH}"
-.tools/haxe/haxe -cp src -main compiler.tools.HaxeonCompiler -hl "$temporary_dir/compiler.hl"
+.tools/haxe/haxe common.hxml -main compiler.tools.HaxeonCompiler -hl "$temporary_dir/compiler.hl"
 for target in hl wasm32 wasm-gc; do
   "$("$repo_dir/scripts/hashlink-path.sh")/hl" "$temporary_dir/compiler.hl" --target="$target" --output="$temporary_dir/sha256.$target" --entry=sha256 --root=tests/programs tests/programs/sha256.hx > "$temporary_dir/$target.log" 2>&1 || { cat "$temporary_dir/$target.log"; exit 1; }
 done

@@ -103,11 +103,11 @@ export HAXEON_COMPILER_HL="$prebuilt_compilers/haxeon-compiler.hl"
 prebuilt_build_tool="$prebuilt_compilers/haxeon-build.hl"
 build_prebuilt_compilers() {
 	local status=0
-	"$haxe" --cwd "$root_dir" -cp src -hl "$HAXEON_MAIN_HL" -main Main &
+	"$haxe" --cwd "$root_dir" common.hxml -hl "$HAXEON_MAIN_HL" -main Main &
 	local main_build=$!
-	"$haxe" --cwd "$root_dir" -cp src -hl "$prebuilt_build_tool" -main build.HaxeonBuild &
+	"$haxe" --cwd "$root_dir" common.hxml -hl "$prebuilt_build_tool" -main build.HaxeonBuild &
 	local build_tool_build=$!
-	"$haxe" --cwd "$root_dir" -cp src -hl "$HAXEON_COMPILER_HL" -main compiler.tools.HaxeonCompiler || status=1
+	"$haxe" --cwd "$root_dir" common.hxml -hl "$HAXEON_COMPILER_HL" -main compiler.tools.HaxeonCompiler || status=1
 	wait "$main_build" || status=1
 	wait "$build_tool_build" || status=1
 	return "$status"
@@ -159,7 +159,7 @@ run_timed world-native-nested-int16-store-integration "$root_dir/tests/integrati
 if [[ -z ${HAXEON_HAXE:-} ]]; then
 	test_cli_hl="$root_dir/out/test-tools/haxeon-cli.hl"
 	mkdir -p "$(dirname "$test_cli_hl")"
-	run_timed test-cli-build "$haxe" --cwd "$root_dir" -cp src -hl "$test_cli_hl" -main tools.HaxeonCli
+	run_timed test-cli-build "$haxe" --cwd "$root_dir" common.hxml -hl "$test_cli_hl" -main tools.HaxeonCli
 fi
 run_isolated_integration_group \
 	tests/integration/test-cxx-project-ffi.sh \

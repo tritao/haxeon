@@ -1,4 +1,4 @@
--cp src
+common.hxml
 -cp tests
 -cp tests/runtime
 -main LiveStringConstantsPatchMain

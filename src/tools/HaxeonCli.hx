@@ -794,16 +794,14 @@ class HaxeonCli {
 		if (!FileSystem.exists(compiler))
 			throw 'Pinned Haxe is missing: $compiler (run scripts/build-native.sh)';
 
-		var compilerArguments = [
-			"-cp",
-			Path.join([home, "src"]),
+		var compilerArguments = build.CompilerSources.classPath(Path.join([home, "src"])).concat([
 			"--run",
 			"compiler.tools.HaxeonCompiler",
 			"--target=" + (target == "host" ? "hl" : "wasm32"),
 			"--build-mode=" + options.buildMode,
 			"--output=" + output,
 			"--entry=" + config.entry
-		];
+		]);
 		for (root in config.sourceRoots)
 			compilerArguments.push("--root=" + resolvePath(root, projectDirectory));
 		for (define in config.defines.concat(options.defines))

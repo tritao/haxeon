@@ -10,7 +10,7 @@ Build the stock-Haxe seed compiler, then run paired measurements:
 ```sh
 export LD_LIBRARY_PATH=$PWD/out:$(scripts/hashlink-path.sh)
 mkdir -p out/regalloc
-.tools/haxe/haxe --cwd . -cp src -hl out/regalloc/compiler.hl -main compiler.tools.HaxeonCompiler
+.tools/haxe/haxe --cwd . common.hxml -hl out/regalloc/compiler.hl -main compiler.tools.HaxeonCompiler
 python3 tests/bench/jit-regalloc/run.py --modes 0,4
 ```
 

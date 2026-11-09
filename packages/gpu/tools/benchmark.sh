@@ -26,7 +26,7 @@ cmake --build "$build_dir" --target nativekit_gpu_benchmark
     "$gpu_dir/bench/benchmark_import.h"
 
 "$haxeon_dir/scripts/build-runtime.sh"
-(cd "$haxeon_dir" && .tools/haxe/haxe -cp src --run compiler.tools.HaxeonCompiler \
+(cd "$haxeon_dir" && .tools/haxe/haxe common.hxml --run compiler.tools.HaxeonCompiler \
     --output="$build_dir/nativekit-gpu-benchmark.hl" \
     --entry=Benchmark \
     --root="$gpu_dir/bench" \

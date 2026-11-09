@@ -15,7 +15,7 @@ for library in "$hashlink_dir"/libhl.so* "$hashlink_dir"/libhl*.dylib "$hashlink
 done
 build_hl=${HAXEON_BUILD_HL:-$work/haxeon-build.hl}
 if [[ -z ${HAXEON_BUILD_HL:-} ]]; then
-	"$root_dir/.tools/haxe/haxe" --cwd "$root_dir" -cp src -hl "$build_hl" -main build.HaxeonBuild
+	"$root_dir/.tools/haxe/haxe" --cwd "$root_dir" common.hxml -hl "$build_hl" -main build.HaxeonBuild
 fi
 (cd "$root_dir" && LD_LIBRARY_PATH="$work${LD_LIBRARY_PATH:+:$LD_LIBRARY_PATH}" \
 	DYLD_LIBRARY_PATH="$work${DYLD_LIBRARY_PATH:+:$DYLD_LIBRARY_PATH}" "$work/hl" "$build_hl" test "${1:-4}")

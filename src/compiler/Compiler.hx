@@ -651,6 +651,7 @@ class Compiler {
 	/** Register the compiler-owned standard library root separately from project source roots. */
 	public function addStandardLibrarySourceRoot(path:String):Void {
 		sourceLoader.addStandardLibraryRoot(path);
+		sourceLoader.addPortableLibraryRoot(path);
 		sourceGeneration++;
 	}
 

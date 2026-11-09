@@ -84,7 +84,7 @@ if ! python3 -c 'import json,sys; raise SystemExit(0 if json.load(sys.stdin).get
 fi
 
 "${dap[@]}" close "$session" >/dev/null
-"$tools_dir/haxe/haxe" --cwd "$repo_dir" -cp src --run Main \
+"$tools_dir/haxe/haxe" --cwd "$repo_dir" common.hxml --run Main \
 	"$repo_dir/tests/dap/DapTopLevelFunctionProbe.hx" "$repo_dir/out/dap-top-level-function.hl" >/dev/null
 top_level_launch=$(python3 - "$repo_dir" <<'PY'
 import json, sys

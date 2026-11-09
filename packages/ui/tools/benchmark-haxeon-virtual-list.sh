@@ -26,7 +26,7 @@ if [[ ! -x "$hashlink_runtime" ]]; then
 	exit 2
 fi
 
-(cd "$haxeon_dir" && .tools/haxe/haxe -cp src --run compiler.tools.HaxeonCompiler \
+(cd "$haxeon_dir" && .tools/haxe/haxe common.hxml --run compiler.tools.HaxeonCompiler \
 	--output="$artifact" \
 	--entry=VirtualListBenchmark \
 	--root="$module_dir/bench" \

@@ -20,7 +20,7 @@ if [[ -z ${HAXEON_COMPILER_HL:-} || ! -f $HAXEON_COMPILER_HL ]]; then
 	haxeon_compiler_dir=$(mktemp -d "$root_dir/out/test-tools/haxeon-compiler.XXXXXX")
 	trap 'rm -rf -- "$haxeon_compiler_dir"' EXIT
 	export HAXEON_COMPILER_HL="$haxeon_compiler_dir/haxeon-compiler.hl"
-	"$haxe_bin" --cwd "$root_dir" -cp src -hl "$HAXEON_COMPILER_HL" -main compiler.tools.HaxeonCompiler
+	"$haxe_bin" --cwd "$root_dir" common.hxml -hl "$HAXEON_COMPILER_HL" -main compiler.tools.HaxeonCompiler
 fi
 
 # Compile with the prebuilt compiler; paths are relative to the repository root.

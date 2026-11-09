@@ -29,9 +29,9 @@ The cross-platform Haxe build entry point provides the native build, bootstrap,
 and core test workflow without Bash. This is the path used by Windows CI:
 
 ```sh
-.tools/haxe/haxe -cp src --run build.HaxeonBuild native
-.tools/haxe/haxe -cp src --run build.HaxeonBuild bootstrap-self
-.tools/haxe/haxe -cp src --run build.HaxeonBuild test 16
+.tools/haxe/haxe common.hxml --run build.HaxeonBuild native
+.tools/haxe/haxe common.hxml --run build.HaxeonBuild bootstrap-self
+.tools/haxe/haxe common.hxml --run build.HaxeonBuild test 16
 ```
 
 `bootstrap/compiler.hl` is checked in. For ordinary compiler development,
@@ -89,8 +89,8 @@ cmake --build --preset release
 The same build can be driven by the cross-platform Haxe entry point:
 
 ```sh
-.tools/haxe/haxe -cp src --run build.HaxeonBuild doctor
-.tools/haxe/haxe -cp src --run build.HaxeonBuild native release
+.tools/haxe/haxe common.hxml --run build.HaxeonBuild doctor
+.tools/haxe/haxe common.hxml --run build.HaxeonBuild native release
 ```
 
 On a fresh Windows checkout, run `scripts/setup.ps1` from a Visual Studio

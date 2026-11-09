@@ -1,0 +1,3 @@
+# The class paths of the compiler, for every build of it with stock Haxe: `haxe common.hxml ...` (from the repository root).
+-cp src
+-cp lib/haxeon-io

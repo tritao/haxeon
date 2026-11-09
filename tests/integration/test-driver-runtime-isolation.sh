@@ -12,8 +12,8 @@ mkdir -p "$work/out" "$work/loaded" "$work/bin"
 cp "$root_dir/out/haxeon_runtime.hdll" "$work/out/haxeon_runtime.hdll"
 cp "$root_dir/out/haxeon_runtime.hdll" "$work/loaded/haxeon_runtime.hdll"
 printf 'int rebuilt_runtime(void) { return 42; }\n' > "$work/runtime.c"
-"$root_dir/.tools/haxe/haxe" --cwd "$root_dir" -cp src -cp tests/runtime -hl "$work/probe.hl" -main RuntimeBuildSafetyProbe
-"$root_dir/.tools/haxe/haxe" --cwd "$root_dir" -cp src -hl "$work/driver.hl" -main build.HaxeonBuild
+"$root_dir/.tools/haxe/haxe" --cwd "$root_dir" common.hxml -cp tests/runtime -hl "$work/probe.hl" -main RuntimeBuildSafetyProbe
+"$root_dir/.tools/haxe/haxe" --cwd "$root_dir" common.hxml -hl "$work/driver.hl" -main build.HaxeonBuild
 
 # An accidental failure to detect the mapping must never launch a real native build.
 cat > "$work/bin/cmake" <<'CMOCK'

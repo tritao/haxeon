@@ -12,7 +12,7 @@ class AndroidPatch {
 	public static function main():Void {
 		var arguments = Sys.args();
 		if (arguments.length != 3)
-			throw "Usage: haxe -cp src --run tools.AndroidPatch <source.hx> <baseline.hcs> <output.hlp>";
+			throw "Usage: haxe common.hxml --run tools.AndroidPatch <source.hx> <baseline.hcs> <output.hlp>";
 
 		var sourcePath = FileSystem.fullPath(arguments[0]),
 			statePath = arguments[1],

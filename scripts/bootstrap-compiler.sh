@@ -17,4 +17,4 @@ if [[ ! -x "$haxe" ]]; then
 	exit 1
 fi
 
-"$haxe" --cwd "$root_dir" -cp src --run build.HaxeonBuild "$command"
+"$haxe" --cwd "$root_dir" common.hxml --run build.HaxeonBuild "$command"

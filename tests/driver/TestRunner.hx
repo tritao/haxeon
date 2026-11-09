@@ -67,7 +67,7 @@ class TestRunner {
 	/** Compile a program to HashLink: with the prebuilt compiler when available, else `haxe --run Main`. */
 	function compileProgram(source:String, output:String):Process
 		return prebuiltMain != null ? new Process(hl,
-			[prebuiltMain, source, output]) : new Process(haxe, ["--cwd", root, "-cp", "src", "--run", "Main", source, output]);
+			[prebuiltMain, source, output]) : new Process(haxe, ["--cwd", root, "common.hxml", "--run", "Main", source, output]);
 
 	/**
 	 * Test mains are compiled to HashLink and run there: faster than re-interpreting the compiler
@@ -322,8 +322,7 @@ class TestRunner {
 		return [
 			"--cwd",
 			root,
-			"-cp",
-			"src",
+			"common.hxml",
 			"-cp",
 			"tests",
 			"-cp",

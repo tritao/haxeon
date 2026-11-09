@@ -8,8 +8,8 @@ if [[ ! -x "$haxe_bin" ]]; then
 	exit 1
 fi
 
-"$haxe_bin" --cwd "$root_dir" -cp src -cp tests/compiler --run HxiAbiMain
-"$haxe_bin" --cwd "$root_dir" -cp src -cp tests/compiler --run HxiParserMain
+"$haxe_bin" --cwd "$root_dir" common.hxml -cp tests/compiler --run HxiAbiMain
+"$haxe_bin" --cwd "$root_dir" common.hxml -cp tests/compiler --run HxiParserMain
 
 probe="$root_dir/tests/native/hxi_value_records_abi.c"
 clang -std=c11 -Wall -Wextra -Werror -fsyntax-only "$probe"

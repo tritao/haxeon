@@ -5,7 +5,7 @@ cd "$repo_dir"
 temporary_dir=$(mktemp -d "${TMPDIR:-/tmp}/haxeon-wasm-boundaries.XXXXXX")
 trap 'rm -rf -- "${temporary_dir:?}"' EXIT
 export LD_LIBRARY_PATH="$repo_dir/out:$("$repo_dir/scripts/hashlink-path.sh")${LD_LIBRARY_PATH:+:$LD_LIBRARY_PATH}"
-.tools/haxe/haxe -cp src -main compiler.tools.HaxeonCompiler -hl "$temporary_dir/compiler.hl"
+.tools/haxe/haxe common.hxml -main compiler.tools.HaxeonCompiler -hl "$temporary_dir/compiler.hl"
 cat > "$temporary_dir/BoundaryBuffers.hxi" <<'HXI'
 interface BoundaryBuffers @target("portable-abi32") @library("boundary_buffers") {
   struct boundary_record @layout(4, 4) { value: i32 @offset(0); }

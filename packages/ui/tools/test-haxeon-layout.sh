@@ -20,7 +20,7 @@ else
 	exit 2
 fi
 
-(cd "$haxeon_dir" && .tools/haxe/haxe -cp src --run compiler.tools.HaxeonCompiler \
+(cd "$haxeon_dir" && .tools/haxe/haxe common.hxml --run compiler.tools.HaxeonCompiler \
 	--output="$build_dir/haxeon-ui-layout-session.hl" \
 	--entry=LayoutSessionSmoke \
 	--root="$module_dir/tests/haxeon" \

@@ -15,7 +15,7 @@ class AndroidReload {
 	public static function main():Void {
 		var arguments = Sys.args();
 		if (arguments.length != 3)
-			throw "Usage: haxe -cp src --run tools.AndroidReload <source.hx> <baseline.hcs> <output.hxr>";
+			throw "Usage: haxe common.hxml --run tools.AndroidReload <source.hx> <baseline.hcs> <output.hxr>";
 
 		var sourcePath = FileSystem.fullPath(arguments[0]),
 			statePath = arguments[1],

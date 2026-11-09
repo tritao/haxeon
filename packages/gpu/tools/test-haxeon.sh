@@ -27,7 +27,7 @@ if [[ ! -x "$hashlink_runtime" ]]; then
 	exit 2
 fi
 
-(cd "$haxeon_dir" && .tools/haxe/haxe -cp src --run compiler.tools.HaxeonCompiler \
+(cd "$haxeon_dir" && .tools/haxe/haxe common.hxml --run compiler.tools.HaxeonCompiler \
     --output="$build_dir/haxeon-triangle.hl" \
     --entry=Triangle \
     --root="$gpu_dir/tests" \

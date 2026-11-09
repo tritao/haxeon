@@ -23,7 +23,7 @@ if [[ "$wasmtime_version" != *"47.0.0"* ]]; then
 fi
 
 mkdir -p "$root_dir/out"
-"$haxe_bin" --cwd "$root_dir" -cp src -cp tests/compiler --run WasmBackendMain
+"$haxe_bin" --cwd "$root_dir" common.hxml -cp tests/compiler --run WasmBackendMain
 haxeon_compile_async \
 	--target=wasm-gc --output=out/wasm-gc-wasmtime-bytes.wasm --entry=wasm-gc-bytes \
 	--root=tests/programs tests/programs/wasm-gc-bytes.hx

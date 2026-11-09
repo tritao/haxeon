@@ -27,12 +27,15 @@ class FfiProvider {
 		if (!useWrapper) {
 			arguments.unshift("FfiImportMain");
 			arguments.unshift("--run");
-			arguments.unshift(Path.join([context.compilerHome, "src"]));
-			arguments.unshift("-cp");
+			var roots = build.CompilerSources.classPath(Path.join([context.compilerHome, "src"]));
+			roots.reverse();
+			for (root in roots)
+				arguments.unshift(root);
 		}
 		if (useWrapper)
 			inputs.push(Path.join([context.compilerHome, "scripts", "haxeon-ffi-import"]));
-		inputs.push(Path.join([context.compilerHome, "src"]));
+		for (root in build.CompilerSources.roots(Path.join([context.compilerHome, "src"])))
+			inputs.push(root);
 		if (ffi.config.cxxThunks) {
 			arguments.push("--library=" + context.layout.ffiNativeLibraryPath(resolvedPackage.name, ffi.config.name));
 			arguments.push("--cxx-thunks=" + thunkSource);
