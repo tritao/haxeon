@@ -4082,3 +4082,23 @@ checks that exactly one enum equality helper reaches the backend. The `MainWeb` 
 of the existing `machinekit-pendant.hxi` because the outer app does not package that interface for Wasm32; that
 packaging issue is outside Haxeon and does not block the compiler push. Guest compile and encode took 93,532 ms and
 167,079 ms respectively. The paired control still reproduces the duplicate-function failure.
+
+### Rejected payload sizing conversion (2026-11-09)
+
+Against `1fae06c3`, the directed `LayoutSizing` payload enum conversion passes the initial framework check and the
+final trial's six UI value snapshot checks, but is not allocation-neutral. An exact HashLink census of a typed class
+setter storing newly constructed `LayoutAxis.fixed(i)` values measures:
+
+| Updates | Committed representation | Payload sizing enum trial |
+|---:|---:|---:|
+| 8 | 0 objects / 0 bytes | 8 objects / 192 bytes |
+| 1,024 | 0 objects / 0 bytes | 1,024 objects / 24,576 bytes |
+
+Every additional allocation is `enum<haxeon.ui.LayoutSizing>`. The trial removes the redundant axis fields and
+preserves the native record mapping, but the current E3/E6/E7 classification keeps the nested enum boxed across
+`ComputedStyle.setAxis`/`getAxis`, style equality methods, reflection and descriptors. Correctness parity is therefore
+insufficient to land it. The complete reproduction and eligibility findings are recorded in `STRUCTS.md` under
+"UI sizing conversion: measured stop"; the patch is preserved on disk and the source was restored. No candidate editor
+or Web module from this rejected conversion is published, and no per-action allocation, RSS or binary-size win is
+claimed. Complete the documented transport and reflection prerequisites before retrying the payload sizing port.
+After restoring the source, `scripts/test-driver.sh 8` passes all 838 tests with zero failures.

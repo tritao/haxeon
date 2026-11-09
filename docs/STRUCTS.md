@@ -542,6 +542,41 @@ possible program. Keep the documented boxed classification for their unsupported
 | E7 beyond the typing path | Remaining callable payload/container/descriptor associations | Implement what admits `TextEditIntent`; broader descriptor/container widening has no additional measured enum cost in these windows |
 | E1/E2 general widening | Reachable-use classification, canonical native Flat enum layouts and representation-changing reload coverage | No measured finite enum besides the typing path is waiting for these; UI native-boundary mappings remain part of the required ports |
 
+#### UI sizing conversion: measured stop
+
+The payload `LayoutSizing` port was tried against `1fae06c3` on 2026-11-09 and withheld under the no-regression
+rule. The trial used `Fit`, `Grow(weight:Float)`, `Fixed(size:Float)` and `Percent(fraction:Float)`, deleted
+`LayoutAxis.value`/`growWeight`, retained `min`/`max`, and explicitly mapped the cases to the unchanged native
+transaction fields. The initial trial passed the HashLink framework suite; after replacing enum stringify with explicit
+case formatting, the final trial passed all six UI snapshot checks (HashLink/Wasm32/Wasm GC, inlining off/on).
+Whole-program eligibility still selected **boxed** storage.
+
+The trace first rejects the enum at `ComputedStyle.setAxis`'s ordinary method argument. Other reasons include
+`ComputedStyle.getAxis`'s result, `StyleAxisProperty.sameAxis`, ordinary method receivers/calls, checked/Dynamic
+escapes, registered reflection layouts and runtime descriptors. These uses reach the enum through its enclosing
+`LayoutAxis` struct; removing a direct enum stringify did not remove the blockers.
+
+An exact HashLink census isolates the typed transport: construct `AxisSink` before the window, then repeat
+`sink.setAxis(LayoutAxis.fixed(i))`, where `setAxis` stores its `LayoutAxis` argument in a field. Warm the path before
+starting the census, stop before dumping, and check the final axis after the window. Control uses the committed
+integer sizing tag; candidate uses the payload enum. Both use the same compiler and checkout-built VM.
+
+| Typed updates | Control objects / bytes | Payload-enum objects / bytes | Allocated type |
+|---:|---:|---:|---|
+| 8 | 0 / 0 | 8 / 192 | `enum<haxeon.ui.LayoutSizing>` |
+| 1,024 | 0 / 0 | 1,024 / 24,576 | `enum<haxeon.ui.LayoutSizing>` |
+
+This is an object/byte census, not a buffer-refill counter. The port would violate the required allocation-free typed
+value transport even though its results are correct. No editor allocation improvement or action-level comparison is
+claimed for this rejected trial. The required alternative is to complete E3 transport for enums inside struct
+arguments/results and the E6/E7 reflective-field/descriptor boundaries before landing this conversion. Those families
+were explicitly deferred from the remaining session; keep the current representation until that work is authorized.
+Do not introduce a second sizing API, enum alias, or per-call boxing fallback to land the port prematurely.
+
+The complete trial patch, path manifest, reproduction source, exact census summary and eligibility trace are preserved
+under `haxeon-enum-work/layout-sizing-payload-trial-2026-11-09/` in the session's disk scratch directory. The source
+conversion was restored, so this record changes no shipped representation. The sizing conversion remains unfinished.
+
 Records: `haxeon-flat-work/enum-impact/{editor,showcase-gc,showcase-w32}-eligibility.json`,
 `diagnostic-artifacts.json`, `action-inventory.jsonl` and `action-census-harness.patch`. The existing aggregate records
 are in `typed-interface-tables-gates/paired-exact-tabs.jsonl`,
