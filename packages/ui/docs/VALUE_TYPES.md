@@ -4067,7 +4067,18 @@ candidate. Tier 2 passed: compiler suite (837 tests, zero failures), self-hostin
 Wasm backend parity, 521 cross-target fixtures (14 skipped), six UI snapshots, app suite, nine retention scenarios,
 editor budgets, and the headless memory gate. The Wasm GC UI snapshot is included in the parity gate.
 
-The app `MainWeb` guest remains an open build issue: control and candidate both fail at
-`compiler.tools.CompilerDriver.compile` with `Duplicate IR function "$enum-equals:278a341efefc3146f489368a235f5603"`.
-The Showcase Wasm GC build and browser scenes pass on both versions. A temporary portable HXI was used to isolate
-the duplicate-function error from the separate missing `machinekit-pendant.hxi` Wasm32 interface diagnostic.
+The app `MainWeb` Wasm GC guest initially failed on both control and candidate with
+`Duplicate IR function "$enum-equals:278a341efefc3146f489368a235f5603"`. A small incremental fixture reproduced the
+same class of failure: a cached struct equality helper retained its enum helper while a newly typed module requested
+that globally named helper under a different owner. The duplicate was at the final assembly boundary, where the same
+canonical function name cached in multiple modules was appended once per module. Sorting and uniquing the cached
+function names before resolving each body through the canonical owner fixes the duplicate; origin is `b2725626`
+(`Anchor shared equality helpers at their type declarations`), which added cross-module enum helper retention.
+
+The regression fixture passes on HashLink, Wasm32 and Wasm GC with inlining off/on, executes the updated program, and
+checks that exactly one enum equality helper reaches the backend. The `MainWeb` guest then compiled 3,353 sources to
+184,559,568 bytes (SHA-256
+`1ca68251980fa9f0d362cddb508f33a02272fafc6d509c58aabf435fb8882838`). This uses a temporary portable-ABI32 copy
+of the existing `machinekit-pendant.hxi` because the outer app does not package that interface for Wasm32; that
+packaging issue is outside Haxeon and does not block the compiler push. Guest compile and encode took 93,532 ms and
+167,079 ms respectively. The paired control still reproduces the duplicate-function failure.

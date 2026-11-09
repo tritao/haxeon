@@ -570,6 +570,7 @@ class FrontendCompilation {
 				cachedNames.push(functionName);
 		}
 		cachedNames.sort(Reflect.compare);
+		cachedNames = uniqueSorted(cachedNames);
 		var cached:Array<IrFunction> = [];
 		for (functionName in cachedNames) {
 			if (!owners.exists(functionName))
