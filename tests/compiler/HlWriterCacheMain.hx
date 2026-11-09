@@ -27,6 +27,8 @@ class HlWriterCacheMain {
 		var tampered = HlLower.lower(Frontend.compile("function main():Int return 1;"));
 		tampered.sourceSnapshots = [{sourceHash: hash, content: content}];
 		tampered.debugSections.push(HlDebugSection.of(HlWriter.SOURCE_SNAPSHOTS, 1, 0, haxe.io.Bytes.ofString("not the model")));
+		var original = Sys.getEnv("HAXEON_CHECK_REUSE");
+		Sys.putEnv("HAXEON_CHECK_REUSE", "0");
 		HlValidator.validate(tampered);
 		Sys.putEnv("HAXEON_CHECK_REUSE", "1");
 		var caught = false;
@@ -34,7 +36,7 @@ class HlWriterCacheMain {
 			HlValidator.validate(tampered)
 		catch (error:Dynamic)
 			caught = Std.string(error).indexOf("does not match its model") >= 0;
-		Sys.putEnv("HAXEON_CHECK_REUSE", "0");
+		Sys.putEnv("HAXEON_CHECK_REUSE", original == null ? "0" : original);
 		expect(caught, "a snapshot section that differs from its model must be reported when checking");
 		Sys.println("PASS: the snapshot section is checked against its model when checking");
 	}
