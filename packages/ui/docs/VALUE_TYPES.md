@@ -4141,3 +4141,17 @@ census, which constructs its callback and initial session before the window, tie
 lifecycle source port remains separate from this compiler fix; editor/Web comparisons and Tier 2 run on the batch head.
 Tier 1 passes 839 compiler tests with zero failures, the six target/inlining combinations above, and self-hosting to a
 fixed point.
+
+### Host lifecycle as a closed enum (2026-11-09)
+
+`UiHostLifecycle` now names its six states with a plain `Equatable` enum. Its former integer values were not a native,
+wire or file contract, so implicit integer conversions have been removed. The transition switch is exhaustive;
+host callers already use named cases. The value snapshot parity gate checks startup, repeated transitions,
+stop/dispose idempotence, terminal states and invalid restarts, and rejects implicit conversions in both directions
+on HashLink, Wasm32 and Wasm GC, with inlining off and on (24 checks including the existing snapshot).
+
+The nullary-case cache prerequisite above makes the plain-enum lifecycle probe tie the integer control on both Wasm
+targets. The exact HashLink census also ties at 3,072 objects / 122,880 bytes for 1,024 session cycles; the session
+object remains 48 bytes. Tier 1 passes all 839 compiler tests with zero failures and the 24 parity checks above.
+These isolated checks establish the representation cost; paired editor/Web modules and full Tier 2 gates are
+assessed separately on the batch head.

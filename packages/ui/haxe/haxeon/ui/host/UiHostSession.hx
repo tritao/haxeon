@@ -1,12 +1,13 @@
 package haxeon.ui.host;
 
-enum abstract UiHostLifecycle(Int) from Int to Int {
-	var Starting = 0;
-	var LoadingResources = 1;
-	var Running = 2;
-	var Stopping = 3;
-	var Stopped = 4;
-	var Failed = 5;
+/** Named states of a hosted application's lifetime; no numeric boundary representation. */
+enum UiHostLifecycle implements Equatable {
+	Starting;
+	LoadingResources;
+	Running;
+	Stopping;
+	Stopped;
+	Failed;
 }
 
 /** Structured host error retained after asynchronous startup or frame failure. */
@@ -54,7 +55,6 @@ class UiHostSession {
 			case UiHostLifecycle.Stopping:
 				next == UiHostLifecycle.Stopped || next == UiHostLifecycle.Failed;
 			case UiHostLifecycle.Stopped, UiHostLifecycle.Failed: false;
-			case _: false;
 		};
 		if (!valid) throw "Invalid UI host lifecycle transition";
 		state = next;
