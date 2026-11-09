@@ -33,6 +33,7 @@ class TestCatalog {
 	static final compilerMains = [
 		"ValueLaneRuntimeMain",
 		"EnumTagStorageMain",
+		"EnumTagRewriteMain",
 		"SourceEnumTagMain",
 		"GeneratedDependencyCompletionMain",
 		"KeyPathTypingMain",

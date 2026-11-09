@@ -8,15 +8,34 @@ import compiler.ir.SourceProvenance.Located;
 private class ValueArrayFunctionIndex {
 	var types:Map<String, {source:IrFunction, elements:Map<String, Bool>, dynamicViews:Bool}> = [];
 	var dynamicDone:Map<String, IrFunction> = [];
+	var originals:Map<String, IrFunction> = [];
 
-	public function new() {}
+	public function originalFunctions(functions:Array<IrFunction>):Map<String, IrFunction> {
+		for (fn in functions) if (originals.get(fn.name) != fn) originals.set(fn.name, fn);
+		return originals;
+	}
 
-	static function key(type:IrType):Null<String>
+	final objectKeys:Map<String, String> = [];
+	final optionalKeys:Map<String, String> = [];
+	final enumKeys:Map<String, String> = [];
+	final tagKeys:Map<String, String> = [];
+
+	public function new(elements:Array<IrType>) {
+		for (element in elements) switch element {
+			case Obj(name): objectKeys.set(name, "value:" + name);
+			case Nullable(Obj(name)): optionalKeys.set(name, "nullable:" + name);
+			case Enum(name): enumKeys.set(name, "enum:" + name);
+			case EnumTag(name): tagKeys.set(name, "enum-tag:" + name);
+			default:
+		}
+	}
+
+	function key(type:IrType):Null<String>
 		return switch type {
-			case Obj(name): "value:" + name;
-			case Nullable(Obj(name)): "nullable:" + name;
-			case Enum(name): "enum:" + name;
-			case EnumTag(name): "enum-tag:" + name;
+			case Obj(name): objectKeys.get(name);
+			case Nullable(Obj(name)): optionalKeys.get(name);
+			case Enum(name): enumKeys.get(name);
+			case EnumTag(name): tagKeys.get(name);
 			default: null;
 		};
 
@@ -31,8 +50,6 @@ private class ValueArrayFunctionIndex {
 					var name = key(element);
 					if (name != null)
 						elements.set(name, true);
-					if (Type.enumEq(type, Array(Dyn)))
-						dynamicViews = true;
 					visit(element);
 				case Nullable(element):
 					visit(element);
@@ -50,8 +67,8 @@ private class ValueArrayFunctionIndex {
 				var output = IrOperands.output(located.value);
 				if (output != null)
 					visit(output.type);
-				for (input in IrOperands.inputs(located.value))
-					visit(input.type);
+				// Valid SSA uses share their definition's type. Discover each carrier once.
+				if (IrValueArrayProgramRewrite.dynamicViewKind(located.value) != 0) dynamicViews = true;
 				switch located.value {
 					case TypeValue(_, type):
 						visit(type);
@@ -82,16 +99,21 @@ class IrValueArrayProgramRewrite {
 		var values:Map<String, Bool> = [for (object in program.objects) if (object.isValue) object.name => true],
 			inlineEnums:Map<String, Bool> = [for (entry in program.enums) if (entry.inlineStorage != null) entry.name => true],
 			elements:Map<String, IrType> = [];
+		var seenTags:Map<String, Bool> = [], seenEnums:Map<String, Bool> = [],
+			seenValues:Map<String, Bool> = [], seenOptionalValues:Map<String, Bool> = [];
+		function register(element:IrType, seen:Map<String, Bool>, name:String):Void {
+			if (seen.exists(name)) return;
+			seen.set(name, true);
+			elements.set(haxe.crypto.Base64.encode(compiler.ir.codec.IrTypeCodec.encode(element)), element);
+		}
 		function visit(type:IrType):Void
 			switch type {
 				case Array(element):
 					switch element {
-						case EnumTag(_):
-							elements.set(haxe.crypto.Base64.encode(compiler.ir.codec.IrTypeCodec.encode(element)), element);
-						case Enum(name) if (inlineEnums.exists(name)):
-							elements.set(haxe.crypto.Base64.encode(compiler.ir.codec.IrTypeCodec.encode(element)), element);
-						case Obj(name) | Nullable(Obj(name)) if (values.exists(name)):
-							elements.set(haxe.crypto.Base64.encode(compiler.ir.codec.IrTypeCodec.encode(element)), element);
+						case EnumTag(name): register(element, seenTags, name);
+						case Enum(name) if (inlineEnums.exists(name)): register(element, seenEnums, name);
+						case Obj(name) if (values.exists(name)): register(element, seenValues, name);
+						case Nullable(Obj(name)) if (values.exists(name)): register(element, seenOptionalValues, name);
 						default:
 					}
 					visit(element);
@@ -132,8 +154,7 @@ class IrValueArrayProgramRewrite {
 					var output = IrOperands.output(located.value);
 					if (output != null)
 						visit(output.type);
-					for (input in IrOperands.inputs(located.value))
-						visit(input.type);
+					// SSA arguments and definitions cover every operand type, including phi edge uses.
 					switch located.value {
 						case TypeValue(_, type):
 							visit(type);
@@ -143,14 +164,14 @@ class IrValueArrayProgramRewrite {
 		}
 		var keys = [for (key in elements.keys()) key];
 		keys.sort(Reflect.compare);
-		var index = new ValueArrayFunctionIndex();
+		var index = new ValueArrayFunctionIndex([for (key in keys) elements.get(key)]);
 		for (key in keys)
 			rewriteIndexed(program, elements.get(key), pointerBits, target, index);
 		IrVerifier.verifyValueArraysLowered(program);
 	}
 
 	public static function rewrite(program:IrProgram, element:IrType, pointerBits:Int, target:IrValueLaneTarget):Void {
-		rewriteIndexed(program, element, pointerBits, target, new ValueArrayFunctionIndex());
+		rewriteIndexed(program, element, pointerBits, target, new ValueArrayFunctionIndex([element]));
 	}
 
 	static function rewriteIndexed(program:IrProgram, element:IrType, pointerBits:Int, target:IrValueLaneTarget, index:ValueArrayFunctionIndex):Void {
@@ -159,15 +180,15 @@ class IrValueArrayProgramRewrite {
 			factory = new IrValueArrayFactory(objects, element, pointerBits, target, program.enums),
 			elements = new IrValueArrayElements(element, factory.helpers, factory.bridge),
 			methods = new IrValueArrayPlaceMethods(objects, element, factory.helpers),
-			originals:Map<String, IrFunction> = [for (fn in program.functions) fn.name => fn],
-			rewritten:Array<IrFunction> = [];
+			originals = index.originalFunctions(program.functions),
+			rewritten:Null<Array<IrFunction>> = null;
 		var optional:Null<IrValueArrayOptionalComponents> = switch element {
 			case Nullable(Obj(name)) if (declarations.exists(IrOptionalScalarFlow.wrapperName(name))):
 				new IrValueArrayOptionalComponents(objects, element, factory.helpers);
 			default: null;
 		};
-		for (fn in program.functions) {
-			var selected = index.has(fn, element), current = fn;
+		for (functionIndex in 0...program.functions.length) {
+			var fn = program.functions[functionIndex], selected = index.has(fn, element), current = fn;
 			if (selected) {
 				current = IrValueArrayRangeRewrite.rewrite(current, element, factory);
 				var roots = IrValueArrayPlaceRewrite.roots(current, element);
@@ -184,18 +205,20 @@ class IrValueArrayProgramRewrite {
 				current = rewriteCasts(current, element, factory.retypeName());
 			}
 			index.finish(current);
-			rewritten.push(current);
+			if (rewritten != null) rewritten.push(current);
+			else if (current != fn) {
+				rewritten = program.functions.slice(0, functionIndex);
+				rewritten.push(current);
+			}
 		}
 		var generatedMethods = methods.generate(originals),
 			generatedFactories = factory.functions(),
 			generatedElements = elements.functions(),
 			generatedOptional = optional == null ? [] : optional.functions(),
 			generatedSlots = factory.helpers.functions();
-		program.functions = rewritten.concat(generatedMethods)
-			.concat(generatedFactories)
-			.concat(generatedElements)
-			.concat(generatedOptional)
-			.concat(generatedSlots);
+		if (rewritten != null) program.functions = rewritten;
+		for (generated in [generatedMethods, generatedFactories, generatedElements, generatedOptional, generatedSlots])
+			for (fn in generated) program.functions.push(fn);
 		var nullableScalars = false;
 		for (slot in factory.layout.lanes.slots)
 			if (slot.nullablePayload)
@@ -354,54 +377,61 @@ class IrValueArrayProgramRewrite {
 		return changed ? new IrFunction(fn.name, fn.arguments, fn.result, blocks, fn.debugBindings, fn.inlineHint, fn.retention) : fn;
 	}
 
-	/** Dynamic views must dispatch by their runtime storage even when the frontend omitted native checks. */
+	/** A shared classifier keeps the immutable index and actual rewrite in agreement. */
+	public static function dynamicViewKind(instruction:IrInstruction):Int {
+		return switch instruction {
+			case ArrayGet(out, array, _) if ((switch array.type { case Array(Dyn): true; default: false; })
+				&& (switch out.type { case Dyn: true; default: false; })): 1;
+			case ArraySet(array, _, value) if ((switch array.type { case Array(Dyn): true; default: false; })
+				&& (switch value.type { case Dyn: true; default: false; })): 2;
+			case Call(_, name, args) if (args.length > 0 && (switch args[0].type { case Array(Dyn): true; default: false; })
+				&& (name == "__array_push_ref" || name == "__array_unshift_ref" || name == "__array_insert_ref" || name == "__array_reverse_ref"
+					|| name == "__array_resize_ref" || name == "__array_copy_ref" || name == "__array_slice_ref" || name == "__array_splice_ref"
+					|| name == "__array_concat_ref" || name == "__array_pop_ref" || name == "__array_shift_ref" || name == "__array_index_of_ref"
+					|| name == "__array_remove_ref")): 3;
+			default: 0;
+		};
+	}
+
+	/** Dynamic views dispatch by runtime storage; bodies and blocks are copied only on an actual change. */
 	static function rewriteDynamicViews(fn:IrFunction):IrFunction {
-		var next = 0, changed = false, blocks:Array<IrBlock> = [];
-		for (argument in fn.arguments)
-			if (argument.id >= next)
-				next = argument.id + 1;
-		for (block in fn.blocks)
-			for (located in block.instructions) {
-				var output = IrOperands.output(located.value);
-				if (output != null && output.id >= next)
-					next = output.id + 1;
-				for (input in IrOperands.inputs(located.value))
-					if (input.id >= next)
-						next = input.id + 1;
-			}
-		for (block in fn.blocks) {
-			var target = new IrBlock(block.id);
-			for (located in block.instructions) {
+		var next = -1, blocks:Null<Array<IrBlock>> = null;
+		for (blockIndex in 0...fn.blocks.length) {
+			var block = fn.blocks[blockIndex], target:Null<IrBlock> = null;
+			for (position in 0...block.instructions.length) {
+				var located = block.instructions[position], kind = dynamicViewKind(located.value);
+				if (kind == 0) {
+					if (target != null) target.instructions.push(located);
+					continue;
+				}
+				if (target == null) {
+					target = new IrBlock(block.id);
+					for (previous in 0...position) target.instructions.push(block.instructions[previous]);
+					target.terminator = block.terminator;
+				}
 				var instruction = switch located.value {
-					case ArrayGet(out, array, index) if (Type.enumEq(array.type, Array(Dyn)) && (switch (out.type) {
-						case Dyn: true;
-						default: false;
-					})):
-						changed = true;
-						Call(out, "__array_get_any", [array, index]);
-					case ArraySet(array, index, value) if (Type.enumEq(array.type, Array(Dyn)) && (switch (value.type) {
-						case Dyn: true;
-						default: false;
-					})):
-						changed = true;
+					case ArrayGet(out, array, index): Call(out, "__array_get_any", [array, index]);
+					case ArraySet(array, index, value):
+						if (next < 0) {
+							next = 0;
+							for (argument in fn.arguments) if (argument.id >= next) next = argument.id + 1;
+							for (body in fn.blocks) for (entry in body.instructions) {
+								var output = IrOperands.output(entry.value);
+								if (output != null && output.id >= next) next = output.id + 1;
+							}
+						}
 						Call(new IrValue(next++, "$dynamic-array-write", Void), "__array_set_any", [array, index, value]);
-					case Call(out, name, args)
-						if ((name == "__array_push_ref" || name == "__array_unshift_ref" || name == "__array_insert_ref" || name == "__array_reverse_ref"
-							|| name == "__array_resize_ref" || name == "__array_copy_ref" || name == "__array_slice_ref" || name == "__array_splice_ref"
-							|| name == "__array_concat_ref" || name == "__array_pop_ref" || name == "__array_shift_ref" || name == "__array_index_of_ref"
-							|| name == "__array_remove_ref")
-							&& args.length > 0
-							&& Type.enumEq(args[0].type, Array(Dyn))):
-						changed = true;
-						Call(out, name.substr(0, name.length - 3) + "any", args);
-					default: located.value;
+					case Call(out, name, args): Call(out, name.substr(0, name.length - 3) + "any", args);
+					default: throw "Dynamic array classifier disagrees with its rewrite";
 				};
 				target.instructions.push(new Located(instruction, located.provenance));
 			}
-			target.terminator = block.terminator;
-			blocks.push(target);
+			if (target != null) {
+				if (blocks == null) blocks = fn.blocks.slice(0, blockIndex);
+				blocks.push(target);
+			} else if (blocks != null) blocks.push(block);
 		}
-		return changed ? new IrFunction(fn.name, fn.arguments, fn.result, blocks, fn.debugBindings, fn.inlineHint, fn.retention) : fn;
+		return blocks == null ? fn : new IrFunction(fn.name, fn.arguments, fn.result, blocks, fn.debugBindings, fn.inlineHint, fn.retention);
 	}
 
 	static function rewriteAllocations(fn:IrFunction, element:IrType, allocator:String):IrFunction {

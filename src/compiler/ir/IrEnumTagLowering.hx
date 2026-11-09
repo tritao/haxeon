@@ -6,22 +6,41 @@ import compiler.ir.SourceProvenance.Located;
 /** Select nominal scalar storage independently of payload-enum escape eligibility. */
 class IrEnumTagLowering {
 	public static function run(program:IrProgram):IrProgram {
-		var names:Map<String, Bool> = [
-			for (entry in program.enums)
-				if (IrEnumTagStorage.eligible(entry)) entry.name => true
-		];
-		if (!names.keys().hasNext())
-			return program;
-		function mapped(type:IrType):IrType
-			return switch type {
-				case Enum(name) if (names.exists(name)): EnumTag(name);
-				case Nullable(Enum(name)) if (names.exists(name)): EnumTag(name);
-				case Array(inner): Array(mapped(inner));
-				case Iterator(inner): Iterator(mapped(inner));
-				case Nullable(inner): Nullable(mapped(inner));
-				case Function(arguments, result): Function([for (argument in arguments) mapped(argument)], mapped(result));
-				default: type;
-			};
+		var names:Map<String,
+			Bool> = [for (entry in program.enums) if (IrEnumTagStorage.eligible(entry)) entry.name => true];
+		if (!names.keys().hasNext()) return program;
+		var tags:Map<String, IrType> = [for (name in names.keys()) name => EnumTag(name)];
+		function changes(type:IrType):Bool return switch type {
+			case Enum(name):
+				names.exists(name);
+			case Array(inner), Iterator(inner), Nullable(inner):
+				changes(inner);
+			case Function(arguments, result):
+				var changed = changes(result);
+				for (argument in arguments) if (changes(argument)) {
+					changed = true;
+					break;
+				}
+				changed;
+			default:
+				false;
+		};
+		function mapped(type:IrType):IrType return switch type {
+			case Enum(name) if (names.exists(name)):
+				tags.get(name);
+			case Nullable(Enum(name)) if (names.exists(name)):
+				tags.get(name);
+			case Array(inner) if (changes(inner)):
+				Array(mapped(inner));
+			case Iterator(inner) if (changes(inner)):
+				Iterator(mapped(inner));
+			case Nullable(inner) if (changes(inner)):
+				Nullable(mapped(inner));
+			case Function(arguments, result) if (changes(type)):
+				Function([for (argument in arguments) mapped(argument)], mapped(result));
+			default:
+				type;
+		};
 		var nativeWrappers:Map<String, String> = [],
 			generated:Array<IrFunction> = [];
 		function nativeWrapper(name:String, arguments:Array<IrType>, result:IrType, cNative:Bool):Void {
@@ -106,10 +125,50 @@ class IrEnumTagLowering {
 					]
 				}
 		];
+		function valueChanges(value:IrValue):Bool return changes(value.type);
+		function instructionChanges(instruction:IrInstruction):Bool {
+			switch instruction {
+				case Call(_, name, _) | CNativeCall(_, name, _) if (nativeWrappers.exists(name)):
+					return true;
+				case TypeValue(_, type):
+					switch type {
+						case Enum(_):
+						default:
+							if (changes(type)) return true;
+					}
+				default:
+			}
+			return IrOperands.anyValue(instruction, valueChanges);
+		}
+		function functionChanges(fn:IrFunction):Bool {
+			if (changes(fn.result)) return true;
+			for (argument in fn.arguments) if (valueChanges(argument)) return true;
+			for (binding in fn.debugBindings) if (valueChanges(binding.value)) return true;
+			// Valid SSA uses have the type of their definition. Discover changed carriers once per definition;
+			// instruction rewriting below still visits every operand, and the verifier checks every use.
+			for (block in fn.blocks) for (located in block.instructions) {
+				var output = IrOperands.output(located.value);
+				if (output != null && valueChanges(output)) return true;
+				switch located.value {
+					case Call(_, name, _) | CNativeCall(_, name, _) if (nativeWrappers.exists(name)):
+						return true;
+					case TypeValue(_, type):
+						switch type {
+							case Enum(_):
+							default:
+								if (changes(type)) return true;
+						}
+					default:
+				}
+			}
+			return false;
+		}
+		var changedFunctions:Array<IrFunction> = [];
 		program.functions = [
-			for (fn in program.functions) {
+			for (fn in program.functions) if (!functionChanges(fn)) fn else {
 				var values:Map<Int, IrValue> = [];
 				function use(value:IrValue):IrValue {
+					if (!valueChanges(value)) return value;
 					if (!values.exists(value.id))
 						values.set(value.id, new IrValue(value.id, value.name, mapped(value.type)));
 					return values.get(value.id);
@@ -118,6 +177,10 @@ class IrEnumTagLowering {
 					for (block in fn.blocks) {
 						var result = new IrBlock(block.id);
 						for (located in block.instructions) {
+							if (!instructionChanges(located.value)) {
+								result.instructions.push(located);
+								continue;
+							}
 							var instruction = IrInliner.remap(located.value, use, id -> id);
 							switch located.value {
 								case Call(output, name, arguments) | CNativeCall(output, name, arguments) if (nativeWrappers.exists(name)):
@@ -150,7 +213,7 @@ class IrEnumTagLowering {
 						result;
 					}
 				];
-				new IrFunction(fn.name, [for (argument in fn.arguments) use(argument)], mapped(fn.result), blocks, [
+				var rewrittenFunction = new IrFunction(fn.name, [for (argument in fn.arguments) use(argument)], mapped(fn.result), blocks, [
 					for (binding in fn.debugBindings)
 						{
 							identity: binding.identity,
@@ -161,53 +224,31 @@ class IrEnumTagLowering {
 							scopeEnd: binding.scopeEnd
 						}
 				], fn.inlineHint, fn.retention);
+				changedFunctions.push(rewrittenFunction);
+				rewrittenFunction;
 			}
 		];
 		program.functions = program.functions.concat(generated);
+		// Only rewritten definitions can introduce tag escapes. Finish that representation transition
+		// here; the later helper pass checks code generated after this lowering.
+		finishEscapes(program, changedFunctions.concat(generated));
 		return program;
 	}
 
 	/** Run again after reflection and other helpers are generated: their escapes need the same checked ABI. */
 	public static function escapes(program:IrProgram):Void {
+		finishEscapes(program, program.functions);
+	}
+
+	static function finishEscapes(program:IrProgram, changedFunctions:Array<IrFunction>):Void {
 		var required:Map<String, Bool> = [];
-		implicitEscapes(program, required);
-		var existing = [for (fn in program.functions) fn.name => true],
-			adapterEnums:Map<String, String> = [];
-		for (entry in program.enums)
-			if (IrEnumTagStorage.eligible(entry)) {
-				adapterEnums.set(IrEnumTagStorage.boxName(entry.name), entry.name);
-				adapterEnums.set(IrEnumTagStorage.unboxName(entry.name), entry.name);
-			}
-		for (fn in program.functions)
-			for (block in fn.blocks)
-				for (index in 0...block.instructions.length) {
-					var located = block.instructions[index],
-						instruction = located.value,
-						changed = false;
-					switch instruction {
-						case Call(_, name, _) if (adapterEnums.exists(name)):
-							required.set(adapterEnums.get(name), true);
-						case ToDyn(output, value):
-							switch value.type {
-								case EnumTag(name):
-									required.set(name, true);
-									instruction = Call(output, IrEnumTagStorage.boxName(name), [value]);
-									changed = true;
-								default:
-							};
-						case SafeCast(output, value):
-							switch output.type {
-								case EnumTag(name):
-									required.set(name, true);
-									instruction = Call(output, IrEnumTagStorage.unboxName(name), [value]);
-									changed = true;
-								default:
-							};
-						default:
-					}
-					if (changed)
-						block.instructions[index] = new Located(instruction, located.provenance);
-				}
+		var existing = [for (fn in program.functions) fn.name => fn], adapterEnums:Map<String, String> = [];
+		for (entry in program.enums) if (IrEnumTagStorage.eligible(entry)) {
+			adapterEnums.set(IrEnumTagStorage.boxName(entry.name), entry.name);
+			adapterEnums.set(IrEnumTagStorage.unboxName(entry.name), entry.name);
+		}
+		if (!adapterEnums.keys().hasNext()) return;
+		rewriteEscapes(program, required, adapterEnums, existing, changedFunctions);
 		var names = [for (name in required.keys()) name];
 		names.sort(Reflect.compare);
 		if (names.length > 0 && !Lambda.exists(program.natives, native -> native.name == "__std_is_exact_type"))
@@ -223,165 +264,325 @@ class IrEnumTagLowering {
 			if (!existing.exists(IrEnumTagStorage.boxName(name)) || !existing.exists(IrEnumTagStorage.unboxName(name)))
 				for (helper in IrEnumTagStorage.adapters(declarations.get(name)))
 					if (!existing.exists(helper.name)) {
-						existing.set(helper.name, true);
+						existing.set(helper.name, helper);
 						program.functions.push(helper);
 					}
 	}
 
-	static function implicitEscapes(program:IrProgram, required:Map<String, Bool>):Void {
+	static function rewriteEscapes(program:IrProgram,
+		required:Map<String, Bool>, adapterEnums:Map<String, String>, functions:Map<String, IrFunction>, selectedFunctions:Array<IrFunction>):Void {
 		var signatures:Map<String, Array<IrType>> = [],
 			objects = [for (object in program.objects) object.name => object],
 			globals = [for (field in program.staticFields) field.name => field.type],
 			contracts = [for (entry in program.interfaces) entry.name => entry];
-		for (fn in program.functions)
-			signatures.set(fn.name, [for (argument in fn.arguments) argument.type]);
-		for (native in program.natives)
-			signatures.set(native.name, native.arguments);
-		for (native in program.cNatives)
-			signatures.set(native.name, native.arguments);
+		for (native in program.natives) signatures.set(native.name, native.arguments);
+		for (native in program.cNatives) signatures.set(native.name, native.arguments);
+		function signature(name:String):Null<Array<IrType>> {
+			if (signatures.exists(name)) return signatures.get(name);
+			var fn = functions.get(name);
+			if (fn == null) return null;
+			var arguments = [for (argument in fn.arguments) argument.type];
+			signatures.set(name, arguments);
+			return arguments;
+		}
+		var fieldTypes:Map<String, Map<String, Null<IrType>>> = [];
+		function fieldIndex(name:String):Null<Map<String, Null<IrType>>> {
+			var known = fieldTypes.get(name);
+			if (known != null) return known;
+			var object = objects.get(name);
+			if (object == null) return null;
+			var index:Map<String, Null<IrType>> = [for (field in object.fields) field.name => field.type];
+			fieldTypes.set(name, index);
+			return index;
+		}
 		function fieldType(type:IrType, field:String):Null<IrType> {
 			var name = switch type {
-				case Obj(name): name;
-				default: return null;
-			};
-			while (name != null) {
-				var object = objects.get(name);
-				if (object == null)
+				case Obj(name):
+					name;
+				default:
 					return null;
-				for (entry in object.fields)
-					if (entry.name == field)
-						return entry.type;
-				name = object.base;
+			}, cache = fieldIndex(name);
+			if (cache == null) return null;
+			if (cache.exists(field)) return cache.get(field);
+			var object = objects.get(name), owner = object == null ? null : object.base;
+			while (owner != null) {
+				var inherited = fieldIndex(owner);
+				if (inherited != null && inherited.exists(field)) {
+					var type = inherited.get(field);
+					cache.set(field, type);
+					return type;
+				}
+				var parent = objects.get(owner);
+				owner = parent == null ? null : parent.base;
 			}
+			cache.set(field, null);
 			return null;
 		}
+		var interfaceMethods:Map<String, Map<String, Null<Array<IrType>>>> = [];
 		function interfaceArguments(name:String, method:String):Null<Array<IrType>> {
 			var declaration = contracts.get(name);
-			if (declaration == null)
-				return null;
-			for (entry in declaration.methods)
-				if (entry.name == method)
-					return entry.arguments;
+			if (declaration == null) return null;
+			var cache = interfaceMethods.get(name);
+			if (cache == null) {
+				cache = [for (entry in declaration.methods) entry.name => entry.arguments];
+				interfaceMethods.set(name, cache);
+			}
+			if (cache.exists(method)) return cache.get(method);
 			for (base in declaration.bases) {
 				var inherited = interfaceArguments(base, method);
-				if (inherited != null)
+				if (inherited != null) {
+					cache.set(method, inherited);
 					return inherited;
+				}
 			}
+			cache.set(method, null);
 			return null;
 		}
+		var objectMethods:Map<String, Map<String, Null<Array<IrType>>>> = [], methodNames:Map<
+			String,
+			Map<String, String>> = [];
+		function methodIndex(name:String):Null<Map<String, String>> {
+			var known = methodNames.get(name);
+			if (known != null) return known;
+			var object = objects.get(name);
+			if (object == null) return null;
+			var index = [for (entry in object.methods) entry.name => entry.functionName];
+			methodNames.set(name, index);
+			return index;
+		}
 		function methodArguments(type:IrType, method:String):Null<Array<IrType>> {
-			return switch type {
-				case Virtual(name): interfaceArguments(name, method);
+			var name = switch type {
+				case Virtual(name):
+					return interfaceArguments(name, method);
 				case Obj(name):
-					var current = name, result:Null<Array<IrType>> = null;
-					while (current != null && result == null) {
-						var object = objects.get(current);
-						if (object == null)
-							break;
-						for (entry in object.methods)
-							if (entry.name == method) {
-								var signature = signatures.get(entry.functionName);
-								if (signature != null)
-									result = signature.slice(1);
-								break;
-							}
-						current = object.base;
-					}
-					result;
-				default: null;
-			};
+					name;
+				default:
+					return null;
+			}, cache = objectMethods.get(name);
+			if (cache == null) {
+				cache = [];
+				objectMethods.set(name, cache);
+			}
+			if (cache.exists(method)) return cache.get(method);
+			var owner:Null<String> = name, result:Null<Array<IrType>> = null;
+			while (owner != null) {
+				var methods = methodIndex(owner), target = methods == null ? null : methods.get(method);
+				if (target != null) {
+					var arguments = signature(target);
+					if (arguments != null) result = arguments.slice(1);
+					break;
+				}
+				var object = objects.get(owner);
+				owner = object == null ? null : object.base;
+			}
+			cache.set(method, result);
+			return result;
+		}
+		function isTag(value:IrValue):Bool return switch value.type {
+			case EnumTag(_):
+				true;
+			default:
+				false;
+		};
+		function hasTag(arguments:Array<IrValue>):Bool {
+			for (argument in arguments) if (isTag(argument)) return true;
+			return false;
+		}
+		function needsArguments(arguments:Array<IrValue>, expected:Null<Array<IrType>>):Bool {
+			if (expected == null) return false;
+			for (index in 0...arguments.length) if (index < expected.length
+				&& isTag(arguments[index]) && (switch expected[index] {
+				case Dyn:
+					true;
+				default:
+					false;
+			}
+			)) return true;
+			return false;
 		}
 
-		for (fn in program.functions) {
-			var next = 0, hasTags = false;
-			for (argument in fn.arguments) {
-				switch argument.type {
-					case EnumTag(_):
-						hasTags = true;
-					default:
-				}
-				if (argument.id >= next)
-					next = argument.id + 1;
+		if (selectedFunctions.length == 0) return;
+		var currentFunction = selectedFunctions[0], currentBlock = new IrBlock(-1), next = -1, position = 0,
+			blockChanged = false, rewritten:Array<Located<IrInstruction>> = [];
+		function markChanged():Void {
+			if (!blockChanged) {
+				rewritten = currentBlock.instructions.slice(0, position);
+				blockChanged = true;
 			}
-			for (block in fn.blocks)
-				for (located in block.instructions) {
-					var output = IrOperands.output(located.value);
-					if (output != null) {
-						switch output.type {
-							case EnumTag(_):
-								hasTags = true;
-							default:
-						}
-						if (output.id >= next)
-							next = output.id + 1;
+		}
+		function adapt(value:IrValue, expected:Null<IrType>):IrValue {
+			return switch value.type {
+				case EnumTag(name) if ((switch expected { case Dyn: true; default: false; })):
+					markChanged();
+					if (next < 0) {
+						next = 0;
+						for (argument in currentFunction.arguments)
+							if (argument.id >= next) next = argument.id + 1;
+						for (block in currentFunction.blocks)
+							for (entry in block.instructions) {
+								var output = IrOperands.output(entry.value);
+								if (output != null && output.id >= next) next = output.id + 1;
+							}
 					}
-				}
-			if (!hasTags)
-				continue;
+					var boxed = new IrValue(next++, "$enum-tag:implicit-box", Dyn);
+					required.set(name, true);
+					rewritten.push(new Located(Call(boxed, IrEnumTagStorage.boxName(name), [value]),
+						currentBlock.instructions[position].provenance));
+					boxed;
+				default: value;
+			};
+		}
+		for (fn in selectedFunctions) {
+			currentFunction = fn;
+			next = -1;
 			for (block in fn.blocks) {
-				var rewritten:Array<Located<IrInstruction>> = [];
-				for (located in block.instructions) {
-					function adapt(value:IrValue, expected:Null<IrType>):IrValue {
-						return switch [value.type, expected] {
-							case [EnumTag(name), Dyn]:
-								var boxed = new IrValue(next++, "$enum-tag:implicit-box", Dyn);
-								required.set(name, true);
-								rewritten.push(new Located(Call(boxed, IrEnumTagStorage.boxName(name), [value]), located.provenance));
-								boxed;
-							default: value;
-						};
-					}
+				currentBlock = block;
+				blockChanged = false;
+				for (index in 0...block.instructions.length) {
+					position = index;
+					var located = block.instructions[index], changed = false;
 					var instruction = switch located.value {
-						case Call(_, name, arguments) if (StringTools.startsWith(name, "__array_")
-							&& arguments.length > 0
-							&& (switch arguments[0].type {
-								case Array(EnumTag(_)): true;
-								default: false;
-							})):
-								// Typed lane operations consume tags directly in the subsequent array rewrite.
-								located.value;
-						case Call(output, name, arguments) if (signatures.exists(name)):
-							var expected = signatures.get(name);
-							Call(output, name, [
-								for (index in 0...arguments.length)
-									adapt(arguments[index], index < expected.length ? expected[index] : null)
-							]);
-						case CNativeCall(output, name, arguments) if (signatures.exists(name)):
-							var expected = signatures.get(name);
-							CNativeCall(output, name, [
-								for (index in 0...arguments.length)
-									adapt(arguments[index], index < expected.length ? expected[index] : null)
-							]);
-						case MethodCall(output, owner, method, arguments, terminalReceiver):
+						case ToDyn(output, value) if (isTag(value)):
+							markChanged();
+							changed = true;
+							var name = switch value.type {
+								case EnumTag(name):
+									name;
+								default:
+									throw "Expected tag";
+							};
+							required.set(name, true);
+							Call(output, IrEnumTagStorage.boxName(name), [value]);
+						case SafeCast(output, value) if (isTag(output)):
+							markChanged();
+							changed = true;
+							var name = switch output.type {
+								case EnumTag(name):
+									name;
+								default:
+									throw "Expected tag";
+							};
+							required.set(name, true);
+							Call(output, IrEnumTagStorage.unboxName(name), [value]);
+						case Call(output, name, arguments):
+							var tagArgument = hasTag(arguments);
+							if (!tagArgument && !isTag(output)) located.value else {
+								var adapter = adapterEnums.get(name);
+								if (adapter != null) {
+									required.set(adapter, true);
+									located.value;
+								} else if (!tagArgument) located.value else {
+									// Lane primitives consume tags directly in the subsequent array rewrite.
+									var lane = arguments.length > 0 && (switch arguments[0].type {
+										case Array(EnumTag(_)): StringTools.startsWith(name, "__array_");
+										default: false;
+									});
+									var expected = lane ? null : signature(name);
+									if (!needsArguments(arguments, expected)) located.value else {
+										changed = true;
+										Call(output, name, [for (index in 0...arguments.length)
+											adapt(arguments[index], expected != null && index < expected.length ? expected[index] : null)]);
+									}
+								}
+							}
+						case CNativeCall(output, name, arguments) if (hasTag(arguments) && needsArguments(
+							arguments,
+							signature(name)
+						)):
+							var expected = signature(name);
+							if (expected == null) throw 'Missing tag escape signature "$name"';
+							changed = true;
+							CNativeCall(
+								output,
+								name,
+								[for (index in 0...arguments.length) adapt(
+									arguments[index],
+									index < expected.length ? expected[index] : null
+								)]
+							);
+						case MethodCall(output, owner, method, arguments, terminalReceiver) if (hasTag(arguments)):
 							var expected = methodArguments(owner.type, method);
-							MethodCall(output, owner, method, [
-								for (index in 0...arguments.length)
-									adapt(arguments[index], expected != null && index < expected.length ? expected[index] : null)
-							], terminalReceiver);
-						case CallClosure(output, closure, arguments):
+							if (!needsArguments(arguments, expected)) located.value else {
+								changed = true;
+								MethodCall(
+									output,
+									owner,
+									method,
+									[for (index in 0...arguments.length) adapt(
+										arguments[index],
+										expected != null && index < expected.length ? expected[index] : null
+									)],
+									terminalReceiver
+								);
+							}
+						case CallClosure(output, closure, arguments) if (hasTag(arguments)):
 							var expected = switch closure.type {
-								case Function(arguments, _): arguments;
-								default: [];
+								case Function(arguments, _):
+									arguments;
+								default:
+									[];
 							};
-							CallClosure(output, closure, [
-								for (index in 0...arguments.length)
-									adapt(arguments[index], index < expected.length ? expected[index] : null)
-							]);
-						case FieldSet(object, field, value): FieldSet(object, field, adapt(value, fieldType(object.type, field)));
-						case GlobalSet(name, value): GlobalSet(name, adapt(value, globals.get(name)));
-						case ArraySet(array, index, value):
+							if (!needsArguments(arguments, expected)) located.value else {
+								changed = true;
+								CallClosure(
+									output,
+									closure,
+									[for (index in 0...arguments.length) adapt(
+										arguments[index],
+										index < expected.length ? expected[index] : null
+									)]
+								);
+							}
+						case FieldSet(object, field, value) if (isTag(value)):
+							var expected = fieldType(object.type, field);
+							if ((switch expected {
+								case Dyn:
+									true;
+								default:
+									false;
+							}
+							)) {
+								changed = true;
+								FieldSet(object, field, adapt(value, expected));
+							} else located.value;
+						case GlobalSet(name, value) if (isTag(value)):
+							var expected = globals.get(name);
+							if ((switch expected {
+								case Dyn:
+									true;
+								default:
+									false;
+							}
+							)) {
+								changed = true;
+								GlobalSet(name, adapt(value, expected));
+							} else located.value;
+						case ArraySet(array, index, value) if (isTag(value)):
 							var expected = switch array.type {
-								case Array(element): element;
-								default: null;
+								case Array(element):
+									element;
+								default:
+									null;
 							};
-							ArraySet(array, index, adapt(value, expected));
-						default: located.value;
+							if ((switch expected {
+								case Dyn:
+									true;
+								default:
+									false;
+							}
+							)) {
+								changed = true;
+								ArraySet(array, index, adapt(value, expected));
+							} else located.value;
+						default:
+							located.value;
 					};
-					rewritten.push(new Located(instruction, located.provenance));
+					if (blockChanged) rewritten.push(changed ? new Located(instruction, located.provenance) : located);
 				}
-				block.instructions.resize(0);
-				for (located in rewritten)
-					block.instructions.push(located);
+				if (blockChanged) {
+					block.instructions.resize(0);
+					for (located in rewritten) block.instructions.push(located);
+				}
 			}
 		}
 	}

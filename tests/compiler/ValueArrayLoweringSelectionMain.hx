@@ -10,13 +10,16 @@ class ValueArrayLoweringSelectionMain {
 		var one = overhead(1), eight = overhead(8);
 		if (one <= 0 || eight > one * 3)
 			throw 'Unrelated bodies were rebuilt per element shape: one=$one eight=$eight';
-		Sys.println('PASS: unrelated body allocation stays bounded across element shapes ($one / $eight bytes)');
+		var metadataOnly = overhead(1, true);
+		if (metadataOnly > one * 1.25)
+			throw 'Unused array signatures triggered a Dynamic-view rewrite: plain=$one metadata=$metadataOnly';
+		Sys.println('PASS: unrelated body allocation stays bounded across element shapes ($one / $eight bytes; unused array metadata $metadataOnly bytes)');
 	}
 
-	static function overhead(shapes:Int):Float
-		return measure(shapes, 128) - measure(shapes, 0);
+	static function overhead(shapes:Int, unusedArrayMetadata:Bool = false):Float
+		return measure(shapes, 128, unusedArrayMetadata) - measure(shapes, 0, unusedArrayMetadata);
 
-	static function measure(shapes:Int, functions:Int):Float {
+	static function measure(shapes:Int, functions:Int, unusedArrayMetadata:Bool):Float {
 		var program = new IrProgram("main"), entry = new IrBuilder();
 		entry.returnValue(entry.constInt(42));
 		program.functions.push(new IrFunction("main", entry.arguments, I32, entry.blocks));
@@ -32,8 +35,13 @@ class ValueArrayLoweringSelectionMain {
 			});
 			program.staticFields.push({name: "values" + i, type: Array(Obj(name))});
 		}
+		program.objects.push({name: "Ordinary", isValue: false, base: null, interfaces: [], methods: [], fields: []});
 		for (i in 0...functions) {
 			var b = new IrBuilder(), result = b.constInt(i);
+			if (unusedArrayMetadata) {
+				b.argument("unusedDynamic", Array(Dyn));
+				b.argument("unusedReference", Array(Obj("Ordinary")));
+			}
 			for (j in 0...20)
 				result = b.add(result, b.constInt(j));
 			b.returnValue(result);

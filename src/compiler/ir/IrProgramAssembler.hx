@@ -566,7 +566,6 @@ class IrProgramAssembler {
 			enumInput.enums = IrEnumRuntimeSpecializations.materialize(enums == null ? [] : enums, allFunctions, enumInput.objects, enumInput.staticFields,
 				enumInput.natives, enumInput.interfaces, enumInput.cNatives);
 			IrEnumTagLowering.run(enumInput);
-			IrEnumTagLowering.escapes(enumInput);
 			var enumOutput = IrInlineEnumLowering.run(enumInput, valueTarget, reflectableObjects);
 			allFunctions = enumOutput.functions;
 			objects = enumOutput.objects;

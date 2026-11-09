@@ -17,10 +17,15 @@ class Holder {
 	public function write(value:Mode):Void mode = value;
 }
 
-interface DynamicSink { function accept(value:Dynamic):Dynamic; }
-class Sink implements DynamicSink {
-	public function new() {}
-	public function accept(value:Dynamic):Dynamic return value;
+interface DynamicSinkBase { function accept(value:Dynamic):Dynamic; }
+interface DynamicSink extends DynamicSinkBase {}
+class SinkBase {
+	public var saved:Dynamic;
+	public function new() saved = null;
+	public function accept(value:Dynamic):Dynamic { saved = value; return value; }
+}
+class Sink extends SinkBase implements DynamicSink {
+	public function new() super();
 }
 
 class Box<T> {
@@ -134,6 +139,11 @@ function main():Int {
 	var sink:DynamicSink = new Sink();
 	var fromInterface:Mode = cast sink.accept(Paused);
 	if (fromInterface != Paused) return 20;
+	var concrete = new Sink();
+	var fromInherited:Mode = cast concrete.accept(On);
+	concrete.saved = Paused;
+	var fromField:Mode = cast concrete.saved;
+	if (fromInherited != On || fromField != Paused) return 31;
 	var phantom:Phantom<Int> = Present;
 	var erasedPhantom:Dynamic = phantom;
 	var restoredPhantom:Phantom<Int> = cast erasedPhantom;

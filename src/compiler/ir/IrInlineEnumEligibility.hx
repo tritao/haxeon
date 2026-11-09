@@ -15,7 +15,7 @@ class IrInlineEnumEligibility {
 
 	final objects:Map<String, IrObject>;
 	final contracts:Map<String, IrInterface>;
-	final declarations:Array<IrEnum>;
+	final declarations:Map<String, IrEnum>;
 	final planner:IrInlineEnumLayout;
 	final enumNodes:Map<String, Int> = [];
 	final objectNodes:Map<String, Int> = [];
@@ -28,12 +28,14 @@ class IrInlineEnumEligibility {
 
 	public function new(program:IrProgram, planner:IrInlineEnumLayout, ?reflectableObjects:Array<String>) {
 		this.planner = planner;
-		declarations = program.enums;
+		declarations = [for (declaration in program.enums) declaration.name => declaration];
 		objects = [for (object in program.objects) object.name => object];
 		contracts = [for (contract in program.interfaces) contract.name => contract];
-		names = [for (declaration in program.enums) declaration.name];
+		// Tag enums have no payload storage to classify. Exclude them before allocating graph bitsets.
+		names = [for (declaration in program.enums) if (!IrEnumTagStorage.eligible(declaration)) declaration.name];
 		words = (names.length + 31) >> 5;
 		rejected = [for (_ in 0...words) 0];
+		if (names.length == 0) return;
 		for (index in 0...names.length) {
 			var name = names[index], node = named(enumNodes, name);
 			nodes[node].bits[index >> 5] |= 1 << (index & 31);
@@ -79,7 +81,7 @@ class IrInlineEnumEligibility {
 				depend(node, field.type);
 		}
 		closeDependencies();
-		for (declaration in program.enums) {
+		for (declaration in program.enums) if (!IrEnumTagStorage.eligible(declaration)) {
 			if (nativePayload(Enum(declaration.name), []))
 				block(declaration.name, "canonical native payload layout");
 			else if (planner.shape(declaration.name) == null)
@@ -302,12 +304,7 @@ class IrInlineEnumEligibility {
 		return switch type {
 			case Enum(name):
 				if (seen.contains(name)) false; else {
-					var declaration:Null<IrEnum> = null;
-					for (candidate in declarations)
-						if (candidate.name == name) {
-							declaration = candidate;
-							break;
-						}
+					var declaration = declarations.get(name);
 					declaration != null && Lambda.exists(declaration.cases, item -> Lambda.exists(item.params, p -> nativePayload(p, seen.concat([name]))))
 					;
 				}

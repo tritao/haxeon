@@ -10,8 +10,6 @@ class IrInlineEnumLowering {
 	public static function run(program:IrProgram, target:IrValueLaneTarget, ?reflectableObjects:Array<String>):IrProgram {
 		var planner = new IrInlineEnumLayout(program.enums, program.objects, target == HashLink ? 64 : 32, target);
 		var eligibility = new IrInlineEnumEligibility(program, planner, reflectableObjects);
-		for (entry in program.enums)
-			if (IrEnumTagStorage.eligible(entry)) eligibility.allowed.remove(entry.name);
 		if (!eligibility.allowed.keys().hasNext())
 			return program;
 		planner = new IrInlineEnumLayout(program.enums, program.objects, target == HashLink ? 64 : 32, target, null, false, eligibility.allowed);

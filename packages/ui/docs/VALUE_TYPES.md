@@ -4366,3 +4366,63 @@ material body-typing growth; the extra representation work is in IR assembly. Th
 `8a5c235144e5691cbde206818f4c37edd3515cb11ec937f2ce7af48b581ef824`. Generated comparison modules are deleted
 once these numbers are recorded. The VM reader additionally rejects forged case-cache global indices before
 hot-reload hashing can use them; the live-patch fixture exercises that malformed-bytecode path.
+
+
+### Nominal-tag assembly traversal follow-up (2026-11-09)
+
+The 5,235.14 → 5,978.75 ms assembly observation above is a regression checkpoint, not an accepted final cost.
+Sampling the same compiler/stdlib compilation identified unconditional IR copying, temporary operand arrays,
+eager function-signature arrays, repeated field/method walks, and two escape traversals as new work. The follow-up
+retains unaffected functions, values and instruction locations; discovers representation changes once per SSA
+definition; indexes inherited field/method signatures; and constructs escape arguments and fresh IDs only when
+an actual adapter is inserted. The first escape transition checks only rewritten functions. The later pass still
+checks generated reflection/runtime helpers. The tag verifier still visits every operand, including phi edges,
+using an exhaustive visitor that does not construct temporary input arrays.
+
+The regression fixture checks 1,000 and 4,000 unrelated functions, unchanged instruction identity, repeated escape
+lowering, nested descriptors and an invalid phi operand. Source fixtures cover inherited class and interface
+signatures and inherited Dynamic fields on all three targets, with inlining disabled and enabled.
+
+
+An allocation-stack census isolated the remaining tag-triggered cost in the lane-array pass: before its fix,
+control/candidate assembly allocated **55,802,950 / 58,884,891 objects**, **2,404,120,848 / 2,539,939,384 bytes**.
+Stacks sampled every 1,024 bytes attributed about 49 MiB to speculative Dynamic-view rebuilding, 25 MiB to
+function summaries and 18 MiB to repeated type-key construction. These are sampled site attributions; the census
+totals are exact. The pass now indexes live lane keys once, discovers carriers from SSA definitions, encodes each
+shape once, shares its function lookup across shapes, appends generated helpers without repeated full-list copies,
+and allocates blocks/locations only for actual Dynamic-array operations. The original array-scaling assertion is
+unchanged: the final unrelated-body overhead is **65,384 / 79,368 bytes** for one/eight shapes; unused Dynamic and
+reference-array parameters cost **69,456 bytes**. Removing fixed discovery overhead exposed the remaining per-shape
+function-map/list rebuilding; that cause was fixed rather than relaxing the test.
+
+The final timing comparison uses the same 661 compiler/stdlib files for every compiler, checkout VM `3ea38fcf`,
+stock-Haxe-built compiler executables (matching the reviewed regression measurement), and CPU affinity `0-11`
+on both sides. No GC settings change. Control compiler source is `39522d88`; the tagged comparison is `f766c04a`.
+Sampling also runs compiler-built executables, confirming the traversal/array-pass costs on the self-hosted path.
+Temporary profiling overlays and captures stay outside the checkout; no profiling hooks enter the compiler.
+The final input SHA-256 is `5536e50bfb09571f3664d94bebcc0a764d7c73c2e754f26ba60231ec0d76f7bd`.
+
+| Pair | Control IR assembly (ms) | Candidate IR assembly (ms) | Control BodyTyped (ms) | Candidate BodyTyped (ms) |
+|---|---:|---:|---:|---:|
+| 1 | 5,002.05 | 5,173.04 | 140.72 | 130.61 |
+| 2 | 5,113.99 | 5,169.55 | 144.28 | 129.48 |
+| 3 | 7,047.45 | 6,387.61 | 137.36 | 140.28 |
+
+Median assembly is **5,113.99 → 5,173.04 ms (+1.15%)**, within observed control variation;
+median BodyTyped is **140.72 → 130.61 ms**.
+Pair 3 overlaps another compiler suite and app guest; its negative delta is not an improvement claim. All pairs are
+retained. Earlier definition-only and lazy-escape cuts still measured +6.47% and +5.64%; the first lane-index cut
+measured +2.64%. Those cuts were not accepted as the final compile-time result. Other contended diagnostic sets
+varied by seconds and were retained as diagnostic records, not used to claim a speedup.
+
+All three optimized outputs are byte-identical to `f766c04a` on these frozen inputs: **36,033,551 bytes**,
+SHA-256 `06d3fea984a3e27b4ce007e69669c884f8acaf82e1d0afcd8116de575ff5c54f`. The first pair's allocator phase meter reports
+**2,404,723,136 → 2,419,281,624 bytes**, **55,818,376 → 55,834,661 allocations**; these are compiler phase counters,
+not editor action allocations. The unchanged output verifies that this optimization does not change allocation behaviour for this
+compiler workload. The batch still needs its editor/Web Tier 2/3 checkpoint before publication.
+
+
+Final Tier 1: **844 passed, zero failed** with eight workers, all affected tag/array fixtures on HashLink, Wasm32
+and Wasm GC with inlining off/on, and a self-hosting fixed point. A final sampling pair also executes the compiler-built
+control and fixed-point candidate; their profiled assembly times are 8,266.38 / 5,876.66 ms under concurrent gate
+load, so those single observations are diagnostic only and do not replace the unprofiled paired table above.

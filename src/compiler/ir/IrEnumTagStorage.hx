@@ -110,17 +110,17 @@ class IrEnumTagStorage {
 				check(argument);
 			check(native.result);
 		}
+		function checkValue(value:IrValue):Bool {
+			check(value.type);
+			return false;
+		}
 		for (fn in program.functions) {
 			for (argument in fn.arguments)
 				check(argument.type);
 			check(fn.result);
 			for (block in fn.blocks) {
 				for (located in block.instructions) {
-					var output = IrOperands.output(located.value);
-					if (output != null)
-						check(output.type);
-					for (input in IrOperands.inputs(located.value))
-						check(input.type);
+					IrOperands.anyValue(located.value, checkValue);
 					switch located.value {
 						case TypeValue(_, type):
 							check(type);

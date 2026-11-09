@@ -36,4 +36,33 @@ class IrOperands {
 			case Call(_, _, arguments), CNativeCall(_, _, arguments), MakeEnum(_, _, _, arguments): arguments;
 			case CallClosure(_, receiver, arguments), MethodCall(_, receiver, _, arguments, _): [receiver].concat(arguments);
 		};
+
+	/** Tests all SSA values, including phi edge uses, without constructing temporary input arrays. */
+	public static function anyValue(instruction:IrInstruction, test:IrValue -> Bool):Bool {
+		var result = output(instruction);
+		if (result != null && test(result)) return true;
+		return switch instruction {
+			case Phi(_, inputs):
+				var found = false;
+				for (input in inputs) if (test(input.value)) { found = true; break; }
+				found;
+			case ConstVoid(_), ConstInt(_, _), ConstFloat(_, _), ConstString(_, _), StaticDataAddress(_, _), ConstBool(_, _), ConstNull(_),
+				TypeValue(_, _), BeginTry(_, _, _), EndTry(_, _), Catch(_), GlobalGet(_, _), StaticClosure(_, _), NewObject(_, _): false;
+			case ToDyn(_, value), IntToFloat(_, value), IntToInt64(_, value), FloatToInt(_, value), FloatToFloat(_, value), SafeCast(_, value),
+				GlobalSet(_, value), InstanceClosure(_, _, value), ToVirtual(_, value), Upcast(_, value), FieldGet(_, value, _), ArraySize(_, value), IteratorNew(_, value),
+				IteratorHasNext(_, value), IteratorNext(_, value), EnumIndex(_, value), EnumField(_, value, _, _), MemoryLoad(_, value, _, _): test(value);
+			case Add(_, a, b), Sub(_, a, b), Mul(_, a, b), Div(_, a, b), Mod(_, a, b), BitAnd(_, a, b), BitXor(_, a, b), BitOr(_, a, b), ShiftLeft(_, a, b),
+				ShiftRight(_, a, b), UnsignedShiftRight(_, a, b), Less(_, a, b), LessEqual(_, a, b), Equal(_, a, b), FieldSet(a, _, b), ArrayGet(_, a, b),
+				PointerOffset(_, a, b), MemoryStore(a, b, _): test(a) || test(b);
+			case ArraySet(array, index, value): test(array) || test(index) || test(value);
+			case Call(_, _, arguments), CNativeCall(_, _, arguments), MakeEnum(_, _, _, arguments):
+				var found = false;
+				for (argument in arguments) if (test(argument)) { found = true; break; }
+				found;
+			case CallClosure(_, receiver, arguments), MethodCall(_, receiver, _, arguments, _):
+				var found = test(receiver);
+				if (!found) for (argument in arguments) if (test(argument)) { found = true; break; }
+				found;
+		};
+	}
 }
