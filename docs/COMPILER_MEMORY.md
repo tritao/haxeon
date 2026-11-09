@@ -136,3 +136,21 @@ lowered-function cache 0.00, last assembler 0.07, inline cache 0.19.
   speed and fragmentation), and a per-build GC mark threshold set by the compiler through a runtime call in our HashLink (a global 0.2
   costs +17 s of GC on a cold build). The second is a decision for the user, not part of this work.
 
+
+
+## Per-build GC mark threshold (landed 2026-11-09)
+
+`GcPolicy` sets the mark threshold before each build: 0.4 for a cold build (the worker has not compiled yet), 0.2 for a warm one. The
+launcher's `HL_GC_MARK_THRESHOLD=0.4` is only the start value. The setter was already in the vendored HashLink (`hl_gc_set_mark_threshold`);
+the compiler is built with the Haxe standard library, whose `hl.Gc` has no setter, so `GcPolicy` declares the `std` primitive itself.
+
+App, pre-merge tree (0405feb5 plus the step-0 floor fix), launcher environment (threshold 0.4 at start), same edit as the other gates:
+
+| build | GCs | GC time | compile wall | worker peak RSS (sampled) |
+|---|---|---|---|---|
+| cold, before / after | 30 / 30 | 6.7 s / 6.5 s | 60.5 s / 59.5 s | 5.6 / 8.1 GB (sampling noise: 5.6 to 8.1 GB between identical runs) |
+| no-op, before / after | 1 / 2 | 0.5 s / 1.1 s | 4.4 s / 4.9 s | 6.4 / 6.2 GB |
+| edit, before / after | 4 / 9 | 2.5 s / 5.4 s | 24.8 s / 28.2 s | 7.7 / 7.0 GB |
+
+The edit build's GC time rises by 2.9 s, as COMPILER_MEMORY predicted, and its wall time by 3.4 s. The peak falls by 0.8 GB in this sample, less than
+the 2 GB measured with a process-wide 0.2; one sample per configuration, peaks sampled every 2 s.

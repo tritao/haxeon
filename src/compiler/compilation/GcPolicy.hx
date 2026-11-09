@@ -17,8 +17,17 @@ class GcPolicy {
 
 	/** `warm` is true when the worker has compiled before. */
 	public static function beginBuild(warm:Bool):Void {
+		var threshold = warm ? WARM_BUILD : COLD_BUILD;
 		#if haxeon
-		hl.Gc.setMarkThreshold(warm ? WARM_BUILD : COLD_BUILD);
+		hl.Gc.setMarkThreshold(threshold);
+		#elseif hl
+		setMarkThreshold(threshold);
 		#end
 	}
+
+	// The compiler is also built with the Haxe standard library, whose hl.Gc has no setter; the primitive is in the runtime either way.
+	#if (hl && !haxeon)
+	@:hlNative("std", "gc_set_mark_threshold")
+	static function setMarkThreshold(fraction:Float):Void {}
+	#end
 }
