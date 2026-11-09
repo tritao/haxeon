@@ -46,12 +46,17 @@ class ModuleSourceLoader {
 		listings.clear();
 	}
 
+	/**
+	 * The module `name`, read from the one root that holds it. A module held by two roots is an error: which file wins would
+	 * depend on the order of the roots, and a file added to an earlier root would silently replace the module.
+	 */
 	public function load(name:String, modules:Map<String, ModuleState>):Null<ModuleState> {
 		if (modules.exists(name))
 			return modules.get(name);
 		if (missing.exists(name))
 			return null;
 		var relative = name.split(".").join("/") + ".hx";
+		var found:Null<{path:String, text:String}> = null;
 		for (root in roots) {
 			var candidates = [relative];
 			if (root.packagePrefix != null) {
@@ -74,12 +79,18 @@ class ModuleSourceLoader {
 			// `package app` is app.Runner, not a root-package Runner that a plain root would also reach.
 			if (declaresOther(text, packageOf(name)))
 				continue;
-			var state = new ModuleState(name, new SourceFile(path, text));
-			modules.set(name, state);
-			return state;
+			if (found != null && found.path != path)
+				throw 'Module "$name" is in two source roots: ${found.path} and $path';
+			if (found == null)
+				found = {path: path, text: text};
 		}
-		missing.set(name, true);
-		return null;
+		if (found == null) {
+			missing.set(name, true);
+			return null;
+		}
+		var state = new ModuleState(name, new SourceFile(found.path, found.text));
+		modules.set(name, state);
+		return state;
 	}
 
 	/** Materialize all source modules directly contained by a package. */

@@ -5,6 +5,7 @@ import haxe.crypto.Sha256;
 import haxe.io.Bytes;
 import sys.FileSystem;
 import sys.io.File;
+import sys.thread.Mutex;
 
 /**
  * The files a program reads while it runs, for caches whose entries are only valid while those files are unchanged.
@@ -31,6 +32,8 @@ class InputFiles {
 	static var written:Null<Map<String, Bool>>;
 	static var ignored:Null<Array<String>>;
 	static var ignoredExact:Null<Map<String, Bool>>;
+	// Generators read and write files from several threads; the lists above are shared.
+	static var lock:Null<Mutex>;
 
 	/** Whether this run records its reads: the program was started with the flag. Decided on first use, whenever that is. */
 	public static function isRecording():Bool {
@@ -45,6 +48,7 @@ class InputFiles {
 					written = [];
 					ignored = ["/proc/", "/sys/", "/dev/"];
 					ignoredExact = [];
+					lock = new Mutex();
 				}
 		}
 		return on;
@@ -65,6 +69,7 @@ class InputFiles {
 		if (ignored == null || exact == null)
 			return;
 		var full = absolute(prefix);
+		acquire();
 		ignored.push(full + "/");
 		var parts = full.split("/");
 		while (parts.length > 1) {
@@ -72,12 +77,17 @@ class InputFiles {
 			parts.pop();
 		}
 		exact.set("/", true);
+		release();
 	}
 
 	/** One file that is not an input: the document a runner hands the program, already part of the cache's key. */
 	public static function ignoreFile(path:String):Void {
-		if (isRecording() && ignored != null)
-			ignored.push(absolute(path));
+		if (isRecording() && ignored != null) {
+			var full = absolute(path);
+			acquire();
+			ignored.push(full);
+			release();
+		}
 	}
 
 	public static function bytesRead(path:String, bytes:Bytes):Void
@@ -109,17 +119,23 @@ class InputFiles {
 
 	/** The program wrote `path`: whatever it reads there afterwards, or before, is its own output. */
 	public static function wrote(path:String):Void {
-		if (isRecording() && written != null)
-			written.set(absolute(path), true);
+		if (isRecording() && written != null) {
+			var full = absolute(path);
+			acquire();
+			written.set(full, true);
+			release();
+		}
 	}
 
 	/** The list of everything noted and not written, as JSON. */
 	public static function report():String {
 		var list:Array<Array<String>> = [];
+		acquire();
 		if (entries != null && written != null)
 			for (entry in entries)
 				if (!written.exists(entry[0]))
 					list.push(entry);
+		release();
 		return Json.stringify(list);
 	}
 
@@ -169,16 +185,32 @@ class InputFiles {
 		if (!isRecording() || ignored == null || noted == null || entries == null)
 			return;
 		var full = absolute(path);
-		if (ignoredExact != null && ignoredExact.exists(full))
-			return;
-		for (prefix in ignored)
-			if (StringTools.startsWith(full, prefix))
-				return;
+		acquire();
+		var skip = ignoredExact != null && ignoredExact.exists(full);
+		if (!skip)
+			for (prefix in ignored)
+				if (StringTools.startsWith(full, prefix)) {
+					skip = true;
+					break;
+				}
 		var key = kind + "\n" + full;
-		if (noted.exists(key))
-			return;
-		noted.set(key, true);
-		entries.push([full, kind, answer]);
+		if (!skip && !noted.exists(key)) {
+			noted.set(key, true);
+			entries.push([full, kind, answer]);
+		}
+		release();
+	}
+
+	static function acquire():Void {
+		var mutex = lock;
+		if (mutex != null)
+			mutex.acquire();
+	}
+
+	static function release():Void {
+		var mutex = lock;
+		if (mutex != null)
+			mutex.release();
 	}
 
 	static function absolute(path:String):String {
