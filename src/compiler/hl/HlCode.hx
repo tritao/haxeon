@@ -41,9 +41,9 @@ final class HlDebugSection {
 	public var payload(get, never):haxe.io.Bytes;
 
 	final stored:Null<haxe.io.Bytes>;
-	final produce:Null<() -> haxe.io.Bytes>;
+	final produce:Null<Null<HlWriterCache>->haxe.io.Bytes>;
 
-	function new(kind:Int, version:Int, flags:Int, stored:Null<haxe.io.Bytes>, produce:Null<() -> haxe.io.Bytes>) {
+	function new(kind:Int, version:Int, flags:Int, stored:Null<haxe.io.Bytes>, produce:Null<Null<HlWriterCache>->haxe.io.Bytes>) {
 		this.kind = kind;
 		this.version = version;
 		this.flags = flags;
@@ -54,7 +54,8 @@ final class HlDebugSection {
 	public static function of(kind:Int, version:Int, flags:Int, payload:haxe.io.Bytes):HlDebugSection
 		return new HlDebugSection(kind, version, flags, payload, null);
 
-	public static function lazy(kind:Int, version:Int, flags:Int, produce:() -> haxe.io.Bytes):HlDebugSection
+	/** `produce` gets the writer cache the module is being written with, if any, so it can reuse what it encoded for unchanged functions. */
+	public static function lazy(kind:Int, version:Int, flags:Int, produce:Null<HlWriterCache>->haxe.io.Bytes):HlDebugSection
 		return new HlDebugSection(kind, version, flags, null, produce);
 
 	/** Whether the section has a payload at all, without producing a derived one. */
@@ -62,7 +63,10 @@ final class HlDebugSection {
 		return stored != null || produce != null;
 
 	function get_payload():haxe.io.Bytes
-		return stored != null ? stored : produce();
+		return payloadFor(null);
+
+	public function payloadFor(cache:Null<HlWriterCache>):haxe.io.Bytes
+		return stored != null ? stored : produce(cache);
 }
 
 /** UTF-8 source contents addressed by the hash carried in debug locations. */

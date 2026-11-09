@@ -1,5 +1,6 @@
 package compiler.hl;
 
+import compiler.hl.HlFunction.HlDebugLocation;
 import haxe.ds.ObjectMap;
 import haxe.io.Bytes;
 
@@ -10,6 +11,7 @@ class HlWriterCache {
 	var functionPaths:ObjectMap<HlFunction, Array<String>> = new ObjectMap();
 	var validatedFunctions:ObjectMap<HlFunction, Bool> = new ObjectMap();
 	var validatedSnapshots:ObjectMap<Bytes, Int> = new ObjectMap();
+	var spanGroups:ObjectMap<Array<HlDebugLocation>, SpanGroupBytes> = new ObjectMap();
 	var prefix:Null<Bytes>;
 	var prefixInts:Dynamic;
 	var prefixFloats:Dynamic;
@@ -32,6 +34,46 @@ class HlWriterCache {
 		debugFiles = files.copy();
 		functions = new ObjectMap();
 		prefix = null;
+	}
+
+	/**
+	 * The encoded opcode source-span group of a function, if `locations` is the array it was encoded from, for the same stable id, and every
+	 * file it names has the index it had then (the file table is built from all groups, so it can shift).
+	 */
+	public function spanGroup(locations:Array<HlDebugLocation>, stableId:Int, fileIndices:Map<String, Int>):Null<Bytes> {
+		var entry = spanGroups.get(locations);
+		if (entry == null || entry.stableId != stableId)
+			return null;
+		for (index in 0...entry.paths.length)
+			if (fileIndices.get(entry.paths[index]) != entry.indices[index])
+				return null;
+		return entry.bytes;
+	}
+
+	public function setSpanGroup(locations:Array<HlDebugLocation>, stableId:Int, bytes:Bytes, fileIndices:Map<String, Int>):Void {
+		var paths:Array<String> = [], indices:Array<Int> = [], previous = "";
+		for (location in locations)
+			if (location.path != previous) {
+				previous = location.path;
+				if (paths.indexOf(previous) < 0) {
+					paths.push(previous);
+					indices.push(fileIndices.get(previous));
+				}
+			}
+		spanGroups.set(locations, new SpanGroupBytes(stableId, bytes, paths, indices));
+	}
+
+	/** Keeps the span groups of the functions just written, so a long-lived session releases the ones an edit replaced. */
+	public function retainSpanGroups(active:Null<Array<Array<HlDebugLocation>>>):Void {
+		if (active == null)
+			return;
+		var kept = new ObjectMap<Array<HlDebugLocation>, SpanGroupBytes>();
+		for (locations in active) {
+			var entry = spanGroups.get(locations);
+			if (entry != null)
+				kept.set(locations, entry);
+		}
+		spanGroups = kept;
 	}
 
 	public function get(fn:HlFunction):Null<Bytes>
@@ -126,5 +168,20 @@ class HlWriterCache {
 			if (left[index] != right[index])
 				return false;
 		return true;
+	}
+}
+
+/** One function's encoded span group with the file indices it was encoded under. */
+private class SpanGroupBytes {
+	public final stableId:Int;
+	public final bytes:Bytes;
+	public final paths:Array<String>;
+	public final indices:Array<Int>;
+
+	public function new(stableId:Int, bytes:Bytes, paths:Array<String>, indices:Array<Int>) {
+		this.stableId = stableId;
+		this.bytes = bytes;
+		this.paths = paths;
+		this.indices = indices;
 	}
 }

@@ -496,7 +496,7 @@ class HlLower {
 			}
 			allocationAfterSpanGroups = AllocationMeter.sample();
 			// The groups only point at the functions' locations; the section is encoded when the module is written.
-			code.debugSections.push(HlDebugSection.lazy(HlWriter.OPCODE_SOURCE_SPANS, 2, 0, () -> HlWriter.encodeOpcodeSourceSpanGroups(spanGroups)));
+			code.debugSections.push(HlDebugSection.lazy(HlWriter.OPCODE_SOURCE_SPANS, 2, 0, cache -> HlWriter.encodeOpcodeSourceSpanGroups(spanGroups, cache)));
 		}
 		if (debugCache != null)
 			debugCache.endGeneration();

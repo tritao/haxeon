@@ -249,6 +249,7 @@ class TestCatalog {
 		"LiveKeptCheckMain",
 		"IrFunctionRewriteMain",
 		"ChunkedOutputMain",
+		"HlWriterCacheMain",
 		"FieldInitializerEditMain",
 		"CodeIdentityMain",
 		"IdentityPathMain",

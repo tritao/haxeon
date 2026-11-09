@@ -377,7 +377,7 @@ class HlWriter {
 			writeUnsignedIndex(section.kind);
 			writeUnsignedIndex(section.version);
 			writeUnsignedIndex(section.flags);
-			var payload = section.payload;
+			var payload = section.payloadFor(cache);
 			writeUnsignedIndex(payload.length);
 			writeShared(payload);
 		}
@@ -401,7 +401,11 @@ class HlWriter {
 	}
 
 	/** Encode the locations that lowering already keeps grouped by stable function identity: one mapping per opcode. */
-	public static function encodeOpcodeSourceSpanGroups(groups:Array<HlOpcodeSourceSpanGroup>):HaxeBytes {
+	/**
+	 * With a cache, a group whose `locations` array is the very one encoded last time (an unchanged function) reuses those bytes as long
+	 * as every file it names has the same index; only the changed functions are encoded.
+	 */
+	public static function encodeOpcodeSourceSpanGroups(groups:Array<HlOpcodeSourceSpanGroup>, ?cache:HlWriterCache):HaxeBytes {
 		var writer = new HlWriter(),
 			files:Array<String> = [],
 			fileIndices:Map<String, Int> = [],
@@ -440,30 +444,46 @@ class HlWriter {
 		var ordered = groups.copy();
 		ordered.sort((left, right) -> left.stableId - right.stableId);
 		writer.writeUnsignedIndex(ordered.length);
-		previousPath = "";
-		var previousFileIndex = -1;
+		var used:Null<Array<Array<HlDebugLocation>>> = cache == null ? null : [];
 		for (group in ordered) {
-			writer.writeUnsignedIndex(group.stableId);
-			writer.writeUnsignedIndex(group.locations.length);
-			for (opcode in 0...group.locations.length) {
-				var location = group.locations[opcode];
-				writer.writeUnsignedIndex(opcode);
-				if (location.path != previousPath) {
-					previousPath = location.path;
-					previousFileIndex = cast fileIndices.get(previousPath);
-				}
-				writer.writeUnsignedIndex(previousFileIndex);
-				writer.writeIndex(location.start + 1);
-				writer.writeIndex(location.end + 1);
-				writer.writeUnsignedIndex(location.line);
-				writer.writeUnsignedIndex(location.column);
-				writer.writeUnsignedIndex(location.endLine);
-				writer.writeUnsignedIndex(location.endColumn);
-				writer.output.writeInt32(location.sourceHash);
-				writer.writeUnsignedIndex(location.flags);
+			var cached = cache == null ? null : cache.spanGroup(group.locations, group.stableId, fileIndices);
+			if (cached == null) {
+				var groupWriter = new HlWriter();
+				groupWriter.writeSpanGroup(group, fileIndices);
+				cached = groupWriter.getBytes();
+				if (cache != null)
+					cache.setSpanGroup(group.locations, group.stableId, cached, fileIndices);
 			}
+			if (used != null)
+				used.push(group.locations);
+			writer.writeShared(cached);
 		}
+		if (cache != null)
+			cache.retainSpanGroups(used);
 		return writer.getBytes();
+	}
+
+	function writeSpanGroup(group:HlOpcodeSourceSpanGroup, fileIndices:Map<String, Int>):Void {
+		writeUnsignedIndex(group.stableId);
+		writeUnsignedIndex(group.locations.length);
+		var previousPath = "", previousFileIndex = -1;
+		for (opcode in 0...group.locations.length) {
+			var location = group.locations[opcode];
+			writeUnsignedIndex(opcode);
+			if (location.path != previousPath) {
+				previousPath = location.path;
+				previousFileIndex = cast fileIndices.get(previousPath);
+			}
+			writeUnsignedIndex(previousFileIndex);
+			writeIndex(location.start + 1);
+			writeIndex(location.end + 1);
+			writeUnsignedIndex(location.line);
+			writeUnsignedIndex(location.column);
+			writeUnsignedIndex(location.endLine);
+			writeUnsignedIndex(location.endColumn);
+			output.writeInt32(location.sourceHash);
+			writeUnsignedIndex(location.flags);
+		}
 	}
 
 	public static function encodeSourceSnapshots(snapshots:Array<compiler.hl.HlCode.HlSourceSnapshot>):HaxeBytes {
@@ -478,7 +498,8 @@ class HlWriter {
 			seen.set(snapshot.sourceHash, snapshot.content);
 			writer.output.writeInt32(snapshot.sourceHash);
 			writer.writeUnsignedIndex(snapshot.content.length);
-			writer.output.write(snapshot.content);
+			// Source contents are never changed after they are read, so the section takes them without copying them.
+			writer.writeShared(snapshot.content);
 		}
 		return writer.getBytes();
 	}

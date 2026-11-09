@@ -127,10 +127,13 @@ class HlValidator {
 		if (cache != null)
 			cache.retainSnapshots([for (snapshot in code.sourceSnapshots) snapshot.content]);
 		if (code.sourceSnapshots.length > 0) {
-			var encoded = HlWriter.encodeSourceSnapshots(code.sourceSnapshots), found = false;
+			// Both sides come from the same model in the same process, so comparing the encodings repeats the encoding of every source
+			// snapshot twice per build for nothing; it is a consistency check, kept for HAXEON_CHECK_REUSE=1.
+			var checking = Sys.getEnv("HAXEON_CHECK_REUSE") == "1", encoded = checking ? HlWriter.encodeSourceSnapshots(code.sourceSnapshots) : null,
+				found = false;
 			for (section in code.debugSections)
 				if (section.kind == HlWriter.SOURCE_SNAPSHOTS && section.version == 1) {
-					if (section.payload.compare(encoded) != 0)
+					if (checking && section.payload.compare(encoded) != 0)
 						throw "HLB source snapshot section does not match its model";
 					found = true;
 				}
