@@ -103,6 +103,16 @@ native. The compiler fails at build time if a target lacks an intrinsic the reac
 
 Host services (print, time, random seed, files) stay imports (HXI, natives), not intrinsics.
 
+This builds on what exists rather than adding a second mechanism. Today the compiler-known primitives are `__name` calls
+resolved by name in `CallResolver`: `__reference_equal`, `__std_string`, `__string_split`, `__string_to_lower_case`,
+`__math_floor` and others. Since `ad476835`, `Source.isStandardLibrarySource` carries stdlib provenance from the loader
+root, but only `__reference_equal` is restricted to stdlib sources (`1d60d0ec`, E1025). The work is:
+
+- The declaration becomes the single list of these primitives. `CallResolver` stops matching name strings.
+- Every primitive is restricted to stdlib sources through `isStandardLibrarySource`.
+- Primitives that are library behaviour rather than basic operations move into Haxeon source as their family is ported
+  (R1 to R5). For example, `__string_split` and `__string_to_lower_case` go in R1.
+
 Wasm GC constraints that the shared library respects:
 
 - **No interior pointers.** Shared code addresses memory as a buffer plus an offset. `RawPtr`, `NativeSpan` and `Arena`
