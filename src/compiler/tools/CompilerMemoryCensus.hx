@@ -124,7 +124,8 @@ class CompilerMemoryCensus {
 				},
 			];
 			var report = File.append(directory + "/census.txt");
-			for (index in 0...steps.length) {
+			var limit = Sys.getEnv("HAXEON_COMPILER_CENSUS_STEPS");
+			for (index in 0...(limit == null ? steps.length : Std.int(Math.min(steps.length, Std.parseInt(limit))))) {
 				steps[index].release();
 				hl.Gc.major();
 				var dump = directory + "/step.dump",
