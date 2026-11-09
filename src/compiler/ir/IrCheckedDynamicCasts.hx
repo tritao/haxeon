@@ -31,7 +31,26 @@ class IrCheckedDynamicCasts {
 			return name;
 		}
 		var rewritten:Array<IrFunction> = [];
+		// Only a cast from Dyn is ever replaced, so a function without one is kept as it is, without building new blocks.
+		function castsFromDyn(instruction:IrInstruction):Bool
+			return switch instruction {
+				case SafeCast(out, input) if ((switch input.type { case Dyn: true; default: false; })):
+					// The cases of the rewrite below, without its effects.
+					switch out.type {
+						case Obj(name): declarations.exists(name) && (checkObjects || (checkValueObjects && declarations.get(name).isValue));
+						case Nullable(Obj(name)): checkValueObjects && declarations.exists(name) && declarations.get(name).isValue;
+						case RawPtr, Virtual(_): true;
+						case Function(_, _), Nullable(Function(_, _)): checkFunctionCasts;
+						default: false;
+					}
+				default: false;
+			};
 		for (fn in functions) {
+			var skipped = !IrInstructionScan.any(fn, castsFromDyn);
+			if (skipped && !IrInstructionScan.checking) {
+				rewritten.push(fn);
+				continue;
+			}
 			var changed = false, blocks:Array<IrBlock> = [];
 			for (block in fn.blocks) {
 				var target = new IrBlock(block.id);
@@ -66,6 +85,8 @@ class IrCheckedDynamicCasts {
 				target.terminator = block.terminator;
 				blocks.push(target);
 			}
+			if (skipped && changed)
+				throw 'HAXEON_CHECK_REUSE: IrCheckedDynamicCasts changed ${fn.name}, which its scan said it cannot';
 			rewritten.push(changed ? new IrFunction(fn.name, fn.arguments, fn.result, blocks, fn.debugBindings, fn.inlineHint, fn.retention) : fn);
 		}
 		return rewritten.concat(generated);

@@ -60,7 +60,20 @@ class IrEnumDynamicDispatch {
 			functionNames.set(name, true);
 		}
 		var rewritten:Array<IrFunction> = [], unboxes:Map<String, IrType> = [], typeTests:Map<String, {type:IrType, exact:Bool}> = [];
+		// The instructions this pass can replace; a function without one is kept as it is, without building new blocks.
+		function rewritable(instruction:IrInstruction):Bool
+			return switch instruction {
+				case Call(_, "__dynamic_equal", _): names.length > 0;
+				case Call(_, "__std_is_of_type" | "__std_is_exact_type", arguments): names.length > 0 && arguments.length == 2;
+				case SafeCast(output, input): isEnum(output.type) && IrVerifier.sameType(input.type, Dyn);
+				default: false;
+			};
 		for (fn in functions) {
+			var skipped = !IrInstructionScan.any(fn, rewritable);
+			if (skipped && !IrInstructionScan.checking) {
+				rewritten.push(fn);
+				continue;
+			}
 			var blocks:Array<IrBlock> = [], changed = false, typeValues:Map<Int, IrType> = [];
 			for (block in fn.blocks) for (located in block.instructions) switch located.value {
 				case TypeValue(output, type): typeValues.set(output.id, type);
@@ -83,6 +96,8 @@ class IrEnumDynamicDispatch {
 				}
 				target.terminator = block.terminator; blocks.push(target);
 			}
+			if (skipped && changed)
+				throw 'HAXEON_CHECK_REUSE: IrEnumDynamicDispatch changed ${fn.name}, which its scan said it cannot';
 			rewritten.push(changed ? new IrFunction(fn.name, fn.arguments, fn.result, blocks, fn.debugBindings, fn.inlineHint, fn.retention) : fn);
 		}
 		var unboxNames = [for (name in unboxes.keys()) name]; unboxNames.sort(Reflect.compare);

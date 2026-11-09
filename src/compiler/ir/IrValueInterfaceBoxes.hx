@@ -136,7 +136,30 @@ class IrValueInterfaceBoxes {
 			return name;
 		}
 		var rewritten:Array<IrFunction> = [], needsTypeId = false;
+		// The instructions this pass can replace; a function without one is kept as it is, without building new blocks.
+		function valueWithInterfaces(type:IrType):Bool {
+			var object = switch type { case Obj(name): objectMap.get(name); default: null; };
+			return object != null && object.isValue && object.interfaces.length > 0;
+		}
+		function rewritable(instruction:IrInstruction):Bool
+			return switch instruction {
+				case Call(_, "__dynamic_object_type_id", _): true;
+				case Call(_, "__std_is_of_type" | "__std_is_exact_type", arguments): arguments.length == 2;
+				case ToVirtual(_, input): switch input.type { case Obj(name): objectMap.get(name) != null && objectMap.get(name).isValue; default: false; }
+				case SafeCast(out, input):
+					switch [out.type, input.type] {
+						case [Virtual(name), Dyn]: interfaceMap.exists(name) || false;
+						case [Obj(_), Virtual(_) | Dyn]: valueWithInterfaces(out.type);
+						default: false;
+					}
+				default: false;
+			};
 		for (fn in functions) {
+			var skipped = !IrInstructionScan.any(fn, rewritable);
+			if (skipped && !IrInstructionScan.checking) {
+				rewritten.push(fn);
+				continue;
+			}
 			var next = nextId(fn), changed = false, blocks:Array<IrBlock> = [], types:Map<Int, IrType> = [];
 			for (block in fn.blocks) for (located in block.instructions) switch located.value {
 				case TypeValue(out, type): types.set(out.id, type);
@@ -192,6 +215,8 @@ class IrValueInterfaceBoxes {
 				target.terminator = block.terminator;
 				blocks.push(target);
 			}
+			if (skipped && changed)
+				throw 'HAXEON_CHECK_REUSE: IrValueInterfaceBoxes changed ${fn.name}, which its scan said it cannot';
 			rewritten.push(changed ? new IrFunction(fn.name, fn.arguments, fn.result, blocks, fn.debugBindings, fn.inlineHint, fn.retention) : fn);
 		}
 		if (needsTypeId && !functionMap.exists(TYPE_ID)) {

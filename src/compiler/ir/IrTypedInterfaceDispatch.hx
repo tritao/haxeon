@@ -36,7 +36,28 @@ class IrTypedInterfaceDispatch {
 		function valueSignature(arguments:Array<IrType>, result:IrType):Bool
 			return isValue(result) || Lambda.exists(arguments, isValue);
 		var rewritten:Array<IrFunction> = [];
+		// Only a method call or an instance closure is replaced; a function without one is kept as it is, without building new blocks.
+		function rewritable(instruction:IrInstruction):Bool
+			return switch instruction {
+				case MethodCall(output, receiver, _, arguments, _):
+					switch receiver.type {
+						case Virtual(_): isValue(output.type) || Lambda.exists(arguments, argument -> isValue(argument.type));
+						default: false;
+					}
+				case InstanceClosure(output, name, receiver) if (!StringTools.startsWith(name, PREFIX)):
+					var separator = name.lastIndexOf(".");
+					separator >= 0 && contracts.exists(name.substr(0, separator)) && switch [receiver.type, output.type] {
+						case [Virtual(_), Function(arguments, result)]: valueSignature(arguments, result);
+						default: false;
+					}
+				default: false;
+			};
 		for (fn in functions) {
+			var skipped = !IrInstructionScan.any(fn, rewritable);
+			if (skipped && !IrInstructionScan.checking) {
+				rewritten.push(fn);
+				continue;
+			}
 			var blocks:Array<IrBlock> = [], changed = false;
 			for (block in fn.blocks) {
 				var target = new IrBlock(block.id);
@@ -72,6 +93,8 @@ class IrTypedInterfaceDispatch {
 				target.terminator = block.terminator;
 				blocks.push(target);
 			}
+			if (skipped && changed)
+				throw 'HAXEON_CHECK_REUSE: IrTypedInterfaceDispatch changed ${fn.name}, which its scan said it cannot';
 			rewritten.push(changed ? new IrFunction(fn.name, fn.arguments, fn.result, blocks, fn.debugBindings, fn.inlineHint, fn.retention) : fn);
 		}
 		return rewritten;

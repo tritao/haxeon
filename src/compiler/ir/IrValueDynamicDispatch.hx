@@ -40,7 +40,17 @@ class IrValueDynamicDispatch {
 			register("$reflected:" + object.name, Obj(object.name));
 		var suffixes = [for (suffix in requests.keys()) suffix]; suffixes.sort(Reflect.compare);
 		var rewritten:Array<IrFunction> = [];
+		function dynamicEqual(instruction:IrInstruction):Bool
+			return switch instruction {
+				case Call(_, "__dynamic_equal", _): true;
+				default: false;
+			};
 		for (fn in functions) {
+			var skipped = suffixes.length == 0 || !IrInstructionScan.any(fn, dynamicEqual);
+			if (skipped && !IrInstructionScan.checking) {
+				rewritten.push(fn);
+				continue;
+			}
 			var blocks:Array<IrBlock> = [], changed = false;
 			for (block in fn.blocks) {
 				var target = new IrBlock(block.id);
@@ -51,6 +61,8 @@ class IrValueDynamicDispatch {
 				}
 				target.terminator = block.terminator; blocks.push(target);
 			}
+			if (skipped && changed)
+				throw 'HAXEON_CHECK_REUSE: IrValueDynamicDispatch changed ${fn.name}, which its scan said it cannot';
 			rewritten.push(changed ? new IrFunction(fn.name, fn.arguments, fn.result, blocks, fn.debugBindings, fn.inlineHint, fn.retention) : fn);
 		}
 		if (needsEqual && suffixes.length > 0) rewritten.push(dispatcher(suffixes, requests, names));
