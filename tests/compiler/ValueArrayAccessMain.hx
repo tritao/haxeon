@@ -1389,7 +1389,7 @@ class ValueArrayAccessMain {
 				var table = IrObjectTable.of([for (object in rangeProgram.objects) object.name => object]);
 				rangeProgram.functions = [for (fn in rangeProgram.functions) IrScalarReplacement.rewrite(fn, table, false, true)];
 				compiler.ir.IrNullableScalarFlow.rewrite(rangeProgram);
-				compiler.ir.IrInliner.run(rangeProgram, new compiler.ir.IrInliner.IrInlineCache(), inlineEnabled);
+				compiler.ir.IrInliner.run(rangeProgram, new compiler.ir.IrInliner.IrInlineCache(), compiler.ir.TargetProfile.wasm, inlineEnabled);
 				var backendTarget:compiler.backend.Backend.BackendTarget = target == Wasm32 ? Wasm32 : WasmGc;
 				var bytes = new compiler.backend.wasm.WasmBackend().compile(rangeProgram, {target:backendTarget, debugNames:true,
 					wasmMemoryStats:target == Wasm32, wasmGcAllocationCount:target == WasmGc,

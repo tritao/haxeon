@@ -18,7 +18,7 @@ class OpportunityCensusMain {
 	static function main():Void {
 		var source = 'class Box { public var value:Int; public function new() { value=7; } } function scan():Int { var b=new Box(); var sum=0; for(i in 0...10) sum+=b.value; return sum; } function main():Int return 0;';
 		var program = Frontend.compile(source);
-		IrInliner.run(program, new IrInlineCache(), true);
+		IrInliner.run(program, new IrInlineCache(), compiler.ir.TargetProfile.wasm, true);
 		var objects:Map<String, IrObject> = [];
 		for (object in program.objects)
 			objects.set(object.name, object);

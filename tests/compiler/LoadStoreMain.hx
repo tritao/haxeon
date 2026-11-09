@@ -233,13 +233,13 @@ class LoadStoreMain {
 		IrLoadStoreForwarding.enabled = true;
 		var program = new IrProgram("test"), cache = new IrInlineCache();
 		program.functions = [fn];
-		IrInliner.run(program, cache);
+		IrInliner.run(program, cache, compiler.ir.TargetProfile.wasm);
 		expect(loads(program.functions[0]) == 0, "forward with inliner off");
 		program.functions = [fn];
-		expect(IrInliner.run(program, cache).length == 0, "memo unchanged");
+		expect(IrInliner.run(program, cache, compiler.ir.TargetProfile.wasm).length == 0, "memo unchanged");
 		IrLoadStoreForwarding.enabled = false;
 		program.functions = [fn];
-		expect(IrInliner.run(program, cache).indexOf("test") >= 0, "switch changes published bytes");
+		expect(IrInliner.run(program, cache, compiler.ir.TargetProfile.wasm).indexOf("test") >= 0, "switch changes published bytes");
 		expect(program.functions[0] == fn, "disabled pass identity");
 		IrInliner.enabled = oldInline;
 		IrLoadStoreForwarding.enabled = oldForward;

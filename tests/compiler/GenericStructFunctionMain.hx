@@ -64,7 +64,7 @@ class GenericStructFunctionMain {
 			var objects = compiler.ir.IrObjectTable.of([for (object in program.objects) object.name => object]);
 			program.functions = [for (fn in program.functions) compiler.ir.IrScalarReplacement.rewrite(fn, objects, false, true)];
 			compiler.ir.IrNullableScalarFlow.rewrite(program);
-			compiler.ir.IrInliner.run(program, new compiler.ir.IrInliner.IrInlineCache(), inlineEnabled);
+			compiler.ir.IrInliner.run(program, new compiler.ir.IrInliner.IrInlineCache(), compiler.ir.TargetProfile.wasm, inlineEnabled);
 			var bytes = new compiler.backend.wasm.WasmBackend().compile(program, {target: WasmGc, debugNames: true,
 				wasmGcAllocationCount: true, exports: ["Census.prepare", "Census.perform"]}).bytes;
 			var directory = Sys.getCwd() + "/out/test-tools";

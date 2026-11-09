@@ -32,7 +32,7 @@ class NullableScalarResultAbiMain {
 		p.functions = [for (fn in p.functions) compiler.ir.IrScalarReplacement.rewrite(fn, objects, false, target == HashLink)];
 		compiler.ir.IrNullableScalarFlow.rewrite(p);
 		compiler.ir.IrVerifier.verify(p);
-		compiler.ir.IrInliner.run(p, new compiler.ir.IrInliner.IrInlineCache(), inlineEnabled);
+		compiler.ir.IrInliner.run(p, new compiler.ir.IrInliner.IrInlineCache(), compiler.ir.TargetProfile.wasm, inlineEnabled);
 		compiler.ir.IrVerifier.verify(p);
 		var root = Sys.getEnv("TMPDIR");
 		if (root == null) root = "/tmp";

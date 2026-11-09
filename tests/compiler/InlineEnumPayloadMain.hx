@@ -68,7 +68,7 @@ class InlineEnumPayloadMain {
   var table=IrObjectTable.of([for(o in p.objects)o.name=>o]);
   p.functions=[for(fn in p.functions)compiler.ir.IrScalarReplacement.rewrite(fn,table,false,target==HashLink)];
   compiler.ir.IrNullableScalarFlow.rewrite(p);
-  compiler.ir.IrInliner.run(p,new compiler.ir.IrInliner.IrInlineCache(),inlineEnabled);
+  compiler.ir.IrInliner.run(p,new compiler.ir.IrInliner.IrInlineCache(), compiler.ir.TargetProfile.wasm,inlineEnabled);
   compiler.ir.IrVerifier.verify(p);
   var entry=new IrBuilder(),censusPaths:Array<{path:String,count:Int}>=[];
   var result=entry.call("main",[],I32);

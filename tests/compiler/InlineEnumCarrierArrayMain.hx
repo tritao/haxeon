@@ -31,7 +31,7 @@ class InlineEnumCarrierArrayMain {
   p.staticFields=[{name:"array",type:arrayType},{name:"owner",type:Obj("Owner")}];
   p.functions=[new IrFunction("prepare",prepare.arguments,Void,prepare.blocks,null,false,compiler.ir.IrFunction.IrRetention.Expose),new IrFunction("main",b.arguments,I32,b.blocks)].concat(helpers.functions());
   p.natives=factory.natives().concat(helpers.natives());
-  compiler.ir.IrInliner.run(p,new compiler.ir.IrInliner.IrInlineCache(),inlineEnabled);
+  compiler.ir.IrInliner.run(p,new compiler.ir.IrInliner.IrInlineCache(), compiler.ir.TargetProfile.wasm,inlineEnabled);
   compiler.ir.IrVerifier.verify(p);
   var entry=new IrBuilder(),captures:Array<{path:String,count:Int}>=[];
   entry.call("prepare",[],Void);var result=entry.call("main",[],I32);

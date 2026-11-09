@@ -69,7 +69,7 @@ class ScalarClosureCarrierMain {
   indices.push({block:b.currentBlock().id,value:b.add(index,b.constInt(1))});sums.push({block:b.currentBlock().id,value:b.add(sum,result)});b.jump(header);b.select(done);b.returnValue(sum);
   p.functions.push(new IrFunction("perform",b.arguments,I32,b.blocks,null,false,Expose));
   var main=new IrBuilder();main.returnValue(main.constInt(42));p.functions.push(new IrFunction("main",main.arguments,I32,main.blocks));
-  compiler.ir.IrInliner.run(p,new compiler.ir.IrInliner.IrInlineCache(),inlineEnabled);compiler.ir.IrVerifier.verify(p);
+  compiler.ir.IrInliner.run(p,new compiler.ir.IrInliner.IrInlineCache(), compiler.ir.TargetProfile.wasm,inlineEnabled);compiler.ir.IrVerifier.verify(p);
   var root=Sys.getEnv("TMPDIR");if(root==null)root="/tmp";var stem=root+"/scalar-carrier-closure-"+Std.random(0x7fffffff),captures:Array<String>=[];
   if(target==HashLink){
    p.natives=[{name:"major",library:"std",symbol:"gc_major",arguments:[],result:Void},

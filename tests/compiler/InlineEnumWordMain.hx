@@ -99,7 +99,7 @@ class InlineEnumWordMain {
 		]);
 		var table = compiler.ir.IrObjectTable.of([for (object in program.objects) object.name => object]);
 		program.functions = [for (fn in program.functions) compiler.ir.IrScalarReplacement.rewrite(fn, table, false)];
-		compiler.ir.IrInliner.run(program, new compiler.ir.IrInliner.IrInlineCache(), inlineEnabled);
+		compiler.ir.IrInliner.run(program, new compiler.ir.IrInliner.IrInlineCache(), compiler.ir.TargetProfile.wasm, inlineEnabled);
 		compiler.ir.IrVerifier.verify(program);
 		if (new IrInterpreter(program).run() != 42) throw "packed enum payload changed its bits";
 		for (target in [HashLink, Wasm32, WasmGc]) {

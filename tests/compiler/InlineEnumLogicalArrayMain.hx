@@ -114,7 +114,7 @@ class InlineEnumLogicalArrayMain {
   var scalarObjects=compiler.ir.IrObjectTable.of([for(object in p.objects)object.name=>object]);
   p.functions=[for(fn in p.functions)compiler.ir.IrScalarReplacement.rewrite(fn,scalarObjects,false,target==HashLink)];
   compiler.ir.IrNullableScalarFlow.rewrite(p);
-  compiler.ir.IrInliner.run(p,new compiler.ir.IrInliner.IrInlineCache(),inlineEnabled);
+  compiler.ir.IrInliner.run(p,new compiler.ir.IrInliner.IrInlineCache(), compiler.ir.TargetProfile.wasm,inlineEnabled);
   compiler.ir.IrVerifier.verify(p);compiler.ir.IrVerifier.verifyValueArraysLowered(p);
   var entry=new IrBuilder(),captures:Array<{path:String,count:Int,build:Bool}>=[];
   entry.call("prepare",[],Void);

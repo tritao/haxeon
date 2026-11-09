@@ -136,7 +136,7 @@ class IteratorTypeDescriptorMain {
 			var objects = compiler.ir.IrObjectTable.of([for (object in program.objects) object.name => object]);
 			program.functions = [for (fn in program.functions) compiler.ir.IrScalarReplacement.rewrite(fn, objects, false, true)];
 			compiler.ir.IrNullableScalarFlow.rewrite(program);
-			compiler.ir.IrInliner.run(program, new compiler.ir.IrInliner.IrInlineCache(), inlineEnabled);
+			compiler.ir.IrInliner.run(program, new compiler.ir.IrInliner.IrInlineCache(), compiler.ir.TargetProfile.wasm, inlineEnabled);
 			var wasm = new WasmBackend().compile(program, {target: target, debugNames: true, wasmGcStress: target == Wasm32,
 				exports: ["checkLanes"]}).bytes, directory = Sys.getEnv("TMPDIR");
 			if (directory == null || directory == "") directory = Sys.getCwd() + "/out/test-tools";
@@ -158,7 +158,7 @@ class IteratorTypeDescriptorMain {
 			runtime.addSourceRoot("stdlib");
 			runtime.update("Main.hx", source);
 			var program = runtime.compile("Main").ir;
-			compiler.ir.IrInliner.run(program, new compiler.ir.IrInliner.IrInlineCache(), inlineEnabled);
+			compiler.ir.IrInliner.run(program, new compiler.ir.IrInliner.IrInlineCache(), compiler.ir.TargetProfile.wasm, inlineEnabled);
 			var wasm = new WasmBackend().compile(program, {target: target, debugNames: true,
 				wasmMemoryStats: target == Wasm32, wasmGcAllocationCount: target == WasmGc,
 				exports: ["BytesIteratorCensus.prepare", "BytesIteratorCensus.iterate", "BytesIteratorCensus.allocateBytes"]}).bytes,

@@ -201,8 +201,7 @@ class IrInliner {
 	 */
 	public static var enabled:Bool = Sys.getEnv("HAXEON_INLINE") != "0";
 
-	/** Set for targets that store a value class field inline in its parent and hand out a pointer into it (HashLink). */
-	public static var packedValueFields:Bool = false;
+	final profile:TargetProfile;
 
 	final byName:Map<String, IrFunction> = [];
 	final done:Map<String, IrFunction> = [];
@@ -236,8 +235,9 @@ class IrInliner {
 
 	var depth = 0;
 
-	function new(program:IrProgram, cache:IrInlineCache, allowInline:Bool) {
+	function new(program:IrProgram, cache:IrInlineCache, profile:TargetProfile, allowInline:Bool) {
 		this.allowInline = allowInline;
+		this.profile = profile;
 		entryPoint = program.entryPoint;
 		this.cache = cache;
 		for (fn in program.functions)
@@ -246,7 +246,7 @@ class IrInliner {
 		// entry records the objects it consulted, so a change to one object does not invalidate the rest.
 		fingerprint = cache.fingerprintId([
 			entryPoint,
-			"packed=" + packedValueFields,
+			"profile=" + profile.key(),
 			"inline=" + allowInline,
 			"loadstore=" + IrLoadStoreForwarding.enabled,
 			"strength=" + IrStrengthReduction.enabled
@@ -315,9 +315,10 @@ class IrInliner {
 	 * published by the previous compile. Those functions must be re-lowered and patched even when their own source did
 	 * not change, because a callee they inlined did.
 	 */
-	public static function run(program:IrProgram, cache:IrInlineCache, ?allowInline:Bool, ?instrument:IrInstrumentation.IrInstrumentationScope):Array<String> {
+	public static function run(program:IrProgram, cache:IrInlineCache, profile:TargetProfile, ?allowInline:Bool,
+			?instrument:IrInstrumentation.IrInstrumentationScope):Array<String> {
 		program.functions = cache.stableSources(program.functions);
-		var inliner = new IrInliner(program, cache, allowInline == null ? enabled : allowInline),
+		var inliner = new IrInliner(program, cache, profile, allowInline == null ? enabled : allowInline),
 			functions:Array<IrFunction> = [],
 			changed:Array<String> = [],
 			relocated:Array<String> = [];
@@ -434,7 +435,7 @@ class IrInliner {
 		var consultedObjects:Map<String, Bool> = [];
 		objectFrames.push(consultedObjects);
 		table.consulted = consultedObjects;
-		var result = allowInline ? inlineCalls(original) : packedValueFields ? IrScalarReplacement.rewrite(original, table, false, true) : original;
+		var result = allowInline ? inlineCalls(original) : profile.packedValueFields ? IrScalarReplacement.rewrite(original, table, false, true) : original;
 		if (IrLoadStoreForwarding.enabled)
 			result = IrLoadStoreForwarding.run(result, table);
 		if (IrStrengthReduction.enabled)
@@ -519,7 +520,10 @@ class IrInliner {
 				frameImpure[frameImpure.length - 1] = true;
 			return null;
 		}
-		if (IrTypedInterfaceDispatch.isDispatchEntry(original.name) || IrTypedInterfaceDispatch.isAdapterEntry(original.name) || original.arguments.length != actuals.length || !looksInlinable(original))
+		if (IrTypedInterfaceDispatch.isDispatchEntry(original.name)
+			|| IrTypedInterfaceDispatch.isAdapterEntry(original.name)
+			|| original.arguments.length != actuals.length
+			|| !looksInlinable(original))
 			return null;
 		for (index in 0...actuals.length)
 			if (!bindable(actuals[index].type, original.arguments[index].type))
@@ -703,7 +707,7 @@ class IrInliner {
 		if (substitutions.keys().hasNext())
 			bindings = substitute(blocks, substitutions, bindings);
 		var replaced = IrScalarReplacement.run(blocks, table, nextValue);
-		if (packedValueFields)
+		if (profile.packedValueFields)
 			replaced = {
 				substitutions: replaced.substitutions,
 				nextValue: IrScalarReplacement.constructInPlace(blocks, table, replaced.nextValue, replaced.substitutions)

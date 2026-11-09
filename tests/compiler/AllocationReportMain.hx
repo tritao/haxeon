@@ -58,7 +58,7 @@ function main():Int { var t = new T(); return t.pure(1) + t.dispatch(new Heavy()
 
 	static function main():Void {
 		var program = Frontend.compile(source);
-		IrInliner.run(program, new IrInlineCache(), true);
+		IrInliner.run(program, new IrInlineCache(), compiler.ir.TargetProfile.wasm, true);
 		var before = [for (fn in program.functions) IrFunctionStateCodec.encode(fn)];
 		var rows = IrAllocationReport.analyze(program, ["T.*"]);
 

@@ -28,13 +28,13 @@ class InlinerSourceIdentityMain {
 
 	static function main():Void {
 		var cache = new IrInlineCache(), first = program(1);
-		IrInliner.run(first, cache, true);
+		IrInliner.run(first, cache, compiler.ir.TargetProfile.wasm, true);
 		var memo = cache.memo.get("caller0");
 		var again = program(1),
 			before = AllocationMeter.sample(),
 			cpu = Sys.cpuTime(),
 			wall = Sys.time();
-		var changed = IrInliner.run(again, cache, true);
+		var changed = IrInliner.run(again, cache, compiler.ir.TargetProfile.wasm, true);
 		var bytes = AllocationMeter.sample().bytes - before.bytes,
 			used = Sys.cpuTime() - cpu,
 			elapsed = Sys.time() - wall;
@@ -44,14 +44,14 @@ class InlinerSourceIdentityMain {
 			throw 'Regenerated input allocated $bytes bytes, expected less than 8 MiB';
 		var fork = cache.copy();
 		var edited = program(2);
-		IrInliner.run(edited, fork, true);
+		IrInliner.run(edited, fork, compiler.ir.TargetProfile.wasm, true);
 		var fresh = program(2);
-		IrInliner.run(fresh, new IrInlineCache(), true);
+		IrInliner.run(fresh, new IrInlineCache(), compiler.ir.TargetProfile.wasm, true);
 		for (i in 0...fresh.functions.length)
 			if (IrFunctionStateCodec.encode(edited.functions[i]).compare(IrFunctionStateCodec.encode(fresh.functions[i])) != 0)
 				throw "Callee edit differs from a cold inlining run";
 		var unchanged = program(1);
-		IrInliner.run(unchanged, cache, true);
+		IrInliner.run(unchanged, cache, compiler.ir.TargetProfile.wasm, true);
 		if (cache.memo.get("caller0") != memo)
 			throw "A speculative cache copy changed its parent's inputs";
 		var placements = new IrInlineCache();

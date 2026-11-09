@@ -93,6 +93,9 @@ class CompilationContext {
 	public function isWasmTarget():Bool
 		return owner.isWasmTarget();
 
+	public function targetProfile():compiler.ir.TargetProfile
+		return owner.isWasmTarget() ? compiler.ir.TargetProfile.wasm : compiler.ir.TargetProfile.hashLink;
+
 	public function valueArrayTarget():compiler.ir.IrValueLaneLayout.IrValueLaneTarget
 		return switch owner.defines.get("target") {
 			case "wasmgc" | "wasm-gc": WasmGc;
