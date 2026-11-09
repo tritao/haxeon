@@ -32,7 +32,7 @@ for inline in 0 1; do
             net_hxi="$root/packages/platform/bindings/nativekit-net-wasm.hxi"
             ui_hxi="$ui/bindings/nativekit-ui-wasm.hxi"
         fi
-        for entry in local-snapshot host-lifecycle; do
+        for entry in local-snapshot host-lifecycle style-kinds; do
             artifact="$tmp/$entry-$inline-$target.$suffix"
             if ! HAXEON_INLINE="$inline" "$hl" "$compiler" "${options[@]}" --entry="$entry" --output="$artifact" "${common[@]}" \
                     --ffi-interface="$platform_hxi" --ffi-projection="$root/packages/platform/bindings/nativekit.hxmap" \
@@ -74,18 +74,18 @@ JS
             fi
             echo "PASS: $entry on $target, inline=$inline"
         done
-        for entry in host-lifecycle-raw-int host-lifecycle-to-int; do
+        for entry in host-lifecycle-raw-int host-lifecycle-to-int style-kinds-raw-string style-kinds-to-string; do
             if HAXEON_INLINE="$inline" "$hl" "$compiler" "${options[@]}" --entry="$entry" \
                     --output="$tmp/rejected.$suffix" "${common[@]}" \
                     "$ui/tests/value-types/$entry.hx" > "$tmp/rejected.log" 2>&1; then
-                echo "FAIL: $entry accepted an implicit numeric conversion on $target, inline=$inline" >&2
+                echo "FAIL: $entry accepted an implicit raw-value conversion on $target, inline=$inline" >&2
                 exit 1
             fi
             if ! grep -Fq 'E1002: Type mismatch for local "state"' "$tmp/rejected.log"; then
                 cat "$tmp/rejected.log" >&2
                 exit 1
             fi
-            echo "PASS: $entry rejects implicit numeric conversion on $target, inline=$inline"
+            echo "PASS: $entry rejects implicit raw-value conversion on $target, inline=$inline"
         done
     done
 done

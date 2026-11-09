@@ -4155,3 +4155,25 @@ targets. The exact HashLink census also ties at 3,072 objects / 122,880 bytes fo
 object remains 48 bytes. Tier 1 passes all 839 compiler tests with zero failures and the 24 parity checks above.
 These isolated checks establish the representation cost; paired editor/Web modules and full Tier 2 gates are
 assessed separately on the batch head.
+
+### Closed style tags (2026-11-09)
+
+`EffectKind`, `DecorationKind` and `EffectParameterType` are plain `Equatable` enums instead of implicitly
+convertible strings. Their lowercase/hyphenated spellings were display labels, not a native or serialized contract.
+Explicit exhaustive label switches preserve those descriptions without reflective enum formatting. Parameter
+component counts remain 1/2/4/4, including the existing zero result for a null parameter type.
+
+A stored-value probe constructs a record containing effect/decoration tags and an `EffectParameter` struct, reads
+the tags through the record and checks its scalar payload. Setup warms all referenced cases before counting:
+
+| Target | Iterations | String tags | Plain enums |
+|---|---:|---:|---:|
+| HashLink | 1,024 | 1,024 objects / 73,728 bytes | 1,024 objects / 65,536 bytes |
+| Wasm32 | 8 / 1,024 | 8 / 1,024 objects | 8 / 1,024 objects |
+| Wasm GC | 8 / 1,024 | 8 / 1,024 objects | 8 / 1,024 objects |
+
+Both inlining modes agree. HashLink's probe record shrinks from 72 to 64 bytes as eligible tags use scalar storage;
+there are no extra enum boxes in the loop. This is a representation probe, not an editor allocation claim. Editor
+and Showcase size/allocation comparisons belong to the batch-head measurements.
+Tier 1 passes 839 compiler tests, all 42 UI value parity/conversion checks and the framework test. No compiler
+sources change in this port; the cache prerequisite's self-hosting fixed point still applies.

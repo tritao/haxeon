@@ -33,7 +33,16 @@ class Decoration {
 		return Decoration.discrete(this, other, amount);
 
 	public function describe():String
-		return Std.string(kind);
+		return switch kind {
+			case DecorationKind.Background: "background";
+			case DecorationKind.Gradient: "gradient";
+			case DecorationKind.Image: "image";
+			case DecorationKind.NineSlice: "nine-slice";
+			case DecorationKind.Border: "border";
+			case DecorationKind.Outline: "outline";
+			case DecorationKind.Shadow: "shadow";
+			case DecorationKind.Custom: "custom";
+		};
 
 	public function toString():String
 		return describe();

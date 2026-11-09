@@ -35,7 +35,16 @@ class VisualEffect {
 		return InkOverflow.zero();
 
 	public function describe():String
-		return Std.string(kind);
+		return switch kind {
+			case EffectKind.Blur: "blur";
+			case EffectKind.Brightness: "brightness";
+			case EffectKind.Contrast: "contrast";
+			case EffectKind.Saturate: "saturate";
+			case EffectKind.HueRotate: "hue-rotate";
+			case EffectKind.ColorMatrix: "color-matrix";
+			case EffectKind.DropShadow: "drop-shadow";
+			case EffectKind.Custom: "custom";
+		};
 
 	public function toString():String
 		return describe();
