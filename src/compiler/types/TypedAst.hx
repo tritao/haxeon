@@ -464,7 +464,7 @@ typedef TypedProgram = {
 	final anonymousTypes:Array<TypedAnonymous>;
 
 	/** The anonymous types each unit (a function, or a class's field initializers) registered, kept for units a later build does not type again. */
-	final ?anonymousUnits:Map<String, Array<TypedAnonymous>>;
+	final anonymousUnits:Map<String, Array<TypedAnonymous>>;
 
 	final natives:Array<TypedNative>;
 }

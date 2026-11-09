@@ -450,7 +450,7 @@ class ProgramTyper {
 	 * `Class.__init`.
 	 */
 	function keepAnonymousUnits(previous:Null<TypedProgram>, classes:Array<AstClass>):Void {
-		if (previous == null || previous.anonymousUnits == null)
+		if (previous == null)
 			return;
 		var classNames:Map<String, Bool> = [for (classDecl in classes) classDecl.name => true],
 			suffix = ".__init",

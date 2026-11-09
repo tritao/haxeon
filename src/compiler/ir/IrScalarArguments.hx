@@ -100,7 +100,7 @@ class IrScalarArguments {
 				// judging whether the specialized callee can keep its value arguments and result in registers.
 				prepared = IrValuePhiScalarization.rewriteFunction(prepared, objects, table, layouts);
 				var specialized = IrScalarReplacement.rewrite(prepared, table, true, true);
-				var scalarLocals = new compiler.ir.hl.HlScalarValueLocals(specialized, objects, _ -> 0);
+				var scalarLocals = new compiler.ir.hl.HlScalarValueLocals(specialized, new compiler.ir.hl.HlLoweringView([], objects), _ -> 0);
 				for (block in specialized.blocks) for (located in block.instructions) switch located.value {
 					case NewObject(out, name):
 						for (arg in fn.arguments) if (isValue(arg.type, objects) && out.id == arg.id && scalarLocals.get(out) == null) retained = true;
@@ -121,7 +121,7 @@ class IrScalarArguments {
 				var prepared = rewriteCalls(clone(fn, objects, true), candidates, pinnedCandidates, objects, methods, methodNames, freshOnly, terminalOnly, argumentsOnly);
 				prepared = IrValuePhiScalarization.rewriteFunction(prepared, objects, table, layouts);
 				var specialized = IrScalarReplacement.rewrite(prepared, table, true, true);
-				var scalarLocals = new compiler.ir.hl.HlScalarValueLocals(specialized, objects, _ -> 0);
+				var scalarLocals = new compiler.ir.hl.HlScalarValueLocals(specialized, new compiler.ir.hl.HlLoweringView([], objects), _ -> 0);
 				for (block in specialized.blocks) for (located in block.instructions) switch located.value {
 					case NewObject(out, name):
 						for (index in 1...fn.arguments.length) if (isValue(fn.arguments[index].type, objects) && out.id == fn.arguments[index].id && scalarLocals.get(out) == null) retained = true;

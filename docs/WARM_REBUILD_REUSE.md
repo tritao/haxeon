@@ -374,3 +374,20 @@ Not traced: `IrInitializationCalls.calls()` beyond its fixpoint header, and the 
 - B.5 puts the scalar-argument fixpoint first because it dominates the edit case; its cone mechanism is also the risk. If you
   prefer to start with the inline-enum pass (the merge regression, simpler summary) and bring the fixpoint passes second,
   say so.
+
+## Open items
+
+- **Generated helper units lose their anonymous-type records.** A unit's anonymous types are kept for a build that does not type it
+  again only while the unit is a function in the signature table or a class's `Class.__init`. Generated helpers (enum equality and
+  reflection bodies, wire and JSON codecs, key-path helpers) are typed on request and are not in that table, so a warm build that
+  does not request them again drops what they registered. None is known to register an anonymous type, and the app's cold and warm
+  typed programs agree. Structured identities (ADR 0003 M3) give a helper the unit it needs; until then
+  `WarmRebuildReuseMain` compares the warm and the fresh typed program, which is the check. `HAXEON_CHECK_REUSE` cannot recompute a typed
+  program without typing every unit again, which is what a fresh compile is, so it does not cover this.
+- **Remaining cold/warm differences found while making the first no-op reuse** (all fixed): process-wide temporaries counters in
+  `IrGenerator`, the typing-order list of reflectable classes, the anonymous types of unchanged units, generated helpers cached by two
+  modules. Each was an input the pipeline could not tell was equal. The class of problem is the mutable `IrGenerator` state
+  (`inputState()` hashes the part the passes read); ADR M1 replaces it.
+- **Worker memory.** The warm app worker reaches 9-12 GB; `earlyoom` ends it when free memory drops under 10%. The reuse caches add about
+  0.4 GB (kept final IR, module and encoded bytes). Tracked separately.
+
