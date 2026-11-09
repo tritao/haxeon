@@ -20,9 +20,12 @@ class InlineEnumReflectionReachMain {
 		driver.configure("inline-reflection-reach-" + target + "-" + inlining, "inline-reflection-reach",
 			CompilerDriver.targetDefines(target).concat(["haxeon-inline=" + (inlining ? 1 : 0)]));
 		driver.update("Main.hx", sys.io.File.getContent("tests/programs/inline-enum-reflection-reach.hx"));
-		var result = driver.compile("Main"), declaration = Lambda.find(result.ir.enums, entry -> entry.name == "ReflectedIntent");
-		if (declaration == null || declaration.inlineStorage != null)
-			throw 'ReflectedIntent was not kept boxed on $target inline=$inlining';
+		var result = driver.compile("Main");
+		for (name in ["ReflectedIntent", "AnonymousIntent"]) {
+			var declaration = Lambda.find(result.ir.enums, entry -> entry.name == name);
+			if (declaration == null || declaration.inlineStorage != null)
+				throw '$name was not kept boxed on $target inline=$inlining';
+		}
 
 		var root = Sys.getEnv("TMPDIR");
 		if (root == null || root == "") root = "/tmp";

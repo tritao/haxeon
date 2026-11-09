@@ -583,9 +583,11 @@ adapters. Native Flat struct payloads and enum-bearing native fields wait for in
 whole enum; there is no switch or per-call boxing fallback. Arrays retain their nominal element descriptors and use the
 existing lane association and checked logical reflection bridges. Closure environments are internal typed storage, not
 bound class-method escapes. Registered object-reflection layouts count as escape surfaces even when their helpers are
-generated after classification. When a class reference is reachable from a Dynamic escape or registered reflection
-layout, eligibility walks its fields transitively through class references, nullable/value fields, arrays, iterators, map
-key/value types, closure signatures and captured closure environments, and interface implementations. Enums found in
+generated after classification. When a class or anonymous-record reference is reachable from a Dynamic escape or
+registered reflection layout, eligibility walks its fields transitively through class and anonymous-record references,
+nullable/value fields, arrays, iterators, map key/value types, closure signatures and captured closure environments,
+and interface implementations. On Wasm, anonymous layouts are registered even when their literal was nested inside a
+Dynamic object; on HashLink, the same reach includes HDYNOBJ and virtual structural values. Enums found in
 that graph stay boxed until reflective field get/set adapters are registered; the IR verifier cannot see the native
 runtime's nested `Reflect.field` traversal. Private enum packets are excluded from that public layout registry.
 

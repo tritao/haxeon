@@ -1,6 +1,7 @@
 package compiler.ir;
 
 import compiler.ir.Ir;
+import compiler.semantic.SemanticSignature;
 import compiler.types.typing.EnumRuntimeType;
 
 private typedef EnumUseNode = {final parents:Array<Int>; final bits:Array<Int>; var queued:Bool;}
@@ -115,9 +116,14 @@ class IrInlineEnumEligibility {
 		if (ObjectReflection.usesObjectLayouts(program.natives)) {
 			var reflectedNames = reflectableObjects == null ? [] : reflectableObjects,
 				reflected = [for (name in reflectedNames) name => true];
-			for (object in program.objects)
+			for (object in program.objects) {
+				// Anonymous records have runtime layouts too. A Dynamic/reflection edge can reach
+				// one even when it was created inside a Dynamic object literal.
+				if (!object.isValue && SemanticSignature.isAnonymousName(object.name))
+					reflected.set(object.name, true);
 				if (object.isValue || StringTools.startsWith(object.name, IrValueInterfaceBoxes.BOX_PREFIX))
 					mark(objectNodes.get(object.name), "registered reflection layout");
+			}
 			var unsupported = reflectedUnsupportedEnums(reflected, functions, program.staticFields);
 			for (name in unsupported.keys()) block(name, "registered reflection layout");
 		}
@@ -522,6 +528,9 @@ class IrInlineEnumEligibility {
 				var environments = closureEnvironments.get(Std.string(type));
 				if (environments != null) for (environment in environments) walkReferences(environment);
 			case Virtual(name):
+				var anonymous = objects.get(name);
+				if (anonymous != null && SemanticSignature.isAnonymousName(name))
+					walk(anonymous);
 				buildInterfaceImplementers();
 				var implementers = interfaceImplementers.get(name);
 				if (implementers != null) for (object in implementers) walk(object);
@@ -585,7 +594,11 @@ class IrInlineEnumEligibility {
 				else
 					mark(objectNodes.get(name), reason);
 			case Virtual(name):
-				mark(interfaceNodes.get(name), reason);
+				var anonymous = objects.get(name);
+				if (anonymous != null && SemanticSignature.isAnonymousName(name) && !anonymous.isValue)
+					dynamicObjectEscapes.set(name, true);
+				else
+					mark(interfaceNodes.get(name), reason);
 			case Nullable(inner), Array(inner), Iterator(inner):
 				escapeType(inner, reason);
 			case Function(arguments, result):
