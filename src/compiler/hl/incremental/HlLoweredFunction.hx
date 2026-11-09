@@ -32,4 +32,7 @@ class HlLoweredFunction {
 	/** The same lowering, for an IR function that compares equal to its source (so the next comparison is by identity). */
 	public function from(equalSource:IrFunction):HlLoweredFunction
 		return new HlLoweredFunction(name, equalSource, fn, requests, facts);
+
+	public function renamed(next:String):HlLoweredFunction
+		return new HlLoweredFunction(next, source, fn, requests, facts);
 }

@@ -134,7 +134,10 @@ class HlModuleAssembler {
 	var publishedStrings = 0;
 	var publishedTypes = 0;
 	var publishedGlobals = 0;
-	var loweredFunctions:Map<String, HlFunction> = [];
+
+	/** The functions of the published module, as live patching keeps them: trusted by name, with no requests (see `HlLower.trustCache`). */
+	var published = new HlLoweredCache();
+
 	var runtimeNatives:Array<IrNative> = [];
 
 	/** Null when a restored baseline does not record them, so the next build cannot trust their slots. */
@@ -199,7 +202,7 @@ class HlModuleAssembler {
 		result.publishedStrings = publishedStrings;
 		result.publishedTypes = publishedTypes;
 		result.publishedGlobals = publishedGlobals;
-		result.loweredFunctions = [for (name => fn in loweredFunctions) name => fn];
+		result.published = published.copy();
 		result.runtimeNatives = runtimeNatives.copy();
 		result.dispatchNatives = dispatchNatives == null ? null : dispatchNatives.copy();
 		result.fieldReserve = fieldReserve;
@@ -312,12 +315,12 @@ class HlModuleAssembler {
 		}
 
 	function renameLowered(names:Map<String, String>):Void {
-		var renamed:Map<String, HlFunction> = [];
-		for (name => fn in loweredFunctions) {
+		var renamed:Map<String, HlLoweredFunction> = [];
+		for (name => entry in published.entries) {
 			var next = names.get(name);
-			renamed.set(next == null ? name : next, fn);
+			renamed.set(next == null ? name : next, next == null ? entry : entry.renamed(next));
 		}
-		loweredFunctions = renamed;
+		published.entries = renamed;
 	}
 
 	/**
@@ -479,13 +482,13 @@ class HlModuleAssembler {
 	function callersOfMoved(moved:Array<String>, tag:String, present:Map<String, Bool>):Array<String> {
 		var oldSlots:Map<Int, Bool> = [];
 		for (name in moved) {
-			var lowered = loweredFunctions.get(RetiredName.movedFunction(name, tag));
+			var lowered = published.entries.get(RetiredName.movedFunction(name, tag));
 			if (lowered != null)
-				oldSlots.set(lowered.functionIndex, true);
+				oldSlots.set(lowered.fn.functionIndex, true);
 		}
 		var callers:Array<String> = [];
-		for (name => fn in loweredFunctions)
-			if (present.exists(name) && !RetiredName.is(name) && referencesAny(fn, oldSlots))
+		for (name => entry in published.entries)
+			if (present.exists(name) && !RetiredName.is(name) && referencesAny(entry.fn, oldSlots))
 				callers.push(name);
 		callers.sort(Reflect.compare);
 		return callers;
@@ -510,7 +513,7 @@ class HlModuleAssembler {
 	 */
 	function discardPublishedSymbols():Void {
 		symbols = new HlSymbolTable();
-		loweredFunctions = [];
+		published = new HlLoweredCache();
 		publishedInts = 0;
 		publishedFloats = 0;
 		publishedStrings = 0;
@@ -828,10 +831,10 @@ class HlModuleAssembler {
 		var layout = slotLayout();
 		if (reuseLowered)
 			for (fn in ordered.functions) {
-				var previous = loweredFunctions.get(fn.name);
-				if (previous != null && previous.functionIndex != layout.get(fn.name)) {
+				var previous = published.entries.get(fn.name);
+				if (previous != null && previous.fn.functionIndex != layout.get(fn.name)) {
 					reload = true;
-					layoutReasons.push('slot of ${fn.name} moved from ${previous.functionIndex} to ${layout.get(fn.name)}');
+					layoutReasons.push('slot of ${fn.name} moved from ${previous.fn.functionIndex} to ${layout.get(fn.name)}');
 					reuseLowered = false;
 					startFresh();
 					layout = slotLayout();
@@ -871,9 +874,14 @@ class HlModuleAssembler {
 					throw 'Added function $name has no slot';
 				addedFunctions.push({slot: slot, name: name});
 			}
-		var lowered = HlLower.lowerStableMeasured(ordered, symbols, layout, cache.stableIds, reuseLowered ? loweredFunctions : null,
-			relocated == null ? regenerated : regenerated.concat(relocated), runtimeNatives, debugMetadata, fieldReserve, developmentMetadata, false,
-			loweredCache, irVerified),
+		var liveCache = loweredCache;
+		if (liveCache == null) {
+			if (!reuseLowered)
+				published = new HlLoweredCache();
+			liveCache = published;
+		}
+		var lowered = HlLower.lowerStableMeasured(ordered, symbols, layout, cache.stableIds, relocated == null ? regenerated : regenerated.concat(relocated),
+			runtimeNatives, debugMetadata, fieldReserve, developmentMetadata, false, liveCache, irVerified, loweredCache == null),
 			module = lowered.code;
 		reusedFunctions = lowered.reusedFunctions;
 		movedFunctions = lowered.movedFunctions;
@@ -884,9 +892,6 @@ class HlModuleAssembler {
 			reload = true;
 			layoutReasons.push('globals $publishedGlobals -> ${module.globals.length} add more than String constants and new types');
 		}
-		loweredFunctions = [];
-		for (index in 0...ordered.functions.length)
-			loweredFunctions.set(ordered.functions[index].name, module.functions[index]);
 		var baseInts = publishedInts,
 			baseFloats = publishedFloats,
 			baseStrings = publishedStrings,

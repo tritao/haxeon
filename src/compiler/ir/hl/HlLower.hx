@@ -102,20 +102,14 @@ class HlLower {
 		return code;
 	}
 
-	public static function lowerStable(program:IrProgram, symbols:HlSymbolTable, indices:Map<String, Int>, ?stableIds:Map<String, Int>,
-			?cachedFunctions:Map<String, HlFunction>, ?regenerated:Array<String>, ?runtimeNatives:Array<IrNative>, ?debugCache:HlDebugMetadataCache,
-			fieldReserve:Int = 0):HlCode {
-		return lowerStableMeasured(program, symbols, indices, stableIds, cachedFunctions, regenerated, runtimeNatives, debugCache, fieldReserve).code;
-	}
-
 	public static function lowerStableMeasured(program:IrProgram, symbols:HlSymbolTable, indices:Map<String, Int>, ?stableIds:Map<String, Int>,
-			?cachedFunctions:Map<String, HlFunction>, ?regenerated:Array<String>, ?runtimeNatives:Array<IrNative>, ?debugCache:HlDebugMetadataCache,
-			fieldReserve:Int = 0, developmentMetadata:Bool = true, recordLowering:Bool = false,
-			?loweredCache:compiler.hl.incremental.HlLoweredCache, irVerified:Bool = false):MeasuredHlCode {
+			?regenerated:Array<String>, ?runtimeNatives:Array<IrNative>, ?debugCache:HlDebugMetadataCache, fieldReserve:Int = 0,
+			developmentMetadata:Bool = true, recordLowering:Bool = false, ?loweredCache:compiler.hl.incremental.HlLoweredCache, irVerified:Bool = false,
+			trustCache:Bool = false):MeasuredHlCode {
 		var startedAt = Sys.time() * 1000.0;
 		var allocationAtStart = AllocationMeter.sample();
 		var affected = regenerated;
-		if (cachedFunctions == null || regenerated == null) {
+		if (!trustCache || regenerated == null || loweredCache == null || !loweredCache.entries.iterator().hasNext()) {
 			// The final IR of a plain build is verified where it is made (`FrontendCompilation`), once, whatever the backend.
 			if (!irVerified)
 				IrVerifier.verify(program);
@@ -130,8 +124,8 @@ class HlLower {
 		}
 		var verifiedAt = Sys.time() * 1000.0,
 			allocationAfterVerification = AllocationMeter.sample(),
-			lowerer = new HlLower(symbols, indices, stableIds, cachedFunctions, affected, runtimeNatives, debugCache, fieldReserve, developmentMetadata,
-				recordLowering, loweredCache),
+			lowerer = new HlLower(symbols, indices, stableIds, affected, runtimeNatives, debugCache, fieldReserve, developmentMetadata, recordLowering,
+				loweredCache, trustCache),
 			code = lowerer.lowerProgram(program);
 		return {
 			code: code,
@@ -152,7 +146,9 @@ class HlLower {
 	}
 
 	final stableIds:Null<Map<String, Int>>;
-	final cachedFunctions:Null<Map<String, HlFunction>>;
+
+	/** The cache is the caller's word: every entry not named in `regenerated` is kept as it is (live patching), with no IR comparison, and the entries made carry no requests. */
+	final trustCache:Bool;
 
 	/** Reserved slots a live build gives each object that can take fields later (see `reservedSlots`). */
 	final fieldReserve:Int;
@@ -174,17 +170,17 @@ class HlLower {
 	var finalizationMs = 0.0;
 	var allocationPhases:Array<PhaseAllocation> = [];
 
-	function new(symbols:HlSymbolTable, indices:Null<Map<String, Int>>, ?stableIds:Map<String, Int>, ?cachedFunctions:Map<String, HlFunction>,
-			?regenerated:Array<String>, ?runtimeNatives:Array<IrNative>, ?debugCache:HlDebugMetadataCache, fieldReserve:Int = 0,
-			developmentMetadata:Bool = true, recordLowering:Bool = false, ?loweredCache:compiler.hl.incremental.HlLoweredCache) {
+	function new(symbols:HlSymbolTable, indices:Null<Map<String, Int>>, ?stableIds:Map<String, Int>, ?regenerated:Array<String>,
+			?runtimeNatives:Array<IrNative>, ?debugCache:HlDebugMetadataCache, fieldReserve:Int = 0, developmentMetadata:Bool = true,
+			recordLowering:Bool = false, ?loweredCache:compiler.hl.incremental.HlLoweredCache, trustCache:Bool = false) {
 		this.symbols = symbols;
 		// HAXEON_CHECK_REUSE=1 lowers with requests recorded so the link step can be checked against this very lowering.
-		this.checkingLinks = cachedFunctions == null && Sys.getEnv("HAXEON_CHECK_REUSE") == "1";
+		this.checkingLinks = !trustCache && Sys.getEnv("HAXEON_CHECK_REUSE") == "1";
 		this.loweredCache = loweredCache;
-		this.recordLowering = recordLowering || checkingLinks || loweredCache != null;
+		this.recordLowering = !trustCache && (recordLowering || checkingLinks || loweredCache != null);
 		this.fieldReserve = fieldReserve;
 		this.stableIds = stableIds;
-		this.cachedFunctions = cachedFunctions;
+		this.trustCache = trustCache;
 		this.preparedRuntimeNatives = runtimeNatives;
 		this.debugCache = debugCache;
 		this.developmentMetadata = developmentMetadata;
@@ -409,13 +405,14 @@ class HlLower {
 		var environment = checkingLinks ? symbols.copy() : null;
 		var entries:Map<String, compiler.hl.incremental.HlLoweredFunction> = [];
 		for (fn in program.functions) {
-			var cached = cachedFunctions == null || regenerated.exists(fn.name) ? null : cachedFunctions.get(fn.name);
-			if (cached != null)
-				code.functions.push(cached);
-			else {
+			var kept = trustCache && !regenerated.exists(fn.name) && loweredCache != null ? loweredCache.entries.get(fn.name) : null;
+			if (kept != null) {
+				code.functions.push(kept.fn);
+				entries.set(fn.name, kept);
+			} else {
 				// A function whose IR is the one the last build lowered, and whose outside facts still hold, keeps its code: linking
 				// it replays its requests, which gives it this build's indices and makes the tables as lowering it would have.
-				var entry = loweredCache == null ? null : loweredCache.entries.get(fn.name);
+				var entry = loweredCache == null || trustCache ? null : loweredCache.entries.get(fn.name);
 				if (entry != null && (entry.source == fn || compiler.ir.codec.IrFunctionStateEquality.same(entry.source, fn))) {
 					var linked = compiler.hl.incremental.HlLink.link(entry, symbols, functionIndices, view);
 					if (linked.fn != null) {
@@ -435,7 +432,10 @@ class HlLower {
 					}
 					var lowered = lowerFunction(PhiEdges.split(fn));
 					code.functions.push(lowered);
-					if (recordLowering) {
+					if (trustCache) {
+						entries.set(fn.name, new compiler.hl.incremental.HlLoweredFunction(fn.name, fn, lowered, [], []));
+						requests = null;
+					} else if (recordLowering) {
 						var entry = new compiler.hl.incremental.HlLoweredFunction(fn.name, fn, lowered, requests, view.endFunction());
 						this.lowered.set(fn.name, entry);
 						entries.set(fn.name, entry);
