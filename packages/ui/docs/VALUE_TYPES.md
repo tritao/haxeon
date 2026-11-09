@@ -4177,3 +4177,108 @@ there are no extra enum boxes in the loop. This is a representation probe, not a
 and Showcase size/allocation comparisons belong to the batch-head measurements.
 Tier 1 passes 839 compiler tests, all 42 UI value parity/conversion checks and the framework test. No compiler
 sources change in this port; the cache prerequisite's self-hosting fixed point still applies.
+
+### Nullary enum cache and closed-tag batch: final measurements (2026-11-09)
+
+Control is `1fae06c3` (the following sizing-blocker commit is docs-only); candidate is `a3064590`, including the
+Wasm nullary-case cache and lifecycle/style-tag ports. Both use the same frozen outer app `2de94628c`, native
+libraries and checkout-built VM. Three paired captures alternate control/candidate order and use the same CPU
+set. The editor and Web modules differ, so no Tier 3 measurement was skipped. Captures and heavy builds live on
+DATA1; raw captures are deleted after their results are recorded.
+
+HashLink action medians below are the medians of three per-capture medians. KiB readings use the existing
+refill-quantized counter; the exact diagnostic windows below decide apparent increases.
+
+| Action | Control KiB | Candidate KiB | Control ms | Candidate ms |
+|---|---:|---:|---:|---:|
+| console->telemetry | 72.4 | 72.4 | 1.02 | 1.02 |
+| hierarchy->sensors | 110.3 | 112.3 | 1.48 | 1.48 |
+| sensors->hierarchy | 77.6 | 77.6 | 1.13 | 1.12 |
+| telemetry->console | 88.8 | 90.7 | 1.09 | 1.08 |
+| hover-away | 13.6 | 13.6 | 0.43 | 0.42 |
+| hover-enter | 0.5 | 0.5 | 0.00 | 0.00 |
+| hover-field | 12.4 | 12.4 | 0.44 | 0.43 |
+| hover-inside | 0.5 | 0.5 | 0.00 | 0.00 |
+| hover-other | 10.0 | 10.0 | 0.42 | 0.42 |
+| idle | 0.3 | 0.3 | 0.01 | 0.01 |
+| idle-focused | 0.3 | 0.3 | 0.01 | 0.01 |
+| scroll-inspector | 21.7 | 21.7 | 0.72 | 0.71 |
+| type-backspace | 16.2 | 16.2 | 0.42 | 0.42 |
+| type-char | 16.1 | 16.1 | 0.42 | 0.42 |
+| selection (exact window) | 571.03 | 571.03 | 2.47 | 2.44 |
+
+The selection row's KiB is one exact steady-state frame, not a refill-counter median. A measurement-only harness
+starts an exact one-byte-interval census on the second matching action and stops it immediately after the frame,
+before timeline serialization. It changes only the detached outer checkout. Control and candidate are rebuilt
+from their respective compiler/UI sources with the same instrumentation. All four tab windows and selection tie:
+
+| Exact action window | Objects, each side | Bytes, each side |
+|---|---:|---:|
+| hierarchy->sensors | 1,680 | 118,008 |
+| sensors->hierarchy | 1,152 | 80,376 |
+| console->telemetry | 1,181 | 79,376 |
+| telemetry->console | 1,716 | 93,952 |
+| selection | 8,624 | 584,736 |
+
+The displayed +2.0 KiB on hierarchy-to-sensors and +1.9 KiB on telemetry-to-console are buffer-refill granularity,
+not additional objects or requested bytes in those windows. No budget ceiling changes. Whole selection-stress
+captures (30 cycles) include timeline serialization; their only varying type is byte buffers. All other per-type
+counts and byte totals match. The UI-only selection window above ties exactly.
+
+| Pair | Control selection objects / bytes | Candidate selection objects / bytes |
+|---:|---:|---:|
+| 1 | 298,804 / 20,782,032 | 298,805 / 20,781,992 |
+| 2 | 298,802 / 20,781,400 | 298,804 / 20,781,680 |
+| 3 | 298,802 / 20,781,416 | 298,804 / 20,781,824 |
+
+Three paired 500-cycle headless captures pass the memory gate. Growth windows are MiB; RSS-after-warmup and p95
+are reported by the same gate:
+
+| Pair / version | RSS after warmup MiB | Growth windows MiB | Frame p95 ms |
+|---|---:|---|---:|
+| 1 / control | 9.69 | [30.16, 3.44, 0.78, 5.47] | 1.46 |
+| 1 / candidate | 10.00 | [29.22, 3.75, 0.78, 5.47] | 1.46 |
+| 2 / control | 13.75 | [29.84, 4.06, 0.78, 8.91] | 1.47 |
+| 2 / candidate | 10.00 | [30.0, 3.91, 0.62, 5.47] | 1.47 |
+| 3 / control | 10.47 | [29.53, 3.91, 0.94, 5.62] | 1.50 |
+| 3 / candidate | 9.69 | [30.16, 3.28, 0.94, 5.47] | 1.46 |
+
+Median growth windows are `[29.84, 3.91, 0.78, 5.62]` → `[30.00, 3.75, 0.78, 5.47]` MiB. The first window is
++0.16 MiB, a recorded finding; the later windows tie or decrease. Median RSS after warmup is 10.47 → 10.00 MiB.
+There was no retry to accept a memory result.
+
+Wasm GC uses 120 warmup and 120 measured frames. Every pair has the same object counts:
+
+| Scene | Control objects | Candidate objects | Control median / p95 ms | Candidate median / p95 ms |
+|---|---:|---:|---:|---:|
+| full | 4440 | 4320 | 1.40 / 2.70 | 1.40 / 2.50 |
+| static | 4440 | 4320 | 1.20 / 2.20 | 1.40 / 2.10 |
+| text-heavy | 4440 | 4320 | 1.40 / 2.50 | 1.40 / 2.20 |
+| editing | 8724 | 8604 | 1.50 / 3.50 | 1.50 / 2.70 |
+
+All scenes drop 120 objects, one per frame. The static scene's frame median rises 0.2 ms; its p95 falls 0.1 ms.
+These are the measured timings, not evidence of a general speedup. Wasm32 also builds and runs in three paired
+full-scene browser checks; its build does not enable an object counter, so no Wasm32 scene allocation count is claimed.
+
+| Module | Control bytes | Candidate bytes | Delta bytes |
+|---|---:|---:|---:|
+| HashLink editor | 102,185,950 | 102,216,099 | +30,149 |
+| Showcase Wasm32 | 11,850,962 | 11,868,822 | +17,860 |
+| Showcase Wasm GC | 5,855,815 | 5,861,190 | +5,375 |
+
+Editor SHA-256 is `2b627314132a2dae6580e6b5cf27c6ae7d50590d6e5d76888c43b7cd03f3cb13` →
+`57fa4883ec951d5d0a9d565fd43995085c99e51b8e9f874f1fb3fea8ff270b2d`. Showcase Wasm32 is
+`bfd12f3824d1bcca6de492b23b21f3d3da4c5d051391835f85ef5f558de8b654` →
+`66a442f51b4295425faf20bfffdbea91acb7721afbe11543bec930204b5d12c5`; Wasm GC is
+`bfe1db39c8dd4b91ac7f4e1700a0da89dec4933e15a220c3e27bf3599d4e295b` →
+`74888d82d5a58431a640557f886bd9753f1b6cc2bfe305904b4ac7b3a6832b01`.
+Serial exact-window builds report BodyTyped (`bodies`) at 111.90 → 111.51 ms, with no measurable increase.
+
+Tier 2 passes all ten UI scripts, full backend parity (521 fixtures; 14 skips), the 42 UI value checks, the app
+suite including CAD plate workflow, all nine retention scenarios, all three paired budget captures and all three
+paired memory captures. The compiler cache fix separately passed 839 compiler tests and self-hosting fixed point.
+Two detached-setup problems initially blocked the app gates: absent root `build/` for a generated test artifact,
+and materialized `.so` version aliases loading the simulation handle registry twice (also reproduced on control).
+The setup now creates that directory and preserves private version aliases with identical library bytes. A stale
+copied CAD library also lacked `cad_cut_many`; the replacement completed native build has source/ABI inputs identical
+to the frozen checkout. These setup fixes change no product source or assertions; their failures remain recorded.
