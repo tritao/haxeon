@@ -799,6 +799,35 @@ prove an RSS improvement. Five paired allocation censuses of the same workload h
 byte-buffer differences, of -6, -4, and +3 allocations; their source is not established. The 30-cycle selection
 census type comparison found only 176 additional byte-buffer bytes and no allocation-count difference.
 
+## Closed raw-value enums
+
+A native, wire or file-format constant keeps its declared raw value:
+
+```haxe
+enum abstract PixelFormat(Int) implements RawRepresentable {
+    var Rgba8 = 1;
+    var Rgb8 = 2;
+}
+var code:Int = PixelFormat.Rgba8.rawValue();
+var format:Null<PixelFormat> = PixelFormat.fromRaw(code);
+```
+
+`RawRepresentable` synthesizes inline `rawValue():Int|String` and static
+`fromRaw(value):Null<Self>` from the declaration's current constants. Unknown raw
+values return null; aliases with the same raw value denote the same value. Both
+members are reserved names. Constants must be compile-time Int/String values.
+The conformance rejects implicit `from`/`to` conversions. Explicit conversion is
+required in both directions, including calls, assignments and native boundaries.
+
+Enum abstracts retain their nominal type during checking and use their underlying
+scalar/reference representation in storage. Bare constants resolve from that
+nominal expected type; no declaration-side hint table survives erasure. Generic
+`T:RawRepresentable` calls resolve against the concrete enum abstract. Synthesized
+helpers are requested on demand and regenerated when constants change.
+`rawValue()` and constrained reads allocate nothing with inlining disabled too.
+`fromRaw()` follows the existing `Null<Int>`/`Null<String>` ABI; this feature does
+not introduce scalar nullable specialization (queue item a2).
+
 ## Equality and hashing
 
 Decided and implemented 2026-11-01. Value equality is declared by interface conformance, following Swift's

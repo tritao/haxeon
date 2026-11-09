@@ -21,12 +21,22 @@ The rules for every entry:
 | Interfaces as the abstraction | No separate trait feature. Interface bounds dispatch statically and specialize for struct type arguments; a struct boxes only when converted to an interface-typed value. | [STRUCTS.md](STRUCTS.md) |
 | Generic specialization for structs | Generic code over struct type arguments uses the concrete representation, the general fix for `Array<S>`, `Map<K, S>` and `T`-typed closures boxing structs. Extends [GENERIC_SPECIALIZATION.md](GENERIC_SPECIALIZATION.md). | [STRUCTS.md](STRUCTS.md) |
 | `Equatable`, `Hashable` | Value-only declared equality, synthesized when every field supports it; nonconforming struct comparisons are errors. Class/interface `==` is always identity; classes cannot declare either capability. Replaces `@:structural`. | [STRUCTS.md](STRUCTS.md) |
+| `RawRepresentable` | Closed Int/String enum abstracts synthesize inline raw-value access and checked conversion from declared constants; implicit conversions are rejected. Implemented. | [STRUCTS.md](STRUCTS.md#closed-raw-value-enums) |
 | `Diffable` | Explicit conformance for field masks (`Diff.mask/apply/bit/all`); writes only to writable fields. | [STRUCTS.md](STRUCTS.md) |
 | Key paths | Typed field references, readable/writable capabilities, composition and `Diff.bit` paths. Escaped nullable-struct values await scalar callable ABI support. | [KEY_PATHS.md](KEY_PATHS.md) |
 | Signals core | `Signal<T>`, `Derived<T>` and `Effect`, with push invalidation, pull recomputation and per-frame batching. | [ADR 0002](adr/0002-reactive-ui-model.md) |
 | `Observable` | Classes whose fields are tracked individually by the compiler; replaces per-field signals and revision counters. | [ADR 0002](adr/0002-reactive-ui-model.md) |
 | Result builders | A library-declared builder lowers `if`, `switch` and `for` in a body; attached to an interface method and inherited by implementers. | [UI_LANGUAGE_FEATURES.md](UI_LANGUAGE_FEATURES.md) |
 | Lazy parameters | `Lazy<T>` parameters receive the caller's expression unevaluated. | [UI_LANGUAGE_FEATURES.md](UI_LANGUAGE_FEATURES.md) |
+
+### RawRepresentable (implemented)
+
+Closed `enum abstract X(Int|String) implements RawRepresentable` synthesizes inline
+`rawValue()` and checked static `fromRaw(value):Null<X>` from declared constants.
+Unknown values return null; implicit `from`/`to` conversions are compile errors.
+The nominal type survives checking while storage keeps the underlying
+representation. Generic constrained calls specialize against the concrete type.
+See [STRUCTS.md](STRUCTS.md#closed-raw-value-enums).
 
 ### Key paths (implemented)
 

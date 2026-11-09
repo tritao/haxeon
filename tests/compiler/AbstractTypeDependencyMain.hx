@@ -37,7 +37,7 @@ class AbstractTypeDependencyMain {
 		compiler.update("Main.hx", "import pkg.Conversions; function main():Int return 42;");
 		compiler.compile("Main");
 		compiler = new Compiler();
-		compiler.update("pkg/Representation.hx", "package pkg; enum abstract Representation(Int) { var Zero=0; }");
+		compiler.update("pkg/Representation.hx", "package pkg; enum abstract Representation(Int) from Int to Int { var Zero=0; }");
 		compiler.update("pkg/Mode.hx", "package pkg; enum abstract Mode(Representation) { var Zero=0; }");
 		compiler.update("Main.hx", "import pkg.Mode; function main():Int return 42;");
 		compiler.compile("Main");

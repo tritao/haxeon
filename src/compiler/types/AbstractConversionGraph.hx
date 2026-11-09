@@ -30,11 +30,11 @@ class AbstractConversionGraph {
 		fromEdges.resize(0);
 		toEdges.resize(0);
 		spans.clear();
-		for (name in declarations.abstracts.keys()) {
-			if (!declarations.abstracts.exists(name))
+		for (name in declarations.abstractNames()) {
+			var decl = declarations.abstractDeclaration(name);
+			if (decl == null)
 				throw 'Abstract declaration "$name" disappeared during conversion indexing';
-			var decl = declarations.abstracts.get(name),
-				substitutions = abstractSubstitutions(decl.name, decl.typeParameters),
+			var substitutions = abstractSubstitutions(decl.name, decl.typeParameters),
 				owner = abstractNode(decl.name, [for (index in 0...decl.typeParameters.length) '$' + '$index']);
 			spans.set(owner, decl.span);
 			for (type in decl.fromTypes)
@@ -76,10 +76,10 @@ class AbstractConversionGraph {
 		};
 
 	function declaredFrom(actual:CompilerType, name:String, arguments:Array<CompilerType>):Bool {
-		if (!declarations.abstracts.exists(name))
+		var decl = declarations.abstractDeclaration(name);
+		if (decl == null)
 			return false;
-		var decl = declarations.abstracts.get(name),
-			substitutions = appliedSubstitutions(decl.typeParameters, arguments);
+		var substitutions = appliedSubstitutions(decl.typeParameters, arguments);
 		for (type in decl.fromTypes)
 			if (TypeRelations.equals(actual, declarations.resolve(type, decl.span, substitutions)))
 				return true;
@@ -96,10 +96,10 @@ class AbstractConversionGraph {
 	}
 
 	function declaredTo(name:String, arguments:Array<CompilerType>, expected:CompilerType):Bool {
-		if (!declarations.abstracts.exists(name))
+		var decl = declarations.abstractDeclaration(name);
+		if (decl == null)
 			return false;
-		var decl = declarations.abstracts.get(name),
-			substitutions = appliedSubstitutions(decl.typeParameters, arguments);
+		var substitutions = appliedSubstitutions(decl.typeParameters, arguments);
 		for (type in decl.toTypes)
 			if (TypeRelations.equals(expected, declarations.resolve(type, decl.span, substitutions)))
 				return true;
@@ -201,14 +201,15 @@ class AbstractConversionGraph {
 	function fail(message:String, node:String):Void {
 		var span = spans.get(node);
 		if (span == null) {
-			var names = [for (name in declarations.abstracts.keys()) name];
+			var names = [for (name in declarations.abstractNames()) name];
 			names.sort(Reflect.compare);
 			if (names.length == 0)
 				throw message;
 			var name = names[0];
-			if (!declarations.abstracts.exists(name))
+			var declaration = declarations.abstractDeclaration(name);
+			if (declaration == null)
 				throw message;
-			span = declarations.abstracts.get(name).span;
+			span = declaration.span;
 		}
 		throw new CompileError(new Diagnostic("E1007", message, span));
 	}

@@ -181,6 +181,15 @@ class TypeRelations {
 				return declarations.typeParameterSatisfies(actual, expected);
 			case _:
 		}
+		switch actual {
+			case TAbstract(name, _, _) if (declarations.enumAbstracts.exists(name)):
+				var declaration = declarations.enumAbstracts.get(name);
+				if (declaration.conformances != null) for (conformance in declaration.conformances) {
+					var resolved = declarations.resolve(conformance, declaration.span);
+					if (equals(resolved, expected) || nominalReaches(resolved, expected)) return true;
+				}
+			default:
+		}
 		if (StructProperties.isConstraintType(expected))
 			return StructProperties.satisfies(declarations, actual, representationConstraintName(expected));
 		var valueCapability = switch expected {

@@ -270,6 +270,8 @@ class ModuleAnalyzer {
 				addFunctionTypeDependencies(method, state, dependencies, abstractDecl.typeParameters);
 		}
 		for (abstractDecl in ast.enumAbstracts) {
+			if (abstractDecl.conformances != null)
+				for (type in abstractDecl.conformances) addModuleTypeDependency(type, state, dependencies);
 			addModuleTypeDependency(abstractDecl.underlying, state, dependencies);
 			for (type in abstractDecl.fromTypes.concat(abstractDecl.toTypes))
 				addModuleTypeDependency(type, state, dependencies);

@@ -1078,6 +1078,7 @@ class FrontendCompilation {
 					&& !StringTools.startsWith(cached, "$enum-reflect-equals:")
 					&& !StringTools.startsWith(cached, "$enum-custom:")
 					&& !StringTools.startsWith(cached, "$hash$value$equality:")
+					&& !StringTools.startsWith(cached, compiler.types.typing.RawRepresentableGenerator.PREFIX)
 					&& !StringTools.startsWith(cached, "$wire:")
 					&& !StringTools.startsWith(cached, "$json:"))
 					continue;

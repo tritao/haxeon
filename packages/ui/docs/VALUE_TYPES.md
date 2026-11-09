@@ -4426,3 +4426,56 @@ Final Tier 1: **844 passed, zero failed** with eight workers, all affected tag/a
 and Wasm GC with inlining off/on, and a self-hosting fixed point. A final sampling pair also executes the compiler-built
 control and fixed-point candidate; their profiled assembly times are 8,266.38 / 5,876.66 ms under concurrent gate
 load, so those single observations are diagnostic only and do not replace the unprofiled paired table above.
+
+### RawRepresentable synthesis (2026-11-09)
+
+`RawRepresentableMain` runs the same source on HashLink, Wasm32 and Wasm GC,
+with inlining disabled and enabled. An Int-backed raw enum occupies one I32
+class field and four bytes inside an eight-byte two-field native struct. Exact
+HashLink census and both Wasm counters report **0 objects for 8 and 1,024 calls**
+to `rawValue()` through direct and constrained generic calls. Checked Int/String
+conversions cover unknown values, zero, aliases and incremental constant edits;
+implicit conversions and a nonconforming generic argument are rejected.
+`fromRaw()` retains the existing nullable scalar ABI; inline nullable scalars
+remain assigned to a2.
+
+Tier 1: **846 passed, 0 failed** (8 workers), all six target/inlining combinations,
+and self-hosting fixed point. Existing permissive enum-abstract fixtures now
+declare the conversions they exercise; annotation arguments are checked against
+the nominal enum before serializing its raw constant, and integer operators
+honor explicitly declared conversions. The former declaration-hint tables are
+deleted.
+
+Self-hosted compiler-source phase comparison uses stock-Haxe-built compilers
+from `52bbc93a` and this change, the same checkout VM, CPU affinity 0–11, and
+663 unchanged source files (source digest
+`6ff03cbac877dd39e55a8c56003515079a529bc0e3e876ce77d582b2247d54af`). The fixed
+three-pair comparison ran after this session's suite and fixed-point processes
+finished. All samples are retained below, in milliseconds.
+
+| Phase | Control samples | Candidate samples | Control median | Candidate median |
+|---|---|---|---:|---:|
+| IR assembly | 8011.77, 7607.58, 7764.08 | 8145.13, 7679.36, 7138.85 | 7764.08 | 7679.36 |
+| BodyTyped | 234.73, 174.49, 191.59 | 251.30, 223.80, 189.32 | 191.59 | 223.80 |
+
+Assembly median changes by -1.09%, within the control spread. BodyTyped's
+wall-time median increases 16.81%, but the ranges overlap (174.49–234.73 versus
+189.32–251.30 ms), with one GC in each sample. Its allocation median decreases
+from 33,571,712 bytes / 1,174,288 objects to 33,559,944 / 1,174,037. Metadata
+typing also decreases from approximately 1,978,721,456 bytes / 56,483,531 objects
+to 1,969,975,304 / 56,353,566. There is no repeated synthesis of previously
+generated raw helpers: the completion loop drains only newly requested members.
+The short BodyTyped wall-time result does not establish a generator retyping
+regression; the complete measurements are recorded rather than selecting a
+faster pair.
+
+The earlier comparison overlapping this session's suite was inconclusive:
+assembly control 8964.10 / 16910.07 / 7232.04 ms, candidate
+15136.56 / 9711.56 / 10259.38; BodyTyped control 383.75 / 594.85 / 181.04,
+candidate 255.45 / 256.49 / 423.15. Those samples are not the acceptance measure.
+
+Compiler modules are stable within each side: 36,082,265 → 36,083,601 bytes
+(+1,336), SHA-256
+`2f6d551710b7b859d9581fa6baffe86496dcd68c43029e56a395b6cf47966b70` →
+`a448197f90e906370ea4bc797c8146c7cd798252d3a33834fef1ea20952508a1`.
+Editor/Showcase module comparison runs at the batch head under Tier 3.

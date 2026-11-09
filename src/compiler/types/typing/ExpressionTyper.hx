@@ -649,7 +649,10 @@ class ExpressionTyper {
 				var expected = session.declarations.resolve(schema.underlying, schema.span, []);
 				if (annotation.arguments.length != 1)
 					fail("E1024", 'Annotation "${annotation.name}" expects one argument, got ${annotation.arguments.length}', annotation.span);
-				arguments.push(typeAnnotationArgument("value", expected, annotation.arguments[0], annotation));
+				var nominal = TAbstract(schema.name, [], expected),
+					typed = coerce(typeExpressionCallback(annotation.arguments[0], new Scope(), nominal, false), nominal,
+						'annotation argument "value"', "E1024");
+				arguments.push({name: "value", type: SemanticSignature.type(expected), value: annotationConstant(typed, annotation)});
 			}
 			typedAnnotationValues.set(metadataKey(annotation), [{name: annotation.name, arguments: arguments}]);
 		}
@@ -687,7 +690,7 @@ class ExpressionTyper {
 			case TStringLiteral(value): StringValue(value);
 			case TBoolLiteral(value): BoolValue(value);
 			case TNullLiteral: NullValue;
-			case TNullableWrap(value): annotationConstant(value, annotation);
+			case TNullableWrap(value), TAbiCast(value): annotationConstant(value, annotation);
 			case TNegate(value):
 				switch value.expression {
 					case TIntLiteral(integer): IntValue(-integer);
@@ -1490,7 +1493,8 @@ class ExpressionTyper {
 			&& !sameType(typedSubject.type, TString)
 			&& !isNullableString(typedSubject.type)
 			&& !isArraySwitchable(typedSubject.type)
-			&& !switchRules.isEnum(typedSubject.type))
+			&& !switchRules.isEnum(typedSubject.type)
+			&& !EnumAbstractValues.switchable(session, typedSubject.type))
 			fail("E1019", "Switch requires an Int, String, array, or enum value", typedSubject.span);
 		var typedCases:Array<TypedSwitchExpressionCase> = [],
 			deferredCaseResults:Map<Int, {expression:AstExpression, scope:Scope}> = [],
@@ -1520,9 +1524,7 @@ class ExpressionTyper {
 					&& arrayPattern == null ? switchRules.enumPattern(switchCase.value, typedSubject.type, caseScope) : null,
 				typedValue = isCatchAll
 					|| subjectBinding != null
-					|| arrayPattern != null ? typedSubject : pattern == null ? coerce(EnumAbstractHints.typed(session,
-						EnumAbstractHints.declaredAs(session, typedSubject), switchCase.value,
-						() -> typeExpressionCallback(switchCase.value, scope, typedSubject.type, false)),
+					|| arrayPattern != null ? typedSubject : pattern == null ? coerce(typeExpressionCallback(switchCase.value, scope, typedSubject.type, false),
 						typedSubject.type, "switch case", "E1019") : pattern.value;
 			var parsedGuard = switchCase.guard,
 				typedGuard = parsedGuard == null ? null : coerce(typeExpressionCallback(parsedGuard, caseScope, null, false), TBool, "switch guard", "E1003"),
@@ -1954,6 +1956,11 @@ class ExpressionTyper {
 			span);
 		if (dynamicResult != null)
 			return dynamicResult;
+		var leftNumeric = numericRepresentation(left.type), rightNumeric = numericRepresentation(right.type);
+		if (leftNumeric != null && !sameType(left.type, leftNumeric))
+			left = coerce(left, leftNumeric, "bitwise operand", "E1010");
+		if (rightNumeric != null && !sameType(right.type, rightNumeric))
+			right = coerce(right, rightNumeric, "bitwise operand", "E1010");
 		if (operation >= 3) {
 			if (!sameType(left.type, TInt) && !sameType(left.type, TInt64))
 				fail("E1010", "Shift operators require an Int or Int64 value", span);
@@ -1984,7 +1991,7 @@ class ExpressionTyper {
 	public function comparison(a:AstExpression, b:AstExpression, scope:Scope, operation:Int, span:SourceSpan, ?symbol:String,
 			reversed:Bool = false):TypedExpression {
 		var left = typeExpressionCallback(a, scope, null, false),
-			right = EnumAbstractHints.typed(session, EnumAbstractHints.declaredAs(session, left), b, () -> typeExpressionCallback(b, scope, left.type, false));
+			right = typeExpressionCallback(b, scope, left.type, false);
 		if (symbol == null)
 			symbol = operation == 0 ? "<" : operation == 1 ? "<=" : "==";
 		var overloaded = callResolver.typeAbstractOperator(symbol, [left, right], span, scope);
@@ -2211,23 +2218,32 @@ class ExpressionTyper {
 
 	function notEqual(a:AstExpression, b:AstExpression, scope:Scope, span:SourceSpan):TypedExpression {
 		var left = typeExpressionCallback(a, scope, null, false),
-			right = EnumAbstractHints.typed(session, EnumAbstractHints.declaredAs(session, left), b, () -> typeExpressionCallback(b, scope, left.type, false)),
+			right = typeExpressionCallback(b, scope, left.type, false),
 			overloaded = callResolver.typeAbstractOperator("!=", [left, right], span, scope);
 		if (overloaded != null)
 			return overloaded;
 		return new TypedExpression(TNot(compareTyped(left, right, 2, span, false)), TBool, span);
 	}
 
-	public function isNumeric(type:CompilerType):Bool
-		return sameType(type, TInt) || sameType(type, TInt64) || sameType(type, TFloat);
+	function numericRepresentation(type:CompilerType):Null<CompilerType> return switch type {
+		case TInt, TInt64, TFloat: type;
+		case TAbstract(_, _, representation) if (session.relations.isAssignable(type, representation)):
+			switch representation { case TInt, TInt64, TFloat: representation; default: null; };
+		default: null;
+	};
+
+	public function isNumeric(type:CompilerType):Bool return numericRepresentation(type) != null;
 
 	function promoteNumericOperands(left:TypedExpression, right:TypedExpression, span:SourceSpan, forceFloat:Bool = false):{
 		left:TypedExpression,
 		right:TypedExpression,
 		type:CompilerType
 	} {
-		var hasInt64 = sameType(left.type, TInt64) || sameType(right.type, TInt64);
-		var hasFloat = sameType(left.type, TFloat) || sameType(right.type, TFloat);
+		var leftNumeric = numericRepresentation(left.type), rightNumeric = numericRepresentation(right.type);
+		if (leftNumeric == null || rightNumeric == null)
+			fail("E1010", "Arithmetic requires numeric operands", span);
+		var hasInt64 = sameType(leftNumeric, TInt64) || sameType(rightNumeric, TInt64);
+		var hasFloat = sameType(leftNumeric, TFloat) || sameType(rightNumeric, TFloat);
 		if (hasInt64 && hasFloat)
 			fail("E1010", "Int64 and Float arithmetic requires an explicit conversion", span);
 		var type = hasInt64 ? TInt64 : forceFloat || hasFloat ? TFloat : TInt;

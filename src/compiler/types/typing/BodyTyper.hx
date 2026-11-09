@@ -307,11 +307,7 @@ class BodyTyper {
 			}
 			bindCell(argument.name, argument.span, scope, type);
 			arguments.push({name: scope.requireId(argument.name), type: type});
-			var declaredAbstract = EnumAbstractHints.named(session, argument.type);
-			if (declaredAbstract != null)
-				context.declaredAbstracts.set(scope.requireId(argument.name), declaredAbstract);
 		}
-		context.declaredResultAbstract = EnumAbstractHints.named(session, fn.result);
 		context.expectedReturnType = result;
 		inferBodyLocalTypes(fn.statements, result);
 		var statements = typeStatements(fn.statements, scope, result);
@@ -1746,15 +1742,14 @@ class BodyTyper {
 					if (expectedAbstract != null) {
 						for (value in expectedAbstract.values)
 							if (value.name == name)
-								return typeExpression(value.value, new Scope(), lowerType(expectedAbstract.underlying));
+								return EnumAbstractValues.typed(this, expectedAbstract, value);
 					}
-					// Enum abstracts lower to their underlying type, so a switch over
-					// one cannot name it here; look the value up among them all.
-					var unqualifiedAbstract = findBareEnumAbstract(name, null, span, false);
+					// Without an expected type, resolve a uniquely visible constant.
+					var unqualifiedAbstract = findBareEnumAbstract(name, span);
 					if (unqualifiedAbstract != null)
 						for (value in unqualifiedAbstract.values)
 							if (value.name == name)
-								return typeExpression(value.value, new Scope(), lowerType(unqualifiedAbstract.underlying));
+								return EnumAbstractValues.typed(this, unqualifiedAbstract, value);
 					var thisType = scope.resolve("this");
 					if (thisType == null)
 						fail("E1005", 'Unknown variable "$name"', span);
@@ -1772,7 +1767,7 @@ class BodyTyper {
 						var enumAbstract = session.enumAbstractDecls.get(enumName);
 						for (value in enumAbstract.values)
 							if (value.name == enumCaseName)
-								return typeExpression(value.value, new Scope(), lowerType(enumAbstract.underlying));
+								return EnumAbstractValues.typed(this, enumAbstract, value);
 					}
 					var qualifiedEnum = session.declarations.enumQualifierType(enumName),
 						resolvedEnumName = BodyTyper.enumName(qualifiedEnum),
@@ -2093,7 +2088,7 @@ class BodyTyper {
 					var abstractDecl = requiredMapValue(session.enumAbstractDecls, className);
 					for (value in abstractDecl.values)
 						if (value.name == name)
-							return typeExpression(value.value, new Scope(), lowerType(abstractDecl.underlying));
+							return EnumAbstractValues.typed(this, abstractDecl, value);
 				}
 				var staticField = findStaticField(className, name, span);
 				var inlineValue = inlineStaticFieldExpression(staticField.owner, name, span);
@@ -2430,45 +2425,31 @@ class BodyTyper {
 	 * ordinary lookup, which reports it). Only called for a bare reference.
 	 */
 	function expectedEnumAbstractValue(name:String, expectedType:Null<CompilerType>, span:SourceSpan):Null<TypedExpression> {
-		// A name written bare can arrive qualified by the class it also names; the value is its last segment.
-		var valueName = lastPathSegment(name);
-		// The other side's declared type names the abstract: that is the one the value belongs to, however
-		// many others declare the name. The hint is spent here so typing the value cannot leak it.
-		var hinted = session.abstractHint;
-		session.abstractHint = null;
-		if (hinted != null) {
-			var hintedDeclaration = session.enumAbstractDecls.get(hinted);
-			if (hintedDeclaration != null)
-				for (value in hintedDeclaration.values)
-					if (value.name == valueName)
-						return typeExpression(value.value, new Scope(), lowerType(hintedDeclaration.underlying));
-		}
-		if (expectedType == null)
-			return null;
-		var declaration = findBareEnumAbstract(valueName, expectedType, span, true);
-		if (declaration == null)
-			return null;
-		for (value in declaration.values)
-			if (value.name == valueName)
-				return typeExpression(value.value, new Scope(), lowerType(declaration.underlying));
+		var valueName = lastPathSegment(name), expected = expectedType;
+		if (expected != null) switch expected { case TNullable(inner): expected = inner; default: }
+		var owner = expected == null ? session.enumAbstractConstantOwner : switch expected {
+			case TAbstract(name, _, _) if (session.enumAbstractDecls.exists(name)): name;
+			default: session.enumAbstractConstantOwner;
+		};
+		var declaration = owner == null ? null : session.enumAbstractDecls.get(owner);
+		if (declaration != null) for (value in declaration.values)
+			if (value.name == valueName) return EnumAbstractValues.typed(this, declaration, value);
 		return null;
 	}
 
 	/**
-	 * The enum abstract a bare value name belongs to, optionally only among those over `underlying`.
+	 * The enum abstract an uncontextualized bare value name belongs to.
 	 * Among several abstracts declaring the value, the one in the current type's own package wins: its
 	 * types are visible without an import, as in Haxe. An ambiguity that leaves more than one is an
-	 * error, or null when `lenient`.
+	 * error.
 	 */
-	function findBareEnumAbstract(name:String, underlying:Null<CompilerType>, span:SourceSpan, lenient:Bool):Null<compiler.syntax.Ast.AstEnumAbstract> {
+	function findBareEnumAbstract(name:String, span:SourceSpan):Null<compiler.syntax.Ast.AstEnumAbstract> {
 		var found:Null<compiler.syntax.Ast.AstEnumAbstract> = null,
 			ambiguous = false,
 			samePackage:Array<compiler.syntax.Ast.AstEnumAbstract> = [],
 			declaredBy:Array<String> = [];
 		var ownerPackage = context.lexicalOwner == null ? null : pathBeforeLast(context.lexicalOwner);
 		for (candidateName => candidate in session.enumAbstractDecls) {
-			if (underlying != null && !sameType(lowerType(candidate.underlying), underlying))
-				continue;
 			for (value in candidate.values)
 				if (value.name == name) {
 					if (found != null)
@@ -2481,8 +2462,6 @@ class BodyTyper {
 		}
 		if (ambiguous) {
 			if (samePackage.length != 1) {
-				if (lenient)
-					return null;
 				declaredBy.sort(Reflect.compare);
 				fail("E1005",
 					'Ambiguous enum abstract value "$name": it is declared by ${[for (owner in declaredBy) '"$owner"'].join(", ")}' +

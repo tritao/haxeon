@@ -310,11 +310,17 @@ class Parser {
 		consume(TokenKind.LeftParen);
 		var underlying = parseType();
 		consume(TokenKind.RightParen);
-		var fromTypes = [], toTypes = [];
+		var fromTypes = [], toTypes = [], conformances = [];
 		while (!check(TokenKind.LeftBrace)) {
+			if (match(TokenKind.Implements)) {
+				conformances.push(parseType());
+				if (match(TokenKind.Comma)) fail(previous(), 'Enum abstract "$name": repeat "implements" for each interface');
+				continue;
+			}
+			if (match(TokenKind.Colon)) fail(previous(), 'Enum abstract "$name": use "implements" to declare conformance');
 			var conversion = consume(TokenKind.Identifier);
 			if (conversion.text != "from" && conversion.text != "to")
-				fail(conversion, 'Expected "from" or "to"');
+				fail(conversion, 'Expected "from", "to" or "implements"');
 			var conversionType = parseType();
 			if (conversion.text == "from")
 				fromTypes.push(conversionType);
@@ -340,6 +346,7 @@ class Parser {
 		return {
 			name: name,
 			metadata: metadata,
+			conformances: conformances,
 			underlying: underlying,
 			fromTypes: fromTypes,
 			toTypes: toTypes,

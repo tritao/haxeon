@@ -205,9 +205,6 @@ class StatementTyper {
 					span) : session.declarations.resolve(declared, null, context.typeSubstitutions);
 				scope.define(name, declaredType, span, false);
 				bindCell(name, span, scope, declaredType);
-				var uninitializedAbstract = (switch (declared) { case InferredType: true; default: false; }) ? null : EnumAbstractHints.named(session, declared);
-				if (uninitializedAbstract != null)
-					context.declaredAbstracts.set(scope.requireId(name), uninitializedAbstract);
 				[TDeclare(scope.requireId(name), declaredType, span)];
 			case VarDeclaration(name, declared, initializer, span):
 				var localFunction:Null<LocalFunction> = null;
@@ -246,8 +243,7 @@ class StatementTyper {
 							recursiveCell = context.storage.cell(scope.requireId(name));
 						default:
 					}
-				var declaredAbstract = EnumAbstractHints.named(session, declared);
-				var value = EnumAbstractHints.typed(session, declaredAbstract, initializer, () -> typeExpression(initializer, scope, declaredType, false));
+				var value = typeExpression(initializer, scope, declaredType, false);
 				if (declaredType != null)
 					value = coerce(value, declaredType, 'local "$name"', "E1002");
 				else
@@ -270,13 +266,10 @@ class StatementTyper {
 				}
 				scope.setMapKeySource(name, value.mapKeySource);
 				bindCell(name, span, scope, value.type);
-				if (declaredAbstract != null)
-					context.declaredAbstracts.set(scope.requireId(name), declaredAbstract);
 				[TVar(scope.requireId(name), value, span)];
 			case Return(expression, span):
 				var expected = result == null ? context.inferredResult : result;
-				var value = EnumAbstractHints.typed(session, context.declaredResultAbstract, expression,
-					() -> typeExpression(expression, scope, expected, false)),
+				var value = typeExpression(expression, scope, expected, false),
 					output:Array<TypedStatement> = [];
 				var thrown = switch value.expression {
 					case TThrowExpression(thrown): thrown;
@@ -790,7 +783,8 @@ class StatementTyper {
 			&& !TypeRelations.equals(typedExpression.type, TString)
 			&& !isNullableString(typedExpression.type)
 			&& !isArraySwitchable(typedExpression.type)
-			&& !switchRules.isEnum(typedExpression.type))
+			&& !switchRules.isEnum(typedExpression.type)
+			&& !EnumAbstractValues.switchable(session, typedExpression.type))
 			fail("E1019", "Switch requires an Int, String, array, or enum value", typedExpression.span);
 		var typedCases:Array<TypedSwitchCase> = [],
 			caseScopes:Array<Scope> = [],
@@ -804,9 +798,7 @@ class StatementTyper {
 					&& arrayPattern == null ? switchRules.enumPattern(switchCase.value, typedExpression.type, caseScope) : null,
 				typedValue = isCatchAll
 					|| subjectBinding != null
-					|| arrayPattern != null ? typedExpression : pattern == null ? coerce(EnumAbstractHints.typed(session,
-						EnumAbstractHints.declaredAs(session, typedExpression), switchCase.value,
-						() -> typeExpression(switchCase.value, scope, typedExpression.type, false)),
+					|| arrayPattern != null ? typedExpression : pattern == null ? coerce(typeExpression(switchCase.value, scope, typedExpression.type, false),
 						typedExpression.type, "switch case", "E1019") : pattern.value;
 			var parsedGuard = switchCase.guard,
 				typedGuard = parsedGuard == null ? null : coerce(typeExpression(parsedGuard, caseScope, null, false), TBool, "switch guard", "E1003");

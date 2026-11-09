@@ -50,11 +50,8 @@ class ProgramTyper {
 			bindCachedNativeLayouts(cachedMetadata.classes);
 		var program = semantic.program;
 		for (decl in program.enumAbstracts) {
-			var emptySubstitutions:Map<String, CompilerType> = [];
-			var underlying = session.declarations.resolve(decl.underlying, null, emptySubstitutions);
-			for (value in decl.values)
-				bodyTyper.coerce(bodyTyper.typeExpression(value.value, new Scope(), underlying), underlying,
-					'enum abstract value "${decl.name}.${value.name}"', "E1002");
+			RawRepresentableGenerator.validate(session, bodyTyper, decl);
+			for (value in decl.values) EnumAbstractValues.raw(bodyTyper, decl, value);
 		}
 		session.bindNominalDeclarations();
 		for (declaration in program.enums)
@@ -329,9 +326,9 @@ class ProgramTyper {
 			hashes:Map<String, TypedFunction> = [],
 			enumMethods:Map<String, TypedFunction> = [],
 			enumAdapters:Map<String, TypedClass> = [],
-			codecs:Map<String, TypedFunction> = [];
+			codecs:Map<String, TypedFunction> = [], rawMethods:Map<String, TypedFunction> = [];
 		function requestCount():Int
-			return Lambda.count(session.valueEqualityRequests) + Lambda.count(session.enumEqualityRequests) + Lambda.count(session.hashRequests)
+			return Lambda.count(session.rawRepresentableRequests) + Lambda.count(session.valueEqualityRequests) + Lambda.count(session.enumEqualityRequests) + Lambda.count(session.hashRequests)
 				+ Lambda.count(session.enumMethodRequests) + Lambda.count(session.enumInterfaceAdapters) + Lambda.count(session.wireCodecRequests)
 				+ Lambda.count(session.jsonCodecRequests) + Lambda.count(session.keyPathDefinitions) + session.representation.genericOwnerRequestCount()
 				+ session.closureConversion.generatedFunctionCount() + session.enumRepresentations.count();
@@ -339,6 +336,8 @@ class ProgramTyper {
 			drainRuntimeTypes();
 			reflectNewClasses();
 			var before = requestCount();
+			for (method in RawRepresentableGenerator.generate(session, bodyTyper, rawMethods))
+				assembler.registerProgramTypes([method], [], [], [], []);
 			for (codec in WireCodecGenerator.generate(session, typedClasses, typedEnums)
 				.concat(WireCodecGenerator.generateJson(session, typedClasses, typedEnums))) {
 				codecs.set(codec.name, codec);
@@ -370,6 +369,9 @@ class ProgramTyper {
 			if (before == requestCount())
 				break;
 		}
+		var rawNames = [for (name in rawMethods.keys()) name];
+		rawNames.sort(Reflect.compare);
+		for (name in rawNames) typedFunctions.push(rawMethods.get(name));
 		var codecNames = [for (name in codecs.keys()) name];
 		codecNames.sort(Reflect.compare);
 		for (name in codecNames)
@@ -634,8 +636,7 @@ class ProgramTyper {
 					if (!field.isStatic)
 						scope.defineReceiver(session.representation.receiverType(classDecl.name, erasedSubstitutions), field.span);
 					try {
-						initializer = bodyTyper.coerce(EnumAbstractHints.typed(session, EnumAbstractHints.named(session, field.type), parsedInitializer,
-							() -> bodyTyper.typeExpression(parsedInitializer, scope, type)),
+						initializer = bodyTyper.coerce(bodyTyper.typeExpression(parsedInitializer, scope, type),
 							type, (field.isStatic ? 'static field "${classDecl.name}.${field.name}"' : 'field "${classDecl.name}.${field.name}"'), "E1002");
 					} catch (error:Dynamic) {
 						bodyTyper.leaveBody(initializerContext);

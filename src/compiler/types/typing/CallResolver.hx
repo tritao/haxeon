@@ -124,7 +124,8 @@ class CallResolver {
 			score:Int
 		}> = null, ambiguous:Null<String> = null;
 		for (owner in owners) {
-			var declaration = requiredMapValue(session.declarations.abstracts, owner);
+			var declaration = session.declarations.abstractDeclaration(owner);
+			if (declaration == null) throw 'Missing abstract declaration "$owner"';
 			for (method in declaration.methods) {
 				if (!method.isStatic || method.arguments.length != operands.length || method.metadata == null)
 					continue;
@@ -413,8 +414,7 @@ class CallResolver {
 		var typed:Array<TypedExpression> = [];
 		for (i in 0...arguments.length) {
 			var supplied = argumentType(parameters[i], substitutions),
-				value = EnumAbstractHints.typed(session, EnumAbstractHints.named(session, parameters[i].type), arguments[i],
-					() -> typeExpression(arguments[i], scope, supplied, false));
+				value = typeExpression(arguments[i], scope, supplied, false);
 			typed.push(coerce(value, supplied, 'argument ${i + 1} to "$name"', "E1009"));
 		}
 		for (i in arguments.length...parameters.length) {
@@ -466,8 +466,7 @@ class CallResolver {
 				expected:Null<CompilerType> = null;
 			if (allTypeParametersBound(parameters, substitutions))
 				expected = session.declarations.resolve(declared.type, declared.span, substitutions);
-			var argument = EnumAbstractHints.typed(session, EnumAbstractHints.named(session, declared.type), arguments[index],
-				() -> typeExpression(arguments[index], scope, expected, expected != null));
+			var argument = typeExpression(arguments[index], scope, expected, expected != null);
 			inferTypeParameters(declared.type, argument.type, parameters, substitutions, argument.span);
 			typed.push(argument);
 		}
@@ -685,8 +684,15 @@ class CallResolver {
 			default:
 				return null;
 		}
-		var declaration = requiredMapValue(session.declarations.abstracts, abstractName),
-			method:Null<AstFunction> = null;
+		var rawDeclaration = session.enumAbstractDecls.get(abstractName);
+		if (name == "rawValue" && rawDeclaration != null && RawRepresentableGenerator.conforms(session, rawDeclaration)) {
+			if (arguments.length != 0) fail("E1008", "rawValue expects no arguments", span);
+			return new TypedExpression(TCall(RawRepresentableGenerator.request(session, abstractName, name, span), [receiver]),
+				lowerType(rawDeclaration.underlying), span);
+		}
+		var declaration = session.declarations.abstractDeclaration(abstractName);
+		if (declaration == null) throw 'Missing abstract declaration "$abstractName"';
+		var method:Null<AstFunction> = null;
 		for (candidate in declaration.methods)
 			if (candidate.name == name && !candidate.isStatic && candidate.name != "new")
 				method = candidate;
@@ -931,6 +937,16 @@ class CallResolver {
 	}
 
 	public function typeNamedCall(name:String, arguments:Array<AstExpression>, span:SourceSpan, scope:Scope, expectedType:Null<CompilerType>):TypedExpression {
+		var rawOwnerEnd = name.lastIndexOf(".");
+		if (rawOwnerEnd > 0 && name.substring(rawOwnerEnd + 1) == "fromRaw") {
+			var rawOwner = name.substring(0, rawOwnerEnd), declaration = session.enumAbstractDecls.get(rawOwner);
+			if (declaration != null && RawRepresentableGenerator.conforms(session, declaration)) {
+				if (arguments.length != 1) fail("E1008", "fromRaw expects one argument", span);
+				var raw = lowerType(declaration.underlying), argument = coerce(typeExpression(arguments[0], scope, raw, false), raw, "fromRaw argument", "E1009");
+				return new TypedExpression(TCall(RawRepresentableGenerator.request(session, rawOwner, "fromRaw", span), [argument]),
+					TNullable(TAbstract(rawOwner, [], raw)), span);
+			}
+		}
 		if (StringTools.startsWith(name, "super.") && name.indexOf(".", 6) < 0)
 			return typeSuperMethodCall(name.substring(6), arguments, span, scope);
 		// A canonical module function is only the fallback for a bare source call; members still win.
