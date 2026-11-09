@@ -30,65 +30,30 @@ class IrCheckedDynamicCasts {
 			generated.push(new IrFunction(name, builder.arguments, type, builder.blocks));
 			return name;
 		}
-		var rewritten:Array<IrFunction> = [];
-		// Only a cast from Dyn is ever replaced, so a function without one is kept as it is, without building new blocks.
-		function castsFromDyn(instruction:IrInstruction):Bool
-			return switch instruction {
-				case SafeCast(out, input) if ((switch input.type { case Dyn: true; default: false; })):
-					// The cases of the rewrite below, without its effects.
+		function replacement(located:Located<IrInstruction>):Null<Array<Located<IrInstruction>>>
+			return switch located.value {
+				case SafeCast(out, input) if ((switch (input.type) { case Dyn: true; default: false; })):
 					switch out.type {
-						case Obj(name): declarations.exists(name) && (checkObjects || (checkValueObjects && declarations.get(name).isValue));
-						case Nullable(Obj(name)): checkValueObjects && declarations.exists(name) && declarations.get(name).isValue;
-						case RawPtr, Virtual(_): true;
-						case Function(_, _), Nullable(Function(_, _)): checkFunctionCasts;
-						default: false;
+						case Obj(name) if (declarations.exists(name) && (checkObjects || (checkValueObjects && declarations.get(name).isValue))):
+							var declaration = declarations.get(name);
+							if (declaration == null) throw 'Missing cast target "$name"';
+							[new Located(Call(out, helperFor(out.type, out.type, name, !declaration.isValue), [input]), located.provenance)];
+						case Nullable(Obj(name)) if (checkValueObjects && declarations.exists(name) && declarations.get(name).isValue):
+							[new Located(Call(out, helperFor(out.type, Obj(name), name, true), [input]), located.provenance)];
+						case RawPtr:
+							[new Located(Call(out, helperFor(out.type, out.type, "hl.Bytes", true), [input]), located.provenance)];
+						case Function(_, _) if (checkFunctionCasts):
+							[new Located(Call(out, helperFor(out.type, out.type, Std.string(out.type), false), [input]), located.provenance)];
+						case Nullable(Function(_, _)) if (checkFunctionCasts):
+							var inner = switch out.type { case Nullable(value): value; default: throw "Invalid nullable function cast"; };
+							[new Located(Call(out, helperFor(out.type, inner, Std.string(inner), true), [input]), located.provenance)];
+						case Virtual(name):
+							[new Located(Call(out, helperFor(out.type, out.type, name, true), [input]), located.provenance)];
+						default: null;
 					}
-				default: false;
+				default: null;
 			};
-		for (fn in functions) {
-			var skipped = !IrInstructionScan.any(fn, castsFromDyn);
-			if (skipped && !IrInstructionScan.checking) {
-				rewritten.push(fn);
-				continue;
-			}
-			var changed = false, blocks:Array<IrBlock> = [];
-			for (block in fn.blocks) {
-				var target = new IrBlock(block.id);
-				for (located in block.instructions) switch located.value {
-					case SafeCast(out, input) if ((switch (input.type) { case Dyn: true; default: false; })):
-						switch out.type {
-							case Obj(name) if (declarations.exists(name) && (checkObjects || (checkValueObjects && declarations.get(name).isValue))):
-								var declaration = declarations.get(name);
-								if (declaration == null) throw 'Missing cast target "$name"';
-								target.instructions.push(new Located(Call(out, helperFor(out.type, out.type, name, !declaration.isValue), [input]), located.provenance));
-								changed = true;
-							case Nullable(Obj(name)) if (checkValueObjects && declarations.exists(name) && declarations.get(name).isValue):
-								target.instructions.push(new Located(Call(out, helperFor(out.type, Obj(name), name, true), [input]), located.provenance));
-								changed = true;
-							case RawPtr:
-								target.instructions.push(new Located(Call(out, helperFor(out.type, out.type, "hl.Bytes", true), [input]), located.provenance));
-								changed = true;
-							case Function(_, _) if (checkFunctionCasts):
-								target.instructions.push(new Located(Call(out, helperFor(out.type, out.type, Std.string(out.type), false), [input]), located.provenance));
-								changed = true;
-							case Nullable(Function(_, _)) if (checkFunctionCasts):
-								var inner = switch out.type { case Nullable(value): value; default: throw "Invalid nullable function cast"; };
-								target.instructions.push(new Located(Call(out, helperFor(out.type, inner, Std.string(inner), true), [input]), located.provenance));
-								changed = true;
-							case Virtual(name):
-								target.instructions.push(new Located(Call(out, helperFor(out.type, out.type, name, true), [input]), located.provenance));
-								changed = true;
-							default: target.instructions.push(located);
-						}
-					default: target.instructions.push(located);
-				}
-				target.terminator = block.terminator;
-				blocks.push(target);
-			}
-			if (skipped && changed)
-				throw 'HAXEON_CHECK_REUSE: IrCheckedDynamicCasts changed ${fn.name}, which its scan said it cannot';
-			rewritten.push(changed ? new IrFunction(fn.name, fn.arguments, fn.result, blocks, fn.debugBindings, fn.inlineHint, fn.retention) : fn);
-		}
+		var rewritten:Array<IrFunction> = [for (fn in functions) IrFunctionRewrite.instructions(fn, replacement)];
 		return rewritten.concat(generated);
 	}
 }

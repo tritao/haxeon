@@ -35,68 +35,29 @@ class IrTypedInterfaceDispatch {
 		function isValue(type:IrType):Bool return switch type { case Obj(name): values.exists(name); default: false; };
 		function valueSignature(arguments:Array<IrType>, result:IrType):Bool
 			return isValue(result) || Lambda.exists(arguments, isValue);
-		var rewritten:Array<IrFunction> = [];
-		// Only a method call or an instance closure is replaced; a function without one is kept as it is, without building new blocks.
-		function rewritable(instruction:IrInstruction):Bool
-			return switch instruction {
-				case MethodCall(output, receiver, _, arguments, _):
+		function replacement(located:Located<IrInstruction>):Null<Array<Located<IrInstruction>>>
+			return switch located.value {
+				case MethodCall(output, receiver, method, arguments, _):
 					switch receiver.type {
-						case Virtual(_): isValue(output.type) || Lambda.exists(arguments, argument -> isValue(argument.type));
-						default: false;
+						case Virtual(name):
+							var carriesValue = isValue(output.type);
+							for (argument in arguments) if (isValue(argument.type)) carriesValue = true;
+							if (!carriesValue) null;
+							else [new Located(Call(output, callName(name, method, [for (argument in arguments) argument.type], output.type), [receiver].concat(arguments)),
+								located.provenance)];
+						default: null;
 					}
 				case InstanceClosure(output, name, receiver) if (!StringTools.startsWith(name, PREFIX)):
 					var separator = name.lastIndexOf(".");
-					separator >= 0 && contracts.exists(name.substr(0, separator)) && switch [receiver.type, output.type] {
-						case [Virtual(_), Function(arguments, result)]: valueSignature(arguments, result);
-						default: false;
+					if (separator < 0 || !contracts.exists(name.substr(0, separator))) null;
+					else switch [receiver.type, output.type] {
+						case [Virtual(owner), Function(arguments, result)] if (valueSignature(arguments, result)):
+							[new Located(InstanceClosure(output, callName(owner, name.substr(separator + 1), arguments, result), receiver), located.provenance)];
+						default: null;
 					}
-				default: false;
+				default: null;
 			};
-		for (fn in functions) {
-			var skipped = !IrInstructionScan.any(fn, rewritable);
-			if (skipped && !IrInstructionScan.checking) {
-				rewritten.push(fn);
-				continue;
-			}
-			var blocks:Array<IrBlock> = [], changed = false;
-			for (block in fn.blocks) {
-				var target = new IrBlock(block.id);
-				for (located in block.instructions) {
-					var replaced = false;
-					var instruction = switch located.value {
-						case MethodCall(output, receiver, method, arguments, _):
-							switch receiver.type {
-								case Virtual(name):
-									var carriesValue = isValue(output.type);
-									for (argument in arguments) if (isValue(argument.type)) carriesValue = true;
-									if (!carriesValue) located.value;
-									else {
-										replaced = true;
-										Call(output, callName(name, method, [for (argument in arguments) argument.type], output.type), [receiver].concat(arguments));
-									}
-								default: located.value;
-							}
-						case InstanceClosure(output, name, receiver) if (!StringTools.startsWith(name, PREFIX)):
-							var separator = name.lastIndexOf(".");
-							if (separator < 0 || !contracts.exists(name.substr(0, separator))) located.value;
-							else switch [receiver.type, output.type] {
-								case [Virtual(owner), Function(arguments, result)] if (valueSignature(arguments, result)):
-									replaced = true;
-									InstanceClosure(output, callName(owner, name.substr(separator + 1), arguments, result), receiver);
-								default: located.value;
-							}
-						default: located.value;
-					};
-					if (!replaced) target.instructions.push(located);
-					else { changed = true; target.instructions.push(new Located(instruction, located.provenance)); }
-				}
-				target.terminator = block.terminator;
-				blocks.push(target);
-			}
-			if (skipped && changed)
-				throw 'HAXEON_CHECK_REUSE: IrTypedInterfaceDispatch changed ${fn.name}, which its scan said it cannot';
-			rewritten.push(changed ? new IrFunction(fn.name, fn.arguments, fn.result, blocks, fn.debugBindings, fn.inlineHint, fn.retention) : fn);
-		}
+		var rewritten:Array<IrFunction> = [for (fn in functions) IrFunctionRewrite.instructions(fn, replacement)];
 		return rewritten;
 	}
 

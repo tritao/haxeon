@@ -181,3 +181,5 @@ at the end of the build) and its owner must guarantee that nothing keeps a refer
 Not measured: allocation sites. The allocation profiler (`hlprof-live --sources alloc`, via `HAXEON_COMPILER_PROFILE_PORT`) attached to the worker but
 recorded no allocation samples, probably because the JIT's inline allocation path does not call the hook; I did not pursue it. The split between
 transient and retained is therefore by phase and by size class, not by site.
+
+No byte-buffer arena (decided 2026-11-09): per-build byte buffers explain at most about 0.35 GB of the empty pointer-free space; the rest is small-object fragmentation, which is the target of the allocation-regions work.

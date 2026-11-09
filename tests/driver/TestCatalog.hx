@@ -247,6 +247,7 @@ class TestCatalog {
 		"LiveStrictSignatureLambdaMain",
 		"LiveLoweringReuseMain",
 		"LiveKeptCheckMain",
+		"IrFunctionRewriteMain",
 		"FieldInitializerEditMain",
 		"CodeIdentityMain",
 		"IdentityPathMain",

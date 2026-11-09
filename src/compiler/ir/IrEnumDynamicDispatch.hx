@@ -60,45 +60,36 @@ class IrEnumDynamicDispatch {
 			functionNames.set(name, true);
 		}
 		var rewritten:Array<IrFunction> = [], unboxes:Map<String, IrType> = [], typeTests:Map<String, {type:IrType, exact:Bool}> = [];
-		// The instructions this pass can replace; a function without one is kept as it is, without building new blocks.
-		function rewritable(instruction:IrInstruction):Bool
-			return switch instruction {
-				case Call(_, "__dynamic_equal", _): names.length > 0;
-				case Call(_, "__std_is_of_type" | "__std_is_exact_type", arguments): names.length > 0 && arguments.length == 2;
-				case SafeCast(output, input): isEnum(output.type) && IrVerifier.sameType(input.type, Dyn);
-				default: false;
+		// The type values of the function being rewritten, found only when it makes a type test.
+		var current:Null<IrFunction> = null, typeValuesOfCurrent:Null<Map<Int, IrType>> = null;
+		function typeValues():Map<Int, IrType> {
+			if (typeValuesOfCurrent == null) {
+				typeValuesOfCurrent = [];
+				for (block in current.blocks) for (located in block.instructions) switch located.value {
+					case TypeValue(output, type): typeValuesOfCurrent.set(output.id, type);
+					default:
+				}
+			}
+			return typeValuesOfCurrent;
+		}
+		function replacement(located:Located<IrInstruction>):Null<Array<Located<IrInstruction>>>
+			return switch located.value {
+				case Call(output, "__dynamic_equal", arguments) if (names.length > 0):
+					[new Located(Call(output, EQUAL, arguments), located.provenance)];
+				case SafeCast(output, input) if (IrVerifier.sameType(input.type, Dyn) && isEnum(output.type)):
+					var helper = unboxName(output.type); unboxes.set(helper, output.type);
+					[new Located(Call(output, helper, [input]), located.provenance)];
+				case Call(output, name, arguments) if (names.length > 0 && (name == "__std_is_of_type" || name == "__std_is_exact_type")
+					&& arguments.length == 2 && typeValues().exists(arguments[1].id) && isEnum(typeValues().get(arguments[1].id))):
+					var type = typeValues().get(arguments[1].id), exact = name == "__std_is_exact_type", helper = typeTestName(type, exact);
+					typeTests.set(helper, {type: type, exact: exact});
+					[new Located(Call(output, helper, [arguments[0]]), located.provenance)];
+				default: null;
 			};
 		for (fn in functions) {
-			var skipped = !IrInstructionScan.any(fn, rewritable);
-			if (skipped && !IrInstructionScan.checking) {
-				rewritten.push(fn);
-				continue;
-			}
-			var blocks:Array<IrBlock> = [], changed = false, typeValues:Map<Int, IrType> = [];
-			for (block in fn.blocks) for (located in block.instructions) switch located.value {
-				case TypeValue(output, type): typeValues.set(output.id, type);
-				default:
-			}
-			for (block in fn.blocks) {
-				var target = new IrBlock(block.id);
-				for (located in block.instructions) switch located.value {
-					case Call(output, "__dynamic_equal", arguments) if (names.length > 0):
-						target.instructions.push(new Located(Call(output, EQUAL, arguments), located.provenance)); changed = true;
-					case SafeCast(output, input) if (IrVerifier.sameType(input.type, Dyn) && isEnum(output.type)):
-						var helper = unboxName(output.type); unboxes.set(helper, output.type);
-						target.instructions.push(new Located(Call(output, helper, [input]), located.provenance)); changed = true;
-					case Call(output, name, arguments) if (names.length > 0 && (name == "__std_is_of_type" || name == "__std_is_exact_type")
-						&& arguments.length == 2 && typeValues.exists(arguments[1].id) && isEnum(typeValues.get(arguments[1].id))):
-						var type = typeValues.get(arguments[1].id), exact = name == "__std_is_exact_type", helper = typeTestName(type, exact);
-						typeTests.set(helper, {type: type, exact: exact});
-						target.instructions.push(new Located(Call(output, helper, [arguments[0]]), located.provenance)); changed = true;
-					default: target.instructions.push(located);
-				}
-				target.terminator = block.terminator; blocks.push(target);
-			}
-			if (skipped && changed)
-				throw 'HAXEON_CHECK_REUSE: IrEnumDynamicDispatch changed ${fn.name}, which its scan said it cannot';
-			rewritten.push(changed ? new IrFunction(fn.name, fn.arguments, fn.result, blocks, fn.debugBindings, fn.inlineHint, fn.retention) : fn);
+			current = fn;
+			typeValuesOfCurrent = null;
+			rewritten.push(IrFunctionRewrite.instructions(fn, replacement));
 		}
 		var unboxNames = [for (name in unboxes.keys()) name]; unboxNames.sort(Reflect.compare);
 		for (name in unboxNames) rewritten.push(unbox(name, unboxes.get(name)));
