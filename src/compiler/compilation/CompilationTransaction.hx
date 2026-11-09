@@ -26,6 +26,7 @@ class CompilationTransaction {
 	public function run():CompileResult {
 		var transactionStartedAt = Sys.time() * 1000.0;
 		compiler.publication.beforeCompile();
+		GcPolicy.beginBuild(compiler.hasCompiled());
 		var snapshot = compiler.snapshot();
 		var snapshotDoneAt = Sys.time() * 1000.0;
 		var previousAssembler = compiler.assembler;
