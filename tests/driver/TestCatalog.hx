@@ -47,6 +47,7 @@ class TestCatalog {
 		"FrontendRestartMain",
 		"TypedMetadataMergeMain",
 		"WarmRebuildReuseMain",
+		"IrVerifyMemoMain",
 		"InlinerMain",
 		"InlinerSourceIdentityMain",
 		"IrStateEqualityMain",

@@ -115,9 +115,19 @@ class HlLower {
 		var startedAt = Sys.time() * 1000.0;
 		var allocationAtStart = AllocationMeter.sample();
 		var affected = regenerated;
-		if (cachedFunctions == null || regenerated == null)
-			IrVerifier.verify(program);
-		else {
+		if (cachedFunctions == null || regenerated == null) {
+			// A plain build with a lowered-function cache verifies the functions the last build did not accept, or whose reads changed.
+			if (loweredCache == null)
+				IrVerifier.verify(program);
+			else {
+				IrVerifier.verifyReusing(program, loweredCache.verified);
+				if (Sys.getEnv("HAXEON_CHECK_REUSE") == "1")
+					try
+						IrVerifier.verify(program)
+					catch (error:String)
+						throw 'HAXEON_CHECK_REUSE: verification skipped a function that fails in full: $error';
+			}
+		} else {
 			// Only regenerated functions are lowered again. Every other function's IR compared equal, provenance and file
 			// hash included, so its cached lowering is still exact; re-lowering every function that touched a changed file
 			// redid most of the program on each edit and produced the same bytes.
