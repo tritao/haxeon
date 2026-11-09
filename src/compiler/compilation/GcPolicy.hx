@@ -18,6 +18,13 @@ class GcPolicy {
 	/** `warm` is true when the worker has compiled before. */
 	public static function beginBuild(warm:Bool):Void {
 		var threshold = warm ? WARM_BUILD : COLD_BUILD;
+		// HAXEON_GC_THRESHOLDS=<cold>,<warm> overrides both values, for measuring.
+		var override = Sys.getEnv("HAXEON_GC_THRESHOLDS");
+		if (override != null) {
+			var parts = override.split(",");
+			if (parts.length == 2 && Std.parseFloat(parts[0]) > 0 && Std.parseFloat(parts[1]) > 0)
+				threshold = Std.parseFloat(parts[warm ? 1 : 0]);
+		}
 		#if haxeon
 		hl.Gc.setMarkThreshold(threshold);
 		#elseif hl
