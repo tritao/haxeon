@@ -309,6 +309,11 @@ class WasmLinearModuleBuilder {
 			if (WasmTarget.isReference(field.type))
 				rootGlobals.push(WasmModuleSupport.requiredGlobal(globals, field.name));
 		}
+		for (key in WasmModuleSupport.nullaryEnumKeys(program, reachable)) {
+			globals.set(key, module.globals.length);
+			rootGlobals.push(module.globals.length);
+			module.globals.push({type: I32, mutable: true, init: [I32Const(0)]});
+		}
 		if (runtimeNeutral && hasHaxeExceptions) {
 			pendingExceptionFlag = module.globals.length;
 			module.globals.push({type: I32, mutable: true, init: [I32Const(0)]});

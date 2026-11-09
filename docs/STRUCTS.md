@@ -325,6 +325,13 @@ implementations are allowed under the same equality/hash contract as structs. En
 `Equatable` and `Hashable`. `Type.enumEq` remains reflective structural comparison and agrees with synthesized equality
 for a conforming enum.
 
+A payload-free constructor of a boxed enum reuses one immutable cached value instead of allocating on every reference.
+HashLink uses its existing case cache; Wasm32 and Wasm GC initialize a module global lazily on the first reference to
+each case. Wasm32 registers those globals as collector roots before generating the collector, and Wasm GC globals are
+managed roots. Repeated references, switches, comparisons, and stores into existing fields or arrays allocate nothing
+after the cases are initialized. This also applies to the payload-free cases of a recursive or otherwise boxed payload
+enum. Sharing storage exposes no identity: equality, hashing and `EnumIndex` retain their value semantics.
+
 `Reflect.compare` does not define an order for enum values. Comparing an enum through that API returns its existing
 invalid-comparison result (`0xAABBCCDD`), including when both operands are the same boxed value. Equality conformance
 does not imply an ordering, and using an allocation address would make boxing observable. This rule applies across

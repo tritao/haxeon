@@ -139,6 +139,7 @@ class TestCatalog {
 		"IrProgramAssemblerMain",
 		"EnumInterpreterTypeMain",
 		"EnumDynamicOrderMain",
+		"NullaryEnumCacheMain",
 		"ValueInterfaceHelperReuseMain",
 		"NominalInterfaceTypeMain",
 		"NullStringMapMain",

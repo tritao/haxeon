@@ -4102,3 +4102,42 @@ insufficient to land it. The complete reproduction and eligibility findings are 
 or Web module from this rejected conversion is published, and no per-action allocation, RSS or binary-size win is
 claimed. Complete the documented transport and reflection prerequisites before retrying the payload sizing port.
 After restoring the source, `scripts/test-driver.sh 8` passes all 838 tests with zero failures.
+
+### Cache payload-free boxed enum cases on Wasm (2026-11-09)
+
+The host lifecycle plain-enum trial exposed a general compiler gap. HashLink reuses payload-free enum case values,
+but both Wasm backends emitted a new enum allocation at every case reference. This affected ordinary comparisons
+against a case as well as construction. The compiler now initializes one managed module-global cache per referenced
+case lazily. Wasm32 reserves and registers the cache roots before generating its collector; Wasm GC uses managed
+reference globals. Payload constructors retain their ordinary boxed allocation behavior.
+
+The small `NullaryEnumCacheMain` regression forces boxed storage with a by-value recursive case. Its measured loop
+references two payload-free cases, switches on them, compares declared equality and `Type.enumIndex`, and writes them
+through class methods into a field and a preallocated array. Setup and case initialization precede the allocation
+window. It clears every ordinary owner and array, churns payload values, collects, and reacquires the cases to check
+that the cache globals alone keep them alive. The Wasm32 run enables collection stress and checks that collection ran;
+the Wasm GC run forces an engine collection. Both inlining modes pass on all targets.
+
+| Target | Iterations | Before objects | After objects |
+|---|---:|---:|---:|
+| HashLink | 8 / 1,024 | 0 / 0 | 0 / 0 |
+| Wasm32 | 8 / 1,024 | 16 / 2,048 | 0 / 0 |
+| Wasm GC | 8 / 1,024 | 16 / 2,048 | 0 / 0 |
+
+The separately preserved lifecycle probe constructs sessions and performs stop/dispose transitions. These counts
+include the sessions and their two empty-array allocations, so they are not expected to be zero. Control uses the
+committed integer enum abstract; the trial uses the plain enum. All rows agree with inlining off and on:
+
+| Target | Session cycles | Integer control | Plain enum before fix | Plain enum after fix |
+|---|---:|---:|---:|---:|
+| Wasm32 | 8 | 27 | 88 | 27 |
+| Wasm32 | 1,024 | 3,075 | 10,248 | 3,075 |
+| Wasm GC | 8 | 28 | 89 | 28 |
+| Wasm GC | 1,024 | 3,076 | 10,249 | 3,076 |
+
+The probe includes one initial session per call; Wasm GC also counts its static callback closure. The exact HashLink
+census, which constructs its callback and initial session before the window, ties at 3,072 objects / 122,880 bytes for
+1,024 cycles, including 48-byte session objects. These are isolated form checks, not editor action measurements. The
+lifecycle source port remains separate from this compiler fix; editor/Web comparisons and Tier 2 run on the batch head.
+Tier 1 passes 839 compiler tests with zero failures, the six target/inlining combinations above, and self-hosting to a
+fixed point.

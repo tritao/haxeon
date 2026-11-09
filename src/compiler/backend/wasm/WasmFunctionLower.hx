@@ -982,6 +982,11 @@ class WasmFunctionLower {
 					[for (argument in arguments) requiredLocal(values, argument.id)]);
 				if (emitIfHandled(body, represented)) {} else {
 					var enumLayout = layout.enumType(typeName);
+					var cache:Null<Int> = arguments.length == 0
+						? WasmModuleSupport.requiredGlobal(globals, WasmModuleSupport.enumCaseKey(typeName, constructor)) : null;
+					if (cache != null) {
+						emit(body, [GlobalGet(cache), LocalTee(requiredLocal(values, output.id)), I32Eqz, If(null)]);
+					}
 					emit(body, [
 						I32Const(enumLayout.size),
 						Call(allocator),
@@ -1004,6 +1009,8 @@ class WasmFunctionLower {
 						]);
 						offset += WasmLayout.sizeOf(argument.type);
 					}
+					if (cache != null)
+						emit(body, [LocalGet(requiredLocal(values, output.id)), GlobalSet(cache), End]);
 				}
 			case EnumIndex(output, value):
 				var represented = context.representation.aggregates.enumIndex(value, requiredLocal(values, output.id), requiredLocal(values, value.id));

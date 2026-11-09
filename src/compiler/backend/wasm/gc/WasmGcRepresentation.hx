@@ -4272,6 +4272,14 @@ class WasmGcRepresentation implements WasmValueRepresentation implements WasmAgg
 	}
 
 	public function makeEnum(typeName:String, constructor:Int, arguments:Array<IrValue>, destination:Int, argumentLocals:Array<Int>):WasmLoweringResult {
+		if (arguments.length == 0) {
+			var global = gc.enumCaseGlobal(typeName, constructor);
+			return [
+				GlobalGet(global), RefIsNull, If(null),
+				I32Const(constructor), StructNew(plan.enumConstructorType(typeName, constructor)), GlobalSet(global), End,
+				GlobalGet(global), LocalSet(destination)
+			];
+		}
 		var body:Array<WasmInstruction> = [I32Const(constructor)];
 		for (local in argumentLocals)
 			body.push(LocalGet(local));
