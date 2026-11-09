@@ -50,7 +50,8 @@ class HlLoweringView {
 
 	public function object(name:String):Null<IrObject> {
 		var found = objects.get(name);
-		record("object:" + name, found == null ? "-" : objectDigest(found));
+		if (reads != null)
+			reads.set("object:" + name, found == null ? "-" : objectDigest(found));
 		return found;
 	}
 
@@ -60,7 +61,8 @@ class HlLoweringView {
 	/** The key under which dispatch function `name` registers its method table, or null for any other function. */
 	public function typedInterfaceKey(name:String):Null<String> {
 		var key = typedKeys.get(name);
-		record("typed:" + name, key == null ? "-" : key);
+		if (reads != null)
+			reads.set("typed:" + name, key == null ? "-" : key);
 		return key;
 	}
 
@@ -79,10 +81,6 @@ class HlLoweringView {
 		}
 		return null;
 	}
-
-	function record(key:String, digest:String):Void
-		if (reads != null)
-			reads.set(key, digest);
 
 	function objectDigest(object:IrObject):String {
 		var known = digests.get(object.name);

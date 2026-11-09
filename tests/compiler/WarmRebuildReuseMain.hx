@@ -37,21 +37,28 @@ class WarmRebuildReuseMain {
 		var failures:Array<String> = [];
 		attempt(failures, "second build without an edit", true, files -> {});
 		attempt(failures, "second build without an edit, checked", true, files -> {}, true);
-		attempt(failures, "after a body edit", false, files -> files.set("Lib.hx", StringTools.replace(libSource, "return a + b;", "return a + b + 0;")));
-		attempt(failures, "after a signature edit", false,
+		edit(failures, "after a body edit", files -> files.set("Lib.hx", StringTools.replace(libSource, "return a + b;", "return a + b + 0;")));
+		edit(failures, "after a signature edit",
 			files -> files.set("Lib.hx", StringTools.replace(libSource, "add(a:Int, b:Int)", "add(a:Int, b:Int, c:Int = 0)")));
-		attempt(failures, "after a new generic specialization", false, files -> {
+		edit(failures, "after a new generic specialization", files -> {
 			files.set("Lib.hx",
 				StringTools.replace(libSource, "return new Box<Int>(3).get();", "return new Box<Int>(3).get() + new Box<String>(\"x\").get().length - 1;"));
 		});
-		attempt(failures, "after adding a function", false,
+		edit(failures, "after adding a function",
 			files -> files.set("Lib.hx",
 				StringTools.replace(libSource, "public static function name()", "public static function extra():Int return 7; public static function name()")));
-		attempt(failures, "after removing a module", false, files -> {
+		edit(failures, "after removing a module", files -> {
 			files.remove("Area.hx");
 			files.set("Main.hx", StringTools.replace(mainSource, " + Area.of(Circle(2))", " + 12"));
 		});
-		attempt(failures, "after a new string constant", false,
+		edit(failures, "after a new constant in a function early in the layout, which shifts the constant tables of the functions after it",
+			files -> files.set("Area.hx", StringTools.replace(areaSource, "3 * radius * radius", "3 * radius * radius + 123456789")), true);
+		edit(failures, "after a new function early in the layout, which shifts the function indices of the functions after it",
+			files -> files.set("Area.hx",
+				StringTools.replace(areaSource, "public static function of(",
+					"public static function again(shape:Shape):Int return 7; public static function of(")),
+			true);
+		edit(failures, "after a new string constant",
 			files -> files.set("Lib.hx",
 				StringTools.replace(libSource, "return \"lib\";",
 					"return \"lib\";" + " public static function shifted():String return \"a-constant-that-shifts-the-string-table\";")));
@@ -60,7 +67,14 @@ class WarmRebuildReuseMain {
 		Sys.println("PASS: a warm plain build equals a fresh one, and reuses its module when nothing changed");
 	}
 
-	static function attempt(failures:Array<String>, label:String, expectReuse:Bool, change:Map<String, String>->Void, ?check:Bool = false):Void {
+	/** An edit is built in a warm session twice: as it is, and with HAXEON_CHECK_REUSE=1, which also lowers every function afresh and compares. */
+	static function edit(failures:Array<String>, label:String, change:Map<String, String>->Void, shifts:Bool = false):Void {
+		attempt(failures, label, false, change, false, shifts);
+		attempt(failures, label + ", checked", false, change, true, shifts);
+	}
+
+	static function attempt(failures:Array<String>, label:String, expectReuse:Bool, change:Map<String, String>->Void, ?check:Bool = false,
+			?shifts:Bool = false):Void {
 		var checkBefore = Sys.getEnv("HAXEON_CHECK_REUSE");
 		try {
 			Sys.putEnv("HAXEON_CHECK_REUSE", check ? "1" : "0");
@@ -86,6 +100,10 @@ class WarmRebuildReuseMain {
 				throw 'expected reuse "$wanted" but the build reported "$reuse"';
 			if (!expectReuse && StringTools.startsWith(reuse, "ir"))
 				throw 'the build reused "$reuse" after an edit';
+			if (shifts && warm.metrics.movedFunctions == 0)
+				throw "the edit shifts the tables but no linked function was given other indices";
+			if (!expectReuse && warm.metrics.linkedFunctions == 0)
+				throw "no function was linked from the last build's lowering after an edit";
 			var warmTypes = anonymousTypes(compiler),
 				freshTypes = anonymousTypes(freshCompiler);
 			if (warmTypes != freshTypes)

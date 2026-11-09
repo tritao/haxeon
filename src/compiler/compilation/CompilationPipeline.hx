@@ -225,7 +225,9 @@ class CompilationPipeline {
 				moduleFunctions: assembly.module.functions.length,
 				moduleNatives: assembly.module.natives.length,
 				patchBytes: patchBytes == null ? 0 : patchBytes.length,
-				reuse: reusedFrom == null ? "none (" + frontend.reuseMiss + ")" : backendReused ? "ir+module" : "ir"
+				reuse: reusedFrom == null ? "none (" + frontend.reuseMiss + ")" : backendReused ? "ir+module" : "ir",
+				linkedFunctions: backendReused ? 0 : candidateAssembler.reusedFunctions,
+				movedFunctions: backendReused ? 0 : candidateAssembler.movedFunctions
 			}
 		};
 	}

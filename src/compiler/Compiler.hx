@@ -189,6 +189,12 @@ typedef CompileMetrics = {
 
 	/** What an unchanged build reused: "none", "ir" (the final IR) or "ir+module" (the module as well), or "result" for a cached result. */
 	final reuse:String;
+
+	/** How many functions the module took from the last plain build's lowering instead of lowering them again. */
+	final linkedFunctions:Int;
+
+	/** How many of those were given other indices than they were lowered with. */
+	final movedFunctions:Int;
 }
 
 /** Non-mutating validation outcome for a prospective source update. */
@@ -239,6 +245,9 @@ class Compiler {
 	 * reuses both. It follows the candidate like `inlineCache` does: a failed build leaves the previous one in place.
 	 */
 	public var pipelineSnapshot:Null<compiler.compilation.PipelineSnapshot> = null;
+
+	/** The lowered functions of the last plain build (see `HlLoweredCache`); follows the candidate like `inlineCache`. */
+	public var loweredCache:compiler.hl.incremental.HlLoweredCache = new compiler.hl.incremental.HlLoweredCache();
 
 	/**
 	 * Whether backend assembly keeps its append-only history between compiles. Live sessions need it: patches
@@ -875,7 +884,9 @@ class Compiler {
 					moduleFunctions: cached.metrics.moduleFunctions,
 					moduleNatives: cached.metrics.moduleNatives,
 					patchBytes: 0,
-					reuse: "result"
+					reuse: "result",
+					linkedFunctions: 0,
+					movedFunctions: 0
 				}
 			};
 		}
@@ -956,6 +967,7 @@ class Compiler {
 		candidate.lastTypedProgram = snapshot.lastTypedProgram;
 		candidate.inlineCache = inlineCache.copy();
 		candidate.pipelineSnapshot = pipelineSnapshot;
+		candidate.loweredCache = loweredCache.copy();
 		candidate.publishedAbi = snapshot.publishedAbi;
 		candidate.compiledOnce = snapshot.compiledOnce;
 		candidate.rehydrationBaseline = snapshot.rehydrationBaseline;
@@ -976,6 +988,7 @@ class Compiler {
 		lastTypedProgram = candidate.lastTypedProgram;
 		inlineCache = candidate.inlineCache;
 		pipelineSnapshot = candidate.pipelineSnapshot;
+		loweredCache = candidate.loweredCache;
 		publishedAbi = candidate.publishedAbi;
 		compiledOnce = candidate.compiledOnce;
 		rehydrationBaseline = candidate.rehydrationBaseline;

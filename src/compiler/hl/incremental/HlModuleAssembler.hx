@@ -90,6 +90,7 @@ typedef HlAssemblyResult = {
 
 	/** The object fields this build adds to the running module, null without any. */
 	final objectLayout:Null<HlObjectLayout>;
+
 	final revision:Int;
 	final baseInts:Int;
 	final baseFloats:Int;
@@ -160,7 +161,17 @@ class HlModuleAssembler {
 	 * fields live patches can add to it. Zero without live patching.
 	 */
 	public var fieldReserve:Int = 0;
+
 	public var developmentMetadata:Bool = true;
+
+	/** The functions of the last plain build to link instead of lowering again, and the ones this build lowers (see `HlLoweredCache`). */
+	public var loweredCache:Null<HlLoweredCache>;
+
+	/** How many functions the last `assemble` took from `loweredCache`. */
+	public var reusedFunctions = 0;
+
+	/** How many of those got other indices than they were lowered with. */
+	public var movedFunctions = 0;
 
 	/** The function a live build adds to initialize an object's added fields on existing instances (see `IrProgramAssembler`). */
 	public static inline final LIVE_INITIALIZER:String = "__liveinit";
@@ -190,6 +201,7 @@ class HlModuleAssembler {
 		result.dispatchNatives = dispatchNatives == null ? null : dispatchNatives.copy();
 		result.fieldReserve = fieldReserve;
 		result.developmentMetadata = developmentMetadata;
+		result.loweredCache = loweredCache;
 		result.retiredFields = [for (name in retiredFields.keys()) name => true];
 		result.programNames = programNames == null ? null : [for (name in programNames.keys()) name => true];
 		return result;
@@ -204,7 +216,9 @@ class HlModuleAssembler {
 	 * has not published: the object is new, and nothing needs its fields initialized.
 	 */
 	public function publishedField(objectName:String, fieldName:String):Bool
-		return initialized && symbols.objectFieldIndex(objectName, fieldName) != null && !retiredFields.exists(objectName + "." + fieldName);
+		return initialized
+			&& symbols.objectFieldIndex(objectName, fieldName) != null
+			&& !retiredFields.exists(objectName + "." + fieldName);
 
 	public function publishedObject(objectName:String):Bool
 		return initialized && symbols.objectDefinition(objectName) != null;
@@ -315,14 +329,16 @@ class HlModuleAssembler {
 			var known = cache.signatures.get(fn.name);
 			// A lambda renamed for this build (`renameLambdas`) still has the signature it was cached with, which names its
 			// environment by its old ordinal; the renamed environment keeps its type, so ordinals do not count.
-			if (known == null || !cache.userSlots.exists(fn.name)
+			if (known == null
+				|| !cache.userSlots.exists(fn.name)
 				|| IrTypeCodec.withoutOrdinals(known) == IrTypeCodec.withoutOrdinals(HlFunctionCache.signature(fn))
 				|| !PatchPlanner.movesOnSignatureChange(fn.name, dispatched))
 				continue;
 			renames.set(fn.name, RetiredName.movedFunction(fn.name, tag));
 			moved.push(fn.name);
 		}
-		var adapted:Array<String> = [], guards:Array<{name:String, description:String}> = [];
+		var adapted:Array<String> = [],
+			guards:Array<{name:String, description:String}> = [];
 		if (moved.length == 0)
 			return {moved: moved, adapted: adapted, guards: guards};
 		cache.rename(renames);
@@ -359,9 +375,10 @@ class HlModuleAssembler {
 			given.set(parameterName(argument), builder.argument(argument.name, argument.type));
 		var passed:Array<IrValue> = [];
 		for (parameter in target.arguments) {
-			var name = parameterName(parameter), value = given.get(name), literal = defaults == null ? null : defaults.get(name);
-			var converted = value != null ? widen(builder, value, parameter.type) : literal == null ? null : defaultValue(builder, literal,
-				parameter.type);
+			var name = parameterName(parameter),
+				value = given.get(name),
+				literal = defaults == null ? null : defaults.get(name);
+			var converted = value != null ? widen(builder, value, parameter.type) : literal == null ? null : defaultValue(builder, literal, parameter.type);
 			if (converted == null)
 				return null;
 			passed.push(converted);
@@ -418,9 +435,13 @@ class HlModuleAssembler {
 	 * functions moved for a changed signature (`moveChangedSignatures` guards those), are left out.
 	 */
 	function dropGuards(program:IrProgram, skip:Map<String, Bool>):Array<{name:String, description:String}> {
-		var present:Map<String, Bool> = [for (fn in program.functions) fn.name => true], guards:Array<{name:String, description:String}> = [];
+		var present:Map<String, Bool> = [for (fn in program.functions) fn.name => true],
+			guards:Array<{name:String, description:String}> = [];
 		for (name in cache.slots) {
-			if (present.exists(name) || skip.exists(name) || RetiredName.movedFrom(name) != null || name == "__init"
+			if (present.exists(name)
+				|| skip.exists(name)
+				|| RetiredName.movedFrom(name) != null
+				|| name == "__init"
 				|| StringTools.endsWith(name, "." + LIVE_INITIALIZER))
 				continue;
 			// After a restore nothing says what the last program had, so every function no build has counts as dropped.
@@ -469,8 +490,8 @@ class HlModuleAssembler {
 	static function referencesAny(fn:HlFunction, slots:Map<Int, Bool>):Bool {
 		for (opcode in fn.opcodes)
 			switch opcode {
-				case Call0(_, target) | Call1(_, target, _) | Call2(_, target, _, _) | CallN(_, target, _) | StaticClosure(_, target)
-					| InstanceClosure(_, target, _):
+				case Call0(_, target) | Call1(_, target, _) | Call2(_, target, _, _) | CallN(_, target, _) | StaticClosure(_, target) |
+					InstanceClosure(_, target, _):
 					if (slots.exists(target))
 						return true;
 				default:
@@ -504,7 +525,8 @@ class HlModuleAssembler {
 			if (constant.global >= publishedGlobals)
 				constants.set(constant.global, true);
 		for (global in publishedGlobals...module.globals.length)
-			if (!constants.exists(global) && !(module.globals[global] >= publishedTypes && HlPatchWriter.isObjectValueGlobal(module, global)))
+			if (!constants.exists(global)
+				&& !(module.globals[global] >= publishedTypes && HlPatchWriter.isObjectValueGlobal(module, global)))
 				return false;
 		return true;
 	}
@@ -542,13 +564,15 @@ class HlModuleAssembler {
 			layout:HlObjectLayout = {fields: [], previousTypes: [], migrations: []},
 			functions:Map<String, Bool> = [for (fn in program.functions) fn.name => true],
 			byName:Map<String, IrObject> = [for (object in program.objects) object.name => object],
-			valueObjects:Map<String, Bool> = [for (object in program.objects) if (object.isValue) object.name => true],
-			// Runtime natives only reach standard library objects, so the program's own natives name the user's.
+			valueObjects:Map<String,
+				Bool> = [for (object in program.objects) if (object.isValue) object.name => true], // Runtime natives only reach standard library objects, so the program's own natives name the user's.
 			nativeVisible = HlLower.nativeVisibleObjects(program.objects, [program.natives]);
 		reserveProgramTypes(program);
 		for (object in program.objects) {
 			var published = symbols.objectDefinition(object.name);
-			if (published == null || object.isValue || StringTools.startsWith(object.name, compiler.semantic.LambdaName.ENVIRONMENT_PREFIX))
+			if (published == null
+				|| object.isValue
+				|| StringTools.startsWith(object.name, compiler.semantic.LambdaName.ENVIRONMENT_PREFIX))
 				continue;
 			switch published.definition {
 				case Object(_, _, _, _, methods, _):
@@ -557,7 +581,8 @@ class HlModuleAssembler {
 				default:
 					continue;
 			}
-			var initializer = object.name + "." + LIVE_INITIALIZER, slot = slots.get(initializer);
+			var initializer = object.name + "." + LIVE_INITIALIZER,
+				slot = slots.get(initializer);
 			if (functions.exists(initializer) && slot != null)
 				layout.migrations.push({type: published.index, slot: slot});
 		}
@@ -585,7 +610,9 @@ class HlModuleAssembler {
 	 */
 	function planObjectFields(object:IrObject, type:Int, valueObjects:Map<String, Bool>, nativeVisible:Map<String, Bool>, layout:HlObjectLayout,
 			reasons:Array<AbiChange>):Void {
-		var native = object.nativeLayout != null || nativeVisible.exists(object.name), exhausted = false, present:Map<String, Bool> = [];
+		var native = object.nativeLayout != null || nativeVisible.exists(object.name),
+			exhausted = false,
+			present:Map<String, Bool> = [];
 		for (field in object.fields) {
 			present.set(field.name, true);
 			if (field.nativeLayout != null || field.scalarStorage != null)
@@ -601,7 +628,8 @@ class HlModuleAssembler {
 					retiredFields.set(object.name + "." + name, true);
 			}
 		for (field in object.fields) {
-			var fieldType = symbols.internObjectFieldType(field.type, valueObjects, compiler.ir.IrFieldStorage.scalar(field)), slot = -1, own = ownFields(type);
+			var fieldType = symbols.internObjectFieldType(field.type, valueObjects, compiler.ir.IrFieldStorage.scalar(field)), slot = -1,
+				own = ownFields(type);
 			for (index in 0...own.length)
 				if (symbols.strings[own[index].name] == field.name)
 					slot = index;
@@ -628,7 +656,12 @@ class HlModuleAssembler {
 			}
 			if (!layout.previousTypes.exists(type))
 				layout.previousTypes.set(type, previous);
-			layout.fields.push({type: type, field: assigned, name: symbols.internString(field.name), fieldType: fieldType});
+			layout.fields.push({
+				type: type,
+				field: assigned,
+				name: symbols.internString(field.name),
+				fieldType: fieldType
+			});
 		}
 	}
 
@@ -640,8 +673,7 @@ class HlModuleAssembler {
 		};
 
 	/** Checks the methods `object` adds or removes against the ones its published type has (`published`). */
-	function planObjectMethods(object:IrObject, published:Array<String>, objects:Array<IrObject>, byName:Map<String, IrObject>,
-			reasons:Array<AbiChange>):Void {
+	function planObjectMethods(object:IrObject, published:Array<String>, objects:Array<IrObject>, byName:Map<String, IrObject>, reasons:Array<AbiChange>):Void {
 		var inherited = object.base == null ? null : symbols.objectMethodSlots(Std.string(object.base));
 		for (method in object.methods) {
 			if (published.indexOf(method.name) >= 0)
@@ -802,7 +834,8 @@ class HlModuleAssembler {
 					break;
 				}
 			}
-		var objectReasons:Array<AbiChange> = [], objectLayout:Null<HlObjectLayout> = null;
+		var objectReasons:Array<AbiChange> = [],
+			objectLayout:Null<HlObjectLayout> = null;
 		if (reuseLowered) {
 			var planned = planObjects(program, layout);
 			if (planned.reasons.length > 0) {
@@ -835,8 +868,11 @@ class HlModuleAssembler {
 				addedFunctions.push({slot: slot, name: name});
 			}
 		var lowered = HlLower.lowerStableMeasured(ordered, symbols, layout, cache.stableIds, reuseLowered ? loweredFunctions : null,
-			relocated == null ? regenerated : regenerated.concat(relocated), runtimeNatives, debugMetadata, fieldReserve, developmentMetadata),
+			relocated == null ? regenerated : regenerated.concat(relocated), runtimeNatives, debugMetadata, fieldReserve, developmentMetadata, false,
+			loweredCache),
 			module = lowered.code;
+		reusedFunctions = lowered.reusedFunctions;
+		movedFunctions = lowered.movedFunctions;
 		var loweredAt = Sys.time() * 1000.0;
 		// A running module can take new String constants and the value slots of new object types but no other global, so a
 		// build that adds any other publishes a fresh module. The ABI plan already asks for that when a static field is added; this guards the rest.

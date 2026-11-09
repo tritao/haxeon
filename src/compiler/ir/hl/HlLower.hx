@@ -41,6 +41,12 @@ typedef MeasuredHlCode = {
 	/** Each function lowered by this call with the requests and facts its code depends on, when asked to record them. */
 	final lowered:Map<String, compiler.hl.incremental.HlLoweredFunction>;
 
+	/** How many functions were linked from the cache instead of lowered. */
+	final reusedFunctions:Int;
+
+	/** How many of them got other indices than they were lowered with. */
+	final movedFunctions:Int;
+
 	final code:HlCode;
 	final metrics:HlLowerMetrics;
 }
@@ -60,6 +66,15 @@ class HlLower {
 
 	/** Whether lowering keeps, for each function, the requests and facts that let a later build reuse its code. */
 	final recordLowering:Bool;
+
+	/** The functions of the last build, to link instead of lowering again; filled with this build's at the end. */
+	final loweredCache:Null<compiler.hl.incremental.HlLoweredCache>;
+
+	/** How many functions this build took from the cache. */
+	public var reusedFunctions = 0;
+
+	/** How many of those got other indices than they were lowered with. */
+	public var movedFunctions = 0;
 
 	final checkingLinks:Bool;
 
@@ -94,7 +109,7 @@ class HlLower {
 
 	public static function lowerStableMeasured(program:IrProgram, symbols:HlSymbolTable, indices:Map<String, Int>, ?stableIds:Map<String, Int>,
 			?cachedFunctions:Map<String, HlFunction>, ?regenerated:Array<String>, ?runtimeNatives:Array<IrNative>, ?debugCache:HlDebugMetadataCache,
-			fieldReserve:Int = 0, developmentMetadata:Bool = true, recordLowering:Bool = false):MeasuredHlCode {
+			fieldReserve:Int = 0, developmentMetadata:Bool = true, recordLowering:Bool = false, ?loweredCache:compiler.hl.incremental.HlLoweredCache):MeasuredHlCode {
 		var startedAt = Sys.time() * 1000.0;
 		var allocationAtStart = AllocationMeter.sample();
 		var affected = regenerated;
@@ -112,11 +127,13 @@ class HlLower {
 		var verifiedAt = Sys.time() * 1000.0,
 			allocationAfterVerification = AllocationMeter.sample(),
 			lowerer = new HlLower(symbols, indices, stableIds, cachedFunctions, affected, runtimeNatives, debugCache, fieldReserve, developmentMetadata,
-				recordLowering),
+				recordLowering, loweredCache),
 			code = lowerer.lowerProgram(program);
 		return {
 			code: code,
 			lowered: lowerer.lowered,
+			reusedFunctions: lowerer.reusedFunctions,
+			movedFunctions: lowerer.movedFunctions,
 			metrics: {
 				allocationPhases: [
 					AllocationMeter.delta("backend-verification", allocationAtStart, allocationAfterVerification)
@@ -155,11 +172,12 @@ class HlLower {
 
 	function new(symbols:HlSymbolTable, indices:Null<Map<String, Int>>, ?stableIds:Map<String, Int>, ?cachedFunctions:Map<String, HlFunction>,
 			?regenerated:Array<String>, ?runtimeNatives:Array<IrNative>, ?debugCache:HlDebugMetadataCache, fieldReserve:Int = 0,
-			developmentMetadata:Bool = true, recordLowering:Bool = false) {
+			developmentMetadata:Bool = true, recordLowering:Bool = false, ?loweredCache:compiler.hl.incremental.HlLoweredCache) {
 		this.symbols = symbols;
 		// HAXEON_CHECK_REUSE=1 lowers with requests recorded so the link step can be checked against this very lowering.
 		this.checkingLinks = cachedFunctions == null && Sys.getEnv("HAXEON_CHECK_REUSE") == "1";
-		this.recordLowering = recordLowering || checkingLinks;
+		this.loweredCache = loweredCache;
+		this.recordLowering = recordLowering || checkingLinks || loweredCache != null;
 		this.fieldReserve = fieldReserve;
 		this.stableIds = stableIds;
 		this.cachedFunctions = cachedFunctions;
@@ -385,11 +403,27 @@ class HlLower {
 		var metadataDoneAt = Sys.time() * 1000.0;
 		var allocationAfterMetadata = AllocationMeter.sample();
 		var environment = checkingLinks ? symbols.copy() : null;
+		var entries:Map<String, compiler.hl.incremental.HlLoweredFunction> = [];
 		for (fn in program.functions) {
 			var cached = cachedFunctions == null || regenerated.exists(fn.name) ? null : cachedFunctions.get(fn.name);
 			if (cached != null)
 				code.functions.push(cached);
-			else
+			else {
+				// A function whose IR is the one the last build lowered, and whose outside facts still hold, keeps its code: linking
+				// it replays its requests, which gives it this build's indices and makes the tables as lowering it would have.
+				var entry = loweredCache == null ? null : loweredCache.entries.get(fn.name);
+				if (entry != null && (entry.source == fn || compiler.ir.codec.IrFunctionStateEquality.same(entry.source, fn))) {
+					var linked = compiler.hl.incremental.HlLink.link(entry, symbols, functionIndices, view);
+					if (linked.fn != null) {
+						code.functions.push(linked.fn);
+						entries.set(fn.name, entry.source == fn ? entry : entry.from(fn));
+						this.lowered.set(fn.name, entry);
+						reusedFunctions++;
+						if (linked.fn != entry.fn)
+							movedFunctions++;
+						continue;
+					}
+				}
 				try {
 					if (recordLowering) {
 						requests = [];
@@ -398,14 +432,19 @@ class HlLower {
 					var lowered = lowerFunction(PhiEdges.split(fn));
 					code.functions.push(lowered);
 					if (recordLowering) {
-						this.lowered.set(fn.name, new compiler.hl.incremental.HlLoweredFunction(fn.name, lowered, requests, view.endFunction()));
+						var entry = new compiler.hl.incremental.HlLoweredFunction(fn.name, fn, lowered, requests, view.endFunction());
+						this.lowered.set(fn.name, entry);
+						entries.set(fn.name, entry);
 						requests = null;
 					}
 				} catch (error:String) {
 					throw 'HashLink lowering failed for ${fn.name}: $error';
 				}
+			}
 		}
-		if (environment != null)
+		if (loweredCache != null)
+			loweredCache.entries = entries;
+		if (environment != null && reusedFunctions == 0)
 			verifyLinking(program, environment);
 		var functionsDoneAt = Sys.time() * 1000.0;
 		var allocationAfterFunctions = AllocationMeter.sample();

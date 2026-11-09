@@ -65,13 +65,24 @@ class BackendAssembly {
 		};
 
 	/** Why a module assembled from the same inputs differs from `previous`, or null when it is the same module. */
-	public static function difference(previous:BackendAssemblyResult, fresh:BackendAssemblyResult):Null<String> {
-		var left = HlWriter.encode(previous.assembly.module),
-			right = HlWriter.encode(fresh.assembly.module);
+	public static function difference(previous:BackendAssemblyResult, fresh:BackendAssemblyResult):Null<String>
+		return moduleDifference(previous.assembly.module, fresh.assembly.module);
+
+	/** What the lowering was done for besides the IR; entries made for another environment are not used (see `HlLoweredCache`). */
+	static function loweringEnvironment(assembler:HlModuleAssembler, context:CompilationContext):String
+		return "fieldReserve:"
+			+ assembler.fieldReserve
+			+ ",development:"
+			+ assembler.developmentMetadata
+			+ ",wasm:"
+			+ context.isWasmTarget();
+
+	/** Why two modules differ, or null when they encode to the same bytes. */
+	public static function moduleDifference(previous:HlCode, fresh:HlCode):Null<String> {
+		var left = HlWriter.encode(previous), right = HlWriter.encode(fresh);
 		if (left.compare(right) == 0)
 			return null;
-		var functions = previous.assembly.module.functions,
-			others = fresh.assembly.module.functions;
+		var functions = previous.functions, others = fresh.functions;
 		if (functions.length != others.length)
 			return "function count " + functions.length + " -> " + others.length;
 		for (index in 0...functions.length)
@@ -114,10 +125,17 @@ class BackendAssembly {
 		var allocationAfterAbi = AllocationMeter.sample();
 		// Without live patching nothing addresses this module by slot, symbol index or stable id, so assemble
 		// from scratch: the result depends only on the source, never on what the session compiled before.
-		var candidateAssembler = !context.livePatching ? new HlModuleAssembler() : context.compiledOnce
+		// A plain build links the functions of the last one whose IR is unchanged instead of lowering them again (see `HlLoweredCache`).
+		var loweredCache = context.livePatching ? null : context.loweredCache;
+		var candidateAssembler = !context.livePatching ? new HlModuleAssembler(null,
+			loweredCache.debug) : context.compiledOnce
 			&& PatchPlanner.requiresFreshLayout(decision) ? freshLayout(baseAssembler) : baseAssembler.copy();
 		candidateAssembler.fieldReserve = context.livePatching && !context.isWasmTarget() ? liveFieldReserve : 0;
 		candidateAssembler.developmentMetadata = context.developmentMetadata || context.livePatching;
+		if (loweredCache != null) {
+			loweredCache.forEnvironment(loweringEnvironment(candidateAssembler, context));
+			candidateAssembler.loweredCache = loweredCache;
+		}
 		var assemblerCopiedAt = Sys.time() * 1000.0;
 		var allocationAfterCopy = AllocationMeter.sample();
 		var assembly = candidateAssembler.assemble(ir, context.rehydratedChanges(regenerated, ir), decision, relocated,
@@ -130,6 +148,19 @@ class BackendAssembly {
 		var allocationAfterAssembly = AllocationMeter.sample();
 		if (candidateAssembler.developmentMetadata)
 			attachSourceSnapshots(context, assembly.module);
+		if (loweredCache != null && candidateAssembler.reusedFunctions > 0 && Sys.getEnv("HAXEON_CHECK_REUSE") == "1") {
+			// The module with functions linked from the last build must be the module lowering every function gives.
+			var fresh = new HlModuleAssembler();
+			fresh.fieldReserve = candidateAssembler.fieldReserve;
+			fresh.developmentMetadata = candidateAssembler.developmentMetadata;
+			var freshAssembly = fresh.assemble(ir, context.rehydratedChanges(regenerated, ir), decision, relocated,
+				PatchPlanner.dispatchedFunctions(previousAbi, nextAbi));
+			if (fresh.developmentMetadata)
+				attachSourceSnapshots(context, freshAssembly.module);
+			var difference = moduleDifference(assembly.module, freshAssembly.module);
+			if (difference != null)
+				throw 'HAXEON_CHECK_REUSE: a module with ${candidateAssembler.reusedFunctions} functions linked from the last build differs from one lowered afresh ($difference)';
+		}
 		if (!context.isWasmTarget())
 			compiler.ir.IrOpportunityCensus.reportHashLink(assembly.module, assembly.functionIndices);
 		var backendAssemblyDoneAt = Sys.time() * 1000.0;
