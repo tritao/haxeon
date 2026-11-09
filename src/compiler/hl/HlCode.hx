@@ -3,6 +3,7 @@ package compiler.hl;
 /** In-memory representation of one complete HashLink bytecode module. */
 class HlCode {
 	public static inline final VERSION = 8;
+
 	/** Private value-ABI metadata, excluded from source methods and reflection. */
 	public static inline final TYPED_METHOD_PROTOTYPE = -2;
 
@@ -46,21 +47,6 @@ typedef HlFunctionIdentity = {
 	final start:Int;
 	final end:Int;
 	final line:Int;
-	final flags:Int;
-}
-
-/** Precise source ownership for one encoded opcode, addressed by stable function identity. */
-typedef HlOpcodeSourceSpan = {
-	final stableId:Int;
-	final opcode:Int;
-	final sourcePath:String;
-	final start:Int;
-	final end:Int;
-	final line:Int;
-	final column:Int;
-	final endLine:Int;
-	final endColumn:Int;
-	final sourceHash:Int;
 	final flags:Int;
 }
 

@@ -463,32 +463,7 @@ class HlLower {
 			for (index in 0...code.functions.length) {
 				var identity = identities[index],
 					loweredFunction = code.functions[index];
-				var cachedSpans = debugCache == null ? null : debugCache.functionSpans(loweredFunction);
-				if (cachedSpans != null) {
-					spanGroups.push({stableId: identity.stableId, mappings: cachedSpans});
-					continue;
-				}
-				var functionSpans:Array<compiler.hl.HlCode.HlOpcodeSourceSpan> = [];
-				for (opcode in 0...loweredFunction.debugLocations.length) {
-					var location = loweredFunction.debugLocations[opcode];
-					var span:compiler.hl.HlCode.HlOpcodeSourceSpan = {
-						stableId: identity.stableId,
-						opcode: opcode,
-						sourcePath: location.path,
-						start: location.start == null ? -1 : location.start,
-						end: location.end == null ? -1 : location.end,
-						line: location.line,
-						column: location.column,
-						endLine: location.endLine,
-						endColumn: location.endColumn,
-						sourceHash: location.sourceHash,
-						flags: location.flags
-					};
-					functionSpans.push(span);
-				}
-				if (debugCache != null)
-					debugCache.rememberFunctionSpans(loweredFunction, functionSpans);
-				spanGroups.push({stableId: identity.stableId, mappings: functionSpans});
+				spanGroups.push({stableId: identity.stableId, locations: loweredFunction.debugLocations});
 			}
 			allocationAfterSpanGroups = AllocationMeter.sample();
 			code.debugSections.push({
@@ -1292,17 +1267,7 @@ class HlLower {
 		for (_ in 0...count)
 			output.push(debugLocation(provenance));
 
-	static final generatedDebugLocation:HlDebugLocation = {
-		path: "<generated>",
-		line: 1,
-		start: -1,
-		end: -1,
-		column: 1,
-		endLine: 1,
-		endColumn: 1,
-		sourceHash: 0,
-		flags: 1
-	};
+	static final generatedDebugLocation:HlDebugLocation = new HlDebugLocation("<generated>", 1, 1, 1, 1, 0, -1, -1, 1);
 
 	/** The latest provenance and its location, replaced as one value: neighbouring opcodes nearly always share it. */
 	static var lastDebugLocation:{provenance:SourceProvenance, location:HlDebugLocation} = null;
@@ -1313,20 +1278,11 @@ class HlLower {
 		if (last != null && last.provenance == provenance)
 			return last.location;
 		var location = provenance.location;
-		var result:HlDebugLocation = location == null ? generatedDebugLocation : {
-			path: location.path,
-			line: location.line,
-			start: location.start,
-			end: location.end,
-			column: location.column,
-			endLine: location.endLine,
-			endColumn: location.endColumn,
-			sourceHash: location.sourceHash,
-			flags: switch provenance.origin {
+		var result:HlDebugLocation = location == null ? generatedDebugLocation : new HlDebugLocation(location.path, location.line, location.column,
+			location.endLine, location.endColumn, location.sourceHash, location.start, location.end, switch provenance.origin {
 				case CompilerGenerated(_): 1;
 				case UserSource: 0;
-			}
-		};
+			});
 		lastDebugLocation = {provenance: provenance, location: result};
 		return result;
 	}
@@ -1346,7 +1302,7 @@ class HlLower {
 			var index = locations.length - 1;
 			while (index >= 0) {
 				var location = locations[index];
-				if (location.start != null
+				if (location.start >= 0
 					&& location.start >= binding.scopeStart
 					&& location.start < binding.scopeEnd
 					&& location.path == binding.path) {

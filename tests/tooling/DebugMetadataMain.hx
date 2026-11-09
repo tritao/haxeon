@@ -84,7 +84,7 @@ class DebugMetadataMain {
 
 		var bytes = HlWriter.encode(code),
 			suffix = encodedAssignmentSuffix(fn.debugAssignments);
-		if (bytes.get(3) != 7
+		if (bytes.get(3) != compiler.hl.HlCode.VERSION
 			|| code.debugSections.length != 2
 			|| code.debugSections[0].kind != HlWriter.FUNCTION_IDENTITIES
 			|| code.debugSections[1].kind != HlWriter.OPCODE_SOURCE_SPANS
@@ -104,17 +104,8 @@ class DebugMetadataMain {
 		var originalLocations = fn.debugLocations.copy();
 		for (index in 0...3) {
 			var location = originalLocations[index];
-			fn.debugLocations[index] = {
-				path: index == 1 ? "second-source.hx" : "first-source.hx",
-				line: location.line,
-				column: location.column,
-				endLine: location.endLine,
-				endColumn: location.endColumn,
-				sourceHash: location.sourceHash,
-				start: location.start,
-				end: location.end,
-				flags: location.flags
-			};
+			fn.debugLocations[index] = new compiler.hl.HlFunction.HlDebugLocation(index == 1 ? "second-source.hx" : "first-source.hx", location.line,
+				location.column, location.endLine, location.endColumn, location.sourceHash, location.start, location.end, location.flags);
 		}
 		var mixedPaths = HlWriter.encode(code),
 			mixedCache = new HlWriterCache();

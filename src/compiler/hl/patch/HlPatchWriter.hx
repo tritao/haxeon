@@ -30,8 +30,8 @@ class HlPatchWriter {
 			baseInts:Int = 0, baseFloats:Int = 0, baseStrings:Int = 0, baseTypes:Int = 0, ?extensionSections:Array<{
 			tag:Int,
 			bytes:HaxeBytes
-		}>, ?addedFunctions:Array<{slot:Int, name:String}>,
-			baseGlobals:Int = -1, ?layout:HlObjectLayout, ?guards:Array<{stableId:Int, description:String}>,
+		}>,
+			?addedFunctions:Array<{slot:Int, name:String}>, baseGlobals:Int = -1, ?layout:HlObjectLayout, ?guards:Array<{stableId:Int, description:String}>,
 			?globalNames:Map<String, Int>):HaxeBytes {
 		if (baseRevision < 0 || revision <= baseRevision)
 			throw "Invalid patch revision range";
@@ -120,7 +120,8 @@ class HlPatchWriter {
 				|| section.tag == ADDED_FUNCTIONS || section.tag == GLOBALS || section.tag == OBJECT_FIELDS || section.tag == MIGRATIONS
 				|| section.tag == GUARDS)
 				throw 'Extension section uses reserved HLP tag ${section.tag}';
-		writeIndex(out, 2
+		writeIndex(out,
+			2
 			+ (debug == null ? 0 : 1)
 			+ (snapshots == null ? 0 : 1)
 			+ (added == null ? 0 : 1)
@@ -339,8 +340,8 @@ class HlPatchWriter {
 				writeIndex(out, location.endLine);
 				writeIndex(out, location.endColumn);
 				out.writeInt32(location.sourceHash);
-				writeIndex(out, location.start == null ? 0 : location.start + 1);
-				writeIndex(out, location.end == null ? 0 : location.end + 1);
+				writeIndex(out, location.start < 0 ? 0 : location.start + 1);
+				writeIndex(out, location.end < 0 ? 0 : location.end + 1);
 				writeIndex(out, location.flags);
 			}
 		}

@@ -449,17 +449,7 @@ class TestMain {
 				Throw(2)
 			], [
 				for (line in 10...17)
-					{
-						path: "patch-debug.hx",
-						line: line,
-						start: null,
-						end: null,
-						column: 1,
-						endLine: line,
-						endColumn: 1,
-						sourceHash: 0,
-						flags: 0
-					}
+					new compiler.hl.HlFunction.HlDebugLocation("patch-debug.hx", line, 1, line, 1, 0, -1, -1, 0)
 			]),
 		];
 		var testModuleId = haxe.io.Bytes.alloc(16),

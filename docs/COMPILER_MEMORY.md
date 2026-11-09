@@ -97,3 +97,20 @@ To reach an edit peak under ~8 GB: 1 alone reaches ~7.2 GB at the cost above; 2 
   the worker's bytecode (`~/.cache/haxeon/compiler/<version>.hl`).
 - An `earlyoom` SIGTERM at 10% available memory ended the worker several times during the measurements for this work, in builds with
   and without any of the new caches.
+
+## Order of work and open items (dev-71, 2026-11-09)
+
+Structural fixes first, each its own commit with byte-identical output, the suite, and cold/no-op/edit peaks: (a) fix 2, compact HL debug
+records; (b) fix 5, one generation of encoded function and module bytes; (c) fix 3, lowered functions cached as encoded bytes plus
+relocations. Then re-measure; a lower GC threshold is considered only if the edit peak is still above ~8 GB, and then as a per-build
+setting made by the compiler through a runtime call in our HashLink (a global 0.2 is rejected: +17 s GC on a cold build).
+
+Done:
+- (a) `HlDebugLocation` is a class and the opcode source-span section is encoded from each function's locations, so the second per-opcode
+  copy (`HlOpcodeSourceSpan` and the span cache) is gone. app: cold 789.5M -> 783.2M objects; edit peak 8.93 -> 8.31 GB.
+
+Deferred (open items):
+- Fix 4, dropping tokens and syntax trees of typed modules, needs the editor/build session split (ADR 0003 option 9).
+- Fix 7, compacting `SourceSpan`, `Token` and AST spans, is parser-wide.
+- Fix 6, fewer transient objects, comes with the pass work (M2).
+

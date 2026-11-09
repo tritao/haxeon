@@ -12,7 +12,8 @@ import sys.io.File;
  * A diagnostic for what a compiler session keeps. With HAXEON_COMPILER_CENSUS=<directory> and HAXEON_COMPILER_CENSUS_TOOL=<hmdtypes> the
  * worker, after its first build, releases the things a session holds one at a time, writing HashLink's memory dump after each and
  * tallying its live blocks by type with the tool. What a step removes from the tally is what only that owner kept alive at that moment,
- * given the owners released before it. The session is not usable afterwards.
+ * given the owners released before it. This leaves the worker unusable: it has dropped the caches and the modules a build needs, so
+ * a diagnostic run is one build followed by the census, and the worker is then discarded.
  */
 class CompilerMemoryCensus {
 	static var done = false;

@@ -11,9 +11,10 @@ import compiler.hl.HlCode.HlTypeDef;
 import compiler.hl.HlFunction.HlInstruction;
 import compiler.hl.HlFunction.HlDebugLocation;
 
+/** The source locations of one function's opcodes, by stable function identity; `locations[i]` belongs to opcode i. */
 typedef HlOpcodeSourceSpanGroup = {
 	final stableId:Int;
-	final mappings:Array<compiler.hl.HlCode.HlOpcodeSourceSpan>;
+	final locations:Array<HlDebugLocation>;
 }
 
 /** Encoded opcode bytes paired with unresolved symbolic branch targets. */
@@ -116,7 +117,8 @@ class HlWriter {
 
 	/** Measure exactly the components written by writeCode, without changing the module. */
 	public static function reportSize(code:HlCode):Void {
-		if (Sys.getEnv("HAXEON_IR_CENSUS") != "1") return;
+		if (Sys.getEnv("HAXEON_IR_CENSUS") != "1")
+			return;
 		var writer = new HlWriter();
 		writer.prepareDebugFiles(code);
 		var part = new HlWriter();
@@ -130,10 +132,12 @@ class HlWriter {
 		var debugFiles = part.getBytes().length;
 		var typeSizes:Array<{index:Int, bytes:Int}> = [], types = 0, reflection = 0;
 		for (index in 0...code.types.length) {
-			part = new HlWriter(); part.writeType(code.types[index]);
+			part = new HlWriter();
+			part.writeType(code.types[index]);
 			var size = part.getBytes().length;
 			types += size;
-			part = new HlWriter(); part.writeReflectionMembers(code.types[index]);
+			part = new HlWriter();
+			part.writeReflectionMembers(code.types[index]);
 			reflection += part.getBytes().length;
 			typeSizes.push({index: index, bytes: size});
 		}
@@ -142,29 +146,57 @@ class HlWriter {
 		for (index in 0...code.strings.length)
 			stringSizes.push({index: index, bytes: HaxeBytes.ofString(code.strings[index]).length});
 		stringSizes.sort((a, b) -> a.bytes != b.bytes ? b.bytes - a.bytes : a.index - b.index);
-		var topTypes = [for (entry in typeSizes.slice(0, 30)) '{"index":' + entry.index + ',"bytes":' + entry.bytes
-			+ ',"type":' + haxe.Json.stringify(typeDescription(code.types[entry.index], code.strings)) + '}'];
-		var topStrings = [for (entry in stringSizes.slice(0, 30)) '{"index":' + entry.index + ',"bytes":' + entry.bytes
-			+ ',"value":' + haxe.Json.stringify(code.strings[entry.index]) + '}'];
+		var topTypes = [
+			for (entry in typeSizes.slice(0, 30))
+				'{"index":'
+				+ entry.index
+				+ ',"bytes":'
+				+ entry.bytes
+				+ ',"type":'
+				+ haxe.Json.stringify(typeDescription(code.types[entry.index], code.strings))
+				+ '}'];
+		var topStrings = [
+			for (entry in stringSizes.slice(0, 30))
+				'{"index":'
+				+ entry.index
+				+ ',"bytes":'
+				+ entry.bytes
+				+ ',"value":'
+				+ haxe.Json.stringify(code.strings[entry.index])
+				+ '}'];
 		var uses:Map<Int, Int> = [];
-		for (fn in code.functions) for (opcode in fn.opcodes) switch opcode {
-			case LoadString(_, index): uses.set(index, (uses.exists(index) ? uses.get(index) : 0) + 1);
-			default:
-		}
+		for (fn in code.functions)
+			for (opcode in fn.opcodes)
+				switch opcode {
+					case LoadString(_, index):
+						uses.set(index, (uses.exists(index) ? uses.get(index) : 0) + 1);
+					default:
+				}
 		var stringUses = [for (index => count in uses) {index: index, count: count}];
 		stringUses.sort((a, b) -> a.count != b.count ? b.count - a.count : a.index - b.index);
-		var topStringUses = [for (entry in stringUses.slice(0, 30)) '{"index":' + entry.index + ',"references":' + entry.count
-			+ ',"value":' + haxe.Json.stringify(code.strings[entry.index]) + '}'];
+		var topStringUses = [
+			for (entry in stringUses.slice(0, 30))
+				'{"index":'
+				+ entry.index
+				+ ',"references":'
+				+ entry.count
+				+ ',"value":'
+				+ haxe.Json.stringify(code.strings[entry.index])
+				+ '}'];
 		part = new HlWriter();
-		for (global in code.globals) part.writeIndex(global);
+		for (global in code.globals)
+			part.writeIndex(global);
 		var globals = part.getBytes().length;
 		part = new HlWriter();
 		for (native in code.natives) {
-			part.writeIndex(native.library); part.writeIndex(native.name); part.writeIndex(native.type);
+			part.writeIndex(native.library);
+			part.writeIndex(native.name);
+			part.writeIndex(native.type);
 			part.writeUnsignedIndex(native.functionIndex);
 		}
 		var natives = part.getBytes().length;
-		part = new HlWriter(); part.writePrefixWithDebug(code, writer);
+		part = new HlWriter();
+		part.writePrefixWithDebug(code, writer);
 		var prefix = part.getBytes().length;
 		var functions = 0, functionDebug = 0, debugSizes:Array<{index:Int, bytes:Int}> = [];
 		for (fn in code.functions) {
@@ -172,25 +204,36 @@ class HlWriter {
 			functions += plain;
 			var debug = writer.encodePreparedFunction(fn).length - plain;
 			functionDebug += debug;
-			if (debug > 0) debugSizes.push({index: fn.functionIndex, bytes: debug});
+			if (debug > 0)
+				debugSizes.push({index: fn.functionIndex, bytes: debug});
 		}
 		debugSizes.sort((a, b) -> a.bytes != b.bytes ? b.bytes - a.bytes : a.index - b.index);
-		var topFunctionDebug = [for (entry in debugSizes.slice(0, 30)) '{"index":' + entry.index + ',"bytes":' + entry.bytes + '}'];
-		part = new HlWriter(); part.writeConstants(code);
+		var topFunctionDebug = [
+			for (entry in debugSizes.slice(0, 30)) '{"index":' + entry.index + ',"bytes":' + entry.bytes + '}'
+		];
+		part = new HlWriter();
+		part.writeConstants(code);
 		var constants = part.getBytes().length;
-		part = new HlWriter(); part.writeDebugSections(code);
+		part = new HlWriter();
+		part.writeDebugSections(code);
 		var debugSections = part.getBytes().length;
-		var sections = [for (section in code.debugSections) '{"kind":' + section.kind + ',"version":' + section.version
-			+ ',"payload":' + section.payload.length + '}'];
+		var sections = [
+			for (section in code.debugSections)
+				'{"kind":'
+				+ section.kind
+				+ ',"version":'
+				+ section.version
+				+ ',"payload":'
+				+ section.payload.length
+				+ '}'];
 		var scalarConstants = code.ints.length * 4 + code.floats.length * 8;
 		var header = prefix - strings - debugFiles - types - globals - natives - scalarConstants;
-		Sys.stderr().writeString('SIZE_CENSUS {"target":"hl","header":' + header + ',"scalarConstants":' + scalarConstants
-			+ ',"strings":' + strings + ',"debugFiles":' + debugFiles + ',"types":' + (types - reflection)
-			+ ',"reflectionMembers":' + reflection + ',"globals":' + globals
-			+ ',"natives":' + natives + ',"functions":' + functions + ',"functionDebug":' + functionDebug
-			+ ',"constants":' + constants + ',"debugSections":' + debugSections + ',"sections":[' + sections.join(",")
-			+ '],"topTypes":[' + topTypes.join(",") + '],"topStrings":[' + topStrings.join(",")
-			+ '],"topStringUses":[' + topStringUses.join(",") + '],"topFunctionDebug":[' + topFunctionDebug.join(",") + ']}\n');
+		Sys.stderr()
+			.writeString('SIZE_CENSUS {"target":"hl","header":' + header + ',"scalarConstants":' + scalarConstants + ',"strings":' + strings
+				+ ',"debugFiles":' + debugFiles + ',"types":' + (types - reflection) + ',"reflectionMembers":' + reflection + ',"globals":' + globals
+				+ ',"natives":' + natives + ',"functions":' + functions + ',"functionDebug":' + functionDebug + ',"constants":' + constants
+				+ ',"debugSections":' + debugSections + ',"sections":[' + sections.join(",") + '],"topTypes":[' + topTypes.join(",") + '],"topStrings":['
+				+ topStrings.join(",") + '],"topStringUses":[' + topStringUses.join(",") + '],"topFunctionDebug":[' + topFunctionDebug.join(",") + ']}\n');
 	}
 
 	function writePrefixWithDebug(code:HlCode, prepared:HlWriter):Void {
@@ -214,8 +257,10 @@ class HlWriter {
 		switch type {
 			case Object(_, _, _, fields, methods, bindings) | Structure(_, _, fields, methods, bindings):
 				writeObjectMembers(fields, methods, bindings);
-			case Virtual(name, fields): writeFields(fields);
-			case Enum(_, _, constructors): writeEnumConstructors(constructors);
+			case Virtual(name, fields):
+				writeFields(fields);
+			case Enum(_, _, constructors):
+				writeEnumConstructors(constructors);
 			default:
 		}
 
@@ -337,66 +382,7 @@ class HlWriter {
 		return writer.getBytes();
 	}
 
-	public static function encodeOpcodeSourceSpans(spans:Array<compiler.hl.HlCode.HlOpcodeSourceSpan>):HaxeBytes {
-		var writer = new HlWriter(),
-			files:Array<String> = [],
-			fileIndices:Map<String, Int> = [],
-			groups:Array<{stableId:Int, mappings:Array<compiler.hl.HlCode.HlOpcodeSourceSpan>}> = [],
-			current:Null<{stableId:Int, mappings:Array<compiler.hl.HlCode.HlOpcodeSourceSpan>}> = null,
-			seenFunctions:Map<Int, Bool> = [],
-			fileIndex:Null<Int>;
-		for (span in spans) {
-			var validRange = span.start == -1 && span.end == -1 || span.start >= 0 && span.end >= span.start;
-			if (span.stableId < 0 || span.opcode < 0 || span.sourcePath == "" || span.line < 1 || span.column < 1 || span.endLine < span.line
-				|| span.endColumn < 1 || span.endLine == span.line && span.endColumn < span.column || span.flags < 0 || !validRange)
-				throw "Invalid HLB opcode source span";
-			fileIndex = fileIndices.get(span.sourcePath);
-			if (fileIndex == null) {
-				fileIndices.set(span.sourcePath, files.length);
-				files.push(span.sourcePath);
-			}
-			if (current == null || current.stableId != span.stableId) {
-				if (seenFunctions.exists(span.stableId))
-					throw "Non-contiguous HLB opcode source spans";
-				current = {stableId: span.stableId, mappings: []};
-				groups.push(current);
-				seenFunctions.set(span.stableId, true);
-			}
-			current.mappings.push(span);
-		}
-		writer.writeUnsignedIndex(files.length);
-		for (file in files)
-			writer.writeSizedString(file);
-		groups.sort((left, right) -> left.stableId - right.stableId);
-		writer.writeUnsignedIndex(groups.length);
-		for (group in groups) {
-			var mappings = group.mappings;
-			writer.writeUnsignedIndex(group.stableId);
-			writer.writeUnsignedIndex(mappings.length);
-			var previousOpcode = -1;
-			for (span in mappings) {
-				if (span.opcode <= previousOpcode)
-					throw "Invalid HLB opcode source span";
-				previousOpcode = span.opcode;
-				writer.writeUnsignedIndex(span.opcode);
-				fileIndex = fileIndices.get(span.sourcePath);
-				if (fileIndex == null)
-					throw 'Missing debug source index for "${span.sourcePath}"';
-				writer.writeUnsignedIndex(fileIndex);
-				writer.writeIndex(span.start + 1);
-				writer.writeIndex(span.end + 1);
-				writer.writeUnsignedIndex(span.line);
-				writer.writeUnsignedIndex(span.column);
-				writer.writeUnsignedIndex(span.endLine);
-				writer.writeUnsignedIndex(span.endColumn);
-				writer.output.writeInt32(span.sourceHash);
-				writer.writeUnsignedIndex(span.flags);
-			}
-		}
-		return writer.getBytes();
-	}
-
-	/** Encode mappings that lowering already keeps grouped by stable function identity. */
+	/** Encode the locations that lowering already keeps grouped by stable function identity: one mapping per opcode. */
 	public static function encodeOpcodeSourceSpanGroups(groups:Array<HlOpcodeSourceSpanGroup>):HaxeBytes {
 		var writer = new HlWriter(),
 			files:Array<String> = [],
@@ -407,16 +393,20 @@ class HlWriter {
 			if (group.stableId < 0 || seenFunctions.exists(group.stableId))
 				throw "Invalid HLB opcode source-span function";
 			seenFunctions.set(group.stableId, true);
-			var previousOpcode = -1;
-			for (span in group.mappings) {
-				var validRange = span.start == -1 && span.end == -1 || span.start >= 0 && span.end >= span.start;
-				if (span.stableId != group.stableId || span.opcode <= previousOpcode || span.sourcePath == "" || span.line < 1 || span.column < 1
-					|| span.endLine < span.line || span.endColumn < 1 || span.endLine == span.line && span.endColumn < span.column || span.flags < 0
+			for (location in group.locations) {
+				var validRange = location.start == -1 && location.end == -1 || location.start >= 0 && location.end >= location.start;
+				if (location.path == ""
+					|| location.line < 1
+					|| location.column < 1
+					|| location.endLine < location.line
+					|| location.endColumn < 1
+					|| location.endLine == location.line
+					&& location.endColumn < location.column
+					|| location.flags < 0
 					|| !validRange)
 					throw "Invalid HLB opcode source span";
-				previousOpcode = span.opcode;
-				if (span.sourcePath != previousPath) {
-					previousPath = span.sourcePath;
+				if (location.path != previousPath) {
+					previousPath = location.path;
 					var fileIndex = fileIndices.get(previousPath);
 					if (fileIndex == null) {
 						fileIndex = files.length;
@@ -436,22 +426,23 @@ class HlWriter {
 		var previousFileIndex = -1;
 		for (group in ordered) {
 			writer.writeUnsignedIndex(group.stableId);
-			writer.writeUnsignedIndex(group.mappings.length);
-			for (span in group.mappings) {
-				writer.writeUnsignedIndex(span.opcode);
-				if (span.sourcePath != previousPath) {
-					previousPath = span.sourcePath;
+			writer.writeUnsignedIndex(group.locations.length);
+			for (opcode in 0...group.locations.length) {
+				var location = group.locations[opcode];
+				writer.writeUnsignedIndex(opcode);
+				if (location.path != previousPath) {
+					previousPath = location.path;
 					previousFileIndex = cast fileIndices.get(previousPath);
 				}
 				writer.writeUnsignedIndex(previousFileIndex);
-				writer.writeIndex(span.start + 1);
-				writer.writeIndex(span.end + 1);
-				writer.writeUnsignedIndex(span.line);
-				writer.writeUnsignedIndex(span.column);
-				writer.writeUnsignedIndex(span.endLine);
-				writer.writeUnsignedIndex(span.endColumn);
-				writer.output.writeInt32(span.sourceHash);
-				writer.writeUnsignedIndex(span.flags);
+				writer.writeIndex(location.start + 1);
+				writer.writeIndex(location.end + 1);
+				writer.writeUnsignedIndex(location.line);
+				writer.writeUnsignedIndex(location.column);
+				writer.writeUnsignedIndex(location.endLine);
+				writer.writeUnsignedIndex(location.endColumn);
+				writer.output.writeInt32(location.sourceHash);
+				writer.writeUnsignedIndex(location.flags);
 			}
 		}
 		return writer.getBytes();
@@ -561,12 +552,12 @@ class HlWriter {
 		for (constructor in constructors) {
 			writeIndex(constructor.name);
 			writeUnsignedIndex(constructor.params.length);
-			for (param in constructor.params) writeIndex(param);
+			for (param in constructor.params)
+				writeIndex(param);
 		}
 	}
 
-	function writeObjectMembers(fields:Array<compiler.hl.HlCode.HlObjectField>, methods:Array<compiler.hl.HlCode.HlObjectMethod>,
-			bindings:Array<Int>):Void {
+	function writeObjectMembers(fields:Array<compiler.hl.HlCode.HlObjectField>, methods:Array<compiler.hl.HlCode.HlObjectMethod>, bindings:Array<Int>):Void {
 		writeFields(fields);
 		for (method in methods) {
 			writeIndex(method.name);
@@ -649,13 +640,13 @@ class HlWriter {
 		return index;
 	}
 
+	/** The location of a function that was given none. */
+	static final generatedLocation = new HlDebugLocation("<generated>", 1, 1, 1, 1, 0, -1, -1, 1);
+
 	function writeDebugLocations(fn:HlFunction):Void {
 		var currentFile = -1, currentLine = 0, index = 0;
 		while (index < fn.opcodes.length) {
-			var location:HlDebugLocation = fn.debugLocations.length == 0 ? {
-				path: "<generated>", line: 1, start: null, end: null, column: 1,
-				endLine: 1, endColumn: 1, sourceHash: 0, flags: 1
-			} : fn.debugLocations[index];
+			var location:HlDebugLocation = fn.debugLocations.length == 0 ? generatedLocation : fn.debugLocations[index];
 			if (location.line > 0x1FFFFF)
 				throw 'Debug line ${location.line} exceeds the HashLink format limit';
 			if (!debugFileIndices.exists(location.path))
@@ -671,7 +662,8 @@ class HlWriter {
 				while (count < 15 && index + count < fn.opcodes.length) {
 					if (fn.debugLocations.length != 0) {
 						var next = fn.debugLocations[index + count];
-						if (next.path != location.path || next.line != currentLine) break;
+						if (next.path != location.path || next.line != currentLine)
+							break;
 					}
 					count++;
 				}
@@ -822,7 +814,8 @@ class HlWriter {
 					{opcode: HlOpcode.JAlways, operands: [targetPosition - (result.length + 1)]};
 				case Trap(destination, target, preserveExceptionStack):
 					var targetPosition = requireLabel(labels, target);
-					{opcode: preserveExceptionStack == true ? HlOpcode.CleanupTrap : HlOpcode.Trap, operands: [destination, targetPosition - (result.length + 1)]};
+					{opcode: preserveExceptionStack == true ? HlOpcode.CleanupTrap : HlOpcode.Trap, operands: [destination, targetPosition
+						- (result.length + 1)]};
 				case EndTrap(destination, preserveExceptionStack):
 					{opcode: preserveExceptionStack == true ? HlOpcode.EndCleanupTrap : HlOpcode.EndTrap, operands: [destination]};
 				case Label(_): {opcode: HlOpcode.Label, operands: []};

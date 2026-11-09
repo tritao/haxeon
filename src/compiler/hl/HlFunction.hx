@@ -1,16 +1,32 @@
 package compiler.hl;
 
-/** HashLink debugger location corresponding exactly to one encoded opcode. */
-typedef HlDebugLocation = {
-	final path:String;
-	final line:Int;
-	final column:Int;
-	final endLine:Int;
-	final endColumn:Int;
-	final sourceHash:Int;
-	final start:Null<Int>;
-	final end:Null<Int>;
-	final flags:Int;
+/**
+ * HashLink debugger location corresponding exactly to one encoded opcode. Immutable and shared by the opcodes of one source position;
+ * a class, because a typedef record costs a virtual object with its own field table, about three times the size, for every one of them.
+ * `start` and `end` are -1 when the location has no byte range.
+ */
+final class HlDebugLocation {
+	public final path:String;
+	public final line:Int;
+	public final column:Int;
+	public final endLine:Int;
+	public final endColumn:Int;
+	public final sourceHash:Int;
+	public final start:Int;
+	public final end:Int;
+	public final flags:Int;
+
+	public function new(path:String, line:Int, column:Int, endLine:Int, endColumn:Int, sourceHash:Int, start:Int, end:Int, flags:Int) {
+		this.path = path;
+		this.line = line;
+		this.column = column;
+		this.endLine = endLine;
+		this.endColumn = endColumn;
+		this.sourceHash = sourceHash;
+		this.start = start;
+		this.end = end;
+		this.flags = flags;
+	}
 }
 
 /** HashLink debugger binding at an encoded opcode, or -1 for an argument. */
@@ -54,8 +70,10 @@ enum HlInstruction {
 	ToInt(destination:Int, source:Int);
 	SafeCast(destination:Int, source:Int);
 	UnsafeCast(destination:Int, source:Int);
+
 	/** Address of a register, valid only while its owning frame remains active. */
 	Ref(destination:Int, source:Int);
+
 	Unref(destination:Int, reference:Int);
 	Setref(reference:Int, source:Int);
 	RefOffset(destination:Int, reference:Int, index:Int);
