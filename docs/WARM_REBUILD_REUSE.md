@@ -397,40 +397,31 @@ Not traced: `IrInitializationCalls.calls()` beyond its fixpoint header, and the 
   0.4 GB (kept final IR, module and encoded bytes). Tracked separately.
 
 
-## M1: TargetProfile and GenerationContext (design, approved 2026-11-09)
+## M1: TargetProfile and ProgramFacts (landed 2026-11-09)
 
-Inventory of the static state in `src/compiler/ir`, `ir/hl`, `hl` and `backend`:
+What landed, one commit each (driver suite, outputs, app counts and the hot-reload scripts at every step):
 
-- `IrGenerator` program facts (written by `bindEnumConstructors` and `bindClasses` on every build; per build; not target-specific):
-  `enumConstructorCounts`, `enumEquatableTypes`, `enumPayloadTypes`, `valueClasses`, `classBases`, `genericClasses`,
-  `genericOwnerOrigins`, `genericOwnerAliases`, `equatableTypes`, `observableClasses`, `observableStateOwners`,
-  `observableFieldBits`, `typedInterfaceContracts`. Read by `IrGenerator` and `inputState()`; accessors `genericOwnerOrigin`
-  (`GenericOwnerErasure`) and `observableClassFieldCount` (`IrProgramAssembler`).
-- `IrGenerator` objects: `generatedObjects` (an output generation fills), `flatValueObjects`, `inlineValueObjects`.
-- `IrGenerator` target flags (set per build from the target): `headerlessValueClasses`, `dynamicObjectLiterals`,
-  `nativeStringFastPaths`, `nativeReflectionDispatch`, `nativeArrayChecks`; `IrInliner.packedValueFields`.
-- Per-function scratch (saved and restored inside `generateFunction`): `cleanupRegions`, `loweringScopedDisposal`,
-  `observableConstructorInitialization`, `localOptionalPlaces`, `arrayValuePlaceSerial`, `observableAccessSerial`.
-- Out of M1: the `HAXEON_*` switches (`IrInliner.enabled`, `IrLoadStoreForwarding.enabled`, `IrStrengthReduction.enabled`),
-  `HlLower.lastDebugLocation`, `HlRuntimeIdentity.sequence`.
+1. `TargetProfile` (`TargetKind` is `HashLink` or `Wasm`; C is added when one of its values first differs) replaces `IrInliner.packedValueFields`;
+   `IrInliner.run` takes it and its memo fingerprint uses `profile.key()`.
+2. The other target flags (`headerlessValueClasses`, `dynamicObjectLiterals`, `nativeArrayChecks`, `nativeStringFastPaths`,
+   `nativeReflectionDispatch`) moved onto the profile, with `hashLink`, `wasm` and `portable` (what `Frontend.compile` builds).
+3. `FunctionScratch` holds the per-function state (cleanup regions, scoped disposal, optional places, the two serials, the constructor flag);
+   `generateCfg` gives each function a fresh one.
+4. `ProgramFacts.of(typed)` holds the enum, class, generic, equatable and observable facts and renders them as `inputState(profile)`.
+   `IrGenerator` is `new IrGenerator(facts, profile)`, an instance; `IrProgramAssembler` takes it where it lowers types or generates functions;
+   `GenericOwnerErasure` and `ObjectReflection` take the facts. `ProgramFacts` is derived on every build; keeping it on the identity of the typed
+   program is the M4 item.
+5. Generation creates no objects of its own (the `generatedObjects` list was assigned and never read), so nothing is returned from it. The flat and
+   inline value-object tables are final inputs built from the program's object list with `IrGenerator.withObjects(objects)`.
 
-Shapes:
+Left on purpose: `IrInliner.enabled`, `IrLoadStoreForwarding.enabled`, `IrStrengthReduction.enabled` (`HAXEON_*` debug switches read at class load),
+`HlLower.lastDebugLocation` (a one-slot memo with no effect on results), `HlRuntimeIdentity.sequence`, and `HlLower.skippedKeptTotal` /
+`reportedSkips` (check-mode diagnostics). Follow-up, not M1: the Wasm statics that are per-build caches (`WasmModuleSupport.hostCNativeProgram`,
+`hostCNatives`, `WasmProgramIndex.cached`) and the per-process byte caches (`WasmCryptoRuntime.runtime*`, `WasmLinearModuleBuilder.cachedRuntime*`,
+the `WasmLinearRuntime` flags).
 
-- `TargetProfile`: immutable, `TargetKind` is `HashLink` or `Wasm` (C is added when a C value first differs). Holds the six flags
-  above and `key()`, which replaces the `wasm:` part of the pipeline environment text and the flags in `inputState()`.
-- `ProgramFacts.of(typed)`: the program-derived maps, immutable, built on every build as `bindClasses` is now. Caching it on
-  the typed program's identity belongs to M4.
-- Generated objects are an output, not context: generation returns the objects it made, and the flat/inline facts are built from
-  that result and passed on as input.
-- `FunctionScratch`: one per `generateFunction` call.
-
-Port order (one commit each; driver suite, byte-identical outputs, app counts, one checked app edit):
-1. `TargetProfile`, `packedValueFields` moves onto it. 2. The other target flags. 3. `FunctionScratch`. 4. `ProgramFacts`.
-5. Objects as generation output. 6. Delete the statics and the resets in `Frontend.hx`.
-
-Follow-up (not M1): the Wasm statics that are per-build caches, `WasmModuleSupport.hostCNativeProgram` / `hostCNatives` and
-`WasmProgramIndex.cached`, and the per-process byte caches (`WasmCryptoRuntime.runtime*`, `WasmLinearModuleBuilder.cachedRuntime*`,
-`WasmLinearRuntime` flags) belong in the same treatment after M1.
+Numbers at the end of M1 (app, same machine): cold 785.6M, no-op 25.3M, edit 236.6M allocations; 585 of 620 program outputs byte-identical
+(the 35 that differ link the compiler's own sources); driver suite 829 of 830 (`LspProtocolMain`, fixed on main).
 
 ## Commit point of a build (2026-11-09)
 
