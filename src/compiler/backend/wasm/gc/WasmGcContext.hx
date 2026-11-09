@@ -22,6 +22,7 @@ class WasmGcContext {
 	final stringSegments:Map<String, Int> = [];
 	final stringGlobals:Map<String, Int> = [];
 	final valueArrayBridgeGlobals:Map<String, Int> = [];
+	final enumCaseGlobals:Map<String, Int> = [];
 
 	public function new(module:WasmModule, plan:WasmGcTypePlan, functions:Map<String, Int>, globals:Map<String, Int>, methods:Map<String, String>) {
 		this.module = module;
@@ -59,6 +60,16 @@ class WasmGcContext {
 		var index = module.globals.length, heap:WasmHeapType = Type(plan.closureTypeIndex);
 		module.globals.push({type: Ref({nullable: true, heap: heap}), mutable: true, init: [RefNull(heap)]});
 		valueArrayBridgeGlobals.set(name, index);
+		return index;
+	}
+
+	/** Immutable nullary cases share one managed root per constructor in this module. */
+	public function enumCaseGlobal(name:String, constructor:Int):Int {
+		var key = compiler.backend.wasm.WasmModuleSupport.enumCaseKey(name, constructor), existing = enumCaseGlobals.get(key);
+		if (existing != null) return existing;
+		var index = module.globals.length, heap:WasmHeapType = Type(plan.enumType(name));
+		module.globals.push({type: Ref({nullable: true, heap: heap}), mutable: true, init: [RefNull(heap)]});
+		enumCaseGlobals.set(key, index);
 		return index;
 	}
 }

@@ -101,8 +101,13 @@ extern function sysGetPid():Int;
 @:hlNative("std", "sys_exit")
 extern function sysExit(code:Int):Void;
 
+#if wasmgc
+function sysArgs():Array<String>
+	return [];
+#else
 @:hlNative("haxeon_runtime", "__sys_args")
 extern function sysArgs():Array<String>;
+#end
 
 #if !wasm
 @:hlNative("haxeon_runtime", "__sys_set_cwd")

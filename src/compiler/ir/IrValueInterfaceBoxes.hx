@@ -87,6 +87,7 @@ class IrValueInterfaceBoxes {
 				intrinsic = exact ? "__std_is_exact_type" : "__std_is_of_type", builder = new IrBuilder(),
 				input = builder.argument("value", Dyn), matched = builder.createBlock(), boxed = builder.createBlock();
 			typeTests.set(key, name);
+			if (functionMap.exists(name)) return name;
 			builder.branch(builder.call(intrinsic, [input, builder.typeValue(Obj(valueName))], Bool), matched, boxed);
 			builder.select(matched);
 			builder.returnValue(builder.constBool(true));
@@ -115,6 +116,7 @@ class IrValueInterfaceBoxes {
 			candidates.sort(Reflect.compare);
 			var name = "$value-interface-cast:" + interfaceName, builder = new IrBuilder(), input = builder.argument("value", Dyn);
 			interfaceCasts.set(interfaceName, name);
+			if (functionMap.exists(name)) return name;
 			for (valueName in candidates) {
 				var existingBox = builder.createBlock(), checkValue = builder.createBlock(), matched = builder.createBlock(), next = builder.createBlock(),
 					boxName = boxFor(valueName);

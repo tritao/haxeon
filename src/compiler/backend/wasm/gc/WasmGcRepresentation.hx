@@ -1828,6 +1828,12 @@ class WasmGcRepresentation implements WasmValueRepresentation implements WasmAgg
 				throw 'Invalid Wasm GC $name signature';
 			return dynamicTypeTest(argumentLocals[0], argumentLocals[1], outputLocal, name == "__std_is_exact_type");
 		}
+		if (name == "__reflect_is_enum") {
+			if (arguments.length != 1 || !compiler.ir.IrVerifier.sameType(arguments[0].type, Dyn) || !compiler.ir.IrVerifier.sameType(output.type, Bool))
+				throw "Invalid Wasm GC enum kind query signature";
+			return plan.enumRootTypeIndex < 0 ? [I32Const(0), LocalSet(outputLocal)] :
+				[LocalGet(argumentLocals[0]), RefTest({nullable: false, heap: Type(plan.enumRootTypeIndex)}), LocalSet(outputLocal)];
+		}
 		if (name == "__reflect_is_function")
 			return [
 				LocalGet(argumentLocals[0]),
@@ -4266,6 +4272,14 @@ class WasmGcRepresentation implements WasmValueRepresentation implements WasmAgg
 	}
 
 	public function makeEnum(typeName:String, constructor:Int, arguments:Array<IrValue>, destination:Int, argumentLocals:Array<Int>):WasmLoweringResult {
+		if (arguments.length == 0) {
+			var global = gc.enumCaseGlobal(typeName, constructor);
+			return [
+				GlobalGet(global), RefIsNull, If(null),
+				I32Const(constructor), StructNew(plan.enumConstructorType(typeName, constructor)), GlobalSet(global), End,
+				GlobalGet(global), LocalSet(destination)
+			];
+		}
 		var body:Array<WasmInstruction> = [I32Const(constructor)];
 		for (local in argumentLocals)
 			body.push(LocalGet(local));

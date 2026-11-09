@@ -79,7 +79,8 @@ class DockWorkspaceModel implements Observable {
 		if (!isOpen(panelId))
 			return false;
 		var changed = activePanelId != panelId;
-		root = DockNodeTools.normalize(DockNodeTools.activate(root, panelId));
+		// Model roots are normalized when installed. Activation changes one tab header and preserves every other branch.
+		root = DockNodeTools.activate(root, panelId);
 		activePanelId = panelId;
 		if (changed)
 			touch();

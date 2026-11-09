@@ -36,7 +36,7 @@ class MixedArrayLiteralMain {
 	static function compiler():Compiler {
 		var c = new Compiler();
 		CompilerIntrinsics.register(c);
-		c.addSourceRoot("stdlib");
+		c.addStandardLibrarySourceRoot("stdlib");
 		return c;
 	}
 

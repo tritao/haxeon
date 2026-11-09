@@ -219,7 +219,7 @@ class LanguageService {
 
 	public function new(?identityState:haxe.io.Bytes) {
 		compiler = new Compiler(identityState, CompilerIntrinsics.configuration());
-		compiler.addSourceRoot("stdlib");
+		compiler.addStandardLibrarySourceRoot("stdlib");
 	}
 
 	public function update(path:String, source:String):ModuleState {
@@ -257,7 +257,7 @@ class LanguageService {
 			var selected = configurationCompilers.get(key);
 			if (selected == null) {
 				selected = new Compiler(compiler.exportIdentityState(), CompilerIntrinsics.configuration(), ffi);
-				selected.addSourceRoot("stdlib");
+				selected.addStandardLibrarySourceRoot("stdlib");
 				for (path => source in editorSources)
 					selected.update(path, source);
 				configurationCompilers.set(key, selected);

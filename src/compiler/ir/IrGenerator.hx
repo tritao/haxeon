@@ -2018,7 +2018,8 @@ class IrGenerator {
 				var operands = lowerOperands([left, right], builder, localTypes);
 				lowerFloatMapKeyEquality(operands[0], operands[1], builder, localTypes);
 			case TCall("__reference_equal", [left, right]):
-				builder.equal(lowerExpression(left, builder, localTypes), lowerExpression(right, builder, localTypes));
+				var operands = lowerOperands([left, right], builder, localTypes);
+				builder.call(IrReferenceIdentity.NAME, operands, Bool);
 			case TCall(intrinsic, args) if (intrinsic == "__std_is_of_type" || intrinsic == "__std_is_exact_type"):
 				if (args.length != 2)
 					throw "Runtime type test requires value and type operands";

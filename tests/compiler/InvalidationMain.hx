@@ -47,7 +47,7 @@ class InvalidationMain {
 		// them), so cached bodies looked drifted on every edit.
 		var wire = new Compiler();
 		CompilerIntrinsics.register(wire);
-		wire.addSourceRoot("stdlib");
+		wire.addStandardLibrarySourceRoot("stdlib");
 		var wireSource = sys.io.File.getContent("tests/programs/messagepack-wire.hx");
 		wire.update("messagepack-wire.hx", wireSource);
 		wire.compile("messagepack-wire");

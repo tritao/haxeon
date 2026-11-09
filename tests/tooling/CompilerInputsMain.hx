@@ -8,8 +8,8 @@ import sys.FileSystem;
 import sys.io.File;
 
 /**
- * `--inputs-output`: the compile reports the modules it read with the digest of each module's text, and a persistent session
- * notices a new file in an earlier source root that shadows a module it already loaded (the report names the new file).
+ * `--inputs-output`: the compile reports the modules it read with the digest of each module's text, and a module held by two
+ * source roots is an error rather than a choice by root order.
  */
 class CompilerInputsMain {
 	static function main():Void {
@@ -53,9 +53,13 @@ class CompilerInputsMain {
 		File.saveContent(value, "class Value { public static function get():Int { return 8; } }");
 		expect(compile().get("Value")[2] == ContentDigest.makeHex(File.getBytes(value)), "an edit changes the digest");
 		File.saveContent(shadow, "class Value { public static function get():Int { return 9; } }");
-		var shadowed = compile().get("Value");
-		expect(StringTools.endsWith(shadowed[1], "/early/Value.hx"), "a new file in an earlier root shadows the loaded module in a persistent session");
-		expect(shadowed[2] == ContentDigest.makeHex(File.getBytes(shadow)), "the shadowing file's digest is reported");
+		var message:Null<String> = null;
+		try {
+			session = new CompilerSession();
+			compile();
+		} catch (error:Dynamic)
+			message = Std.string(error);
+		expect(message != null && message.indexOf("two source roots") >= 0, "a module held by two source roots is rejected: " + message);
 		Sys.println("Compiler inputs report passed");
 	}
 

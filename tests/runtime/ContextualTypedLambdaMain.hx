@@ -20,7 +20,7 @@ class ContextualTypedLambdaMain {
 	static function main():Void {
 		var compiler = new Compiler();
 		CompilerIntrinsics.register(compiler);
-		compiler.addSourceRoot("stdlib");
+		compiler.addStandardLibrarySourceRoot("stdlib");
 		var prefix = 'class Sink {
 		 public function new() {}
 		 public function consume<T>(value:T, callback:T->Void):Void callback(value);
@@ -43,7 +43,7 @@ class ContextualTypedLambdaMain {
 		var incremental = compiler.compile("Main");
 		var fresh = new Compiler();
 		CompilerIntrinsics.register(fresh);
-		fresh.addSourceRoot("stdlib");
+		fresh.addStandardLibrarySourceRoot("stdlib");
 		fresh.update("Main.hx", source);
 		fresh.compile("Main");
 		// A formerly valid dependency changing its parameter type must reject.

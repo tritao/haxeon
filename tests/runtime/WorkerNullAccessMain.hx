@@ -9,7 +9,7 @@ class WorkerNullAccessMain {
 		for (inlineEnabled in [false, true]) {
 			var compiler = new Compiler();
 			CompilerIntrinsics.register(compiler);
-			compiler.addSourceRoot("stdlib");
+			compiler.addStandardLibrarySourceRoot("stdlib");
 			compiler.configure("worker-null", "test", ["haxeon-inline=" + (inlineEnabled ? "1" : "0")]);
 			var input = inlineEnabled ? StringTools.replace(source, 'stack.indexOf("resolveTarget") >= 0', "true") : source;
 			for (revision in 0...2) {

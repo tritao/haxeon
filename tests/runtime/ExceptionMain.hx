@@ -8,7 +8,7 @@ class ExceptionMain {
 	static function main():Void {
 		var compiler = new Compiler();
 		CompilerIntrinsics.register(compiler);
-		compiler.addSourceRoot("stdlib");
+		compiler.addStandardLibrarySourceRoot("stdlib");
 		compiler.update("Main.hx",
 			"import haxe.Exception; import haxe.ValueException; import haxe.CallStack;\n"
 			+ "function identity(value:Any):Any return value;\n"

@@ -1101,7 +1101,7 @@ class TestMain {
 			throw "Class metadata and top-level visibility were not preserved";
 		var wireCollisionCompiler = new Compiler();
 		CompilerIntrinsics.register(wireCollisionCompiler);
-		wireCollisionCompiler.addSourceRoot("stdlib");
+		wireCollisionCompiler.addStandardLibrarySourceRoot("stdlib");
 		wireCollisionCompiler.update("foo/Bar.hx", "package foo; @:wire class Bar { @:id(1) public var value:Int; }");
 		wireCollisionCompiler.update("foo_Bar.hx", "@:wire class foo_Bar { @:id(1) public var value:Int; }");
 		wireCollisionCompiler.update("Main.hx",

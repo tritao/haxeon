@@ -23,6 +23,26 @@ typedef WasmClosureTypes = {
 }
 
 class WasmModuleSupport {
+	public static function enumCaseKey(name:String, constructor:Int):String
+		return "$enum-case:" + name.length + ":" + name + ":" + constructor;
+
+	/** Linear GC needs every cached enum root before its collector is generated. */
+	public static function nullaryEnumKeys(program:IrProgram, reachable:Map<String, Bool>):Array<String> {
+		var used:Map<String, Bool> = [];
+		for (fn in program.functions)
+			if (reachable.exists(fn.name))
+				for (block in fn.blocks)
+					for (located in block.instructions)
+						switch located.value {
+							case MakeEnum(_, name, constructor, arguments) if (arguments.length == 0):
+								used.set(enumCaseKey(name, constructor), true);
+							case _:
+						}
+		var result:Array<String> = [for (key in used.keys()) key];
+		result.sort(function(left, right) return Reflect.compare(left, right));
+		return result;
+	}
+
 	public static function addMemoryStatExport(module:WasmModule, name:String, body:Array<WasmInstruction>):Void {
 		var index = module.addFunction(new WasmFunction(name, {parameters: [], results: [I32]}, [], body));
 		module.exports.push({name: name, functionIndex: index});

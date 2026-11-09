@@ -110,7 +110,7 @@ class WasmLinearRuntime {
 				functions.set(native.name, reflection);
 				continue;
 			}
-			var runtimeFunction = addRuntimeNativeFunction(module, native, allocator, bytesDataPointer, outputReserve);
+			var runtimeFunction = addRuntimeNativeFunction(module, native, allocator, bytesDataPointer, outputReserve, program);
 			if (runtimeFunction != null)
 				functions.set(native.name, runtimeFunction);
 			else {
@@ -332,10 +332,39 @@ class WasmLinearRuntime {
 		]));
 	}
 
+	/** Emit a balanced membership test over the header ID already loaded into local 1. */
+	static function appendEnumKindCheck(body:Array<WasmInstruction>, ids:Array<Int>, first:Int, last:Int):Void {
+		if (first == last) {
+			body.push(I32Const(0));
+		} else if (last - first == 1) {
+			body.push(LocalGet(1)); body.push(I32Const(ids[first])); body.push(I32Eq);
+		} else {
+			var middle = first + ((last - first) >> 1);
+			body.push(LocalGet(1)); body.push(I32Const(ids[middle])); body.push(I32LtS); body.push(If(I32));
+			appendEnumKindCheck(body, ids, first, middle);
+			body.push(Else);
+			appendEnumKindCheck(body, ids, middle, last);
+			body.push(End);
+		}
+	}
+
 	/** Lower the stable haxeon_runtime symbol names used by generated HXI and stdlib code. */
 	static function addRuntimeNativeFunction(module:WasmModule, native:compiler.ir.Ir.IrNative, allocator:Int, bytesDataPointer:Int,
-			outputReserve:Int):Null<Int> {
+			outputReserve:Int, program:IrProgram):Null<Int> {
 		return switch native.symbol {
+			case "__reflect_is_enum":
+				if (native.arguments.length != 1 || !compiler.ir.IrVerifier.sameType(native.arguments[0], Dyn) || !compiler.ir.IrVerifier.sameType(native.result, Bool))
+					throw "Invalid Wasm32 enum kind query signature";
+				var ids = [for (declaration in program.enums) module.runtimeTypeId(Enum(declaration.name))];
+				ids.sort((left, right) -> left < right ? -1 : left > right ? 1 : 0);
+				var body:Array<WasmInstruction> = ids.length == 0 ? [] : [
+					LocalGet(0), I32Eqz, LocalGet(0), I32Const(1), I32And, I32Or,
+					If(null), I32Const(0), Return, End,
+					LocalGet(0), I32Load(0), LocalSet(1)
+				];
+				appendEnumKindCheck(body, ids, 0, ids.length);
+				body.push(Return);
+				module.addFunction(WasmFunctionBuilder.fromRaw(native.name, {parameters: [I32], results: [I32]}, ids.length == 0 ? [] : [{type:I32}], body));
 			case "__reflect_is_function": module.addFunction(WasmFunctionBuilder.fromRaw(native.name, {parameters: [I32], results: [I32]}, [], [
 					LocalGet(0),
 					I32Eqz,

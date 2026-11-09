@@ -18,7 +18,7 @@ class AndroidPatch {
 			statePath = arguments[1],
 			patchPath = arguments[2],
 			compiler = new Compiler(File.getBytes(statePath), CompilerIntrinsics.configuration());
-		compiler.addSourceRoot("stdlib");
+		compiler.addStandardLibrarySourceRoot("stdlib");
 		compiler.update(sourcePath, File.getContent(sourcePath));
 		var result:CompileResult = compiler.compile(ModulePath.fromFile(sourcePath));
 		if (result.requiresReload)

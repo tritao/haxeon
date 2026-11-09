@@ -71,6 +71,7 @@ class CountingDiagnosticLanguageService extends LanguageService {
 class LspProtocolMain {
 	static function main():Void {
 		haxeonManifestWorkspace();
+		linkedManifestWorkspace();
 		recoveredDefinitionNavigation();
 		recoveredTypeNavigation();
 		var positions = new LspDocument("file:///workspace/Lines.hx", "/workspace/Lines.hx", 1, "one\nthree");
@@ -272,9 +273,13 @@ class LspProtocolMain {
 				hasUnopenedMember = true;
 		if (!hasUnopenedMember)
 			throw "project-backed completion omitted members from unopened dependencies";
-		var temporaryRoot = Sys.getEnv("TMPDIR");
-		if (temporaryRoot == null || temporaryRoot.length == 0) temporaryRoot = sys.FileSystem.fullPath(".");
-		var watchRoot = Path.join([temporaryRoot, "haxeon-lsp-watch-" + Std.string(Std.int(Sys.time() * 1000000))]),
+		// Outside the checkout: its build.hxml would make every folder below it part of the compiler's own project.
+		var temporaryRoot = Sys.getEnv(Sys.systemName() == "Windows" ? "TEMP" : "TMPDIR");
+		if (temporaryRoot == null || temporaryRoot.length == 0)
+			temporaryRoot = "/tmp";
+		// Sys.time() in microseconds overflows Int on HashLink; a random suffix keeps concurrent runs apart.
+		var runId = Std.string(Math.floor(Sys.time() * 1000)) + "-" + Std.random(1000000);
+		var watchRoot = Path.join([temporaryRoot, "haxeon-lsp-watch-" + runId]),
 			watchSourceRoot = Path.join([watchRoot, "src"]),
 			watchAppRoot = Path.join([watchSourceRoot, "app"]),
 			watchLibRoot = Path.join([watchSourceRoot, "lib"]),
@@ -440,7 +445,7 @@ class LspProtocolMain {
 		if (watchProtocol.project.configurationFor(Path.join([alternateRoot, "Alternate.hx"])).file != secondConfigPath)
 			throw "explicit Haxe build selection did not override path ownership";
 		deleteTree(watchRoot);
-		var folderRoot = Path.join([temporaryRoot, "haxeon-lsp-folders-" + Std.string(Std.int(Sys.time() * 1000000))]),
+		var folderRoot = Path.join([temporaryRoot, "haxeon-lsp-folders-" + runId]),
 			folderA = Path.join([folderRoot, "folder-a"]),
 			folderB = Path.join([folderRoot, "folder-b"]),
 			folderASource = Path.join([folderA, "src"]),
@@ -539,7 +544,17 @@ class LspProtocolMain {
 				}
 			}
 		}));
-		if (opened.length != 1 || Json.parse(opened[0]).method != "textDocument/publishDiagnostics")
+		var openedDocumentDiagnostics = false;
+		for (message in opened) {
+			var notification:Dynamic = Json.parse(message);
+			if (notification.method == "textDocument/publishDiagnostics") {
+				if (notification.params.uri == uri)
+					openedDocumentDiagnostics = true;
+				else
+					throw "LSP didOpen published diagnostics for a file outside the open document and workspace";
+			}
+		}
+		if (!openedDocumentDiagnostics)
 			throw "LSP didOpen did not publish diagnostics";
 		if (service.compiler.publicationStatus().hasPendingRevision)
 			throw "LSP document analysis published a runtime candidate";
@@ -1116,11 +1131,8 @@ class LspProtocolMain {
 			method: "textDocument/didChange",
 			params: {textDocument: {uri: choiceUri, version: 5}, contentChanges: [{text: "package workspace.shape; enum Choice { One; Two; }"}]}
 		}));
-		if (closedDependent.length != 1)
-			throw "closed dependent diagnostic was not published";
-		var closedMessage:Dynamic = Json.parse(closedDependent[0]);
-		if (closedMessage.params.uri != consumerUri || Reflect.hasField(closedMessage.params, "version"))
-			throw "closed document diagnostic incorrectly included an LSP version";
+		if (closedDependent.length != 0)
+			throw "LSP published diagnostics for a closed file outside the workspace";
 		var scheduledService = new LanguageService(),
 			scheduledProtocol = new LspProtocol(scheduledService),
 			scheduledMessages:Array<String> = [],
@@ -1726,9 +1738,59 @@ class LspProtocolMain {
 		Sys.println("PASS: current recovered this.member definitions, shadowing and edits with broken dependencies; rename remains protected");
 	}
 
+	/** Package discovery resolves symbolic links; a workspace opened through a link must still own its manifest sources. */
+	static function linkedManifestWorkspace():Void {
+		if (Sys.systemName() == "Windows")
+			return;
+		var target = sys.FileSystem.absolutePath("out/lsp-linked-workspace-target"),
+			base = sys.FileSystem.absolutePath("out/lsp-linked-workspace");
+		if (Sys.command("rm", ["-f", base]) != 0)
+			throw "could not remove the previous workspace link";
+		deleteTree(target);
+		for (directory in [
+			target,
+			target + "/app",
+			target + "/app/src",
+			target + "/app/src/app",
+			target + "/lib",
+			target + "/lib/code"
+		])
+			sys.FileSystem.createDirectory(directory);
+		if (Sys.command("ln", ["-s", target, base]) != 0)
+			throw "could not link the workspace";
+		sys.io.File.saveContent(base + "/app/haxeon.json",
+			'{"version":1,"package":{"name":"demo"},"entry":"app.Main","sourceRoots":["src"],"dependencies":{"helper":{"path":"../lib"}}}');
+		sys.io.File.saveContent(base + "/lib/haxeon.json", '{"version":1,"package":{"name":"helper"},"sourceRoots":["code"]}');
+		sys.io.File.saveContent(base + "/lib/code/Value.hx", "class Value { public static function answer():Int return 42; }");
+		var mainPath = base + "/app/src/app/Main.hx",
+			protocol = new LspProtocol();
+		sys.io.File.saveContent(mainPath, "package app; class Main { public static function main():Int return Value.answer(); }");
+		request(protocol, Json.stringify({
+			jsonrpc: "2.0",
+			id: 851,
+			method: "initialize",
+			params: {rootUri: "file://" + base + "/app"}
+		}));
+		if (protocol.project.configurations.length != 1
+			|| protocol.project.compilerPath(mainPath) != "app/Main.hx"
+			|| !protocol.project.hasDiskSource(mainPath)
+			|| !protocol.project.hasDiskSource(base + "/lib/code/Value.hx"))
+			throw "a manifest workspace opened through a symbolic link lost its sources";
+		Sys.println("PASS: a manifest workspace opened through a symbolic link keeps its sources and dependencies");
+	}
+
 	static function haxeonManifestWorkspace():Void {
-		var base = sys.FileSystem.absolutePath("out/lsp-haxeon-workspace");
+		var base = sys.FileSystem.fullPath("out") + "/lsp-haxeon-workspace-" + Date.now().getTime() + "-" + Std.random(0x7fffffff);
+		try {
+			haxeonManifestWorkspaceAt(base);
+		} catch (failure:Dynamic) {
+			deleteTree(base);
+			throw failure;
+		}
 		deleteTree(base);
+	}
+
+	static function haxeonManifestWorkspaceAt(base:String):Void {
 		for (directory in [
 			base,
 			base + "/app",
@@ -1785,8 +1847,12 @@ class LspProtocolMain {
 			foundDiagnostic = false;
 		for (raw in messages) {
 			var message:Dynamic = Json.parse(raw);
-			if (message.method == "textDocument/publishDiagnostics" && message.params.uri == uri && message.params.diagnostics.length > 0)
-				foundDiagnostic = true;
+			if (message.method == "textDocument/publishDiagnostics") {
+				if (!StringTools.startsWith(message.params.uri, "file://" + base + "/"))
+					throw "LSP published diagnostics for a file outside the workspace";
+				if (message.params.uri == uri && message.params.diagnostics.length > 0)
+					foundDiagnostic = true;
+			}
 		}
 		if (!foundDiagnostic)
 			throw "manifest-backed document did not diagnose a type error";
@@ -2022,8 +2088,6 @@ class LspProtocolMain {
 			throw "FFI reload reused stale declaration provenance: " + Json.stringify(reloadedDefinition);
 
 		Sys.println("PASS: manifest FFI interfaces, projections and reload preserve unsaved overlays");
-
-		deleteTree(base);
 	}
 
 	static function request(protocol:LspProtocol, message:String):Dynamic {

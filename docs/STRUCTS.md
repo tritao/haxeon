@@ -26,6 +26,9 @@ required with it for `Hashable`. Struct comparisons without `Equatable` are reje
 identity; classes cannot conform to `Equatable` or `Hashable`. `haxeon.Equality.equals` and `==` use that same implementation. `Diff.mask/apply/bit/all` operate
 on `Diffable` declarations. `Diff.copy` remains only for mutable `Diffable` classes; a struct is copied by binding
 it to a value.
+The compiler-only `__reference_equal` primitive is available only to modules the source loader resolved from the
+compiler-registered standard-library root; a path that merely contains `stdlib` does not grant access. It backs
+identity-keyed collections; user code compares class references with `==`.
 Focused checks cover immutable copies, generic forwarding, mutable-copy independence and nested writable places on
 HashLink. Nullable struct bindings now copy present payloads, preserve absence and use fieldwise equality; an absent
 value raises a catchable null-access error when cast to its non-null struct. A focused program covers these behaviours,
@@ -322,6 +325,13 @@ implementations are allowed under the same equality/hash contract as structs. En
 `Equatable` and `Hashable`. `Type.enumEq` remains reflective structural comparison and agrees with synthesized equality
 for a conforming enum.
 
+A payload-free constructor of a boxed enum reuses one immutable cached value instead of allocating on every reference.
+HashLink uses its existing case cache; Wasm32 and Wasm GC initialize a module global lazily on the first reference to
+each case. Wasm32 registers those globals as collector roots before generating the collector, and Wasm GC globals are
+managed roots. Repeated references, switches, comparisons, and stores into existing fields or arrays allocate nothing
+after the cases are initialized. This also applies to the payload-free cases of a recursive or otherwise boxed payload
+enum. Sharing storage exposes no identity: equality, hashing and `EnumIndex` retain their value semantics.
+
 `Reflect.compare` does not define an order for enum values. Comparing an enum through that API returns its existing
 invalid-comparison result (`0xAABBCCDD`), including when both operands are the same boxed value. Equality conformance
 does not imply an ordering, and using an allocation address would make boxing observable. This rule applies across
@@ -462,6 +472,13 @@ This rule avoids making allocation strategy observable and does not require an i
 and reference-slot layout. Existing payload-enum comparisons declare conformance where value equality is intended and
 express any former identity-dependent distinction explicitly. The compiler enforces this rule for boxed enums. The first source inline subset excludes any use whose logical equality adapter is not yet connected.
 
+Boxed-enum kind checks use the runtime representation rather than source enum type tokens. Wasm GC enum bases
+share one tagged root, so the check is one `ref.test`; the root reuses the existing tag and adds no payload field or
+per-value allocation. Wasm32 loads the header once and uses a balanced decision tree over the module's resolved enum
+type IDs, without a lookup allocation or an added header field. `Reflect.compare` returns the
+invalid-comparison result when either operand is an enum, including when the other operand is null. These checks
+apply to canonical escape boxes; typed inline packets keep their scalar/reference lanes.
+
 ### Source inline enum activation: remaining blockers
 
 The production pipeline selects source enum storage before optional-flow, reflection and scalar-call lowering. The
@@ -480,6 +497,97 @@ compiler change, and **L** spans multiple semantic/runtime boundaries. Update th
 | E7 | Connect logical enum descriptors through source closure signatures, reflected fields and erased container views without exposing private packet types; array/iterator lane associations are tested already. | M | Only for uses admitted by the first subset |
 | E8 | Carry enum value representations through generic owners/functions and their erased semantic descriptors; concrete payload schemas are retained already, but schema retention alone does not specialize their transport. | L | No; exclude unsupported generic uses initially |
 | E9 | Gate activated source forms on all targets/inlining modes, cached/edited builds and GC roots, and show a real editor allocation decrease without action or RSS regressions. | M | Yes |
+
+#### Widening order from measured editor allocations
+
+The published `f69bfe43` batch has no real-editor enum allocation decrease. Rank the next steps by the existing
+interaction, tab-matrix and selection censuses, rather than by inventory number. The table below covers the 15
+budgeted editor actions. Current-source isolated windows corroborate those aggregate censuses: count only the second
+matching input-through-frame action, excluding setup and all other actions. Every allocation is counted; stack sampling
+is separate. Diagnostic builds collect `IrInlineEnumEligibility.reasons` plus subsequent blocking reasons without
+changing selection; their editor, Wasm32 Showcase and Wasm GC Showcase outputs are byte-identical to the published
+modules. The action-window harness is a measurement-only change in the detached outer checkout.
+
+| Payload enum | Editor action | Objects / bytes per action | Editor blockers | Showcase blockers |
+|---|---|---:|---|---|
+| `DockNode` | Each of `hierarchy->sensors`, `sensors->hierarchy`, `console->telemetry`, `telemetry->console` | 54 / 1,992 | Permanent by-value recursion; also E3 calls, E6 reflection/Dynamic/casts and E7 descriptors | Not present |
+| `TextEditIntent` | `type-char` | 1 / 24 | E3 checked casts of `Virtual(...)`; E6 registered reflection/Dynamic reach; E7 runtime type descriptors | E6 registered reflection; E7 callable descriptors |
+| `PropertyValue` (setup control) | All 15 measured action windows | 0 / 0 | E3 calls, E6 reflection/Dynamic/casts and E7 descriptors | Not present |
+
+No other payload enum allocates in these windows. In particular, backspace uses a payload-free cached intent.
+`PropertyValue`'s 14 objects / 312 bytes in the selection aggregate are setup costs, not a per-selection allocation.
+`TextEditorHistoryKind` is payload-free and adds no per-action enum allocation. The current effect/decoration/mask values and scalar sizing modes account for no repeated allocations in these
+windows. Their planned ports remain required, but are not evidence for prioritizing an unrelated blocker ahead of the
+measured typing path.
+
+The latest candidate still allocates one 24-byte `TextEditIntent` for `type-char`: three paired control/candidate runs
+had 835 objects each and median totals of 60,064 / 60,056 bytes. It does not regress, but does not unlock the enum.
+Its remaining trace includes checked casts and runtime descriptors for virtual contracts, for example
+`$checked-dynamic-cast:Virtual(haxeon.ui.core.View)`. These uses also appear in generic-erased interface code; resolving
+them needs the deferred E3 virtual-call/type-check and E7 descriptor work, rather than one local escape adapter.
+Control/candidate editor builds took 148,925 / 141,789 ms; self-hosting stage-1 `BodyTyped` took 51.53 / 41.22 ms.
+The candidate's corresponding editor `BodyTyped` phase was 1,249 / 1,207 ms. Record the enum as still blocked and
+continue with the measured UI allocation site rather than widening E3/E7 in this session. E4 nullable closures and E8
+generic transport do not block this measured finite enum. Next, investigate why one tab switch constructs 54 `DockNode`
+values and reuse unchanged persistent dock-tree branches in the UI rather than changing their compiler representation.
+`DockNode.Split` contains `DockNode` directly
+by value; its cost cannot justify bypassing the permanent recursive-enum classification. Then perform the UI value
+enum conversions, with measured deltas for allocating forms and the required type-honesty ports for the others.
+Byte-identical editor/Web output skips paired measurements under Tier 3. Do not count a setup control or a renamed
+allocation as an enum win.
+
+The following widening work is explicitly a follow-up after this session, not an activation prerequisite. The census
+evidence is bounded to the 15 budgeted action windows above; it does not claim these features are cost-free in every
+possible program. Keep the documented boxed classification for their unsupported uses until their complete ABIs land.
+
+| Follow-up | Remaining work | Current census evidence |
+|---|---|---|
+| E3 | Ordinary/bound class value calls and inheritance, with typed constant-time dispatch and no global dense tables | `PropertyValue` is blocked here but allocates zero in all 15 windows; `TextEditIntent` is not blocked here |
+| E4 | Nullable struct closure result presence plus scalar/reference leaves when the struct contains an enum | No allocating finite payload enum in these windows needs this path; nullable enums themselves already use tag zero |
+| E8 | Concrete generic enum instances and enum transport in generic owners/functions/erased views | No additional allocating finite payload enum in these windows is unlocked by this work |
+| E6 beyond the typing path | General direct enum Dynamic/reflection/throw/native escape adapters | Only the callable/reflection paths needed by `TextEditIntent` are in this session; no other finite payload enum allocates in these windows |
+| E7 beyond the typing path | Remaining callable payload/container/descriptor associations | Implement what admits `TextEditIntent`; broader descriptor/container widening has no additional measured enum cost in these windows |
+| E1/E2 general widening | Reachable-use classification, canonical native Flat enum layouts and representation-changing reload coverage | No measured finite enum besides the typing path is waiting for these; UI native-boundary mappings remain part of the required ports |
+
+#### UI sizing conversion: measured stop
+
+The payload `LayoutSizing` port was tried against `1fae06c3` on 2026-11-09 and withheld under the no-regression
+rule. The trial used `Fit`, `Grow(weight:Float)`, `Fixed(size:Float)` and `Percent(fraction:Float)`, deleted
+`LayoutAxis.value`/`growWeight`, retained `min`/`max`, and explicitly mapped the cases to the unchanged native
+transaction fields. The initial trial passed the HashLink framework suite; after replacing enum stringify with explicit
+case formatting, the final trial passed all six UI snapshot checks (HashLink/Wasm32/Wasm GC, inlining off/on).
+Whole-program eligibility still selected **boxed** storage.
+
+The trace first rejects the enum at `ComputedStyle.setAxis`'s ordinary method argument. Other reasons include
+`ComputedStyle.getAxis`'s result, `StyleAxisProperty.sameAxis`, ordinary method receivers/calls, checked/Dynamic
+escapes, registered reflection layouts and runtime descriptors. These uses reach the enum through its enclosing
+`LayoutAxis` struct; removing a direct enum stringify did not remove the blockers.
+
+An exact HashLink census isolates the typed transport: construct `AxisSink` before the window, then repeat
+`sink.setAxis(LayoutAxis.fixed(i))`, where `setAxis` stores its `LayoutAxis` argument in a field. Warm the path before
+starting the census, stop before dumping, and check the final axis after the window. Control uses the committed
+integer sizing tag; candidate uses the payload enum. Both use the same compiler and checkout-built VM.
+
+| Typed updates | Control objects / bytes | Payload-enum objects / bytes | Allocated type |
+|---:|---:|---:|---|
+| 8 | 0 / 0 | 8 / 192 | `enum<haxeon.ui.LayoutSizing>` |
+| 1,024 | 0 / 0 | 1,024 / 24,576 | `enum<haxeon.ui.LayoutSizing>` |
+
+This is an object/byte census, not a buffer-refill counter. The port would violate the required allocation-free typed
+value transport even though its results are correct. No editor allocation improvement or action-level comparison is
+claimed for this rejected trial. The required alternative is to complete E3 transport for enums inside struct
+arguments/results and the E6/E7 reflective-field/descriptor boundaries before landing this conversion. Those families
+were explicitly deferred from the remaining session; keep the current representation until that work is authorized.
+Do not introduce a second sizing API, enum alias, or per-call boxing fallback to land the port prematurely.
+
+The complete trial patch, path manifest, reproduction source, exact census summary and eligibility trace are preserved
+under `haxeon-enum-work/layout-sizing-payload-trial-2026-11-09/` in the session's disk scratch directory. The source
+conversion was restored, so this record changes no shipped representation. The sizing conversion remains unfinished.
+
+Records: `haxeon-flat-work/enum-impact/{editor,showcase-gc,showcase-w32}-eligibility.json`,
+`diagnostic-artifacts.json`, `action-inventory.jsonl` and `action-census-harness.patch`. The existing aggregate records
+are in `typed-interface-tables-gates/paired-exact-tabs.jsonl`,
+`interface-value-gates/paired-exact-interaction-v2.jsonl` and `enum-first-batch-gates/paired-census.jsonl`.
 
 The first activation need not wait for E3/E4 and E6–E8 in their entirety. Start with a bounded, documented eligibility rule for
 finite concrete enums whose admitted uses have verified value storage and call ABIs and no unsupported Dynamic,
@@ -520,7 +628,13 @@ adapters. Native Flat struct payloads and enum-bearing native fields wait for in
 whole enum; there is no switch or per-call boxing fallback. Arrays retain their nominal element descriptors and use the
 existing lane association and checked logical reflection bridges. Closure environments are internal typed storage, not
 bound class-method escapes. Registered object-reflection layouts count as escape surfaces even when their helpers are
-generated after classification. Private enum packets are excluded from that public layout registry.
+generated after classification. When a class or anonymous-record reference is reachable from a Dynamic escape or
+registered reflection layout, eligibility walks its fields transitively through class and anonymous-record references,
+nullable/value fields, arrays, iterators, map key/value types, closure signatures and captured closure environments,
+and interface implementations. On Wasm, anonymous layouts are registered even when their literal was nested inside a
+Dynamic object; on HashLink, the same reach includes HDYNOBJ and virtual structural values. Enums found in
+that graph stay boxed until reflective field get/set adapters are registered; the IR verifier cannot see the native
+runtime's nested `Reflect.field` traversal. Private enum packets are excluded from that public layout registry.
 
 After lowering, `IrVerifier` rejects a selected enum's nominal value carrier in every object/static field, native/C-native
 or interface/function signature, instruction output or operand, phi input, terminator and debug binding. The scan covers
@@ -539,7 +653,9 @@ The logical IR-only frontend still assembles nominal types without selecting a t
 compiler supplies its target and host export roots to assembly before selecting the physical enum layout. Cached
 source functions remain nominal and unmodified; changing an escape reselects storage on the assembled copy.
 `SourceInlineEnumMain` checks cold and edited builds, including adding and removing Dynamic and registered-reflection escapes, on all three
-targets with inlining off and on. Its allocation fixture prepares reference payloads and a typed closure before the
+targets with inlining off and on. `InlineEnumDynamicReachMain` verifies that a Dynamic-root escape follows nested class,
+array, map and captured-closure references and rejects each enum for that reason; `InlineEnumReflectionReachMain` runs
+two-level `Reflect.field` get/set and `Reflect.fields` listing on all targets. The allocation fixture prepares reference payloads and a typed closure before the
 window, then exercises construction, null joins, static and object fields, copies and closure results at 8 and 1,024
 iterations. Explicit array iteration and element copies are checked separately from the allocation window, which does
 not include allocation of the iterator itself. E9's real-editor decrease remains a required measurement before the UI

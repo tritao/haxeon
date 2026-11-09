@@ -29,6 +29,8 @@ class TyperBoundaryMain {
 		expect(hasRuntimeDependency(measured.runtimeDependencies, "main", "Std"), "Float string conversion should retain the Std runtime dependency");
 		assertDiagnostic("function main():Int { var value:Int; return value; }", "E1023", "may be used before assignment");
 		assertDiagnostic("function identity(value:Int):Int return value; function main():Int return identity(\"wrong\");", "E1009", "argument 1");
+		assertDiagnosticAt("project/stdlib/Intruder.hx", "class Key {} function main():Int return __reference_equal(new Key(), new Key()) ? 42 : 0;",
+			"E1025", "stdlib-only");
 		// Value class instances are stored inline in fields, so null cannot reach one; it used to segfault at runtime.
 		var value = "@:value class V { public var x:Int; public function new(x:Int) this.x = x; } ";
 		assertDiagnostic(value
@@ -69,13 +71,17 @@ class TyperBoundaryMain {
 	}
 
 	static function assertDiagnostic(source:String, code:String, messagePart:String):Void {
+		assertDiagnosticAt("TyperBoundaryError.hx", source, code, messagePart);
+	}
+
+	static function assertDiagnosticAt(path:String, source:String, code:String, messagePart:String):Void {
 		try {
-			Typer.type(parse("TyperBoundaryError.hx", source));
+			Typer.type(parse(path, source));
 			throw 'Expected $code diagnostic';
 		} catch (error:CompileError) {
 			expect(error.diagnostic.code == code, 'Expected diagnostic $code, got ${error.diagnostic.code}');
 			expect(error.diagnostic.message.indexOf(messagePart) >= 0, 'Diagnostic did not contain "$messagePart"');
-			expect(error.diagnostic.span.file.path == "TyperBoundaryError.hx", "diagnostics should retain their source file");
+			expect(error.diagnostic.span.file.path == path, "diagnostics should retain their source file");
 		}
 	}
 

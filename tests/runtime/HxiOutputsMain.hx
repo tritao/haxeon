@@ -15,7 +15,7 @@ class HxiOutputsMain {
 			library = Sys.args()[1],
 			compiler = new Compiler();
 		CompilerIntrinsics.register(compiler);
-		compiler.addSourceRoot(Sys.getCwd() + "/stdlib");
+		compiler.addStandardLibrarySourceRoot(Sys.getCwd() + "/stdlib");
 		compiler.addFfiInterface("outputs.hxi",
 			'interface Outputs @target("x86_64-linux-gnu") @library("$library") {\n'
 			+ '\tstruct fixture_point @layout(8, 4) { x: i32 @offset(0); y: i32 @offset(4); }\n'

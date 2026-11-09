@@ -51,10 +51,12 @@ class VirtualList implements View {
 		this.itemMetadata = itemMetadata;
 		this.keyForIndex = keyForIndex;
 		this.suppliedController = controller != null;
-		this.controller = controller == null ? new ScrollController() : controller;
-		this.fallbackViewportHeight = viewportHeight;
 		this.viewportStyle = viewportStyle == null ? defaultViewportStyle(viewportHeight) :
 			viewportStyle.copy();
+		this.controller = controller == null ? new ScrollController() : controller;
+		this.controller.seedViewport(0.0,
+			this.viewportStyle.height.sizing == LayoutSizing.Fixed ? this.viewportStyle.height.value : 0.0);
+		this.fallbackViewportHeight = viewportHeight;
 		this.virtualization = virtualization == null ? new VirtualizationPolicy() : virtualization;
 		materializedFirst = 0;
 		materializedLast = 0;

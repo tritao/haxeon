@@ -34,7 +34,7 @@ class IrIntegerBuilderMain {
 	}
 	static function checkSourceConstructors():Void {
 		var compiler = new compiler.Compiler(null, compiler.runtime.CompilerIntrinsics.configuration());
-		compiler.addSourceRoot("stdlib");
+		compiler.addStandardLibrarySourceRoot("stdlib");
 		compiler.update("WideConstructors.hx", 'function main():Int { '
 			+ 'var wide = haxe.Int64.make(1, -1); var negative = haxe.Int64.ofInt(-7); '
 			+ 'return haxe.Int64.toInt(haxe.Int64.ushr(wide, 32)) == 1 '

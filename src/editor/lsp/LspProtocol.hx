@@ -545,14 +545,19 @@ class LspProtocol {
 				return [];
 			var diskPath = project.diskPath(state.source.path),
 				uri = documents.uri(diskPath),
-				fingerprint = diagnosticFingerprint(state.diagnostics);
-			if (publishedDiagnostics.get(uri) == fingerprint)
+				fingerprint = diagnosticFingerprint(state.diagnostics),
+				published = publishedDiagnostics.get(uri),
+				open = documents.forPath(diskPath);
+			if (published == fingerprint)
+				continue;
+			// A client needs diagnostics for open documents and workspace files. Clean unopened modules
+			// that have no previous publication need no empty notification.
+			if (open == null && (state.diagnostics.length == 0 || !project.hasDiskSource(diskPath)))
 				continue;
 			var params:Dynamic = {
 				uri: uri,
 				diagnostics: [for (diagnostic in state.diagnostics) diagnosticJson(diagnostic)]
 			};
-			var open = documents.forPath(diskPath);
 			if (open != null)
 				Reflect.setField(params, "version", open.version);
 			pending.push({uri: uri, fingerprint: fingerprint, message: notification("textDocument/publishDiagnostics", params)});

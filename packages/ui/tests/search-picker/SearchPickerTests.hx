@@ -11,6 +11,7 @@ import haxeon.ui.core.UiEventKind;
 import haxeon.ui.core.UiKey;
 import haxeon.ui.semantics.AccessibilityRole;
 import haxeon.ui.semantics.AccessibilityState;
+import haxeon.ui.semantics.Semantics;
 import haxeon.ui.widgets.commands.CommandPalette;
 import haxeon.ui.widgets.commands.SearchPicker;
 import haxeon.ui.widgets.commands.SearchPickerModel;
@@ -76,17 +77,28 @@ class SearchPickerTests {
 		var runtime = Runtime.start();
 		var fonts = FontCollection.create(); fonts.addSystemFallbacks();
 		var ui = new UiContext(null, fonts);
-		var model = new Results(), built = 0;
+		var model = new Results(), built = 0, rowBuildPasses = 0, previousBuildPass = -1;
 		var picker = new SearchPicker("results", model, function(context, index, selected, hovered, revision) {
 			built++;
+			if (context.buildFeedbackPass != previousBuildPass) {
+				rowBuildPasses++;
+				previousBuildPass = context.buildFeedbackPass;
+			}
 			var style = new LayoutStyle(); style.width = LayoutAxis.grow(); style.height = LayoutAxis.fixed(32);
 			return new Text(model.labelAt(index), style);
 		}, function() {}, function() {});
 		var frame = new LayoutFrame(720, 480);
 		var root = ui.submit(picker, frame);
 		check(built > 0 && built < 40, "Picker materialized all results");
+		// ScrollView resolves its initial controller metrics after the first build; the next pass settles the virtual window.
+		check(rowBuildPasses <= 2, "Picker rebuilt its virtual window in more than two build passes");
+		var frameMetrics = ui.frameMetrics;
+		check(frameMetrics != null && frameMetrics.buildPasses <= 3, "Picker submit exceeded three build passes");
 		var focus = ui.focus.focusedNode();
 		check(focus != null && focus.styleType == "text-field", "Picker did not focus its input");
+		var focusedNode:RenderNode = cast focus;
+		var focusSemantics:Semantics = cast focusedNode.semantics;
+		check((focusSemantics.states & AccessibilityState.Focused) != 0, "Focused input state was not applied during submit");
 		ui.key(UiEventKind.KeyDown, UiKey.Up);
 		root = ui.submit(picker, frame);
 		root = ui.submit(picker, frame);

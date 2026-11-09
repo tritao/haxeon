@@ -64,7 +64,7 @@ class FrontendRestartMain {
 	static function compile(source:String):compiler.Compiler.CompileResult {
 		var compiler = new Compiler();
 		CompilerIntrinsics.register(compiler);
-		compiler.addSourceRoot("stdlib");
+		compiler.addStandardLibrarySourceRoot("stdlib");
 		compiler.update("Main.hx", source);
 		return compiler.compile("Main", null, false);
 	}

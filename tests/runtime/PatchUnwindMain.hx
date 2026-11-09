@@ -12,7 +12,7 @@ class PatchUnwindMain {
 	static function main():Void {
 		var compiler = new Compiler();
 		CompilerIntrinsics.register(compiler);
-		compiler.addSourceRoot("stdlib");
+		compiler.addStandardLibrarySourceRoot("stdlib");
 		var program = (message:String) -> "import haxe.CallStack;\n"
 			+ "function fail():Void { throw '"
 			+ message

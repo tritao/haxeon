@@ -8,7 +8,7 @@ import sys.io.File;
 class ModuleSourceLoader {
 	static final caseSensitiveFileSystem:Bool = Sys.systemName() != "Windows" && Sys.systemName() != "Mac";
 
-	final roots:Array<{path:String, packagePrefix:Null<String>}> = [];
+	final roots:Array<{path:String, packagePrefix:Null<String>, isStandardLibrary:Bool}> = [];
 	// Names no root holds a module for. Import resolution asks for the same missing names (a declaration path, then each
 	// parent) many times, each a file probe in every root. A copy starts empty, so each compile request probes again.
 	final missing:Map<String, Bool> = [];
@@ -25,7 +25,15 @@ class ModuleSourceLoader {
 		var normalized = normalizeRoot(path);
 		if (!FileSystem.exists(normalized) || !FileSystem.isDirectory(normalized))
 			throw 'Source root "$path" is not a directory';
-		addRootMapping(normalized, null);
+		addRootMapping(normalized, null, false);
+	}
+
+	/** Register the compiler-owned standard library root; sources loaded from it carry trusted provenance. */
+	public function addStandardLibraryRoot(path:String):Void {
+		var normalized = normalizeRoot(path);
+		if (!FileSystem.exists(normalized) || !FileSystem.isDirectory(normalized))
+			throw 'Standard library source root "$path" is not a directory';
+		addRootMapping(normalized, null, true);
 	}
 
 	public function addPackageRoot(packageName:String, path:String):Void {
@@ -34,24 +42,31 @@ class ModuleSourceLoader {
 		var normalized = normalizeRoot(path);
 		if (!FileSystem.exists(normalized) || !FileSystem.isDirectory(normalized))
 			throw 'Package source root "$path" is not a directory';
-		addRootMapping(normalized, packageName);
+		addRootMapping(normalized, packageName, false);
 	}
 
-	function addRootMapping(path:String, packagePrefix:Null<String>):Void {
+	function addRootMapping(path:String, packagePrefix:Null<String>, isStandardLibrary:Bool):Void {
 		for (root in roots)
-			if (root.path == path && root.packagePrefix == packagePrefix)
+			if (root.path == path && root.packagePrefix == packagePrefix) {
+				root.isStandardLibrary = root.isStandardLibrary || isStandardLibrary;
 				return;
-		roots.push({path: path, packagePrefix: packagePrefix});
+			}
+		roots.push({path: path, packagePrefix: packagePrefix, isStandardLibrary: isStandardLibrary});
 		missing.clear();
 		listings.clear();
 	}
 
+	/**
+	 * The module `name`, read from the one root that holds it. A module held by two roots is an error: which file wins would
+	 * depend on the order of the roots, and a file added to an earlier root would silently replace the module.
+	 */
 	public function load(name:String, modules:Map<String, ModuleState>):Null<ModuleState> {
 		if (modules.exists(name))
 			return modules.get(name);
 		if (missing.exists(name))
 			return null;
 		var relative = name.split(".").join("/") + ".hx";
+		var found:Null<{path:String, text:String, standard:Bool}> = null;
 		for (root in roots) {
 			var candidates = [relative];
 			if (root.packagePrefix != null) {
@@ -74,12 +89,19 @@ class ModuleSourceLoader {
 			// `package app` is app.Runner, not a root-package Runner that a plain root would also reach.
 			if (declaresOther(text, packageOf(name)))
 				continue;
-			var state = new ModuleState(name, new SourceFile(path, text));
-			modules.set(name, state);
-			return state;
+			// The standard library overrides Haxe's std by design, so a second copy beside it is not a second root.
+			if (found != null && found.path != path && !found.standard && !root.isStandardLibrary)
+				throw 'Module "$name" is in two source roots: ${found.path} and $path';
+			if (found == null)
+				found = {path: path, text: text, standard: root.isStandardLibrary};
 		}
-		missing.set(name, true);
-		return null;
+		if (found == null) {
+			missing.set(name, true);
+			return null;
+		}
+		var state = new ModuleState(name, new SourceFile(found.path, found.text, found.standard));
+		modules.set(name, state);
+		return state;
 	}
 
 	/** Materialize all source modules directly contained by a package. */
@@ -126,7 +148,7 @@ class ModuleSourceLoader {
 						text = File.getContent(path);
 					if (declaresOther(text, packageName))
 						continue;
-					modules.set(moduleName, new ModuleState(moduleName, new SourceFile(path, text)));
+					modules.set(moduleName, new ModuleState(moduleName, new SourceFile(path, text, root.isStandardLibrary)));
 				}
 				if (result.indexOf(moduleName) < 0)
 					result.push(moduleName);
@@ -231,7 +253,7 @@ class ModuleSourceLoader {
 	public function copy():ModuleSourceLoader {
 		var result = new ModuleSourceLoader();
 		for (root in roots)
-			result.roots.push({path: root.path, packagePrefix: root.packagePrefix});
+			result.roots.push({path: root.path, packagePrefix: root.packagePrefix, isStandardLibrary: root.isStandardLibrary});
 		return result;
 	}
 

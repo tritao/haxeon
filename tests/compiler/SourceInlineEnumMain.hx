@@ -61,7 +61,7 @@ class SourceInlineEnumMain {
 		for (target in ["hl", "wasm32", "wasm-gc"])
 			for (inlining in [false, true]) {
 				var c = new Compiler(null, compiler.runtime.CompilerIntrinsics.configuration());
-				c.addSourceRoot("stdlib");
+				c.addStandardLibrarySourceRoot("stdlib");
 				c.configure("first-" + target + inlining, "first", CompilerDriver.targetDefines(target).concat(["haxeon-inline=" + (inlining ? 1 : 0)]));
 				c.update("Main.hx", sys.io.File.getContent("tests/programs/source-inline-enum.hx"));
 				var result = c.compile("Main");
@@ -94,6 +94,43 @@ class SourceInlineEnumMain {
 					throw "Failed " + target + inlining + " " + status;
 				Sys.println("PASS " + target + " inline=" + inlining);
 				sys.FileSystem.deleteFile(path);
+				checkNativeMapEnum(target, inlining);
 			}
+	}
+
+	static function checkNativeMapEnum(target:String, inlining:Bool):Void {
+		var compiler = new Compiler(null, compiler.runtime.CompilerIntrinsics.configuration());
+		compiler.addStandardLibrarySourceRoot("stdlib");
+		compiler.configure("native-map-enum-" + target + inlining, "map-enum",
+			CompilerDriver.targetDefines(target).concat(["haxeon-inline=" + (inlining ? 1 : 0)]));
+		compiler.update("Main.hx", sys.io.File.getContent("tests/programs/enum-array-iterator-escape.hx"));
+		var compiled = compiler.compile("Main"), declaration = Lambda.find(compiled.ir.enums, entry -> entry.name == "IteratorChoice");
+		if (declaration == null || declaration.inlineStorage != null)
+			throw 'Native reference map did not keep IteratorChoice boxed on $target inline=$inlining';
+		var root = Sys.getEnv("TMPDIR");
+		if (root == null || root == "") root = "/tmp";
+		var path = root + "/native-map-enum-" + target + "-" + inlining + "-" + Std.random(0x7fffffff)
+			+ (target == "hl" ? ".hl" : ".wasm");
+		if (target == "hl") {
+			sys.io.File.saveBytes(path, HlWriter.encode(compiled.module));
+			var vm = Sys.getEnv("HAXEON_HASHLINK_DIR"), process = new sys.io.Process(vm == null ? "scripts/hl" : vm + "/hl", [path]),
+				error = process.stderr.readAll().toString(), status = process.exitCode();
+			process.close();
+			if (status != 42) throw 'Native reference map failed on $target inline=$inlining ($status): $error';
+		} else {
+			var bytes = new WasmBackend().compile(compiled.ir, {
+				target: target == "wasm32" ? Wasm32 : WasmGc,
+				debugNames: true,
+				wasmMemoryStats: target == "wasm32",
+				wasmGcAllocationCount: target == "wasm-gc"
+			}).bytes;
+			sys.io.File.saveBytes(path, bytes);
+			var process = new sys.io.Process("node", ["-e", 'const e=new WebAssembly.Instance(new WebAssembly.Module(require("fs").readFileSync(process.argv[1]))).exports;if(e.main()!==42)throw Error("result");', path]),
+				error = process.stderr.readAll().toString(), status = process.exitCode();
+			process.close();
+			if (status != 0) throw 'Native reference map failed on $target inline=$inlining ($status): $error';
+		}
+		sys.FileSystem.deleteFile(path);
+		Sys.println('PASS $target inline=$inlining native reference map keeps enum values boxed and iterable');
 	}
 }

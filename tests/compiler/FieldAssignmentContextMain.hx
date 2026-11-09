@@ -15,7 +15,7 @@ class FieldAssignmentContextMain {
 
 	static function compiler(source:String):Compiler {
 		var result = new Compiler();
-		result.addSourceRoot(Sys.getCwd() + "/stdlib");
+		result.addStandardLibrarySourceRoot(Sys.getCwd() + "/stdlib");
 		result.update("Main.hx", declarations + source);
 		return result;
 	}

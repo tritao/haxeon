@@ -8,7 +8,7 @@ class AbstractTypeDependencyMain {
 	static function main():Void {
 		var compiler = new Compiler();
 		CompilerIntrinsics.register(compiler);
-		compiler.addSourceRoot("stdlib");
+		compiler.addStandardLibrarySourceRoot("stdlib");
 		var source = File.getContent("tests/programs/bytes-stream-float.hx");
 		for (revision in 0...2) {
 			compiler.update("Main.hx", revision == 0 ? source : StringTools.replace(source, "? 42 : 7", "? 43 : 7"));

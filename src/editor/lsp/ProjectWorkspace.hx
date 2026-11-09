@@ -399,29 +399,34 @@ class ProjectWorkspace {
 			// Share validated local package discovery with the build driver. It does
 			// not acquire remote dependencies or build native artifacts.
 			var resolved = ProjectDiscovery.discover(file),
+				spelling = new LinkSpelling(Path.directory(file)),
 				roots:Array<String> = [],
 				interfaces:Map<String, String> = [],
 				projections:Map<String, String> = [];
+			// Discovery returns native separators and resolves symbolic links; ownership compares
+			// normalized paths in the spelling the editor opened the workspace by.
+			function local(path:String):String
+				return spelling.respell(normalize(path));
 			for (value in resolved.packages.packages) {
-				outputDirectories.set(resolve(value.root, value.manifest.outputDir), true);
+				var packageRoot = local(value.root);
+				outputDirectories.set(resolve(packageRoot, value.manifest.outputDir), true);
 				for (source in value.sources) {
-					var directory = Path.directory(source);
-					while (directory.length > value.root.length) {
-						declaredSourceDirectories.set(normalize(directory), true);
+					var directory = Path.directory(local(source));
+					while (directory.length > packageRoot.length) {
+						declaredSourceDirectories.set(directory, true);
 						directory = Path.directory(directory);
 					}
 				}
-				// Discovery returns native separators; ownership compares normalized paths.
-				for (root in value.sourceRoots.map(normalize)) {
-					if (root != normalize(value.root))
+				for (root in value.sourceRoots.map(local)) {
+					if (root != packageRoot)
 						manifestSourceRoots.set(root, true);
 					if (roots.indexOf(root) < 0)
 						roots.push(root);
 				}
 				for (path in value.ffiInterfaces)
-					interfaces.set(path, File.getContent(path));
+					interfaces.set(local(path), File.getContent(path));
 				for (path in value.ffiProjections)
-					projections.set(path, File.getContent(path));
+					projections.set(local(path), File.getContent(path));
 			}
 			var interfacePaths = [for (path in interfaces.keys()) path],
 				projectionPaths = [for (path in projections.keys()) path];
@@ -572,4 +577,37 @@ class ProjectWorkspace {
 
 	static function normalize(path:String):String
 		return StringTools.replace(FileSystem.absolutePath(path), "\\", "/");
+}
+
+/**
+	Maps a path with its symbolic links resolved back into the spelling of an anchor directory: the deepest
+	ancestor of the anchor whose resolved form contains the path names it. A path outside every ancestor keeps
+	its resolved form.
+**/
+private class LinkSpelling {
+	final ancestors:Array<{spelled:String, resolved:String}> = [];
+
+	public function new(anchor:String) {
+		var directory = anchor;
+		while (directory.length > 0) {
+			if (FileSystem.exists(directory)) {
+				var resolved = StringTools.replace(FileSystem.fullPath(directory), "\\", "/");
+				if (resolved != directory)
+					ancestors.push({spelled: directory, resolved: resolved});
+			}
+			var parent = Path.directory(directory);
+			if (parent == directory)
+				break;
+			directory = parent;
+		}
+	}
+
+	public function respell(path:String):String {
+		for (ancestor in ancestors)
+			if (path == ancestor.resolved)
+				return ancestor.spelled;
+			else if (StringTools.startsWith(path, ancestor.resolved + "/"))
+				return ancestor.spelled + path.substr(ancestor.resolved.length);
+		return path;
+	}
 }

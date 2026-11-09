@@ -25,6 +25,8 @@ class UiFrameMetrics {
 	public final resolvedGeometryChangedNodes:Int;
 	/** Nodes whose previous resolved geometry object was retained. */
 	public final resolvedGeometryReusedNodes:Int;
+	/** Internal submit passes used to settle geometry, reactive state, and interaction feedback. */
+	public final buildPasses:Int;
 	public final submitSeconds:Float;
 	public var viewSeconds(default, null):Float = 0.0;
 	public var treeAndStyleSeconds(default, null):Float = 0.0;
@@ -64,7 +66,8 @@ class UiFrameMetrics {
 			submitSeconds:Float, nativeLayoutSubmitted:Bool = true,
 			nativeLayoutReused:Bool = false,
 			resolvedGeometryChangedNodes:Int = 0,
-			resolvedGeometryReusedNodes:Int = 0) {
+			resolvedGeometryReusedNodes:Int = 0,
+			buildPasses:Int = 1) {
 		this.frameNumber = frameNumber;
 		this.nodeCount = nodeCount;
 		this.styleResolutions = styleResolutions;
@@ -84,6 +87,7 @@ class UiFrameMetrics {
 		this.nativeLayoutReused = nativeLayoutReused;
 		this.resolvedGeometryChangedNodes = resolvedGeometryChangedNodes;
 		this.resolvedGeometryReusedNodes = resolvedGeometryReusedNodes;
+		this.buildPasses = buildPasses;
 		this.submitSeconds = submitSeconds;
 		paintedNodes = 0;
 		paintSkippedNodes = 0;

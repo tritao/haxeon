@@ -14,7 +14,7 @@ class PrimitiveStringEffectsMain {
 
 	static function compiler():Compiler {
 		var result = new Compiler(null, CompilerIntrinsics.configuration());
-		result.addSourceRoot(Sys.getCwd() + "/stdlib");
+		result.addStandardLibrarySourceRoot(Sys.getCwd() + "/stdlib");
 		result.update("Support.hx", helpers);
 		result.update("Main.hx", view);
 		return result;

@@ -304,11 +304,23 @@ class IrInlineEnumLowering {
 								case Function(_, _): true;
 								default: false;
 							}):
+						case ToDyn(_, value) if (eligibility.supportsCallableEscape(value.type)):
+							// Scalar closure lowering boxes enum arguments only in this Dynamic boundary adapter.
+						case SafeCast(output, value) if ((switch value.type { case Dyn: true; default: false; })
+							&& eligibility.supportsCallableEscape(output.type)):
+							// The paired closure adapter restores the physical enum packet after its logical signature check.
 						case ToDyn(_, value), SafeCast(_, value), Equal(_, value, _):
 							var output = IrOperands.output(located.value);
-							if (containsMapped(value.type) || (output != null && containsMapped(output.type)))
+							var supported = switch located.value {
+								case ToDyn(_, input): eligibility.supportsCallableEscape(input.type);
+								case SafeCast(out, input): (switch input.type { case Dyn: true; default: false; }) && eligibility.supportsCallableEscape(out.type);
+								default: false;
+							};
+							if (!supported && (containsMapped(value.type) || (output != null && containsMapped(output.type))))
 								throw 'Unsupported inline enum escape passed eligibility: ' + Std.string(located.value);
-						case TypeValue(_, type): // Keep the nominal type descriptor; typed array allocation consumes it.
+						case TypeValue(out, type):
+							var callable = eligibility.callableDescriptors.get(fn.name);
+							instruction = TypeValue(use(out), callable != null && callable.exists(out.id) ? mapped(type) : type);
 						default:
 					}
 					copy.instructions.push(new Located(instruction, located.provenance));

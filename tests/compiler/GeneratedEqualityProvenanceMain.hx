@@ -6,7 +6,7 @@ class GeneratedEqualityProvenanceMain {
 	static function create(sources:Map<String, String>):Compiler {
 		var c = new Compiler();
 		CompilerIntrinsics.register(c);
-		c.addSourceRoot("stdlib");
+		c.addStandardLibrarySourceRoot("stdlib");
 		c.livePatching = false;
 		c.developmentMetadata = true;
 		for (path => source in sources)

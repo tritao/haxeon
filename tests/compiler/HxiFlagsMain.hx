@@ -34,7 +34,7 @@ class HxiFlagsMain {
 			&& natives.length == 1,
 			"flags should project to nominal bitwise-friendly types without narrowing the ABI");
 		var compiler = new Compiler();
-		compiler.addSourceRoot("stdlib");
+		compiler.addStandardLibrarySourceRoot("stdlib");
 		compiler.addFfiInterface("flag-widths.hxi", source);
 		compiler.update("FlagsMain.hx", 'import flag_widths; function main():Int { return WideFlags.low().contains(WideFlags.low()) ? 42 : 0; }');
 		compiler.compile("FlagsMain");

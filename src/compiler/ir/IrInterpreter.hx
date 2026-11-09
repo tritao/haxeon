@@ -12,6 +12,7 @@ import compiler.ir.IrFunction;
 class IrInterpreter {
 	final program:IrProgram;
 	final functions:Map<String, IrFunction> = [];
+	final enumKindQueries:Map<String, Bool> = [];
 	final globals:Map<String, Dynamic> = [];
 	var steps:Int;
 	var maxSteps:Int;
@@ -20,6 +21,7 @@ class IrInterpreter {
 
 	public function new(program:IrProgram, ?maxSteps:Int = 1000000) {
 		this.program = program;
+		for (native in program.natives) if (native.library == "haxeon_runtime" && native.symbol == "__reflect_is_enum") enumKindQueries.set(native.name, true);
 		this.maxSteps = maxSteps;
 		for (fn in program.functions)
 			functions.set(fn.name, fn);
@@ -330,6 +332,7 @@ class IrInterpreter {
 			return closure.target == expected.target && closure.nativeName == expected.nativeName ? closure.receiver : null;
 		}
 
+		if (enumKindQueries.exists(name)) return Std.isOfType(arguments[0], InterpEnum);
 		return switch name {
 			case "__exit": null;
 			case "__dynamic_object_type_id":

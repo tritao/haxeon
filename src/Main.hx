@@ -13,7 +13,7 @@ class Main {
 		var outputPath = arguments.length > 1 ? arguments[1] : "out/program.hl";
 		var compiler = new Compiler();
 		CompilerIntrinsics.register(compiler);
-		compiler.addSourceRoot("stdlib");
+		compiler.addStandardLibrarySourceRoot("stdlib");
 		// Modules the file refers to are found beside it, as with `-cp .` in Haxe.
 		var directory = Path.directory(sourcePath);
 		compiler.addSourceRoot(directory == "" ? "." : directory);

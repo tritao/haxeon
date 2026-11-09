@@ -93,11 +93,9 @@ class ObjectReflection {
 	static function needsLogicalReflection(type:IrType, values:Map<String, Bool>):Bool
 		return switch type {
 			case Obj(name): values.exists(name);
-			case Nullable(Obj(name)): values.exists(name);
+			case Nullable(inner): needsLogicalReflection(inner, values);
 			case Function(arguments, result):
-				var found = switch result { case Obj(name): values.exists(name); default: false; };
-				for (argument in arguments) switch argument { case Obj(name) if (values.exists(name)): found = true; default: }
-				found;
+				Lambda.exists(arguments, argument -> needsLogicalReflection(argument, values)) || needsLogicalReflection(result, values);
 			default: false;
 		};
 

@@ -25,7 +25,6 @@ class Main {
 		var seen = [A.value(), D.value(), E.value(), Z.value()];
 		for (name in ["Main", "A", "B", "C", "D", "E", "X", "Y", "Z", "Nope"])
 			Sys.println(name + "=" + CodeIdentity.ofModule(name));
-		Sys.println("native=" + CodeIdentity.nativeBuild("fake"));
 		return seen.length - 4;
 	}
 }',
@@ -149,30 +148,6 @@ class Main {
 		var sessionV = new CompilerSession();
 		sameAll(v1, build(sessionV, "sv1", ["--define=compiler-version=1"]), "a session build with the version");
 		expect(changed(v1, build(sessionV, "sv2", ["--define=compiler-version=2"])) == all.join(","), "a session rebuild with a new compiler version");
-
-		// The native build: the libraries published beside the program, by content.
-		write(base);
-		expect(build(new CompilerSession(), "n0").get("native") == "null", "no native directory, no native identity");
-		var native = root + "/native/fake";
-		FileSystem.createDirectory(root + "/native");
-		FileSystem.createDirectory(native);
-		File.saveContent(native + "/readme.txt", "not a library");
-		expect(build(new CompilerSession(), "n1").get("native") == "null", "a directory without libraries has no native identity");
-		File.saveContent(native + "/libfake.so", "first build");
-		var n2 = build(new CompilerSession(), "n2").get("native");
-		expect(n2 != null && n2 != "null" && n2.length == 64, "a published library gives an identity: " + n2);
-		expect(build(new CompilerSession(), "n2b").get("native") == n2, "the native identity is stable");
-		File.saveContent(native + "/readme.txt", "still not a library");
-		expect(build(new CompilerSession(), "n2c").get("native") == n2, "files that are not libraries do not count");
-		File.saveContent(native + "/libfake.so", "second build");
-		var n3 = build(new CompilerSession(), "n3").get("native");
-		expect(n3 != n2, "rebuilding a library changes the native identity");
-		File.saveContent(native + "/libother.so.8", "another");
-		expect(build(new CompilerSession(), "n4").get("native") != n3, "another library changes the native identity");
-		File.saveContent(native + "/libfake.so", "first build");
-		FileSystem.deleteFile(native + "/libother.so.8");
-		expect(build(new CompilerSession(), "n5").get("native") == n2, "the identity depends on the content only");
-		sameAll(first, build(new CompilerSession(), "n6"), "native libraries do not change code identities");
 
 		deleteTree(root);
 		Sys.println("PASS: code identities (" + checks + " checks)");

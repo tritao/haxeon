@@ -130,8 +130,6 @@ class CompilerSession {
 					break;
 				}
 			}
-		if (compiler != null && compiler.hasShadowedModule())
-			reset();
 		if (compiler == null) {
 			interfaces = [for (path in interfacePaths) {path: path, text: read(path)}];
 			projections = [for (path in projectionPaths) {path: path, text: read(path)}];
@@ -182,7 +180,7 @@ class CompilerSession {
 					compiler.addFfiInterface(source.path, source.text);
 				}
 			}
-			compiler.addSourceRoot("stdlib");
+			compiler.addStandardLibrarySourceRoot("stdlib");
 			for (root in request.roots)
 				compiler.addSourceRoot(root);
 			for (root in request.packageRoots)

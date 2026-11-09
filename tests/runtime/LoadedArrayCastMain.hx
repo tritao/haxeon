@@ -9,7 +9,7 @@ class LoadedArrayCastMain {
 	static function main():Void {
 		var compiler = new Compiler();
 		CompilerIntrinsics.register(compiler);
-		compiler.addSourceRoot("stdlib");
+		compiler.addStandardLibrarySourceRoot("stdlib");
 		var source = File.getContent("tests/fixtures/loaded-array-cast/Main.hx");
 		for (incremental in [false, true]) {
 			compiler.update("Main.hx", incremental ? StringTools.replace(source, "return 42;", "return 43;") : source);

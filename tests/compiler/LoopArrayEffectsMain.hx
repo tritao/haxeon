@@ -13,7 +13,7 @@ class LoopArrayEffectsMain {
 
 	static function check(label:String, body:String, accepted:Bool):Void {
 		var compiler = new Compiler();
-		compiler.addSourceRoot(Sys.getCwd() + "/stdlib");
+		compiler.addStandardLibrarySourceRoot(Sys.getCwd() + "/stdlib");
 		compiler.update("Main.hx", source(body));
 		try {
 			var compiled = compiler.compile("Main");

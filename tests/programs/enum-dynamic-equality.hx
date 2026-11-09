@@ -31,6 +31,9 @@ class EnumHolder<T> {
 
 function makeGeneric<T:Equatable>(value:T):GenericValue<T> return GenericValue.Item(value);
 
+@:hlNative("haxeon_runtime", "__reflect_is_enum")
+extern function enumKindProbe(value:Dynamic):Bool;
+
 function main():Int {
 	var first:Dynamic = Value.Item(1), same:Dynamic = Value.Item(1), different:Dynamic = Value.Item(2);
 	if (!(first == same) || first == different) return 1;
@@ -72,5 +75,37 @@ function main():Int {
 	if (!(reflectedA == reflectedB) || !Type.enumEq(reflectedA, reflectedB)) return 19;
 	if (Reflect.compare(first, first) != 0xAABBCCDD || Reflect.compare(first, same) != 0xAABBCCDD
 		|| Reflect.compare(null, first) != 0xAABBCCDD || Reflect.compare(first, null) != 0xAABBCCDD) return 20;
+	var number:Dynamic = 7, decimal:Dynamic = 7.5, flag:Dynamic = false, text:Dynamic = "enum";
+	var list:Array<Int> = [], erasedList:Dynamic = list, object:Dynamic = new EnumHolder(7);
+	var callback:Dynamic = () -> 7;
+	if (!enumKindProbe(first) || !enumKindProbe(customFirst) || !enumKindProbe(never) || !enumKindProbe(dynamicNumbers[0])
+		|| !enumKindProbe(dynamicTexts[0]) || !enumKindProbe(dynamicNumbers[2]) || enumKindProbe(null) || enumKindProbe(number) || enumKindProbe(decimal)
+		|| enumKindProbe(flag) || enumKindProbe(text) || enumKindProbe(erasedList) || enumKindProbe(object) || enumKindProbe(callback)) return 23;
+	#if wasm
+	if (Reflect.compare(number, number) != 0 || Reflect.compare(null, number) != -1) return 24;
+	#end
+	if (CompareCensus.perform(8) != 336) return 21;
+	#if !wasm
+	for (count in [8, 1024]) {
+		hl.Gc.censusStart(0);
+		var before = hl.Gc.totalAllocated(), result = CompareCensus.perform(count);
+		var bytes = hl.Gc.totalAllocated() - before;
+		hl.Gc.censusStop();
+		if (result != count * 42 || bytes != 0) return 22;
+	}
+	#end
 	return 42;
+}
+
+/** Enum kind checks must not allocate or depend on nominal descriptor dispatch. */
+class CompareCensus {
+	static final value:Dynamic = Value.Item(7);
+	@:expose public static function perform(count:Int):Int {
+		var sum = 0;
+		for (index in 0...count)
+			if (Reflect.compare(value, value) == 0xAABBCCDD && Reflect.compare(null, value) == 0xAABBCCDD
+				&& Reflect.compare(value, null) == 0xAABBCCDD && enumKindProbe(value))
+				sum += 42;
+		return sum;
+	}
 }

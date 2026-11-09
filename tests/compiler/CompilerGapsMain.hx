@@ -40,7 +40,7 @@ class CompilerGapsMain {
 	static function create(target:BackendTarget):Compiler {
 		var c = new Compiler();
 		CompilerIntrinsics.register(c);
-		c.addSourceRoot("stdlib");
+		c.addStandardLibrarySourceRoot("stdlib");
 		if (target != HashLink) {
 			var name = target == WasmGc ? "wasm-gc" : "wasm32";
 			c.configure("gaps:" + name, "gaps:" + name, CompilerDriver.targetDefines(name));

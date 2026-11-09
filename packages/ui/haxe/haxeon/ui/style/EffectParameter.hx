@@ -69,6 +69,6 @@ struct EffectParameter implements Equatable {
 		var text:Array<String> = [];
 		for (index in 0...componentCount)
 			text.push(Std.string(valueAt(index)));
-		return Std.string(type) + "(" + text.join(",") + ")";
+		return EffectParameterTypeUtil.label(type) + "(" + text.join(",") + ")";
 	}
 }

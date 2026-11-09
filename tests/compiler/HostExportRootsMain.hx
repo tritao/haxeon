@@ -31,7 +31,7 @@ class HostExportRootsMain {
 			throw "Unchanged CLI export roots did not reuse the session";
 		for (inlineEnabled in [false, true]) for (target in ["hl", "wasm32", "wasm-gc"]) {
 			var compiler = new Compiler(null, CompilerIntrinsics.configuration());
-			compiler.addSourceRoot("stdlib");
+			compiler.addStandardLibrarySourceRoot("stdlib");
 			compiler.configure("host-roots-" + target + inlineEnabled, "host-roots",
 				CompilerDriver.targetDefines(target).concat(["haxeon-inline=" + (inlineEnabled ? 1 : 0)]));
 			compiler.update("Main.hx", source);
