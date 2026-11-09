@@ -120,3 +120,19 @@ Deferred (open items):
 - Fix 7, compacting `SourceSpan`, `Token` and AST spans, is parser-wide.
 - Fix 6, fewer transient objects, comes with the pass work (M2).
 
+## Conclusion (2026-11-09, after fixes a, b and per-function verification)
+
+Census after an edit, on the app: live blocks 3.60 GB (4.43 before fixes 2 and 5), GC pages 7.14 GB (8.5 before), process peak ~7.9-8.0 GB
+(8.93 before). Releasing owners one at a time: cached result 0.10 GB, reuse snapshot 0.01, encoded module bytes + writer cache 0.16,
+lowered-function cache 0.00, last assembler 0.07, inline cache 0.19.
+
+- **Live data is ~3.6 GB**, and the HL module together with the lowered-function cache and the retained assembler is about 0.2 GB of it.
+  The 0.8 GB that "fix 3" (encoded lowered functions) aimed at was the debug records, which fix 2 removed, so fix 3 is not done: encoding
+  the cache would save ~0.1 GB and only if `HlCode` stopped holding function objects. The small residuals (dropping the retained 100 MB of
+  module bytes, packing the 3.0M recorded requests) are ~0.1 GB each and are not worth the code.
+- **What remains of the peak is fragmentation and slack**: pages hold 3.6 GB of live blocks in 7.1 GB, then the collector's growth
+  allowance adds up to the process peak.
+- **Levers left**: fewer transient allocations (the pass work, M2: every pass that stops rebuilding unchanged functions helps both
+  speed and fragmentation), and a per-build GC mark threshold set by the compiler through a runtime call in our HashLink (a global 0.2
+  costs +17 s of GC on a cold build). The second is a decision for the user, not part of this work.
+
