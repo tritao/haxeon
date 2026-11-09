@@ -253,7 +253,7 @@ class Compiler {
 	 * What the last verification of the final IR accepted (see `IrVerifyMemo`). It belongs to the IR, not to a backend, so it is not
 	 * part of the lowered-function cache; candidate builds share it, since an acceptance holds only while the reads it recorded do.
 	 */
-	public final verifyMemo:compiler.ir.IrVerifyMemo = new compiler.ir.IrVerifyMemo();
+	public var verifyMemo:compiler.ir.IrVerifyMemo = new compiler.ir.IrVerifyMemo();
 
 	/**
 	 * Whether backend assembly keeps its append-only history between compiles. Live sessions need it: patches
@@ -976,6 +976,8 @@ class Compiler {
 		candidate.types = snapshot.types;
 		candidate.objectCache = [for (name => object in snapshot.objectCache) name => object];
 		candidate.lastTypedProgram = snapshot.lastTypedProgram;
+		// Shared, not copied: an acceptance holds only while the IR and everything it read are equal, so a build that fails leaves nothing wrong behind.
+		candidate.verifyMemo = verifyMemo;
 		candidate.inlineCache = inlineCache.copy();
 		candidate.pipelineSnapshot = pipelineSnapshot;
 		candidate.loweredCache = loweredCache.copy();
