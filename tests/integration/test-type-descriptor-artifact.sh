@@ -149,7 +149,7 @@ with tempfile.TemporaryDirectory(prefix='descriptor-invalidation-', dir=outputs)
     main = src / 'Main.hx'
     resource.write_text('package schema; interface Resource {}\n')
     base.write_text('package schema; interface BaseResource {}\n')
-    item.write_text('package model; import schema.BaseResource; struct Item : BaseResource { public var value:Int; }\n')
+    item.write_text('package model; import schema.BaseResource; struct Item implements BaseResource { public var value:Int; }\n')
     main.write_text('import model.Item; function main():Int return typeInfo<Item>().interfaces.length;\n')
     session_dir = root / 'sessions'
     env['HAXEON_COMPILER_SESSION_DIR'] = str(session_dir)
@@ -177,11 +177,11 @@ with tempfile.TemporaryDirectory(prefix='descriptor-invalidation-', dir=outputs)
         ancestor_removed = build(True)
         assert ancestor_removed['interfaces'] == first['interfaces']
         assert ancestor_removed['hash'] != inherited['hash'], 'removing an ancestor interface must change the emitted descriptor hash'
-        item.write_text('package model; import schema.BaseResource; import schema.Resource; struct Item : BaseResource, Resource { public var value:Int; }\n')
+        item.write_text('package model; import schema.BaseResource; import schema.Resource; struct Item implements BaseResource implements Resource { public var value:Int; }\n')
         direct = build(True)
         assert direct['interfaces'] == inherited['interfaces']
         assert direct['hash'] != ancestor_removed['hash'], 'adding a direct interface must change the emitted descriptor hash'
-        item.write_text('package model; import schema.BaseResource; import schema.Resource; struct Item : BaseResource { public var value:Int; }\n')
+        item.write_text('package model; import schema.BaseResource; import schema.Resource; struct Item implements BaseResource { public var value:Int; }\n')
         direct_removed = build(True)
         assert direct_removed['interfaces'] == ancestor_removed['interfaces']
         assert direct_removed['hash'] == ancestor_removed['hash'], 'removing the direct interface must restore the original descriptor hash'
