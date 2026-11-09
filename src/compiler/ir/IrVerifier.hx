@@ -691,8 +691,9 @@ class IrVerifier {
 						require(values,arg);
 						var valid = switch arg.type {
 							case Obj(name): var object = objects.get(name); object != null && !object.isValue;
-							// Erased class/interface owners already carry a reference; the operation never creates a box.
-							case Virtual(_), Dyn: true;
+							// Managed references retain identity at erased boundaries; the operation never creates a box.
+							case Bytes, ManagedBytes, Virtual(_), Dyn, Array(_), Iterator(_): true;
+							case Nullable(inner): isIdentityReference(inner, objects);
 							default: false;
 						};
 						if (!valid) throw 'Reference identity requires class or interface references, got ${Std.string(arg.type)}';
@@ -1071,6 +1072,14 @@ class IrVerifier {
 	static function isReference(type:IrType):Bool
 		return switch type {
 			case Bytes, RawPtr, ManagedBytes, Dyn, Nullable(_), Obj(_), Enum(_), Abstract(_), Virtual(_), Array(_), Iterator(_), Function(_, _): true;
+			default: false;
+		};
+
+	static function isIdentityReference(type:IrType, objects:Map<String, IrObject>):Bool
+		return switch type {
+			case Obj(name): var object = objects.get(name); object != null && !object.isValue;
+			case Bytes, ManagedBytes, Virtual(_), Dyn, Array(_), Iterator(_): true;
+			case Nullable(inner): isIdentityReference(inner, objects);
 			default: false;
 		};
 

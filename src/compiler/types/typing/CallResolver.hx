@@ -1201,6 +1201,23 @@ class CallResolver {
 
 	public function typeBuiltinCall(name:String, arguments:Array<AstExpression>, span:SourceSpan, scope:Scope,
 			expectedType:Null<CompilerType> = null):Null<TypedExpression> {
+		if (name == "__reference_equal") {
+			if (arguments.length != 2)
+				fail("E1008", 'Function "$name" expects 2 arguments, got ${arguments.length}', span);
+			var left = typeExpressionValue(arguments[0], scope),
+				right = coerce(typeExpressionValue(arguments[1], scope), left.type, "reference identity operand", "E1002");
+			function isReferenceIdentityType(type:CompilerType):Bool
+				return switch type {
+					case TDynamic, TTypeParameter(_, _), TString, TBytes, THlBytes, TArray(_), TIterator(_), TMap(_, _),
+						TInstance(NominalKind.Interface, _, _): true;
+					case TInstance(NominalKind.Class, _, _): !session.relations.isStruct(type);
+					case TNullable(inner): isReferenceIdentityType(inner);
+					default: false;
+				};
+			if (!isReferenceIdentityType(left.type))
+				fail("E1025", 'Reference identity requires a managed object reference, got "${compiler.semantic.SemanticSignature.display(left.type)}"', span);
+			return new TypedExpression(TCall("__reference_equal", [left, right]), TBool, span);
+		}
 		if (name == "$value.place") {
 			if (arguments.length != 1)
 				throw "Invalid compiler-generated place binding";

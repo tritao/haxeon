@@ -8,8 +8,15 @@ class ObjectMap<K, V> {
 
 	public function new() {}
 
+	function indexOf(key:K):Int {
+		for (index in 0...keys.length)
+			if (__reference_equal(keys[index], key))
+				return index;
+		return -1;
+	}
+
 	public function set(key:K, value:V):Void {
-		var index = keys.indexOf(key);
+		var index = indexOf(key);
 		if (index < 0) {
 			keys.push(key);
 			values.push(value);
@@ -18,15 +25,15 @@ class ObjectMap<K, V> {
 	}
 
 	public function get(key:K):Null<V> {
-		var index = keys.indexOf(key);
+		var index = indexOf(key);
 		return index < 0 ? null : values[index];
 	}
 
 	public function exists(key:K):Bool
-		return keys.indexOf(key) >= 0;
+		return indexOf(key) >= 0;
 
 	public function remove(key:K):Bool {
-		var index = keys.indexOf(key);
+		var index = indexOf(key);
 		if (index < 0)
 			return false;
 		keys.splice(index, 1);
