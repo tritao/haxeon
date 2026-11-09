@@ -26,9 +26,11 @@ class HlWriterCache {
 	public function prepare(files:Array<String>):Void {
 		if (sameStrings(debugFiles, files))
 			return;
+		// Encoded bodies and the prefix name debug files by index, so they go. Validation does not depend on that list, and
+		// `HlValidator` marks functions before the writer prepares the cache: clearing the marks here made the first build
+		// after a different file list validate every function again.
 		debugFiles = files.copy();
 		functions = new ObjectMap();
-		validatedFunctions = new ObjectMap();
 		prefix = null;
 	}
 

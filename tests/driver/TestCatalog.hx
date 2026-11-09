@@ -248,6 +248,7 @@ class TestCatalog {
 		"LiveLoweringReuseMain",
 		"LiveKeptCheckMain",
 		"IrFunctionRewriteMain",
+		"ChunkedOutputMain",
 		"FieldInitializerEditMain",
 		"CodeIdentityMain",
 		"IdentityPathMain",

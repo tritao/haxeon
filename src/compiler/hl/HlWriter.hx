@@ -34,7 +34,11 @@ class HlWriter {
 	#else
 	final output:Output;
 	#end
+	#if haxeon
 	final bytesOutput:Null<BytesOutput>;
+	#else
+	final bytesOutput:Null<ChunkedOutput>;
+	#end
 	final cache:Null<HlWriterCache>;
 	var hasDebug:Bool = false;
 	var debugFiles:Array<String> = [];
@@ -50,11 +54,23 @@ class HlWriter {
 	#else
 	public function new(?cache:HlWriterCache, ?destination:Output) {
 		this.cache = cache;
-		bytesOutput = destination == null ? new BytesOutput() : null;
+		bytesOutput = destination == null ? new ChunkedOutput() : null;
 		output = destination == null ? bytesOutput : destination;
 		output.bigEndian = false;
 	}
 	#end
+
+	/** Appends bytes that are never changed again (the cached prefix, cached function encodings, section payloads) without copying them. */
+	function writeShared(bytes:HaxeBytes):Void {
+		#if haxeon
+		output.write(bytes);
+		#else
+		if (bytesOutput != null)
+			bytesOutput.writeShared(bytes);
+		else
+			output.write(bytes);
+		#end
+	}
 
 	function getBytes():HaxeBytes {
 		if (bytesOutput == null)
@@ -280,7 +296,7 @@ class HlWriter {
 			if (cache != null)
 				cache.setPrefix(code, prefix);
 		}
-		output.write(prefix);
+		writeShared(prefix);
 		for (fn in code.functions) {
 			var encoded = cache == null ? null : cache.get(fn);
 			if (encoded == null) {
@@ -288,7 +304,7 @@ class HlWriter {
 				if (cache != null)
 					cache.set(fn, encoded);
 			}
-			output.write(encoded);
+			writeShared(encoded);
 		}
 		if (cache != null)
 			cache.retainFunctions(code.functions);
@@ -363,7 +379,7 @@ class HlWriter {
 			writeUnsignedIndex(section.flags);
 			var payload = section.payload;
 			writeUnsignedIndex(payload.length);
-			output.write(payload);
+			writeShared(payload);
 		}
 	}
 
