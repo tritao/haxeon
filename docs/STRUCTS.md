@@ -672,6 +672,13 @@ all bodies even during selective incremental verification. Only the generated bo
 the selected declaration and canonical adapter signature (including their existing scalar/optional ABI clones), may
 contain boxed enum temporaries. An arbitrary helper prefix does not grant that exception.
 
+ABI-dependent closure escape checks run after the selected target has constructed its explicit adapters. HashLink
+finishes that ABI in the frontend and can memoize verification there. Wasm finishes it in the backend and verifies
+the adapted program unconditionally. A Wasm compilation session also verifies its separately adapted auxiliary
+HashLink assembly; fresh recomputation uses that same adapted input. No private-payload escape is exempted merely
+because it occurs in a closure. Cold and edited builds with reuse checking, and forged unadapted backend payloads,
+exercise this ordering on both Wasm targets.
+
 Arrays and iterators retain logical `Enum(E)` element descriptors while transporting reference handles to lane storage;
 that exception does not admit an array or iterator of callbacks taking/returning nominal `E` values. A nominal enum type
 token is metadata, not a value: its uses are limited to matching array allocation/retyping descriptors and the array

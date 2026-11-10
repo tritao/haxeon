@@ -70,6 +70,7 @@ class TestCatalog {
 		"AllocationReportMain",
 		"GenericDynamicArgumentMain",
 		"GenericScalarMapOwnerMain",
+		"WasmClosureVerificationOrderMain",
 		"GenericStructFunctionMain",
 		"GenericOwnerPolicyMain",
 		"GenericOwnerRecursionMain",

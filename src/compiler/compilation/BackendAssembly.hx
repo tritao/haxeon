@@ -150,7 +150,8 @@ class BackendAssembly {
 			&& PatchPlanner.requiresFreshLayout(decision) ? freshLayout(baseAssembler) : baseAssembler.copy();
 		candidateAssembler.fieldReserve = context.livePatching && !context.isWasmTarget() ? liveFieldReserve : 0;
 		candidateAssembler.developmentMetadata = context.developmentMetadata || context.livePatching;
-		candidateAssembler.irVerified = !context.livePatching;
+		// The Wasm session's auxiliary HashLink copy acquired its own closure adapters above; verify that copy too.
+		candidateAssembler.irVerified = !context.livePatching && !context.isWasmTarget();
 		candidateAssembler.livePatching = context.livePatching;
 		if (loweredCache != null) {
 			loweredCache.forEnvironment(loweringEnvironment(candidateAssembler, context));
@@ -175,7 +176,7 @@ class BackendAssembly {
 			fresh.developmentMetadata = candidateAssembler.developmentMetadata;
 			fresh.irVerified = candidateAssembler.irVerified;
 			fresh.loweredCache = new compiler.hl.incremental.HlLoweredCache();
-			var freshAssembly = fresh.assemble(ir, context.rehydratedChanges(regenerated, ir), decision, relocated,
+			var freshAssembly = fresh.assemble(assemblyIr, context.rehydratedChanges(regenerated, assemblyIr), decision, relocated,
 				PatchPlanner.dispatchedFunctions(previousAbi, nextAbi));
 			if (fresh.developmentMetadata)
 				attachSourceSnapshots(context, freshAssembly.module);

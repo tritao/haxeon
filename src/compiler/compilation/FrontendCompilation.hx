@@ -687,8 +687,8 @@ class FrontendCompilation {
 			compiler.ir.IrEnumTagLowering.escapes(ir);
 			// Compare and publish the final IR even when only load/store forwarding is enabled.
 			inlinerChanged = IrInliner.run(ir, context.inlineCache(), context.targetProfile(), context.inlineEnabled(), instrumentScope);
-			// The final IR is verified here, once, whatever backend follows: only the functions whose IR or reads of the program changed.
-			if (!context.livePatching) {
+			// HashLink has its scalar closure ABI here. Wasm verifies after its target-specific closure escape adapters exist.
+			if (!context.livePatching && !context.isWasmTarget()) {
 				IrVerifier.verifyReusing(ir, context.verifyMemo);
 				if (checkingReuse)
 					try
