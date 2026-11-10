@@ -225,6 +225,15 @@ typedef IrObject = {
 	final methods:Array<IrObjectMethod>;
 }
 
+/** Copies of an IR object that change one part and carry every other field over, including ones added later. */
+class IrObjectTools {
+	public static function withMethods(object:IrObject, methods:Array<IrObjectMethod>):IrObject {
+		var copy:Dynamic = Reflect.copy(object);
+		copy.methods = methods;
+		return copy;
+	}
+}
+
 /** Callable contract required by an IR interface. */
 typedef IrInterfaceMethod = {final name:String; final arguments:Array<IrType>; final result:IrType;}
 
@@ -291,4 +300,21 @@ class IrProgram {
 
 	public function new(entryPoint:String)
 		this.entryPoint = entryPoint;
+
+	/** A program with its own function and native lists, sharing everything else with this one. */
+	public function copy():IrProgram {
+		var result = new IrProgram(entryPoint);
+		result.natives = natives.copy();
+		result.cNatives = cNatives;
+		result.functions = functions.copy();
+		result.objects = objects;
+		result.interfaces = interfaces;
+		result.enums = enums;
+		result.staticFields = staticFields;
+		result.positionalFingerprints = positionalFingerprints;
+		result.parameterDefaults = parameterDefaults;
+		result.positionalPlaces = positionalPlaces;
+		result.positionalSources = positionalSources;
+		return result;
+	}
 }

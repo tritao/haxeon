@@ -101,19 +101,18 @@ class BackendAssembly {
 		// target-specific adapters.
 		var assemblyIr = ir;
 		if (context.isWasmTarget()) {
-			assemblyIr = new IrProgram(ir.entryPoint);
-			assemblyIr.natives = ir.natives.copy();
-			assemblyIr.cNatives = ir.cNatives;
-			assemblyIr.functions = ir.functions.copy();
-			assemblyIr.objects = ir.objects;
-			assemblyIr.interfaces = ir.interfaces;
-			assemblyIr.enums = ir.enums;
-			assemblyIr.staticFields = ir.staticFields;
-			assemblyIr.positionalFingerprints = ir.positionalFingerprints;
-			assemblyIr.parameterDefaults = ir.parameterDefaults;
-			assemblyIr.positionalPlaces = ir.positionalPlaces;
-			assemblyIr.positionalSources = ir.positionalSources;
+			assemblyIr = ir.copy();
 			compiler.ir.IrScalarClosures.rewrite(assemblyIr);
+		} else if (!context.livePatching) {
+			// A plain HashLink build writes only what is reachable from the entry: a function nothing reaches is not lowered or
+			// encoded, and a class no reachable function mentions loses its methods. The program in the result keeps everything
+			// (other backends and tools read it), and a live module keeps every function too, because its host can call any of
+			// them by id and a reachability change must not move its layout.
+			assemblyIr = ir.copy();
+			var reachable = compiler.ir.IrReachability.withGeneratedRuntimeRoots(ir, ir.entryPoint, null, true);
+			compiler.ir.IrReachability.prune(assemblyIr, reachable);
+			regenerated = [for (name in regenerated) if (reachable.exists(name)) name];
+			relocated = [for (name in relocated) if (reachable.exists(name)) name];
 		}
 		// Lambdas are named by their position among their siblings. When an edit moved those names onto other functions, give
 		// the running module's lambdas the names their functions have now (see `LambdaAlignment`), so the plan compares, and
@@ -175,7 +174,7 @@ class BackendAssembly {
 			fresh.developmentMetadata = candidateAssembler.developmentMetadata;
 			fresh.irVerified = candidateAssembler.irVerified;
 			fresh.loweredCache = new compiler.hl.incremental.HlLoweredCache();
-			var freshAssembly = fresh.assemble(ir, context.rehydratedChanges(regenerated, ir), decision, relocated,
+			var freshAssembly = fresh.assemble(assemblyIr, context.rehydratedChanges(regenerated, assemblyIr), decision, relocated,
 				PatchPlanner.dispatchedFunctions(previousAbi, nextAbi));
 			if (fresh.developmentMetadata)
 				attachSourceSnapshots(context, freshAssembly.module);

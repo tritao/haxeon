@@ -45,6 +45,7 @@ class TestCatalog {
 		"TestMain",
 		"AuditVerifierMain",
 		"FrontendRestartMain",
+		"ReachabilityPruneMain",
 		"TypedMetadataMergeMain",
 		"WarmRebuildReuseMain",
 		"IrVerifyMemoMain",

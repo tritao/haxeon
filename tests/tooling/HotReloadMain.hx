@@ -41,6 +41,7 @@ class HotReloadMain {
 		testBackendStateLifetime();
 		testJitSupportModuleRetirement();
 		testLiveAbiPatchMatrix();
+		testLiveReachability();
 		testRetainedPatchedClosure();
 		if (Runtime.retryRetirements() != 0)
 			throw "released closure kept module retirement blocked after its frame unwound";
@@ -538,6 +539,36 @@ class HotReloadMain {
 			if (error.status != RuntimeStatus.BadArgument)
 				throw error;
 		}
+	}
+
+	/**
+	 * A live module keeps every function, reachable or not: its host can call any function by id, and an edit that makes a class used
+	 * or unused must patch like any other edit and not move the module's layout.
+	 */
+	static function testLiveReachability():Void {
+		var unused = "class Spare { public function new() {} public function read():Int { return 40; } public function more():Int { return 2; } } "
+			+ "function main():Int { return 42; }",
+			used = "class Spare { public function new() {} public function read():Int { return 40; } public function more():Int { return 2; } } "
+			+ "function main():Int { var s = new Spare(); return s.read() + s.more(); }";
+		var compiler = new Compiler();
+		compiler.update("Main.hx", unused);
+		var first = compiler.compile("Main");
+		var loaded = Runtime.load(HlWriter.encode(first.module).flatten(), first.runtimeIdentity);
+		if (!first.functionIds.exists("Spare.read") || !first.functionIds.exists("Spare.more"))
+			throw "a live module must keep the methods of a class nothing uses";
+		var step = 0, baseRevision = first.revision;
+		for (source in [used, unused, used, unused]) {
+			step++;
+			compiler.update("Main.hx", source);
+			var changed = compiler.compile("Main");
+			if (changed.requiresReload || changed.patchBytes == null)
+				throw 'step $step: making a class used or unused must patch, not reload: ${[for (reason in changed.reloadReasons) Std.string(reason)]}';
+			Runtime.patchSet(loaded, new PatchSet(baseRevision, changed.revision, changed.patchBytes, changed.changedFunctions));
+			baseRevision = changed.revision;
+			if (Runtime.callInt(loaded, changed.functionIds.get("main")) != 42)
+				throw 'step $step: the patched module does not run the edited program';
+		}
+		Runtime.dispose(loaded);
 	}
 
 	static function testLiveAbiPatchMatrix():Void {

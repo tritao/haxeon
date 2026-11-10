@@ -13,9 +13,10 @@ import haxe.io.Bytes;
  * and compared inside the compiler, which throws on a difference.
  */
 class WarmRebuildReuseMain {
-	static final boxSource = "class Box<T> { public var value:T; public function new(value:T) this.value = value; public function get():T return value; }";
+	static final boxSource = "class Box<T> { public var value:T; public var spare:Int; public function new(value:T) this.value = value; public function get():T return value; }";
 	static final shapeSource = "enum Shape { Circle(radius:Int); Square(side:Int); }";
-	static final areaSource = "class Area { public static function of(shape:Shape):Int return switch shape { case Circle(radius): 3 * radius * radius; case Square(side): side * side; }; }";
+	/** `step` is recursive so it is not inlined into `of` or `main`: a function nothing reaches is not in the module, and the scenarios below edit functions that are. */
+	static final areaSource = "class Area { public static function of(shape:Shape):Int return step(shape, 0); static function step(shape:Shape, n:Int):Int return n > 0 ? step(shape, n - 1) : switch shape { case Circle(radius): 3 * radius * radius; case Square(side): side * side; }; }";
 	static final libSource = "class Lib { public static function add(a:Int, b:Int):Int return a + b; public static function name():String return \"lib\"; public static function boxed():Int return new Box<Int>(3).get(); }";
 
 	/** Field initializers register anonymous types (`{}`) when they are typed, which a warm build does not do again for an unchanged class. */
@@ -52,11 +53,14 @@ class WarmRebuildReuseMain {
 			files.set("Main.hx", StringTools.replace(mainSource, " + Area.of(Circle(2))", " + 12"));
 		});
 		edit(failures, "after a new constant in a function early in the layout, which shifts the constant tables of the functions after it",
-			files -> files.set("Area.hx", StringTools.replace(areaSource, "3 * radius * radius", "3 * radius * radius + 123456789")), true);
+			files -> files.set("Box.hx", StringTools.replace(boxSource, "public function get():T return value;", "public function get():T { spare = spare + 123456789; return value; }")), true);
 		edit(failures, "after a new function early in the layout, which shifts the function indices of the functions after it",
-			files -> files.set("Area.hx",
-				StringTools.replace(areaSource, "public static function of(",
-					"public static function again(shape:Shape):Int return 7; public static function of(")),
+			files -> {
+				files.set("Area.hx",
+					StringTools.replace(areaSource, "public static function of(",
+						"public static function again(shape:Shape, n:Int):Int return n > 0 ? again(shape, n - 1) : 7; public static function of("));
+				files.set("Main.hx", StringTools.replace(mainSource, "Area.of(Circle(2))", "Area.of(Circle(2)) + Area.again(Circle(1), 0) - 7"));
+			},
 			true);
 		edit(failures, "after a new string constant",
 			files -> files.set("Lib.hx",
