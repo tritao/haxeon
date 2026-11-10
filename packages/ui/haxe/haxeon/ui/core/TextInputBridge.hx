@@ -9,6 +9,7 @@ import haxeon.ui.TextLayout.TextRangeRect;
 import haxeon.ui.widgets.text.Text;
 
 import nativekit.ffi.NativeKitTypes.Result;
+import nativekit.ffi.NativeKitTypes.TextInputFlags;
 import haxeon.ui.Rect;
 import haxeon.ui.widgets.text.TextInputWindow;
 
@@ -98,7 +99,7 @@ class TextInputBridge {
 	/** Publishes the active document, selection, composition and screen caret. */
 	public function update(window:TextInputWindow, documentLength:Int, selectionStart:Int,
 			selectionEnd:Int, compositionStart:Int, compositionEnd:Int,
-			inputType:Int, flags:Int, cursor:Rect,
+			inputType:Int, flags:TextInputFlags, cursor:Rect,
 			selectionRects:Array<TextRangeRect>, compositionRects:Array<TextRangeRect>):Void {
 		ensureLive();
 		if (surface == null || surface.isDisposed() || !requestedActive || cursor == null ||
@@ -115,7 +116,7 @@ class TextInputBridge {
 			publishedState[0] != windowStart || publishedState[1] != documentLength ||
 			publishedState[2] != selectionStart || publishedState[3] != selectionEnd ||
 			publishedState[4] != compositionStart || publishedState[5] != compositionEnd ||
-			publishedState[6] != inputType || publishedState[7] != flags ||
+			publishedState[6] != inputType || publishedState[7] != flags.rawValue() ||
 			publishedState[8] != cursor.x || publishedState[9] != cursor.y ||
 			publishedState[10] != cursor.width || publishedState[11] != cursor.height;
 		if (stateChanged) {
@@ -124,7 +125,7 @@ class TextInputBridge {
 			state.compositionStart = compositionStart;
 			state.compositionEnd = compositionEnd;
 			state.inputType = cast inputType;
-			state.flags = cast flags;
+			state.flags = flags;
 			state.cursorX = cursor.x;
 			state.cursorY = cursor.y;
 			state.cursorWidth = cursor.width;
@@ -139,7 +140,7 @@ class TextInputBridge {
 			publishedState[4] = compositionStart;
 			publishedState[5] = compositionEnd;
 			publishedState[6] = inputType;
-			publishedState[7] = flags;
+			publishedState[7] = flags.rawValue();
 			publishedState[8] = cursor.x;
 			publishedState[9] = cursor.y;
 			publishedState[10] = cursor.width;

@@ -1,7 +1,5 @@
 package haxeon.ui.core;
 
-import haxeon.ui.widgets.text.Text;
-
 import nativekit.ffi.NativeKitTypes;
 import nativekit.ffi.NativeKitTypes.CursorShape as NativeCursorShape;
 
@@ -11,7 +9,7 @@ import haxeon.ui.core.CursorShape as UiCursorShape;
 /** Applies UI cursor intent to one NativeKit window with lazy native resources. */
 class NativeCursorController {
 	final window:WindowHandle;
-	final cursors:Map<Int, OwnedCursorHandle>;
+	final cursors:Map<NativeCursorShape, OwnedCursorHandle>;
 	var capabilityChecked:Bool;
 	var available:Bool;
 	var active:UiCursorShape;
@@ -39,11 +37,11 @@ class NativeCursorController {
 		if (!supportsCursor())
 			return;
 
-		var key:Int = cast nativeShape(shape);
+		var key = nativeShape(shape);
 		var owner = cursors.get(key);
 		if (owner == null || owner.isClosed()) {
 			try {
-				owner = NativeKit.nk_cursor_create_standard_checked(nativeShape(shape));
+				owner = NativeKit.nk_cursor_create_standard_checked(key);
 				cursors.set(key, owner);
 			} catch (_:Dynamic) {
 				available = false;
@@ -59,7 +57,7 @@ class NativeCursorController {
 		if (active != UiCursorShape.Arrow && available)
 			setNativeCursor(CursorHandle.invalid());
 		active = UiCursorShape.Arrow;
-		var keys:Array<Int> = [];
+		var keys:Array<NativeCursorShape> = [];
 		for (key in cursors.keys())
 			keys.push(key);
 		for (key in keys) {
@@ -91,7 +89,7 @@ class NativeCursorController {
 	}
 
 	static function nativeShape(shape:UiCursorShape):NativeCursorShape {
-		return cast switch shape {
+		return switch shape {
 			case UiCursorShape.Text: NativeCursorShape.Ibeam;
 			case UiCursorShape.Crosshair: NativeCursorShape.Crosshair;
 			case UiCursorShape.Hand: NativeCursorShape.Hand;
@@ -101,7 +99,7 @@ class NativeCursorController {
 			case UiCursorShape.DiagonalResizeNesw: NativeCursorShape.NeswResize;
 			case UiCursorShape.Move: NativeCursorShape.Move;
 			case UiCursorShape.NotAllowed: NativeCursorShape.NotAllowed;
-			case _: NativeCursorShape.Arrow;
+			case UiCursorShape.Arrow: NativeCursorShape.Arrow;
 		};
 	}
 }

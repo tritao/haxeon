@@ -1,10 +1,12 @@
 import haxeon.ui.core.CursorShape;
 import haxeon.ui.core.UiContext;
+import haxeon.ui.core.NativeCursorController;
 import haxeon.ui.core.RenderNode;
 import haxeon.ui.core.WidgetId;
 import nativekit.ffi.NativeKitTypes.CursorShape as NativeCursorShape;
 
 @:access(haxeon.ui.core.UiContext)
+@:access(haxeon.ui.core.NativeCursorController)
 private class CursorShapeProbe {
 	public static function run():Int {
 		var shapes = [CursorShape.Arrow, CursorShape.Text, CursorShape.Crosshair, CursorShape.Hand,
@@ -21,6 +23,7 @@ private class CursorShapeProbe {
 			node.windowDecorationCursor = shape;
 			if (node.cursor != shape || node.windowDecorationCursor != shape) return 2;
 			if (UiContext.nativeCursorShape(shape) != native[index]) return 3;
+			if (NativeCursorController.nativeShape(shape) != native[index]) return 5;
 		}
 		node.cursor = null;
 		node.windowDecorationCursor = null;

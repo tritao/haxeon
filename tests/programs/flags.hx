@@ -11,7 +11,7 @@ struct Pair {
     public final value:Int;
     public function new(code:Access,value:Int) {this.code=code;this.value=value;}
 }
-class Holder { public var code:Access; public function new(code:Access) this.code=code; }
+class Holder { public var code:Access; public var initial:Access=Access.empty(); public function new(code:Access) this.code=code; }
 function read<T:Flags>(value:T):Int return value.rawValue();
 class Probe {
     @:expose public static function perform(count:Int):Int {
@@ -37,7 +37,7 @@ function main():Int {
     try { Access.fromRaw(8); }catch(error:Dynamic) {caught=true;}
     if(!caught) return 5;
     var holder=new Holder(Access.Read), pair=new Pair(Access.Write,40), values:Array<Access>=[Access.None,Access.Read];
-    if(holder.code!=Access.Read || pair.code.rawValue()+pair.value!=42 || values[1]!=Access.Read)return 6;
+    if(!holder.initial.isEmpty() || holder.code!=Access.Read || pair.code.rawValue()+pair.value!=42 || values[1]!=Access.Read)return 6;
     if(Probe.perform(32)!=32)return 7;
     return 42;
 }

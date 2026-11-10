@@ -67,7 +67,7 @@ class FlagsMain {
 		for (target in ["hl", "wasm32", "wasm-gc"])
 			for (inlining in [false, true])
 				check(target, inlining);
-		Sys.println("PASS: closed immutable flags, checked bits and zero allocation on all targets");
+		Sys.println("PASS: zero-allocation flags/reference-map reads; scalar-map reads match the cast baseline on all targets");
 	}
 
 	static function incremental():Void {
@@ -101,8 +101,22 @@ class FlagsMain {
 		var interpreted = new compiler.ir.IrInterpreter(p).run("main");
 		if (interpreted != 42)
 			throw 'Flags interpreter $target inline=$inlining returned $interpreted';
+		// Reference-valued maps use native primitives; the interpreter validates the core flags above.
+		// Exercise the typed cursor-cache key shape and its read allocations on the three runtimes.
+		var mapped = source.replace("class Probe {",
+			'enum abstract NativeShape(Int) implements RawRepresentable { var Arrow=0; var Text=1; } class Probe { public static var cache:Map<NativeShape,Holder>; public static var states:Map<Int,Access>;');
+		mapped = mapped.replace("total+=read(result);",
+			'var cached=cache.get(NativeShape.Text); if(cached==null || cached.code!=Access.Read || !cached.initial.isEmpty())return -3; total+=read(result);');
+		mapped = mapped.replace("if(Probe.perform(32)!=32)",
+			'Probe.states=new Map(); Probe.states.set(0,Access.empty()); Probe.cache=new Map(); Probe.cache.set(NativeShape.Text,holder); if(Probe.perform(32)!=32)');
+		mapped = mapped.replace("public static var states:Map<Int,Access>;",
+			'public static var states:Map<Int,Access>; @:expose public static function scalarChecks(count:Int, checked:Bool):Int { var total=0; for(i in 0...count) { if(checked) { if(!states.exists(0))return -4; var state:Access=states.get(0); if(!state.isEmpty())return -4; } else { var state:Access=cast states.get(0); if(!state.isEmpty())return -4; } total++; } return total; }');
+		c.update("Main.hx", mapped);
+		p = c.compile("Main").ir;
 		var holder = Lambda.find(p.objects, o -> o.name == "Holder");
-		if (holder == null || holder.fields.length != 1 || !compiler.ir.IrVerifier.sameType(holder.fields[0].type, I32))
+		if (holder == null
+			|| holder.fields.length != 2
+			|| Lambda.exists(holder.fields, field -> !compiler.ir.IrVerifier.sameType(field.type, I32)))
 			throw "A raw Int field must stay I32";
 		var pair = Lambda.find(p.objects, o -> o.name == "Pair");
 		if (pair == null || pair.nativeLayout == null || pair.nativeLayout.size != 8)
@@ -167,6 +181,19 @@ class FlagsMain {
 				b.branch(b.equal(value, b.constInt(n)), next, bad);
 				b.select(next);
 			}
+			for (checked in [false, true]) {
+				b.call("Probe.scalarChecks", [b.constInt(2), b.constBool(checked)], I32);
+				for (n in [8, 1024]) {
+					b.call("rawReset", [], Void);
+					b.call("rawStart", [b.constInt(0)], Void);
+					var value = b.call("Probe.scalarChecks", [b.constInt(n), b.constBool(checked)], I32);
+					b.call("rawStop", [], Void);
+					b.call("rawDump", [b.constString(stem + "-map-" + checked + "-" + n + ".json")], Void);
+					var next = b.createBlock();
+					b.branch(b.equal(value, b.constInt(n)), next, bad);
+					b.select(next);
+				}
+			}
 			b.call("rawExit", [b.constInt(42)], Void);
 			b.returnValue(b.constVoid());
 			b.select(bad);
@@ -187,7 +214,9 @@ class FlagsMain {
 			var js = 'const e=new WebAssembly.Instance(new WebAssembly.Module(require("fs").readFileSync(process.argv[1]))).exports;'
 				+ 'if(e.main()!==42)throw Error("raw semantics"); const count=e.__allocation_count||e["haxeon.memory.allocation_count"];'
 				+
-				'e["Probe.perform"](2);for(const n of [8,1024]){const before=count();if(e["Probe.perform"](n)!==n)throw Error("raw loop");if(count()!==before)throw Error("raw values boxed");}';
+				'e["Probe.perform"](2);for(const n of [8,1024]){const before=count();if(e["Probe.perform"](n)!==n)throw Error("raw loop");if(count()!==before)throw Error("raw values boxed");}'
+				+
+				'for(const n of [8,1024]){const measures=[],bytes=e["haxeon.memory.allocated_bytes"];for(const checked of [false,true]){e["Probe.scalarChecks"](2,checked);const before=count(),beforeBytes=bytes?bytes():0;if(e["Probe.scalarChecks"](n,checked)!==n)throw Error("scalar map semantics");measures.push({objects:count()-before,bytes:bytes?bytes()-beforeBytes:null});}console.log("scalar map",n,JSON.stringify(measures));if(measures[1].objects>measures[0].objects||measures[1].bytes>measures[0].bytes)throw Error("checked map read allocated more");}';
 			var child = new sys.io.Process(target == "hl" ? "scripts/hl" : "node", target == "hl" ? [path] : ["--expose-gc", "-e", js, path]);
 			var output = child.stdout.readAll().toString() + child.stderr.readAll().toString(),
 				code = child.exitCode();
@@ -200,6 +229,23 @@ class FlagsMain {
 					if (census.allocations != 0)
 						throw "Raw values allocated " + census.allocations + " objects";
 				}
+			if (target == "hl")
+				for (n in [8, 1024]) {
+					var baseline:Dynamic = haxe.Json.parse(sys.io.File.getContent(stem + "-map-false-" + n + ".json"));
+					var checked:Dynamic = haxe.Json.parse(sys.io.File.getContent(stem + "-map-true-" + n + ".json"));
+					function allocated(census:Dynamic):Float {
+						var total:Float = 0,
+							types:Array<Dynamic> = census.types;
+						for (type in types)
+							total += type.bytes;
+						return total;
+					}
+					if (checked.allocations > baseline.allocations || allocated(checked) > allocated(baseline))
+						throw "Checked scalar-map read allocated more than its cast baseline";
+					Sys.println('scalar map hl $n: ${baseline.allocations}/${allocated(baseline)} -> ${checked.allocations}/${allocated(checked)} objects/bytes');
+				}
+			else
+				Sys.print(output);
 		} catch (error:Dynamic) {
 			cleanup(stem);
 			throw error;

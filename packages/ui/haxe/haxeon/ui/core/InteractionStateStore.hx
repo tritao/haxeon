@@ -37,7 +37,8 @@ class InteractionStateStore {
 		var count = 0;
 		if (pending.size() != 0)
 			for (id in pending.keys()) {
-				var before:StyleState = cast pending.get(id), after:StyleState = cast values.get(id);
+				if (!values.exists(id)) throw "Pending interaction change has no current state";
+				var after:StyleState = values.get(id), before:StyleState = pending.get(id);
 				if (before == after) continue;
 				if (count == changeScratch.length)
 					changeScratch.push({id:id, before:before, after:after});

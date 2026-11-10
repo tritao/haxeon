@@ -609,7 +609,7 @@ class SettingsTests {
 		check(panel.shortcutText("editor.palette") == "Ctrl+K, Ctrl+P" && panel.shortcutText("scene.frame") == "None",
 			"shortcut text");
 
-		check(!panel.press(UiKey.F2, 0), "keys are ignored until a row records");
+		check(!panel.press(UiKey.F2, UiModifier.empty()), "keys are ignored until a row records");
 		panel.record("scene.frame");
 		check(panel.recordingId == "scene.frame" && changes == 1, "clicking a shortcut starts recording");
 		check(panel.press(340, UiModifier.Shift) && panel.recordingId == "scene.frame", "a modifier alone keeps waiting");
@@ -617,7 +617,7 @@ class SettingsTests {
 		check(panel.shortcutText("scene.frame") == "Shift+F", "lock keys are not part of the chord");
 
 		panel.record("scene.frame");
-		check(panel.press(UiKey.Escape, 0) && panel.shortcutText("scene.frame") == "Shift+F", "Escape cancels recording");
+		check(panel.press(UiKey.Escape, UiModifier.empty()) && panel.shortcutText("scene.frame") == "Shift+F", "Escape cancels recording");
 
 		panel.record("scene.frame");
 		panel.press(UiKey.S, UiModifier.Control);

@@ -381,7 +381,7 @@ class TextLayout extends NativeKitUIResource {
 	public function moveWord(offset:Int, direction:Int, macStyle:Bool = false):Int {
 		if (offset < 0 || (direction != -1 && direction != 1))
 			throw "Text word movement arguments are invalid";
-		var behavior:NativeKitUI.TextNavigationBehavior = cast (macStyle ? 1 : 0);
+		var behavior:NativeKitUI.TextNavigationBehavior = macStyle ? NativeKitUI.TextNavigationBehavior.Macos : NativeKitUI.TextNavigationBehavior.Standard;
 		var result = NativeKitUI.nkui_text_layout_move_word(nativeHandle(), offset,
 			direction, behavior);
 		UiResult.check(result.status, "textLayout.moveWord");
@@ -392,7 +392,7 @@ class TextLayout extends NativeKitUIResource {
 	public function moveParagraph(offset:Int, direction:Int, macStyle:Bool = false):Int {
 		if (offset < 0 || (direction != -1 && direction != 1))
 			throw "Text paragraph movement arguments are invalid";
-		var behavior:NativeKitUI.TextNavigationBehavior = cast (macStyle ? 1 : 0);
+		var behavior:NativeKitUI.TextNavigationBehavior = macStyle ? NativeKitUI.TextNavigationBehavior.Macos : NativeKitUI.TextNavigationBehavior.Standard;
 		var result = NativeKitUI.nkui_text_layout_move_paragraph(nativeHandle(), offset,
 			direction, behavior);
 		UiResult.check(result.status, "textLayout.moveParagraph");

@@ -10,6 +10,7 @@ import nativekit.ffi.NativeKitTypes.WindowDecorationRegion as NativeWindowDecora
 import haxeon.ui.widgets.text.Text;
 
 import nativekit.ffi.NativeKitTypes;
+import nativekit.ffi.NativeKitTypes.CursorShape as NativeCursorShape;
 
 import haxeon.ui.LayoutFrame;
 import haxeon.ui.LayoutSession;
@@ -1567,7 +1568,7 @@ class UiContext {
 			var kind:WindowDecorationRegionKind = cast node.windowDecoration;
 			region.set_kind(kind);
 			region.set_cursor_shape(node.windowDecorationCursor == null
-				? 0 : nativeCursorShape(node.windowDecorationCursor));
+				? NativeCursorShape.Arrow : nativeCursorShape(node.windowDecorationCursor));
 			regions.push(region);
 		});
 		var window:WindowHandle = cast decorationWindow;
@@ -1596,18 +1597,18 @@ class UiContext {
 		return decorationAvailable;
 	}
 
-	static function nativeCursorShape(shape:UiCursorShape):Int {
-		return cast switch shape {
-			case UiCursorShape.Arrow: CursorShape.Arrow;
-			case UiCursorShape.Text: CursorShape.Ibeam;
-			case UiCursorShape.Crosshair: CursorShape.Crosshair;
-			case UiCursorShape.Hand: CursorShape.Hand;
-			case UiCursorShape.HorizontalResize: CursorShape.HorizontalResize;
-			case UiCursorShape.VerticalResize: CursorShape.VerticalResize;
-			case UiCursorShape.DiagonalResize: CursorShape.NwseResize;
-			case UiCursorShape.DiagonalResizeNesw: CursorShape.NeswResize;
-			case UiCursorShape.Move: CursorShape.Move;
-			case UiCursorShape.NotAllowed: CursorShape.NotAllowed;
+	static function nativeCursorShape(shape:UiCursorShape):NativeCursorShape {
+		return switch shape {
+			case UiCursorShape.Arrow: NativeCursorShape.Arrow;
+			case UiCursorShape.Text: NativeCursorShape.Ibeam;
+			case UiCursorShape.Crosshair: NativeCursorShape.Crosshair;
+			case UiCursorShape.Hand: NativeCursorShape.Hand;
+			case UiCursorShape.HorizontalResize: NativeCursorShape.HorizontalResize;
+			case UiCursorShape.VerticalResize: NativeCursorShape.VerticalResize;
+			case UiCursorShape.DiagonalResize: NativeCursorShape.NwseResize;
+			case UiCursorShape.DiagonalResizeNesw: NativeCursorShape.NeswResize;
+			case UiCursorShape.Move: NativeCursorShape.Move;
+			case UiCursorShape.NotAllowed: NativeCursorShape.NotAllowed;
 		};
 	}
 

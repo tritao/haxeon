@@ -4527,3 +4527,104 @@ in this change. This is not a completed paired compile-time comparison or an
 acceptance result. A control with the required boundary casts is being checked;
 the flow-fact scaling issue remains a follow-up until that comparison completes.
 Batch editor/Web allocation and memory measurements remain pending Tier 3.
+
+
+### Typed cursor keys and flag reads (655fd164 follow-up)
+
+The native cursor cache uses its native shape as the key; both cursor mappings
+return native cases directly, and the controller's switch is exhaustive.
+Interaction changes read typed maps without unchecked casts and check the
+current-state invariant before reading a present value. IME flags and platform
+option defaults also use typed flags.
+
+The expanded fixture compares the former cast with the presence-checked read,
+including an empty flags value. Results are identical with inlining off and on:
+
+| Runtime | 8 reads, old → checked | 1,024 reads, old → checked |
+|---|---:|---:|
+| HashLink objects / bytes | 0 / 0 → 0 / 0 | 0 / 0 → 0 / 0 |
+| Wasm32 objects / bytes | 8 / 64 → 8 / 64 | 1,024 / 8,192 → 1,024 / 8,192 |
+| Wasm GC objects | 8 → 8 | 1,024 → 1,024 |
+
+The Wasm objects are the existing nullable-scalar map result boxes (a2).
+Reference-valued maps keyed by a nominal native-shape enum abstract allocate
+zero objects on every target, as do the repeated flags operations. The
+interpreter checks the core flags and field initializer; reference-valued
+native map primitives are not implemented there, so map allocation comparisons
+run on the three runtimes.
+
+Compiler suite: **850 passed, 0 failed**. The full UI value snapshot matrix
+passes 24 positive and 36 negative checks; settings and layout also pass.
+The snapshot gate exposed a pre-existing omission in enum-tag scalar-storage
+verification, fixed separately in `1e42b4c6`, with valid four-byte storage and
+malformed-width tests. Older layout/native-enum integer casts remain assigned
+to their queued type-conversion groups; this follow-up removes the casts around
+the newly typed flags and cursor intent.
+
+### Closed raw/flags conversions: pre-rebase batch checkpoint (2026-11-10)
+
+The frozen outer app is `2de94628c`; the candidate includes the explicit Flags ports, with other outer code held constant. Control is `a3064590`; candidate is `a01cf81a` (the code before this measurement note). Both use the checkout-built HashLink VM at `3ea38fcf`. Three fixed alternating pairs were run, without selecting a best run. All ten UI scripts, full three-target parity including UI value snapshots, the app suite, all nine retention scenarios, budgets and six 500-cycle headless captures pass. These results precede rebasing onto the newer origin/main; they do not certify that integration.
+
+Per-action medians across the three pairs (KiB counter and frame ms):
+
+| Action | Control KiB | Candidate KiB | Control ms | Candidate ms |
+|---|---:|---:|---:|---:|
+| console->telemetry | 74.40 | 73.00 | 1.01 | 1.01 |
+| hierarchy->sensors | 110.80 | 111.00 | 1.46 | 1.47 |
+| sensors->hierarchy | 77.60 | 78.30 | 1.12 | 1.12 |
+| telemetry->console | 88.80 | 89.40 | 1.08 | 1.07 |
+| hover-away | 13.60 | 13.60 | 0.42 | 0.42 |
+| hover-enter | 0.50 | 0.50 | 0.00 | 0.00 |
+| hover-field | 12.40 | 12.30 | 0.42 | 0.43 |
+| hover-inside | 0.50 | 0.50 | 0.00 | 0.00 |
+| hover-other | 10.00 | 9.90 | 0.41 | 0.41 |
+| idle | 0.30 | 0.30 | 0.01 | 0.01 |
+| idle-focused | 0.30 | 0.30 | 0.01 | 0.01 |
+| scroll-inspector | 21.70 | 21.70 | 0.71 | 0.71 |
+| type-backspace | 16.20 | 16.10 | 0.41 | 0.41 |
+| type-char | 16.10 | 16.10 | 0.41 | 0.42 |
+| selection | — | — | 2.44 | 2.43 |
+
+The KiB counter crosses different shared-buffer refill boundaries. Exact censuses of the second warm action window stop before timeline serialization. Every tab action and selection allocates fewer objects and bytes, including the actions whose KiB counter rises:
+
+| Action | Control objects / bytes | Candidate objects / bytes |
+|---|---:|---:|
+| hierarchy->sensors | 1,680 / 118,008 | 1,677 / 117,240 |
+| telemetry->console | 1,716 / 93,952 | 1,713 / 93,208 |
+| console->telemetry | 1,181 / 79,376 | 1,178 / 78,584 |
+| sensors->hierarchy | 1,152 / 80,376 | 1,149 / 79,656 |
+| selection | 8,624 / 584,736 | 8,621 / 580,816 |
+
+Raw paired memory results (MiB; no retry):
+
+| Pair / version | RSS after warmup | Growth windows | Frame p95 ms |
+|---|---:|---|---:|
+| 1 / control | 10.31 | [29.53, 4.06, 0.78, 5.47] | 1.45 |
+| 1 / candidate | 10.62 | [28.91, 4.06, 0.94, 5.62] | 1.45 |
+| 2 / candidate | 9.69 | [30.16, 3.28, 0.78, 5.62] | 1.44 |
+| 2 / control | 9.69 | [29.84, 3.44, 0.78, 5.47] | 1.44 |
+| 3 / control | 10.00 | [29.53, 3.59, 0.78, 5.62] | 1.44 |
+| 3 / candidate | 10.47 | [29.22, 3.91, 0.78, 5.78] | 1.45 |
+
+Median growth windows are `[29.53, 3.59, 0.78, 5.47]` → `[29.22, 3.91, 0.78, 5.62]` MiB; warmup RSS is 10.00 → 10.47 MiB. The +0.32 and +0.15 MiB windows and +0.47 MiB warmup are recorded findings within the previously recorded page/allocator variation, not a claimed memory reduction. Exact program allocation totals decrease.
+
+Wasm GC has 120 warmup and 120 measured frames. Each of the three pairs has identical control/candidate object totals:
+
+| Scene | Control objects | Candidate objects | Control median / p95 ms | Candidate median / p95 ms |
+|---|---:|---:|---:|---:|
+| full | 4320 | 4320 | 1.70 / 2.20 | 1.70 / 2.20 |
+| static | 4320 | 4320 | 1.50 / 2.00 | 1.50 / 2.10 |
+| text-heavy | 4320 | 4320 | 1.40 / 2.00 | 1.50 / 2.10 |
+| editing | 8604 | 8604 | 1.60 / 2.30 | 1.70 / 2.30 |
+
+Wasm32 also passes three fixed full-scene browser pairs; its memory-stat build does not provide a GC object count. Both Web modules differ, so browser measurements were required.
+
+| Module | Control bytes | Candidate bytes |
+|---|---:|---:|
+| HashLink headless editor | 102,205,475 | 105,954,981 |
+| Wasm32 Showcase | 11,868,822 | 12,041,570 |
+| Wasm GC Showcase | 5,861,190 | 5,903,055 |
+
+The development editor module is 105,148,935 bytes (SHA-256 `7d878d1a97b857fa64fc42932c38392c8621bd11669b5b66a3da1ea2da650711`); the prior recorded `a3064590` module was 102,216,099 bytes. The fresh control module has SHA-256 `0affd3510c6710cad2ae69be6ffc1bb93b03ec249f84eec376741b12db419533`; absolute checkout/debug paths differ from its earlier build. Size growth includes synthesized raw/flags methods and nominal tag metadata, not additional action allocations.
+
+Two setup failures produced no guest measurements: the Web GC configure initially enabled the Wasm32-only memory-stat option, and the detached control initially lacked the HashLink source needed by the profiling harness’s CMake step. Both configurations were corrected before these fixed pairs. Captures were deleted after their numbers were extracted; measurement-only action hooks stay in detached checkouts.

@@ -852,7 +852,7 @@ class TextField implements View {
 		context.textInput.update(window, editor.documentLength(),
 			window.selectionStart, window.selectionEnd, editor.compositionStart,
 			editor.compositionEnd, 0,
-			multiline ? 1 : 0,
+			multiline ? nativekit.ffi.NativeKitTypes.TextInputFlags.Multiline : nativekit.ffi.NativeKitTypes.TextInputFlags.empty(),
 			caretRect, selectionGeometry, compositionGeometry);
 	}
 

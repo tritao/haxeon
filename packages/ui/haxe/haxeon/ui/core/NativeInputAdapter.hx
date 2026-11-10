@@ -55,7 +55,7 @@ class NativeInputAdapter {
 				// NativeKit exposes physical capture through the window's pointer
 				// mode. Logical capture remains authoritative when a backend does
 				// not support the platform operation.
-				NativeKit.nk_window_set_cursor_mode_checked(window, cast (captured ? 2 : 0));
+				NativeKit.nk_window_set_cursor_mode_checked(window, captured ? CursorMode.Captured : CursorMode.Normal);
 			} catch (_:Dynamic) {
 				// Unsupported capture must not interrupt logical event routing.
 			}

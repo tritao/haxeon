@@ -11,7 +11,7 @@ class SurfaceOptions {
 	public var height:Int;
 	public var x:Int = 0;
 	public var y:Int = 0;
-	public var flags:SurfaceFlags = cast 0;
+	public var flags:SurfaceFlags = SurfaceFlags.empty();
 	public var api:GraphicsApi = cast 0;
 	public var majorVersion:Int = 0;
 	public var minorVersion:Int = 0;
