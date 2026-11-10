@@ -62,7 +62,7 @@ class EnumConformanceMethods {
 				{
 					name: typed.name, origin: origin, originKind: Helper, typeArguments: null, owner: null,
 					isStatic: true, isConstructor: false, isInline: typed.isInline, isKept: false, isExposed: false,
-					provides: Serves(compiler.semantic.SemanticSignature.type(type), ProviderOperation.detailed(ProviderOperation.CustomMethod, method.name)),
+					provides: Serves(type, ProviderOperation.detailed(ProviderOperation.CustomMethod, method.name)),
 					arguments: typed.arguments, result: typed.result, statements: typed.statements,
 					cells: typed.cells, cellCaptures: typed.cellCaptures, span: typed.span
 				};

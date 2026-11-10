@@ -39,10 +39,10 @@ class IrFunction {
 	public final retention:IrRetention;
 
 	/** The operation this function serves for a type when a generator made it as a helper, else `None`. */
-	public final provides:Provides;
+	public final provides:Provides<TypeKey>;
 
 	/** `provides` is required: a function made without saying what it serves does not compile. */
-	public function new(name, arguments, result, blocks, provides:Provides, ?debugBindings, inlineHint = false, retention:IrRetention = Reachable) {
+	public function new(name, arguments, result, blocks, provides:Provides<TypeKey>, ?debugBindings, inlineHint = false, retention:IrRetention = Reachable) {
 		this.name = name;
 		this.arguments = arguments;
 		this.result = result;

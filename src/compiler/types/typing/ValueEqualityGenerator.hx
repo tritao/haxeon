@@ -159,7 +159,7 @@ class ValueEqualityGenerator {
 			owner: null,
 			isStatic: true,
 			isConstructor: false,
-			provides: Serves(compiler.semantic.SemanticSignature.type(type), Equals),
+			provides: Serves(type, Equals),
 			arguments: [
 				{
 					name: "left",

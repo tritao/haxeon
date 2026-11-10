@@ -213,7 +213,7 @@ class ConversionResolver {
 				owner: null,
 				isStatic: true,
 				isConstructor: false,
-				provides: compiler.Provides.Serves(compiler.semantic.SemanticSignature.type(target), compiler.Provides.ProviderOperation.DynamicStructure),
+				provides: compiler.Provides.Serves(target, compiler.Provides.ProviderOperation.DynamicStructure),
 				arguments: [
 					{
 						name: "source",

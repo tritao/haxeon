@@ -1,5 +1,6 @@
 package compiler.ir;
 
+import compiler.Provides.ProviderOperation;
 import compiler.ir.IrStaticNullChecks.IrStaticCheckCache;
 import compiler.types.Type.CompilerType;
 import compiler.types.Type.NominalKind;
@@ -240,7 +241,11 @@ class IrGenerator {
 			var cfg = CfgIteratorReplacement.run(generateCfg(fn)),
 				built = SsaBuilder.build(cfg);
 			var retention:compiler.ir.IrFunction.IrRetention = fn.isExposed == true ? Expose : fn.isKept == true ? Keep : Reachable;
-			var provides = fn.provides == null ? compiler.Provides.None : fn.provides;
+			var provides:compiler.Provides<TypeKey> = switch fn.provides {
+				case null, None: None;
+				// Two source types can lower to one IR type (every Int-like hash key is i32), so the semantic type stays in the row as detail.
+				case Serves(type, operation): Serves(TypeKey.of(lowerType(type)), ProviderOperation.detailed(operation, compiler.semantic.SemanticSignature.type(type)));
+			};
 			return fn.isInline == true
 				|| retention != Reachable
 				|| provides != None ? new IrFunction(built.name, built.arguments, built.result, built.blocks, provides, built.debugBindings, fn.isInline == true,

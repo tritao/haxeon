@@ -138,7 +138,7 @@ class EnumEqualityGenerator {
 			owner: null,
 			isStatic: true,
 			isConstructor: false,
-			provides: Serves(compiler.semantic.SemanticSignature.type(type), reflective ? ReflectEquals : Equals),
+			provides: Serves(type, reflective ? ReflectEquals : Equals),
 			arguments: [
 				{
 					name: "left",

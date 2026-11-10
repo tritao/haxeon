@@ -154,23 +154,23 @@ class IrFunctionStateCodec {
 	}
 
 	/** What a function serves is part of its persisted state, not of its code fingerprint: it never changes the body. */
-	static function writeProvides(output:BytesOutput, provides:compiler.Provides):Void {
+	static function writeProvides(output:BytesOutput, provides:compiler.Provides<compiler.ir.TypeKey>):Void {
 		switch provides {
 			case None:
 				output.writeByte(0);
-			case Serves(typeKey, operation):
+			case Serves(type, operation):
 				output.writeByte(1);
-				IrTypeCodec.writeString(output, typeKey);
+				IrTypeCodec.writeString(output, type.toString());
 				IrTypeCodec.writeString(output, operation);
 		}
 	}
 
-	static function readProvides(input:BytesInput, limit:Int):compiler.Provides
+	static function readProvides(input:BytesInput, limit:Int):compiler.Provides<compiler.ir.TypeKey>
 		return switch input.readByte() {
 			case 0: None;
 			case 1:
-				var typeKey = IrTypeCodec.readString(input, limit);
-				Serves(typeKey, cast IrTypeCodec.readString(input, limit));
+				var typeText = IrTypeCodec.readString(input, limit);
+				Serves(compiler.ir.TypeKey.fromPersisted(typeText), cast IrTypeCodec.readString(input, limit));
 			default: throw "Invalid IR function provider";
 		};
 

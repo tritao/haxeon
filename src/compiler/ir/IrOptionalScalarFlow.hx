@@ -127,7 +127,7 @@ class IrOptionalScalarFlow {
 			b.branch(b.equal(receiver, b.constNull(receiver.type)), missing, present);
 			b.select(missing); b.terminate(Throw(b.toDyn(b.constString("Null access"))));
 			b.select(present); b.returnValue(b.constVoid());
-			receiverChecks.set(name, new IrFunction(name, b.arguments, Void, b.blocks, Serves(typeName, ProviderOperation.ReceiverCheck)));
+			receiverChecks.set(name, new IrFunction(name, b.arguments, Void, b.blocks, Serves(TypeKey.of(Obj(typeName)), ProviderOperation.ReceiverCheck)));
 		}
 		return name;
 	}

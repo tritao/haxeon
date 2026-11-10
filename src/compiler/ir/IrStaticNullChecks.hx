@@ -135,7 +135,7 @@ class IrStaticNullChecks {
 									builder.terminate(Throw(builder.toDyn(builder.constString('Cannot dereference null static "$name"'))));
 									builder.select(present);
 									builder.returnValue(builder.constVoid());
-									var created = new IrFunction(helperName, builder.arguments, Void, builder.blocks, Serves(name, ProviderOperation.detailed(ProviderOperation.ReceiverCheck, helperName)));
+									var created = new IrFunction(helperName, builder.arguments, Void, builder.blocks, Serves(TypeKey.of(valueType == null ? Dyn : valueType), ProviderOperation.detailed(ProviderOperation.ReceiverCheck, helperName)));
 									helpers.set(helperName, created);
 									store.helpers.set(helperName, created);
 								}

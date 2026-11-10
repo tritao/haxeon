@@ -330,7 +330,7 @@ typedef TypedFunction = {
 	final ?isExposed:Bool;
 
 	/** What this function serves for a type when a generator made it as a helper (`compiler.Provides`); absent for any other function. */
-	final ?provides:compiler.Provides;
+	final ?provides:compiler.Provides<CompilerType>;
 
 	final arguments:Array<{name:String, type:CompilerType}>;
 	final result:CompilerType;

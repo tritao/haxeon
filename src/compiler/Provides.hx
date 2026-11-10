@@ -32,7 +32,6 @@ enum abstract ProviderOperation(String) to String {
 	var GenericTypeTest = "generic-type-test";
 	var GenericMethodReference = "generic-method-reference";
 	var DynamicStructure = "dynamic-structure";
-	var LaneRuntime = "lane-runtime";
 	var StaticInitializer = "static-initializer";
 	var ReceiverCheck = "receiver-check";
 
@@ -43,13 +42,15 @@ enum abstract ProviderOperation(String) to String {
 
 /**
  * Whether a function is a helper that serves an operation on a type, and which. Every `$`-named function in the final IR is one of
- * these, a clone or lambda or adapter of another function (`None`, checked against `Provides.isDerivedName`), or the check fails:
- * see `IrProviders.check`. The type key is the string the generator hashes into the name (`SemanticSignature.type` of the type, or
- * the IR type's text for a helper made in an IR pass).
+ * these, a clone or lambda or adapter of another function (`None`, checked against `IrProviders.isDerivedName`), or the check fails:
+ * see `IrProviders.check`.
+ *
+ * `K` is how the type is named. A typing-time generator has the source type (`Provides<CompilerType>`, on `TypedFunction`); the IR
+ * names it by `compiler.ir.TypeKey` (`Provides<TypeKey>`, on `IrFunction`), and `IrGenerator` converts when it lowers the function.
  */
-enum Provides {
+enum Provides<K> {
 	/** Not a helper for a type: a user function, a lambda, a clone of another function, an adapter, a marker. */
 	None;
 
-	Serves(typeKey:String, operation:ProviderOperation);
+	Serves(type:K, operation:ProviderOperation);
 }

@@ -149,7 +149,7 @@ class HashGenerator {
 		return {
 			name: hashName(type), origin: req.origin, originKind: Helper, typeArguments: null,
 			owner: null, isStatic: true, isConstructor: false,
-			provides: Serves(compiler.semantic.SemanticSignature.type(type), Hash),
+			provides: Serves(type, Hash),
 			arguments: [{name: "value", type: type}], result: TInt,
 			statements: statements, cells: [], cellCaptures: [], span: span
 		};
