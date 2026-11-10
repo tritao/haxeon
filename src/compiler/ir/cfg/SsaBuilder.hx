@@ -23,7 +23,9 @@ class SsaBuilder {
 	var children:Array<Array<Int>> = [];
 	var frontiers:Array<Map<Int, Bool>> = [];
 	var frontierKeys:Array<Array<Int>> = [];
-	var liveIn:Array<Map<String, Bool>> = [];
+	var liveIn:Array<Array<Int>> = [];
+	var liveSlots:Map<String, Int> = [];
+	static final emptyWords:Array<Int> = [];
 	var phis:Array<Map<String, SsaPhi>> = [];
 	var phiNames:Array<Array<String>> = [];
 	var roots:Array<Int> = [];
@@ -219,28 +221,47 @@ class SsaBuilder {
 		}
 	}
 
+	/**
+	 * Which locals are live on entry to each block. Each local gets a slot number once; the sets are bit sets over those slots, so the
+	 * fixpoint compares and merges words instead of hashing names.
+	 */
 	function computeLiveness():Void {
-		var uses:Array<Map<String, Bool>> = [for (_ in cfg.blocks) []],
-			defs:Array<Map<String, Bool>> = [for (_ in cfg.blocks) []],
-			liveOut:Array<Map<String, Bool>> = [for (_ in cfg.blocks) []];
+		liveSlots = [];
+		var count = 0;
+		for (block in cfg.blocks)
+			if (reachable[block.id])
+				for (located in block.instructions)
+					switch located.value {
+						case LoadLocal(_, name), StoreLocal(name, _):
+							if (!liveSlots.exists(name))
+								liveSlots.set(name, count++);
+						default:
+					}
+		var words = (count + 31) >> 5,
+			uses:Array<Array<Int>> = [for (_ in cfg.blocks) emptyWords],
+			defs:Array<Array<Int>> = [for (_ in cfg.blocks) emptyWords];
+		liveIn = [for (_ in cfg.blocks) emptyWords];
+		if (words == 0)
+			return;
 		for (block in cfg.blocks) {
 			var id = block.id;
 			if (!reachable[id])
 				continue;
-			var use:Map<String, Bool> = [], def:Map<String, Bool> = [];
+			var use = [for (_ in 0...words) 0], def = [for (_ in 0...words) 0];
 			for (located in cfg.blocks[id].instructions)
 				switch located.value {
 					case LoadLocal(_, name):
-						if (!def.exists(name))
-							use.set(name, true);
+						var slot = liveSlots.get(name);
+						if (def[slot >> 5] & (1 << (slot & 31)) == 0)
+							use[slot >> 5] |= 1 << (slot & 31);
 					case StoreLocal(name, _):
-						def.set(name, true);
+						var slot = liveSlots.get(name);
+						def[slot >> 5] |= 1 << (slot & 31);
 					default:
 				}
 			uses[id] = use;
 			defs[id] = def;
-			liveIn[id] = [];
-			liveOut[id] = [];
+			liveIn[id] = [for (_ in 0...words) 0];
 		}
 		var work:Array<Int> = [],
 			queued:Array<Bool> = [for (_ in cfg.blocks) false];
@@ -252,22 +273,20 @@ class SsaBuilder {
 		while (work.length > 0) {
 			var id = work.pop();
 			queued[id] = false;
-			var out = liveOut[id];
-			for (successor in successors[id])
-				for (name in liveIn[successor].keys())
-					if (!out.exists(name))
-						out.set(name, true);
-			var input = liveIn[id], changed = false;
-			for (name in uses[id].keys())
-				if (!input.exists(name)) {
-					input.set(name, true);
+			var input = liveIn[id], use = uses[id], def = defs[id], changed = false;
+			for (word in 0...words) {
+				var out = 0;
+				for (successor in successors[id]) {
+					var successorIn = liveIn[successor];
+					if (successorIn.length > word)
+						out |= successorIn[word];
+				}
+				var next = input[word] | use[word] | (out & ~def[word]);
+				if (next != input[word]) {
+					input[word] = next;
 					changed = true;
 				}
-			for (name in out.keys())
-				if (!defs[id].exists(name) && !input.exists(name)) {
-					input.set(name, true);
-					changed = true;
-				}
+			}
 			if (changed) {
 				for (predecessor in predecessors[id])
 					if (!queued[predecessor]) {
@@ -276,6 +295,11 @@ class SsaBuilder {
 					}
 			}
 		}
+	}
+
+	function isLiveIn(block:Int, name:String):Bool {
+		var slot = liveSlots.get(name);
+		return slot != null && liveIn[block].length > (slot >> 5) && liveIn[block][slot >> 5] & (1 << (slot & 31)) != 0;
 	}
 
 	function insertPhis():Void {
@@ -301,7 +325,7 @@ class SsaBuilder {
 			while (cursor < work.length) {
 				var block = work[cursor++];
 				for (join in frontierKeys[block])
-					if (!placed.exists(join) && liveIn[join].exists(name)) {
+					if (!placed.exists(join) && isLiveIn(join, name)) {
 						placed.set(join, true);
 						phis[join].set(name, {output: allocate(name, cfg.localTypes.get(name)), inputs: []});
 						phiNames[join].push(name);
