@@ -30,6 +30,7 @@ inline_cases=(
 	enum-concrete-payloads
 	enum-unused-lane-payload
 	enum-interface-conformance
+	enum-tag-interface-box
 	scoped-cleanup
 	defer-cleanup
 	defer-exception-stack

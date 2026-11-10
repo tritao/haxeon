@@ -488,7 +488,8 @@ zero represents null, including `Null<E>`, without another wrapper or presence b
 Portable; a record containing an enum tag and an Int occupies eight bytes with four-byte alignment.
 
 The IR retains the enum's nominal identity separately from its I32 carrier. An enum tag is not an Int and tags
-of different enums are not interchangeable. Typed array access uses four-byte scalar lanes and preserves the
+of different enums are not interchangeable. Flattened interface boxes retain the nominal tag and its four-byte
+scalar-storage metadata; the verifier rejects other tag storage widths. Typed array access uses four-byte scalar lanes and preserves the
 nominal element descriptor, including through iterator and Dynamic views. A genuine Dynamic or reflection escape
 returns the enum's cached boxed case; checked unboxing verifies the exact enum type before reading its index.
 HashLink also records a distinct `HENUMTAG` type whose value occupies four bytes. Its descriptor retains the boxed

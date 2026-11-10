@@ -89,7 +89,7 @@ class EnumTagStorageMain {
 			base: null,
 			interfaces: [],
 			methods: [],
-			fields: [{name: "mode", type: EnumTag("Mode")}, {name: "number", type: I32}]
+			fields: [{name: "mode", type: EnumTag("Mode"), scalarStorage: {size: 4, signed: true}}, {name: "number", type: I32}]
 		});
 		var bad = b.createBlock(), next = b.createBlock();
 		b.branch(b.equal(loaded, value), next, bad);
@@ -210,6 +210,12 @@ class EnumTagStorageMain {
 		IrVerifier.verify(referenceCheck);
 		if (new compiler.ir.IrInterpreter(referenceCheck).run("referenceCheck") != 42)
 			throw "Interpreter reinterpreted a reference receiver as a numeric tag";
+		for (size in [0, 1, 2, 8]) {
+			var malformed = program();
+			malformed.objects.push({name: "WrongTagWidth", isValue: false, base: null, interfaces: [], methods: [],
+				fields: [{name: "mode", type: EnumTag("Mode"), scalarStorage: {size: size, signed: true}}]});
+			rejected(malformed, "Invalid scalar storage");
+		}
 		reject(EnumTag("Missing"), "requires a payload-free enum");
 		for (operation in 0...3) {
 			var malformed = program(),

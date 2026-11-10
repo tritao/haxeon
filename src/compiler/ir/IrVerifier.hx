@@ -292,6 +292,7 @@ class IrVerifier {
 		var size = storage.size;
 		return switch type {
 			case I32: size == 1 || size == 2 || size == 4;
+			case EnumTag(_): size == 4;
 			case I64: size == 1 || size == 2 || size == 4 || size == 8;
 			case F32: size == 4;
 			case F64: size == 8;
