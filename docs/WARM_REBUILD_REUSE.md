@@ -474,3 +474,18 @@ The first reports of the pruning work (the final walk in `BackendAssembly`, and 
 The gate for all reachability work is now that the program-case runner (`tests/driver/TestRunner.hx`) builds and runs every program twice, as a live build and as a plain build (`Main --plain`), and the checked suite does the same. A redo of the early prune has to pass it. The design constraint for that redo: a helper generated for a type and an operation is recorded with what it serves (the type, and the operation that needs it), and the walk follows that edge, so that "the type is reachable and a dynamic-equality site is reachable" makes the helper reachable; a list of helper name families to treat as roots would be a second copy of that knowledge. The fallback is to run the early prune after the dispatcher-introducing passes.
 
 Live-build pruning is parked (`/media/joao/DATA1/warm-prof/live-prune-wip2.patch`). What the attempt found: the live host calls a fixed protocol on its entry class (`start`, `tick`, `close`, `saveState`, `restoreState`, optional `liveRelease`/`liveRebuild`), which a live build must export (the app's `DevEntry` does not mark them `@:keep`); every constructor must stay (a removed constructor is a reload in `PatchPlanner`); every function the running module already holds must stay (a closure made before an edit may still call it, and the runtime refuses a patch that deletes a function something holds); a class's `__liveinit` must stay with its class and must not be a root of its own (it mentions the class and keeps all its methods alive); and the many fixtures that call a function by id without the program calling it need `@:keep`.
+
+### Array growth policy (measured 2026-11-10, dropped)
+
+`hl.types.ArrayObj.__expand` grows from capacity 0 by 1, 2, 3, 4, 6, 9 ... (x1.5, minimum newlen), so the first five pushes of every
+array each reallocate. A scratch override with a minimum capacity of 4 (`size < 4 ? 4 : size * 3 >> 1`), placed first on the class path
+of the 0405feb5 app build, three fresh-worker cold builds each, interleaved, load 8 to 15 from other sessions:
+
+| | allocations (compile-count) | compiler ms | wall s | peak RSS GB |
+| --- | --- | --- | --- | --- |
+| stock | 785.6M | 81.5 / 62.1 / 63.4 | 84.4 / 64.1 / 65.2 | 3.07 / 6.21 / 5.45 |
+| min 4 | 746.6M (-5.0%) | 62.5 / 63.1 / 72.7 | 72.8 / 64.9 / 74.5 | 5.36 / 5.64 / 5.64 |
+
+Allocation count drops 5.0% and is stable across runs, but wall median (65.2 vs 72.8 s, within the load noise) and compiler time median
+(63.4 vs 63.1 ms-column values) show no gain, and peak RSS does not move. Under the 2% wall bar, so no override is kept: it would be a
+fork of a stock std file for no measurable time. Revisit when the Haxeon-built worker (ADR 0003 section 12) applies our own Array policy.
