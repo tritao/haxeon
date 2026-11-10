@@ -499,3 +499,14 @@ and an unrelated Dynamic function cast of the same arity. A forged differing ove
 inlining modes, each typed method path at 8/1,024 iterations changes from 16/2,048 Wasm32 and Wasm GC allocations to zero;
 HashLink remains at zero bytes. `rpc-lifecycle` returns 42 on all three targets in both modes. Logical enum descriptors
 at genuine Dynamic/reflection callable boundaries remain E7 widening work in STRUCTS.md.
+
+### Scalar map storage in an opaque generic owner (a2)
+
+An unspecialized class field `Map<String, V>` still chooses reference-map storage when `V` is a scalar. A minimal
+`ReadView<V>` storing that map, instantiated with `Bool`, reproduces `Can't cast map_string_bool to map_string_ref`
+on HashLink at construction. This is part of a2's typed standard-map/scalar specialization work, not a representation
+that may be reinterpreted unchecked. The compiler's read-only verifier tables now accept typed lookup and membership
+callbacks instead of owning an erased map: each callback reads its concrete map kind, and the generic view preserves
+its nullable result type. The `generic-map-read-view` fixture checks false, true, missing keys and reference values on
+all three targets with both inlining settings. This does not add scalar specialization or claim allocation-free
+nullable scalar map reads.

@@ -90,9 +90,12 @@ class ProgramFacts {
 				out.add(key.length + ":" + key + "=" + render(key) + ",");
 			out.add("}\n");
 		}
-		function flag(value:Bool):String
+		function flag(value:Null<Bool>):String {
+			if (value == null)
+				throw "Missing Boolean fact while computing pipeline inputs";
 			return value ? "1" : "0";
-		function text(value:String):String
+		}
+		function text(value:Null<String>):String
 			return value == null ? "-" : value.length + ":" + value;
 		section("enumConstructorCounts", [for (key in enumConstructorCounts.keys()) key], key -> Std.string(enumConstructorCounts.get(key)));
 		section("enumEquatableTypes", [for (key in enumEquatableTypes.keys()) key], key -> flag(enumEquatableTypes.get(key)));
@@ -106,8 +109,10 @@ class ProgramFacts {
 		section("observableClasses", [for (key in observableClasses.keys()) key], key -> flag(observableClasses.get(key)));
 		section("observableStateOwners", [for (key in observableStateOwners.keys()) key], key -> text(observableStateOwners.get(key)));
 		section("observableFieldBits", [for (key in observableFieldBits.keys()) key], key -> {
-			var bits = observableFieldBits.get(key),
-				names = [for (name in bits.keys()) name];
+			var bits = observableFieldBits.get(key);
+			if (bits == null)
+				throw 'Missing Observable field facts for "$key"';
+			var names = [for (name in bits.keys()) name];
 			names.sort(Reflect.compare);
 			[for (name in names) name + ":" + bits.get(name)].join(";");
 		});

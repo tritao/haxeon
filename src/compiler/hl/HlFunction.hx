@@ -5,7 +5,7 @@ package compiler.hl;
  * a class, because a typedef record costs a virtual object with its own field table, about three times the size, for every one of them.
  * `start` and `end` are -1 when the location has no byte range.
  */
-final class HlDebugLocation {
+class HlDebugLocation {
 	public final path:String;
 	public final line:Int;
 	public final column:Int;

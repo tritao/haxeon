@@ -549,18 +549,20 @@ class HlLower {
 			if (linked.fn != lowered.fn)
 				throw 'HAXEON_CHECK_REUSE: linking ${fn.name} against the tables it was lowered with moved its indices';
 		}
-		function same(what:String, expected:Array<Dynamic>, actual:Array<Dynamic>):Void {
-			if (expected.length != actual.length)
-				throw 'HAXEON_CHECK_REUSE: replaying the requests made $what table of ${actual.length} entries, lowering made ${expected.length}';
-			for (index in 0...expected.length)
-				if (Std.string(expected[index]) != Std.string(actual[index]))
-					throw 'HAXEON_CHECK_REUSE: replaying the requests made $what ${index} different from lowering\'s: ${Std.string(actual[index])} and ${Std.string(expected[index])}';
-		}
-		same("the integer", symbols.ints, environment.ints);
-		same("the float", symbols.floats, environment.floats);
-		same("the string", symbols.strings, environment.strings);
-		same("the global", symbols.globals, environment.globals);
-		same("the type", symbols.types, environment.types);
+
+		sameReplayTable("the integer", symbols.ints, environment.ints);
+		sameReplayTable("the float", symbols.floats, environment.floats);
+		sameReplayTable("the string", symbols.strings, environment.strings);
+		sameReplayTable("the global", symbols.globals, environment.globals);
+		sameReplayTable("the type", symbols.types, environment.types);
+	}
+
+	static function sameReplayTable<T>(what:String, expected:Array<T>, actual:Array<T>):Void {
+		if (expected.length != actual.length)
+			throw 'HAXEON_CHECK_REUSE: replaying the requests made $what table of ${actual.length} entries, lowering made ${expected.length}';
+		for (index in 0...expected.length)
+			if (Std.string(expected[index]) != Std.string(actual[index]))
+				throw 'HAXEON_CHECK_REUSE: replaying the requests made $what ${index} different from lowering\'s: ${Std.string(actual[index])} and ${Std.string(expected[index])}';
 	}
 
 	/**

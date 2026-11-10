@@ -268,7 +268,8 @@ class EnumTagStorageMain {
 					};
 					var p = arrays ? arrayProgram(laneTarget) : variant == 2 ? nativeProgram() : program();
 					p = compiler.ir.codec.CanonicalIrCodec.decode(compiler.ir.codec.CanonicalIrCodec.encode(p));
-					compiler.ir.IrInliner.run(p, new compiler.ir.IrInliner.IrInlineCache(), inlineEnabled);
+					compiler.ir.IrInliner.run(p, new compiler.ir.IrInliner.IrInlineCache(),
+						target == HashLink ? compiler.ir.TargetProfile.hashLink : compiler.ir.TargetProfile.wasm, inlineEnabled);
 					IrVerifier.verify(p);
 					if (!arrays && new compiler.ir.IrInterpreter(p).run() != 42)
 						throw "Interpreter tag roundtrip failed";

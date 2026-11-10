@@ -144,8 +144,8 @@ class BackendAssembly {
 		// Without live patching nothing addresses this module by slot, symbol index or stable id, so assemble
 		// from scratch: the result depends only on the source, never on what the session compiled before.
 		// A plain build links the functions of the last one whose IR is unchanged instead of lowering them again (see `HlLoweredCache`).
-		var loweredCache = context.livePatching ? null : context.loweredCache;
-		var candidateAssembler = !context.livePatching ? new HlModuleAssembler(null,
+		var loweredCache:Null<compiler.hl.incremental.HlLoweredCache> = context.livePatching ? null : context.loweredCache;
+		var candidateAssembler = loweredCache != null ? new HlModuleAssembler(null,
 			loweredCache.debug) : context.compiledOnce
 			&& PatchPlanner.requiresFreshLayout(decision) ? freshLayout(baseAssembler) : baseAssembler.copy();
 		candidateAssembler.fieldReserve = context.livePatching && !context.isWasmTarget() ? liveFieldReserve : 0;

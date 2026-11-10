@@ -630,8 +630,8 @@ class FrontendCompilation {
 			reuseMiss = context.livePatching ? "live patching" : previousPipeline == null ? "no earlier build" : previousPipeline.mismatch(inputs),
 			matchesPrevious = reuseMiss == null, checkingReuse = Sys.getEnv("HAXEON_CHECK_REUSE") == "1",
 			reusedPipeline:Null<PipelineSnapshot> = matchesPrevious ? previousPipeline : null, ir:IrProgram, inlinerChanged:Array<String>;
-		if (matchesPrevious && !checkingReuse) {
-			ir = previousPipeline.ir;
+		if (reusedPipeline != null && !checkingReuse) {
+			ir = reusedPipeline.ir;
 			inlinerChanged = [];
 		} else {
 			ir = IrProgramAssembler.assemble(generator, cached, irNatives, generated.objects, generated.interfaces, generated.enums,
@@ -696,8 +696,8 @@ class FrontendCompilation {
 					catch (error:String)
 						throw 'HAXEON_CHECK_REUSE: verification skipped a function that fails in full: $error';
 			}
-			if (matchesPrevious) {
-				var difference = PipelineSnapshot.irDifference(previousPipeline.ir, ir);
+			if (reusedPipeline != null) {
+				var difference = PipelineSnapshot.irDifference(reusedPipeline.ir, ir);
 				if (difference != null)
 					throw 'HAXEON_CHECK_REUSE: the final IR reused for equal pipeline inputs differs from a fresh run ($difference)';
 			}

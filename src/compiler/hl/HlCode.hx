@@ -34,7 +34,7 @@ typedef HlConstant = {final global:Int; final fields:Array<Int>;}
  * stored: `lazy` keeps only how to produce it, and `payload` encodes it on each access, so a module that is kept between builds does not
  * also keep tens of megabytes of encoded sections that the writer would encode again.
  */
-final class HlDebugSection {
+class HlDebugSection {
 	public final kind:Int;
 	public final version:Int;
 	public final flags:Int;
@@ -61,8 +61,14 @@ final class HlDebugSection {
 	public function hasPayload():Bool
 		return stored != null || produce != null;
 
-	function get_payload():haxe.io.Bytes
-		return stored != null ? stored : produce();
+	function get_payload():haxe.io.Bytes {
+		if (stored != null)
+			return stored;
+		var encode = produce;
+		if (encode == null)
+			throw "Debug section has no payload";
+		return encode();
+	}
 }
 
 /** UTF-8 source contents addressed by the hash carried in debug locations. */

@@ -4628,3 +4628,35 @@ Wasm32 also passes three fixed full-scene browser pairs; its memory-stat build d
 The development editor module is 105,148,935 bytes (SHA-256 `7d878d1a97b857fa64fc42932c38392c8621bd11669b5b66a3da1ea2da650711`); the prior recorded `a3064590` module was 102,216,099 bytes. The fresh control module has SHA-256 `0affd3510c6710cad2ae69be6ffc1bb93b03ec249f84eec376741b12db419533`; absolute checkout/debug paths differ from its earlier build. Size growth includes synthesized raw/flags methods and nominal tag metadata, not additional action allocations.
 
 Two setup failures produced no guest measurements: the Web GC configure initially enabled the Wasm32-only memory-stat option, and the detached control initially lacked the HashLink source needed by the profiling harness’s CMake step. Both configurations were corrected before these fixed pairs. Captures were deleted after their numbers were extracted; measurement-only action hooks stay in detached checkouts.
+
+### Restoring self-hosting after origin/main 090589e5
+
+Integration brought in compiler sources that stock Haxe accepted but the Haxeon seed could not compile. The source
+ports retain final fields and checks; they do not add language features, scalar specialization, Dynamic casts or
+verifier exceptions.
+
+| Originating commit | Failure / source dependency | Correction |
+|---|---|---|
+| e9250493, 1d8b480a, 38cecb6e, 555583f0, 941bda3b | `final class` is unsupported | Ordinary internal classes; their final fields stay final |
+| 69ee0334 | Cannot infer `TargetProfile.portable` | Explicit types on the three shared profiles |
+| 444fe6c8, 1651826d | Nullable cache / pipeline accessed through a correlated Boolean | Check the actual local before dereferencing it |
+| 1d8b480a | Nullable debug payload producer called as a field | Check the local callback; reject a section with neither payload nor producer |
+| aabb57b6 | `Type.getEnum` / reflective opcode comparison | Exhaustive typed comparison of all 68 instructions, register arrays and label bijections |
+| a3cee201 | Nullable native-storage index, invariant replay arrays, nullable object view | Check both indices; compare replay arrays through a generic helper; guard object lookup |
+| 555583f0 | Nullable verifier-table reads and unsupported `Type.typeof` | Explicit checked reads and supported object/String tests; same identity-print cache |
+| 6d9515ec | Nullable values read inside fact-rendering callbacks | Typed nullable parameters with explicit presence checks |
+| 555583f0 | Generic `Map<String,V>` wrapper reinterprets a Boolean map as a reference map | Typed read/membership callbacks preserve each concrete map representation |
+
+The last failure was reproduced separately: `ReadView<V>` storing `Map<String,V>`, instantiated with `Bool`, throws
+`Can't cast map_string_bool to map_string_ref` at construction. The opaque-map/scalar specialization limitation is
+recorded under a2 in GENERIC_SPECIALIZATION.md. The verifier's table is now a storage-independent read view with no
+unchecked map conversion. Missing, false and true results remain distinct.
+
+Validation on the frozen source: **854 passed, 0 failed** with eight workers; compiler self-hosting reaches a
+byte-identical stage-1/stage-2 fixed point; the read-view fixture passes HashLink, Wasm32 and Wasm GC with inlining
+off/on. Typed opcode tests check copied arrays, changed operands, different constructors and consistent injective
+label renaming. The existing enum-tag IR fixture was ported to the new explicit target-profile argument.
+
+Full parity also found an independent integration issue in f5fe8b0a: frontend verification runs before Wasm constructs
+its closure escape adapters, so `inline-enum-callback-escape` is rejected prematurely. This is the next correctness
+fix; this checkpoint does not claim a Tier 2 pass or authorize publication.
