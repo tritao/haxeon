@@ -13,7 +13,7 @@ class DebugSectionFixture {
 		var program = Frontend.compileFile(new SourceFile("debug-section-fixture.hx", "function main():Int return 0;\n"));
 		var code = HlLower.lower(program);
 		code.debugSections.push(compiler.hl.HlCode.HlDebugSection.of(0x3FFF, 9, 0, Bytes.ofString("unknown-section")));
-		var encoded = HlWriter.encode(code);
+		var encoded = HlWriter.encode(code).flatten();
 		File.saveBytes(args[0], encoded);
 		File.saveBytes(args[1], encoded.sub(0, encoded.length - 1));
 	}

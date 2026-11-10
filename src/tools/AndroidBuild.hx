@@ -94,7 +94,7 @@ class AndroidBuild {
 
 		var output = resolvePath(outputPath, Sys.getCwd());
 		ensureDirectory(Path.directory(output));
-		File.saveBytes(output, HlWriter.encode(result.module));
+		File.saveBytes(output, HlWriter.encode(result.module).flatten());
 		File.saveBytes(sidecar(output, ".hli"), result.runtimeIdentity);
 		File.saveContent(sidecar(output, ".entry"), Std.string(entryId));
 		compiler.acknowledgePublication(result.revision);

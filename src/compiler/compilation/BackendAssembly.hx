@@ -80,7 +80,7 @@ class BackendAssembly {
 	/** Why two modules differ, or null when they encode to the same bytes. */
 	public static function moduleDifference(previous:HlCode, fresh:HlCode):Null<String> {
 		var left = HlWriter.encode(previous), right = HlWriter.encode(fresh);
-		if (left.compare(right) == 0)
+		if (left.equals(right))
 			return null;
 		var functions = previous.functions, others = fresh.functions;
 		if (functions.length != others.length)

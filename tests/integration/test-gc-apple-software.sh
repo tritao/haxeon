@@ -44,6 +44,6 @@ for generator in HxiCallMain HxiRetainedMain; do
   if [[ $status != 42 ]]; then echo "FAIL: Apple $generator returned $status"; exit 1; fi
  done
 done
-"$root/.tools/haxe/haxe" -cp "$root/src" -cp "$root/tests/runtime" -main GcModuleLifetimeMain -hl "$work/modules.hl"
+"$root/.tools/haxe/haxe" -cp "$root/src" -cp "$root/lib/haxeon-io" -cp "$root/tests/runtime" -main GcModuleLifetimeMain -hl "$work/modules.hl"
 for threads in 1 4; do HL_GC_THREADS=$threads "$vm" "$work/modules.hl"; done
 echo 'PASS: experimental Apple AArch64 software GC validation suite'

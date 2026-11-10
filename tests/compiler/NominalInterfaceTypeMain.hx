@@ -24,7 +24,7 @@ class NominalInterfaceTypeMain {
 				var result = c.compile("Main"), temp = Sys.getEnv("TMPDIR");
 				if (temp == null) temp = "out";
 				var path = temp + "/nominal-interface-" + target + inlining + (target == "hl" ? ".hl" : ".wasm");
-				sys.io.File.saveBytes(path, target == "hl" ? HlWriter.encode(result.module) : new WasmBackend().compile(result.ir, {
+				sys.io.File.saveBytes(path, target == "hl" ? HlWriter.encode(result.module).flatten() : new WasmBackend().compile(result.ir, {
 					target: target == "wasm32" ? Wasm32 : WasmGc, debugNames: true
 				}).bytes);
 				var js = 'const e=new WebAssembly.Instance(new WebAssembly.Module(require("fs").readFileSync(process.argv[1]))).exports;const r=e.main();if(r!==42)throw Error("result "+r);';

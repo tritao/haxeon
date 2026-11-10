@@ -36,7 +36,7 @@ class AddedLambdaPatchMain {
 		var compiler = new Compiler();
 		compiler.update("Main.hx", program("", "x * scale"));
 		var build = compiler.compile("Main"),
-			live = Runtime.load(HlWriter.encode(build.module), build.runtimeIdentity),
+			live = Runtime.load(HlWriter.encode(build.module).flatten(), build.runtimeIdentity),
 			mainId = build.functionIds.get("main");
 		var before = Runtime.callInt(live, mainId);
 		if (before != 4141)
@@ -51,7 +51,7 @@ class AddedLambdaPatchMain {
 		var after = Runtime.callInt(live, mainId);
 		if (after != 4248)
 			throw 'The patched module returned $after instead of 4248';
-		var fresh = Runtime.load(HlWriter.encode(changed.module), changed.runtimeIdentity);
+		var fresh = Runtime.load(HlWriter.encode(changed.module).flatten(), changed.runtimeIdentity);
 		var clean = Runtime.callInt(fresh, changed.functionIds.get("main"));
 		Runtime.dispose(fresh);
 		if (clean != 4848)

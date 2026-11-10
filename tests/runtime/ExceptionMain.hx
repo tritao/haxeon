@@ -24,6 +24,6 @@ class ExceptionMain {
 			+ " && error.stack.length == 0 && error.details() == '42' && CallStack.exceptionStack().length > 0 ? 42 : 0;\n"
 			+ "  }\n"
 			+ "}");
-		File.saveBytes(Sys.args()[0], HlWriter.encode(compiler.compile("Main").module));
+		File.saveBytes(Sys.args()[0], HlWriter.encode(compiler.compile("Main").module).flatten());
 	}
 }

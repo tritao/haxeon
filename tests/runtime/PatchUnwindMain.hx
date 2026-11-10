@@ -22,7 +22,7 @@ class PatchUnwindMain {
 			+ "function main():Int { return probe(); }\n";
 		compiler.update("Main.hx", program("boom"));
 		var first = compiler.compile("Main"),
-			live = Runtime.load(HlWriter.encode(first.module), first.runtimeIdentity),
+			live = Runtime.load(HlWriter.encode(first.module).flatten(), first.runtimeIdentity),
 			mainId = first.functionIds.get("main");
 		var before = Runtime.callInt(live, mainId);
 		if (before != 7)

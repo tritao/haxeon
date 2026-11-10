@@ -146,7 +146,7 @@ class LiveObjectLayoutMain {
 		var compiler = compiler();
 		compiler.update("Main.hx", original());
 		var build = compiler.compile("Main"),
-			live = Runtime.load(HlWriter.encode(build.module), build.runtimeIdentity),
+			live = Runtime.load(HlWriter.encode(build.module).flatten(), build.runtimeIdentity),
 			main = build.functionIds.get("main"),
 			fresh = build.functionIds.get("Main.fresh"),
 			reflected = build.functionIds.get("Main.reflected");
@@ -208,7 +208,7 @@ class LiveObjectLayoutMain {
 		var compiler = compiler();
 		compiler.update("Main.hx", boxes(true, false, withItems, "  return 0;\n"));
 		var build = compiler.compile("Main"),
-			live = Runtime.load(HlWriter.encode(build.module), build.runtimeIdentity),
+			live = Runtime.load(HlWriter.encode(build.module).flatten(), build.runtimeIdentity),
 			main = build.functionIds.get("main"),
 			later = build.functionIds.get("Main.later");
 		expect("the first push", Runtime.callInt(live, main), 2);
@@ -277,7 +277,7 @@ class LiveObjectLayoutMain {
 		var compiler = compiler();
 		compiler.update("Main.hx", without);
 		var build = compiler.compile("Main"),
-			live = Runtime.load(HlWriter.encode(build.module), build.runtimeIdentity),
+			live = Runtime.load(HlWriter.encode(build.module).flatten(), build.runtimeIdentity),
 			rounds = build.functionIds.get("Main.rounds");
 		expect("starting the worker", Runtime.callInt(live, build.functionIds.get("Main.start")), 0);
 		var revision = build.revision;

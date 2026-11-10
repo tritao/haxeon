@@ -48,7 +48,7 @@ class HostExportRootsMain {
 			var temp = Sys.getEnv("TMPDIR");
 			if (temp == null) temp = "out";
 			var path = temp + "/host-enum-export-" + target + "-" + inlineEnabled + (target == "hl" ? ".hl" : ".wasm");
-			var bytes = target == "hl" ? HlWriter.encode(exposed.module) : new WasmBackend().compile(exposed.ir,
+			var bytes = target == "hl" ? HlWriter.encode(exposed.module).flatten() : new WasmBackend().compile(exposed.ir,
 				{target: target == "wasm32" ? Wasm32 : WasmGc, debugNames: true,
 					wasmMemoryStats: target == "wasm32", wasmGcAllocationCount: target == "wasm-gc"}).bytes;
 			sys.io.File.saveBytes(path, bytes);

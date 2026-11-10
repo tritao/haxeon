@@ -13,6 +13,6 @@ class ImportClassMain {
 		compiler.update("Main.hx",
 			"import editor.widgets.SearchPlugin; import editor.widgets.*; function main():Int { var plugin:SearchPlugin = new SearchPlugin(2); var options:SearchPluginOptions = new SearchPluginOptions(); var palette:SearchPalette = new SearchPalette(); var filesystemPalette:FilesystemPalette = new FilesystemPalette(); return plugin.score(40) + options.bias + palette.bias + filesystemPalette.bias; }");
 		var result = compiler.compile("Main");
-		File.saveBytes(Sys.args()[0], HlWriter.encode(result.module));
+		File.saveBytes(Sys.args()[0], HlWriter.encode(result.module).flatten());
 	}
 }

@@ -51,7 +51,7 @@ class MethodClosureValueMain {
 				if (temp == null)
 					temp = "out";
 				var path = temp + "/method-" + target + inlining + (target == "hl" ? ".hl" : ".wasm");
-				var bytes = target == "hl" ? HlWriter.encode(result.module) : new WasmBackend().compile(result.ir, {
+				var bytes = target == "hl" ? HlWriter.encode(result.module).flatten() : new WasmBackend().compile(result.ir, {
 					target: target == "wasm32" ? Wasm32 : WasmGc,
 					debugNames: true,
 					wasmMemoryStats: target == "wasm32",

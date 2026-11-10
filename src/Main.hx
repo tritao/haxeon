@@ -20,7 +20,7 @@ class Main {
 		var module = ModulePath.fromFile(Path.withoutDirectory(sourcePath));
 		compiler.update(sourcePath, File.getContent(sourcePath), module);
 		var result = compiler.compile(module);
-		File.saveBytes(outputPath, HlWriter.encode(result.module));
+		File.saveBytes(outputPath, HlWriter.encode(result.module).flatten());
 		Sys.println('compiled $sourcePath -> $outputPath');
 	}
 }

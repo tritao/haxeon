@@ -29,7 +29,7 @@ class EnumDynamicOrderMain {
 		var result = compiler.compile("Main"),
 			path = temp + "/enum-order-" + target + inlining + (target == "hl" ? ".hl" : ".wasm");
 		if (target == "hl")
-			sys.io.File.saveBytes(path, HlWriter.encode(result.module));
+			sys.io.File.saveBytes(path, HlWriter.encode(result.module).flatten());
 		else
 			sys.io.File.saveBytes(path, new WasmBackend().compile(result.ir, {
 				target: target == "wasm32" ? Wasm32 : WasmGc,

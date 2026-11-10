@@ -16,7 +16,7 @@ class NullStringMapMain {
    if(target=="hl") input+='function census():Int { NullStringMapCensus.prepare(); var before=hl.Gc.totalAllocated(); var small=NullStringMapCensus.perform(8); if(small!=8 || hl.Gc.totalAllocated()!=before) return 1; before=hl.Gc.totalAllocated(); var result=NullStringMapCensus.perform(1024); return result==1024 && hl.Gc.totalAllocated()==before ? 42 : 1; }';
    c.update("Main.hx",input); var result=c.compile("Main"),temp=Sys.getEnv("TMPDIR"); if(temp==null)temp="out";
    var path=temp+"/null-map-"+target+inlining+(target=="hl"?".hl":".wasm");
-   sys.io.File.saveBytes(path,target=="hl"?HlWriter.encode(result.module):new WasmBackend().compile(result.ir,{
+   sys.io.File.saveBytes(path,target=="hl"?HlWriter.encode(result.module).flatten():new WasmBackend().compile(result.ir,{
     target:target=="wasm32"?Wasm32:WasmGc,debugNames:true,wasmMemoryStats:target=="wasm32",wasmGcAllocationCount:target=="wasm-gc",exports:exports
    }).bytes);
    if(target=="hl") {

@@ -133,7 +133,7 @@ class HlValidator {
 				found = false;
 			for (section in code.debugSections)
 				if (section.kind == HlWriter.SOURCE_SNAPSHOTS && section.version == 1) {
-					if (checking && section.payload.compare(encoded) != 0)
+					if (checking && !section.payload.equals(encoded))
 						throw "HLB source snapshot section does not match its model";
 					found = true;
 				}

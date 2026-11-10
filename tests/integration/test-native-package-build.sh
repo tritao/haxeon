@@ -15,7 +15,7 @@ fi
 cp -R "$repo_dir/tests/fixtures/build/native-package/." "$project_dir/"
 
 run_cli() {
-	HAXEON_HOME="$home" HAXEON_COMPILER_SOURCE="$repo_dir/src" "$haxe" --cwd "$repo_dir" -cp "$repo_dir/src" --run tools.HaxeonCli "$@"
+	HAXEON_HOME="$home" HAXEON_COMPILER_SOURCE="$repo_dir/src" "$haxe" --cwd "$repo_dir" -cp "$repo_dir/src" -cp "$repo_dir/lib/haxeon-io" --run tools.HaxeonCli "$@"
 }
 
 plan_output=$(run_cli build --project "$project_dir/app/haxeon.json" --plan --explain --timings)

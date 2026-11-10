@@ -11,6 +11,6 @@ class StaticImportMain {
 		compiler.update("Main.hx",
 			"import util.Helpers.triple; import util.Helpers.clamp; import util.Helpers.LIMIT; import util.Helpers.plain; import util.Helpers.Other; function main():Int { var total = triple(4) + clamp(50, 7) + LIMIT + plain(1) + Other.ten(); return total == 12 + 7 + 5 + 101 + 10 ? 42 : 1; }");
 		var result = compiler.compile("Main");
-		File.saveBytes(Sys.args()[0], HlWriter.encode(result.module));
+		File.saveBytes(Sys.args()[0], HlWriter.encode(result.module).flatten());
 	}
 }

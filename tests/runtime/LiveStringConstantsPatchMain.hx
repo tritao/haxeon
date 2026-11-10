@@ -32,7 +32,7 @@ class LiveStringConstantsPatchMain {
 		var build = compiler.compile("Main");
 		if (build.module.constants.length < 2)
 			throw 'A live module should hold its literals as constants, got ${build.module.constants.length}';
-		var live = Runtime.load(HlWriter.encode(build.module), build.runtimeIdentity),
+		var live = Runtime.load(HlWriter.encode(build.module).flatten(), build.runtimeIdentity),
 			mainId = build.functionIds.get("main");
 		expect(Runtime.callInt(live, mainId) == 2000, "The live module allocated while evaluating its literals, or computed the wrong total");
 		var edits = [
@@ -75,7 +75,7 @@ class LiveStringConstantsPatchMain {
 			var result = Runtime.callInt(live, mainId);
 			expect(result == edit.expected, 'After ${edit.label} the patched module returned $result instead of ${edit.expected}');
 			// A rejected patch falls back to loading the same build's full module, which must run on its own.
-			var fresh = Runtime.load(HlWriter.encode(changed.module), changed.runtimeIdentity),
+			var fresh = Runtime.load(HlWriter.encode(changed.module).flatten(), changed.runtimeIdentity),
 				reloaded = Runtime.callInt(fresh, changed.functionIds.get("main"));
 			Runtime.dispose(fresh);
 			expect(reloaded == edit.expected, 'After ${edit.label} the full module returned $reloaded instead of ${edit.expected}');

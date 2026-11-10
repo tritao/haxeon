@@ -73,6 +73,6 @@ function main():Int {
 	  if (onlyJsonAgain.get(1) != "one") return 12;
   return 42;
 }');
-		File.saveBytes(Sys.args()[0], HlWriter.encode(compiler.compile("Main").module));
+		File.saveBytes(Sys.args()[0], HlWriter.encode(compiler.compile("Main").module).flatten());
 	}
 }

@@ -67,7 +67,7 @@ class LiveSignaturePatchMain {
 		var compiler = new Compiler();
 		compiler.update("Main.hx", program(1));
 		var build = compiler.compile("Main"),
-			live = Runtime.load(HlWriter.encode(build.module), build.runtimeIdentity),
+			live = Runtime.load(HlWriter.encode(build.module).flatten(), build.runtimeIdentity),
 			mainId = build.functionIds.get("main");
 		// The kept point sums 3, a new one 5, the stored scaler doubles 4, and scale(1) is 2.
 		expect(Runtime.callInt(live, mainId), 305082, "before the edits");
@@ -123,7 +123,7 @@ class LiveSignaturePatchMain {
 	}
 
 	static function runFresh(build:Dynamic):Int {
-		var fresh = Runtime.load(HlWriter.encode(build.module), build.runtimeIdentity);
+		var fresh = Runtime.load(HlWriter.encode(build.module).flatten(), build.runtimeIdentity);
 		var value = Runtime.callInt(fresh, build.functionIds.get("main"));
 		Runtime.dispose(fresh);
 		return value;

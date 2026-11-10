@@ -38,7 +38,7 @@ class EnumAbstractDeclaredTypeMain {
 			+
 			"function main():Int return callSwitchLeft() + callSwitchRight() + callEqualLeft() + callNotEqualRight() + passLeft() + passRight() + localLeft() + localRight() + returned() + switchCall() + fields() + switchField() + switchMember();");
 		var result = compiler.compile("Main"),
-			live = Runtime.load(HlWriter.encode(result.module), result.runtimeIdentity);
+			live = Runtime.load(HlWriter.encode(result.module).flatten(), result.runtimeIdentity);
 		function call(name:String, expected:Int):Void {
 			var actual = Runtime.callInt(live, result.functionIds.get("Main." + name));
 			if (actual != expected)

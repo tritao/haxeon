@@ -47,6 +47,6 @@ class InstanceClosureMain {
 			exited = entryBuilder.call("__exit", [mainResult], IrType.Void);
 		entryBuilder.returnValue(exited);
 		program.functions.push(new IrFunction("__entry", [], IrType.Void, entryBuilder.blocks));
-		File.saveBytes(Sys.args()[0], HlWriter.encode(HlLower.lower(program)));
+		File.saveBytes(Sys.args()[0], HlWriter.encode(HlLower.lower(program)).flatten());
 	}
 }

@@ -40,7 +40,7 @@ class FunctionValueLanesMain {
 				program.functions.push(new IrFunction("run",wrapper.arguments,Void,wrapper.blocks));
 				program.natives.push({name:"exit",library:"std",symbol:"sys_exit",arguments:[I32],result:Void}); program.entryPoint="run";
 				var path="out/function-value-lanes.hl";
-				sys.io.File.saveBytes(path,compiler.hl.HlWriter.encode(compiler.ir.hl.HlLower.lower(program)));
+				sys.io.File.saveBytes(path,compiler.hl.HlWriter.encode(compiler.ir.hl.HlLower.lower(program)).flatten());
 				var process=new sys.io.Process(Sys.getEnv("HAXEON_HASHLINK_DIR") + "/hl",[path]), error=process.stderr.readAll().toString(), status=process.exitCode(); process.close();
 				if(status!=42) throw 'HashLink callback lane returned $status: $error';
 			} else {

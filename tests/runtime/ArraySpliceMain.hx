@@ -28,6 +28,6 @@ class ArraySpliceMain {
 			+ "  var shiftedStrings = [\"first\", \"second\"]; if (shiftedStrings.shift() != \"first\" || shiftedStrings[0] != \"second\") return 8;\n"
 			+ "  return 42;\n"
 			+ "}");
-		File.saveBytes(Sys.args()[0], HlWriter.encode(compiler.compile("Main").module));
+		File.saveBytes(Sys.args()[0], HlWriter.encode(compiler.compile("Main").module).flatten());
 	}
 }

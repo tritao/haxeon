@@ -82,7 +82,7 @@ class DebugMetadataMain {
 			throw "Fixture did not verify assignment positions in the presence of encoded labels";
 		Sys.println("PASS: HL assignments use encoded opcode positions, including labels");
 
-		var bytes = HlWriter.encode(code),
+		var bytes = HlWriter.encode(code).flatten(),
 			suffix = encodedAssignmentSuffix(fn.debugAssignments);
 		if (bytes.get(3) != compiler.hl.HlCode.VERSION
 			|| code.debugSections.length != 2
@@ -90,7 +90,7 @@ class DebugMetadataMain {
 			|| code.debugSections[1].kind != HlWriter.OPCODE_SOURCE_SPANS
 			|| code.debugSections[1].payload.length == 0)
 			throw "HLB function identity and opcode source-span sections were not emitted";
-		if (bytes.compare(HlWriter.encode(code)) != 0)
+		if (bytes.compare(HlWriter.encode(code).flatten()) != 0)
 			throw "HLB debug section encoding is not deterministic";
 		var writerCache = new HlWriterCache();
 		for (_ in 0...2) {
@@ -107,7 +107,7 @@ class DebugMetadataMain {
 			fn.debugLocations[index] = new compiler.hl.HlFunction.HlDebugLocation(index == 1 ? "second-source.hx" : "first-source.hx", location.line,
 				location.column, location.endLine, location.endColumn, location.sourceHash, location.start, location.end, location.flags);
 		}
-		var mixedPaths = HlWriter.encode(code),
+		var mixedPaths = HlWriter.encode(code).flatten(),
 			mixedCache = new HlWriterCache();
 		for (_ in 0...2) {
 			var streamed = new BytesOutput();
@@ -166,9 +166,9 @@ class DebugMetadataMain {
 		];
 		if (sections.length != 1
 			|| sections[0].version != 1
-			|| sections[0].payload.compare(HlWriter.encodeSourceSnapshots(snapshots)) != 0)
+			|| !sections[0].payload.equals(HlWriter.encodeSourceSnapshots(snapshots)))
 			throw "Compiler did not emit the canonical source snapshot section";
-		if (HlWriter.encode(result.module).compare(HlWriter.encode(result.module)) != 0)
+		if (HlWriter.encode(result.module).flatten().compare(HlWriter.encode(result.module).flatten()) != 0)
 			throw "HLB source snapshot encoding is not deterministic";
 		var stableBySlot:Map<Int, Int> = [for (fn in result.module.functions) fn.functionIndex => fn.functionIndex],
 			patch = HlPatchReader.decode(HlPatchWriter.encode(result.module, Bytes.alloc(16), [for (fn in result.module.functions) fn.functionIndex],

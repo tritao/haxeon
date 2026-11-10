@@ -21,6 +21,6 @@ class DebugLineEncodingFixture {
 		}];
 		code.functions = [new HlFunction(1, 0, [0], operations, locations)];
 		HlWriter.reportSize(code);
-		File.saveBytes(Sys.args()[0], HlWriter.encode(code));
+		File.saveBytes(Sys.args()[0], HlWriter.encode(code).flatten());
 	}
 }

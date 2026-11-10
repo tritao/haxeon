@@ -31,7 +31,7 @@ class GcOwnerRetirementMain {
 function makeBox():Box { return new Box(42); }
 function make():() -> Int { var values = [40, 2]; return function() return values[0] + values[1]; } function main():Int { return 42; }");
 		var compiled = compiler.compile("Main");
-		var bytes = HlWriter.encode(compiled.module);
+		var bytes = HlWriter.encode(compiled.module).flatten();
 		var make = compiled.functionIds.get("Main.make");
 
 		// A plain object of the module is a block of the module like any other, however the JIT allocated it.

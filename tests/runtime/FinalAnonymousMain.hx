@@ -31,6 +31,6 @@ class FinalAnonymousMain {
 		}
 		compiler.update("Main.hx", 'typedef Frame = { final x:Float; }
 	function main():Int { var value:Frame = {x: 2.0}; return value.x == 2.0 ? 42 : 1; }');
-		File.saveBytes(Sys.args()[0], HlWriter.encode(compiler.compile("Main").module));
+		File.saveBytes(Sys.args()[0], HlWriter.encode(compiler.compile("Main").module).flatten());
 	}
 }

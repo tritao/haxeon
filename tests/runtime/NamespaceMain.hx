@@ -12,6 +12,6 @@ class NamespaceMain {
 		var result = compiler.compile("Main");
 		if (!result.functionIndices.exists("left.Item.new") || !result.functionIndices.exists("right.Item.new"))
 			throw "qualified nominal declarations collided";
-		File.saveBytes(Sys.args()[0], HlWriter.encode(result.module));
+		File.saveBytes(Sys.args()[0], HlWriter.encode(result.module).flatten());
 	}
 }

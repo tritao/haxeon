@@ -50,7 +50,7 @@ class ValueStructMain {
 		var nativeResult = nativeValue.compile("Main");
 		if ([for (object in nativeResult.ir.objects) if (object.name == "Point") object].length != 0)
 			throw "C-represented values must not produce HashLink object declarations";
-		File.saveBytes(Sys.args()[0], HlWriter.encode(result.module));
+		File.saveBytes(Sys.args()[0], HlWriter.encode(result.module).flatten());
 	}
 
 	static function expectCompileError(source:String, expected:String):Void {

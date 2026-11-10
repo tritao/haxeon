@@ -40,7 +40,7 @@ class StructuralIterationMain {
 				File.saveBytes('out/structural-iteration-$target-' + (incremental ? "incremental" : "clean") + ".wasm",
 					new WasmBackend().compile(result.ir, {target: target, debugNames: true}).bytes);
 			}
-			var live = Runtime.load(HlWriter.encode(result.module), result.runtimeIdentity);
+			var live = Runtime.load(HlWriter.encode(result.module).flatten(), result.runtimeIdentity);
 			var value = Runtime.callInt(live, result.functionIds.get("main"));
 			Runtime.dispose(live);
 			var expected = incremental ? 43 : 42;

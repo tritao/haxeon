@@ -14,7 +14,7 @@ class DapHotReloadProbe {
 		compiler.update("Main.hx", "function main():Int { return Value.value(); }");
 		var initial = compiler.compile("Main");
 		var functionIndex = initial.functionIds.get("Value.value");
-		var loaded = Runtime.load(HlWriter.encode(initial.module), initial.runtimeIdentity);
+		var loaded = Runtime.load(HlWriter.encode(initial.module).flatten(), initial.runtimeIdentity);
 		for (gate in 0...100)
 			Sys.sleep(0.02);
 		var initialValue = Runtime.callInt(loaded, functionIndex);

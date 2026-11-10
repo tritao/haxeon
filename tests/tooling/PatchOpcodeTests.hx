@@ -235,7 +235,7 @@ class PatchOpcodeTests {
 		var code = module([LoadInt(0, 0), Return(0)]),
 			moduleId = HaxeBytes.alloc(16);
 		code.globals = [1];
-		var loaded = Runtime.load(HlWriter.encode(code), HlRuntimeIdentity.encode(moduleId, 1, ["main" => 0], ["main" => 70000]));
+		var loaded = Runtime.load(HlWriter.encode(code).flatten(), HlRuntimeIdentity.encode(moduleId, 1, ["main" => 0], ["main" => 70000]));
 		var invalid:Array<HlInstruction> = [
 			Mod(1, 0, 0),
 			ShiftLeft(0, 1, 0),
@@ -375,7 +375,7 @@ class PatchOpcodeTests {
 	}
 
 	static function loadStrings():runtime.LoadedModule
-		return Runtime.load(HlWriter.encode(stringModule()), HlRuntimeIdentity.encode(HaxeBytes.alloc(16), 1, ["main" => 0], ["main" => 70000]));
+		return Runtime.load(HlWriter.encode(stringModule()).flatten(), HlRuntimeIdentity.encode(HaxeBytes.alloc(16), 1, ["main" => 0], ["main" => 70000]));
 
 	static function readIndexAt(bytes:HaxeBytes, position:Int):{value:Int, next:Int} {
 		var first = bytes.get(position);

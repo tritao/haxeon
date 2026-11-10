@@ -28,6 +28,6 @@ class ERegMain {
 			+ "  if (!invalid) return 7;\n"
 			+ "  return 42;\n"
 			+ "}");
-		File.saveBytes(Sys.args()[0], HlWriter.encode(compiler.compile("Main").module));
+		File.saveBytes(Sys.args()[0], HlWriter.encode(compiler.compile("Main").module).flatten());
 	}
 }

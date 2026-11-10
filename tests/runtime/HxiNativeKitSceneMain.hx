@@ -31,7 +31,7 @@ class HxiNativeKitSceneMain {
 		compiler.addFfiInterface("NativeKitScene.hxi", sceneHxi);
 		compiler.addFfiInterface("NativeKitSceneRender.hxi", renderHxi);
 		compiler.update("Main.hx", source());
-		File.saveBytes(output, HlWriter.encode(compiler.compile("Main").module));
+		File.saveBytes(output, HlWriter.encode(compiler.compile("Main").module).flatten());
 	}
 
 	static function source():String

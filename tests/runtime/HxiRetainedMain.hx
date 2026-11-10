@@ -39,6 +39,6 @@ class HxiRetainedMain {
 			compiler.update("Main.hx", source);
 		}
 		var result = compiler.compile("Main");
-		File.saveBytes(output, HlWriter.encode(result.module));
+		File.saveBytes(output, HlWriter.encode(result.module).flatten());
 	}
 }

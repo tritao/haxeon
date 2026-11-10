@@ -30,7 +30,7 @@ class AndroidReload {
 		var entry = result.functionIds.get("main");
 		if (entry == null)
 			throw "Android reload module has no main function";
-		var module = HlWriter.encode(result.module),
+		var module = HlWriter.encode(result.module).flatten(),
 			bundle = encode(module, result.runtimeIdentity, entry);
 		File.saveBytes(bundlePath, bundle);
 		compiler.acknowledgePublication(result.revision);

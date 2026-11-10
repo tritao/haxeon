@@ -16,7 +16,7 @@ class NativeClosurePatchMain {
 			+ "; } } function main():Int { return Calc.run(); }";
 		compiler.update("Main.hx", program(1));
 		var first = compiler.compile("Main"),
-			live = Runtime.load(HlWriter.encode(first.module), first.runtimeIdentity),
+			live = Runtime.load(HlWriter.encode(first.module).flatten(), first.runtimeIdentity),
 			mainId = first.functionIds.get("main");
 		if (Runtime.callInt(live, mainId) != 5)
 			throw "The native-closure program did not run correctly before the edit";

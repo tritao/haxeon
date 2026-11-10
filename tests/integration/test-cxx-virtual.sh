@@ -42,7 +42,7 @@ esac
 grep -q 'CxxVirtual' "$repo_dir/out/cxx_virtual_projection/Renderer.hx"
 grep -q 'native_virtual_invoke_1' "$repo_dir/out/cxx_virtual_projection/Renderer.hx"
 
-"$repo_dir/.tools/haxe/haxe" -cp "$repo_dir/src" -cp "$repo_dir/tests/runtime" --run CxxVirtualMain \
+"$repo_dir/.tools/haxe/haxe" -cp "$repo_dir/src" -cp "$repo_dir/lib/haxeon-io" -cp "$repo_dir/tests/runtime" --run CxxVirtualMain \
 	"$repo_dir/out/cxx-virtual-test.hl" "$hxi_path" "$projection_dir/Renderer.hx"
 (
 	cd "$repo_dir/out"

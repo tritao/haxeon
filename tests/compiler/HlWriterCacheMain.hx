@@ -10,7 +10,7 @@ class HlWriterCacheMain {
 	static function main():Void {
 		var code = HlLower.lower(Frontend.compile("function add(a:Int, b:Int):Int return a + b; function main():Int return add(40, 2);")),
 			cache = new HlWriterCache();
-		HlWriter.encode(code, cache);
+		HlWriter.encode(code, cache).flatten();
 		for (fn in code.functions)
 			expect(cache.isValidated(fn), "a function validated by the first encode stays validated after the writer prepared the cache");
 		var function_ = code.functions[0];

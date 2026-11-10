@@ -12,7 +12,7 @@ class DynamicStringMain {
 			compiler.update("Main.hx", incremental ? StringTools.replace(source, "return 42;", "return 43;") : source);
 			var result = compiler.compile("Main");
 			var path = "out/dynamic-string-methods-" + (incremental ? "incremental" : "clean") + ".hl";
-			File.saveBytes(path, HlWriter.encode(result.module));
+			File.saveBytes(path, HlWriter.encode(result.module).flatten());
 			var child = run(path), expected = incremental ? 43 : 42;
 			if (child.status != expected)
 				throw 'Dynamic String regression (incremental=$incremental): ${child.status}: ${child.output}';
@@ -21,7 +21,7 @@ class DynamicStringMain {
 		compiler.update("Main.hx", 'function main():Void { var object:Dynamic = {}; object.missing(); }');
 		var result = compiler.compile("Main"),
 			path = "out/dynamic-string-missing.hl";
-		File.saveBytes(path, HlWriter.encode(result.module));
+		File.saveBytes(path, HlWriter.encode(result.module).flatten());
 		var missing = run(path);
 		if (missing.status == 0 || missing.output.indexOf("Null access") < 0)
 			throw 'Missing method must raise a normal null-access error: ${missing.status}: ${missing.output}';

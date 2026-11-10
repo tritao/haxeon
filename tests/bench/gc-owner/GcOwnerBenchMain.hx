@@ -94,7 +94,7 @@ function main():Int { return 0; }";
 			var compiler = new Compiler();
 			compiler.update("Main.hx", StringTools.replace(StringTools.replace(moduleSource, "ITER", Std.string(iterations)), "LIVE", Std.string(liveNodes)));
 			var compiled = compiler.compile("Main");
-			var module = Runtime.load(HlWriter.encode(compiled.module), compiled.runtimeIdentity);
+			var module = Runtime.load(HlWriter.encode(compiled.module).flatten(), compiled.runtimeIdentity);
 			var run = compiled.functionIds.get("Main.run");
 			var c0 = GcStats.collections(),
 				m0 = GcStats.markMicros(),

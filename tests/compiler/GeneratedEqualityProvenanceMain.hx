@@ -57,8 +57,8 @@ class GeneratedEqualityProvenanceMain {
 						if (generatedOps == 0)
 							throw "Nullable primitive equality helpers were not exercised";
 					}
-					var warm = HlWriter.encode(warmResult.module),
-						cold = HlWriter.encode(create(edited).compile("Main").module);
+					var warm = HlWriter.encode(warmResult.module).flatten(),
+						cold = HlWriter.encode(create(edited).compile("Main").module).flatten();
 					if (warm.compare(cold) != 0)
 						throw 'Shared helper provenance differs after editing $path (prefix=$prefix): $valueType';
 				}

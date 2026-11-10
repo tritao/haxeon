@@ -72,7 +72,7 @@ HAXEON_HAXE_BIN="$haxe_bin" "$repo_dir/scripts/haxeon-ffi-import" \
 	"$render_header"
 
 output="$generated_dir/nativekit-scene.hx.hl"
-"$haxe_bin" -cp "$repo_dir/src" -cp "$repo_dir/tests/runtime" --run HxiNativeKitSceneMain \
+"$haxe_bin" -cp "$repo_dir/src" -cp "$repo_dir/lib/haxeon-io" -cp "$repo_dir/tests/runtime" --run HxiNativeKitSceneMain \
 	"$output" "$generated_dir/nativekit-scene.hxi" "$generated_dir/nativekit-scene-render.hxi" \
 	"$nativekit_root" "$generated_dir/nativekit.hxi" "$generated_dir/nativekit-gpu.hxi"
 

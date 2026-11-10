@@ -26,7 +26,7 @@ class AddedStaticCallerMain {
 		compiler.addStandardLibrarySourceRoot("stdlib");
 		compiler.update("Main.hx", program("", "plural(keys.length, \"Item\")"));
 		var build = compiler.compile("Main"),
-			live = Runtime.load(HlWriter.encode(build.module), build.runtimeIdentity),
+			live = Runtime.load(HlWriter.encode(build.module).flatten(), build.runtimeIdentity),
 			mainId = build.functionIds.get("main");
 		if (Runtime.callInt(live, mainId) != 14)
 			throw "The program did not run correctly before the edit";
@@ -52,7 +52,7 @@ class AddedStaticCallerMain {
 		result = Runtime.callInt(live, mainId);
 		if (result != 14)
 			throw 'After removing the function the patched module returned $result instead of 14';
-		var fresh = Runtime.load(HlWriter.encode(undone.module), undone.runtimeIdentity);
+		var fresh = Runtime.load(HlWriter.encode(undone.module).flatten(), undone.runtimeIdentity);
 		result = Runtime.callInt(fresh, undone.functionIds.get("main"));
 		Runtime.dispose(fresh);
 		if (result != 14)

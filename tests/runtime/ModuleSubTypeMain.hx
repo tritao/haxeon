@@ -26,6 +26,6 @@ class ModuleSubTypeMain {
 		flat.update("Stock.hx", STOCK);
 		flat.update("Main.hx", MAIN);
 		var result = flat.compile("Main");
-		File.saveBytes(Sys.args()[0], HlWriter.encode(result.module));
+		File.saveBytes(Sys.args()[0], HlWriter.encode(result.module).flatten());
 	}
 }

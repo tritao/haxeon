@@ -22,11 +22,11 @@ class PluginMain {
 		var mainSource = loadFixture(compiler, "Main.hx", "pragtical/app/Main.hx");
 
 		var first = compiler.compile("Main");
-		File.saveBytes(output, HlWriter.encode(first.module));
+		File.saveBytes(output, HlWriter.encode(first.module).flatten());
 		if (first.metrics.modules != 6 || first.requiresReload || first.patchBytes != null)
 			throw "Initial plugin workload did not compile as a stable module";
 		var disposedModules = 0,
-			live = Runtime.load(HlWriter.encode(first.module), first.runtimeIdentity),
+			live = Runtime.load(HlWriter.encode(first.module).flatten(), first.runtimeIdentity),
 			domain = new RuntimeDomain("search", function(module:Dynamic):Void {
 				disposedModules++;
 				Runtime.dispose(cast module);
@@ -102,7 +102,7 @@ class PluginMain {
 		var activationFailureSource = StringTools.replace(mainSource, "searchPlugin.activate();", "throw \"activation failed\";");
 		compiler.update("Main.hx", activationFailureSource);
 		var activationFailure = compiler.compile("Main"),
-			activationCandidate = Runtime.load(HlWriter.encode(activationFailure.module), activationFailure.runtimeIdentity);
+			activationCandidate = Runtime.load(HlWriter.encode(activationFailure.module).flatten(), activationFailure.runtimeIdentity);
 		try {
 			domain.reloadWithModule(loadedPlugin(activationCandidate, activationFailure.functionIds), activationCandidate);
 			throw "Plugin activation failure unexpectedly published";
@@ -114,7 +114,7 @@ class PluginMain {
 		var restoreFailureSource = StringTools.replace(mainSource, "searchPlugin.restoreState(value);", "throw \"restore failed\";");
 		compiler.update("Main.hx", restoreFailureSource);
 		var restoreFailure = compiler.compile("Main"),
-			restoreCandidate = Runtime.load(HlWriter.encode(restoreFailure.module), restoreFailure.runtimeIdentity);
+			restoreCandidate = Runtime.load(HlWriter.encode(restoreFailure.module).flatten(), restoreFailure.runtimeIdentity);
 		try {
 			domain.reloadWithModule(loadedPlugin(restoreCandidate, restoreFailure.functionIds), restoreCandidate);
 			throw "Plugin restore failure unexpectedly published";
@@ -126,7 +126,7 @@ class PluginMain {
 		var structural = compiler.compile("Main");
 		if (!structural.requiresReload || structural.patchBytes != null)
 			throw "Plugin editor-layout edit did not require a domain reload";
-		var replacement = Runtime.load(HlWriter.encode(structural.module), structural.runtimeIdentity),
+		var replacement = Runtime.load(HlWriter.encode(structural.module).flatten(), structural.runtimeIdentity),
 			replacementPlugin = loadedPlugin(replacement, structural.functionIds);
 		domain.reloadWithModule(replacementPlugin, replacement);
 		compiler.acknowledgePublication(structural.revision);

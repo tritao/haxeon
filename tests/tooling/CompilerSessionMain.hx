@@ -114,7 +114,7 @@ class CompilerSessionMain {
 		expect(edited.retyped.length > 0, "a source edit must retype affected modules");
 		expect(edited.metrics.declarationMs == 0.0 && edited.metrics.shapeConnectionMs == 0.0 && edited.metrics.signatureTypingMs == 0.0,
 			"an explicitly typed class-method body edit must reuse validated declarations");
-		expect(File.getBytes(output).compare(HlWriter.encode(edited.module)) == 0, "cached HashLink function encoding must match canonical serialization");
+		expect(File.getBytes(output).compare(HlWriter.encode(edited.module).flatten()) == 0, "cached HashLink function encoding must match canonical serialization");
 		// With inlining, Main.main contains Value.get, so it must be rebuilt when Value.get changes.
 		var mainReused = functionByName(initial, "Main.main") == functionByName(edited, "Main.main");
 		expect(compiler.ir.IrInliner.enabled ? !mainReused : mainReused,

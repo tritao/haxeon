@@ -39,6 +39,6 @@ class ObjectMain {
 		program.entryPoint = "__entry";
 		var lowered = HlLower.lower(program);
 		var output = Sys.args()[0];
-		File.saveBytes(output, HlWriter.encode(lowered));
+		File.saveBytes(output, HlWriter.encode(lowered).flatten());
 	}
 }

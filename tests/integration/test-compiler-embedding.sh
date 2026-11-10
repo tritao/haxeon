@@ -85,7 +85,7 @@ HX
 task_haxeon_home=${HAXEON_HOME:-$repo_dir}
 task_haxe=${HAXEON_HAXE:-"$task_haxeon_home/.tools/haxe/haxe"}
 HAXEON_HOME="$task_haxeon_home" HAXEON_COMPILER_SOURCE="$repo_dir/src" \
-    "$task_haxe" --cwd "$repo_dir" -cp "$repo_dir/src" --run tools.HaxeonCli \
+    "$task_haxe" --cwd "$repo_dir" -cp "$repo_dir/src" -cp "$repo_dir/lib/haxeon-io" --run tools.HaxeonCli \
     run --project "$project_dir/haxeon.json" "$@"
 
 # The library must not replace the consumer's entry with its own compiler CLI Main.

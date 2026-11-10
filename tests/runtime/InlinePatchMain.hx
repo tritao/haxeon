@@ -17,7 +17,7 @@ class InlinePatchMain {
 			+ "function main():Int { return Counter.bump() + other(); }";
 		compiler.update("Main.hx", program("value++;", ""));
 		var first = compiler.compile("Main"),
-			live = Runtime.load(HlWriter.encode(first.module), first.runtimeIdentity),
+			live = Runtime.load(HlWriter.encode(first.module).flatten(), first.runtimeIdentity),
 			mainId = first.functionIds.get("main"),
 			bumpId = first.functionIds.get("Counter.bump"),
 			otherId = first.functionIds.get("other");

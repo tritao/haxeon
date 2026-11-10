@@ -732,7 +732,7 @@ class TestMain {
 				}
 		if (!nullableEnumHasJump)
 			throw "Nullable enum null checks must lower through HashLink's dedicated null branch";
-		HlWriter.encode(nullableEnumHl);
+		HlWriter.encode(nullableEnumHl).flatten();
 		Sys.println("PASS: nullable enum null checks use dedicated HashLink null branches");
 
 		var deepBlockCount = 2048, deepBlocks:Array<CfgBlock> = [];
@@ -913,7 +913,7 @@ class TestMain {
 		if (!provenanceLines.exists(2) || !provenanceLines.exists(3))
 			throw "SSA IR did not retain expression and statement source lines";
 		var debugCode = HlLower.lower(provenanceProgram),
-			debugBytes = HlWriter.encode(debugCode);
+			debugBytes = HlWriter.encode(debugCode).flatten();
 		if (debugBytes.get(4) != 1)
 			throw "HLB writer did not enable function debug metadata";
 		for (fn in debugCode.functions)
@@ -2065,7 +2065,7 @@ class TestMain {
 		];
 		objectCode.functions = [new HlFunction(3, 0, [1], [LoadInt(0, 0), Return(0)])];
 		objectCode.entryPoint = 0;
-		if (HlWriter.encode(objectCode).length == 0)
+		if (HlWriter.encode(objectCode).flatten().length == 0)
 			throw "HashLink object type did not serialize";
 		var incrementalClass = new Compiler();
 		incrementalClass.update("Main.hx",
@@ -2095,7 +2095,7 @@ class TestMain {
 
 	static function expectError(code:HlCode, expected:String):Void {
 		try {
-			HlWriter.encode(code);
+			HlWriter.encode(code).flatten();
 			throw 'writer accepted invalid module; expected "$expected"';
 		} catch (error:String) {
 			if (error != expected)

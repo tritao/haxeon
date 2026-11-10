@@ -1,10 +1,8 @@
 package compiler.hl;
 
 import haxe.io.Bytes as HaxeBytes;
-import haxe.io.BytesOutput;
-#if !haxeon
-import haxe.io.Output;
-#end
+import haxeon.io.ByteSink;
+import haxeon.io.SegmentedBytes;
 import haxe.ds.ObjectMap;
 import sys.io.File;
 import compiler.hl.HlCode.HlTypeDef;
@@ -17,118 +15,79 @@ typedef HlOpcodeSourceSpanGroup = {
 	final locations:Array<HlDebugLocation>;
 }
 
-/** Encoded opcode bytes paired with unresolved symbolic branch targets. */
-private typedef EncodedInstruction = {
-	final opcode:HlOpcode;
-	final operands:Array<Int>;
-}
-
 /** Serializes the in-memory HashLink model using canonical HLB encodings. */
 class HlWriter {
 	public static inline final FUNCTION_IDENTITIES = 1;
 	public static inline final OPCODE_SOURCE_SPANS = 2;
 	public static inline final SOURCE_SNAPSHOTS = 3;
 
-	#if haxeon
-	final output:BytesOutput;
-	#else
-	final output:Output;
-	#end
-	#if haxeon
-	final bytesOutput:Null<BytesOutput>;
-	#else
-	final bytesOutput:Null<ChunkedOutput>;
-	#end
+	final output:ByteSink = new ByteSink();
 	final cache:Null<HlWriterCache>;
 	var hasDebug:Bool = false;
 	var debugFiles:Array<String> = [];
 	var debugFileIndices:Map<String, Int> = [];
 
-	#if haxeon
 	public function new(?cache:HlWriterCache) {
 		this.cache = cache;
-		bytesOutput = new BytesOutput();
-		bytesOutput.setBigEndian(false);
-		output = bytesOutput;
 	}
-	#else
-	public function new(?cache:HlWriterCache, ?destination:Output) {
-		this.cache = cache;
-		bytesOutput = destination == null ? new ChunkedOutput() : null;
-		output = destination == null ? bytesOutput : destination;
-		output.bigEndian = false;
-	}
-	#end
 
 	/** Appends bytes that are never changed again (the cached prefix, cached function encodings, section payloads) without copying them. */
-	function writeShared(bytes:HaxeBytes):Void {
-		#if haxeon
-		output.write(bytes);
-		#else
-		if (bytesOutput != null)
-			bytesOutput.writeShared(bytes);
-		else
-			output.write(bytes);
-		#end
-	}
+	function writeShared(bytes:HaxeBytes):Void
+		output.appendShared(bytes);
 
-	function getBytes():HaxeBytes {
-		if (bytesOutput == null)
-			throw "HashLink writer has no byte buffer";
-		return bytesOutput.getBytes();
-	}
+	/** What this writer wrote, as one buffer: for the small results (an index, a function, a section header). */
+	function bytes():HaxeBytes
+		return output.finish().flatten();
 
-	public static function encode(code:HlCode, ?cache:HlWriterCache):HaxeBytes {
+	/** The module as segments: the cached encodings of unchanged functions are shared, not copied. */
+	public static function encode(code:HlCode, ?cache:HlWriterCache):SegmentedBytes {
 		HlValidator.validate(code, cache);
 		var writer = new HlWriter(cache);
 		writer.writeCode(code);
-		return writer.getBytes();
+		return writer.output.finish();
 	}
 
-	#if !haxeon
-	/** Write a module directly to an output without building a second module-sized buffer. */
-	public static function writeTo(code:HlCode, destination:Output, ?cache:HlWriterCache):Void {
-		HlValidator.validate(code, cache);
-		new HlWriter(cache, destination).writeCode(code);
-	}
-	#end
+	/** Write a module to an output. */
+	public static function writeTo(code:HlCode, destination:haxe.io.Output, ?cache:HlWriterCache):Void
+		encode(code, cache).writeTo(destination);
 
 	/** Validate before opening the destination, preserving an older file on validation failure. */
-	public static function writeFile(code:HlCode, path:String, ?cache:HlWriterCache):Void {
-		HlValidator.validate(code, cache);
+	public static function writeFile(code:HlCode, path:String, ?cache:HlWriterCache):Void
+		saveSegments(encode(code, cache), path);
+
+	/** Writes a module to `path` through a temporary file beside it, so a reader never sees half a module. */
+	public static function saveSegments(module:SegmentedBytes, path:String):Void {
+		// The self-hosted build's standard library has no streaming file output yet.
 		#if haxeon
-		File.saveBytes(path, new HlWriter(cache).writeAndGetBytes(code));
+		File.saveBytes(path, module.flatten());
 		#else
-		var destination = File.write(path, true);
+		var temporary = path + ".tmp", destination = File.write(temporary, true);
 		try {
-			new HlWriter(cache, destination).writeCode(code);
+			module.writeTo(destination);
 		} catch (error:Dynamic) {
 			destination.close();
+			sys.FileSystem.deleteFile(temporary);
 			throw error;
 		}
 		destination.close();
+		if (sys.FileSystem.exists(path))
+			sys.FileSystem.deleteFile(path);
+		sys.FileSystem.rename(temporary, path);
 		#end
 	}
-
-	#if haxeon
-	function writeAndGetBytes(code:HlCode):HaxeBytes {
-		writeCode(code);
-		return getBytes();
-	}
-	#end
 
 	/** Public because index encoding is part of the HLB format contract. */
 	public static function encodeIndex(value:Int):HaxeBytes {
 		var writer = new HlWriter();
 		writer.writeIndex(value);
-		return writer.getBytes();
+		return writer.bytes();
 	}
 
 	/** Encodes one function using its canonical HLB function representation. */
 	public static function encodeFunction(fn:HlFunction):HaxeBytes {
 		var writer = new HlWriter();
 		writer.writeFunction(fn);
-		return writer.getBytes();
+		return writer.bytes();
 	}
 
 	/** Measure exactly the components written by writeCode, without changing the module. */
@@ -139,22 +98,22 @@ class HlWriter {
 		writer.prepareDebugFiles(code);
 		var part = new HlWriter();
 		part.writeStrings(code.strings);
-		var strings = part.getBytes().length;
+		var strings = part.output.length;
 		part = new HlWriter();
 		if (writer.hasDebug) {
 			part.writeUnsignedIndex(writer.debugFiles.length);
 			part.writeStrings(writer.debugFiles);
 		}
-		var debugFiles = part.getBytes().length;
+		var debugFiles = part.output.length;
 		var typeSizes:Array<{index:Int, bytes:Int}> = [], types = 0, reflection = 0;
 		for (index in 0...code.types.length) {
 			part = new HlWriter();
 			part.writeType(code.types[index]);
-			var size = part.getBytes().length;
+			var size = part.output.length;
 			types += size;
 			part = new HlWriter();
 			part.writeReflectionMembers(code.types[index]);
-			reflection += part.getBytes().length;
+			reflection += part.output.length;
 			typeSizes.push({index: index, bytes: size});
 		}
 		typeSizes.sort((a, b) -> a.bytes != b.bytes ? b.bytes - a.bytes : a.index - b.index);
@@ -202,7 +161,7 @@ class HlWriter {
 		part = new HlWriter();
 		for (global in code.globals)
 			part.writeIndex(global);
-		var globals = part.getBytes().length;
+		var globals = part.output.length;
 		part = new HlWriter();
 		for (native in code.natives) {
 			part.writeIndex(native.library);
@@ -210,10 +169,10 @@ class HlWriter {
 			part.writeIndex(native.type);
 			part.writeUnsignedIndex(native.functionIndex);
 		}
-		var natives = part.getBytes().length;
+		var natives = part.output.length;
 		part = new HlWriter();
 		part.writePrefixWithDebug(code, writer);
-		var prefix = part.getBytes().length;
+		var prefix = part.output.length;
 		var functions = 0, functionDebug = 0, debugSizes:Array<{index:Int, bytes:Int}> = [];
 		for (fn in code.functions) {
 			var plain = encodeFunction(fn).length;
@@ -230,10 +189,10 @@ class HlWriter {
 		];
 		part = new HlWriter();
 		part.writeConstants(code);
-		var constants = part.getBytes().length;
+		var constants = part.output.length;
 		part = new HlWriter();
 		part.writeDebugSections(code);
-		var debugSections = part.getBytes().length;
+		var debugSections = part.output.length;
 		var sections = [
 			for (section in code.debugSections)
 				'{"kind":'
@@ -292,7 +251,7 @@ class HlWriter {
 			prefixWriter.debugFiles = debugFiles;
 			prefixWriter.debugFileIndices = debugFileIndices;
 			prefixWriter.writePrefix(code);
-			prefix = prefixWriter.getBytes();
+			prefix = prefixWriter.bytes();
 			if (cache != null)
 				cache.setPrefix(code, prefix);
 		}
@@ -366,7 +325,7 @@ class HlWriter {
 		writer.debugFiles = debugFiles;
 		writer.debugFileIndices = debugFileIndices;
 		writer.writeFunction(fn);
-		return writer.getBytes();
+		return writer.bytes();
 	}
 
 	function writeDebugSections(code:HlCode):Void {
@@ -379,7 +338,7 @@ class HlWriter {
 			writeUnsignedIndex(section.flags);
 			var payload = section.payloadFor(cache);
 			writeUnsignedIndex(payload.length);
-			writeShared(payload);
+			output.appendSegments(payload);
 		}
 	}
 
@@ -397,7 +356,7 @@ class HlWriter {
 			writer.writeUnsignedIndex(identity.line);
 			writer.writeUnsignedIndex(identity.flags);
 		}
-		return writer.getBytes();
+		return writer.bytes();
 	}
 
 	/** Encode the locations that lowering already keeps grouped by stable function identity: one mapping per opcode. */
@@ -405,7 +364,7 @@ class HlWriter {
 	 * With a cache, a group whose `locations` array is the very one encoded last time (an unchanged function) reuses those bytes as long
 	 * as every file it names has the same index; only the changed functions are encoded.
 	 */
-	public static function encodeOpcodeSourceSpanGroups(groups:Array<HlOpcodeSourceSpanGroup>, ?cache:HlWriterCache):HaxeBytes {
+	public static function encodeOpcodeSourceSpanGroups(groups:Array<HlOpcodeSourceSpanGroup>, ?cache:HlWriterCache):SegmentedBytes {
 		var writer = new HlWriter(),
 			files:Array<String> = [],
 			fileIndices:Map<String, Int> = [],
@@ -450,7 +409,7 @@ class HlWriter {
 			if (cached == null) {
 				var groupWriter = new HlWriter();
 				groupWriter.writeSpanGroup(group, fileIndices);
-				cached = groupWriter.getBytes();
+				cached = groupWriter.bytes();
 				if (cache != null)
 					cache.setSpanGroup(group.locations, group.stableId, cached, fileIndices);
 			}
@@ -460,7 +419,7 @@ class HlWriter {
 		}
 		if (cache != null)
 			cache.retainSpanGroups(used);
-		return writer.getBytes();
+		return writer.output.finish();
 	}
 
 	function writeSpanGroup(group:HlOpcodeSourceSpanGroup, fileIndices:Map<String, Int>):Void {
@@ -486,7 +445,7 @@ class HlWriter {
 		}
 	}
 
-	public static function encodeSourceSnapshots(snapshots:Array<compiler.hl.HlCode.HlSourceSnapshot>):HaxeBytes {
+	public static function encodeSourceSnapshots(snapshots:Array<compiler.hl.HlCode.HlSourceSnapshot>):SegmentedBytes {
 		var writer = new HlWriter(),
 			ordered = snapshots.copy(),
 			seen:Map<Int, HaxeBytes> = [];
@@ -501,7 +460,7 @@ class HlWriter {
 			// Source contents are never changed after they are read, so the section takes them without copying them.
 			writer.writeShared(snapshot.content);
 		}
-		return writer.getBytes();
+		return writer.output.finish();
 	}
 
 	function writeSizedString(value:String):Void {
@@ -511,20 +470,21 @@ class HlWriter {
 	}
 
 	function writeStrings(strings:Array<String>):Void {
-		var data = new BytesOutput();
-		var lengths:Array<Int> = [];
+		var encoded:Array<HaxeBytes> = [], lengths:Array<Int> = [], total = 0;
 		for (value in strings) {
 			for (index in 0...value.length)
 				if (value.charCodeAt(index) == 0)
 					throw "HashLink String cannot contain NUL; use Bytes for binary data";
 			var bytes = HaxeBytes.ofString(value);
+			encoded.push(bytes);
 			lengths.push(bytes.length);
-			data.write(bytes);
-			data.writeByte(0);
+			total += bytes.length + 1;
 		}
-		var bytes = data.getBytes();
-		output.writeInt32(bytes.length);
-		output.write(bytes);
+		output.writeInt32(total);
+		for (bytes in encoded) {
+			output.write(bytes);
+			output.writeByte(0);
+		}
 		for (length in lengths)
 			writeUnsignedIndex(length);
 	}
@@ -608,15 +568,19 @@ class HlWriter {
 	}
 
 	function writeFunction(fn:HlFunction):Void {
-		var instructions = lowerInstructions(fn);
+		var labels = HlValidator.collectLabels(fn);
 		writeIndex(fn.type);
 		writeUnsignedIndex(fn.functionIndex);
 		writeUnsignedIndex(fn.registers.length);
-		writeUnsignedIndex(instructions.length);
+		// Every instruction, labels included, is one HashLink instruction.
+		writeUnsignedIndex(fn.opcodes.length);
 		for (type in fn.registers)
 			writeIndex(type);
-		for (instruction in instructions)
-			writeOpcode(instruction.opcode, instruction.operands);
+		for (position in 0...fn.opcodes.length) {
+			var opcode = lowerInstruction(fn.opcodes[position], position, labels);
+			HlOpcodeSchema.validate(opcode, operands);
+			writeOpcode(opcode, operands);
+		}
 		if (hasDebug) {
 			writeDebugLocations(fn);
 			writeUnsignedIndex(fn.debugAssignments.length);
@@ -723,154 +687,179 @@ class HlWriter {
 		}
 	}
 
-	function lowerInstructions(fn:HlFunction):Array<EncodedInstruction> {
-		var labels = HlValidator.collectLabels(fn);
-		var result:Array<EncodedInstruction> = [];
-		for (instruction in fn.opcodes) {
-			var encoded:EncodedInstruction = switch instruction {
-				case Move(destination, source): {opcode: HlOpcode.Mov, operands: [destination, source]};
+	/** The operands of the instruction being lowered; reused by every instruction of the writer. */
+	final operands:Array<Int> = [];
+
+	inline function put0():Void
+		operands.resize(0);
+
+	inline function put1(a:Int):Void {
+		operands.resize(0);
+		operands.push(a);
+	}
+
+	inline function put2(a:Int, b:Int):Void {
+		operands.resize(0);
+		operands.push(a);
+		operands.push(b);
+	}
+
+	inline function put3(a:Int, b:Int, c:Int):Void {
+		put2(a, b);
+		operands.push(c);
+	}
+
+	inline function put4(a:Int, b:Int, c:Int, d:Int):Void {
+		put3(a, b, c);
+		operands.push(d);
+	}
+
+	/** `destination, target, arguments.length, ...arguments` */
+	function putCall(destination:Int, target:Int, arguments:Array<Int>):Void {
+		put3(destination, target, arguments.length);
+		for (argument in arguments)
+			operands.push(argument);
+	}
+
+	/** Lowers the instruction at `position` into `opcode` and the operands left in `operands`; nothing is allocated per instruction. */
+	function lowerInstruction(instruction:HlInstruction, position:Int, labels:Map<String, Int>):HlOpcode {
+			return switch instruction {
+				case Move(destination, source): { put2(destination, source); HlOpcode.Mov; }
 				case LoadInt(destination, constant):
-					{opcode: HlOpcode.Int, operands: [destination, constant]};
+					{ put2(destination, constant); HlOpcode.Int; }
 				case LoadFloat(destination, constant):
-					{opcode: HlOpcode.Float, operands: [destination, constant]};
+					{ put2(destination, constant); HlOpcode.Float; }
 				case LoadString(destination, constant):
-					{opcode: HlOpcode.String, operands: [destination, constant]};
+					{ put2(destination, constant); HlOpcode.String; }
 				case LoadBool(destination, value):
-					{opcode: HlOpcode.Bool, operands: [destination, value ? 1 : 0]};
+					{ put2(destination, value ? 1 : 0); HlOpcode.Bool; }
 				case LoadNull(destination):
-					{opcode: HlOpcode.Null, operands: [destination]};
+					{ put1(destination); HlOpcode.Null; }
 				case LoadType(destination, type):
-					{opcode: HlOpcode.Type, operands: [destination, type]};
+					{ put2(destination, type); HlOpcode.Type; }
 				case ToDyn(destination, source):
-					{opcode: HlOpcode.ToDyn, operands: [destination, source]};
+					{ put2(destination, source); HlOpcode.ToDyn; }
 				case ToSFloat(destination, source):
-					{opcode: HlOpcode.ToSFloat, operands: [destination, source]};
+					{ put2(destination, source); HlOpcode.ToSFloat; }
 				case ToInt(destination, source):
-					{opcode: HlOpcode.ToInt, operands: [destination, source]};
+					{ put2(destination, source); HlOpcode.ToInt; }
 				case UnsafeCast(destination, source):
-					{opcode: HlOpcode.UnsafeCast, operands: [destination, source]};
+					{ put2(destination, source); HlOpcode.UnsafeCast; }
 				case Ref(destination, source):
-					{opcode: HlOpcode.Ref, operands: [destination, source]};
+					{ put2(destination, source); HlOpcode.Ref; }
 				case Unref(destination, source):
-					{opcode: HlOpcode.Unref, operands: [destination, source]};
+					{ put2(destination, source); HlOpcode.Unref; }
 				case Setref(destination, source):
-					{opcode: HlOpcode.Setref, operands: [destination, source]};
+					{ put2(destination, source); HlOpcode.Setref; }
 				case RefOffset(destination, source, index):
-					{opcode: HlOpcode.RefOffset, operands: [destination, source, index]};
+					{ put3(destination, source, index); HlOpcode.RefOffset; }
 				case SafeCast(destination, source):
-					{opcode: HlOpcode.SafeCast, operands: [destination, source]};
+					{ put2(destination, source); HlOpcode.SafeCast; }
 				case GlobalGet(destination, global):
-					{opcode: HlOpcode.GetGlobal, operands: [destination, global]};
+					{ put2(destination, global); HlOpcode.GetGlobal; }
 				case GlobalSet(global, source):
-					{opcode: HlOpcode.SetGlobal, operands: [global, source]};
+					{ put2(global, source); HlOpcode.SetGlobal; }
 				case Add(destination, left, right):
-					{opcode: HlOpcode.Add, operands: [destination, left, right]};
+					{ put3(destination, left, right); HlOpcode.Add; }
 				case Sub(destination, left, right):
-					{opcode: HlOpcode.Sub, operands: [destination, left, right]};
-				case Mul(destination, left, right): {opcode: HlOpcode.Mul, operands: [destination, left, right]};
-				case Div(destination, left, right): {opcode: HlOpcode.SDiv, operands: [destination, left, right]};
-				case Mod(destination, left, right): {opcode: HlOpcode.SMod, operands: [destination, left, right]};
-				case BitAnd(destination, left, right): {opcode: HlOpcode.And, operands: [destination, left, right]};
-				case BitXor(destination, left, right): {opcode: HlOpcode.Xor, operands: [destination, left, right]};
-				case BitOr(destination, left, right): {opcode: HlOpcode.Or, operands: [destination, left, right]};
-				case ShiftLeft(destination, left, right): {opcode: HlOpcode.Shl, operands: [destination, left, right]};
-				case ShiftRight(destination, left, right): {opcode: HlOpcode.SShr, operands: [destination, left, right]};
-				case UnsignedShiftRight(destination, left, right): {opcode: HlOpcode.UShr, operands: [destination, left, right]};
+					{ put3(destination, left, right); HlOpcode.Sub; }
+				case Mul(destination, left, right): { put3(destination, left, right); HlOpcode.Mul; }
+				case Div(destination, left, right): { put3(destination, left, right); HlOpcode.SDiv; }
+				case Mod(destination, left, right): { put3(destination, left, right); HlOpcode.SMod; }
+				case BitAnd(destination, left, right): { put3(destination, left, right); HlOpcode.And; }
+				case BitXor(destination, left, right): { put3(destination, left, right); HlOpcode.Xor; }
+				case BitOr(destination, left, right): { put3(destination, left, right); HlOpcode.Or; }
+				case ShiftLeft(destination, left, right): { put3(destination, left, right); HlOpcode.Shl; }
+				case ShiftRight(destination, left, right): { put3(destination, left, right); HlOpcode.SShr; }
+				case UnsignedShiftRight(destination, left, right): { put3(destination, left, right); HlOpcode.UShr; }
 				case Call0(destination, functionIndex):
-					{opcode: HlOpcode.Call0, operands: [destination, functionIndex]};
+					{ put2(destination, functionIndex); HlOpcode.Call0; }
 				case Call1(destination, functionIndex, argument):
-					{opcode: HlOpcode.Call1, operands: [destination, functionIndex, argument]};
+					{ put3(destination, functionIndex, argument); HlOpcode.Call1; }
 				case Call2(destination, functionIndex, argument1, argument2):
-					{opcode: HlOpcode.Call2, operands: [destination, functionIndex, argument1, argument2]};
+					{ put4(destination, functionIndex, argument1, argument2); HlOpcode.Call2; }
 				case CallN(destination, functionIndex, arguments):
-					{opcode: HlOpcode.CallN, operands: [destination, functionIndex, arguments.length].concat(arguments)};
+					{ putCall(destination, functionIndex, arguments); HlOpcode.CallN; }
 				case StaticClosure(destination, functionIndex):
-					{opcode: HlOpcode.StaticClosure, operands: [destination, functionIndex]};
+					{ put2(destination, functionIndex); HlOpcode.StaticClosure; }
 				case InstanceClosure(destination, functionIndex, receiver):
-					{opcode: HlOpcode.InstanceClosure, operands: [destination, functionIndex, receiver]};
+					{ put3(destination, functionIndex, receiver); HlOpcode.InstanceClosure; }
 				case NullCheck(register):
-					{opcode: HlOpcode.NullCheck, operands: [register]};
+					{ put1(register); HlOpcode.NullCheck; }
 				case CallClosure(destination, closure, arguments):
-					{opcode: HlOpcode.CallClosure, operands: [destination, closure, arguments.length].concat(arguments)};
+					{ putCall(destination, closure, arguments); HlOpcode.CallClosure; }
 				case ToVirtual(destination, source):
-					{opcode: HlOpcode.ToVirtual, operands: [destination, source]};
+					{ put2(destination, source); HlOpcode.ToVirtual; }
 				case CallMethod(destination, method, arguments):
-					{opcode: HlOpcode.CallMethod, operands: [destination, method, arguments.length].concat(arguments)};
+					{ putCall(destination, method, arguments); HlOpcode.CallMethod; }
 				case New(destination, _, _):
 					// ONew has no encoded type operand. HashLink derives the
 					// allocation type from the destination register's type.
-					{opcode: HlOpcode.New, operands: [destination]};
+					{ put1(destination); HlOpcode.New; }
 				case FieldGet(destination, object, field):
-					{opcode: HlOpcode.Field, operands: [destination, object, field]};
+					{ put3(destination, object, field); HlOpcode.Field; }
 				case FieldSet(object, field, source):
-					{opcode: HlOpcode.SetField, operands: [object, field, source]};
+					{ put3(object, field, source); HlOpcode.SetField; }
 				case ArrayGet(destination, array, index):
-					{opcode: HlOpcode.GetArray, operands: [destination, array, index]};
+					{ put3(destination, array, index); HlOpcode.GetArray; }
 				case ArraySet(array, index, source):
-					{opcode: HlOpcode.SetArray, operands: [array, index, source]};
+					{ put3(array, index, source); HlOpcode.SetArray; }
 				case GetI8(destination, pointer, offset):
-					{opcode: HlOpcode.GetI8, operands: [destination, pointer, offset]};
+					{ put3(destination, pointer, offset); HlOpcode.GetI8; }
 				case GetI16(destination, pointer, offset):
-					{opcode: HlOpcode.GetI16, operands: [destination, pointer, offset]};
+					{ put3(destination, pointer, offset); HlOpcode.GetI16; }
 				case GetMem(destination, pointer, offset):
-					{opcode: HlOpcode.GetMem, operands: [destination, pointer, offset]};
+					{ put3(destination, pointer, offset); HlOpcode.GetMem; }
 				case SetI8(pointer, offset, source):
-					{opcode: HlOpcode.SetI8, operands: [pointer, offset, source]};
+					{ put3(pointer, offset, source); HlOpcode.SetI8; }
 				case SetI16(pointer, offset, source):
-					{opcode: HlOpcode.SetI16, operands: [pointer, offset, source]};
+					{ put3(pointer, offset, source); HlOpcode.SetI16; }
 				case SetMem(pointer, offset, source):
-					{opcode: HlOpcode.SetMem, operands: [pointer, offset, source]};
+					{ put3(pointer, offset, source); HlOpcode.SetMem; }
 				case ArraySize(destination, array):
-					{opcode: HlOpcode.ArraySize, operands: [destination, array]};
+					{ put2(destination, array); HlOpcode.ArraySize; }
 				case RefData(destination, array):
-					{opcode: HlOpcode.RefData, operands: [destination, array]};
+					{ put2(destination, array); HlOpcode.RefData; }
 				case MakeEnum(destination, constructor, arguments):
-					{opcode: HlOpcode.MakeEnum, operands: [destination, constructor, arguments.length].concat(arguments)};
+					{ putCall(destination, constructor, arguments); HlOpcode.MakeEnum; }
 				case EnumIndex(destination, value):
-					{opcode: HlOpcode.EnumIndex, operands: [destination, value]};
+					{ put2(destination, value); HlOpcode.EnumIndex; }
 				case EnumField(destination, value, constructor, field):
-					{opcode: HlOpcode.EnumField, operands: [destination, value, constructor, field]};
+					{ put4(destination, value, constructor, field); HlOpcode.EnumField; }
 				case JumpSignedLessOrEqual(left, right, target):
 					var targetPosition = requireLabel(labels, target);
-					{opcode: HlOpcode.JSLte, operands: [left, right, targetPosition - (result.length + 1)]};
+					{ put3(left, right, targetPosition - (position + 1)); HlOpcode.JSLte; }
 				case JumpSignedLess(left, right, target):
 					var targetPosition = requireLabel(labels, target);
-					{opcode: HlOpcode.JSLt, operands: [left, right, targetPosition - (result.length + 1)]};
+					{ put3(left, right, targetPosition - (position + 1)); HlOpcode.JSLt; }
 				case JumpUnsignedLess(left, right, target):
 					var targetPosition = requireLabel(labels, target);
-					{opcode: HlOpcode.JULt, operands: [left, right, targetPosition - (result.length + 1)]};
+					{ put3(left, right, targetPosition - (position + 1)); HlOpcode.JULt; }
 				case JumpNull(value, target):
 					var targetPosition = requireLabel(labels, target);
-					{opcode: HlOpcode.JNull, operands: [value, targetPosition - (result.length + 1)]};
+					{ put2(value, targetPosition - (position + 1)); HlOpcode.JNull; }
 				case JumpEqual(left, right, target):
 					var targetPosition = requireLabel(labels, target);
-					{opcode: HlOpcode.JEq, operands: [left, right, targetPosition - (result.length + 1)]};
+					{ put3(left, right, targetPosition - (position + 1)); HlOpcode.JEq; }
 				case JumpTrue(condition, target):
 					var targetPosition = requireLabel(labels, target);
-					{opcode: HlOpcode.JTrue, operands: [condition, targetPosition - (result.length + 1)]};
+					{ put2(condition, targetPosition - (position + 1)); HlOpcode.JTrue; }
 				case Jump(target):
 					var targetPosition = requireLabel(labels, target);
-					{opcode: HlOpcode.JAlways, operands: [targetPosition - (result.length + 1)]};
+					{ put1(targetPosition - (position + 1)); HlOpcode.JAlways; }
 				case Trap(destination, target, preserveExceptionStack):
 					var targetPosition = requireLabel(labels, target);
-					{
-						opcode: preserveExceptionStack == true ? HlOpcode.CleanupTrap : HlOpcode.Trap,
-						operands: [destination, targetPosition - (result.length + 1)]
-					};
+					{ put2(destination, targetPosition - (position + 1)); preserveExceptionStack == true ? HlOpcode.CleanupTrap : HlOpcode.Trap; }
 				case EndTrap(destination, preserveExceptionStack):
-					{opcode: preserveExceptionStack == true ? HlOpcode.EndCleanupTrap : HlOpcode.EndTrap, operands: [destination]};
-				case Label(_): {opcode: HlOpcode.Label, operands: []};
+					{ put1(destination); preserveExceptionStack == true ? HlOpcode.EndCleanupTrap : HlOpcode.EndTrap; }
+				case Label(_): { put0(); HlOpcode.Label; }
 				case Return(register):
-					{opcode: HlOpcode.Ret, operands: [register]};
+					{ put1(register); HlOpcode.Ret; }
 				case Throw(register):
-					{opcode: HlOpcode.Throw, operands: [register]};
+					{ put1(register); HlOpcode.Throw; }
 				case Rethrow(register):
-					{opcode: HlOpcode.Rethrow, operands: [register]};
-			}
-			HlOpcodeSchema.validate(encoded.opcode, encoded.operands);
-			result.push(encoded);
-		}
-		return result;
+					{ put1(register); HlOpcode.Rethrow; }
+			};
 	}
 
 	static function requireLabel(labels:Map<String, Int>, target:String):Int {

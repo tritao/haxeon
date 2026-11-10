@@ -19,6 +19,6 @@ class CastTypeMain {
 		compiler.update("app/Measure.hx", MEASURE);
 		compiler.update("app/Main.hx", MAIN);
 		var result = compiler.compile("app.Main");
-		File.saveBytes(Sys.args()[0], HlWriter.encode(result.module));
+		File.saveBytes(Sys.args()[0], HlWriter.encode(result.module).flatten());
 	}
 }

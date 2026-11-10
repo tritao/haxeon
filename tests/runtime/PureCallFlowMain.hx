@@ -21,7 +21,7 @@ class PureCallFlowMain {
 			+ "}\n"
 			+ "function main():Int return !invalid({lower: 3.0, upper: 50.0}) && invalid({lower: 0.5, upper: null})\n"
 			+ "  && invalid({lower: null, upper: 500.0}) && !invalid(null) ? 42 : 1;");
-		File.saveBytes(Sys.args()[0], HlWriter.encode(compiler.compile("Main").module));
+		File.saveBytes(Sys.args()[0], HlWriter.encode(compiler.compile("Main").module).flatten());
 		Sys.println("PASS: @:pure calls preserve nullable field refinements");
 	}
 }

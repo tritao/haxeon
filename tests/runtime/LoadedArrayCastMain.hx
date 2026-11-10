@@ -14,7 +14,7 @@ class LoadedArrayCastMain {
 		for (incremental in [false, true]) {
 			compiler.update("Main.hx", incremental ? StringTools.replace(source, "return 42;", "return 43;") : source);
 			var result = compiler.compile("Main"),
-				bytes = HlWriter.encode(result.module);
+				bytes = HlWriter.encode(result.module).flatten();
 			var expected = incremental ? 43 : 42;
 			var path = "out/loaded-array-cast-" + (incremental ? "incremental" : "clean") + ".hl";
 			File.saveBytes(path, bytes);

@@ -1,5 +1,6 @@
 package tools;
 
+import build.CompilerSources;
 import build.HashLinkPath;
 
 import tools.WatchRun.WatchChange;
@@ -794,7 +795,7 @@ class HaxeonCli {
 		if (!FileSystem.exists(compiler))
 			throw 'Pinned Haxe is missing: $compiler (run scripts/build-native.sh)';
 
-		var compilerArguments = build.CompilerSources.classPath(Path.join([home, "src"])).concat([
+		var compilerArguments = CompilerSources.classPath(Path.join([home, "src"])).concat([
 			"--run",
 			"compiler.tools.HaxeonCompiler",
 			"--target=" + (target == "host" ? "hl" : "wasm32"),

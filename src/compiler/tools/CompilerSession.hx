@@ -46,11 +46,11 @@ class CompilerSession {
 	 * The bytes of the module last written, with the module they encode. Encoding is a function of the module alone, so a build
 	 * that reuses the module (see `PipelineSnapshot`) writes the same bytes without validating and encoding it again.
 	 */
-	var encodedModule:Null<{code:HlCode, bytes:haxe.io.Bytes}>;
+	var encodedModule:Null<{code:HlCode, bytes:haxeon.io.SegmentedBytes}>;
 
 	var encodedWasm:Null<{ir:compiler.ir.Ir.IrProgram, options:String, bytes:haxe.io.Bytes}>;
 
-	public function encodeHashLink(code:HlCode):haxe.io.Bytes {
+	public function encodeHashLink(code:HlCode):haxeon.io.SegmentedBytes {
 		var known = encodedModule;
 		if (known == null || known.code != code) {
 			known = {code: code, bytes: HlWriter.encode(code, writerCache)};
@@ -60,7 +60,7 @@ class CompilerSession {
 	}
 
 	public function writeHashLink(code:HlCode, path:String):Void
-		File.saveBytes(path, encodeHashLink(code));
+		HlWriter.saveSegments(encodeHashLink(code), path);
 
 	/** The Wasm module for `ir` and `options`; the previous one when this is the program and the options it was made from. */
 	public function wasmModule(ir:compiler.ir.Ir.IrProgram, options:String, encode:() -> haxe.io.Bytes):haxe.io.Bytes {

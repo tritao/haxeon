@@ -370,7 +370,7 @@ class LiveClosureGuardMain {
 		return {
 			compiler: compiler,
 			build: build,
-			live: Runtime.load(HlWriter.encode(build.module), build.runtimeIdentity),
+			live: Runtime.load(HlWriter.encode(build.module).flatten(), build.runtimeIdentity),
 			mainId: build.functionIds.get("main")
 		};
 	}

@@ -49,7 +49,7 @@ grep -q 'OwnedWidget' "$repo_dir/out/cxx_owned_projection/CxxOwnedFixtureFunctio
 grep -q '@owned("haxeon_cxx_thunk_' "$repo_dir/out/cxx_owned_fixture.hxi"
 grep -q 'return OwnedWidget.adopt' "$repo_dir/out/cxx_owned_projection/CxxOwnedFixtureFunctions.hx"
 
-"$repo_dir/.tools/haxe/haxe" -cp "$repo_dir/src" -cp "$repo_dir/tests/runtime" --run CxxOwnedMain \
+"$repo_dir/.tools/haxe/haxe" -cp "$repo_dir/src" -cp "$repo_dir/lib/haxeon-io" -cp "$repo_dir/tests/runtime" --run CxxOwnedMain \
 	"$repo_dir/out/cxx-owned-test.hl" "$repo_dir/out/cxx_owned_fixture.hxi" "$repo_dir/out/cxx_owned_projection"
 (
 	cd "$repo_dir/out"

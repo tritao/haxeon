@@ -31,7 +31,7 @@ class NominalInterfacePatchMain {
  static function main():Void {
   var compiler=configuredCompiler();
   compiler.update("Contract.hx",contract(1)); compiler.update("Main.hx",source(false,1));
-  var first=compiler.compile("Main"), live=Runtime.load(HlWriter.encode(first.module),first.runtimeIdentity);
+  var first=compiler.compile("Main"), live=Runtime.load(HlWriter.encode(first.module).flatten(),first.runtimeIdentity);
   var retained=Runtime.retainObject(live,first.functionIds.get("Main.make"));
   if(Runtime.callIntObject(live,first.functionIds.get("Main.probe"),retained)!=42) throw "Initial conformance failed";
   compiler.update("Contract.hx",contract(2)); compiler.update("Main.hx",source(false,2));
@@ -46,7 +46,7 @@ class NominalInterfacePatchMain {
    throw "Appending an implementation changed interface identity";
   Runtime.dispose(live);
   var freshCompiler=configuredCompiler(); freshCompiler.update("Contract.hx",contract(3)); freshCompiler.update("Main.hx",source(true,3));
-  var fresh=freshCompiler.compile("Main"), reloaded=Runtime.load(HlWriter.encode(fresh.module),fresh.runtimeIdentity);
+  var fresh=freshCompiler.compile("Main"), reloaded=Runtime.load(HlWriter.encode(fresh.module).flatten(),fresh.runtimeIdentity);
   hl.Gc.major(); Runtime.retryRetirements();
   var result=Runtime.callIntObject(reloaded,fresh.functionIds.get("Main.probe"),retained);
   if(result!=42) throw "Old object lost conformance after reload: "+result;
@@ -54,7 +54,7 @@ class NominalInterfacePatchMain {
   changedCompiler.update("Contract.hx",contract(4).split("score():Int").join("score(extra:Int):Int"));
   changedCompiler.update("Main.hx",source(true,4).split("score():Int").join("score(extra:Int):Int").split(".score()").join(".score(0)")
    +"function reject(value:Dynamic):Int return Std.isOfType(value,Reader)?1:42;\n");
-  var incompatible=changedCompiler.compile("Main"), replacement=Runtime.load(HlWriter.encode(incompatible.module),incompatible.runtimeIdentity);
+  var incompatible=changedCompiler.compile("Main"), replacement=Runtime.load(HlWriter.encode(incompatible.module).flatten(),incompatible.runtimeIdentity);
   if(Runtime.callIntObject(replacement,incompatible.functionIds.get("Main.reject"),retained)!=42)
    throw "An incompatible reloaded interface accepted the old object";
   retained.release(); Runtime.dispose(reloaded); Runtime.dispose(replacement);

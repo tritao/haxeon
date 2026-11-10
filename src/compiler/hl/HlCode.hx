@@ -38,12 +38,12 @@ final class HlDebugSection {
 	public final kind:Int;
 	public final version:Int;
 	public final flags:Int;
-	public var payload(get, never):haxe.io.Bytes;
+	public var payload(get, never):haxeon.io.SegmentedBytes;
 
-	final stored:Null<haxe.io.Bytes>;
-	final produce:Null<Null<HlWriterCache>->haxe.io.Bytes>;
+	final stored:Null<haxeon.io.SegmentedBytes>;
+	final produce:Null<Null<HlWriterCache>->haxeon.io.SegmentedBytes>;
 
-	function new(kind:Int, version:Int, flags:Int, stored:Null<haxe.io.Bytes>, produce:Null<Null<HlWriterCache>->haxe.io.Bytes>) {
+	function new(kind:Int, version:Int, flags:Int, stored:Null<haxeon.io.SegmentedBytes>, produce:Null<Null<HlWriterCache>->haxeon.io.SegmentedBytes>) {
 		this.kind = kind;
 		this.version = version;
 		this.flags = flags;
@@ -52,20 +52,20 @@ final class HlDebugSection {
 	}
 
 	public static function of(kind:Int, version:Int, flags:Int, payload:haxe.io.Bytes):HlDebugSection
-		return new HlDebugSection(kind, version, flags, payload, null);
+		return new HlDebugSection(kind, version, flags, haxeon.io.SegmentedBytes.ofBytes(payload), null);
 
 	/** `produce` gets the writer cache the module is being written with, if any, so it can reuse what it encoded for unchanged functions. */
-	public static function lazy(kind:Int, version:Int, flags:Int, produce:Null<HlWriterCache>->haxe.io.Bytes):HlDebugSection
+	public static function lazy(kind:Int, version:Int, flags:Int, produce:Null<HlWriterCache>->haxeon.io.SegmentedBytes):HlDebugSection
 		return new HlDebugSection(kind, version, flags, null, produce);
 
 	/** Whether the section has a payload at all, without producing a derived one. */
 	public function hasPayload():Bool
 		return stored != null || produce != null;
 
-	function get_payload():haxe.io.Bytes
+	function get_payload():haxeon.io.SegmentedBytes
 		return payloadFor(null);
 
-	public function payloadFor(cache:Null<HlWriterCache>):haxe.io.Bytes
+	public function payloadFor(cache:Null<HlWriterCache>):haxeon.io.SegmentedBytes
 		return stored != null ? stored : produce(cache);
 }
 

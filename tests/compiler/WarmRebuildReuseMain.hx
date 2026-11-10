@@ -108,8 +108,8 @@ class WarmRebuildReuseMain {
 				freshTypes = anonymousTypes(freshCompiler);
 			if (warmTypes != freshTypes)
 				throw 'the warm typed program lists other anonymous types than a fresh one\nwarm:  $warmTypes\nfresh: $freshTypes';
-			var warmBytes = HlWriter.encode(warm.module),
-				freshBytes = HlWriter.encode(fresh.module);
+			var warmBytes = HlWriter.encode(warm.module).flatten(),
+				freshBytes = HlWriter.encode(fresh.module).flatten();
 			if (warmBytes.compare(freshBytes) != 0)
 				throw 'the warm module differs from a fresh one (${warmBytes.length} and ${freshBytes.length} bytes)';
 			if (expectReuse && !check && warm.module != first.module)

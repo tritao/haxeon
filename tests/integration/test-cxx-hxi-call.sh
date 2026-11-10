@@ -42,7 +42,7 @@ esac
 	--output="$hxi_path" \
 	"$repo_dir/tests/ffi/cxx_runtime_fixture.hpp"
 
-"$repo_dir/.tools/haxe/haxe" -cp "$repo_dir/src" -cp "$repo_dir/tests/runtime" --run CxxHxiCallMain \
+"$repo_dir/.tools/haxe/haxe" -cp "$repo_dir/src" -cp "$repo_dir/lib/haxeon-io" -cp "$repo_dir/tests/runtime" --run CxxHxiCallMain \
 	"$repo_dir/out/cxx-hxi-call-test.hl" "$hxi_path" "$projection_dir/DisplayList.hx"
 (
 	cd "$repo_dir/out"

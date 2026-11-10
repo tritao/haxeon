@@ -9,7 +9,7 @@ class StaticFieldMain {
 		compiler.update("Main.hx",
 			"class Counter { public static var value:Int = 40; public static function bump():Int { value++; return value; } } function main():Int { return Counter.bump(); }");
 		var first = compiler.compile("Main"),
-			live = Runtime.load(HlWriter.encode(first.module), first.runtimeIdentity),
+			live = Runtime.load(HlWriter.encode(first.module).flatten(), first.runtimeIdentity),
 			mainId = first.functionIds.get("main");
 		if (Runtime.callInt(live, mainId) != 41)
 			throw "Static field initializer did not run before the first call";

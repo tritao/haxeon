@@ -10,7 +10,7 @@ class GeneratedProgramRunner {
 		if (!FileSystem.exists(directory))
 			FileSystem.createDirectory(directory);
 		var path = directory + "/effects-" + StringTools.replace(Std.string(Sys.time()), ".", "-") + "-" + Std.random(0x7fffffff) + ".hl";
-		File.saveBytes(path, HlWriter.encode(compiled.module));
+		File.saveBytes(path, HlWriter.encode(compiled.module).flatten());
 		var status:Int;
 		try {
 			status = Sys.command(Sys.getEnv("HAXEON_HASHLINK_DIR") + "/hl", [path]);

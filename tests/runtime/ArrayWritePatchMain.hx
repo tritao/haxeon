@@ -14,7 +14,7 @@ class ArrayWritePatchMain {
 			+ "; return slots[1] + slots.length; } } function main():Int { return Slots.run(); }";
 		compiler.update("Main.hx", program(9));
 		var first = compiler.compile("Main"),
-			live = Runtime.load(HlWriter.encode(first.module), first.runtimeIdentity),
+			live = Runtime.load(HlWriter.encode(first.module).flatten(), first.runtimeIdentity),
 			mainId = first.functionIds.get("main");
 		if (Runtime.callInt(live, mainId) != 12)
 			throw "The array-write program did not run correctly before the edit";
@@ -34,7 +34,7 @@ class ArrayWritePatchMain {
 			'import haxe.io.Bytes; function main():Int {var a=[0,0,0];a.resize(0);var b=Bytes.alloc(1);a.push($value);b.set(0,a[0]);return b.get(0);}';
 		fastCompiler.update("Main.hx", fastProgram(9));
 		var initialFast = fastCompiler.compile("Main");
-		var fastLive = Runtime.load(HlWriter.encode(initialFast.module), initialFast.runtimeIdentity);
+		var fastLive = Runtime.load(HlWriter.encode(initialFast.module).flatten(), initialFast.runtimeIdentity);
 		var fastMain = initialFast.functionIds.get("main");
 		if (Runtime.callInt(fastLive, fastMain) != 9)
 			throw "Initial inline runtime operations failed";

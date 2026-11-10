@@ -301,7 +301,7 @@ class HlPatchWriter {
 			for (snapshot in code.sourceSnapshots)
 				if (referenced.exists(snapshot.sourceHash)) snapshot
 		];
-		return selected.length == 0 ? null : HlWriter.encodeSourceSnapshots(selected);
+		return selected.length == 0 ? null : HlWriter.encodeSourceSnapshots(selected).flatten();
 	}
 
 	static function encodeDebug(functions:Array<HlFunction>, stableIdsBySlot:Map<Int, Int>):Null<HaxeBytes> {

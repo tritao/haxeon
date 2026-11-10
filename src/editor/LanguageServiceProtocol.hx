@@ -86,7 +86,7 @@ class LanguageServiceProtocol {
 						changedFunctions: build.changedFunctions,
 						requiresReload: build.requiresReload,
 						patchAvailable: build.patchBytes != null,
-						moduleBase64: Base64.encode(HlWriter.encode(build.module)),
+						moduleBase64: Base64.encode(HlWriter.encode(build.module).flatten()),
 						patchBase64: build.patchBytes == null ? null : Base64.encode(build.patchBytes),
 						runtimeIdentityBase64: Base64.encode(build.runtimeIdentity),
 						metrics: build.metrics

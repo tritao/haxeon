@@ -40,7 +40,7 @@ export LD_LIBRARY_PATH="$root/out:$("$root/scripts/hashlink-path.sh")"
 export XDG_CACHE_HOME="$work/inline-debug-cache"
 export HAXEON_HOME="$root" HAXEON_COMPILER_SOURCE="$root/src"
 export HAXEON_INLINE=1 HAXEON_BOUNDS=0 HAXEON_NATIVE_READY=1
-"$root/.tools/haxe/haxe" --cwd "$root" -cp "$root/src" --run tools.HaxeonCli build --project "$project/haxeon.json"
+"$root/.tools/haxe/haxe" --cwd "$root" -cp "$root/src" -cp "$root/lib/haxeon-io" --run tools.HaxeonCli build --project "$project/haxeon.json"
 python3 - "$DAP_CLI_HOME/config/adapters.json" "$root/vendor/hashlink-debugger" <<'PY'
 import subprocess, json,sys
 path,adapter=sys.argv[1:]
