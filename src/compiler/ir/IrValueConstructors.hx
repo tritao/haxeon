@@ -104,7 +104,7 @@ class IrValueConstructors {
 			// stay calls, while every independent call site can be expanded.
 			index += callee.blocks.length + 1;
 		}
-		return changes == 0 ? fn : new IrFunction(fn.name, fn.arguments, fn.result, blocks, fn.debugBindings, fn.inlineHint, fn.retention);
+		return changes == 0 ? fn : new IrFunction(fn.name, fn.arguments, fn.result, blocks, fn.debugBindings, fn.inlineHint, fn.retention, fn.kind);
 	}
 
 	static function expandStraightLine(fn:IrFunction, constructors:Map<String, IrFunction>):IrFunction {
@@ -140,6 +140,6 @@ class IrValueConstructors {
 			copy.terminator = block.terminator;
 			blocks.push(copy);
 		}
-		return changed ? new IrFunction(fn.name, fn.arguments, fn.result, blocks, fn.debugBindings, fn.inlineHint, fn.retention) : fn;
+		return changed ? new IrFunction(fn.name, fn.arguments, fn.result, blocks, fn.debugBindings, fn.inlineHint, fn.retention, fn.kind) : fn;
 	}
 }

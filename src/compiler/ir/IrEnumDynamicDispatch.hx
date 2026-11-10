@@ -84,7 +84,7 @@ class IrEnumDynamicDispatch {
 				}
 				target.terminator = block.terminator; blocks.push(target);
 			}
-			rewritten.push(changed ? new IrFunction(fn.name, fn.arguments, fn.result, blocks, fn.debugBindings, fn.inlineHint, fn.retention) : fn);
+			rewritten.push(changed ? new IrFunction(fn.name, fn.arguments, fn.result, blocks, fn.debugBindings, fn.inlineHint, fn.retention, fn.kind) : fn);
 		}
 		var unboxNames = [for (name in unboxes.keys()) name]; unboxNames.sort(Reflect.compare);
 		for (name in unboxNames) rewritten.push(unbox(name, unboxes.get(name)));

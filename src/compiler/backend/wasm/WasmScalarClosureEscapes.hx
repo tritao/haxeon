@@ -156,7 +156,7 @@ class WasmScalarClosureEscapes {
 			rewritten.terminator = block.terminator;
 			blocks.push(rewritten);
 		}
-		return changed ? new IrFunction(fn.name, fn.arguments, fn.result, blocks, fn.debugBindings, fn.inlineHint, fn.retention) : fn;
+		return changed ? new IrFunction(fn.name, fn.arguments, fn.result, blocks, fn.debugBindings, fn.inlineHint, fn.retention, fn.kind) : fn;
 	}
 
 	/** The escape adapter's target identifies its original scalar closure signature. */

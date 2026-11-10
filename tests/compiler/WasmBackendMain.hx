@@ -50,9 +50,10 @@ class WasmBackendMain {
 			+ "function dead():Int { var erased:Dynamic = deadSource; var casted:Bool->Bool = cast erased; return 0; } "
 			+ "function main():Int return 42;");
 		compiler.backend.wasm.linear.WasmLinearClosureAdapters.generate(deadClosure, [], deadClosure.entryPoint, []);
-		for (fn in deadClosure.functions)
-			if (StringTools.startsWith(fn.name, "__haxeon_closure_adapter_") || StringTools.startsWith(fn.name, "__haxeon_closure_cast_"))
-				throw "unreachable closure casts must not generate adapters";
+		for (fn in deadClosure.functions) switch fn.kind {
+			case ClosureAdapter(_, _), ClosureCast(_): throw "unreachable closure casts must not generate adapters";
+			default:
+		}
 		var modeProgram = Frontend.compile("function main():Int return 42;");
 		for (target in [Wasm32, WasmGc]) {
 			var release = new WasmBackend().compile(modeProgram, {target: target, debugNames: true, developmentMetadata: false}).bytes;

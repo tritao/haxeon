@@ -24,6 +24,14 @@ enum abstract IrRetention(Int) from Int to Int {
 	var Expose = 2;
 }
 
+/** Compiler-declared role and semantic signatures of generated closure boundary functions. */
+enum IrFunctionKind {
+	Ordinary;
+	ClosureAdapter(source:IrType, target:IrType);
+	ClosureCast(target:IrType);
+	ClosureVarargs(target:IrType);
+}
+
 /** Verified SSA function with explicit arguments, blocks, and result type. */
 class IrFunction {
 	public final name:String;
@@ -36,8 +44,9 @@ class IrFunction {
 	public final inlineHint:Bool;
 
 	public final retention:IrRetention;
+	public final kind:IrFunctionKind;
 
-	public function new(name, arguments, result, blocks, ?debugBindings, inlineHint = false, retention:IrRetention = Reachable) {
+	public function new(name, arguments, result, blocks, ?debugBindings, inlineHint = false, retention:IrRetention = Reachable, kind:IrFunctionKind = Ordinary) {
 		this.name = name;
 		this.arguments = arguments;
 		this.result = result;
@@ -45,5 +54,6 @@ class IrFunction {
 		this.debugBindings = debugBindings == null ? [] : debugBindings;
 		this.inlineHint = inlineHint;
 		this.retention = retention;
+		this.kind = kind;
 	}
 }

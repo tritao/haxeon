@@ -4,6 +4,7 @@ import compiler.ir.Ir;
 import compiler.ir.Ir.IrInterface;
 import compiler.ir.Ir.IrEnum;
 import compiler.ir.Ir.IrCNativeArgumentMode;
+import compiler.ir.IrFunction.IrFunctionKind;
 
 /** Rejects malformed or ill-typed SSA programs before backend lowering. */
 class IrVerifier {
@@ -173,7 +174,15 @@ class IrVerifier {
 	}
 
 	static function verifySelected(program:IrProgram, selected:Null<Map<String, Bool>>, memo:Null<IrVerifyMemo>):Void {
-		var signatures:Map<String, {arguments:Array<IrType>, result:IrType}> = [];
+		var signatures:Map<String, {arguments:Array<IrType>, result:IrType, kind:IrFunctionKind}> = [];
+		var closureCasts:Map<String, String> = [];
+		for (fn in program.functions) switch fn.kind {
+			case ClosureCast(target):
+				var key = Std.string(target);
+				if (closureCasts.exists(key)) throw 'Duplicate closure cast for $key';
+				closureCasts.set(key, fn.name);
+			default:
+		}
 		var scalarFunctions = [for (fn in program.functions) if (StringTools.startsWith(fn.name, IrScalarArguments.PREFIX)) fn.name => true];
 		for (native in program.natives)
 			addSignature(signatures, native.name, native.arguments, native.result);
@@ -182,7 +191,7 @@ class IrVerifier {
 		for (native in program.cNatives)
 			addSignature(signatures, native.name, native.arguments, native.result);
 		for (fn in program.functions)
-			addSignature(signatures, fn.name, [for (a in fn.arguments) a.type], fn.result);
+			addSignature(signatures, fn.name, [for (a in fn.arguments) a.type], fn.result, fn.kind);
 		var objects:Map<String, IrObject> = [];
 		var physicalValues:Map<String, Bool> = [];
 		var interfaces:Map<String, IrInterface> = [];
@@ -256,11 +265,13 @@ class IrVerifier {
 		if (memo != null) {
 			memo.attach(["signatures" => k -> signatures.get(k), "objects" => k -> objects.get(k), "interfaces" => k -> interfaces.get(k),
 				"enums" => k -> enums.get(k), "globals" => k -> globals.get(k), "scalarFunctions" => k -> scalarFunctions.get(k),
-				"carrierSlots" => k -> carrierSlots.get(k), "physicalValues" => k -> physicalValues.get(k)]);
+				"carrierSlots" => k -> carrierSlots.get(k), "physicalValues" => k -> physicalValues.get(k),
+				"closureCasts" => k -> closureCasts.get(k)]);
 			memo.forget([for (fn in program.functions) fn.name => true]);
 		}
 		var tables = {
-			signatures: new IrVerifyTable<{arguments:Array<IrType>, result:IrType}>("signatures", (key:String) -> signatures.get(key), (key:String) -> signatures.exists(key), memo),
+			closureCasts: new IrVerifyTable<String>("closureCasts", (key:String) -> closureCasts.get(key), (key:String) -> closureCasts.exists(key), memo),
+			signatures: new IrVerifyTable<{arguments:Array<IrType>, result:IrType, kind:IrFunctionKind}>("signatures", (key:String) -> signatures.get(key), (key:String) -> signatures.exists(key), memo),
 			objects: new IrVerifyTable<IrObject>("objects", (key:String) -> objects.get(key), (key:String) -> objects.exists(key), memo),
 			interfaces: new IrVerifyTable<IrInterface>("interfaces", (key:String) -> interfaces.get(key), (key:String) -> interfaces.exists(key), memo),
 			enums: new IrVerifyTable<IrEnum>("enums", (key:String) -> enums.get(key), (key:String) -> enums.exists(key), memo),
@@ -277,7 +288,7 @@ class IrVerifier {
 					if (memo != null)
 						memo.begin();
 					verifyFunction(fn, tables.signatures, tables.objects, tables.interfaces, tables.enums, tables.globals, tables.scalarFunctions,
-						tables.carrierSlots, tables.physicalValues);
+						tables.carrierSlots, tables.physicalValues, tables.closureCasts);
 					if (memo != null)
 						memo.accept(fn);
 				} catch (error:String) {
@@ -353,8 +364,8 @@ class IrVerifier {
 	static function validAggregateLayout(size:Int, alignment:Int):Bool
 		return size > 0 && size <= 0x10000000 && alignment > 0 && alignment <= 0x10000 && (alignment & (alignment - 1)) == 0;
 
-	static function verifyFunction(fn:IrFunction, signatures:IrVerifyTable<{arguments:Array<IrType>, result:IrType}>, objects:IrVerifyTable<IrObject>,
-			interfaces:IrVerifyTable<IrInterface>, enums:IrVerifyTable<IrEnum>, globals:IrVerifyTable<IrType>, scalarFunctions:IrVerifyTable<Bool>, carrierSlots:IrVerifyTable<Bool>, physicalValues:IrVerifyTable<Bool>):Void {
+	static function verifyFunction(fn:IrFunction, signatures:IrVerifyTable<{arguments:Array<IrType>, result:IrType, kind:IrFunctionKind}>, objects:IrVerifyTable<IrObject>,
+			interfaces:IrVerifyTable<IrInterface>, enums:IrVerifyTable<IrEnum>, globals:IrVerifyTable<IrType>, scalarFunctions:IrVerifyTable<Bool>, carrierSlots:IrVerifyTable<Bool>, physicalValues:IrVerifyTable<Bool>, closureCasts:IrVerifyTable<String>):Void {
 		if (IrHlScalarRef.element(fn.result) != null) throw "A scalar stack reference cannot be returned";
 		if (IrValueLaneReference.isCarrier(fn.result) && !(carrierSlots.exists(fn.name) && carrierSlots.get(fn.name) == false)) throw "A value lane reference cannot be returned";
 		for (arg in fn.arguments)
@@ -374,7 +385,7 @@ class IrVerifier {
 			var block = graph.block(id), ordinary = false;
 			for (position in 0...block.instructions.length) {
 				var instruction = block.instructions[position].value;
-				verifyScalarReferenceUse(instruction, scalarFunctions, carrierSlots, physicalValues, fn, signatures);
+				verifyScalarReferenceUse(instruction, scalarFunctions, carrierSlots, physicalValues, fn, signatures, closureCasts);
 				switch instruction {
 					case Phi(_, _):
 						if (ordinary)
@@ -454,21 +465,18 @@ class IrVerifier {
 		default: IrValueLaneReference.isCarrier(type);
 	};
 
-	static function closureSignatureKey(type:IrType):String
-		return haxe.crypto.Sha256.encode(Std.string(type)).substr(0, 32);
-
-	/** A Wasm32 closure adapter casts its erased receiver through a generated signature checker. */
+	/** A generated adapter may cast its erased receiver only at its declared semantic signature. */
 	static function isGeneratedClosureAdapterCast(fn:IrFunction, output:IrValue, input:IrValue,
-			signatures:IrVerifyTable<{arguments:Array<IrType>, result:IrType}>):Bool {
-		if (!sameType(input.type, Dyn) || fn.arguments.length == 0 || !sameType(fn.arguments[0].type, Dyn)) return false;
-		var prefix = "__haxeon_closure_adapter_";
-		if (!StringTools.startsWith(fn.name, prefix)) return false;
-		var keys = fn.name.substr(prefix.length).split("_");
-		if (keys.length != 2) return false;
-		var targetType:IrType = Function([for (index in 1...fn.arguments.length) fn.arguments[index].type], fn.result),
-			sourceKey = closureSignatureKey(output.type), targetKey = closureSignatureKey(targetType);
-		if (keys[0] != sourceKey || keys[1] != targetKey) return false;
-		var castSignature = signatures.get("__haxeon_closure_cast_" + sourceKey);
+			signatures:IrVerifyTable<{arguments:Array<IrType>, result:IrType, kind:IrFunctionKind}>, closureCasts:IrVerifyTable<String>):Bool {
+		var source:IrType, target:IrType;
+		switch fn.kind { case ClosureAdapter(s, t): source = s; target = t; default: return false; }
+		if (!sameType(input.type, Dyn) || fn.arguments.length == 0 || !sameType(fn.arguments[0].type, Dyn)
+			|| !sameType(output.type, source)) return false;
+		var actualTarget:IrType = Function([for (index in 1...fn.arguments.length) fn.arguments[index].type], fn.result);
+		if (!sameType(target, actualTarget)) return false;
+		var castName = closureCasts.get(Std.string(source));
+		if (castName == null) return false;
+		var castSignature = signatures.get(castName);
 		if (castSignature == null || castSignature.arguments.length != 1 || !sameType(castSignature.arguments[0], Dyn)
 			|| !sameType(castSignature.result, Dyn)) return false;
 		for (block in fn.blocks) for (located in block.instructions) switch located.value {
@@ -479,42 +487,40 @@ class IrVerifier {
 	}
 
 	static function isGeneratedClosureAdapterValue(fn:IrFunction, value:IrValue,
-			signatures:IrVerifyTable<{arguments:Array<IrType>, result:IrType}>):Bool {
-		var castPrefix = "__haxeon_closure_cast_";
-		if (!StringTools.startsWith(fn.name, castPrefix) || fn.arguments.length != 1 || !sameType(fn.arguments[0].type, Dyn)
-			|| !sameType(fn.result, Dyn)) return false;
-		var targetKey = closureSignatureKey(value.type);
-		if (fn.name != castPrefix + targetKey) return false;
-		var targetArguments = switch value.type { case Function(arguments, _): arguments; default: return false; },
-			targetResult = switch value.type { case Function(_, result): result; default: return false; };
+			signatures:IrVerifyTable<{arguments:Array<IrType>, result:IrType, kind:IrFunctionKind}>):Bool {
+		var target:IrType;
+		switch fn.kind { case ClosureCast(t): target = t; default: return false; }
+		if (fn.arguments.length != 1 || !sameType(fn.arguments[0].type, Dyn) || !sameType(fn.result, Dyn)
+			|| !sameType(target, value.type)) return false;
+		var targetArguments = switch target { case Function(arguments, _): arguments; default: return false; },
+			targetResult = switch target { case Function(_, result): result; default: return false; };
 		for (block in fn.blocks) for (located in block.instructions) switch located.value {
 			case InstanceClosure(output, name, receiver) if (output.id == value.id && receiver.id == fn.arguments[0].id):
-				if (name != "__haxeon_varargs_adapter_" + Std.string(value.type)) {
-					var prefix = "__haxeon_closure_adapter_";
-					if (!StringTools.startsWith(name, prefix)) continue;
-					var keys = name.substr(prefix.length).split("_");
-					if (keys.length != 2 || keys[1] != targetKey) continue;
-				}
 				var adapter = signatures.get(name);
 				if (adapter == null || adapter.arguments.length != targetArguments.length + 1 || !sameType(adapter.arguments[0], Dyn)
 					|| !sameType(adapter.result, targetResult)) continue;
-			var matches = true;
-			for (index in 0...targetArguments.length) if (!sameType(adapter.arguments[index + 1], targetArguments[index])) matches = false;
-			if (matches) return true;
+				var validKind = switch adapter.kind {
+					case ClosureAdapter(_, t), ClosureVarargs(t): sameType(t, target);
+					default: false;
+				};
+				if (!validKind) continue;
+				var matches = true;
+				for (index in 0...targetArguments.length) if (!sameType(adapter.arguments[index + 1], targetArguments[index])) matches = false;
+				if (matches) return true;
 			default:
 		}
 		return false;
 	}
 
 	static function verifyScalarReferenceUse(instruction:IrInstruction, scalarFunctions:IrVerifyTable<Bool>, carrierSlots:IrVerifyTable<Bool>,
-			physicalValues:IrVerifyTable<Bool>, fn:IrFunction, signatures:IrVerifyTable<{arguments:Array<IrType>, result:IrType}>):Void {
+			physicalValues:IrVerifyTable<Bool>, fn:IrFunction, signatures:IrVerifyTable<{arguments:Array<IrType>, result:IrType, kind:IrFunctionKind}>, closureCasts:IrVerifyTable<String>):Void {
 		switch instruction {
 			case ToDyn(output, value) if (sameType(output.type, Dyn) && !IrValueLaneReference.isCarrier(value.type) && requiresLogicalValueAdapter(value.type, physicalValues)
 				&& !isGeneratedClosureAdapterValue(fn, value, signatures)):
 				throw "Inline value storage requires a logical Dynamic adapter";
 			case SafeCast(output, value) if (sameType(output.type, Dyn) && !IrValueLaneReference.isCarrier(value.type) && requiresLogicalValueAdapter(value.type, physicalValues)
 				|| sameType(value.type, Dyn) && !IrValueLaneReference.isCarrier(output.type) && requiresLogicalValueAdapter(output.type, physicalValues)
-					&& !isGeneratedClosureAdapterCast(fn, output, value, signatures)):
+					&& !isGeneratedClosureAdapterCast(fn, output, value, signatures, closureCasts)):
 				throw "Inline value storage requires a logical cast adapter";
 			default:
 		}
@@ -1009,7 +1015,7 @@ class IrVerifier {
 	}
 
 	static function methodSignature(type:IrType, name:String, signatures, objects:IrVerifyTable<IrObject>,
-			interfaces:IrVerifyTable<IrInterface>):Null<{arguments:Array<IrType>, result:IrType}> {
+			interfaces:IrVerifyTable<IrInterface>):Null<{arguments:Array<IrType>, result:IrType, kind:IrFunctionKind}> {
 		return switch type {
 			case Obj(_):
 				var object = requireObjectType(type, objects),
@@ -1024,7 +1030,7 @@ class IrVerifier {
 					else {
 						var arguments:Array<IrType> = [Virtual(interfaceName)];
 						arguments = arguments.concat(method.arguments);
-						{arguments: arguments, result: method.result};
+						{arguments: arguments, result: method.result, kind: Ordinary};
 					}
 				}
 			default: null;
@@ -1057,10 +1063,10 @@ class IrVerifier {
 		};
 	}
 
-	static function addSignature(map:Map<String, {arguments:Array<IrType>, result:IrType}>, name:String, arguments:Array<IrType>, result:IrType):Void {
+	static function addSignature(map:Map<String, {arguments:Array<IrType>, result:IrType, kind:IrFunctionKind}>, name:String, arguments:Array<IrType>, result:IrType, kind:IrFunctionKind = Ordinary):Void {
 		if (map.exists(name))
 			throw 'Duplicate IR function "$name"';
-		map.set(name, {arguments: arguments, result: result});
+		map.set(name, {arguments: arguments, result: result, kind: kind});
 	}
 
 	static function define(values:Map<Int, IrType>, value:IrValue):Void {

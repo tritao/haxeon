@@ -92,7 +92,7 @@ class WasmGcValueArrayAccessors {
 			target.terminator = block.terminator;
 			blocks.push(target);
 		}
-		return changed ? new IrFunction(fn.name, fn.arguments, fn.result, blocks, fn.debugBindings, fn.inlineHint, fn.retention) : fn;
+		return changed ? new IrFunction(fn.name, fn.arguments, fn.result, blocks, fn.debugBindings, fn.inlineHint, fn.retention, fn.kind) : fn;
 	}
 
 	function specialize(native:IrNative, arguments:Array<IrValue>, constants:Map<Int, Int>):Null<String> {

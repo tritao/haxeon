@@ -460,7 +460,7 @@ class IrValueArrayPlaceMethods {
 		}
 		var debug = [for (binding in fn.debugBindings) if (!aliases.exists(binding.value.id) && !optionalScalars.exists(binding.value.id)
 			&& !virtualFresh.exists(binding.value.id) && !optionalFresh.exists(binding.value.id)) binding];
-		return new IrFunction(name, [array, index].concat(fn.arguments.slice(1)), fn.result, blocks, debug, fn.inlineHint, fn.retention);
+		return new IrFunction(name, [array, index].concat(fn.arguments.slice(1)), fn.result, blocks, debug, fn.inlineHint, fn.retention, fn.kind);
 	}
 
 	function request(receiverType:IrType, method:String, path:Array<String>):String {

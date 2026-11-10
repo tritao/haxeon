@@ -101,7 +101,7 @@ class WasmDynamicCalls {
 				}
 				blocks.push(copy);
 			}
-			result.functions.push(new IrFunction(fn.name, fn.arguments, fn.result, blocks, fn.debugBindings, fn.inlineHint, fn.retention));
+			result.functions.push(new IrFunction(fn.name, fn.arguments, fn.result, blocks, fn.debugBindings, fn.inlineHint, fn.retention, fn.kind));
 		}
 		if (needsFunctionTest && !Lambda.exists(result.natives, n -> n.name == isFunction))
 			result.natives.push({
@@ -208,7 +208,7 @@ class WasmDynamicCalls {
 		}
 		var called = b.call(VARARGS_CALL, [original, array], Dyn);
 		b.returnValue((switch (result) { case Void: true; default: false; }) ? b.constVoid() : (switch (result) { case Dyn: true; default: false; }) ? called : fromDynamic(called, result));
-		return new IrFunction(name, b.arguments, result, b.blocks, null, false, Keep);
+		return new IrFunction(name, b.arguments, result, b.blocks, null, false, Keep, ClosureVarargs(type));
 	}
 
 	static function callHelper(name:String, type:IrType, dynamicCall:Bool, isFunction:String):IrFunction {

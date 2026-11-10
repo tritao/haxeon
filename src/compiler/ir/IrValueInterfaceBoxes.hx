@@ -192,7 +192,7 @@ class IrValueInterfaceBoxes {
 				target.terminator = block.terminator;
 				blocks.push(target);
 			}
-			rewritten.push(changed ? new IrFunction(fn.name, fn.arguments, fn.result, blocks, fn.debugBindings, fn.inlineHint, fn.retention) : fn);
+			rewritten.push(changed ? new IrFunction(fn.name, fn.arguments, fn.result, blocks, fn.debugBindings, fn.inlineHint, fn.retention, fn.kind) : fn);
 		}
 		if (needsTypeId && !functionMap.exists(TYPE_ID)) {
 			// The physical class of an interface box is an implementation detail.

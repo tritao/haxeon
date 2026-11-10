@@ -210,7 +210,7 @@ class WasmLinearModuleBuilder {
 				for (block in fn.blocks) for (located in block.instructions) switch located.value {
 					case SafeCast(output, _): switch output.type {
 						case Function(_, _):
-							var name = WasmLinearClosureAdapters.castName(output.type);
+							var name = closureAdapters.castName(output.type);
 							if (plannedFunctions.exists(name) && !rootSet.exists(name)) { roots.push(name); rootSet.set(name, true); changed = true; }
 						default:
 					}

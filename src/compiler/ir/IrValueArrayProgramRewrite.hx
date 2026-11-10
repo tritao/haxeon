@@ -374,7 +374,7 @@ class IrValueArrayProgramRewrite {
 			target.terminator = block.terminator;
 			blocks.push(target);
 		}
-		return changed ? new IrFunction(fn.name, fn.arguments, fn.result, blocks, fn.debugBindings, fn.inlineHint, fn.retention) : fn;
+		return changed ? new IrFunction(fn.name, fn.arguments, fn.result, blocks, fn.debugBindings, fn.inlineHint, fn.retention, fn.kind) : fn;
 	}
 
 	/** A shared classifier keeps the immutable index and actual rewrite in agreement. */
@@ -431,7 +431,7 @@ class IrValueArrayProgramRewrite {
 				blocks.push(target);
 			} else if (blocks != null) blocks.push(block);
 		}
-		return blocks == null ? fn : new IrFunction(fn.name, fn.arguments, fn.result, blocks, fn.debugBindings, fn.inlineHint, fn.retention);
+		return blocks == null ? fn : new IrFunction(fn.name, fn.arguments, fn.result, blocks, fn.debugBindings, fn.inlineHint, fn.retention, fn.kind);
 	}
 
 	static function rewriteAllocations(fn:IrFunction, element:IrType, allocator:String):IrFunction {
@@ -498,6 +498,6 @@ class IrValueArrayProgramRewrite {
 			target.terminator = block.terminator;
 			blocks.push(target);
 		}
-		return changed ? new IrFunction(fn.name, fn.arguments, fn.result, blocks, fn.debugBindings, fn.inlineHint, fn.retention) : fn;
+		return changed ? new IrFunction(fn.name, fn.arguments, fn.result, blocks, fn.debugBindings, fn.inlineHint, fn.retention, fn.kind) : fn;
 	}
 }

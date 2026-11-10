@@ -10,7 +10,8 @@ These unchecked families encode compiler meaning in names today. Each family mus
 the boxes are checked only when the string representation and its parser are gone. Ordinary source names and diagnostic
 interpolation are not markers.
 
-- [ ] Closure adapter and cast signature hashes (`__haxeon_closure_adapter_`, `__haxeon_closure_cast_`); verifier and Wasm adapters.
+- [x] Closure adapter and cast signature hashes: linear Wasm uses planned signature IDs for linkage, and the verifier reads
+  declared adapter, cast and varargs kinds and their semantic types instead of parsing hashes from names.
 - [ ] Function origins and scalar ABI eligibility: the duplicated prefix lists in `IrScalarArguments` and `WasmScalarAbi`,
   including lambda, generic, equality/hash, iteration, interface, optional, nullable, key-path and array helpers.
 - [ ] Value-array slot, element, factory, bridge and place-method names (`$value-array:`), including encoded type and path.

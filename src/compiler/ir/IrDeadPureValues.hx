@@ -53,6 +53,6 @@ class IrDeadPureValues {
 			copy.terminator = block.terminator;
 			blocks.push(copy);
 		}
-		return changed ? new IrFunction(fn.name, fn.arguments, fn.result, blocks, fn.debugBindings, fn.inlineHint, fn.retention) : fn;
+		return changed ? new IrFunction(fn.name, fn.arguments, fn.result, blocks, fn.debugBindings, fn.inlineHint, fn.retention, fn.kind) : fn;
 	}
 }

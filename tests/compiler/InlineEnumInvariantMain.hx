@@ -18,9 +18,6 @@ class InlineEnumInvariantMain {
 		return result;
 	}
 
-	static function closureKey(type:IrType):String
-		return haxe.crypto.Sha256.encode(Std.string(type)).substr(0, 32);
-
 	static function main():Void {
 		for (target in ["hl", "wasm32", "wasm-gc"])
 			for (inlineEnabled in [false, true]) {
@@ -45,17 +42,25 @@ class InlineEnumInvariantMain {
 				adapterBody.returnValue(adapterBody.equal(callbackResult, adapterBody.constInt(42)));
 				var castBody = new IrBuilder(), castInput = castBody.argument("closure", Dyn);
 				castBody.returnValue(castInput);
-				adapter.functions.push(new IrFunction("__haxeon_closure_cast_" + closureKey(sourceClosure), castBody.arguments, Dyn, castBody.blocks));
-				adapter.functions.push(new IrFunction("__haxeon_closure_adapter_" + closureKey(sourceClosure) + "_" + closureKey(targetClosure),
-					adapterBody.arguments, Bool, adapterBody.blocks));
-				var varargsName = "__haxeon_varargs_adapter_" + Std.string(targetClosure), varargsBody = new IrBuilder();
+				adapter.functions.push(new IrFunction("source-cast", castBody.arguments, Dyn, castBody.blocks, null, false, Reachable, ClosureCast(sourceClosure)));
+				adapter.functions.push(new IrFunction("adapter", adapterBody.arguments, Bool, adapterBody.blocks, null, false, Reachable,
+					ClosureAdapter(sourceClosure, targetClosure)));
+				var varargsName = "varargs-adapter", varargsBody = new IrBuilder();
 				varargsBody.argument("closure", Dyn); varargsBody.argument("value", inlineEnum); varargsBody.returnValue(varargsBody.constBool(true));
-				adapter.functions.push(new IrFunction(varargsName, varargsBody.arguments, Bool, varargsBody.blocks));
+				adapter.functions.push(new IrFunction(varargsName, varargsBody.arguments, Bool, varargsBody.blocks, null, false, Reachable, ClosureVarargs(targetClosure)));
 				var castWrapper = new IrBuilder(), castReceiver = castWrapper.argument("closure", Dyn),
 					varargsClosure = castWrapper.instanceClosure(varargsName, castReceiver, targetClosure);
 				castWrapper.returnValue(castWrapper.toDyn(varargsClosure));
-				adapter.functions.push(new IrFunction("__haxeon_closure_cast_" + closureKey(targetClosure), castWrapper.arguments, Dyn, castWrapper.blocks));
+				adapter.functions.push(new IrFunction("target-cast", castWrapper.arguments, Dyn, castWrapper.blocks, null, false, Reachable, ClosureCast(targetClosure)));
 				IrVerifier.verify(adapter);
+				var mismatched = copy(adapter);
+				for (index in 0...mismatched.functions.length) if (mismatched.functions[index].name == "adapter")
+					mismatched.functions[index] = new IrFunction("adapter", adapterBody.arguments, Bool, adapterBody.blocks, null, false, Reachable,
+						ClosureAdapter(targetClosure, targetClosure));
+				var mismatchError = "";
+				try IrVerifier.verify(mismatched) catch (failure:Dynamic) mismatchError = Std.string(failure);
+				if (mismatchError.indexOf("Inline value storage requires a logical cast adapter") < 0)
+					throw 'Mismatched closure kind was not rejected: $mismatchError';
 				var unadapted = copy(base), badCast = new IrBuilder(), badClosure = badCast.argument("closure", Dyn);
 				badCast.safeCast(badClosure, sourceClosure);
 				badCast.returnValue(badCast.constInt(42));

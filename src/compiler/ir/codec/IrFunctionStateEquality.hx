@@ -12,6 +12,7 @@ class IrFunctionStateEquality {
 		if (left == right)
 			return true;
 		if (left.name != right.name
+			|| !sameKind(left.kind, right.kind)
 			|| left.inlineHint != right.inlineHint
 			|| left.retention != right.retention
 			|| !IrVerifier.sameType(left.result, right.result)
@@ -45,6 +46,16 @@ class IrFunctionStateEquality {
 		}
 		return true;
 	}
+
+	static function sameKind(a:compiler.ir.IrFunction.IrFunctionKind, b:compiler.ir.IrFunction.IrFunctionKind):Bool
+		return switch [a, b] {
+			case [Ordinary, Ordinary]: true;
+			case [ClosureAdapter(aSource, aTarget), ClosureAdapter(bSource, bTarget)]:
+				IrVerifier.sameType(aSource, bSource) && IrVerifier.sameType(aTarget, bTarget);
+			case [ClosureCast(aTarget), ClosureCast(bTarget)]: IrVerifier.sameType(aTarget, bTarget);
+			case [ClosureVarargs(aTarget), ClosureVarargs(bTarget)]: IrVerifier.sameType(aTarget, bTarget);
+			default: false;
+		};
 
 	static function value(a:IrValue, b:IrValue):Bool
 		return a == b || (a.id == b.id && a.name == b.name && IrVerifier.sameType(a.type, b.type));

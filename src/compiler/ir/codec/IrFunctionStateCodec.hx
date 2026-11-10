@@ -20,7 +20,7 @@ import compiler.ir.SourceProvenance.SourceOrigin;
 
 /** Deterministic framing for a complete SSA IR function. */
 class IrFunctionStateCodec {
-	static inline final VERSION = 12;
+	static inline final VERSION = 13;
 	static inline final MAX_BLOCKS = 0x100000;
 	static inline final MAX_INSTRUCTIONS = 0x1000000;
 
@@ -102,6 +102,19 @@ class IrFunctionStateCodec {
 		IrTypeCodec.writeType(output, fn.result, 0, erase);
 		output.writeByte(fn.inlineHint ? 1 : 0);
 		output.writeByte(fn.retention);
+		switch fn.kind {
+			case Ordinary: output.writeByte(0);
+			case ClosureAdapter(source, target):
+				output.writeByte(1);
+				IrTypeCodec.writeType(output, source, 0, erase);
+				IrTypeCodec.writeType(output, target, 0, erase);
+			case ClosureCast(target):
+				output.writeByte(2);
+				IrTypeCodec.writeType(output, target, 0, erase);
+			case ClosureVarargs(target):
+				output.writeByte(3);
+				IrTypeCodec.writeType(output, target, 0, erase);
+		}
 		var debugBindings = identified ? fn.debugBindings : [];
 		output.writeInt32(debugBindings.length);
 		for (binding in debugBindings) {
@@ -158,7 +171,7 @@ class IrFunctionStateCodec {
 			if (input.readString(3) != "IRF")
 				throw "Invalid IR function state";
 			var version = input.readByte();
-			if (version < 1 || version > VERSION)
+			if (version != VERSION)
 				throw "Unsupported IR function state version";
 			var valuesArray = IrValueTableCodec.decode(readBytes(input, bytes.length)),
 				values = IrValueTableCodec.byId(valuesArray),
@@ -171,6 +184,13 @@ class IrFunctionStateCodec {
 				debugBindings:Array<compiler.ir.IrFunction.IrDebugBinding> = [];
 			var inlineHint = version >= 9 && input.readByte() != 0,
 				retention:compiler.ir.IrFunction.IrRetention = version >= 10 ? input.readByte() : Reachable;
+			var kind:compiler.ir.IrFunction.IrFunctionKind = switch input.readByte() {
+				case 0: Ordinary;
+				case 1: ClosureAdapter(IrTypeCodec.readType(input, bytes.length, 0), IrTypeCodec.readType(input, bytes.length, 0));
+				case 2: ClosureCast(IrTypeCodec.readType(input, bytes.length, 0));
+				case 3: ClosureVarargs(IrTypeCodec.readType(input, bytes.length, 0));
+				default: throw "Invalid IR function kind";
+			};
 			if (version >= 3) {
 				var bindingCount = input.readInt32();
 				if (bindingCount < 0 || bindingCount > IrValueTableCodec.MAX_VALUES)
@@ -230,7 +250,7 @@ class IrFunctionStateCodec {
 			}
 			if (input.position != bytes.length)
 				throw "Trailing IR function state data";
-			return new IrFunction(name, arguments, result, blocks, debugBindings, inlineHint, retention);
+			return new IrFunction(name, arguments, result, blocks, debugBindings, inlineHint, retention, kind);
 		} catch (error:haxe.io.Eof) {
 			throw "Truncated IR function state";
 		}

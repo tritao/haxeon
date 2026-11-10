@@ -551,7 +551,7 @@ class IrProgramAssembler {
 			var exported = [for (name in exportedFunctions) name => true];
 			allFunctions = [
 				for (fn in allFunctions)
-					exported.exists(fn.name) ? new IrFunction(fn.name, fn.arguments, fn.result, fn.blocks, fn.debugBindings, fn.inlineHint, Expose) : fn
+					exported.exists(fn.name) ? new IrFunction(fn.name, fn.arguments, fn.result, fn.blocks, fn.debugBindings, fn.inlineHint, Expose, fn.kind) : fn
 			];
 		}
 		if (valueTarget != null) {

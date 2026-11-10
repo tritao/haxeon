@@ -215,7 +215,7 @@ class IrEnumTagLowering {
 							scopeStart: binding.scopeStart,
 							scopeEnd: binding.scopeEnd
 						}
-				], fn.inlineHint, fn.retention);
+				], fn.inlineHint, fn.retention, fn.kind);
 				changedFunctions.push(rewrittenFunction);
 				rewrittenFunction;
 			}

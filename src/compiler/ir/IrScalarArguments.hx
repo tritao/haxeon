@@ -520,7 +520,7 @@ class IrScalarArguments {
 			copy.terminator = block.terminator;
 			blocks.push(copy);
 		}
-		return changed ? new IrFunction(fn.name, fn.arguments, fn.result, blocks, fn.debugBindings, fn.inlineHint, fn.retention) : fn;
+		return changed ? new IrFunction(fn.name, fn.arguments, fn.result, blocks, fn.debugBindings, fn.inlineHint, fn.retention, fn.kind) : fn;
 	}
 
 	/** The Wasm scalar ABI reads fields at the call site. Only an unaliased value is stable there;

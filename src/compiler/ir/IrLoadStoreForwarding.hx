@@ -141,7 +141,7 @@ class IrLoadStoreForwarding {
 					scopeEnd: binding.scopeEnd
 				}
 		];
-		return new IrFunction(fn.name, fn.arguments, fn.result, blocks, bindings, fn.inlineHint, fn.retention);
+		return new IrFunction(fn.name, fn.arguments, fn.result, blocks, bindings, fn.inlineHint, fn.retention, fn.kind);
 	}
 
 	/** Fields available on every normal path into each block. A null value is the analysis top. */

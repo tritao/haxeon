@@ -667,12 +667,13 @@ class WasmFunctionLower {
 				var represented = context.representation.values.safeCast(output, value, requiredLocal(values, output.id), requiredLocal(values, value.id));
 				if (emitIfHandled(body, represented)) {} else
 					switch output.type {
-						case Function(_, _) if (functions.exists(compiler.backend.wasm.linear.WasmLinearClosureAdapters.castName(output.type))):
+						case Function(_, _) if (Std.isOfType(context.representation.values, WasmLinearRepresentation)
+							&& functions.exists((cast context.representation.values:WasmLinearRepresentation).closureAdapters.castName(output.type))):
 							// A closure created with another representation is adapted (WasmLinearClosureAdapters).
 							emit(body, [
 								LocalGet(requiredLocal(values, value.id)),
 								Call(WasmModuleSupport.requiredFunctionIndex(functions,
-									compiler.backend.wasm.linear.WasmLinearClosureAdapters.castName(output.type))),
+									(cast context.representation.values:WasmLinearRepresentation).closureAdapters.castName(output.type))),
 								LocalSet(requiredLocal(values, output.id))
 							]);
 						case Function(_, _) if (Std.isOfType(context.representation.values, WasmLinearRepresentation)):

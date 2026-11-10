@@ -74,7 +74,7 @@ class IrScalarReplacement {
 				return fn;
 		}
 		var bindings = IrInliner.substitute(blocks, result.substitutions, fn.debugBindings);
-		return new IrFunction(fn.name, fn.arguments, fn.result, blocks, bindings, fn.inlineHint, fn.retention);
+		return new IrFunction(fn.name, fn.arguments, fn.result, blocks, bindings, fn.inlineHint, fn.retention, fn.kind);
 	}
 
 	public static function run(blocks:Array<IrBlock>, objects:IrObjectTable, nextValue:Int, forcePhis = false):ScalarReplacementResult {

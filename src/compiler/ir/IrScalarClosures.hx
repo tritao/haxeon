@@ -436,7 +436,7 @@ class IrScalarClosures {
 					scopeEnd: binding.scopeEnd
 				}
 		];
-		return new IrFunction(fn.name, [for (argument in fn.arguments) map(argument)], mapType(fn.result), blocks, debug, fn.inlineHint, fn.retention);
+		return new IrFunction(fn.name, [for (argument in fn.arguments) map(argument)], mapType(fn.result), blocks, debug, fn.inlineHint, fn.retention, fn.kind);
 	}
 
 	/** A scalar closure escapes through a signature-specific adapter; only that target proves its original type. */

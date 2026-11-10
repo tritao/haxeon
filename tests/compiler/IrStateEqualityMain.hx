@@ -34,6 +34,17 @@ class IrStateEqualityMain {
 	}
 
 	static function main():Void {
+		var body = fn(ConstInt(new IrValue(0, "v", I32), 1));
+		var adapter = new IrFunction(body.name, body.arguments, body.result, body.blocks, body.debugBindings, false, Reachable,
+			ClosureAdapter(Function([I32], I32), Function([Dyn], Dyn)));
+		var castFunction = new IrFunction(body.name, body.arguments, body.result, body.blocks, body.debugBindings, false, Reachable,
+			ClosureCast(Function([Dyn], Dyn)));
+		var otherAdapter = new IrFunction(body.name, body.arguments, body.result, body.blocks, body.debugBindings, false, Reachable,
+			ClosureAdapter(Function([I64], I32), Function([Dyn], Dyn)));
+		compare(adapter, IrFunctionStateCodec.decode(IrFunctionStateCodec.encode(adapter)));
+		compare(adapter, castFunction);
+		compare(adapter, otherAdapter);
+		compare(body, adapter);
 		var v = new IrValue(0, "v", I32), w = new IrValue(1, "w", I32);
 		var cases:Array<{original:IrInstruction, changed:Array<IrInstruction>}> = [
 			{

@@ -154,7 +154,7 @@ class IrStaticNullChecks {
 			}
 			// Cached functions belong to the frontend; never instrument them in place.
 			// A function with no static receiver gets no check, and stays the frontend's own object.
-			var copied = used.keys().hasNext() ? new IrFunction(fn.name, fn.arguments, fn.result, blocks, fn.debugBindings, fn.inlineHint, fn.retention) : fn;
+			var copied = used.keys().hasNext() ? new IrFunction(fn.name, fn.arguments, fn.result, blocks, fn.debugBindings, fn.inlineHint, fn.retention, fn.kind) : fn;
 			nextCopies.set(fn.name, {source: fn, result: copied, statics: [for (name in used.keys()) name]});
 			result.push(copied);
 		}

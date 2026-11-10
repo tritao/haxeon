@@ -348,7 +348,7 @@ class IrInlineEnumLowering {
 						scopeStart: binding.scopeStart,
 						scopeEnd: binding.scopeEnd
 					}
-			], fn.inlineHint, fn.retention));
+			], fn.inlineHint, fn.retention, fn.kind));
 		}
 		var names = [for (name in helpers.keys()) name];
 		names.sort(Reflect.compare);

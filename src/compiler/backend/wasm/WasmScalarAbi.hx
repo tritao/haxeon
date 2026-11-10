@@ -733,7 +733,7 @@ class WasmScalarAbi {
 			replacement.terminator = terminator;
 			blocks.push(replacement);
 		}
-		return new IrFunction(fn.name, args, fn.result, blocks, fn.debugBindings, fn.inlineHint, fn.retention);
+		return new IrFunction(fn.name, args, fn.result, blocks, fn.debugBindings, fn.inlineHint, fn.retention, fn.kind);
 	}
 
 	function expandVirtualCall(block:IrBlock, origin:Located<IrInstruction>, out:IrValue, receiver:IrValue, method:String,

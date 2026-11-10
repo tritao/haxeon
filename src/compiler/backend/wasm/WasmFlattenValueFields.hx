@@ -218,7 +218,7 @@ class WasmFlattenValueFields {
 		for (block in blocks) if (edgeCopies.exists(block.id))
 			for (instruction in edgeCopies.get(block.id)) block.instructions.push(instruction);
 		var bindings = [for (binding in fn.debugBindings) if (!aliases.exists(binding.value.id)) binding];
-		return new IrFunction(fn.name, fn.arguments, fn.result, blocks, bindings, fn.inlineHint, fn.retention);
+		return new IrFunction(fn.name, fn.arguments, fn.result, blocks, bindings, fn.inlineHint, fn.retention, fn.kind);
 	}
 
 	/** Fold a holder check into an immediately following scalar access, without moving it across evaluation. */

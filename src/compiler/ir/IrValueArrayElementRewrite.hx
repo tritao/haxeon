@@ -63,7 +63,7 @@ class IrValueArrayElementRewrite {
 			target.terminator = block.terminator;
 			blocks.push(target);
 		}
-		return changed ? new IrFunction(fn.name, fn.arguments, fn.result, blocks, fn.debugBindings, fn.inlineHint, fn.retention) : fn;
+		return changed ? new IrFunction(fn.name, fn.arguments, fn.result, blocks, fn.debugBindings, fn.inlineHint, fn.retention, fn.kind) : fn;
 	}
 
 	static function rewriteCheckedSplice(fn:IrFunction, element:IrType, helpers:IrValueArrayElements):IrFunction {
@@ -118,6 +118,6 @@ class IrValueArrayElementRewrite {
 		}
 		if (!changed) return fn;
 		var debug = [for (binding in fn.debugBindings) if (!removed.exists(binding.value.id)) binding];
-		return new IrFunction(fn.name, fn.arguments, fn.result, blocks, debug, fn.inlineHint, fn.retention);
+		return new IrFunction(fn.name, fn.arguments, fn.result, blocks, debug, fn.inlineHint, fn.retention, fn.kind);
 	}
 }

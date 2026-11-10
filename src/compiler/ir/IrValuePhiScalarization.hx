@@ -68,7 +68,7 @@ class IrValuePhiScalarization {
 				copies.push(copy);
 			}
 			var debug = IrInliner.substitute(copies, substitutions, fn.debugBindings);
-			fn = new IrFunction(fn.name, fn.arguments, fn.result, copies, debug, fn.inlineHint, fn.retention);
+			fn = new IrFunction(fn.name, fn.arguments, fn.result, copies, debug, fn.inlineHint, fn.retention, fn.kind);
 		}
 		var known:Map<Int, Bool> = [], next = 0, byId:Map<Int, IrBlock> = [];
 		for (arg in fn.arguments)
@@ -297,7 +297,7 @@ class IrValuePhiScalarization {
 			for (item in preReads)
 				target.instructions.push(item);
 		}
-		var candidate = new IrFunction(fn.name, fn.arguments, fn.result, blocks, fn.debugBindings, fn.inlineHint, fn.retention);
+		var candidate = new IrFunction(fn.name, fn.arguments, fn.result, blocks, fn.debugBindings, fn.inlineHint, fn.retention, fn.kind);
 		var optimized = IrScalarReplacement.rewrite(candidate, table, true, true);
 		for (block in optimized.blocks)
 			for (located in block.instructions)

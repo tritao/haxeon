@@ -66,7 +66,7 @@ class IrCheckedDynamicCasts {
 				target.terminator = block.terminator;
 				blocks.push(target);
 			}
-			rewritten.push(changed ? new IrFunction(fn.name, fn.arguments, fn.result, blocks, fn.debugBindings, fn.inlineHint, fn.retention) : fn);
+			rewritten.push(changed ? new IrFunction(fn.name, fn.arguments, fn.result, blocks, fn.debugBindings, fn.inlineHint, fn.retention, fn.kind) : fn);
 		}
 		return rewritten.concat(generated);
 	}

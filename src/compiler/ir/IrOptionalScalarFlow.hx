@@ -728,6 +728,6 @@ class IrOptionalScalarFlow {
 		debug = [for (binding in debug) if (!removed.exists(binding.value.id)) binding];
 		var result = optional(fn.result) == null ? fn.result : Obj(wrapper(optional(fn.result)).name);
 		return new IrFunction(clone ? PREFIX + fn.name : fn.name, args, result, blocks, debug, fn.inlineHint,
-			clone ? compiler.ir.IrFunction.IrRetention.Reachable : fn.retention);
+			clone ? compiler.ir.IrFunction.IrRetention.Reachable : fn.retention, clone ? Ordinary : fn.kind);
 	}
 }

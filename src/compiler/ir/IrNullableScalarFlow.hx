@@ -290,7 +290,7 @@ class IrNullableScalarFlow {
 		debug = IrInliner.substitute(blocks, substitutions, debug);
 		return {
 			fn: new IrFunction(clone ? specializationName(fn.name) : fn.name, arguments, fn.result, blocks, debug, fn.inlineHint,
-				clone ? compiler.ir.IrFunction.IrRetention.Reachable : fn.retention),
+				clone ? compiler.ir.IrFunction.IrRetention.Reachable : fn.retention, clone ? Ordinary : fn.kind),
 			eligible: true
 		};
 	}
