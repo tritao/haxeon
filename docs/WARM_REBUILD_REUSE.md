@@ -481,11 +481,11 @@ Live-build pruning is parked (`/media/joao/DATA1/warm-prof/live-prune-wip2.patch
 array each reallocate. A scratch override with a minimum capacity of 4 (`size < 4 ? 4 : size * 3 >> 1`), placed first on the class path
 of the 0405feb5 app build, three fresh-worker cold builds each, interleaved, load 8 to 15 from other sessions:
 
-| | allocations (compile-count) | compiler ms | wall s | peak RSS GB |
+| | allocations (compile-count) | compiler s | wall s | peak RSS GB |
 | --- | --- | --- | --- | --- |
 | stock | 785.6M | 81.5 / 62.1 / 63.4 | 84.4 / 64.1 / 65.2 | 3.07 / 6.21 / 5.45 |
 | min 4 | 746.6M (-5.0%) | 62.5 / 63.1 / 72.7 | 72.8 / 64.9 / 74.5 | 5.36 / 5.64 / 5.64 |
 
 Allocation count drops 5.0% and is stable across runs, but wall median (65.2 vs 72.8 s, within the load noise) and compiler time median
-(63.4 vs 63.1 ms-column values) show no gain, and peak RSS does not move. Under the 2% wall bar, so no override is kept: it would be a
+(63.4 vs 63.1 s) show no gain, and peak RSS does not move. Under the 2% wall bar, so no override is kept: it would be a
 fork of a stock std file for no measurable time. Revisit when the Haxeon-built worker (ADR 0003 section 12) applies our own Array policy.
