@@ -720,7 +720,7 @@ class IrInliner {
 				frames[frames.length - 1].set(name, original);
 		};
 		new IrCopyElision(byName, resolveMethod, consult).run(blocks);
-		return new IrFunction(fn.name, fn.arguments, fn.result, blocks, bindings, fn.inlineHint, fn.retention, fn.kind);
+		return fn.withBlocks(blocks, bindings);
 	}
 
 	/** Value receivers are non-null values; reference receivers must retain the method call's null check. */

@@ -38,7 +38,7 @@ class WasmClosureVerificationOrderMain {
 			fields:[{name:"tag", type:I32}, {name:"scalar0", type:I32}]}];
 		var builder = new IrBuilder();
 		builder.returnValue(builder.toDyn(builder.newObject(name)));
-		program.functions = [new IrFunction("main", builder.arguments, Dyn, builder.blocks)];
+		program.functions = [new IrFunction("main", builder.arguments, Dyn, builder.blocks, Ordinary)];
 		var failure:Null<String> = null;
 		try new WasmBackend().compile(program, {target:target, debugNames:true}) catch (error:Dynamic) failure = Std.string(error);
 		if (failure == null || failure.indexOf("Inline value storage requires a logical Dynamic adapter") < 0)

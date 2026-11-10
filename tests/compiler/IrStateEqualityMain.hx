@@ -14,7 +14,7 @@ class IrStateEqualityMain {
 			where = SourceProvenance.user(new compiler.Source.SourceFile("test.hx", "x").span(0, 1));
 		b.instructions.push(new Located(instruction, where));
 		b.terminator = new Located(Return(v), where);
-		return new IrFunction("probe", [v, w], I32, [b], [
+		return new IrFunction("probe", [v, w], I32, [b], Ordinary, [
 			{
 				identity: "local",
 				name: "v",
@@ -35,12 +35,12 @@ class IrStateEqualityMain {
 
 	static function main():Void {
 		var body = fn(ConstInt(new IrValue(0, "v", I32), 1));
-		var adapter = new IrFunction(body.name, body.arguments, body.result, body.blocks, body.debugBindings, false, Reachable,
-			ClosureAdapter(Function([I32], I32), Function([Dyn], Dyn)));
-		var castFunction = new IrFunction(body.name, body.arguments, body.result, body.blocks, body.debugBindings, false, Reachable,
-			ClosureCast(Function([Dyn], Dyn)));
-		var otherAdapter = new IrFunction(body.name, body.arguments, body.result, body.blocks, body.debugBindings, false, Reachable,
-			ClosureAdapter(Function([I64], I32), Function([Dyn], Dyn)));
+		var adapter = new IrFunction(body.name, body.arguments, body.result, body.blocks, ClosureAdapter(Function([I32], I32), Function([Dyn], Dyn)), body.debugBindings, false, Reachable);
+		var castFunction = new IrFunction(body.name, body.arguments, body.result, body.blocks, ClosureCast(Function([Dyn], Dyn)), body.debugBindings, false, Reachable);
+		var otherAdapter = new IrFunction(body.name, body.arguments, body.result, body.blocks, ClosureAdapter(Function([I64], I32), Function([Dyn], Dyn)), body.debugBindings, false, Reachable);
+		var retained = new IrFunction(body.name, body.arguments, body.result, body.blocks, adapter.kind, body.debugBindings, true, Keep);
+		if (!IrFunctionStateEquality.same(retained, retained.withBlocks(retained.blocks)))
+			throw "Replacing blocks must preserve function metadata";
 		compare(adapter, IrFunctionStateCodec.decode(IrFunctionStateCodec.encode(adapter)));
 		compare(adapter, castFunction);
 		compare(adapter, otherAdapter);
@@ -448,12 +448,12 @@ class IrStateEqualityMain {
 			}
 		];
 		for (changed in [
-			new IrFunction("renamed", original.arguments, original.result, original.blocks, original.debugBindings),
-			new IrFunction(original.name, [w, v], original.result, original.blocks, original.debugBindings),
-			new IrFunction(original.name, original.arguments, I64, original.blocks, original.debugBindings),
-			new IrFunction(original.name, original.arguments, original.result, original.blocks, changedBindings),
-			new IrFunction(original.name, original.arguments, original.result, original.blocks, original.debugBindings, true),
-			new IrFunction(original.name, original.arguments, original.result, original.blocks, original.debugBindings, false,
+			new IrFunction("renamed", original.arguments, original.result, original.blocks, Ordinary, original.debugBindings),
+			new IrFunction(original.name, [w, v], original.result, original.blocks, Ordinary, original.debugBindings),
+			new IrFunction(original.name, original.arguments, I64, original.blocks, Ordinary, original.debugBindings),
+			new IrFunction(original.name, original.arguments, original.result, original.blocks, Ordinary, changedBindings),
+			new IrFunction(original.name, original.arguments, original.result, original.blocks, Ordinary, original.debugBindings, true),
+			new IrFunction(original.name, original.arguments, original.result, original.blocks, Ordinary, original.debugBindings, false,
 				compiler.ir.IrFunction.IrRetention.Keep),
 			fn(ConstInt(v, 42), SourceProvenance.generated("first")),
 			fn(ConstInt(v, 42), SourceProvenance.generated("second"))

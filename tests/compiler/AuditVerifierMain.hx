@@ -30,7 +30,7 @@ class AuditVerifierMain {
 			program.natives.push({name:"$aliased-push", library:"haxeon_runtime", symbol:"__array_push_ref",
 				arguments:[Array(element), element], result:I32});
 			program.objects.push({name:"S", isValue:valueObject, base:null, interfaces:[], fields:[], methods:[]});
-			program.functions.push(new IrFunction("main", builder.arguments, I32, builder.blocks));
+			program.functions.push(new IrFunction("main", builder.arguments, I32, builder.blocks, Ordinary));
 			return program;
 		}
 		for (operation in ["get", "set", "iterator", "push", "alias", "concat-second"]) {
@@ -86,7 +86,7 @@ class AuditVerifierMain {
 			stackRef = refBuilder.call(IrHlScalarRef.ADDRESS, [initialValue], IrHlScalarRef.type(I32));
 		refBuilder.returnValue(stackRef);
 		var refProgram = new IrProgram("main");
-		refProgram.functions.push(new IrFunction("main", [], stackRef.type, refBuilder.blocks));
+		refProgram.functions.push(new IrFunction("main", [], stackRef.type, refBuilder.blocks, Ordinary));
 		rejected(refProgram, "scalar stack reference cannot be returned");
 
 		var builder = new IrBuilder(),
@@ -100,13 +100,13 @@ class AuditVerifierMain {
 		builder.select(yes);
 		builder.returnValue(value);
 		var program = new IrProgram("main");
-		program.functions.push(new IrFunction("main", builder.arguments, I32, builder.blocks));
+		program.functions.push(new IrFunction("main", builder.arguments, I32, builder.blocks, Ordinary));
 		rejected(program, "does not dominate");
 
 		var forged = new IrBuilder(), integer = forged.constInt(42);
 		forged.returnValue(new IrValue(integer.id, "forged", Bool));
 		var forgedProgram = new IrProgram("main");
-		forgedProgram.functions.push(new IrFunction("main", [], Bool, forged.blocks));
+		forgedProgram.functions.push(new IrFunction("main", [], Bool, forged.blocks, Ordinary));
 		rejected(forgedProgram, "definition type");
 
 		var phiBuilder = new IrBuilder(),
@@ -124,7 +124,7 @@ class AuditVerifierMain {
 		var merged = phiBuilder.phi(I32, [{block: left.id, value: leftValue}, {block: right.id, value: leftValue}]);
 		phiBuilder.returnValue(merged);
 		var phiProgram = new IrProgram("main");
-		phiProgram.functions.push(new IrFunction("main", phiBuilder.arguments, I32, phiBuilder.blocks));
+		phiProgram.functions.push(new IrFunction("main", phiBuilder.arguments, I32, phiBuilder.blocks, Ordinary));
 		rejected(phiProgram, "does not dominate");
 
 		var critical = new IrBuilder(),
@@ -139,7 +139,7 @@ class AuditVerifierMain {
 		critical.select(criticalJoin);
 		critical.returnValue(critical.phi(I32, [{block: 0, value: initial}, {block: other.id, value: alternative}]));
 		var criticalProgram = new IrProgram("main"),
-			criticalFunction = new IrFunction("main", critical.arguments, I32, critical.blocks);
+			criticalFunction = new IrFunction("main", critical.arguments, I32, critical.blocks, Ordinary);
 		criticalProgram.functions.push(criticalFunction);
 		var before = compiler.ir.codec.IrFunctionStateCodec.encode(criticalFunction);
 		compiler.ir.hl.HlLower.lower(criticalProgram);
@@ -152,8 +152,8 @@ class AuditVerifierMain {
 		var invalid = new IrBuilder(), invalidValue = invalid.constInt(2);
 		invalid.returnValue(new IrValue(invalidValue.id, "forged", Bool));
 		var selectiveProgram = new IrProgram("cached");
-		selectiveProgram.functions.push(new IrFunction("cached", [], I32, cached.blocks));
-		selectiveProgram.functions.push(new IrFunction("edited", [], Bool, invalid.blocks));
+		selectiveProgram.functions.push(new IrFunction("cached", [], I32, cached.blocks, Ordinary));
+		selectiveProgram.functions.push(new IrFunction("edited", [], Bool, invalid.blocks, Ordinary));
 		IrVerifier.verifyFunctions(selectiveProgram, ["cached" => true]);
 		rejectedFunctions(selectiveProgram, ["edited" => true], "definition type");
 

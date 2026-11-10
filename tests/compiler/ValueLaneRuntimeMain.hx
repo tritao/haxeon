@@ -20,7 +20,7 @@ class ValueLaneRuntimeMain {
 			var factory = new compiler.ir.IrValueArrayFactory(compiler.ir.IrObjectTable.of([handle.name => handle]), Nullable(Obj(handle.name)), target == HashLink ? 64 : 32, target),
 				program = new IrProgram("main"), body = new compiler.ir.IrBuilder();
 			body.returnValue(body.constInt(42)); program.objects = [handle];
-			program.functions = [new IrFunction("main", body.arguments, I32, body.blocks)].concat(factory.functions()).concat(factory.helpers.functions());
+			program.functions = [new IrFunction("main", body.arguments, I32, body.blocks, Ordinary)].concat(factory.functions()).concat(factory.helpers.functions());
 			program.natives = factory.natives().concat(factory.helpers.natives());
 			compiler.ir.IrVerifier.verify(program);
 		}

@@ -81,7 +81,7 @@ class IrValueArrayPlaceMethods {
 				position = builder.argument("index", I32);
 			builder.call(helpers.checker(request.path, false), [array, position], Void);
 			builder.returnValue(bridge.readValue(builder, array, position, request.type, request.path));
-			result.push(new IrFunction(name, builder.arguments, request.type, builder.blocks));
+			result.push(new IrFunction(name, builder.arguments, request.type, builder.blocks, Ordinary));
 		}
 		for (name in writes) {
 			var request = valueWrites.get(name), builder = new IrBuilder(), array = builder.argument("array", Array(element)),
@@ -89,7 +89,7 @@ class IrValueArrayPlaceMethods {
 			builder.call(helpers.checker(request.path, false), [array, position], Void);
 			bridge.writeValue(builder, array, position, value, request.type, request.path);
 			builder.returnValue(builder.constVoid());
-			result.push(new IrFunction(name, builder.arguments, Void, builder.blocks));
+			result.push(new IrFunction(name, builder.arguments, Void, builder.blocks, Ordinary));
 		}
 		finished = true;
 		return result;
@@ -460,7 +460,7 @@ class IrValueArrayPlaceMethods {
 		}
 		var debug = [for (binding in fn.debugBindings) if (!aliases.exists(binding.value.id) && !optionalScalars.exists(binding.value.id)
 			&& !virtualFresh.exists(binding.value.id) && !optionalFresh.exists(binding.value.id)) binding];
-		return new IrFunction(name, [array, index].concat(fn.arguments.slice(1)), fn.result, blocks, debug, fn.inlineHint, fn.retention, fn.kind);
+		return new IrFunction(name, [array, index].concat(fn.arguments.slice(1)), fn.result, blocks, fn.kind, debug, fn.inlineHint, fn.retention);
 	}
 
 	function request(receiverType:IrType, method:String, path:Array<String>):String {

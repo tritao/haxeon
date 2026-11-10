@@ -46,7 +46,7 @@ class IrStrengthReduction {
 			copy.terminator = block.terminator;
 			blocks.push(copy);
 		}
-		return changed ? new IrFunction(fn.name, fn.arguments, fn.result, blocks, fn.debugBindings, fn.inlineHint, fn.retention, fn.kind) : fn;
+		return changed ? fn.withBlocks(blocks) : fn;
 	}
 
 	/** A normal binary power of two whose reciprocal is also normal. */

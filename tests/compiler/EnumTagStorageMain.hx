@@ -52,7 +52,7 @@ class EnumTagStorageMain {
 				result: Bool
 			}
 		];
-		p.functions = [new IrFunction("main", b.arguments, I32, b.blocks)].concat(IrEnumTagStorage.adapters(declaration()));
+		p.functions = [new IrFunction("main", b.arguments, I32, b.blocks, Ordinary)].concat(IrEnumTagStorage.adapters(declaration()));
 		return p;
 	}
 
@@ -100,7 +100,7 @@ class EnumTagStorageMain {
 		b.returnValue(b.constInt(42));
 		b.select(bad);
 		b.returnValue(b.constInt(1));
-		p.functions[0] = new IrFunction("main", b.arguments, I32, b.blocks);
+		p.functions[0] = new IrFunction("main", b.arguments, I32, b.blocks, Ordinary);
 		p.natives.push({
 			name: "__array_alloc_ref",
 			library: "haxeon_runtime",
@@ -133,7 +133,7 @@ class EnumTagStorageMain {
 			index = b.temporary(I32);
 		b.emit(EnumIndex(index, returned));
 		b.returnValue(b.add(index, b.constInt(41)));
-		p.functions = [new IrFunction("main", b.arguments, I32, b.blocks)];
+		p.functions = [new IrFunction("main", b.arguments, I32, b.blocks, Ordinary)];
 		compiler.ir.IrEnumTagLowering.run(p);
 		compiler.ir.IrEnumTagLowering.escapes(p);
 		// Supply a deterministic boxed-ABI stub so the same wrapper executes on every target.
@@ -141,7 +141,7 @@ class EnumTagStorageMain {
 		var stub = new IrBuilder(),
 			input = stub.argument("input", Enum("Mode"));
 		stub.returnValue(input);
-		p.functions.push(new IrFunction("nativeRoundtrip", stub.arguments, Enum("Mode"), stub.blocks));
+		p.functions.push(new IrFunction("nativeRoundtrip", stub.arguments, Enum("Mode"), stub.blocks, Ordinary));
 		return p;
 	}
 
@@ -149,7 +149,7 @@ class EnumTagStorageMain {
 		var p = program(), b = new IrBuilder();
 		b.argument("bad", type);
 		b.returnValue(b.constInt(42));
-		p.functions.push(new IrFunction("bad", b.arguments, I32, b.blocks));
+		p.functions.push(new IrFunction("bad", b.arguments, I32, b.blocks, Ordinary));
 		var message = "";
 		try
 			IrVerifier.verify(p)
@@ -179,7 +179,7 @@ class EnumTagStorageMain {
 			logicalIndex = body.temporary(I32);
 		body.emit(EnumIndex(logicalIndex, roundtrip));
 		body.returnValue(body.add(logicalIndex, body.constInt(41)));
-		logical.functions = [new IrFunction("logical", body.arguments, I32, body.blocks)];
+		logical.functions = [new IrFunction("logical", body.arguments, I32, body.blocks, Ordinary)];
 		compiler.ir.IrEnumTagLowering.run(logical);
 		compiler.ir.IrEnumTagLowering.escapes(logical);
 		IrVerifier.verify(logical);
@@ -193,7 +193,7 @@ class EnumTagStorageMain {
 		var nullCheck = program(), checkBody = new IrBuilder();
 		checkBody.call(compiler.ir.IrReceiverCheck.NAME, [checkBody.constNull(EnumTag("Mode"))], Void);
 		checkBody.returnValue(checkBody.constInt(42));
-		nullCheck.functions.push(new IrFunction("nullCheck", checkBody.arguments, I32, checkBody.blocks));
+		nullCheck.functions.push(new IrFunction("nullCheck", checkBody.arguments, I32, checkBody.blocks, Ordinary));
 		IrVerifier.verify(nullCheck);
 		var nullMessage = "";
 		try
@@ -206,7 +206,7 @@ class EnumTagStorageMain {
 		referenceCheck.objects.push({name: "Reference", isValue: false, base: null, interfaces: [], methods: [], fields: []});
 		referenceBody.call(compiler.ir.IrReceiverCheck.NAME, [referenceBody.newObject("Reference")], Void);
 		referenceBody.returnValue(referenceBody.constInt(42));
-		referenceCheck.functions.push(new IrFunction("referenceCheck", referenceBody.arguments, I32, referenceBody.blocks));
+		referenceCheck.functions.push(new IrFunction("referenceCheck", referenceBody.arguments, I32, referenceBody.blocks, Ordinary));
 		IrVerifier.verify(referenceCheck);
 		if (new compiler.ir.IrInterpreter(referenceCheck).run("referenceCheck") != 42)
 			throw "Interpreter reinterpreted a reference receiver as a numeric tag";
@@ -231,7 +231,7 @@ class EnumTagStorageMain {
 					access.emit(IteratorNew(access.temporary(Iterator(EnumTag("Mode"))), array));
 			}
 			access.returnValue(access.constInt(42));
-			malformed.functions.push(new IrFunction("badLaneAccess", access.arguments, I32, access.blocks));
+			malformed.functions.push(new IrFunction("badLaneAccess", access.arguments, I32, access.blocks, Ordinary));
 			var message = "";
 			try
 				IrVerifier.verifyValueArraysLowered(malformed)
@@ -248,13 +248,13 @@ class EnumTagStorageMain {
 			escaped = new IrBuilder(),
 			tag = escaped.argument("value", EnumTag("Mode"));
 		escaped.returnValue(escaped.toDyn(tag));
-		escape.functions.push(new IrFunction("badEscape", escaped.arguments, Dyn, escaped.blocks));
+		escape.functions.push(new IrFunction("badEscape", escaped.arguments, Dyn, escaped.blocks, Ordinary));
 		rejected(escape, "requires a box adapter");
 		var castProgram = program(),
 			caster = new IrBuilder(),
 			input = caster.argument("value", Dyn);
 		caster.returnValue(caster.safeCast(input, EnumTag("Mode")));
-		castProgram.functions.push(new IrFunction("badCast", caster.arguments, EnumTag("Mode"), caster.blocks));
+		castProgram.functions.push(new IrFunction("badCast", caster.arguments, EnumTag("Mode"), caster.blocks, Ordinary));
 		rejected(castProgram, "requires an unbox adapter");
 		for (target in [HashLink, Wasm32, WasmGc])
 			for (inlineEnabled in [false, true])
@@ -292,7 +292,7 @@ class EnumTagStorageMain {
 							var entry = new IrBuilder();
 							entry.call("exit", [entry.call("main", [], I32)], Void);
 							entry.returnValue(entry.constVoid());
-							p.functions.push(new IrFunction("entry", entry.arguments, Void, entry.blocks));
+							p.functions.push(new IrFunction("entry", entry.arguments, Void, entry.blocks, Ordinary));
 							p.entryPoint = "entry";
 							p.natives.push({
 								name: "exit",

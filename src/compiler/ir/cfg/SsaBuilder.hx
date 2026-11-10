@@ -79,7 +79,7 @@ class SsaBuilder {
 		for (block in cfg.blocks)
 			if (reachable[block.id] && roots.indexOf(block.id) < 0 && immediate[block.id] == -1)
 				rename(block.id);
-		return new IrFunction(cfg.name, arguments, cfg.result, output, debugBindings);
+		return new IrFunction(cfg.name, arguments, cfg.result, output, Ordinary, debugBindings);
 	}
 
 	function buildGraph():Void {

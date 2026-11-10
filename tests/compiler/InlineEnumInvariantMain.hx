@@ -42,21 +42,19 @@ class InlineEnumInvariantMain {
 				adapterBody.returnValue(adapterBody.equal(callbackResult, adapterBody.constInt(42)));
 				var castBody = new IrBuilder(), castInput = castBody.argument("closure", Dyn);
 				castBody.returnValue(castInput);
-				adapter.functions.push(new IrFunction("source-cast", castBody.arguments, Dyn, castBody.blocks, null, false, Reachable, ClosureCast(sourceClosure)));
-				adapter.functions.push(new IrFunction("adapter", adapterBody.arguments, Bool, adapterBody.blocks, null, false, Reachable,
-					ClosureAdapter(sourceClosure, targetClosure)));
+				adapter.functions.push(new IrFunction("source-cast", castBody.arguments, Dyn, castBody.blocks, ClosureCast(sourceClosure), null, false, Reachable));
+				adapter.functions.push(new IrFunction("adapter", adapterBody.arguments, Bool, adapterBody.blocks, ClosureAdapter(sourceClosure, targetClosure), null, false, Reachable));
 				var varargsName = "varargs-adapter", varargsBody = new IrBuilder();
 				varargsBody.argument("closure", Dyn); varargsBody.argument("value", inlineEnum); varargsBody.returnValue(varargsBody.constBool(true));
-				adapter.functions.push(new IrFunction(varargsName, varargsBody.arguments, Bool, varargsBody.blocks, null, false, Reachable, ClosureVarargs(targetClosure)));
+				adapter.functions.push(new IrFunction(varargsName, varargsBody.arguments, Bool, varargsBody.blocks, ClosureVarargs(targetClosure), null, false, Reachable));
 				var castWrapper = new IrBuilder(), castReceiver = castWrapper.argument("closure", Dyn),
 					varargsClosure = castWrapper.instanceClosure(varargsName, castReceiver, targetClosure);
 				castWrapper.returnValue(castWrapper.toDyn(varargsClosure));
-				adapter.functions.push(new IrFunction("target-cast", castWrapper.arguments, Dyn, castWrapper.blocks, null, false, Reachable, ClosureCast(targetClosure)));
+				adapter.functions.push(new IrFunction("target-cast", castWrapper.arguments, Dyn, castWrapper.blocks, ClosureCast(targetClosure), null, false, Reachable));
 				IrVerifier.verify(adapter);
 				var mismatched = copy(adapter);
 				for (index in 0...mismatched.functions.length) if (mismatched.functions[index].name == "adapter")
-					mismatched.functions[index] = new IrFunction("adapter", adapterBody.arguments, Bool, adapterBody.blocks, null, false, Reachable,
-						ClosureAdapter(targetClosure, targetClosure));
+					mismatched.functions[index] = new IrFunction("adapter", adapterBody.arguments, Bool, adapterBody.blocks, ClosureAdapter(targetClosure, targetClosure), null, false, Reachable);
 				var mismatchError = "";
 				try IrVerifier.verify(mismatched) catch (failure:Dynamic) mismatchError = Std.string(failure);
 				if (mismatchError.indexOf("Inline value storage requires a logical cast adapter") < 0)
@@ -64,7 +62,7 @@ class InlineEnumInvariantMain {
 				var unadapted = copy(base), badCast = new IrBuilder(), badClosure = badCast.argument("closure", Dyn);
 				badCast.safeCast(badClosure, sourceClosure);
 				badCast.returnValue(badCast.constInt(42));
-				unadapted.functions.push(new IrFunction("unadaptedClosureCast", badCast.arguments, I32, badCast.blocks));
+				unadapted.functions.push(new IrFunction("unadaptedClosureCast", badCast.arguments, I32, badCast.blocks, Ordinary));
 				var badCastError = "";
 				try IrVerifier.verify(unadapted) catch (failure:Dynamic) badCastError = Std.string(failure);
 				if (badCastError.indexOf("Inline value storage requires a logical cast adapter") < 0)
@@ -73,7 +71,7 @@ class InlineEnumInvariantMain {
 				valid.argument("array", Nullable(Array(Enum("E"))));
 				valid.argument("iterator", Iterator(Enum("E")));
 				valid.returnValue(valid.constInt(42));
-				containers.functions.push(new IrFunction("logicalHandles", valid.arguments, I32, valid.blocks));
+				containers.functions.push(new IrFunction("logicalHandles", valid.arguments, I32, valid.blocks, Ordinary));
 				containers.objects.push({
 					name: "LogicalHandles",
 					isValue: false,
@@ -147,7 +145,7 @@ class InlineEnumInvariantMain {
 					}
 					if (kind != 10)
 						b.returnValue(b.constInt(42));
-					bad.functions.push(new IrFunction(name, b.arguments, result, b.blocks));
+					bad.functions.push(new IrFunction(name, b.arguments, result, b.blocks, Ordinary));
 					var error = "";
 					try
 						IrVerifier.verifyFunctions(bad, ["main" => true])

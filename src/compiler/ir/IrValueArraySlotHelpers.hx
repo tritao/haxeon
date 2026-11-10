@@ -123,7 +123,7 @@ class IrValueArraySlotHelpers {
 			var slot = shape.slots[index];
 			var read = new IrBuilder(), readArray = read.argument("array", Array(element)), readIndex = read.argument("index", I32);
 			read.returnValue(access.read(read, readArray, readIndex, slot));
-			result.push(new IrFunction(getter(index), read.arguments, slot.type, read.blocks));
+			result.push(new IrFunction(getter(index), read.arguments, slot.type, read.blocks, Ordinary));
 			var write = new IrBuilder(), writeArray = write.argument("array", Array(element)), writeIndex = write.argument("index", I32),
 				value = write.argument("value", slot.type);
 			if (slot.isPresence) {
@@ -141,7 +141,7 @@ class IrValueArraySlotHelpers {
 			} else
 				access.write(write, writeArray, writeIndex, slot, value);
 			write.returnValue(write.constVoid());
-			result.push(new IrFunction(setter(index), write.arguments, Void, write.blocks));
+			result.push(new IrFunction(setter(index), write.arguments, Void, write.blocks, Ordinary));
 		}
 		var checkNames = [for (name in checks.keys()) name];
 		checkNames.sort(Reflect.compare);
@@ -157,7 +157,7 @@ class IrValueArraySlotHelpers {
 				builder.select(yes);
 			}
 			builder.returnValue(builder.constVoid());
-			result.push(new IrFunction(name, builder.arguments, Void, builder.blocks));
+			result.push(new IrFunction(name, builder.arguments, Void, builder.blocks, Ordinary));
 		}
 		var writeNames = [for (name in optionalWrites.keys()) name];
 		writeNames.sort(Reflect.compare);
@@ -174,7 +174,7 @@ class IrValueArraySlotHelpers {
 			builder.call(setter(slot(request.path, true)), [array, index, builder.constBool(false)], Void);
 			builder.jump(done);
 			builder.select(done); builder.returnValue(builder.constVoid());
-			result.push(new IrFunction(name, builder.arguments, Void, builder.blocks));
+			result.push(new IrFunction(name, builder.arguments, Void, builder.blocks, Ordinary));
 		}
 		var scalarNames = [for (name in scalarChecks.keys()) name];
 		scalarNames.sort(Reflect.compare);
@@ -184,7 +184,7 @@ class IrValueArraySlotHelpers {
 			builder.branch(present, yes, no);
 			builder.select(yes); builder.returnValue(payload);
 			builder.select(no); builder.terminate(Throw(builder.toDyn(builder.constString("Null access"))));
-			result.push(new IrFunction(name, builder.arguments, type, builder.blocks));
+			result.push(new IrFunction(name, builder.arguments, type, builder.blocks, Ordinary));
 		}
 		return result;
 	}

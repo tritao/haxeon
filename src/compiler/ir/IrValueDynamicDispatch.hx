@@ -51,7 +51,7 @@ class IrValueDynamicDispatch {
 				}
 				target.terminator = block.terminator; blocks.push(target);
 			}
-			rewritten.push(changed ? new IrFunction(fn.name, fn.arguments, fn.result, blocks, fn.debugBindings, fn.inlineHint, fn.retention, fn.kind) : fn);
+			rewritten.push(changed ? fn.withBlocks(blocks) : fn);
 		}
 		if (needsEqual && suffixes.length > 0) rewritten.push(dispatcher(suffixes, requests, names));
 		return rewritten;
@@ -84,6 +84,6 @@ class IrValueDynamicDispatch {
 		}, fallback);
 		builder.select(fallback);
 		builder.returnValue(builder.call("__dynamic_equal", [left, right], Bool));
-		return new IrFunction(EQUAL, builder.arguments, Bool, builder.blocks);
+		return new IrFunction(EQUAL, builder.arguments, Bool, builder.blocks, Ordinary);
 	}
 }

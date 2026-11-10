@@ -21,33 +21,33 @@ class InlineEnumCarrierBoundaryMain {
  static function main():Void {
   reject("ordinary carrier argument",function(p) {
    var b=new IrBuilder();b.argument("value",IrValueLaneReference.type());b.returnValue(b.constInt(42));
-   p.functions=[new IrFunction("main",b.arguments,I32,b.blocks)];
+   p.functions=[new IrFunction("main",b.arguments,I32,b.blocks, Ordinary)];
   },"A value lane reference cannot cross an ordinary function boundary");
   reject("scalar function returning a carrier",function(p) {
    p.entryPoint=IrScalarArguments.PREFIX+"bad";
    var b=new IrBuilder();b.returnValue(b.constNull(IrValueLaneReference.type()));
-   p.functions=[new IrFunction(p.entryPoint,b.arguments,IrValueLaneReference.type(),b.blocks)];
+   p.functions=[new IrFunction(p.entryPoint,b.arguments,IrValueLaneReference.type(),b.blocks, Ordinary)];
   },"A value lane reference cannot be returned");
   for(name in ["nativeEscape",IrScalarArguments.PREFIX+"fakeNative"])reject(name,function(p) {
    p.natives=[{name:name,library:"test",symbol:"escape",arguments:[IrValueLaneReference.type()],result:Void}];
    var b=new IrBuilder();b.call(name,[b.constNull(IrValueLaneReference.type())],Void);b.returnValue(b.constInt(42));
-   p.functions=[new IrFunction("main",b.arguments,I32,b.blocks)];
+   p.functions=[new IrFunction("main",b.arguments,I32,b.blocks, Ordinary)];
   },"A value lane reference cannot escape its operation");
   reject("wrong private argument signature",function(p) {
    var name=IrScalarArguments.PREFIX+"typed",callee=new IrBuilder();callee.argument("value",I32);callee.returnValue(callee.constVoid());
    var b=new IrBuilder();b.call(name,[b.constNull(IrValueLaneReference.type())],Void);b.returnValue(b.constInt(42));
-   p.functions=[new IrFunction("main",b.arguments,I32,b.blocks),new IrFunction(name,callee.arguments,Void,callee.blocks)];
+   p.functions=[new IrFunction("main",b.arguments,I32,b.blocks, Ordinary),new IrFunction(name,callee.arguments,Void,callee.blocks, Ordinary)];
   },"Wrong IR argument type");
   reject("wrong scalar load element",function(p) {
    var b=new IrBuilder(),pointer=b.call(IrHlScalarRef.ADDRESS,[b.constInt(42)],IrHlScalarRef.type(I32));
    b.call(IrHlScalarRef.LOAD,[pointer],IrValueLaneReference.type());b.returnValue(b.constInt(42));
-   p.functions=[new IrFunction("main",b.arguments,I32,b.blocks)];
+   p.functions=[new IrFunction("main",b.arguments,I32,b.blocks, Ordinary)];
   },"Invalid scalar reference intrinsic");
   for (array in [false,true]) reject(array ? "scalar enum storage array boxed as Dynamic" : "scalar enum storage boxed as Dynamic", function(p) {
    var name="$inline-enum:Scalar";
    p.objects=[{name:name,isValue:true,base:null,interfaces:[],methods:[],fields:[{name:"tag",type:I32},{name:"scalar0",type:I32}]}];
    var b=new IrBuilder(), value=array?b.argument("array",Array(Obj(name))):b.newObject(name);
-   b.returnValue(b.toDyn(value));p.functions=[new IrFunction("main",b.arguments,Dyn,b.blocks)];
+   b.returnValue(b.toDyn(value));p.functions=[new IrFunction("main",b.arguments,Dyn,b.blocks, Ordinary)];
   }, "requires a logical Dynamic adapter");
   for (nested in [false, true]) reject(nested ? "nested carrier record boxed as Dynamic" : "carrier record boxed as Dynamic", function(p) {
    var packet:IrObject = {name:"Packet",isValue:true,base:null,interfaces:[],methods:[],fields:[{name:"reference0",type:IrValueLaneReference.type()}]};
@@ -57,12 +57,12 @@ class InlineEnumCarrierBoundaryMain {
    b.fieldSet(value,"reference0",b.constNull(IrValueLaneReference.type()));
    if (nested) { var wrapper=b.newObject("Outer"); b.fieldSet(wrapper,"packet",value); value=wrapper; }
    b.returnValue(b.toDyn(value));
-   p.functions=[new IrFunction("main",b.arguments,Dyn,b.blocks)];
+   p.functions=[new IrFunction("main",b.arguments,Dyn,b.blocks, Ordinary)];
   }, "requires a logical Dynamic adapter");
   reject("carrier record recovered from Dynamic without an adapter", function(p) {
    p.objects=[{name:"Packet",isValue:true,base:null,interfaces:[],methods:[],fields:[{name:"reference0",type:IrValueLaneReference.type()}]}];
    var b=new IrBuilder();b.safeCast(b.constNull(Dyn),Obj("Packet"));b.returnValue(b.constInt(42));
-   p.functions=[new IrFunction("main",b.arguments,I32,b.blocks)];
+   p.functions=[new IrFunction("main",b.arguments,I32,b.blocks, Ordinary)];
   }, "requires a logical cast adapter");
   for(wrongPath in [false,true])reject(wrongPath?"forged lane field path":"wrong lane array signature",function(p) {
    var element:IrType=Obj("Packet");
@@ -71,7 +71,7 @@ class InlineEnumCarrierBoundaryMain {
    var helpers=new compiler.ir.IrValueArraySlotHelpers(element,shape),name=helpers.getter(helpers.slot(["owner"]));
    if(wrongPath)name=name.substr(0,name.lastIndexOf(":")+1)+haxe.crypto.Base64.encode(haxe.io.Bytes.ofString(haxe.Json.stringify(["value"])));
    var b=new IrBuilder();b.argument("array",Array(wrongPath?element:Dyn));b.argument("index",I32);b.returnValue(b.constNull(IrValueLaneReference.type()));
-   p.entryPoint=name;p.objects=[packet];p.functions=[new IrFunction(name,b.arguments,IrValueLaneReference.type(),b.blocks)];
+   p.entryPoint=name;p.objects=[packet];p.functions=[new IrFunction(name,b.arguments,IrValueLaneReference.type(),b.blocks, Ordinary)];
   },"Invalid lane carrier accessor signature");
  }
 }

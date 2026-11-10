@@ -44,7 +44,7 @@ class InlineEnumEqualityAbiMain {
 			};
 			b.returnValue(result);
 			program.functions.push(new IrFunction(field == "tag" ? tagName : field == "number" ? numberName : ownerName,
-				b.arguments, result.type, b.blocks));
+				b.arguments, result.type, b.blocks, Ordinary));
 		}
 		for (name in [equality, reflective]) {
 			var b = new IrBuilder(), a = b.argument("first", storage), z = b.argument("second", storage),
@@ -57,7 +57,7 @@ class InlineEnumEqualityAbiMain {
 			b.select(payload);
 			b.branch(b.equal(b.call(numberName, [a], I32), b.call(numberName, [z], I32)), owners, different);
 			b.select(owners); b.returnValue(b.equal(b.call(ownerName, [a], Obj(owner.name)), b.call(ownerName, [z], Obj(owner.name))));
-			program.functions.push(new IrFunction(name, b.arguments, Bool, b.blocks));
+			program.functions.push(new IrFunction(name, b.arguments, Bool, b.blocks, Ordinary));
 		}
 		var prepare = new IrBuilder(), reference = prepare.newObject(owner.name);
 		prepare.fieldSet(reference, "id", prepare.constInt(2));
@@ -67,7 +67,7 @@ class InlineEnumEqualityAbiMain {
 		set(prepare, "empty", access.construct(prepare, 0, []));
 		set(prepare, "nil", access.nullValue(prepare));
 		prepare.returnValue(prepare.constVoid());
-		program.functions.push(new IrFunction("prepare", prepare.arguments, Void, prepare.blocks, null, false, Expose));
+		program.functions.push(new IrFunction("prepare", prepare.arguments, Void, prepare.blocks, Ordinary, null, false, Expose));
 		for (dynamicEscape in [false, true]) {
 			var b = new IrBuilder(), count = b.argument("count", I32), initial = b.currentBlock().id,
 				header = b.createBlock(), body = b.createBlock(), done = b.createBlock(), failure = b.createBlock(),
@@ -96,10 +96,10 @@ class InlineEnumEqualityAbiMain {
 			iterations.push({block:b.currentBlock().id, value:b.add(index, b.constInt(1))});
 			sums.push({block:b.currentBlock().id, value:b.add(total, b.constInt(42))}); b.jump(header);
 			b.select(done); b.returnValue(total); b.select(failure); b.returnValue(b.constInt(-1));
-			program.functions.push(new IrFunction(dynamicEscape ? "dynamicCensus" : "typedCensus", b.arguments, I32, b.blocks, null, false, Expose));
+			program.functions.push(new IrFunction(dynamicEscape ? "dynamicCensus" : "typedCensus", b.arguments, I32, b.blocks, Ordinary, null, false, Expose));
 		}
 		var main = new IrBuilder(); main.returnValue(main.constInt(42));
-		program.functions.push(new IrFunction("main", main.arguments, I32, main.blocks));
+		program.functions.push(new IrFunction("main", main.arguments, I32, main.blocks, Ordinary));
 		program.functions = program.functions.concat(compiler.ir.IrInlineEnumEscapes.functions(program.enums, table, planner));
 		compiler.ir.IrVerifier.verify(program);
 		compiler.ir.IrValuePhiScalarization.rewrite(program);
@@ -139,7 +139,7 @@ class InlineEnumEqualityAbiMain {
 			}
 			entry.jump(success); entry.select(success); entry.call("exit", [entry.constInt(42)], Void); entry.returnValue(entry.constVoid());
 			entry.select(failure); entry.call("exit", [entry.constInt(1)], Void); entry.returnValue(entry.constVoid());
-			program.functions.push(new IrFunction("entry", entry.arguments, Void, entry.blocks)); program.entryPoint = "entry";
+			program.functions.push(new IrFunction("entry", entry.arguments, Void, entry.blocks, Ordinary)); program.entryPoint = "entry";
 		}
 		var backendTarget:compiler.backend.Backend.BackendTarget = target == HashLink ? HashLink : target == Wasm32 ? Wasm32 : WasmGc,
 			bytes = target == HashLink ? new compiler.backend.hl.HlBackend().compile(program, {target:backendTarget, debugNames:true}).bytes

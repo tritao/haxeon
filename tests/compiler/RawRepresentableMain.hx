@@ -177,7 +177,7 @@ class RawRepresentableMain {
 			b.select(bad);
 			b.call("rawExit", [b.constInt(1)], Void);
 			b.returnValue(b.constVoid());
-			p.functions.push(new IrFunction("rawEntry", b.arguments, Void, b.blocks));
+			p.functions.push(new IrFunction("rawEntry", b.arguments, Void, b.blocks, Ordinary));
 			p.entryPoint = "rawEntry";
 		}
 		var bytes = target == "hl" ? new compiler.backend.hl.HlBackend().compile(p, {target: HashLink, debugNames: true})

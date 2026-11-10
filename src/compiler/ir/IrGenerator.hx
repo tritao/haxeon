@@ -241,7 +241,7 @@ class IrGenerator {
 				built = SsaBuilder.build(cfg);
 			var retention:compiler.ir.IrFunction.IrRetention = fn.isExposed == true ? Expose : fn.isKept == true ? Keep : Reachable;
 			return fn.isInline == true
-				|| retention != Reachable ? new IrFunction(built.name, built.arguments, built.result, built.blocks, built.debugBindings, fn.isInline == true,
+				|| retention != Reachable ? new IrFunction(built.name, built.arguments, built.result, built.blocks, built.kind, built.debugBindings, fn.isInline == true,
 					retention) : built;
 		} catch (error:String) {
 			throw 'CFG generation failed for ${fn.name}: $error';

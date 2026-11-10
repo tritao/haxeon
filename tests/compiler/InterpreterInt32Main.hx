@@ -25,7 +25,7 @@ class InterpreterInt32Main {
 		];
 		var p = new IrProgram("main");
 		for (index in 0...values.length) {
-			var fn = new IrFunction("main", b.arguments, I32, b.blocks);
+			var fn = new IrFunction("main", b.arguments, I32, b.blocks, Ordinary);
 			// Each checked value has its definition in this shared acyclic instruction block.
 			b.currentBlock().terminator = null;
 			b.returnValue(values[index]);

@@ -146,7 +146,7 @@ class ObjectReflection {
 			builder.returnValue(builder.call(helper, [typed].concat(arguments), native.result));
 		});
 		builder.returnValue(builder.call(fallback, [object].concat(arguments), native.result));
-		return new IrFunction(native.name, builder.arguments, native.result, builder.blocks);
+		return new IrFunction(native.name, builder.arguments, native.result, builder.blocks, Ordinary);
 	}
 
 	/** Reflectable layouts with inherited fields first, ordered so subclasses are tested before their bases. */
@@ -238,7 +238,7 @@ class ObjectReflection {
 			object = builder.argument("object", Dyn);
 		forEachLayout(builder, object, layouts, (layout, _) -> builder.returnValue(builder.constInt(layout.fields.length)));
 		builder.returnValue(builder.constInt(0));
-		return new IrFunction(name, builder.arguments, I32, builder.blocks);
+		return new IrFunction(name, builder.arguments, I32, builder.blocks, Ordinary);
 	}
 
 	static function deleteField(name:String, layouts:Array<ReflectedLayout>, functions:Array<IrFunction>):IrFunction
@@ -339,7 +339,7 @@ class ObjectReflection {
 			for (parameter in parameters)
 				layoutBuilder.argument(parameter.name, parameter.type)
 		]);
-		functions.push(new IrFunction(layoutName, layoutBuilder.arguments, result, layoutBuilder.blocks));
+		functions.push(new IrFunction(layoutName, layoutBuilder.arguments, result, layoutBuilder.blocks, Ordinary));
 		return layoutName;
 	}
 
@@ -359,7 +359,7 @@ class ObjectReflection {
 			builder.returnValue(builder.call(layoutName, [typed].concat(arguments), result));
 		});
 		builder.returnValue(fallback(builder));
-		return new IrFunction(name, builder.arguments, result, builder.blocks);
+		return new IrFunction(name, builder.arguments, result, builder.blocks, Ordinary);
 	}
 
 	/** Runs `body` on the value cast to the first matching layout; `body` must terminate its block. */

@@ -27,7 +27,7 @@ class IrCheckedDynamicCasts {
 			builder.returnValue(builder.safeCast(input, type));
 			builder.select(rejected);
 			builder.terminate(Throw(builder.toDyn(builder.constString('Invalid cast to $typeName'))));
-			generated.push(new IrFunction(name, builder.arguments, type, builder.blocks));
+			generated.push(new IrFunction(name, builder.arguments, type, builder.blocks, Ordinary));
 			return name;
 		}
 		var rewritten:Array<IrFunction> = [];
@@ -66,7 +66,7 @@ class IrCheckedDynamicCasts {
 				target.terminator = block.terminator;
 				blocks.push(target);
 			}
-			rewritten.push(changed ? new IrFunction(fn.name, fn.arguments, fn.result, blocks, fn.debugBindings, fn.inlineHint, fn.retention, fn.kind) : fn);
+			rewritten.push(changed ? fn.withBlocks(blocks) : fn);
 		}
 		return rewritten.concat(generated);
 	}

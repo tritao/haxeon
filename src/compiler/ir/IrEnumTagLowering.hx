@@ -69,7 +69,7 @@ class IrEnumTagLowering {
 				default: called;
 			};
 			b.returnValue(returned);
-			generated.push(new IrFunction(wrapper, b.arguments, mapped(result), b.blocks));
+			generated.push(new IrFunction(wrapper, b.arguments, mapped(result), b.blocks, Ordinary));
 			nativeWrappers.set(name, wrapper);
 		}
 		for (native in program.natives)
@@ -205,7 +205,7 @@ class IrEnumTagLowering {
 						result;
 					}
 				];
-				var rewrittenFunction = new IrFunction(fn.name, [for (argument in fn.arguments) use(argument)], mapped(fn.result), blocks, [
+				var rewrittenFunction = new IrFunction(fn.name, [for (argument in fn.arguments) use(argument)], mapped(fn.result), blocks, fn.kind, [
 					for (binding in fn.debugBindings)
 						{
 							identity: binding.identity,
@@ -215,7 +215,7 @@ class IrEnumTagLowering {
 							scopeStart: binding.scopeStart,
 							scopeEnd: binding.scopeEnd
 						}
-				], fn.inlineHint, fn.retention, fn.kind);
+				], fn.inlineHint, fn.retention);
 				changedFunctions.push(rewrittenFunction);
 				rewrittenFunction;
 			}

@@ -29,7 +29,7 @@ class ManagedBytesMain {
 		var builder = new IrBuilder(),
 			argument = builder.argument("bytes", ManagedBytes);
 		builder.returnValue(argument);
-		var fn = new IrFunction("identity", builder.arguments, ManagedBytes, builder.blocks),
+		var fn = new IrFunction("identity", builder.arguments, ManagedBytes, builder.blocks, Ordinary),
 			restoredFunction = IrFunctionStateCodec.decode(IrFunctionStateCodec.encode(fn));
 		expect(restoredFunction.result == ManagedBytes && restoredFunction.arguments[0].type == ManagedBytes,
 			"managed byte signatures must persist in incremental function state");

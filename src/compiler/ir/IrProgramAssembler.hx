@@ -119,7 +119,7 @@ class IrProgramAssembler {
 		for (index in 1...functions.length)
 			lastCall = boot.call(functions[index].name, [], Void);
 		boot.returnValue(lastCall);
-		functions.unshift(new IrFunction("__init", [], Void, boot.blocks));
+		functions.unshift(new IrFunction("__init", [], Void, boot.blocks, Ordinary));
 		return functions;
 	}
 
@@ -525,7 +525,7 @@ class IrProgramAssembler {
 				var builder = new IrBuilder();
 				builder.argument("this", Obj(object.name));
 				builder.returnValue(builder.constInt(count));
-				allFunctions.push(new IrFunction(object.name + ".$haxeonObservableFieldCount", builder.arguments, I32, builder.blocks));
+				allFunctions.push(new IrFunction(object.name + ".$haxeonObservableFieldCount", builder.arguments, I32, builder.blocks, Ordinary));
 			}
 		if (objects != null)
 			allFunctions = IrEnumDynamicDispatch.rewrite(allFunctions);
@@ -551,7 +551,7 @@ class IrProgramAssembler {
 			var exported = [for (name in exportedFunctions) name => true];
 			allFunctions = [
 				for (fn in allFunctions)
-					exported.exists(fn.name) ? new IrFunction(fn.name, fn.arguments, fn.result, fn.blocks, fn.debugBindings, fn.inlineHint, Expose, fn.kind) : fn
+					exported.exists(fn.name) ? new IrFunction(fn.name, fn.arguments, fn.result, fn.blocks, fn.kind, fn.debugBindings, fn.inlineHint, Expose) : fn
 			];
 		}
 		if (valueTarget != null) {
@@ -955,7 +955,7 @@ class IrProgramAssembler {
 		if ((switch (mainFunction.result) { case I32: true; default: false; }))
 			result = entry.call("__exit", [result], Void);
 		entry.returnValue(result);
-		program.functions.push(new IrFunction("__entry", [], Void, entry.blocks));
+		program.functions.push(new IrFunction("__entry", [], Void, entry.blocks, Ordinary));
 		IrEnumTagLowering.escapes(program);
 		return program;
 	}

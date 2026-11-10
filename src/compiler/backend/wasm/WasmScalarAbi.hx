@@ -537,10 +537,10 @@ class WasmScalarAbi {
 		result.functions = [for (fn in program.functions) rewriteFunction(fn)];
 		for (fn in program.functions) {
 			var direct = directClones.get(fn.name);
-			if (direct != null) result.functions.push(rewriteFunction(new IrFunction(direct, fn.arguments, fn.result, fn.blocks,
+			if (direct != null) result.functions.push(rewriteFunction(new IrFunction(direct, fn.arguments, fn.result, fn.blocks, Ordinary,
 				fn.debugBindings, fn.inlineHint)));
 			var clone = methodClones.get(fn.name);
-			if (clone != null) result.functions.push(rewriteFunction(new IrFunction(clone, fn.arguments, fn.result, fn.blocks,
+			if (clone != null) result.functions.push(rewriteFunction(new IrFunction(clone, fn.arguments, fn.result, fn.blocks, Ordinary,
 				fn.debugBindings, fn.inlineHint)));
 		}
 		result.objects = program.objects; result.interfaces = program.interfaces; result.enums = program.enums;
@@ -733,7 +733,7 @@ class WasmScalarAbi {
 			replacement.terminator = terminator;
 			blocks.push(replacement);
 		}
-		return new IrFunction(fn.name, args, fn.result, blocks, fn.debugBindings, fn.inlineHint, fn.retention, fn.kind);
+		return new IrFunction(fn.name, args, fn.result, blocks, fn.kind, fn.debugBindings, fn.inlineHint, fn.retention);
 	}
 
 	function expandVirtualCall(block:IrBlock, origin:Located<IrInstruction>, out:IrValue, receiver:IrValue, method:String,

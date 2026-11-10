@@ -188,7 +188,7 @@ class HlFunctionCache {
 				stableIds.set(entry.to, idsOf.get(entry.from));
 			var body = bodies.get(entry.from);
 			if (body != null)
-				functions.set(entry.to, new IrFunction(entry.to, body.arguments, body.result, body.blocks, body.debugBindings, body.inlineHint,
+				functions.set(entry.to, new IrFunction(entry.to, body.arguments, body.result, body.blocks, body.kind, body.debugBindings, body.inlineHint,
 					body.retention));
 			if (signaturesOf.exists(entry.from))
 				signatures.set(entry.to, signaturesOf.get(entry.from));

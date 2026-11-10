@@ -13,7 +13,7 @@ class EnumTagRewriteMain {
 	static function plain(name:String, index:Int):IrFunction {
 		var b = new IrBuilder();
 		b.returnValue(b.add(b.constInt(index), b.constInt(42)));
-		return new IrFunction(name, b.arguments, I32, b.blocks);
+		return new IrFunction(name, b.arguments, I32, b.blocks, Ordinary);
 	}
 
 	static function main():Void {
@@ -25,16 +25,16 @@ class EnumTagRewriteMain {
 			b.add(number, b.constInt(1));
 			b.returnValue(mode);
 			var mixed = new IrFunction("mixed",
-				b.arguments, Enum("Mode"), b.blocks), scalar = b.blocks[0].instructions[0];
+				b.arguments, Enum("Mode"), b.blocks, Ordinary), scalar = b.blocks[0].instructions[0];
 			p.functions.push(mixed);
 			var descriptor = new IrBuilder();
 			descriptor.returnValue(descriptor.typeValue(Function([Enum("Mode")], Array(Enum("Mode")))));
-			p.functions.push(new IrFunction("descriptor", descriptor.arguments, TypeRef, descriptor.blocks));
+			p.functions.push(new IrFunction("descriptor", descriptor.arguments, TypeRef, descriptor.blocks, Ordinary));
 			var escape = new IrBuilder(), input = escape.argument("mode", Enum("Mode"));
 			escape.constInt(7);
 			escape.call("accept", [input], Void);
 			escape.returnValue(escape.constInt(42));
-			p.functions.push(new IrFunction("escape", escape.arguments, I32, escape.blocks));
+			p.functions.push(new IrFunction("escape", escape.arguments, I32, escape.blocks, Ordinary));
 			p.natives = [{name: "accept", library: "test", symbol: "accept", arguments: [Dyn], result: Void}];
 
 			IrEnumTagLowering.run(p);
@@ -92,7 +92,7 @@ class EnumTagRewriteMain {
 		bad.emit(instruction);
 		bad.returnValue(bad.constInt(42));
 		var malformed = new IrProgram("main");
-		malformed.functions = [new IrFunction("main", bad.arguments, I32, bad.blocks)];
+		malformed.functions = [new IrFunction("main", bad.arguments, I32, bad.blocks, Ordinary)];
 		var message = "";
 		try IrEnumTagStorage.verify(malformed) catch (error:Dynamic) message = Std.string(error);
 		if (message.indexOf('requires a payload-free enum "Missing"')

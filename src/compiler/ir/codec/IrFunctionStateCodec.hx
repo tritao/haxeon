@@ -250,7 +250,7 @@ class IrFunctionStateCodec {
 			}
 			if (input.position != bytes.length)
 				throw "Trailing IR function state data";
-			return new IrFunction(name, arguments, result, blocks, debugBindings, inlineHint, retention, kind);
+			return new IrFunction(name, arguments, result, blocks, kind, debugBindings, inlineHint, retention);
 		} catch (error:haxe.io.Eof) {
 			throw "Truncated IR function state";
 		}

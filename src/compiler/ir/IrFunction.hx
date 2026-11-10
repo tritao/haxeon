@@ -46,7 +46,7 @@ class IrFunction {
 	public final retention:IrRetention;
 	public final kind:IrFunctionKind;
 
-	public function new(name, arguments, result, blocks, ?debugBindings, inlineHint = false, retention:IrRetention = Reachable, kind:IrFunctionKind = Ordinary) {
+	public function new(name, arguments, result, blocks, kind:IrFunctionKind, ?debugBindings, inlineHint = false, retention:IrRetention = Reachable) {
 		this.name = name;
 		this.arguments = arguments;
 		this.result = result;
@@ -56,4 +56,8 @@ class IrFunction {
 		this.retention = retention;
 		this.kind = kind;
 	}
+
+	/** Replace the body while preserving the function's declared metadata. */
+	public function withBlocks(blocks:Array<IrBlock>, ?bindings:Array<IrDebugBinding>):IrFunction
+		return new IrFunction(name, arguments, result, blocks, kind, bindings == null ? debugBindings : bindings, inlineHint, retention);
 }

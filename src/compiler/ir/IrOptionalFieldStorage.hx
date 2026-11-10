@@ -92,7 +92,7 @@ class IrOptionalFieldStorage {
 			var rootReader = new IrBuilder(),
 				rootOwner = rootReader.argument("owner", Obj(plan.owner));
 			rootReader.returnValue(readValue(rootReader, plan, rootOwner, Obj(element), []));
-			all.push(new IrFunction(placeGetterName(plan.owner, plan.field, []), rootReader.arguments, Obj(element), rootReader.blocks));
+			all.push(new IrFunction(placeGetterName(plan.owner, plan.field, []), rootReader.arguments, Obj(element), rootReader.blocks, Ordinary));
 			appendPlaceSetters(all, plan, Obj(element), []);
 		}
 		var originals:Map<String, IrFunction> = [for (fn in functions) fn.name => fn],
@@ -229,7 +229,7 @@ class IrOptionalFieldStorage {
 			target.terminator = terminator;
 			blocks.push(target);
 		}
-		return new IrFunction(name, [owner].concat(fn.arguments.slice(1)), fn.result, blocks, [], fn.inlineHint);
+		return new IrFunction(name, [owner].concat(fn.arguments.slice(1)), fn.result, blocks, Ordinary, [], fn.inlineHint);
 	}
 
 	function materializeAlias(value:IrValue, aliases:Map<Int, Array<String>>, plan:OptionalFieldPlan, owner:IrValue, target:IrBlock,
@@ -324,14 +324,14 @@ class IrOptionalFieldStorage {
 						var reader = new IrBuilder(),
 							source = reader.argument("owner", Obj(plan.owner));
 						reader.returnValue(readValue(reader, plan, source, field.type, childPath));
-						functions.push(new IrFunction(placeGetterName(plan.owner, plan.field, childPath), reader.arguments, field.type, reader.blocks));
+						functions.push(new IrFunction(placeGetterName(plan.owner, plan.field, childPath), reader.arguments, field.type, reader.blocks, Ordinary));
 						switch field.type {
 							case Nullable(Obj(child)) if (isValue(child)):
 								var unwrapped = new IrBuilder(),
 									sourceOwner = unwrapped.argument("owner", Obj(plan.owner));
 								unwrapped.returnValue(readValue(unwrapped, plan, sourceOwner, Obj(child), childPath));
 								functions.push(new IrFunction(placeUnwrappedGetterName(plan.owner, plan.field, childPath), unwrapped.arguments, Obj(child),
-									unwrapped.blocks));
+									unwrapped.blocks, Ordinary));
 							default:
 						}
 						var builder = new IrBuilder(),
@@ -339,7 +339,7 @@ class IrOptionalFieldStorage {
 							value = builder.argument("value", field.type);
 						writeValue(builder, plan, owner, field.type, childPath, value);
 						builder.returnValue(builder.constVoid());
-						functions.push(new IrFunction(placeSetterName(plan.owner, plan.field, childPath), builder.arguments, Void, builder.blocks));
+						functions.push(new IrFunction(placeSetterName(plan.owner, plan.field, childPath), builder.arguments, Void, builder.blocks, Ordinary));
 					}
 					appendPlaceSetters(functions, plan, field.type, childPath);
 				}
@@ -432,7 +432,7 @@ class IrOptionalFieldStorage {
 			replacement.terminator = block.terminator;
 			blocks.push(replacement);
 		}
-		return changed ? new IrFunction(fn.name, fn.arguments, fn.result, blocks, fn.debugBindings, fn.inlineHint, fn.retention, fn.kind) : fn;
+		return changed ? fn.withBlocks(blocks) : fn;
 	}
 
 	function needsRewrite(fn:IrFunction):Bool {
@@ -472,7 +472,7 @@ class IrOptionalFieldStorage {
 			builder.returnValue(builder.constVoid());
 		} else
 			builder.returnValue(readValue(builder, plan, owner, plan.type, []));
-		return new IrFunction(accessorName(plan, write), builder.arguments, write ? Void : plan.type, builder.blocks);
+		return new IrFunction(accessorName(plan, write), builder.arguments, write ? Void : plan.type, builder.blocks, Ordinary);
 	}
 
 	function readValue(builder:IrBuilder, plan:OptionalFieldPlan, owner:IrValue, type:IrType, path:Array<String>):IrValue {

@@ -125,7 +125,7 @@ class SourceEnumTagMain {
 			entry.select(bad);
 			entry.call("cacheExit", [entry.constInt(1)], Void);
 			entry.returnValue(entry.constVoid());
-			program.functions.push(new IrFunction("cacheEntry", entry.arguments, Void, entry.blocks));
+			program.functions.push(new IrFunction("cacheEntry", entry.arguments, Void, entry.blocks, Ordinary));
 			program.entryPoint = "cacheEntry";
 		}
 		compiler.ir.IrVerifier.verify(program);
