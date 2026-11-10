@@ -114,6 +114,8 @@ class BackendAssembly {
 			assemblyIr.positionalPlaces = ir.positionalPlaces;
 			assemblyIr.positionalSources = ir.positionalSources;
 			compiler.ir.IrScalarClosures.rewrite(assemblyIr);
+			// The retained assembly adapters can introduce fresh nominal-tag escapes.
+			compiler.ir.IrEnumTagLowering.escapes(assemblyIr);
 		}
 		// Lambdas are named by their position among their siblings. When an edit moved those names onto other functions, give
 		// the running module's lambdas the names their functions have now (see `LambdaAlignment`), so the plan compares, and

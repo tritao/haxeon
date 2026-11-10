@@ -1,3 +1,22 @@
+enum ClosureMode { Fast; Slow; }
+
+struct Tiny {
+	public var x:Int;
+	public function new(x:Int) this.x = x;
+}
+
+class ClosureProbe {
+	static function apply(value:Tiny, mode:ClosureMode):Int
+		return value.x + (mode == Slow ? 1 : 0);
+
+	public static function test():Bool {
+		var callback:(Tiny, ClosureMode)->Int = apply;
+		var erased:Dynamic = callback;
+		var restored:(Tiny, ClosureMode)->Int = cast erased;
+		return restored(new Tiny(41), Slow) == 42;
+	}
+}
+
 enum Mode implements Hashable { Off; On; Paused; }
 enum OtherMode { Other; }
 enum Phantom<T> { Present; Missing; }
@@ -73,6 +92,7 @@ class Probe {
 }
 
 function main():Int {
+	if (!ClosureProbe.test()) return 32;
 	if (sizeof<TaggedPair>() != 8 || alignof<TaggedPair>() != 4 || offsetof<TaggedPair>("count") != 4) return 1;
 	Probe.prepare();
 	if (Probe.perform(8) != 336) return 2;

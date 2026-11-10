@@ -5169,3 +5169,29 @@ negative Int/String conversion checks. The framework smoke test including
 4,000-node layout pressure passes. The compiler suite passes **856/856** under the shared heavy-build lock
 with eight workers. Production binary-size and paired allocation results
 are collected with the next Tier 2 batch against `fcfd253b`.
+
+### Complete nominal-tag escapes in retained Wasm assemblies (2026-11-10)
+
+A callback taking both a value struct and a nullary enum, converted through
+`Dynamic` and restored, compiled on HashLink but failed while preparing the
+retained HashLink assembly of a Wasm compilation. The source-enum fixture on
+`d8b322c2` reproduced:
+
+```
+IR verification failed for $scalar-closure:erased-call:5fa30522a1cd0352dc17fa565f102625: Unknown IR call "$enum-tag:unbox:ClosureMode"
+```
+
+The retained assembly creates its scalar closure adapters after frontend tag
+escape completion. Complete tag escapes on that assembly copy immediately after
+creating those adapters, as the target-specific Wasm adapters already do. This
+keeps the original logical program available to the Wasm backend.
+
+The extended `enum-tag-storage` fixture covers the mixed struct/enum closure
+round trip. Its source-enum matrix passes on HashLink, Wasm32 and Wasm GC, with
+inlining off/on. Existing tracked tag-loop windows still allocate **zero objects
+for 8/1,024 iterations**; HashLink tag arrays retain **2/2 objects and 152/4,392
+bytes** for 8/1,024 elements. The explicit Dynamic closure round trip is a
+correctness check outside those allocation windows. The compiler suite passes
+**856/856** with eight workers, and self-hosting reaches a fixed point. Both
+heavy checks run under the shared build lock. Production size and paired runtime
+results belong to the following enum-conversion batch.
