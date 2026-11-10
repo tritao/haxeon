@@ -9,7 +9,7 @@ tmp=$(mktemp -d "${TMPDIR:-/tmp}/haxeon-ui-value-parity.XXXXXXXX")
 trap 'rm -rf -- "$tmp"' EXIT
 compiler=${HAXEON_COMPILER_HL:-"$tmp/compiler.hl"}
 if [[ ! -f "$compiler" ]]; then
-    "$haxe" -cp "$root/src" -hl "$compiler" -main compiler.tools.HaxeonCompiler
+    "$haxe" -cp "$root/src" -cp "$root/lib/haxeon-io" -hl "$compiler" -main compiler.tools.HaxeonCompiler
 fi
 cat > "$tmp/memory.json" <<'JSON'
 {"name":"nativekit-haxeon-linear-memory","version":1,"address_model":"wasm32","page_size":65536,"host_base":0,"host_limit":134217728,"guest_base":134217728,"guest_limit":268435456,"memory_size":268435456}
