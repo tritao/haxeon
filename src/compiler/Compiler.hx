@@ -144,6 +144,9 @@ typedef CompileMetrics = {
 	/** The functions each typing pass of the frontend typed, in order: a pass that continues another types only what is new. */
 	final frontendPassFunctions:Array<Int>;
 
+	/** Where each frontend pass spent its time and allocation, one line per pass. */
+	final frontendPassReports:Array<String>;
+
 	final semanticAssemblyMs:Float;
 	final semanticAliasMs:Float;
 	final semanticCanonicalizationMs:Float;
@@ -841,6 +844,7 @@ class Compiler {
 					graphInitializationMs: 0.0,
 					frontendRestarts: [],
 					frontendPassFunctions: [],
+					frontendPassReports: [],
 					semanticAssemblyMs: 0.0,
 					semanticAliasMs: 0.0,
 					semanticCanonicalizationMs: 0.0,

@@ -187,6 +187,8 @@ class CompilerDriver {
 				+ milliseconds(artifactsWrittenAt - backendDoneAt)
 				+ (stampedAt < 0 ? "" : " stamp=" + milliseconds(stampedAt - requestStartedAt) + (deferFullModule ? " (patch first)" : "")));
 			report(phaseReport(result, backendDoneAt - backendStartedAt));
+			for (line in result.metrics.frontendPassReports)
+				report("frontend " + line);
 			report(allocationReport("compiler allocation phases:", result.metrics.allocationPhases));
 			report(allocationReport("driver allocation phases:", [
 				AllocationMeter.delta("prepare", allocationAtStart, allocationAfterPrepare),

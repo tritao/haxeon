@@ -57,6 +57,7 @@ typedef FrontendResult = {
 	final graphInitializationMs:Float;
 	final frontendRestarts:Array<String>;
 	final frontendPassFunctions:Array<Int>;
+	final frontendPassReports:Array<String>;
 	final frontendDoneAt:Float;
 	final typingLoweringDoneAt:Float;
 	final irAssemblyDoneAt:Float;
@@ -78,7 +79,11 @@ class FrontendCompilation {
 			retyped:Array<String>
 		}):FrontendResult {
 		seedRepresentationModules(context);
-		var allocationAtStart = AllocationMeter.sample();
+		var allocationAtStart = AllocationMeter.sample(),
+			passStartedAt = Sys.time() * 1000.0,
+			parseMsAtStart = context.parseMs,
+			parseBytesAtStart = context.parseBytes,
+			parseCountAtStart = context.parseCount;
 		var modules = context.modules,
 			graph = context.graph,
 			objectCache = context.objectCache,
@@ -162,6 +167,7 @@ class FrontendCompilation {
 		var frontendDoneAt = Sys.time() * 1000.0;
 		var allocationAfterSemantic = AllocationMeter.sample();
 		var allocationAfterAnalysis = allocationAfterSemantic;
+		var analysisDoneAt = frontendDoneAt, typingDoneAt = frontendDoneAt;
 		var allocationAfterProgramTyping = allocationAfterSemantic;
 		var typedNew:TypedProgram, typerMetrics:TyperPhaseMetrics, generator:IrGenerator;
 		var runtimeDependencies:Array<{var functionName:String; var target:String;}> = [];
@@ -185,10 +191,12 @@ class FrontendCompilation {
 			else
 				semantic = SemanticProgram.analyze(canonicalProgram);
 			allocationAfterAnalysis = AllocationMeter.sample();
+			analysisDoneAt = Sys.time() * 1000.0;
 			var typedResult = Typer.typeAnalyzedMeasured(semantic, selected, context.nativeSignatures(), entryPoint, genericSpecializations,
 				context.nativeLayoutTarget(), canReuseSemantic ? context.lastTypedProgram : null, semanticAssembly.facts, lowerToIr,
 				retainedFromPrevious(context, names, selected, lowerToIr, [for (classDecl in canonicalProgram.classes) classDecl.name => true]));
 			allocationAfterProgramTyping = AllocationMeter.sample();
+			typingDoneAt = Sys.time() * 1000.0;
 			typedNew = typedResult.program;
 			context.frontendPassFunctions.push(typedNew.functions.length);
 			generator = new IrGenerator(compiler.ir.ProgramFacts.of(typedNew), context.targetProfile());
@@ -508,6 +516,14 @@ class FrontendCompilation {
 				}
 			}
 		regenerated = uniqueSorted(regenerated);
+		context.frontendPassReports.push(passReport(context.frontendPassReports.length + 1, [
+			stage("graph", frontendGraphDoneAt - passStartedAt, AllocationMeter.delta("graph", allocationAtStart, allocationAfterGraph)),
+			stage("semantic-assembly", frontendDoneAt - frontendGraphDoneAt, AllocationMeter.delta("semantic", allocationAfterGraph, allocationAfterSemantic)),
+			stage("signature-inference", analysisDoneAt - frontendDoneAt, AllocationMeter.delta("analysis", allocationAfterSemantic, allocationAfterAnalysis)),
+			stage("typing", typingDoneAt - analysisDoneAt, AllocationMeter.delta("typing", allocationAfterAnalysis, allocationAfterProgramTyping)),
+			stage("ir-generation", Sys.time() * 1000.0 - typingDoneAt,
+				AllocationMeter.delta("ir-generation", allocationAfterProgramTyping, AllocationMeter.sample()))
+		], context.parseMs - parseMsAtStart, context.parseBytes - parseBytesAtStart, context.parseCount - parseCountAtStart));
 		// A runtime helper found while typing joins the program after this pass. What was typed so far is published, so the next
 		// pass is an incremental one over it: it has the newly reachable modules to type, and the work of this pass carries over.
 		if (includeTypedRuntimeDependencies(context, runtimeDependencies, typedNew.functions, owners, names, rollbackModules)) {
@@ -557,6 +573,7 @@ class FrontendCompilation {
 				graphInitializationMs: graphInitializationMs,
 				frontendRestarts: context.frontendRestarts,
 				frontendPassFunctions: context.frontendPassFunctions,
+				frontendPassReports: context.frontendPassReports,
 				frontendDoneAt: frontendDoneAt,
 				typingLoweringDoneAt: typingLoweringDoneAt,
 				irAssemblyDoneAt: typingLoweringDoneAt,
@@ -744,6 +761,7 @@ class FrontendCompilation {
 			graphInitializationMs: graphInitializationMs,
 			frontendRestarts: context.frontendRestarts,
 			frontendPassFunctions: context.frontendPassFunctions,
+				frontendPassReports: context.frontendPassReports,
 			frontendDoneAt: frontendDoneAt,
 			typingLoweringDoneAt: typingLoweringDoneAt,
 			irAssemblyDoneAt: irAssemblyDoneAt,
@@ -1318,6 +1336,24 @@ class FrontendCompilation {
 			return null;
 		var className = name.substr(0, name.length - INITIALIZER_SUFFIX.length);
 		return owners.get(className + ".new");
+	}
+
+	static function stage(name:String, ms:Float, allocation:PhaseAllocation):{name:String, ms:Float, allocation:PhaseAllocation}
+		return {name: name, ms: ms, allocation: allocation};
+
+	/**
+	 * One frontend pass as a line: for each stage its time, bytes, objects and collections (with their time), and the parsing done inside
+	 * the pass (it happens in the graph and in semantic assembly, so it is shown apart rather than as a stage).
+	 */
+	static function passReport(number:Int, stages:Array<{name:String, ms:Float, allocation:PhaseAllocation}>, parseMs:Float, parseBytes:Float,
+			parseCount:Float):String {
+		var parts = ['pass$number'];
+		for (stage in stages) {
+			var a = stage.allocation;
+			parts.push('${stage.name}=${Math.round(stage.ms)}ms/${Math.round(a.bytes / 1048576.0)}MB/${Math.round(a.count / 1000.0)}k/${Std.int(a.collections)}gc(${Math.round(a.markMicros / 1000.0)}ms)');
+		}
+		parts.push('parse-within=${Math.round(parseMs)}ms/${Math.round(parseBytes / 1048576.0)}MB/${Math.round(parseCount / 1000.0)}k');
+		return parts.join(" ");
 	}
 
 	static function includeTypedRuntimeDependencies(context:CompilationContext, dependencies:Array<{var functionName:String; var target:String;}>,
