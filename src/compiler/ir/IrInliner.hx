@@ -211,6 +211,9 @@ class IrInliner {
 	final entryPoint:String;
 
 	/** The program's objects and the direct subclasses of each (for resolving a virtual call when every override agrees). */
+	/** The most classes a method call's resolution looks at: the receiver's class and the classes that extend it. */
+	static inline final MaxSubclassWalk = 256;
+
 	final table:IrObjectTable;
 
 	/** Which function each class and method resolve to, shared with the other passes that resolve calls. */
@@ -650,7 +653,10 @@ class IrInliner {
 			for (name in resolution.subtreeOf(typeName))
 				consulted.set(name, true);
 		}
-		return resolution.uniqueImplementation(typeName, method);
+		// A call on a class with more than MaxSubclassWalk classes below it stays unresolved, as it did when this walked the subclasses
+		// itself and gave up after that many. Lifting the limit resolves calls on very wide hierarchies (MachineComponent in the app),
+		// which changes the output, so it is a separate measured step.
+		return resolution.subtreeOf(typeName).length > MaxSubclassWalk ? null : resolution.uniqueImplementation(typeName, method);
 	}
 
 	/** Cheap syntactic screen on the original body, before the callee's own calls are inlined. */
