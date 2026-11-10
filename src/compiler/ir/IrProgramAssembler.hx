@@ -528,17 +528,17 @@ class IrProgramAssembler {
 				allFunctions.push(new IrFunction(object.name + ".$haxeonObservableFieldCount", builder.arguments, I32, builder.blocks));
 			}
 		if (objects != null)
-			allFunctions = IrEnumDynamicDispatch.rewrite(allFunctions);
+			allFunctions = compiler.compilation.IrPassMeter.measure("enum-dynamic-dispatch", () -> IrEnumDynamicDispatch.rewrite(allFunctions));
 		if (objects != null)
-			allFunctions = IrValueDynamicDispatch.rewrite(allFunctions, objects);
+			allFunctions = compiler.compilation.IrPassMeter.measure("value-dynamic-dispatch", () -> IrValueDynamicDispatch.rewrite(allFunctions, objects));
 		if (objects != null)
-			GenericOwnerErasure.generate(generator.facts, allFunctions, objects);
+			compiler.compilation.IrPassMeter.measureVoid("generic-owner-erasure", () -> GenericOwnerErasure.generate(generator.facts, allFunctions, objects));
 		if (objects != null && interfaces != null)
-			allFunctions = IrValueInterfaceBoxes.rewrite(allFunctions, objects, interfaces);
+			allFunctions = compiler.compilation.IrPassMeter.measure("value-interface-boxes", () -> IrValueInterfaceBoxes.rewrite(allFunctions, objects, interfaces));
 		if (objects != null && interfaces != null) {
-			allFunctions = IrTypedInterfaceDispatch.rewriteValueCalls(allFunctions, objects, interfaces);
+			allFunctions = compiler.compilation.IrPassMeter.measure("typed-interface-calls", () -> IrTypedInterfaceDispatch.rewriteValueCalls(allFunctions, objects, interfaces));
 			var beforeTypedInterfaces = allFunctions.length;
-			IrTypedInterfaceDispatch.generate(allFunctions, objects, interfaces);
+			compiler.compilation.IrPassMeter.measureVoid("typed-interface-generate", () -> IrTypedInterfaceDispatch.generate(allFunctions, objects, interfaces));
 			if (allFunctions.length > beforeTypedInterfaces) {
 				var existing = allFunctions.slice(0, beforeTypedInterfaces);
 				allFunctions = existing.concat(IrValueInterfaceBoxes.rewrite(allFunctions.slice(beforeTypedInterfaces), objects, interfaces, existing));
@@ -546,7 +546,7 @@ class IrProgramAssembler {
 		}
 		// HashLink checks object casts itself, but interface casts need checks on every target.
 		if (objects != null)
-			allFunctions = IrCheckedDynamicCasts.rewrite(allFunctions, objects, generator.profile.nativeReflectionDispatch);
+			allFunctions = compiler.compilation.IrPassMeter.measure("checked-dynamic-casts", () -> IrCheckedDynamicCasts.rewrite(allFunctions, objects, generator.profile.nativeReflectionDispatch));
 		if (exportedFunctions != null && exportedFunctions.length > 0) {
 			var exported = [for (name in exportedFunctions) name => true];
 			allFunctions = [
@@ -565,7 +565,7 @@ class IrProgramAssembler {
 			enumInput.cNatives = cNatives == null ? [] : cNatives;
 			enumInput.enums = IrEnumRuntimeSpecializations.materialize(enums == null ? [] : enums, allFunctions, enumInput.objects, enumInput.staticFields,
 				enumInput.natives, enumInput.interfaces, enumInput.cNatives);
-			var enumOutput = IrInlineEnumLowering.run(enumInput, valueTarget, reflectableObjects);
+			var enumOutput = compiler.compilation.IrPassMeter.measure("inline-enum-lowering", () -> IrInlineEnumLowering.run(enumInput, valueTarget, reflectableObjects));
 			allFunctions = enumOutput.functions;
 			objects = enumOutput.objects;
 			interfaces = enumOutput.interfaces;
@@ -574,10 +574,10 @@ class IrProgramAssembler {
 			enums = enumOutput.enums;
 		}
 		if (objects != null) {
-			allFunctions = new IrOptionalScalarFlow(objects).rewrite(objects, allFunctions);
+			allFunctions = compiler.compilation.IrPassMeter.measure("optional-scalar-flow", () -> new IrOptionalScalarFlow(objects).rewrite(objects, allFunctions));
 			allFunctions = IrOptionalValueFlow.addHelpers(allFunctions, objects);
 		}
-		allFunctions = IrStaticNullChecks.run(allFunctions, objects, staticChecks);
+		allFunctions = compiler.compilation.IrPassMeter.measure("static-null-checks", () -> IrStaticNullChecks.run(allFunctions, objects, staticChecks));
 		if (objects != null && reflectableObjects != null) {
 			reflectableObjects = reflectableObjects.copy();
 			var known:Map<String, Bool> = [for (name in reflectableObjects) name => true];
@@ -604,7 +604,7 @@ class IrProgramAssembler {
 				allFunctions = optionalStorage.rewrite(allFunctions);
 				objects = optionalStorage.physicalObjects(objects);
 			}
-			allFunctions = new IrNullableScalarFields(objects).rewrite(allFunctions);
+			allFunctions = compiler.compilation.IrPassMeter.measure("nullable-scalar-fields", () -> new IrNullableScalarFields(objects).rewrite(allFunctions));
 		}
 		var needsArrayRuntime = false,
 			needsTypedRefArrayRuntime = false,

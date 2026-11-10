@@ -189,6 +189,8 @@ class CompilerDriver {
 			report(phaseReport(result, backendDoneAt - backendStartedAt));
 			for (line in result.metrics.frontendPassReports)
 				report("frontend " + line);
+			report("ir pass allocation (MB/k objects): "
+				+ [for (entry in compiler.compilation.IrPassMeter.entries()) entry.name + "=" + Math.round(entry.bytes / 1048576.0) + "/" + Math.round(entry.count / 1000.0)].join(" "));
 			report(allocationReport("compiler allocation phases:", result.metrics.allocationPhases));
 			report(allocationReport("driver allocation phases:", [
 				AllocationMeter.delta("prepare", allocationAtStart, allocationAfterPrepare),

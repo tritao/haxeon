@@ -651,6 +651,7 @@ class FrontendCompilation {
 			ir = previousPipeline.ir;
 			inlinerChanged = [];
 		} else {
+			compiler.compilation.IrPassMeter.reset();
 			ir = IrProgramAssembler.assemble(generator, cached, irNatives, generated.objects, generated.interfaces, generated.enums,
 				generated.staticFields, generated.initializers, entryPoint, irCNatives, generated.reflectable, context.inlineCache().staticChecks,
 				context.valueArrayTarget(), context.exportedFunctions());
@@ -677,7 +678,7 @@ class FrontendCompilation {
 			if (context.livePatching && !context.isWasmTarget() && semantic != null)
 				ir.parameterDefaults = parameterDefaults(ir, semantic.signatures);
 			var valueArrayTarget = context.valueArrayTarget();
-			compiler.ir.IrValueArrayProgramRewrite.rewriteAll(ir, valueArrayTarget == HashLink ? 64 : 32, valueArrayTarget);
+			compiler.compilation.IrPassMeter.measureVoid("value-array-rewrite", () -> compiler.ir.IrValueArrayProgramRewrite.rewriteAll(ir, valueArrayTarget == HashLink ? 64 : 32, valueArrayTarget));
 			// Scalarize value joins before choosing the scalar call ABI. The HashLink call rewrite can introduce
 			// further value joins, so it needs a second pass after that rewrite.
 			if (context.isWasmTarget()) {
@@ -689,23 +690,23 @@ class FrontendCompilation {
 				}
 			}
 			if (!context.isWasmTarget()) {
-				compiler.ir.IrValueConstructors.rewrite(ir);
-				compiler.ir.IrValuePhiScalarization.rewrite(ir);
-				compiler.ir.IrScalarArguments.rewrite(ir);
-				compiler.ir.IrScalarClosures.rewrite(ir);
-				compiler.ir.IrValuePhiScalarization.rewrite(ir);
+				compiler.compilation.IrPassMeter.measureVoid("value-constructors", () -> compiler.ir.IrValueConstructors.rewrite(ir));
+				compiler.compilation.IrPassMeter.measureVoid("value-phi-scalarization", () -> compiler.ir.IrValuePhiScalarization.rewrite(ir));
+				compiler.compilation.IrPassMeter.measureVoid("scalar-arguments", () -> compiler.ir.IrScalarArguments.rewrite(ir));
+				compiler.compilation.IrPassMeter.measureVoid("scalar-closures", () -> compiler.ir.IrScalarClosures.rewrite(ir));
+				compiler.compilation.IrPassMeter.measureVoid("value-phi-scalarization", () -> compiler.ir.IrValuePhiScalarization.rewrite(ir));
 			}
 			var scalarObjects = compiler.ir.IrObjectTable.of([for (object in ir.objects) object.name => object]);
-			ir.functions = [
+			ir.functions = compiler.compilation.IrPassMeter.measure("scalar-replacement", () -> [
 				for (fn in ir.functions)
 					compiler.ir.IrScalarReplacement.rewrite(fn, scalarObjects, false, !context.isWasmTarget())
-			];
-			compiler.ir.IrNullableScalarFlow.rewrite(ir);
+			]);
+			compiler.compilation.IrPassMeter.measureVoid("nullable-scalar-flow", () -> compiler.ir.IrNullableScalarFlow.rewrite(ir));
 			// Compare and publish the final IR even when only load/store forwarding is enabled.
-			inlinerChanged = IrInliner.run(ir, context.inlineCache(), context.targetProfile(), context.inlineEnabled(), instrumentScope);
+			inlinerChanged = compiler.compilation.IrPassMeter.measure("inliner", () -> IrInliner.run(ir, context.inlineCache(), context.targetProfile(), context.inlineEnabled(), instrumentScope));
 			// The final IR is verified here, once, whatever backend follows: only the functions whose IR or reads of the program changed.
 			if (!context.livePatching) {
-				IrVerifier.verifyReusing(ir, context.verifyMemo);
+				compiler.compilation.IrPassMeter.measureVoid("verifier", () -> IrVerifier.verifyReusing(ir, context.verifyMemo));
 				if (checkingReuse)
 					try
 						IrVerifier.verify(ir)
