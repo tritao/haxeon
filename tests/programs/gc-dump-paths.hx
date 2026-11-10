@@ -24,7 +24,7 @@ function sizeOf(path:String):Int {
 }
 
 function main():Int {
-	var directory = "out/gc-dump-paths-é";
+	var directory = "out/gc-dump-paths-" + Sys.getPid() + "-é";
 	clear(directory);
 	hl.Gc.censusStart(0);
 	var kept = [for (i in 0...100) new Box(i)];

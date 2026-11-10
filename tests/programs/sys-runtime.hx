@@ -10,10 +10,12 @@ function main():Int {
 		|| sys.FileSystem.fullPath(".").length == 0
 		|| now < 0.0)
 		return 0;
-	var directory = "out/sys-runtime-é";
-	var renamed = "out/sys-runtime-renamed-é";
-	var file = "out/sys-runtime-renamed-é/value-ß.txt";
-	var bytesFile = "out/sys-runtime-renamed-é/bytes-ç.txt";
+	// The live and plain builds of this program run at the same time, so the paths carry the process id.
+	var tag = "-" + Sys.getPid();
+	var directory = "out/sys-runtime" + tag + "-é";
+	var renamed = "out/sys-runtime-renamed" + tag + "-é";
+	var file = renamed + "/value-ß.txt";
+	var bytesFile = renamed + "/bytes-ç.txt";
 	if (Sys.exists(file))
 		Sys.delete(file);
 	if (Sys.exists(bytesFile))
@@ -60,8 +62,8 @@ function main():Int {
 	var argumentValues = systemName == "Windows" ? ["value with spaces", "==", "value with spaces"] : ["value with spaces; 'quoted'", "=", "value with spaces; 'quoted'"];
 	if (Sys.command(argumentCommand, argumentValues) != 0)
 		return 13;
-	var fsDirectory = "out/filesystem-runtime-é";
-	var fsRenamed = "out/filesystem-runtime-renamed-é";
+	var fsDirectory = "out/filesystem-runtime" + tag + "-é";
+	var fsRenamed = "out/filesystem-runtime-renamed" + tag + "-é";
 	var fsFile = fsRenamed + "/value-ß.txt";
 	if (sys.FileSystem.exists(fsFile))
 		sys.FileSystem.deleteFile(fsFile);
