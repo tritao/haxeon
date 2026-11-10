@@ -32,10 +32,13 @@ class IrFunctionRewriteMain {
 
 		var unchanged = IrFunctionRewrite.instructions(fn, keep);
 		expect(unchanged == fn, "a rule that replaces nothing must return the same function object");
-		var before = AllocationMeter.sample(), middle = AllocationMeter.sample();
-		IrFunctionRewrite.instructions(fn, keep);
+		// The collector counts allocations in lumps (a thread's buffer is counted when it is reserved, up to 256 blocks at once), so a
+		// single call cannot be measured. Many calls must count far fewer allocations than one for each of them.
+		var before = AllocationMeter.sample();
+		for (i in 0...2000)
+			IrFunctionRewrite.instructions(fn, keep);
 		var after = AllocationMeter.sample();
-		expect(after.count - middle.count == middle.count - before.count, "a rule that replaces nothing must allocate nothing");
+		expect(after.count - before.count < 1000, "a rule that replaces nothing must allocate nothing");
 
 		var changed = IrFunctionRewrite.instructions(fn, threeForTwo);
 		expect(changed != fn && changed.name == fn.name && changed.result == fn.result && changed.arguments == fn.arguments, "one change makes a new function");
