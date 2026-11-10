@@ -267,6 +267,48 @@ Go/no-go, measured against the stock-Haxe worker on the `app` builds (cold, no-o
 
 Until then, shared general-purpose code stays in the portable root, never in `#if` forks.
 
+### 13. Reachability with explicit providers; whole-program work runs on the reachable program (added 2026-11-11)
+
+Two attempts on 2026-11-10 failed for the same reason: some dependencies are not edges in the IR.
+
+- **Pruning before the passes was unsound.** Typing generates per-type helpers, such as dynamic equality for an enum. Nothing
+  calls them until a later pass builds the dispatcher over all types, so an early walk pruned them, and programs comparing
+  values dynamically failed at run time.
+- **Seeding the runtime modules up front de-optimized unrelated code.** The program-wide enum and closure classification
+  looks at every function present, including unused helpers that take `Dynamic`.
+
+Decision:
+
+1. **Providers.** Every generator of a type-dispatched helper registers what it provides as a (type, operation) pair in
+   one provider table on the program. Operations include dynamic equality, hash, compare, `toString`, dynamic enum test,
+   reflection field access, boxing and interface dispatch. The knowledge lives with the generator, never in a list of
+   names in the walker.
+2. **A type-aware walk** (rapid type analysis). The walk follows explicit edges: calls, closures, dispatch over the
+   subtypes of *created* types, and provider edges. A provider (T, op) is reachable when T is created and op is used at a
+   reachable dynamic site.
+   - Roots: the entry, static initializers, `@:keep`/`@:expose`, reflection by Wasm's rules, native callbacks, and
+     declared live-host entries.
+   - There is one walker (`IrReachability`) for every target.
+3. **It runs once, after IR generation and before the passes.** Passes, classifications and the verifier see the
+   reachable program. Dispatchers are built from reachable providers only.
+4. **Invariant, enforced in check mode.** A pass may only introduce calls to functions that are reachable or that it
+   creates. A violation names the pass and the call, so a missed edge is a test failure, never a miscompile.
+5. **Single frontend pass.** The declared runtime modules (decision 6) are always part of the program on the targets that
+   can host them. Typing records uses and never adds a module, so the restart and its continuation are deleted. Unused
+   runtime code is gone before any classification, and it is absent from the output. Compiler intrinsics are always
+   registered by the compiler itself.
+6. **Tests.**
+   - Program cases build and run both live and plain.
+   - A standing test runs programs pruned and unpruned and requires equal behavior.
+
+Migration, each step separately gated:
+
+1. Provider inventory and table (no behavior change).
+2. The type-aware walk, compared with the conservative walk on the program corpus.
+3. Prune before the passes, with the invariant.
+4. Single frontend pass.
+5. Later: live-build pruning with declared host roots, and per-method pruning.
+
 ## Migration
 
 Each step is its own series of commits. Every commit keeps the full driver suite green and the warm-equals-cold tests
