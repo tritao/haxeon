@@ -19,5 +19,6 @@ cd "$platform_dir"
     --interface=NativeKit \
     --include="$nativekit_dir/include" \
     --source-label=bindings/haxe/nativekit_import.h \
+    --exclude-header="$nativekit_dir/include/nativekit_net.h" \
     "$@" \
     "$platform_dir/bindings/nativekit_import.h"

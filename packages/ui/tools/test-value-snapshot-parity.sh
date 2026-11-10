@@ -17,7 +17,7 @@ JSON
 export LD_LIBRARY_PATH="$root/out:$("$root/scripts/hashlink-path.sh"):$root/out/packages/ui/native${LD_LIBRARY_PATH:+:$LD_LIBRARY_PATH}"
 common=(--root="$ui/tests/value-types" --root="$ui/haxe"
     --root="$ui/bindings/haxe" --root="$root/packages/editor/src" --root="$root/packages/platform/src")
-entries=(local-snapshot host-lifecycle style-kinds cursor-shape layout-codes layout-policies text-codes widget-kinds presentation-kinds)
+entries=(local-snapshot host-lifecycle style-kinds cursor-shape layout-codes layout-policies text-codes widget-kinds presentation-kinds native-boundary-kinds)
 negative_entries=(
     host-lifecycle-raw-int
     host-lifecycle-to-int
@@ -88,6 +88,54 @@ negative_entries=(
     presentation-kinds-dock-panel-header-mode-to-int
     presentation-kinds-dock-panel-header-mode-raw-string
     presentation-kinds-dock-panel-header-mode-to-string
+    native-boundary-kinds-composite-mode-raw-int
+    native-boundary-kinds-composite-mode-to-int
+    native-boundary-kinds-composite-mode-raw-string
+    native-boundary-kinds-composite-mode-to-string
+    native-boundary-kinds-line-cap-raw-int
+    native-boundary-kinds-line-cap-to-int
+    native-boundary-kinds-line-cap-raw-string
+    native-boundary-kinds-line-cap-to-string
+    native-boundary-kinds-line-join-raw-int
+    native-boundary-kinds-line-join-to-int
+    native-boundary-kinds-line-join-raw-string
+    native-boundary-kinds-line-join-to-string
+    native-boundary-kinds-image-format-raw-int
+    native-boundary-kinds-image-format-to-int
+    native-boundary-kinds-image-format-raw-string
+    native-boundary-kinds-image-format-to-string
+    native-boundary-kinds-image-filter-raw-int
+    native-boundary-kinds-image-filter-to-int
+    native-boundary-kinds-image-filter-raw-string
+    native-boundary-kinds-image-filter-to-string
+    native-boundary-kinds-mask-kind-raw-int
+    native-boundary-kinds-mask-kind-to-int
+    native-boundary-kinds-mask-kind-raw-string
+    native-boundary-kinds-mask-kind-to-string
+    native-boundary-kinds-cache-policy-raw-int
+    native-boundary-kinds-cache-policy-to-int
+    native-boundary-kinds-cache-policy-raw-string
+    native-boundary-kinds-cache-policy-to-string
+    native-boundary-kinds-accessibility-role-raw-int
+    native-boundary-kinds-accessibility-role-to-int
+    native-boundary-kinds-accessibility-role-raw-string
+    native-boundary-kinds-accessibility-role-to-string
+    native-boundary-kinds-accessibility-orientation-raw-int
+    native-boundary-kinds-accessibility-orientation-to-int
+    native-boundary-kinds-accessibility-orientation-raw-string
+    native-boundary-kinds-accessibility-orientation-to-string
+    layout-codes-sizing-raw-string
+    layout-codes-sizing-to-string
+    layout-codes-visual-raw-string
+    layout-codes-visual-to-string
+    text-codes-font-family-raw-string
+    text-codes-font-family-to-string
+    text-codes-alignment-raw-string
+    text-codes-alignment-to-string
+    text-codes-wrap-raw-string
+    text-codes-wrap-to-string
+    text-codes-direction-raw-string
+    text-codes-direction-to-string
 )
 if (( $# > 0 )); then
     for requested in "$@"; do

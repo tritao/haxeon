@@ -103,11 +103,37 @@ class CHeaderImporter {
 				handleRecords.set(name, declaration);
 		}
 		var hxiDeclarations:Array<HxiDeclaration> = [],
-			documentation:Map<String, HxiDocumentation> = [];
+			documentation:Map<String, HxiDocumentation> = [],
+			enumGroups:Map<String, Int> = [];
 		for (declaration in declarations) {
 			var imported = importDeclaration(declaration, layouts, handleNames, handleRecords, handleDestroySymbols, documentation);
 			if (imported != null)
-				hxiDeclarations.push(imported);
+				switch imported {
+					case Enumeration(name, representation, flags, values, span):
+						var index = enumGroups.get(name);
+						if (index == null) {
+							enumGroups.set(name, hxiDeclarations.length);
+							hxiDeclarations.push(imported);
+						} else switch hxiDeclarations[index] {
+							case Enumeration(_, previousRepresentation, previousFlags, previousValues, previousSpan):
+								var compatible = switch [representation, previousRepresentation] {
+									case [Primitive(left), Primitive(right)]: left == right && flags == previousFlags;
+									default: false;
+								};
+								if (!compatible) throw 'Conflicting C enum value groups for "$name"';
+								var combined = previousValues.concat(values);
+								// Anonymous C groups need not have a stable AST order across targets.
+								// Raw values, rather than declaration order, define this native domain.
+								combined.sort(function(left, right) {
+									var order = flags ? Int64.ucompare(left.value, right.value) : Int64.compare(left.value, right.value);
+									return order == 0 ? Reflect.compare(left.name, right.name) : order;
+								});
+								hxiDeclarations[index] = Enumeration(name, representation, flags, combined, previousSpan);
+							default: throw "C enum group index does not name an enum";
+						}
+					default:
+						hxiDeclarations.push(imported);
+				}
 		}
 		var source = sourceFile(FileSystem.fullPath(header));
 		return new HxiInterface(interfaceName == null ? moduleName(header) : interfaceName, target, library, dependencies == null ? [] : dependencies.copy(),

@@ -15,12 +15,12 @@ class FontCollection extends NativeKitUIResource {
 	}
 
 	public function add(path:String, family:FontFamily = FontFamily.Default):Void
-		UiResult.check(NativeKitUI.nkui_font_collection_add(nativeHandle(), path, family.rawValue()), "fonts.add");
+		UiResult.check(NativeKitUI.nkui_font_collection_add(nativeHandle(), path, NativeEnums.fontFamily(family)), "fonts.add");
 
 	/** Adds font bytes, which is useful when a browser asset has been fetched into memory. */
 	public function addData(name:String, data:Bytes, family:FontFamily = FontFamily.Default):Void
 		UiResult.check(NativeKitUI.nkui_font_collection_add_data(nativeHandle(), name, data,
-			family.rawValue()), "fonts.addData");
+			NativeEnums.fontFamily(family)), "fonts.addData");
 
 	/** Adds platform-provided script and emoji fallback fonts when available. */
 	public function addSystemFallbacks():Void

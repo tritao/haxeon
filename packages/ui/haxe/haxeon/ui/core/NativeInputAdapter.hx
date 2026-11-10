@@ -95,9 +95,9 @@ class NativeInputAdapter {
 				pointerY = y;
 				snapshotModifiers(UiModifier.fromRaw(modifiers.rawValue()));
 				if (action == InputAction.Press)
-					context.pointerDown(x / coordinateScale, y / coordinateScale, button, UiModifier.fromRaw(modifiers.rawValue()));
+					context.pointerDown(x / coordinateScale, y / coordinateScale, button.rawValue(), UiModifier.fromRaw(modifiers.rawValue()));
 				else if (action == InputAction.Release)
-					context.pointerUp(x / coordinateScale, y / coordinateScale, button, UiModifier.fromRaw(modifiers.rawValue()));
+					context.pointerUp(x / coordinateScale, y / coordinateScale, button.rawValue(), UiModifier.fromRaw(modifiers.rawValue()));
 				action == InputAction.Press || action == InputAction.Release;
 			case PointerScroll(eventSource, deltaX, deltaY) if (matches(eventSource)):
 				context.scroll(pointerX / coordinateScale, pointerY / coordinateScale, deltaX / coordinateScale, deltaY / coordinateScale, pointerModifiers);
@@ -112,7 +112,7 @@ class NativeInputAdapter {
 					try {
 						if (button != null)
 							context.pointerReenter(
-								NativeKit.nk_pointer_button_get_state_checked(window, cast button) ==
+								NativeKit.nk_pointer_button_get_state_checked(window, NativeKitTypes.NativeKitTypesEnumDecoders.decodePointerButton(button)) ==
 								InputAction.Press, pointerX / coordinateScale, pointerY / coordinateScale);
 					} catch (_:Dynamic) {}
 				}
@@ -130,8 +130,9 @@ class NativeInputAdapter {
 				if (kind == null)
 					false;
 				else {
-					updateKeyModifiers(key, action, UiModifier.fromRaw(modifiers.rawValue()));
-					context.key(kind, key, UiModifier.fromRaw(modifiers.rawValue()), scancode);
+					var keyCode = key.rawValue();
+					updateKeyModifiers(keyCode, action, UiModifier.fromRaw(modifiers.rawValue()));
+					context.key(kind, keyCode, UiModifier.fromRaw(modifiers.rawValue()), scancode);
 					true;
 				}
 			case TextInput(eventSource, codepoint) if (matchesText(eventSource)):

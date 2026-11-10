@@ -127,7 +127,7 @@ class TextLayout extends NativeKitUIResource {
 
 	static function nativeTextStyle(style:TextStyle):nkui_text_style {
 		var result = new nkui_text_style();
-		result.set_family(style.font.rawValue());
+		result.set_family(NativeEnums.fontFamily(style.font));
 		result.set_font_size(style.fontSize);
 		result.set_letter_spacing(style.letterSpacing);
 		return result;
@@ -138,9 +138,9 @@ class TextLayout extends NativeKitUIResource {
 		result.set_line_height(style.lineHeight == null ? 0.0 : style.lineHeight);
 		if (style.tabWidth < 0) throw "Tab width cannot be negative";
 		result.set_tab_width(style.tabWidth);
-		result.set_wrap(style.wrap.rawValue());
-		result.set_alignment(style.alignment.rawValue());
-		result.set_direction(style.direction.rawValue());
+		result.set_wrap(NativeEnums.textWrap(style.wrap));
+		result.set_alignment(NativeEnums.textAlignment(style.alignment));
+		result.set_direction(NativeEnums.textDirection(style.direction));
 		return result;
 	}
 
@@ -205,7 +205,7 @@ class TextLayout extends NativeKitUIResource {
 		var result = NativeKitUI.nkui_text_layout_caret(nativeHandle(), caret);
 		UiResult.check(result.status, "textLayout.caret");
 		return new TextCaret(result.out_caret.get_x(), result.out_caret.get_y(), result.out_caret.get_ascender(),
-			result.out_caret.get_descender(), result.out_caret.get_slope(), result.out_caret.get_direction());
+			result.out_caret.get_descender(), result.out_caret.get_slope(), NativeEnums.textDirectionFromNative(result.out_caret.get_direction()));
 	}
 
 	/** Returns grapheme-aware visual rectangles for a code-point selection. */
@@ -315,7 +315,7 @@ class TextLayout extends NativeKitUIResource {
 				Math.isFinite(bottom) && right > left && bottom > top)
 			{
 				var rect = new TextRangeRect(cursor, next, left, top, right - left, bottom - top,
-					startCaret.direction != TextDirection.Rtl.rawValue());
+					startCaret.direction != TextDirection.Rtl);
 				result.push(rect);
 				if (wholeGrapheme && canonicalStart && cached == null && cachedGraphemes < maximumCachedGraphemes &&
 					(next != last || (lastPosition.offset == last && lastPosition.affinity == 0))) {
@@ -481,9 +481,9 @@ struct TextCaret implements Equatable {
 	public final ascender:Float;
 	public final descender:Float;
 	public final slope:Float;
-	public final direction:Int;
+	public final direction:TextDirection;
 
-	public function new(x:Float, y:Float, ascender:Float, descender:Float, slope:Float, direction:Int) {
+	public function new(x:Float, y:Float, ascender:Float, descender:Float, slope:Float, direction:TextDirection) {
 		this.x = x;
 		this.y = y;
 		this.ascender = ascender;

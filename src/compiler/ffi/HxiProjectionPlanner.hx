@@ -187,7 +187,7 @@ class HxiProjectionPlanner {
 				|| ownedResult != null
 				|| aggregateResult != null
 				|| callbackResult
-				|| abi.isFlagsValue(signature.result) ? '__hxi_raw_$nativeName' : publicName,
+				|| abi.isEnumValue(signature.result) ? '__hxi_raw_$nativeName' : publicName,
 			policy = HxiHaxeEmitter.resultErrorProjection(result, profile),
 			checked:Null<ProjectedCheckedFunction> = null,
 			byteSlice:Null<String> = null;

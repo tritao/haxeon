@@ -1,9 +1,9 @@
 package haxeon.ui;
 
 /** Rendering/layout representation, independent from semantic role. */
-enum abstract LayoutVisualKind(Int) implements RawRepresentable {
-	var Box = 1;
-	var Text = 2;
-	var Image = 3;
-	var Custom = 4;
+enum LayoutVisualKind implements Hashable {
+	Box;
+	Text;
+	Image;
+	Custom;
 }

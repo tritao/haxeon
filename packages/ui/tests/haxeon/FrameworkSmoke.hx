@@ -1011,7 +1011,7 @@ class FrameworkSmoke {
 			return 37;
 		editor.insert("hi");
 		var composition = new PlatformTextEdit(TextEditAction.Compose, "á", 2, 2,
-			4, 4, 2, 4, 1, 6);
+			4, 4, 2, 4, 1, nativekit.ffi.NativeKitTypes.TextEditHistoryKind.Composition);
 		if (!editor.applyTextEdit(composition) || editor.text != "hiá" ||
 			editor.selectionEnd != 4 || editor.selectionFocusAffinity != 1 ||
 			editor.compositionStart != 2 || editor.compositionEnd != 4 ||
@@ -1039,7 +1039,7 @@ class FrameworkSmoke {
 			throw "Empty input geometry should reuse its published snapshot";
 		var nativeDeleteEditor = new TextEditorState(fonts, "ab");
 		var nativeDelete = new PlatformTextEdit(TextEditAction.Delete, null, 1, 2,
-			1, 1, -1, -1, 1, 2);
+			1, 1, -1, -1, 1, nativekit.ffi.NativeKitTypes.TextEditHistoryKind.DeleteBackward);
 		if (!nativeDeleteEditor.applyTextEdit(nativeDelete) || nativeDeleteEditor.text != "a" ||
 			nativeDeleteEditor.selectionFocusAffinity != 1 ||
 			nativeDeleteEditor.lastEditTransaction == null ||
@@ -2151,26 +2151,26 @@ class FrameworkSmoke {
 		var scaledBounds = buttonNode.globalBounds();
 		var scaledX = (scaledBounds.x + scaledBounds.width * 0.75) * 2;
 		var scaledY = (scaledBounds.y + scaledBounds.height * 0.75) * 2;
-		if (!input.consume(PointerButton(source, 0, InputAction.Press, nativekit.ffi.NativeKitTypes.Modifiers.empty(), scaledX, scaledY)) ||
-			!input.consume(PointerButton(source, 0, InputAction.Release, nativekit.ffi.NativeKitTypes.Modifiers.empty(), scaledX, scaledY)) || clicks != 2)
+		if (!input.consume(PointerButton(source, nativekit.ffi.NativeKitTypes.PointerButton.Left, InputAction.Press, nativekit.ffi.NativeKitTypes.Modifiers.empty(), scaledX, scaledY)) ||
+			!input.consume(PointerButton(source, nativekit.ffi.NativeKitTypes.PointerButton.Left, InputAction.Release, nativekit.ffi.NativeKitTypes.Modifiers.empty(), scaledX, scaledY)) || clicks != 2)
 			return 14;
 		input.coordinateScale = 1;
-		if (!input.consume(Key(source, UiKey.Enter, 28, InputAction.Press, nativekit.ffi.NativeKitTypes.Modifiers.empty())) ||
-			!input.consume(Key(source, UiKey.Enter, 28, InputAction.Repeat, nativekit.ffi.NativeKitTypes.Modifiers.empty())) ||
+		if (!input.consume(Key(source, nativekit.ffi.NativeKitTypes.Key.Enter, 28, InputAction.Press, nativekit.ffi.NativeKitTypes.Modifiers.empty())) ||
+			!input.consume(Key(source, nativekit.ffi.NativeKitTypes.Key.Enter, 28, InputAction.Repeat, nativekit.ffi.NativeKitTypes.Modifiers.empty())) ||
 			keyEvents != 1 || repeatEvents != 1 || clicks != 3)
 			return 15;
 		var nextId = root.children[1].id;
-		if (!input.consume(Key(source, UiKey.Tab, 15, InputAction.Press, nativekit.ffi.NativeKitTypes.Modifiers.empty())) ||
+		if (!input.consume(Key(source, nativekit.ffi.NativeKitTypes.Key.Tab, 15, InputAction.Press, nativekit.ffi.NativeKitTypes.Modifiers.empty())) ||
 			context.focus.focusedId == null || !context.focus.focusedId.equals(nextId) ||
-			!input.consume(Key(source, UiKey.Tab, 15, InputAction.Repeat, nativekit.ffi.NativeKitTypes.Modifiers.empty())) ||
+			!input.consume(Key(source, nativekit.ffi.NativeKitTypes.Key.Tab, 15, InputAction.Repeat, nativekit.ffi.NativeKitTypes.Modifiers.empty())) ||
 			context.focus.focusedId == null || !context.focus.focusedId.equals(initialId) ||
-			!input.consume(Key(source, UiKey.Tab, 15, InputAction.Repeat, nativekit.ffi.NativeKitTypes.Modifiers.empty())) ||
+			!input.consume(Key(source, nativekit.ffi.NativeKitTypes.Key.Tab, 15, InputAction.Repeat, nativekit.ffi.NativeKitTypes.Modifiers.empty())) ||
 			context.focus.focusedId == null || !context.focus.focusedId.equals(nextId) ||
-			!input.consume(Key(source, UiKey.Tab, 15, InputAction.Press, nativekit.ffi.NativeKitTypes.Modifiers.Shift)) ||
+			!input.consume(Key(source, nativekit.ffi.NativeKitTypes.Key.Tab, 15, InputAction.Press, nativekit.ffi.NativeKitTypes.Modifiers.Shift)) ||
 			context.focus.focusedId == null || !context.focus.focusedId.equals(initialId) ||
-			!input.consume(Key(source, UiKey.Tab, 15, InputAction.Repeat, nativekit.ffi.NativeKitTypes.Modifiers.Shift)) ||
+			!input.consume(Key(source, nativekit.ffi.NativeKitTypes.Key.Tab, 15, InputAction.Repeat, nativekit.ffi.NativeKitTypes.Modifiers.Shift)) ||
 			context.focus.focusedId == null || !context.focus.focusedId.equals(nextId) ||
-			!input.consume(Key(source, UiKey.Tab, 15, InputAction.Repeat, nativekit.ffi.NativeKitTypes.Modifiers.Shift)) ||
+			!input.consume(Key(source, nativekit.ffi.NativeKitTypes.Key.Tab, 15, InputAction.Repeat, nativekit.ffi.NativeKitTypes.Modifiers.Shift)) ||
 			context.focus.focusedId == null || !context.focus.focusedId.equals(initialId))
 			return 24;
 		if (!input.consume(TextInput(source, 0x1f642)) || committedText != "🙂")
@@ -2225,28 +2225,28 @@ class FrameworkSmoke {
 		var wheelModifiers = UiModifier.empty();
 		buttonNode.on(UiEventKind.PointerMove, function(event) moveModifiers = event.modifiers);
 		buttonNode.on(UiEventKind.Scroll, function(event) wheelModifiers = event.modifiers);
-		input.consume(Key(source, 340, 0, InputAction.Press, nativekit.ffi.NativeKitTypes.Modifiers.empty()));
+		input.consume(Key(source, nativekit.ffi.NativeKitTypes.Key.LeftShift, 0, InputAction.Press, nativekit.ffi.NativeKitTypes.Modifiers.empty()));
 		input.consume(PointerMove(source, 4.0, 4.0));
 		input.consume(PointerScroll(source, 0, -40));
 		if (moveModifiers != UiModifier.Shift || wheelModifiers != UiModifier.Shift)
 			throw "modifier press must affect subsequent move and wheel events";
-		input.consume(Key(source, 344, 0, InputAction.Press, nativekit.ffi.NativeKitTypes.Modifiers.Shift));
-		input.consume(Key(source, 340, 0, InputAction.Release, nativekit.ffi.NativeKitTypes.Modifiers.Shift));
+		input.consume(Key(source, nativekit.ffi.NativeKitTypes.Key.RightShift, 0, InputAction.Press, nativekit.ffi.NativeKitTypes.Modifiers.Shift));
+		input.consume(Key(source, nativekit.ffi.NativeKitTypes.Key.LeftShift, 0, InputAction.Release, nativekit.ffi.NativeKitTypes.Modifiers.Shift));
 		input.consume(PointerScroll(source, 0, -40));
 		if (wheelModifiers != UiModifier.Shift)
 			throw "releasing one Shift must preserve the other Shift";
-		input.consume(Key(source, 344, 0, InputAction.Release, nativekit.ffi.NativeKitTypes.Modifiers.Shift));
+		input.consume(Key(source, nativekit.ffi.NativeKitTypes.Key.RightShift, 0, InputAction.Release, nativekit.ffi.NativeKitTypes.Modifiers.Shift));
 		input.consume(PointerScroll(source, 0, -40));
 		if (!wheelModifiers.isEmpty()) throw "modifier release snapshot must not leave Shift stuck";
-		input.consume(Key(source, UiKey.A, 0, InputAction.Press, nativekit.ffi.NativeKitTypes.Modifiers.Control | nativekit.ffi.NativeKitTypes.Modifiers.Alt));
-		input.consume(Key(new Handle(18), UiKey.A, 0, InputAction.Press, nativekit.ffi.NativeKitTypes.Modifiers.empty()));
+		input.consume(Key(source, nativekit.ffi.NativeKitTypes.Key.A, 0, InputAction.Press, nativekit.ffi.NativeKitTypes.Modifiers.Control | nativekit.ffi.NativeKitTypes.Modifiers.Alt));
+		input.consume(Key(new Handle(18), nativekit.ffi.NativeKitTypes.Key.A, 0, InputAction.Press, nativekit.ffi.NativeKitTypes.Modifiers.empty()));
 		input.consume(PointerMove(source, 4.0, 4.0));
 		if (moveModifiers != (UiModifier.Control | UiModifier.Alt))
 			throw "foreign window must not change pointer modifiers";
 		input.consume(WindowStateChanged(source, nativekit.ffi.NativeKitTypes.WindowStateFlags.empty()));
 		input.consume(PointerScroll(source, 0, -40));
 		if (!wheelModifiers.isEmpty()) throw "focus loss must clear pointer modifiers";
-		input.consume(Key(source, 341, 0, InputAction.Press, nativekit.ffi.NativeKitTypes.Modifiers.empty()));
+		input.consume(Key(source, nativekit.ffi.NativeKitTypes.Key.LeftControl, 0, InputAction.Press, nativekit.ffi.NativeKitTypes.Modifiers.empty()));
 		input.detach();
 		input.consume(PointerScroll(source, 0, -40));
 		if (!wheelModifiers.isEmpty()) throw "detach must clear pointer modifiers";

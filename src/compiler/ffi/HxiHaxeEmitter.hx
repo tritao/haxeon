@@ -32,6 +32,7 @@ private typedef ProjectedArrayElement = {
 	final size:Int;
 	final structure:Bool;
 	final flagsMask:Null<String>;
+	final enumDecoder:Null<String>;
 }
 
 /** An output sized by an @inout count: bytes, UTF-8 strings or typed elements. */
@@ -213,7 +214,7 @@ class HxiHaxeEmitter {
 				case _:
 			}
 		for (fn in abi.functions())
-			if (abi.isFlagsValue(fn.result))
+			if (abi.isEnumValue(fn.result))
 				directed.set(fn.name, true);
 		for (fn in abi.functions())
 			switch fn.semantics.result {
@@ -538,8 +539,27 @@ class HxiHaxeEmitter {
 						output.add('@:pure inline function __hxi_flags_from_native_$name(value:$rawType):${projected.haxeType} return ${nativeFlagsRead(projected.haxeType, "value", mask, wide)};\n');
 					default:
 				}
+		var emittedEnumDecoders = false, enumDecoderModule = functionModule;
+		var typeModule = profile.typeModule;
+		if (splitTypes && typeModule != null) enumDecoderModule = typeModule;
+		if (emitTypes)
+			for (declaration in plan.enums)
+				if (!declaration.flags) {
+					if (!emittedEnumDecoders) {
+						output.add('class ${upperFirst(enumDecoderModule)}EnumDecoders {\n');
+						emittedEnumDecoders = true;
+					}
+					var projected = projectedTypeReferenceName(declaration.name, profile);
+					var guard = nativeEnumCodeGuard([for (value in declaration.values) value.value]);
+					output.add('public static function decode${declaration.name}(value:Int):$projected {\n');
+					output.add('if ($guard) return cast value;\n');
+					output.add('throw "Unknown native enum ${declaration.nativeName} value"; }\n');
+				}
+		if (emittedEnumDecoders) output.add('}\n');
+		if (emitFunctions && hasCallbacks)
+			output.add('function __hxi_callback_error_from_native(value:Int):$callbackErrorType return switch value { case 0 | 1 | 2 | 3 | 4 | 5: cast value; default: throw "Unknown native callback error kind"; };\n');
 		if (emitTypes && hasCallbacks)
-			output.add('enum abstract $callbackErrorType(Int) from Int to Int { var None = 0; var Exception = 1; var WrongThread = 2; var PointerContract = 3; var AggregateContract = 4; var StringContract = 5; }\n');
+			output.add('enum abstract $callbackErrorType(Int) implements RawRepresentable { var None = 0; var Exception = 1; var WrongThread = 2; var PointerContract = 3; var AggregateContract = 4; var StringContract = 5; }\n');
 		if (emitTypes)
 			for (declaration in opaqueDeclarations)
 				switch declaration {
@@ -609,6 +629,18 @@ class HxiHaxeEmitter {
 							continue;
 						var signature = callSignature(codes.join(",") + ">" + abiDescriptor(classifiedResult, declarations, abi, aggregateDescriptors),
 							callConvention);
+						var nativeArguments:Array<String> = [], checks = false;
+						for (parameter in parameters) {
+							var classified = abi.classify(parameter.type), decoder = nativeEnumDecoder(classified, abi, profile);
+							if (decoder == null) nativeArguments.push(parameter.name);
+							else {
+								checks = true;
+								nativeArguments.push('$decoder(${parameter.name}.rawValue())');
+							}
+						}
+						var registeredCallback = checks
+							? '(function(${argumentTypes.join(", ")}):${returnValue.haxeType} { ${returnValue.haxeType == "Void" ? "" : "return "}callback(${nativeArguments.join(", ")}); })'
+							: "callback";
 						emitDocumentation(output, model, name);
 						output.add('typedef $projectedName = (${argumentTypes.join(", ")})->${returnValue.haxeType};\n');
 						output.add('abstract ${projectedName}Callback(hl.Abstract<"native_callback">) {\n');
@@ -619,12 +651,12 @@ class HxiHaxeEmitter {
 						else
 							output.add('\tpublic inline function new(callback:$projectedName) this = haxeon.wasm.Callbacks.create("$callbackEntryModule.__hxi_callback_entry_$name", "${wasmEntry.signature}", callback);\n');
 						output.add('\tpublic inline function close():Bool return haxeon.wasm.Callbacks.close(cast this);\n');
-						output.add('\tpublic inline function errorKind():$callbackErrorType return haxeon.wasm.Callbacks.errorKind(cast this);\n');
+						output.add('\tpublic inline function errorKind():$callbackErrorType return ${model.name}.__hxi_callback_error_from_native(haxeon.wasm.Callbacks.errorKind(cast this));\n');
 						output.add('\tpublic inline function takeError():Null<haxe.io.Bytes> return haxeon.wasm.Callbacks.takeError(cast this);\n');
 						output.add('#else\n');
-						output.add('\tpublic inline function new(callback:$projectedName) this = ${model.name}.__hxi_callback_create(haxe.io.Bytes.ofString("$signature"), haxe.io.Bytes.ofString("${pointerSizes.join(",")}"), haxe.io.Bytes.ofString("${pointerNullable.join(",")}"), callback);\n');
+						output.add('\tpublic inline function new(callback:$projectedName) this = ${model.name}.__hxi_callback_create(haxe.io.Bytes.ofString("$signature"), haxe.io.Bytes.ofString("${pointerSizes.join(",")}"), haxe.io.Bytes.ofString("${pointerNullable.join(",")}"), $registeredCallback);\n');
 						output.add('\tpublic inline function close():Bool return ${model.name}.__hxi_callback_close_$name(this);\n');
-						output.add('\tpublic inline function errorKind():$callbackErrorType return ${model.name}.__hxi_callback_error_kind_$name(this);\n');
+						output.add('\tpublic inline function errorKind():$callbackErrorType return ${model.name}.__hxi_callback_error_from_native(${model.name}.__hxi_callback_error_kind_$name(this));\n');
 						output.add('\tpublic inline function takeError():Null<haxe.io.Bytes> return ${model.name}.__hxi_callback_take_error_$name(this);\n');
 						output.add('#end\n');
 						output.add('\tpublic static inline function fromNative(pointer:hl.Abstract<"native_pointer">):${projectedName}Callback return cast ${model.name}.__hxi_callback_from_pointer_$name(haxe.io.Bytes.ofString("$signature"), haxe.io.Bytes.ofString("${pointerSizes.join(",")}"), haxe.io.Bytes.ofString("${pointerNullable.join(",")}"), pointer);\n');
@@ -632,6 +664,8 @@ class HxiHaxeEmitter {
 							invokeArguments = callbackNames.length == 0 ? "" : ", " + callbackNames.join(", ");
 						if (returnValue.haxeType == "Void")
 							output.add('\tpublic inline function call(${argumentTypes.join(", ")}):Void { ${model.name}.__hxi_callback_invoke_$name(this$invokeArguments); }\n');
+						else if (nativeEnumDecoder(classifiedResult, abi, profile) != null)
+							output.add('\tpublic inline function call(${argumentTypes.join(", ")}):${returnValue.haxeType} return ${nativeEnumDecoder(classifiedResult, abi, profile)}(cast ${model.name}.__hxi_callback_invoke_$name(this$invokeArguments));\n');
 						else
 							output.add('\tpublic inline function call(${argumentTypes.join(", ")}):${returnValue.haxeType} return cast ${model.name}.__hxi_callback_invoke_$name(this$invokeArguments);\n');
 						output.add('}\n');
@@ -704,7 +738,7 @@ class HxiHaxeEmitter {
 							output.add('\tpublic inline function rawValue():haxe.Int64 return this;\n');
 							output.add('}\n');
 						} else {
-							output.add(flags ? 'enum abstract $projectedName(${underlying.haxeType}) implements Flags {\n' : 'enum abstract $projectedName(${underlying.haxeType}) from ${underlying.haxeType} to ${underlying.haxeType} {\n');
+							output.add(flags ? 'enum abstract $projectedName(${underlying.haxeType}) implements Flags {\n' : 'enum abstract $projectedName(${underlying.haxeType}) implements RawRepresentable {\n');
 							for (value in values) {
 								emitDocumentation(output, model, '$name.${value.name}', "\t");
 								var projectedValue = projectedEnumValueName(projectedEnum, value.name),
@@ -905,11 +939,14 @@ class HxiHaxeEmitter {
 							var arrayIsHandle = isHandleAbi(abi.classify(array.element)),
 								arrayRead = arrayIsHandle ? 'cast ${model.name}.__hxi_struct_get${arrayAccess}(this, $fieldOffset + index * $stride)' : '${model.name}.__hxi_struct_get${arrayAccess}(this, $fieldOffset + index * $stride)',
 								arrayWrite = arrayIsHandle
-									|| abi.isFlagsValue(abi.classify(array.element))
+									|| abi.isEnumValue(abi.classify(array.element))
 									&& element.haxeType != "haxe.Int64" ? "value.rawValue()" : "value";
 							var nativeMask = nativeFlagsMask(abi.classify(array.element), abi);
 							if (nativeMask != null)
 								arrayRead = nativeFlagsRead(element.haxeType, arrayRead, nativeMask, stride == 8);
+							var decoder = nativeEnumDecoder(abi.classify(array.element), abi, profile);
+							if (decoder != null)
+								arrayRead = '$decoder($arrayRead)';
 							structAccesses.set(arrayAccess, {type: structAccessHaxeType(arrayAccess), setterType: structAccessHaxeType(arrayAccess)});
 							emitDocumentation(output, model, '$name.${field.name}', "\t");
 							output.add('\tpublic inline function get_${fieldName}(index:Int):${element.haxeType} { if (index < 0 || index >= ${array.length}) throw "HXI array index out of bounds"; return $arrayRead; }\n');
@@ -969,11 +1006,14 @@ class HxiHaxeEmitter {
 						var isHandle = isHandleAbi(abi.classify(field.type)),
 							readExpression = isHandle ? 'cast ${model.name}.__hxi_struct_get${access}(this, $fieldOffset)' : '${model.name}.__hxi_struct_get${access}(this, $fieldOffset)',
 							writeExpression = isHandle
-								|| abi.isFlagsValue(abi.classify(field.type))
+								|| abi.isEnumValue(abi.classify(field.type))
 								&& value.haxeType != "haxe.Int64" ? "value.rawValue()" : "value";
 						var nativeMask = nativeFlagsMask(abi.classify(field.type), abi);
 						if (nativeMask != null)
 							readExpression = nativeFlagsRead(value.haxeType, readExpression, nativeMask, structSize(value.code) == 8);
+						var decoder = nativeEnumDecoder(abi.classify(field.type), abi, profile);
+						if (decoder != null)
+							readExpression = '$decoder($readExpression)';
 						structAccesses.set(access, {type: structAccessHaxeType(access), setterType: structAccessHaxeType(access)});
 						emitDocumentation(output, model, '$name.${field.name}', "\t");
 						output.add('\tpublic inline function get_$fieldName():${value.haxeType} return $readExpression;\n');
@@ -1009,7 +1049,7 @@ class HxiHaxeEmitter {
 							if (access == null)
 								continue;
 							var write = value.code == 15 ? "value ? 1 : 0" : (isHandleAbi(abi.classify(field.type))
-								|| abi.isFlagsValue(abi.classify(field.type))
+								|| abi.isEnumValue(abi.classify(field.type))
 								&& value.haxeType != "haxe.Int64") ? "value.rawValue()" : "value";
 							output.add('\tpublic function set_$fieldName(index:Int, value:${value.haxeType}):Void ${model.name}.__hxi_struct_set${access}(this.bytes, this.offset(index) + $fieldOffset, $write);\n');
 						}
@@ -1174,7 +1214,7 @@ class HxiHaxeEmitter {
 						case OutputValues:
 							emitOutputWrapper(output, fn.name, publicName, parameters, argumentTypes, resultType, abi, profile, library, nativeSymbol,
 								signature, pointerOwnedSlotHelper, model.documentation.get(fn.name), functionModule, ownedHandleResult,
-								aggregateResult == null ? null : aggregateResult.name, nativeFlagsMask(fn.result, abi), structSize(result.code) == 8);
+								aggregateResult == null ? null : aggregateResult.name, nativeFlagsMask(fn.result, abi), structSize(result.code) == 8, nativeEnumDecoder(fn.result, abi, profile));
 						case NoOutputWrapper:
 							throw 'Output parameters were not normalized for "${fn.name}"';
 					}
@@ -1185,6 +1225,13 @@ class HxiHaxeEmitter {
 					if (mask == null)
 						throw "Native result mask disappeared";
 					output.add('function $publicName(${arguments.join(", ")}):$resultType return ${nativeFlagsRead(resultType, (resultType == "haxe.Int64" ? '$rawName($callArguments)' : '$rawName($callArguments).rawValue()'), mask, structSize(result.code) == 8)};\n');
+				} else if (abi.isEnumValue(fn.result)) {
+					var arguments = [for (index in 0...argumentTypes.length) 'arg$index:${argumentTypes[index]}'],
+						callArguments = [for (index in 0...argumentTypes.length) 'arg$index'].join(", "),
+						decoder = nativeEnumDecoder(fn.result, abi, profile);
+					if (decoder == null)
+						throw "Native enum result decoder disappeared";
+					output.add('function $publicName(${arguments.join(", ")}):$resultType return $decoder($rawName($callArguments).rawValue());\n');
 				} else if (spanResult != null) {
 					var countName = switch functionDeclarationForSymbol(model.declarations, spanResult.count) {
 						case Function(value, _, _, _, _, _, _, _): projectedFunctionName(value, profile);
@@ -1210,7 +1257,7 @@ class HxiHaxeEmitter {
 					emitCheckedResultWrapper(output, model, fn.name, publicName, parameters, argumentTypes, projectedFunction.checked, abi, profile);
 				var spanInputs = spanCompanionInputs(fn.semantics);
 				if (spanInputs != null)
-					emitSpanCompanion(output, library, fn.symbol, signature, fn.name, publicName, parameters, argumentTypes, resultType, spanInputs, abi,
+					emitSpanCompanion(output, library, fn.symbol, signature, fn.name, publicName, parameters, argumentTypes, resultType, fn.result, spanInputs, abi,
 						profile);
 			}
 		var source = output.toString();
@@ -1400,6 +1447,7 @@ class HxiHaxeEmitter {
 		structure:Bool,
 		handle:Bool,
 		flagsMask:Null<String>,
+		enumDecoder:Null<String>,
 		ownedValueHandle:Bool,
 		opaquePointer:Bool,
 		nullable:Bool,
@@ -1423,6 +1471,7 @@ class HxiHaxeEmitter {
 					structure: true,
 					handle: false,
 					flagsMask: null,
+					enumDecoder: null,
 					ownedValueHandle: false,
 					opaquePointer: false,
 					nullable: false,
@@ -1441,6 +1490,7 @@ class HxiHaxeEmitter {
 					structure: false,
 					handle: true,
 					flagsMask: null,
+					enumDecoder: null,
 					ownedValueHandle: ownedValueHandle,
 					opaquePointer: false,
 					nullable: false,
@@ -1459,6 +1509,7 @@ class HxiHaxeEmitter {
 					structure: false,
 					handle: false,
 					flagsMask: nativeFlagsMask(classified, abi),
+					enumDecoder: nativeEnumDecoder(classified, abi, profile),
 					ownedValueHandle: false,
 					opaquePointer: false,
 					nullable: false,
@@ -1479,6 +1530,7 @@ class HxiHaxeEmitter {
 					structure: false,
 					handle: false,
 					flagsMask: null,
+					enumDecoder: null,
 					ownedValueHandle: false,
 					opaquePointer: true,
 					nullable: nullable,
@@ -1580,7 +1632,7 @@ class HxiHaxeEmitter {
 		length of its span; spans sharing a count must have equal lengths.
 	**/
 	static function emitSpanCompanion(output:StringBuf, library:String, symbol:String, signature:String, nativeName:String, publicName:String,
-			parameters:Array<HxiParameter>, rawArgumentTypes:Array<String>, resultType:String, spanInputs:Map<Int, String>, abi:HxiAbi,
+			parameters:Array<HxiParameter>, rawArgumentTypes:Array<String>, resultType:String, resultAbi:HxiAbiValue, spanInputs:Map<Int, String>, abi:HxiAbi,
 			profile:HxiProjectionProfile):Void {
 		// Each count is the length of the first array it counts: a span's length() or an array's length.
 		var counts:Map<String, String> = [],
@@ -1634,7 +1686,12 @@ class HxiHaxeEmitter {
 		output.add('function ${publicName}_span(${arguments.join(", ")}):$resultType {\n');
 		for (check in checks)
 			output.add(check);
-		output.add('\t${resultType == "Void" ? "" : "return "}$rawName(${callArguments.join(", ")});\n');
+		var call = '$rawName(${callArguments.join(", ")})', mask = nativeFlagsMask(resultAbi, abi), decoder = nativeEnumDecoder(resultAbi, abi, profile);
+		if (mask != null)
+			call = nativeFlagsRead(resultType, resultType == "haxe.Int64" ? call : '$call.rawValue()', mask, switch resultAbi { case EnumerationValue(_, 64, _): true; default: false; });
+		else if (decoder != null)
+			call = '$decoder($call.rawValue())';
+		output.add('\t${resultType == "Void" ? "" : "return "}$call;\n');
 		output.add('}\n');
 	}
 
@@ -1719,7 +1776,7 @@ class HxiHaxeEmitter {
 	static function emitOutputWrapper(output:StringBuf, nativeName:String, publicName:String, parameters:Array<compiler.ffi.HxiModel.HxiParameter>,
 			rawArgumentTypes:Array<String>, resultType:String, abi:HxiAbi, profile:HxiProjectionProfile, library:String, nativeSymbol:String,
 			signature:String, pointerOwnedSlotHelper:String, documentation:Null<HxiDocumentation>, moduleName:String, ?ownedHandleResult:String,
-			?aggregateResultType:String, ?nativeResultMask:String, nativeResultWide:Bool = false):Void {
+			?aggregateResultType:String, ?nativeResultMask:String, nativeResultWide:Bool = false, ?nativeResultDecoder:String):Void {
 		var arguments:Array<String> = [], queryArguments:Array<String> = [], callArguments:Array<String> = [], setup:Array<String> = [],
 			reads:Array<String> = [], values:Array<{
 				name:String,
@@ -1785,7 +1842,7 @@ class HxiHaxeEmitter {
 							default: false;
 						})) {
 							var nativeValue = info.handle
-								|| info.flagsMask != null
+								|| (info.flagsMask != null || info.enumDecoder != null)
 								&& info.haxeType != "haxe.Int64" ? '${parameter.name}.rawValue()' : info.code == 15 ? '(${parameter.name} ? 1 : 0)' : parameter.name;
 							setup.push('__hxi_struct_set${structAccess(info.code)}($local, 0, $nativeValue);');
 						}
@@ -1812,6 +1869,8 @@ class HxiHaxeEmitter {
 						expression = 'cast($expression, ${info.haxeType})';
 					else if (info.flagsMask != null)
 						expression = nativeFlagsRead(info.haxeType, expression, info.flagsMask, info.size == 8);
+					else if (info.enumDecoder != null)
+						expression = '${info.enumDecoder}($expression)';
 					values.push({
 						name: parameter.name,
 						type: info.haxeType,
@@ -1963,14 +2022,16 @@ class HxiHaxeEmitter {
 			output.add('\tvar __managed_result = $aggregateResultType.__hxi_attach(__status);\n');
 		else if (nativeResultMask != null)
 			output.add('\tvar __managed_result = ${nativeFlagsRead(resultType, resultType == "haxe.Int64" ? "__status" : "__status.rawValue()", nativeResultMask, nativeResultWide)};\n');
+		else if (nativeResultDecoder != null)
+			output.add('\tvar __managed_result = $nativeResultDecoder(__status.rawValue());\n');
 		if (resultOnly) {
 			if (resultType != "Void")
-				output.add('\treturn ${ownedHandleResult == null && aggregateResultType == null && nativeResultMask == null ? "__status" : "__managed_result"};\n');
+				output.add('\treturn ${ownedHandleResult == null && aggregateResultType == null && nativeResultMask == null && nativeResultDecoder == null ? "__status" : "__managed_result"};\n');
 		} else if (direct)
 			output.add('\treturn ${values[0].expression};\n');
 		else {
 			var resultValues:Array<String> = resultType == "Void" ? [] : [
-				ownedHandleResult == null && aggregateResultType == null && nativeResultMask == null ? "__status" : "__managed_result"];
+				ownedHandleResult == null && aggregateResultType == null && nativeResultMask == null && nativeResultDecoder == null ? "__status" : "__managed_result"];
 			for (value in values)
 				resultValues.push(value.expression);
 			output.add('\treturn new $wrapperResult(${resultValues.join(", ")});\n');
@@ -2136,7 +2197,8 @@ class HxiHaxeEmitter {
 			code: projected.code,
 			size: layout.size,
 			structure: projected.code == 12,
-			flagsMask: nativeFlagsMask(value, abi)
+			flagsMask: nativeFlagsMask(value, abi),
+			enumDecoder: nativeEnumDecoder(value, abi, profile)
 		};
 	}
 
@@ -2167,7 +2229,7 @@ class HxiHaxeEmitter {
 				'if ($name.length > ${maxArrayCount(element.size)}) throw "HXI input array exceeds the 256 MiB safety limit"; var __array_$name = ${element.haxeType}.array($name);'
 			];
 		var access = structAccess(element.code),
-			value = element.code == 15 ? '$name[__index] ? 1 : 0' : element.flagsMask != null
+			value = element.code == 15 ? '$name[__index] ? 1 : 0' : (element.flagsMask != null || element.enumDecoder != null)
 				&& element.haxeType != "haxe.Int64" ? '$name[__index].rawValue()' : '$name[__index]';
 		return [
 			'if ($name.length > ${maxArrayCount(element.size)}) throw "HXI input array exceeds the 256 MiB safety limit"; var __array_$name = __hxi_struct_alloc($name.length * ${element.size}); for (__index in 0...$name.length) __hxi_struct_set$access(__array_$name, __index * ${element.size}, $value);'
@@ -2212,6 +2274,8 @@ class HxiHaxeEmitter {
 			return '$read != 0';
 		if (element.flagsMask != null)
 			return nativeFlagsRead(element.haxeType, read, element.flagsMask, element.size == 8);
+		if (element.enumDecoder != null)
+			return '${element.enumDecoder}($read)';
 		return element.haxeType == "Int" || element.haxeType == "Float" || element.haxeType == "haxe.Int64" ? read : 'cast $read';
 	}
 
@@ -2587,7 +2651,8 @@ class HxiHaxeEmitter {
 						return null;
 					rawParameters.push('$argument:${projected.haxeType}');
 					letters.push(letter);
-					values.push(argument);
+					var decoder = nativeEnumDecoder(classified, abi, profile);
+					values.push(decoder == null ? argument : '$decoder($argument.rawValue())');
 			}
 		}
 		var call = '__callback(${values.join(", ")})', resultLetter:String, returnType:String, body:String, fallback = "";
@@ -2872,6 +2937,39 @@ class HxiHaxeEmitter {
 			case "I64": "haxe.Int64";
 			case "F32" | "F64": "Float";
 			case _: "Int";
+		};
+
+	/** Exact union of consecutive declared codes; gaps remain rejected. */
+	static function nativeEnumCodeGuard(values:Array<String>):String {
+		var codes:Array<Int> = [], seen:Map<Int, Bool> = [];
+		for (value in values) {
+			var code = haxe.Int64.toInt(haxe.Int64.parseString(value));
+			if (!seen.exists(code)) { seen.set(code, true); codes.push(code); }
+		}
+		codes.sort((a, b) -> a < b ? -1 : (a > b ? 1 : 0));
+		var ranges:Array<String> = [], index = 0;
+		while (index < codes.length) {
+			var first = codes[index++], last = first;
+			while (index < codes.length && last != 2147483647 && codes[index] == last + 1)
+				last = codes[index++];
+			ranges.push(first == last ? 'value == $first' : '(value >= $first && value <= $last)');
+		}
+		return ranges.length == 0 ? "false" : ranges.join(" || ");
+	}
+
+	static function nativeEnumDecoder(value:HxiAbiValue, abi:HxiAbi, profile:HxiProjectionProfile):Null<String>
+		return switch value {
+			case EnumerationValue(_, _, _) if (!abi.isFlagsValue(value)):
+				var projected = project(value, false, profile);
+				if (projected == null) throw "Missing native enum decoder type";
+				var separator = projected.haxeType.lastIndexOf("."),
+					owner = separator < 0 ? "" : projected.haxeType.substr(0, separator),
+					name = projected.haxeType.substr(separator + 1),
+					module = separator < 0 ? (profile.typeModule != null ? profile.typeModule : profile.functionModule) : compiler.QualifiedName.last(owner);
+				if (module == null) module = abi.interfaceName;
+				if (module == null) throw "Missing native enum owning module";
+				(owner.length == 0 ? "" : owner + ".") + upperFirst(module) + "EnumDecoders.decode" + name;
+			default: null;
 		};
 
 	/** Native reads discard bits outside the imported schema; source fromRaw stays strict. */

@@ -1,5 +1,6 @@
 package haxeon.ui.core;
 
+import haxeon.ui.NativeEnums;
 import nativekit.ffi.NativeKitTypes;
 import nativekit.ffi.NativeKitTypes.CursorShape as NativeCursorShape;
 
@@ -37,7 +38,7 @@ class NativeCursorController {
 		if (!supportsCursor())
 			return;
 
-		var key = nativeShape(shape);
+		var key = NativeEnums.cursorShape(shape);
 		var owner = cursors.get(key);
 		if (owner == null || owner.isClosed()) {
 			try {
@@ -86,20 +87,5 @@ class NativeCursorController {
 			available = false;
 			return false;
 		}
-	}
-
-	static function nativeShape(shape:UiCursorShape):NativeCursorShape {
-		return switch shape {
-			case UiCursorShape.Text: NativeCursorShape.Ibeam;
-			case UiCursorShape.Crosshair: NativeCursorShape.Crosshair;
-			case UiCursorShape.Hand: NativeCursorShape.Hand;
-			case UiCursorShape.HorizontalResize: NativeCursorShape.HorizontalResize;
-			case UiCursorShape.VerticalResize: NativeCursorShape.VerticalResize;
-			case UiCursorShape.DiagonalResize: NativeCursorShape.NwseResize;
-			case UiCursorShape.DiagonalResizeNesw: NativeCursorShape.NeswResize;
-			case UiCursorShape.Move: NativeCursorShape.Move;
-			case UiCursorShape.NotAllowed: NativeCursorShape.NotAllowed;
-			case UiCursorShape.Arrow: NativeCursorShape.Arrow;
-		};
 	}
 }

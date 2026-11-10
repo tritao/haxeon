@@ -8,16 +8,12 @@ import haxeon.ui.LayoutTransaction;
 function main():Int {
     var sizes = [LayoutSizing.Fit, LayoutSizing.Grow, LayoutSizing.Fixed, LayoutSizing.Percent];
     for (index in 0...sizes.length) {
-        var decoded = LayoutSizing.fromRaw(index);
-        if (decoded == null || decoded != sizes[index] || decoded.rawValue() != index) return 1;
+        if (Type.enumIndex(sizes[index]) != index || haxeon.ui.NativeEnums.layoutSizing(sizes[index]).rawValue() != index) return 1;
     }
-    if (LayoutSizing.fromRaw(-1) != null || LayoutSizing.fromRaw(4) != null) return 2;
     var kinds = [LayoutVisualKind.Box, LayoutVisualKind.Text, LayoutVisualKind.Image, LayoutVisualKind.Custom];
     for (index in 0...kinds.length) {
-        var decoded = LayoutVisualKind.fromRaw(index + 1);
-        if (decoded == null || decoded != kinds[index] || decoded.rawValue() != index + 1) return 3;
+        if (Type.enumIndex(kinds[index]) != index || haxeon.ui.NativeEnums.layoutVisualKind(kinds[index]).rawValue() != index + 1) return 3;
     }
-    if (LayoutVisualKind.fromRaw(0) != null || LayoutVisualKind.fromRaw(5) != null) return 4;
     var style = new LayoutStyle();
     style.width = LayoutAxis.fixed(42);
     style.height = LayoutAxis.grow(3, 90, 2);

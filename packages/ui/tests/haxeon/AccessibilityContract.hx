@@ -66,8 +66,8 @@ class AccessibilityContract {
 			return 1;
 		var tabListRecord:AccessibilitySnapshotNode = cast tabList;
 		var firstTabRecord:AccessibilitySnapshotNode = cast firstTab;
-		var tabOrientation:Int = cast tabListRecord.orientation;
-		var expectedTabOrientation:Int = cast AccessibilityOrientation.Horizontal;
+		var tabOrientation = tabListRecord.orientation;
+		var expectedTabOrientation = AccessibilityOrientation.Horizontal;
 		var tabHasSelect = firstTabRecord.actions.contains(AccessibilityAction.Select);
 		var firstTabSelected = firstTabRecord.states.contains(AccessibilityState.Selected);
 		if (tabOrientation != expectedTabOrientation || !tabHasSelect || !firstTabSelected)
@@ -102,10 +102,10 @@ class AccessibilityContract {
 			allRemoved.nativeUpdate.get_focus() != NativeKitConstants.NK_ACCESSIBILITY_ROOT)
 			return 5;
 		var nativeNodes = AccessibilityBridge.buildNodes(tabsSnapshot);
-		var firstNativeRole:Int = cast nativeNodes[0].get_role();
+		var firstNativeRole = nativeNodes[0].get_role();
 		if (nativeNodes.length != tabsSnapshot.length ||
 			nativeNodes[0].get_struct_size() != AccessibilityNode.size() ||
-			firstNativeRole != AccessibilityRole.TabList)
+			firstNativeRole != nativekit.ffi.NativeKitTypes.AccessibilityRole.TabList)
 			return 6;
 
 		var dismissals = 0;
@@ -300,18 +300,17 @@ class AccessibilityContract {
 		var nativeGrid:Null<AccessibilityNode> = null;
 		var nativeRow:Null<AccessibilityNode> = null;
 		for (node in metadataNative) {
-			var nativeRole:Int = cast node.get_role();
-			if (nativeRole == AccessibilityRole.Cell)
+			var nativeRole = node.get_role();
+			if (nativeRole == nativekit.ffi.NativeKitTypes.AccessibilityRole.Cell)
 				nativeCell = node;
-			else if (nativeRole == AccessibilityRole.Grid)
+			else if (nativeRole == nativekit.ffi.NativeKitTypes.AccessibilityRole.Grid)
 				nativeGrid = node;
-			else if (nativeRole == AccessibilityRole.Row)
+			else if (nativeRole == nativekit.ffi.NativeKitTypes.AccessibilityRole.Row)
 				nativeRow = node;
 		}
-		var nativeGridOrientation:Int = nativeGrid == null ? -1 : cast nativeGrid.get_orientation();
 		if (nativeCell == null || nativeGrid == null || nativeRow == null ||
 			nativeGrid.get_row_count() != 2 || nativeGrid.get_column_count() != 3 ||
-			nativeGridOrientation != AccessibilityOrientation.Horizontal ||
+			nativeGrid.get_orientation() != nativekit.ffi.NativeKitTypes.AccessibilityOrientation.Horizontal ||
 			nativeCell.get_row_index() != 1 || nativeCell.get_column_index() != 2 ||
 			nativeCell.get_row_span() != 1 || nativeCell.get_column_span() != 1 ||
 			nativeRow.get_hierarchy_level() != 1)

@@ -26,6 +26,7 @@ HAXEON_HAXE_BIN="$haxe_bin" "$repo_dir/scripts/haxeon-ffi-import" \
 	--include="$nativekit_root/include" \
 	--output="$generated_dir/nativekit.hxi" \
 	--source-label=bindings/haxe/nativekit_import.h \
+	--exclude-header="$nativekit_root/include/nativekit_net.h" \
 	"$nativekit_import_header"
 
 HAXEON_HAXE_BIN="$haxe_bin" "$repo_dir/scripts/haxeon-ffi-import" \

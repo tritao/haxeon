@@ -110,7 +110,7 @@ class UiInspector {
 		var bounds = geometry == null ? new Rect(0.0, 0.0, 0.0, 0.0) : geometry.bounds();
 		var clip = geometry == null ? new Rect(0.0, 0.0, 0.0, 0.0) : geometry.clipBounds;
 		var content = geometry == null ? new Rect(0.0, 0.0, 0.0, 0.0) : geometry.contentBounds;
-		var role = semantics == null ? -1 : cast semantics.role;
+		var role = semantics == null ? -1 : Type.enumIndex(semantics.role);
 		var styleEntries:Array<StyleInspectionEntry> = includeStyleDetails ? [] : NoEntries;
 		var matchingStyleRules:Array<StyleSource> = includeStyleDetails ? [] : NoRules;
 		if (node.computedStyle != null) {
@@ -154,7 +154,7 @@ class UiInspector {
 		var effectDescriptions = describeEffects(effects);
 		var backdropEffectDescriptions = describeEffects(backdropEffects);
 		output.push(new UiNodeSnapshot(node.id.value, parentId, depth,
-			node.layout.visualKind.rawValue(), bounds, clip, content,
+			Type.enumIndex(node.layout.visualKind), bounds, clip, content,
 			geometry != null && geometry.visible, node.enabled, node.focusable,
 			focused != null && focused.equals(node.id),
 			(node.states).contains(StyleState.Hovered) ||

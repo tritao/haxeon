@@ -150,6 +150,7 @@ class TestCatalog {
 		"EnumInterpreterTypeMain",
 		"EnumDynamicOrderMain",
 		"NullaryEnumCacheMain",
+		"NativeEnumProjectionMain",
 		"ValueInterfaceHelperReuseMain",
 		"NominalInterfaceTypeMain",
 		"NullStringMapMain",

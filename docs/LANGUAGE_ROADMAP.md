@@ -63,6 +63,13 @@ See [KEY_PATHS.md](KEY_PATHS.md) for the specification and measured blocker.
 Drawn mostly from Swift, filtered for Haxeon's goals: value types without allocation, typed native interop, and explicit
 capabilities.
 
+### Generated UI-to-native enum mappings (NativeMapped by case name)
+
+Consider generating exhaustive mappings between plain UI enums and closed native
+binding enums from case names, with an explicit renaming table where necessary.
+Revisit once roughly 15–20 hand-written mappings justify it; native integer
+ownership stays in the generated binding, and UI tags remain independent.
+
 ### Inline enums with payloads
 
 Enums with payloads can allocate one object per value. An inline enum stores its tag and largest

@@ -1,5 +1,6 @@
 package haxeon.ui.semantics;
 
+import haxeon.ui.NativeEnums;
 import haxeon.platform.Surface;
 import nativekit.ffi.NativeKitConstants;
 import nativekit.ffi.NativeKitTypes;
@@ -122,7 +123,7 @@ class AccessibilityBridge {
 		node.set_id(item.id);
 		node.set_parent_id(item.parentId);
 		node.set_child_index(item.childIndex);
-		node.set_role(cast(item.role, AccessibilityRole));
+		node.set_role(NativeEnums.accessibilityRole(item.role));
 		node.set_states(AccessibilityStates.fromRaw(item.states.rawValue()));
 		node.set_actions(AccessibilityActions.fromRaw(item.actions.rawValue()));
 		node.set_reserved0(0);
@@ -148,7 +149,7 @@ class AccessibilityBridge {
 		node.set_row_span(item.rowSpan);
 		node.set_column_span(item.columnSpan);
 		node.set_hierarchy_level(item.hierarchyLevel);
-		node.set_orientation(cast(item.orientation, AccessibilityOrientation));
+		node.set_orientation(NativeEnums.accessibilityOrientation(item.orientation));
 		return node;
 	}
 
@@ -208,5 +209,7 @@ class AccessibilityBridge {
 		}
 		return result;
 	}
+
+
 
 }

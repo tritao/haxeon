@@ -99,3 +99,21 @@ continues to validate the same C ABI independently through `tools/test-wine.sh`.
 ### Cancelling managed dialogs
 
 `runtime.events.requests.cancelDialog(request)` cancels a native dialog and keeps its completion tracked until the terminal event arrives. Repeated cancellation returns `false`. `forget(request)` removes only the completion handler; it does not stop native work. The legacy `cancel(request)` remains an alias for `forget(request)`. Cancelled message dialogs resolve to `Cancelled` even when their button set has no Cancel button.
+
+### Closed native enum values
+
+Generated non-flags enums implement `RawRepresentable` without implicit integer
+conversions. Native reads use non-nullable checked decoders, shared by interfaces
+that import the same type. UI enum names are separate from native codes.
+
+`nativekit_import.h` completes the finite pointer-button domain: GTK can produce
+codes 5/6 although the vendor header names only 0–4 and 7. Additional annotated
+value groups for the same integer typedef merge into one audited enum. This
+keeps the valid range closed at 0–7; it neither changes the vendor ABI nor adds
+an open-enum projection.
+
+The common `nk_result` domain also includes the declared HTTP and transport
+errors used in `event.result` and synchronous receive results. The import header
+uses their C constants to complete that closed domain; HTTP declarations remain
+in the separate Net interface through the existing header-exclusion option.
+`Result.TransportWouldBlock` replaces private numeric status constants.

@@ -1,5 +1,6 @@
 package haxeon.ui.core;
 
+import haxeon.ui.NativeEnums;
 import haxeon.reactive.ReactiveRuntime;
 
 import haxeon.ui.debug.RenderCost;
@@ -857,7 +858,7 @@ class UiContext {
 		for (node in submittedPaintNodes) {
 			var nodeId = node.id.value;
 			if (node.resolved != null && node.cachePolicy != CachePolicy.None)
-				session.setCachePolicy(node.id.value, node.cachePolicy);
+				session.setCachePolicy(node.id.value, NativeEnums.cachePolicy(node.cachePolicy));
 			if (!node.hasPaintHandler() || node.resolved == null) {
 				clearCustomPaintBindings(node.id.value);
 				continue;
@@ -881,7 +882,7 @@ class UiContext {
 						customPaintBound.set(nodeId, true);
 					}
 					if (node.cachePolicy != CachePolicy.None)
-						session.setCustomPaintCachePolicy(nodeId, node.cachePolicy);
+						session.setCustomPaintCachePolicy(nodeId, NativeEnums.cachePolicy(node.cachePolicy));
 				}
 			} else {
 				var canvas = customCanvases.get(nodeId);
@@ -917,7 +918,7 @@ class UiContext {
 					customPaintBound.set(nodeId, false);
 				}
 				if (hasCommands && node.cachePolicy != CachePolicy.None)
-					session.setCustomPaintCachePolicy(nodeId, node.cachePolicy);
+					session.setCustomPaintCachePolicy(nodeId, NativeEnums.cachePolicy(node.cachePolicy));
 				customGeometries.set(nodeId, geometry);
 				customPaintKeys.set(nodeId, node.retainedPaintKey());
 				customContentRevisions.set(nodeId, node.paintRevision);

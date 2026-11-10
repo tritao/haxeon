@@ -2,11 +2,6 @@ package haxeon.ui;
 
 import haxe.io.Bytes;
 import NativeKitUI.NkuiLayoutClipFlags;
-import NativeKitUI.UiLayoutDirection as NativeDirection;
-import NativeKitUI.UiLayoutAlignment as NativeAlignment;
-import NativeKitUI.NkuiLayoutDistribution as NativeDistribution;
-import NativeKitUI.NkuiLayoutWrapMode as NativeWrapMode;
-import NativeKitUI.NkuiLayoutSelfAlignment as NativeSelfAlignment;
 
 /** Encodes a retained Haxe node tree into the single native frame payload. */
 @:noCompletion
@@ -150,12 +145,12 @@ class LayoutTransaction {
 					+ ", height=" + axisDescription(style.height) + ", aspect=" + style.aspectRatio;
 			var determinant = style.transform.a * style.transform.d -
 				style.transform.b * style.transform.c;
-			var childAlignX = alignmentXCode(style.childAlignX);
-			var childAlignY = alignmentYCode(style.childAlignY);
-			var childDistribution = distributionCode(style.childDistribution);
+			var childAlignX = NativeEnums.alignmentXCode(style.childAlignX);
+			var childAlignY = NativeEnums.alignmentYCode(style.childAlignY);
+			var childDistribution = NativeEnums.distributionCode(style.childDistribution);
 			var positioning = style.positioning;
-			var wrapMode = wrapModeCode(style.wrapMode);
-			var alignSelf = selfAlignmentCode(style.alignSelf);
+			var wrapMode = NativeEnums.wrapModeCode(style.wrapMode);
+			var alignSelf = NativeEnums.selfAlignmentCode(style.alignSelf);
 			if (!validSpacing(style.padding.left) || !validSpacing(style.padding.right) ||
 				!validSpacing(style.padding.top) || !validSpacing(style.padding.bottom) ||
 				!validSpacing(style.childGap) || !validSpacing(style.rowGap) ||
@@ -166,10 +161,10 @@ class LayoutTransaction {
 			writeInt(output, record, NativeKitUIConstants.NKUI_LAYOUT_NODE_ID_OFFSET, node.id);
 			writeInt(output, record, NativeKitUIConstants.NKUI_LAYOUT_NODE_PARENT_OFFSET, parents[index]);
 			writeInt(output, record, NativeKitUIConstants.NKUI_LAYOUT_NODE_VISUAL_KIND_OFFSET,
-				node.visualKind.rawValue());
-			writeInt(output, record, NativeKitUIConstants.NKUI_LAYOUT_NODE_WIDTH_SIZING_OFFSET, style.width.sizing.rawValue());
+				NativeEnums.layoutVisualKind(node.visualKind).rawValue());
+			writeInt(output, record, NativeKitUIConstants.NKUI_LAYOUT_NODE_WIDTH_SIZING_OFFSET, NativeEnums.layoutSizing(style.width.sizing).rawValue());
 			writeFloat(output, record, NativeKitUIConstants.NKUI_LAYOUT_NODE_WIDTH_VALUE_OFFSET, style.width.value);
-			writeInt(output, record, NativeKitUIConstants.NKUI_LAYOUT_NODE_HEIGHT_SIZING_OFFSET, style.height.sizing.rawValue());
+			writeInt(output, record, NativeKitUIConstants.NKUI_LAYOUT_NODE_HEIGHT_SIZING_OFFSET, NativeEnums.layoutSizing(style.height.sizing).rawValue());
 			writeFloat(output, record, NativeKitUIConstants.NKUI_LAYOUT_NODE_HEIGHT_VALUE_OFFSET, style.height.value);
 			writeFloat(output, record, NativeKitUIConstants.NKUI_LAYOUT_NODE_WIDTH_MIN_OFFSET, style.width.min);
 			writeFloat(output, record, NativeKitUIConstants.NKUI_LAYOUT_NODE_WIDTH_MAX_OFFSET, style.width.max);
@@ -180,7 +175,7 @@ class LayoutTransaction {
 				style.width.growWeight);
 			writeFloat(output, record, NativeKitUIConstants.NKUI_LAYOUT_NODE_HEIGHT_GROW_WEIGHT_OFFSET,
 				style.height.growWeight);
-			writeInt(output, record, NativeKitUIConstants.NKUI_LAYOUT_NODE_DIRECTION_OFFSET, directionCode(style.direction));
+			writeInt(output, record, NativeKitUIConstants.NKUI_LAYOUT_NODE_DIRECTION_OFFSET, NativeEnums.directionCode(style.direction).rawValue());
 			writeFloat(output, record, NativeKitUIConstants.NKUI_LAYOUT_NODE_PADDING_LEFT_OFFSET, style.padding.left);
 			writeFloat(output, record, NativeKitUIConstants.NKUI_LAYOUT_NODE_PADDING_RIGHT_OFFSET, style.padding.right);
 			writeFloat(output, record, NativeKitUIConstants.NKUI_LAYOUT_NODE_PADDING_TOP_OFFSET, style.padding.top);
@@ -197,14 +192,14 @@ class LayoutTransaction {
 			writeInt(output, record, NativeKitUIConstants.NKUI_LAYOUT_NODE_TEXT_OFFSET_OFFSET, textOffset);
 			writeInt(output, record, NativeKitUIConstants.NKUI_LAYOUT_NODE_TEXT_LENGTH_OFFSET, this.stringBytes[index].length);
 			writeColor(output, record, NativeKitUIConstants.NKUI_LAYOUT_NODE_TEXT_COLOR_OFFSET, node.textColor);
-			writeInt(output, record, NativeKitUIConstants.NKUI_LAYOUT_NODE_FONT_FAMILY_OFFSET, nodeTextStyle.font.rawValue());
+			writeInt(output, record, NativeKitUIConstants.NKUI_LAYOUT_NODE_FONT_FAMILY_OFFSET, NativeEnums.fontFamily(nodeTextStyle.font).rawValue());
 			writeFloat(output, record, NativeKitUIConstants.NKUI_LAYOUT_NODE_FONT_SIZE_OFFSET, nodeTextStyle.fontSize);
 			writeFloat(output, record, NativeKitUIConstants.NKUI_LAYOUT_NODE_LETTER_SPACING_OFFSET, nodeTextStyle.letterSpacing);
 			writeFloat(output, record, NativeKitUIConstants.NKUI_LAYOUT_NODE_LINE_HEIGHT_OFFSET,
 				lineHeight);
-			writeInt(output, record, NativeKitUIConstants.NKUI_LAYOUT_NODE_TEXT_WRAP_OFFSET, nodeParagraphStyle.wrap.rawValue());
-			writeInt(output, record, NativeKitUIConstants.NKUI_LAYOUT_NODE_TEXT_ALIGNMENT_OFFSET, nodeParagraphStyle.alignment.rawValue());
-			writeInt(output, record, NativeKitUIConstants.NKUI_LAYOUT_NODE_TEXT_DIRECTION_OFFSET, nodeParagraphStyle.direction.rawValue());
+			writeInt(output, record, NativeKitUIConstants.NKUI_LAYOUT_NODE_TEXT_WRAP_OFFSET, NativeEnums.textWrap(nodeParagraphStyle.wrap).rawValue());
+			writeInt(output, record, NativeKitUIConstants.NKUI_LAYOUT_NODE_TEXT_ALIGNMENT_OFFSET, NativeEnums.textAlignment(nodeParagraphStyle.alignment).rawValue());
+			writeInt(output, record, NativeKitUIConstants.NKUI_LAYOUT_NODE_TEXT_DIRECTION_OFFSET, NativeEnums.textDirection(nodeParagraphStyle.direction).rawValue());
 			if (nodeParagraphStyle.tabWidth < 0) throw "Tab width cannot be negative";
 			writeInt(output, record, NativeKitUIConstants.NKUI_LAYOUT_NODE_TAB_WIDTH_OFFSET, nodeParagraphStyle.tabWidth);
 			writeInt(output, record, NativeKitUIConstants.NKUI_LAYOUT_NODE_TEXT_FLAGS_OFFSET, 0);
@@ -234,17 +229,17 @@ class LayoutTransaction {
 			}
 			writeInt(output, record, NativeKitUIConstants.NKUI_LAYOUT_NODE_FLAGS_OFFSET, nodeFlags);
 			writeInt(output, record, NativeKitUIConstants.NKUI_LAYOUT_NODE_CHILD_ALIGNMENT_OFFSET,
-				childAlignX | (childAlignY << 8));
+				childAlignX.rawValue() | (childAlignY.rawValue() << 8));
 			writeInt(output, record, NativeKitUIConstants.NKUI_LAYOUT_NODE_CHILD_DISTRIBUTION_OFFSET,
-				childDistribution);
+				childDistribution.rawValue());
 			writeFloat(output, record, NativeKitUIConstants.NKUI_LAYOUT_NODE_ROW_GAP_OFFSET,
 				style.rowGap);
 			writeFloat(output, record, NativeKitUIConstants.NKUI_LAYOUT_NODE_COLUMN_GAP_OFFSET,
 				style.columnGap);
 			writeInt(output, record, NativeKitUIConstants.NKUI_LAYOUT_NODE_WRAP_MODE_OFFSET,
-				wrapMode);
+				wrapMode.rawValue());
 			writeInt(output, record, NativeKitUIConstants.NKUI_LAYOUT_NODE_ALIGN_SELF_OFFSET,
-				alignSelf);
+				alignSelf.rawValue());
 			writeInt(output, record, NativeKitUIConstants.NKUI_LAYOUT_NODE_MEASURE_VERSION_OFFSET,
 				measureVersion);
 			writeFloat(output, record, NativeKitUIConstants.NKUI_LAYOUT_NODE_TRANSFORM_ORIGIN_X_OFFSET,
@@ -334,53 +329,6 @@ class LayoutTransaction {
 		if (index == stringBytes.length) stringBytes.push(text); else stringBytes[index] = text;
 	}
 
-	/** UI case order is independent of the integer codes declared by the native binding. */
-	static inline function directionCode(value:LayoutDirection):Int
-		return switch value {
-			case LeftToRight: NativeDirection.LeftToRight;
-			case TopToBottom: NativeDirection.TopToBottom;
-		};
-
-	static inline function alignmentXCode(value:LayoutAlignmentX):Int
-		return switch value {
-			case Start: NativeAlignment.Start;
-			case End: NativeAlignment.End;
-			case Center: NativeAlignment.Center;
-		};
-
-	static inline function alignmentYCode(value:LayoutAlignmentY):Int
-		return switch value {
-			case Start: NativeAlignment.Start;
-			case End: NativeAlignment.End;
-			case Center: NativeAlignment.Center;
-			case Baseline: NativeAlignment.Baseline;
-		};
-
-	static inline function distributionCode(value:LayoutDistribution):Int
-		return switch value {
-			case Start: NativeDistribution.Start;
-			case Center: NativeDistribution.Center;
-			case End: NativeDistribution.End;
-			case SpaceBetween: NativeDistribution.SpaceBetween;
-			case SpaceAround: NativeDistribution.SpaceAround;
-			case SpaceEvenly: NativeDistribution.SpaceEvenly;
-		};
-
-	static inline function wrapModeCode(value:LayoutWrapMode):Int
-		return switch value {
-			case NoWrap: NativeWrapMode.NoWrap;
-			case Wrap: NativeWrapMode.Wrap;
-		};
-
-	static inline function selfAlignmentCode(value:LayoutSelfAlignment):Int
-		return switch value {
-			case Inherit: NativeSelfAlignment.Inherit;
-			case Start: NativeSelfAlignment.Start;
-			case End: NativeSelfAlignment.End;
-			case Center: NativeSelfAlignment.Center;
-			case Baseline: NativeSelfAlignment.Baseline;
-		};
-
 	static function finite(value:Float):Bool {
 		return value == value && value - value == 0.0;
 	}
@@ -393,7 +341,7 @@ class LayoutTransaction {
 		return finite(value) && value > 0.0;
 
 	static function axisDescription(axis:LayoutAxis):String {
-		return "[" + axis.sizing.rawValue() + "," + axis.value + "," + axis.min + "," + axis.max + "," + axis.growWeight + "]";
+		return "[" + Type.enumIndex(axis.sizing) + "," + axis.value + "," + axis.min + "," + axis.max + "," + axis.growWeight + "]";
 	}
 
 	static function validAxis(axis:LayoutAxis):Bool {

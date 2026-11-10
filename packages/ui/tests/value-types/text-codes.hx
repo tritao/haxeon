@@ -7,31 +7,21 @@ import haxeon.ui.ParagraphStyle;
 import haxeon.ui.LayoutNode;
 import haxeon.ui.LayoutTransaction;
 function main():Int {
-    var valuesFontFamily = [FontFamily.Default, FontFamily.Emoji, FontFamily.Monospace];
-    for (value in valuesFontFamily) {
-        var decoded = FontFamily.fromRaw(value.rawValue());
-        if (decoded == null || decoded != value) return 1;
+    var fonts = [FontFamily.Default, FontFamily.Emoji, FontFamily.Monospace];
+    var fontCodes = [0, 1, 4];
+    for (i in 0...fonts.length)
+        if (Type.enumIndex(fonts[i]) != i || haxeon.ui.NativeEnums.fontFamily(fonts[i]).rawValue() != fontCodes[i]) return 1;
+    var alignments = [TextAlignment.Start, TextAlignment.Center, TextAlignment.End];
+    for (i in 0...alignments.length)
+        if (haxeon.ui.NativeEnums.textAlignment(alignments[i]).rawValue() != i) return 2;
+    var wraps = [TextWrap.None, TextWrap.Word, TextWrap.WordCharacter];
+    for (i in 0...wraps.length)
+        if (haxeon.ui.NativeEnums.textWrap(wraps[i]).rawValue() != i) return 3;
+    var directions = [TextDirection.Auto, TextDirection.Ltr, TextDirection.Rtl];
+    for (i in 0...directions.length) {
+        var native = haxeon.ui.NativeEnums.textDirection(directions[i]);
+        if (native.rawValue() != i || haxeon.ui.NativeEnums.textDirectionFromNative(native) != directions[i]) return 3;
     }
-    if (FontFamily.fromRaw(-1) != null || FontFamily.fromRaw(99) != null) return 2;
-    var valuesTextAlignment = [TextAlignment.Start, TextAlignment.Center, TextAlignment.End];
-    for (value in valuesTextAlignment) {
-        var decoded = TextAlignment.fromRaw(value.rawValue());
-        if (decoded == null || decoded != value) return 1;
-    }
-    if (TextAlignment.fromRaw(-1) != null || TextAlignment.fromRaw(99) != null) return 2;
-    var valuesTextWrap = [TextWrap.None, TextWrap.Word, TextWrap.WordCharacter];
-    for (value in valuesTextWrap) {
-        var decoded = TextWrap.fromRaw(value.rawValue());
-        if (decoded == null || decoded != value) return 1;
-    }
-    if (TextWrap.fromRaw(-1) != null || TextWrap.fromRaw(99) != null) return 2;
-    var valuesTextDirection = [TextDirection.Auto, TextDirection.Ltr, TextDirection.Rtl];
-    for (value in valuesTextDirection) {
-        var decoded = TextDirection.fromRaw(value.rawValue());
-        if (decoded == null || decoded != value) return 1;
-    }
-    if (TextDirection.fromRaw(-1) != null || TextDirection.fromRaw(99) != null) return 2;
-    if (FontFamily.fromRaw(2) != null || FontFamily.fromRaw(3) != null) return 3;
     var node = new LayoutNode(1);
     node.textStyle = new TextStyle(16, FontFamily.Monospace);
     node.paragraphStyle = new ParagraphStyle(TextWrap.WordCharacter, TextAlignment.Center, null, TextDirection.Rtl);

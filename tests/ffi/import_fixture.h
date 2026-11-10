@@ -58,6 +58,11 @@ enum HXI_ENUM(sample_mode) {
     SAMPLE_MODE_ALTERNATE
 };
 
+/* A binding header may name additional values of the same integer domain. */
+enum HXI_ENUM(sample_mode) {
+    SAMPLE_MODE_EXTRA = 2
+};
+
 typedef uint32_t sample_flags;
 enum HXI_FLAGS(sample_flags) {
     SAMPLE_FLAGS_NONE = 0,

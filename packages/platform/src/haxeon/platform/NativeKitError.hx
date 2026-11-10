@@ -8,7 +8,7 @@ class NativeKitError extends PlatformError {
 	public final result:Result;
 
 	public function new(result:Result, operation:String, diagnostic:Null<String>) {
-		super("nativekit", result, operation, diagnostic);
+		super("nativekit", result.rawValue(), operation, diagnostic);
 		this.result = result;
 	}
 }

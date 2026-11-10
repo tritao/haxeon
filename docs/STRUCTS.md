@@ -838,6 +838,57 @@ nominal element type for argument checks.
 `fromRaw()` follows the existing `Null<Int>`/`Null<String>` ABI; this feature does
 not introduce scalar nullable specialization (queue item a2).
 
+### Native enum boundaries
+
+A generated binding owns the native integer codes. Non-flags native enums are
+closed `enum abstract X(Int) implements RawRepresentable`; their parameters and
+record fields retain that type. There are no implicit Int conversions. Ordinary
+UI choices already migrated in this series retain their plain enums. Their
+exhaustive UI-to-native switches share one home, `haxeon.ui.NativeEnums`, including
+layout policy, cursor, effect, mask, cache and accessibility projections. UI
+fingerprints and snapshots use the UI case, independently of native codes.
+For future types, a UI choice that mirrors a native enum one to one uses the
+generated binding type directly; a separate UI enum and mapping are appropriate
+only when the UI meaning differs. RawRepresentable belongs on a distinct UI type
+only when that type's own number is a file, wire or persisted-data format.
+
+Typed reads from C use a generated checked decoder returning X directly, rather
+than the nullable `fromRaw` result. The successful path stays an integer carrier
+and allocates nothing. An unknown code throws at the native boundary. No open
+native enum mechanism is introduced; add one only for a real extensible platform
+contract. Flag reads retain the separate documented policy of masking bits the
+imported schema does not declare.
+
+One out-of-line decoder method is shared per native enum in its owning generated
+type module's decoder class. Dependent interfaces reuse that decoder rather than
+regenerating checks. Consecutive declared codes use exact range guards; sparse
+domains keep their gaps rejected rather than generating one switch arm per code.
+The regression
+fixture covers a dependency and separate function/type modules in the same
+package. Scalar and fixed-array record getters, output values, counted arrays,
+native results and span-call results use the checked projection. Callback enum
+arguments and results also validate at their generated boundary. Explicit raw
+native memory remains subject to the native-memory rules.
+
+The native-enum fixture rejects implicit Int/String conversions on all three
+targets, with inlining off/on. The focused count is zero objects for 8 and 1,024
+successful scalar/fixed-array decode/read/write iterations on each target.
+
+Native declarations must cover every valid code, including unnamed but finite
+values. NativeKit's GTK backend maps physical buttons 6/7 to native codes 5/6,
+while its public header names only codes 0–4 and 7. The binding import header names
+those missing values. The C importer merges compatible `hxi:enum` value groups
+for one integer typedef, canonicalizes the combined raw-value order, and rejects
+conflicting enum/flags contracts. This completes the closed domain 0–7 without
+changing the vendor pin or accepting arbitrary values; code 8 is rejected.
+
+The common native result domain includes the header-declared HTTP/transport
+errors carried in event results and receive calls. These finite domains are
+combined from C constants in the import header, so valid subsystem errors pass
+checked reads while unknown values still fail. The Net API remains in its own
+interface. Cross-target native-record tests cover a transport status, an HTTP
+status and rejection of an unknown result.
+
 ## Closed flags
 
 `enum abstract Access(Int) implements Flags` declares named bits and combinations.

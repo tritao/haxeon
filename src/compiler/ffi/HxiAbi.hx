@@ -30,6 +30,7 @@ typedef HxiTypeLayout = {size:Int, align:Int}
 /** Resolves target-dependent C types without conflating them with fixed-width types. */
 class HxiAbi {
 	public final target:String;
+	public final interfaceName:Null<String>;
 	public final pointerBits:Int;
 	public final longBits:Int;
 	public final wcharBits:Int;
@@ -53,6 +54,7 @@ class HxiAbi {
 
 	function new(model:Null<HxiInterface>, target:String, visibleDeclarations:Null<Map<String, HxiDeclaration>>) {
 		this.model = model;
+		this.interfaceName = model == null ? null : model.name;
 		this.target = target.toLowerCase();
 		var architecture = switch this.target {
 			case "portable-abi64": "portable64";
@@ -137,6 +139,13 @@ class HxiAbi {
 			case Pointer(_), Primitive("utf8"): true;
 			case Nullable(element) | Const(element): pointerLike(element);
 			case _: false;
+		};
+
+	/** Native enums retain their nominal type while sharing the integer call ABI. */
+	public function isEnumValue(value:HxiAbiValue):Bool
+		return switch value {
+			case EnumerationValue(_, _, _): true;
+			default: false;
 		};
 
 	public function isFlagsValue(value:HxiAbiValue):Bool

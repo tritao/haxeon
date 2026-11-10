@@ -14,45 +14,46 @@ class NativeKitEventDecoderTests {
 		var zeroInt = 0;
 		// Request IDs are Int64; this also covers the core signed widening conversion.
 		var zero:haxe.Int64 = zeroInt, empty = haxe.io.Bytes.alloc(0);
-		var unknown = new EventSnapshot(0x7ffffffe, handle(7), zero, -2, 3, 4, empty);
+		var unknownRejected = throws(function() { NativeKitTypes.NativeKitTypesEnumDecoders.decodeEventKind(0x7ffffffe); });
+		var unknown = new EventSnapshot(EventKind.PluginEvent, handle(7), zero, Result.ErrorInvalidArgument, 3, 4, empty);
 		var rawOk = switch NativeEvent.decodeSnapshot(unknown) {
-			case Raw(kind, source, _, result, flags, count, data): kind == 0x7ffffffe && source.rawValue() == 7 && result == -2 && flags == 3 && count == 4 && data == empty;
+			case Raw(kind, source, _, result, flags, count, data): kind == EventKind.PluginEvent && source.rawValue() == 7 && result == Result.ErrorInvalidArgument && flags == 3 && count == 4 && data == empty;
 			case _: false;
 		};
-		var none = new EventSnapshot(EventKind.None, handle(0), zero, 0, 0, 0, empty);
+		var none = new EventSnapshot(EventKind.None, handle(0), zero, Result.Ok, 0, 0, empty);
 		var nonMatch = WindowEventDecoder.decode(none) == null && InputEventDecoder.decode(none) == null && ResourceEventDecoder.decode(none) == null;
 
 		var unterminated = haxe.io.Bytes.alloc(9);
 		putU32(unterminated, 0, 1); putU32(unterminated, 4, 8); unterminated.set(8, 65);
 		var badResource = haxe.io.Bytes.alloc(16);
 		putU32(badResource, 4, 1); putU32(badResource, 8, 16); putU32(badResource, 12, 16);
-		var shortKey = new EventSnapshot(EventKind.Key, handle(0), zero, 0, 0, 0, haxe.io.Bytes.alloc(15));
-		var shortWindow = new EventSnapshot(EventKind.WindowResize, handle(0), zero, 0, 0, 0, haxe.io.Bytes.alloc(7));
-		var shortEdit = new EventSnapshot(EventKind.TextEdit, handle(0), zero, 0, 0, 0, haxe.io.Bytes.alloc(47));
+		var shortKey = new EventSnapshot(EventKind.Key, handle(0), zero, Result.Ok, 0, 0, haxe.io.Bytes.alloc(15));
+		var shortWindow = new EventSnapshot(EventKind.WindowResize, handle(0), zero, Result.Ok, 0, 0, haxe.io.Bytes.alloc(7));
+		var shortEdit = new EventSnapshot(EventKind.TextEdit, handle(0), zero, Result.Ok, 0, 0, haxe.io.Bytes.alloc(47));
 		var messagePayload = haxe.io.Bytes.alloc(4);
 		putU32(messagePayload, 0, 3);
-		var messageContext = new EventSnapshot(EventKind.DialogMessageComplete, handle(0), zero, 0, 4, 0, messagePayload);
+		var messageContext = new EventSnapshot(EventKind.DialogMessageComplete, handle(0), zero, Result.Ok, 4, 0, messagePayload);
 		var messageOk = switch NativeEvent.decodeSnapshot(messageContext) {
-			case DialogMessage(_, 0, 3, false): true;
+			case DialogMessage(_, Result.Ok, MessageResult.Yes, false): true;
 			case _: false;
 		};
 		var checkedPayload = haxe.io.Bytes.alloc(8);
 		putU32(checkedPayload, 0, 3); putU32(checkedPayload, 4, 1);
-		var checkedContext = new EventSnapshot(EventKind.DialogMessageComplete, handle(0), zero, 0, 4, 0, checkedPayload);
+		var checkedContext = new EventSnapshot(EventKind.DialogMessageComplete, handle(0), zero, Result.Ok, 4, 0, checkedPayload);
 		messageOk = messageOk && switch NativeEvent.decodeSnapshot(checkedContext) {
-			case DialogMessage(_, 0, 3, true): true;
+			case DialogMessage(_, Result.Ok, MessageResult.Yes, true): true;
 			case _: false;
 		};
 		var resourcesPayload = haxe.io.Bytes.alloc(16);
 		putU32(resourcesPayload, 8, 16); putU32(resourcesPayload, 12, 16);
-		var resourcesContext = new EventSnapshot(EventKind.DialogResourcesComplete, handle(0), zero, 0, 5, 0, resourcesPayload);
+		var resourcesContext = new EventSnapshot(EventKind.DialogResourcesComplete, handle(0), zero, Result.Ok, 5, 0, resourcesPayload);
 		var resourcesOk = switch NativeEvent.decodeSnapshot(resourcesContext) {
-			case Resources(kind, _, result, accepted, items): kind == EventKind.DialogResourcesComplete && result == 0 && !accepted && items.length == 0;
+			case Resources(kind, _, result, accepted, items): kind == EventKind.DialogResourcesComplete && result == Result.Ok && !accepted && items.length == 0;
 			case _: false;
 		};
 		var resourceCacheEventsOk = switch [
 			NativeEvent.decodeSnapshot(new EventSnapshot(EventKind.ResourceCacheReady,
-				handle(24), haxe.Int64.ofInt(25), 0, 0, 0, empty)),
+				handle(24), haxe.Int64.ofInt(25), Result.Ok, 0, 0, empty)),
 			NativeEvent.decodeSnapshot(new EventSnapshot(EventKind.ResourceCacheLoadFailed,
 				handle(25), haxe.Int64.ofInt(26), Result.ErrorUnknown, 0, 0, empty))
 		] {
@@ -62,22 +63,22 @@ class NativeKitEventDecoderTests {
 			case _: false;
 		};
 		var editPayload = haxe.io.Bytes.alloc(50);
-		putU32(editPayload, 0, TextEditAction.Compose);
+		putU32(editPayload, 0, TextEditAction.Compose.rawValue());
 		putU32(editPayload, 4, 48); putU32(editPayload, 8, 2);
 		putU32(editPayload, 12, 1); putU32(editPayload, 16, 2);
 		putU32(editPayload, 20, 2); putU32(editPayload, 24, 2);
 		putU32(editPayload, 28, 1); putU32(editPayload, 32, 2);
 		putU32(editPayload, 36, 1); putU32(editPayload, 40, 6);
 		editPayload.set(48, 0xc3); editPayload.set(49, 0xa9);
-		var editContext = new EventSnapshot(EventKind.TextEdit, handle(9), zero, 0, 0, 0, editPayload);
+		var editContext = new EventSnapshot(EventKind.TextEdit, handle(9), zero, Result.Ok, 0, 0, editPayload);
 		var editOk = switch NativeEvent.decodeSnapshot(editContext) {
-			case TextEdit(source, edit): source.rawValue() == 9 && edit.action == TextEditAction.Compose && edit.text == "é" && edit.replaceStart == 1 && edit.compositionEnd == 2 && edit.selectionAffinity == 1 && edit.historyKind == 6;
+			case TextEdit(source, edit): source.rawValue() == 9 && edit.action == TextEditAction.Compose && edit.text == "é" && edit.replaceStart == 1 && edit.compositionEnd == 2 && edit.selectionAffinity == 1 && edit.historyKind == nativekit.ffi.NativeKitTypes.TextEditHistoryKind.Composition;
 			case _: false;
 		};
 		var invalidEditMetadata = editPayload.sub(0, editPayload.length);
 		putU32(invalidEditMetadata, 40, 7);
 		var invalidEditMetadataContext = new EventSnapshot(EventKind.TextEdit,
-			handle(9), zero, 0, 0, 0, invalidEditMetadata);
+			handle(9), zero, Result.Ok, 0, 0, invalidEditMetadata);
 		var invalidUtf8 = haxe.io.Bytes.alloc(50);
 		putU32(invalidUtf8, 4, 48); putU32(invalidUtf8, 8, 2);
 		invalidUtf8.set(48, 0xc0); invalidUtf8.set(49, 0x80);
@@ -89,7 +90,7 @@ class NativeKitEventDecoderTests {
 		putU32(accessibilityPayload, 24, 1);
 		accessibilityPayload.set(32, 0x6f); accessibilityPayload.set(33, 0x6b);
 		var accessibilityContext = new EventSnapshot(EventKind.AccessibilityAction,
-			handle(15), zero, 0, 0, 0, accessibilityPayload);
+			handle(15), zero, Result.Ok, 0, 0, accessibilityPayload);
 		var accessibilityOk = switch NativeEvent.decodeSnapshot(accessibilityContext) {
 			case AccessibilityAction(source, nodeId, action, value, selectionStart, selectionEnd, granularity):
 				source.rawValue() == 15 && nodeId == 77 && action == 1 && value == "ok" &&
@@ -98,61 +99,75 @@ class NativeKitEventDecoderTests {
 		};
 		var unterminatedAccessibility = accessibilityPayload.sub(0, 34);
 		var unterminatedAccessibilityContext = new EventSnapshot(EventKind.AccessibilityAction,
-			handle(15), zero, 0, 0, 0, unterminatedAccessibility);
+			handle(15), zero, Result.Ok, 0, 0, unterminatedAccessibility);
 
 		var keyPayload = haxe.io.Bytes.alloc(16);
-		putU32(keyPayload, 0, Key.Escape); putU32(keyPayload, 4, 41);
-		putU32(keyPayload, 8, InputAction.Press); putU32(keyPayload, 12, Modifiers.Control.rawValue() | (1 << 30));
-		var keyContext = new EventSnapshot(EventKind.Key, handle(12), zero, 0, 0, 0, keyPayload);
+		putU32(keyPayload, 0, Key.Escape.rawValue()); putU32(keyPayload, 4, 41);
+		putU32(keyPayload, 8, InputAction.Press.rawValue()); putU32(keyPayload, 12, Modifiers.Control.rawValue() | (1 << 30));
+		var keyContext = new EventSnapshot(EventKind.Key, handle(12), zero, Result.Ok, 0, 0, keyPayload);
 		var typedKeyOk = switch NativeEvent.decodeSnapshot(keyContext) {
 			case Key(source, key, scancode, action, modifiers):
 				source.rawValue() == 12 && key == Key.Escape && scancode == 41 && action == InputAction.Press
 					&& modifiers == Modifiers.Control;
 			case _: false;
 		};
+		// GTK can report the unnamed sixth/seventh buttons; the binding import
+		// header completes that finite native domain without accepting arbitrary codes.
+		var extraButtonsOk = true;
+		for (code in [5, 6]) {
+			var payload = haxe.io.Bytes.alloc(32);
+			putU32(payload, 0, code);
+			putU32(payload, 4, InputAction.Press.rawValue());
+			var snapshot = new EventSnapshot(EventKind.PointerButton, handle(12), zero, Result.Ok, 0, 0, payload);
+			extraButtonsOk = extraButtonsOk && switch NativeEvent.decodeSnapshot(snapshot) {
+				case PointerButton(_, button, action, _, _, _): button.rawValue() == code && action == InputAction.Press;
+				case _: false;
+			};
+		}
+		var invalidButtonRejected = throws(function() { NativeKitTypes.NativeKitTypesEnumDecoders.decodePointerButton(8); });
 		var hatPayload = haxe.io.Bytes.alloc(8);
 		putU32(hatPayload, 0, 2); putU32(hatPayload, 4, (JoystickHatFlags.Up | JoystickHatFlags.Left).rawValue());
-		var hatContext = new EventSnapshot(EventKind.JoystickHat, handle(13), zero, 0, 0, 0, hatPayload);
+		var hatContext = new EventSnapshot(EventKind.JoystickHat, handle(13), zero, Result.Ok, 0, 0, hatPayload);
 		var typedHatOk = switch NativeEvent.decodeSnapshot(hatContext) {
 			case JoystickHat(source, hat, value):
-				source.rawValue() == 13 && hat == 2 && !(value & JoystickHatFlags.Up).isEmpty()
-					&& !(value & JoystickHatFlags.Left).isEmpty();
+				source.rawValue() == 13 && hat == 2 && value.contains(JoystickHatFlags.Up)
+					&& value.contains(JoystickHatFlags.Left);
 			case _: false;
 		};
-		var navigationContext = new EventSnapshot(EventKind.WebviewNavigationFailed, handle(14), zero, 0,
-			NavigationError.NotFound, 0, empty);
+		var navigationContext = new EventSnapshot(EventKind.WebviewNavigationFailed, handle(14), zero, Result.Ok,
+			NavigationError.NotFound.rawValue(), 0, empty);
 		var typedNavigationOk = switch NativeEvent.decodeSnapshot(navigationContext) {
 			case WebViewNavigationFailed(source, category, _): source.rawValue() == 14 && category == NavigationError.NotFound;
 			case _: false;
 		};
 		var taskPayload = haxe.io.Bytes.alloc(4);
 		putU32(taskPayload, 0, 0x1234);
-		var taskContext = new EventSnapshot(EventKind.TaskComplete, handle(21), zero, 0,
+		var taskContext = new EventSnapshot(EventKind.TaskComplete, handle(21), zero, Result.Ok,
 			0, 1, taskPayload);
 		var taskOk = switch NativeEvent.decodeSnapshot(taskContext) {
-			case TaskComplete(source, result, data): source.rawValue() == 21 && result == 0 && data == taskPayload;
+			case TaskComplete(source, result, data): source.rawValue() == 21 && result == Result.Ok && data == taskPayload;
 			case _: false;
 		};
 		var audioContext = new EventSnapshot(EventKind.AudioVoiceComplete,
-			handle(16), zero, 0, 0, 0, empty);
+			handle(16), zero, Result.Ok, 0, 0, empty);
 		var audioOk = switch NativeEvent.decodeSnapshot(audioContext) {
 			case AudioVoiceComplete(source): source.rawValue() == 16;
 			case _: false;
 		};
 		var audioTransitionEventsOk = switch [
 			NativeEvent.decodeSnapshot(new EventSnapshot(EventKind.AudioVoiceStolen,
-				handle(21), zero, 0, 0, 0, empty)),
+				handle(21), zero, Result.Ok, 0, 0, empty)),
 			NativeEvent.decodeSnapshot(new EventSnapshot(EventKind.AudioVoiceVirtualized,
-				handle(22), zero, 0, 0, 0, empty)),
+				handle(22), zero, Result.Ok, 0, 0, empty)),
 			NativeEvent.decodeSnapshot(new EventSnapshot(EventKind.AudioVoiceResumed,
-				handle(23), zero, 0, 0, 0, empty))
+				handle(23), zero, Result.Ok, 0, 0, empty))
 		] {
 			case [AudioVoiceStolen(stolen), AudioVoiceVirtualized(virtualized), AudioVoiceResumed(resumed)]:
 				stolen.rawValue() == 21 && virtualized.rawValue() == 22 && resumed.rawValue() == 23;
 			case _: false;
 		};
 		var audioReadyContext = new EventSnapshot(EventKind.AudioVoiceReady,
-			handle(17), zero, 0, 0, 0, empty);
+			handle(17), zero, Result.Ok, 0, 0, empty);
 		var audioReadyOk = switch NativeEvent.decodeSnapshot(audioReadyContext) {
 			case AudioVoiceReady(source): source.rawValue() == 17;
 			case _: false;
@@ -186,11 +201,11 @@ class NativeKitEventDecoderTests {
 			case _: false;
 		};
 		var audioDeviceEventsOk = switch [
-			NativeEvent.decodeSnapshot(new EventSnapshot(EventKind.AudioDeviceStarted, handle(0), zero, 0, 0, 0, empty)),
-			NativeEvent.decodeSnapshot(new EventSnapshot(EventKind.AudioDeviceStopped, handle(0), zero, 0, 0, 0, empty)),
-			NativeEvent.decodeSnapshot(new EventSnapshot(EventKind.AudioDeviceRerouted, handle(0), zero, 0, 0, 0, empty)),
-			NativeEvent.decodeSnapshot(new EventSnapshot(EventKind.AudioDeviceInterruptionBegan, handle(0), zero, 0, 0, 0, empty)),
-			NativeEvent.decodeSnapshot(new EventSnapshot(EventKind.AudioDeviceInterruptionEnded, handle(0), zero, 0, 0, 0, empty))
+			NativeEvent.decodeSnapshot(new EventSnapshot(EventKind.AudioDeviceStarted, handle(0), zero, Result.Ok, 0, 0, empty)),
+			NativeEvent.decodeSnapshot(new EventSnapshot(EventKind.AudioDeviceStopped, handle(0), zero, Result.Ok, 0, 0, empty)),
+			NativeEvent.decodeSnapshot(new EventSnapshot(EventKind.AudioDeviceRerouted, handle(0), zero, Result.Ok, 0, 0, empty)),
+			NativeEvent.decodeSnapshot(new EventSnapshot(EventKind.AudioDeviceInterruptionBegan, handle(0), zero, Result.Ok, 0, 0, empty)),
+			NativeEvent.decodeSnapshot(new EventSnapshot(EventKind.AudioDeviceInterruptionEnded, handle(0), zero, Result.Ok, 0, 0, empty))
 		] {
 			case [AudioDeviceStarted, AudioDeviceStopped, AudioDeviceRerouted,
 				AudioDeviceInterruptionBegan, AudioDeviceInterruptionEnded]: true;
@@ -200,7 +215,7 @@ class NativeKitEventDecoderTests {
 		if (!messageOk) throw "message completion decoding failed";
 		if (!resourcesOk) throw "resource completion decoding failed";
 		if (!resourceCacheEventsOk) throw "resource cache event decoding failed";
-		return decodedResourceIsReusable() && rawOk && nonMatch && editOk && typedKeyOk && typedHatOk && typedNavigationOk && accessibilityOk && taskOk && audioOk
+		return decodedResourceIsReusable() && unknownRejected && rawOk && nonMatch && editOk && extraButtonsOk && invalidButtonRejected && typedKeyOk && typedHatOk && typedNavigationOk && accessibilityOk && taskOk && audioOk
 			&& audioReadyOk && audioFailedOk
 			&& audioClipReadyOk && audioClipFailedOk
 			&& audioTransitionEventsOk

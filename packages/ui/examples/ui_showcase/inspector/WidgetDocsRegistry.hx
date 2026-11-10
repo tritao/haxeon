@@ -30,86 +30,86 @@ import haxeon.ui.semantics.AccessibilityAction;
 import haxeon.ui.semantics.AccessibilityRole;
 import haxeon.ui.semantics.AccessibilityState;
 
-/** API synopsis and canonical usage examples keyed by semantic widget role. */
+/** API synopsis keyed by the UI enum case index stored in inspector snapshots. */
 class WidgetDocsRegistry {
 	public static function describe(role:Int):{description:String, behavior:String, code:String} {
 		return switch role {
-			case AccessibilityRole.Button: {
+			case Type.enumIndex(AccessibilityRole.Button): {
 				description: "A compositional action control. Haxe owns its interaction state and semantic action; the render tree contains a box and label.",
 				behavior: "Activate with click, Enter or Space. It participates in keyboard focus and exposes an Activate accessibility action.",
 				code: 'var save = new Button("Save changes", style, onActivate, "save");\nsave.variant = ButtonVariant.Primary;'
 			};
-			case AccessibilityRole.Checkbox: {
+			case Type.enumIndex(AccessibilityRole.Checkbox): {
 				description: "A boolean selection control composed from ordinary Haxe layout and paint nodes.",
 				behavior: "Click or press Space to toggle. Checked state is reflected in the semantic value and state bits.",
 				code: 'new Checkbox("show-labels", "Show labels", checked, onChange)'
 			};
-			case AccessibilityRole.Radio: {
+			case Type.enumIndex(AccessibilityRole.Radio): {
 				description: "One option in an exclusive radio selection group.",
 				behavior: "Arrow keys move between enabled options; Space or Enter selects the focused option.",
 				code: 'new RadioGroup("density", options, selected, onChange)'
 			};
-			case AccessibilityRole.TextField: {
+			case Type.enumIndex(AccessibilityRole.TextField): {
 				description: "An editable text control backed by Haxeon editor state and native text-input services.",
 				behavior: "Pointer hit testing positions the caret; keyboard selection/editing and platform clipboard and IME are supported where available.",
 				code: 'new TextField("name", value, onChange, style, "Display name")'
 			};
-			case AccessibilityRole.Slider: {
+			case Type.enumIndex(AccessibilityRole.Slider): {
 				description: "A continuous range control with pointer, keyboard and semantic value support.",
 				behavior: "Drag the thumb or track; arrow keys and accessibility increment/decrement adjust the snapped value.",
 				code: 'new Slider("volume", "Volume", value, 0, 1, 0.01, onChange)'
 			};
-			case AccessibilityRole.ScrollArea: {
+			case Type.enumIndex(AccessibilityRole.ScrollArea): {
 				description: "A clipped viewport that translates persistent content using Haxe-owned scroll state.",
 				behavior: "Wheel, touch/drag, and semantic forward/back actions update the scroll controller.",
 				code: 'new ScrollView("results", content, style, ScrollAxis.Vertical)'
 			};
-			case AccessibilityRole.List, AccessibilityRole.ListItem: {
+			case Type.enumIndex(AccessibilityRole.List), Type.enumIndex(AccessibilityRole.ListItem): {
 				description: "A list container or a realized item within a data-oriented view.",
 				behavior: "The model-backed list builds only visible rows plus a small overscan window, preserves stable item keys, and exposes collection semantics.",
 				code: 'new ListView("rows", model, style, controller, viewportHeight)'
 			};
-			case AccessibilityRole.Image: {
+			case Type.enumIndex(AccessibilityRole.Image): {
 				description: "A rendered image with an optional accessible name.",
 				behavior: "The image participates in normal layout, clipping and render order.",
 				code: 'new ImageView("avatar", image, "Profile photo")'
 			};
-			case AccessibilityRole.Heading: {
+			case Type.enumIndex(AccessibilityRole.Heading): {
 				description: "A heading that identifies a section of the current demo.",
 				behavior: "Headings expose a navigable semantic role while rendering with the shared text pipeline.",
 				code: 'new Text("Section title", headingStyle)'
 			};
-			case AccessibilityRole.Group: {
+			case Type.enumIndex(AccessibilityRole.Group): {
 				description: "A layout or grouping node in the Haxe-owned render tree.",
 				behavior: "It composes children and contributes resolved bounds, clipping and z-order without adding a native widget abstraction.",
 				code: 'new Column("settings", [keyed("name", nameField)])'
 			};
-			case AccessibilityRole.Switch: {
+			case Type.enumIndex(AccessibilityRole.Switch): {
 				description: "A two-position control with switch semantics and Haxe-owned checked state.",
 				behavior: "Click or press Space to toggle. Checked state is announced as a switch value.",
 				code: 'new Toggle("notifications", "Notifications", enabled, onChange)'
 			};
-			case AccessibilityRole.ComboBox: {
+			case Type.enumIndex(AccessibilityRole.ComboBox): {
 				description: "A typed selection control with either a compact trigger or an editable query field and a keyboard-navigable option list.",
 				behavior: "Click or press Enter/Space to open. ComboBox text filters options; arrow keys move between enabled options; long lists scroll, Enter selects, Escape or an outside click closes, and the list stays anchored to the control.",
 				code: 'new ComboBox("density", options, selected, onChange)'
 			};
-			case AccessibilityRole.ProgressBar: {
+			case Type.enumIndex(AccessibilityRole.ProgressBar): {
 				description: "A non-interactive determinate or indeterminate indicator driven by the shared animation scheduler.",
 				behavior: "Determinate values animate visually while accessibility receives the current value immediately. Indeterminate mode reports busy state and respects reduced motion.",
 				code: 'var progress = new ProgressBar("upload", value, 0, 1, "Upload progress");\nprogress.mode = ProgressMode.Indeterminate;'
 			};
-			case AccessibilityRole.Dialog: {
+			case Type.enumIndex(AccessibilityRole.Dialog): {
 				description: "A modal surface for a focused task, composed above the application tree.",
 				behavior: "Dismiss or complete the task with its controls; modal semantics and focus are exposed with the dialog.",
 				code: 'new Dialog("confirm", "Confirm", content, onDismiss)'
 			};
-			case AccessibilityRole.Menu, AccessibilityRole.MenuBar, AccessibilityRole.MenuItem: {
+			case Type.enumIndex(AccessibilityRole.Menu), Type.enumIndex(AccessibilityRole.MenuBar), Type.enumIndex(AccessibilityRole.MenuItem): {
 				description: "A command surface or one of its actionable menu entries.",
 				behavior: "Menu commands expose their labels, enabled state and activation action.",
 				code: 'new Menu("file-menu", items, width, height, onDismiss)'
 			};
-			case AccessibilityRole.TabList, AccessibilityRole.Tab, AccessibilityRole.TabPanel: {
+			case Type.enumIndex(AccessibilityRole.TabList), Type.enumIndex(AccessibilityRole.Tab), Type.enumIndex(AccessibilityRole.TabPanel): {
 				description: "A tab navigation surface with an active tab and associated panel.",
 				behavior: "Use arrow keys to move between tabs and Enter or Space to activate the focused tab.",
 				code: 'new Tabs("settings", tabs, selected, onChange)'
@@ -124,42 +124,42 @@ class WidgetDocsRegistry {
 
 	public static function roleName(role:Int):String {
 		return switch role {
-			case AccessibilityRole.Group: "Group";
-			case AccessibilityRole.Button: "Button";
-			case AccessibilityRole.Checkbox: "Checkbox";
-			case AccessibilityRole.Radio: "Radio";
-			case AccessibilityRole.Text: "Text";
-			case AccessibilityRole.TextField: "TextField";
-			case AccessibilityRole.Link: "Link";
-			case AccessibilityRole.Image: "Image";
-			case AccessibilityRole.Heading: "Heading";
-			case AccessibilityRole.List: "List";
-			case AccessibilityRole.ListItem: "ListItem";
-			case AccessibilityRole.Slider: "Slider";
-			case AccessibilityRole.ScrollArea: "ScrollArea";
-			case AccessibilityRole.Dialog: "Dialog";
-			case AccessibilityRole.Menu: "Menu";
-			case AccessibilityRole.MenuBar: "MenuBar";
-			case AccessibilityRole.MenuItem: "MenuItem";
-			case AccessibilityRole.TabList: "TabList";
-			case AccessibilityRole.Tab: "Tab";
-			case AccessibilityRole.TabPanel: "TabPanel";
-			case AccessibilityRole.Switch: "Switch";
-			case AccessibilityRole.ProgressBar: "ProgressBar";
-			case AccessibilityRole.ComboBox: "ComboBox";
-			case AccessibilityRole.Collection: "Collection";
-			case AccessibilityRole.CollectionItem: "CollectionItem";
-			case AccessibilityRole.Grid: "Grid";
-			case AccessibilityRole.Row: "Row";
-			case AccessibilityRole.Cell: "Cell";
-			case AccessibilityRole.ColumnHeader: "ColumnHeader";
-			case AccessibilityRole.RowHeader: "RowHeader";
-			case AccessibilityRole.Tree: "Tree";
-			case AccessibilityRole.TreeItem: "TreeItem";
-			case AccessibilityRole.Separator: "Separator";
-			case AccessibilityRole.Toolbar: "Toolbar";
-			case AccessibilityRole.Status: "Status";
-			case AccessibilityRole.Alert: "Alert";
+			case Type.enumIndex(AccessibilityRole.Group): "Group";
+			case Type.enumIndex(AccessibilityRole.Button): "Button";
+			case Type.enumIndex(AccessibilityRole.Checkbox): "Checkbox";
+			case Type.enumIndex(AccessibilityRole.Radio): "Radio";
+			case Type.enumIndex(AccessibilityRole.Text): "Text";
+			case Type.enumIndex(AccessibilityRole.TextField): "TextField";
+			case Type.enumIndex(AccessibilityRole.Link): "Link";
+			case Type.enumIndex(AccessibilityRole.Image): "Image";
+			case Type.enumIndex(AccessibilityRole.Heading): "Heading";
+			case Type.enumIndex(AccessibilityRole.List): "List";
+			case Type.enumIndex(AccessibilityRole.ListItem): "ListItem";
+			case Type.enumIndex(AccessibilityRole.Slider): "Slider";
+			case Type.enumIndex(AccessibilityRole.ScrollArea): "ScrollArea";
+			case Type.enumIndex(AccessibilityRole.Dialog): "Dialog";
+			case Type.enumIndex(AccessibilityRole.Menu): "Menu";
+			case Type.enumIndex(AccessibilityRole.MenuBar): "MenuBar";
+			case Type.enumIndex(AccessibilityRole.MenuItem): "MenuItem";
+			case Type.enumIndex(AccessibilityRole.TabList): "TabList";
+			case Type.enumIndex(AccessibilityRole.Tab): "Tab";
+			case Type.enumIndex(AccessibilityRole.TabPanel): "TabPanel";
+			case Type.enumIndex(AccessibilityRole.Switch): "Switch";
+			case Type.enumIndex(AccessibilityRole.ProgressBar): "ProgressBar";
+			case Type.enumIndex(AccessibilityRole.ComboBox): "ComboBox";
+			case Type.enumIndex(AccessibilityRole.Collection): "Collection";
+			case Type.enumIndex(AccessibilityRole.CollectionItem): "CollectionItem";
+			case Type.enumIndex(AccessibilityRole.Grid): "Grid";
+			case Type.enumIndex(AccessibilityRole.Row): "Row";
+			case Type.enumIndex(AccessibilityRole.Cell): "Cell";
+			case Type.enumIndex(AccessibilityRole.ColumnHeader): "ColumnHeader";
+			case Type.enumIndex(AccessibilityRole.RowHeader): "RowHeader";
+			case Type.enumIndex(AccessibilityRole.Tree): "Tree";
+			case Type.enumIndex(AccessibilityRole.TreeItem): "TreeItem";
+			case Type.enumIndex(AccessibilityRole.Separator): "Separator";
+			case Type.enumIndex(AccessibilityRole.Toolbar): "Toolbar";
+			case Type.enumIndex(AccessibilityRole.Status): "Status";
+			case Type.enumIndex(AccessibilityRole.Alert): "Alert";
 			default: "Text";
 		};
 	}
