@@ -67,10 +67,17 @@ tree as measured; the other 57 had stopped compiling because of the `IrFunction`
 - Slowest by wall (compile + run): LiveClosureHostMain 33.7 s (27 s run, mostly waiting), GcIncrementalMain 20.2 s (20 s CPU in the run),
   CompilerGapsMain 15.3 s, CompilerKeepAliveMain 12.1 s, LiveStrictRefusalMain 12.1 s, InheritedMethodContractMain 10.9 s,
   BuildSystemMain 10.5 s (10 s run), TypedMetadataMergeMain 9.9 s, CodeIdentityMain 9.2 s, LiveStrictSignatureLambdaMain 9.0 s.
-- They share one cost, the compile. A Haxe compilation server (`haxe --wait` once, `--connect` per main) reuses the typed compiler
-  sources: on six mains the first compile took 7.1 s and the next five took 1.5-3.8 s (fresh: 6.5 s), with identical output on the one I
-  compared. That is a 2-4x cut of the dominant cost: the named phase (530-580 s at -j4) should fall to roughly 200-300 s. Mains stay
-  independent processes; only the compiler's typed module cache is shared.
+- They share one cost, the compile. **Tried: a Haxe compilation server (one `haxe --wait` per worker, mains connecting with `--connect`)
+  and rejected.** On 32 named cases at -j4 it took 62 s against 87 s without servers, a 29% gain including the warm-up of the four
+  servers, not the 2-4x that six single compiles suggested (four servers each type-check the compiler's sources once). More important,
+  its output depends on typing order: a fresh compile is byte-identical to another fresh compile, and a cold server equals a fresh
+  compile, but a warm server's module for the same main differs (same length of dump, different function indices and constant-pool
+  order). A sample audit that recompiled three mains fresh and compared bytes failed on two of them. The difference is probably benign
+  ordering, but a cache whose results cannot be shown equal to a fresh build is not a safe speed-up for a gate, and weakening the audit to
+  a behavioral comparison would only restate what the case checks. The patch is kept in the scratch directory, not in the tree.
+- What remains for the named phase: compile all mains into one module and select the main by argument (feasibility not yet checked:
+  every class's static initializers would run at every start, and mains may depend on isolated global state), only if the named phase
+  still matters after the other changes.
 
 ## 4. -j8
 
@@ -91,7 +98,7 @@ and the `provides` row come from the generator and a change in either fails the 
 
 ## 6. Order I would do it in
 
-1. Compilation server for named cases (largest saving, no coverage change).
+1. ~~Compilation server for named cases~~ (rejected, see section 3).
 2. The checked-suite split above, with the warm edit-rebuild addition.
 3. HelperFixtures.
 4. -j8 behind the memory floor check.
