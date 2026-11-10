@@ -1,5 +1,6 @@
 package compiler.backend.wasm.gc;
 
+import compiler.ir.IrReachability;
 import compiler.backend.wasm.WasmFlattenValueFields;
 
 import haxe.io.Bytes as HaxeBytes;
@@ -1072,7 +1073,7 @@ class WasmGcRepresentation implements WasmValueRepresentation implements WasmAgg
 		var body:Array<WasmInstruction> = [];
 		for (name in classes) {
 			var objectType = plan.objectType(name),
-				method = WasmModuleSupport.stringMethod(program, name),
+				method = IrReachability.stringMethod(program, name),
 				methodIndex = method == null ? null : gc.functions.get(method);
 			body.push(LocalGet(valueLocal));
 			body.push(RefTest({nullable: false, heap: Type(objectType)}));

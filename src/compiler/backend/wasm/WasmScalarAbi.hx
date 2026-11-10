@@ -1,5 +1,7 @@
 package compiler.backend.wasm;
 
+import compiler.ir.IrReachability;
+import compiler.ir.IrProgramIndex;
 import compiler.backend.wasm.WasmScalarClosureEscapes;
 
 import compiler.backend.wasm.WasmValueLayout;
@@ -11,7 +13,6 @@ import compiler.ir.IrOperands;
 import compiler.ir.IrVerifier;
 import compiler.ir.SourceProvenance.Located;
 import compiler.backend.wasm.WasmModuleSupport;
-import compiler.backend.wasm.WasmProgramIndex;
 
 /** Source signature retained while a direct function uses scalar Wasm parameters and results. */
 typedef WasmScalarSignature = {
@@ -165,7 +166,7 @@ class WasmScalarAbi {
 		return Std.string(receiver) + ":" + method.length + ":" + method;
 
 	function planScalarVirtuals():Void {
-		var index = WasmProgramIndex.of(program), seen:Map<String, Bool> = [];
+		var index = IrProgramIndex.of(program), seen:Map<String, Bool> = [];
 		for (fn in program.functions) for (block in fn.blocks) for (located in block.instructions) switch located.value {
 			case MethodCall(out, receiver, method, _, _) if (!values.isValue(receiver.type)):
 				var key = virtualKey(receiver.type, method);
@@ -216,7 +217,7 @@ class WasmScalarAbi {
 			entry = WasmModuleSupport.hasFunction(program, "main") ? "main" :
 				WasmModuleSupport.hasFunction(program, "Main.main") ? "Main.main" : program.entryPoint;
 		if (WasmModuleSupport.hasFunction(program, "__init")) roots.push("__init");
-		var reachable = WasmModuleSupport.reachableFunctionsWithGeneratedRuntimeRoots(program, entry, roots);
+		var reachable = IrReachability.withGeneratedRuntimeRoots(program, entry, roots);
 		// A kept function is still internal; retention alone is not a host ABI boundary.
 		for (fn in program.functions) if (fn.name == entry || (!planningBoundaries && (roots.indexOf(fn.name) >= 0 || fn.retention == Expose))) {
 			for (argument in fn.arguments) if (closureArity(argument.type) >= 0) excluded.set(Std.string(argument.type), true);
@@ -305,7 +306,7 @@ class WasmScalarAbi {
 			case MethodCall(_, receiver, method, arguments, _):
 				// A typed virtual call transports the same closure reference. Its scalar callable ABI is safe
 				// only when every possible implementation accepts the exact declared signature at that position.
-				var index = WasmProgramIndex.of(program), targets = switch receiver.type {
+				var index = IrProgramIndex.of(program), targets = switch receiver.type {
 					case Obj(name): index.subtypesOf(name);
 					case Virtual(name): index.implementorsOf(name);
 					default: [];

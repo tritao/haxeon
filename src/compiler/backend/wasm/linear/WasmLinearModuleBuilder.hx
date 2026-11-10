@@ -1,5 +1,6 @@
 package compiler.backend.wasm.linear;
 
+import compiler.ir.IrReachability;
 import compiler.backend.Backend.BackendOptions;
 import compiler.backend.Backend.BackendResult;
 import compiler.backend.MemoryContract.MemoryContract;
@@ -196,7 +197,7 @@ class WasmLinearModuleBuilder {
 		var roots = [for (name in exportedFunctions) boundaryExportAdapters.exists(name) ? boundaryExportAdapters.get(name) : name];
 		if (WasmModuleSupport.hasFunction(program, "__init"))
 			roots.push("__init");
-		reachable = WasmModuleSupport.reachableFunctionsWithGeneratedRuntimeRoots(program, preferredEntry, roots);
+		reachable = IrReachability.withGeneratedRuntimeRoots(program, preferredEntry, roots);
 		var plannedFunctions:Map<String, Bool> = [], rootSet:Map<String, Bool> = [];
 		for (fn in program.functions) plannedFunctions.set(fn.name, true);
 		var changed = true;
@@ -215,10 +216,10 @@ class WasmLinearModuleBuilder {
 					}
 					default:
 				}
-			if (changed) reachable = WasmModuleSupport.reachableFunctionsWithGeneratedRuntimeRoots(program, preferredEntry, roots);
+			if (changed) reachable = IrReachability.withGeneratedRuntimeRoots(program, preferredEntry, roots);
 		}
 		usedCNatives = WasmModuleSupport.reachableCNatives(program, reachable);
-		usedNatives = WasmModuleSupport.reachableNatives(program, reachable);
+		usedNatives = IrReachability.natives(program, reachable);
 		compiler.backend.wasm.WasmValueLaneRuntime.attach(program, reachable, usedNatives);
 		layout = new WasmLayout(program, logicalProgram, module.runtimeTypeIds);
 		strings = [];

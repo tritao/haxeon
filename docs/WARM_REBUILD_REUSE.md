@@ -115,7 +115,7 @@ Cache entry: `LoweredEntry { relocatable function, facts }`.
 
 Removed functions disappear at link time; added functions are just lowered. Order is `program.functions` order, as today.
 
-Wasm: `WasmFunctionLower` runs per function over `WasmProgramIndex`/`WasmLayout`/type-id plan with whole-module layout
+Wasm: `WasmFunctionLower` runs per function over `IrProgramIndex`/`WasmLayout`/type-id plan with whole-module layout
 decisions (type ids, flattened value fields, reflection table), and `WasmOptimizer` works on the whole module. The same
 relocation approach applies to the function bodies, but the layout inputs are wider. Step 2 will say after reading
 `WasmFunctionLower`: I expect HashLink first and Wasm for function bodies only if the layout facts record the same way;
@@ -417,7 +417,7 @@ What landed, one commit each (driver suite, outputs, app counts and the hot-relo
 Left on purpose: `IrInliner.enabled`, `IrLoadStoreForwarding.enabled`, `IrStrengthReduction.enabled` (`HAXEON_*` debug switches read at class load),
 `HlLower.lastDebugLocation` (a one-slot memo with no effect on results), `HlRuntimeIdentity.sequence`, and `HlLower.skippedKeptTotal` /
 `reportedSkips` (check-mode diagnostics). Follow-up, not M1: the Wasm statics that are per-build caches (`WasmModuleSupport.hostCNativeProgram`,
-`hostCNatives`, `WasmProgramIndex.cached`) and the per-process byte caches (`WasmCryptoRuntime.runtime*`, `WasmLinearModuleBuilder.cachedRuntime*`,
+`hostCNatives`, `IrProgramIndex.cached`) and the per-process byte caches (`WasmCryptoRuntime.runtime*`, `WasmLinearModuleBuilder.cachedRuntime*`,
 the `WasmLinearRuntime` flags).
 
 Numbers at the end of M1 (app, same machine): cold 785.6M, no-op 25.3M, edit 236.6M allocations; 585 of 620 program outputs byte-identical

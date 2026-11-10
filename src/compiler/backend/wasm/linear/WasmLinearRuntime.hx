@@ -1,5 +1,6 @@
 package compiler.backend.wasm.linear;
 
+import compiler.ir.IrReachability;
 import compiler.ir.Ir.IrProgram;
 import compiler.ir.Ir.IrType;
 import compiler.backend.wasm.WasmFmod;
@@ -3935,7 +3936,7 @@ class WasmLinearRuntime {
 		// Objects print through their class's toString, or their class name without one, as on HL.
 		// Method indices exist only after user functions are declared (finalizeDynamicString).
 		for (object in program.objects) {
-			var method = WasmModuleSupport.stringMethod(program, object.name),
+			var method = IrReachability.stringMethod(program, object.name),
 				methodIndex = method == null || functions == null ? null : functions.get(method);
 			builder.localGet(value);
 			builder.emit(I32Load(0));

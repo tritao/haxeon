@@ -1,5 +1,6 @@
 package compiler.backend.wasm.linear;
 
+import compiler.ir.IrReachability;
 import compiler.ir.Ir.IrProgram;
 import compiler.ir.Ir.IrType;
 import compiler.ir.Ir.IrValue;
@@ -81,7 +82,7 @@ class WasmLinearClosureAdapters {
 				default:
 			}
 		}
-		var reachable = WasmModuleSupport.reachableFunctionsWithGeneratedRuntimeRoots(program, entry, roots);
+		var reachable = IrReachability.withGeneratedRuntimeRoots(program, entry, roots);
 		for (fn in program.functions) for (block in fn.blocks) for (located in block.instructions)
 			switch located.value {
 				case InstanceClosure(_, name, _) if (name == WasmDynamicCalls.VARARGS_TARGET):

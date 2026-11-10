@@ -1,5 +1,6 @@
 package compiler.backend.wasm.gc;
 
+import compiler.ir.IrProgramIndex;
 import compiler.backend.wasm.WasmValueLayout;
 
 import compiler.ir.Ir.IrEnum;
@@ -458,7 +459,7 @@ class WasmGcTypePlan {
 	}
 
 	function interfaceExtends(actual:String, expected:String):Bool
-		return WasmProgramIndex.of(program).interfaceExtends(actual, expected);
+		return IrProgramIndex.of(program).interfaceExtends(actual, expected);
 
 	function visitObject(object:IrObject, states:Map<String, Int>):Void {
 		var state = states.get(object.name);

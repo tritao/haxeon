@@ -1,5 +1,6 @@
 package compiler.backend.wasm;
 
+import compiler.ir.IrProgramIndex;
 import compiler.ir.Ir.IrProgram;
 import compiler.ir.Ir.IrType;
 import compiler.ir.Ir.IrValue;
@@ -1768,7 +1769,7 @@ class WasmFunctionLower {
 			argumentTypes:Array<IrType>,
 			resultType:IrType
 		}> = [];
-		var index = WasmProgramIndex.of(program);
+		var index = IrProgramIndex.of(program);
 		for (object in index.implementorsOf(interfaceName)) {
 			var functionName = index.findMethod(object.name, methodName);
 			if (functionName != null) {
@@ -1802,7 +1803,7 @@ class WasmFunctionLower {
 			argumentTypes:Array<IrType>,
 			resultType:IrType
 		}> = [];
-		var index = WasmProgramIndex.of(program);
+		var index = IrProgramIndex.of(program);
 		for (object in index.subtypesOf(staticType)) {
 			var functionName = index.findMethod(object.name, methodName);
 			if (functionName != null) {
@@ -1825,19 +1826,19 @@ class WasmFunctionLower {
 	}
 
 	static function isObjectSubtype(program:IrProgram, actual:String, expected:String):Bool
-		return WasmProgramIndex.of(program).isObjectSubtype(actual, expected);
+		return IrProgramIndex.of(program).isObjectSubtype(actual, expected);
 
 	static function objectInheritanceDepth(program:IrProgram, typeName:String):Int
-		return WasmProgramIndex.of(program).inheritanceDepth(typeName);
+		return IrProgramIndex.of(program).inheritanceDepth(typeName);
 
 	static function findMethod(program:IrProgram, objectName:String, methodName:String):Null<String>
-		return WasmProgramIndex.of(program).findMethod(objectName, methodName);
+		return IrProgramIndex.of(program).findMethod(objectName, methodName);
 
 	static function implementsInterface(program:IrProgram, objectName:String, interfaceName:String):Bool
-		return WasmProgramIndex.of(program).implementsInterface(objectName, interfaceName);
+		return IrProgramIndex.of(program).implementsInterface(objectName, interfaceName);
 
 	static function interfaceExtends(program:IrProgram, actual:String, expected:String):Bool
-		return WasmProgramIndex.of(program).interfaceExtends(actual, expected);
+		return IrProgramIndex.of(program).interfaceExtends(actual, expected);
 
 	function typeId(type:IrType):Int
 		return context.module.runtimeTypeId(type);

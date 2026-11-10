@@ -1,3 +1,4 @@
+import compiler.ir.IrReachability;
 import compiler.Frontend;
 import compiler.Compiler;
 import compiler.runtime.CompilerIntrinsics;
@@ -255,12 +256,12 @@ class WasmBackendMain {
 			result: Bytes,
 			generatedFunctionDependencies: ["runtime.Ryu.format"]
 		});
-		var generatedNativeReachable = WasmModuleSupport.reachableFunctionsWithGeneratedRuntimeRoots(generatedNativeProgram, "main");
+		var generatedNativeReachable = IrReachability.withGeneratedRuntimeRoots(generatedNativeProgram, "main");
 		if (!generatedNativeReachable.exists("runtime.Ryu.format"))
 			throw "Wasm reachability must retain runtime helpers called by generated native wrappers";
 		var unusedRuntimeProgram = Frontend.compile("function main():Int return 42;");
 		unusedRuntimeProgram.functions.push(new IrFunction("runtime.Ryu.format", [], Bytes, []));
-		if (WasmModuleSupport.reachableFunctionsWithGeneratedRuntimeRoots(unusedRuntimeProgram, "main").exists("runtime.Ryu.format"))
+		if (IrReachability.withGeneratedRuntimeRoots(unusedRuntimeProgram, "main").exists("runtime.Ryu.format"))
 			throw "Wasm reachability must not root unused generated runtime helpers";
 		var intrinsicCompiler = new Compiler(null, CompilerIntrinsics.configuration());
 		intrinsicCompiler.update("Main.hx", "function main():Int { var text = \"value=\" + 42; return text.length; }");
