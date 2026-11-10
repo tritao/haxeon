@@ -24,6 +24,9 @@ private typedef ProgramResult = {
 private typedef ProgramRun = {
 	var test:ProgramCase;
 	var plain:Bool;
+
+	/** Built, edited twice and rebuilt in one compiler session (`Main --warm-edit`), each rebuild compared with a fresh build. */
+	var warm:Bool;
 }
 
 private typedef ActiveProgram = {
@@ -71,17 +74,17 @@ class TestRunner {
 	}
 
 	/** Compile a program to HashLink: with the prebuilt compiler when available, else `haxe --run Main`. */
-	function compileProgram(source:String, output:String, plain:Bool):Process {
-		var arguments = [source, output].concat(plain ? ["--plain"] : []);
+	function compileProgram(source:String, output:String, run:ProgramRun):Process {
+		var arguments = [source, output].concat(run.warm ? ["--warm-edit"] : run.plain ? ["--plain"] : []);
 		return prebuiltMain != null ? new Process(hl,
 			[prebuiltMain].concat(arguments)) : new Process(haxe, ["--cwd", root, "common.hxml", "--run", "Main"].concat(arguments));
 	}
 
 	static function runName(run:ProgramRun):String
-		return run.test.name + (run.plain ? " (plain build)" : "");
+		return run.test.name + (run.warm ? " (warm edit rebuilds)" : run.plain ? " (plain build)" : "");
 
 	static function runOutput(root:String, run:ProgramRun):String
-		return Path.join([root, "out", run.test.name + (run.plain ? ".plain" : "") + ".hl"]);
+		return Path.join([root, "out", run.test.name + (run.warm ? ".warm" : run.plain ? ".plain" : "") + ".hl"]);
 
 	/**
 	 * Test mains are compiled to HashLink and run there: faster than re-interpreting the compiler
@@ -181,19 +184,30 @@ class TestRunner {
 
 	public function runProgram(test:ProgramCase):Bool {
 		var failed = false;
-		for (plain in [false, true]) {
-			var result = runProgramCaptured({test: test, plain: plain}, 0);
+		for (run in runsOf(test)) {
+			var result = runProgramCaptured(run, 0);
 			Sys.print(result.output);
 			failed = failed || !result.passed;
 		}
 		return !failed;
 	}
 
+	/**
+	 * The builds of one program: live and plain, and, when HAXEON_CHECK_REUSE=1 asks for the reuse checks, a third that is edited and
+	 * rebuilt warm. A cold compile in a fresh process reuses nothing, so only that third build exercises the checks on a program.
+	 */
+	static function runsOf(test:ProgramCase):Array<ProgramRun> {
+		var runs:Array<ProgramRun> = [{test: test, plain: false, warm: false}, {test: test, plain: true, warm: false}];
+		if (Sys.getEnv("HAXEON_CHECK_REUSE") == "1")
+			runs.push({test: test, plain: true, warm: true});
+		return runs;
+	}
+
 	/** Every program is built and run twice, live and plain, so a difference between the two modes (what a plain build prunes) fails a case. */
 	public function runPrograms(tests:Array<ProgramCase>, jobs:Int):Int {
 		if (tests.length == 0)
 			return 0;
-		var runs:Array<ProgramRun> = [for (test in tests) for (plain in [false, true]) {test: test, plain: plain}];
+		var runs:Array<ProgramRun> = [for (test in tests) for (run in runsOf(test)) run];
 		if (jobs == 1) {
 			var failures = 0;
 			for (run in runs) {
@@ -230,7 +244,7 @@ class TestRunner {
 				active.push({
 					index: next,
 					run: run,
-					process: compileProgram(source, runOutput(root, run), run.plain)
+					process: compileProgram(source, runOutput(root, run), run)
 				});
 				next++;
 			}
@@ -272,7 +286,7 @@ class TestRunner {
 	function runProgramCaptured(run:ProgramRun, index:Int):ProgramResult {
 		var source = Path.join([root, "tests", "programs", run.test.name + ".hx"]);
 		var output = runOutput(root, run), test = run.test;
-		var compilation = finishCommand(compileProgram(source, output, run.plain));
+		var compilation = finishCommand(compileProgram(source, output, run));
 		if (compilation.status != 0) {
 			return {
 				index: index,
