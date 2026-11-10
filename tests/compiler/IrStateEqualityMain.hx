@@ -45,6 +45,14 @@ class IrStateEqualityMain {
 		compare(adapter, castFunction);
 		compare(adapter, otherAdapter);
 		compare(body, adapter);
+		for (kind in [GenericSpecialization, SourceLambda, Equality, Hash, KeyPath, IterationAdapter,
+			GeneratedHelper, ScalarArguments, InlineEnumAccess, TypedInterface, ValueUnbox, GenericMethodReference,
+			OptionalScalar(null), OptionalScalar("owner.method"), OptionalValueBoundary, NullableScalarArguments,
+			ValueArrayElement, WasmClosureRestore]) {
+			var functionWithKind = new IrFunction(body.name, body.arguments, body.result, body.blocks, kind, body.debugBindings);
+			if (!IrFunctionStateEquality.same(functionWithKind, IrFunctionStateCodec.decode(IrFunctionStateCodec.encode(functionWithKind))))
+				throw 'Function role failed to round-trip: $kind';
+		}
 		var v = new IrValue(0, "v", I32), w = new IrValue(1, "w", I32);
 		var cases:Array<{original:IrInstruction, changed:Array<IrInstruction>}> = [
 			{

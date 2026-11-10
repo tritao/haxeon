@@ -1,5 +1,6 @@
 package compiler.types.typing;
 
+import compiler.types.TypedAst.TypedFunctionRole;
 import compiler.syntax.Ast;
 import compiler.syntax.Ast.AstExpression;
 import compiler.syntax.Ast.AstFunction;
@@ -329,6 +330,7 @@ class BodyTyper {
 		}
 		var resultFunction:TypedFunction = {
 			name: functionName,
+			role: specializedName == null ? UserFunction : GenericFunction,
 			origin: specializedName == null ? null : (owner == null ? fn.name : owner + "." + fn.name),
 			originKind: specializedName == null ? null : compiler.types.TypedAst.FunctionOriginKind.Specialization,
 			typeArguments: typeArguments,

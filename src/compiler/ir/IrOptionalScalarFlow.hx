@@ -145,7 +145,7 @@ class IrOptionalScalarFlow {
 			b.branch(b.equal(receiver, b.constNull(receiver.type)), missing, present);
 			b.select(missing); b.terminate(Throw(b.toDyn(b.constString("Null access"))));
 			b.select(present); b.returnValue(b.constVoid());
-			receiverChecks.set(name, new IrFunction(name, b.arguments, Void, b.blocks, Ordinary));
+			receiverChecks.set(name, new IrFunction(name, b.arguments, Void, b.blocks, OptionalScalar(null)));
 		}
 		return name;
 	}
@@ -727,7 +727,7 @@ class IrOptionalScalarFlow {
 		}
 		debug = [for (binding in debug) if (!removed.exists(binding.value.id)) binding];
 		var result = optional(fn.result) == null ? fn.result : Obj(wrapper(optional(fn.result)).name);
-		return new IrFunction(clone ? PREFIX + fn.name : fn.name, args, result, blocks, clone ? Ordinary : fn.kind, debug, fn.inlineHint,
+		return new IrFunction(clone ? PREFIX + fn.name : fn.name, args, result, blocks, clone ? OptionalScalar(fn.name) : fn.kind, debug, fn.inlineHint,
 			clone ? compiler.ir.IrFunction.IrRetention.Reachable : fn.retention);
 	}
 }

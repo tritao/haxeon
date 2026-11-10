@@ -1,5 +1,6 @@
 package compiler.types.typing;
 
+import compiler.types.TypedAst.TypedFunctionRole;
 import compiler.Source.SourceSpan;
 import compiler.syntax.Ast.AstEnumAbstract;
 import compiler.types.Type.CompilerType;
@@ -119,7 +120,7 @@ class RawRepresentableGenerator {
 			}
 
 			var fn:TypedFunction = {
-				name: helper,
+				name: helper, role: OtherFunction,
 				origin: request.origin,
 				originKind: Helper,
 				owner: null,

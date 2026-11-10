@@ -35,18 +35,8 @@ class IrScalarArguments {
 		// Methods that call out may snapshot only a fresh receiver: a field place can be changed by an alias
 		// while the method runs, and must keep its original receiver ABI.
 		for (fn in program.functions) {
-			if (StringTools.startsWith(fn.name, "$") && !StringTools.startsWith(fn.name, "$lambda:")
-				&& !StringTools.startsWith(fn.name, "$iteration-adapter:")
-				&& !StringTools.startsWith(fn.name, IrInlineEnumCaseAccess.HELPER_PREFIX)
-				&& !StringTools.startsWith(fn.name, IrTypedInterfaceDispatch.PREFIX)
-				&& !StringTools.startsWith(fn.name, IrTypedInterfaceDispatch.ADAPTER_PREFIX)
-				&& !StringTools.startsWith(fn.name, IrValueInterfaceBoxes.UNBOX_PREFIX)
-				&& !StringTools.startsWith(fn.name, GenericOwnerErasure.METHOD_REFERENCE_PREFIX)
-				&& !compiler.types.typing.HashGenerator.isHashName(fn.name)
-				&& !compiler.types.typing.EnumEqualityGenerator.isEqualityName(fn.name)
-				&& !StringTools.startsWith(fn.name, compiler.types.typing.KeyPathTyping.HELPER_PREFIX)
-				&& !StringTools.startsWith(fn.name, "$generic:") && !StringTools.startsWith(fn.name, "$value$equality:") && !StringTools.startsWith(fn.name, "$equality:") && !StringTools.startsWith(fn.name, IrOptionalScalarFlow.PREFIX)
-				&& !IrOptionalValueFlow.isBoundaryHelper(fn.name) && !StringTools.startsWith(fn.name, IrValueArrayElements.PREFIX)) continue;
+			var declared = IrScalarAbiEligibility.permits(fn.kind, false);
+			if (!declared) continue;
 			var hasValue = isValue(fn.result, objects), eligible = true, pinnedEligible = !argumentsOnly, pinnedHasValue = hasValue,
 				argumentCount = 0, pinnedArgumentCount = 1;
 			if (argumentsOnly && hasValue) eligible = false;
@@ -423,7 +413,7 @@ class IrScalarArguments {
 			}
 			blocks.push(copy);
 		}
-		return new IrFunction(PREFIX + (preserveReceiver ? "$receiver:" : "") + fn.name, args, returnSlots.length > 0 ? Void : fn.result, blocks, Ordinary, fn.debugBindings, fn.inlineHint);
+		return new IrFunction(PREFIX + (preserveReceiver ? "$receiver:" : "") + fn.name, args, returnSlots.length > 0 ? Void : fn.result, blocks, ScalarArguments, fn.debugBindings, fn.inlineHint);
 	}
 
 	static function rewriteCalls(fn:IrFunction, candidates:Map<String, IrFunction>, pinnedCandidates:Map<String, IrFunction>, objects:Map<String, IrObject>,

@@ -85,9 +85,10 @@ class WasmDynamicCalls {
 								targets.set(Std.string(signature), signature);
 							var key = (dynamicCall ? "dynamic:" : "typed:") + Std.string(signature);
 							if (!helpers.exists(key)) {
-								var prefix = !dynamicCall && compiler.ir.IrScalarArguments.isPrivateClosureType(signature)
+								var privateAbi = !dynamicCall && compiler.ir.IrScalarArguments.isPrivateClosureType(signature),
+									prefix = privateAbi
 									? compiler.ir.IrScalarArguments.PREFIX + "$wasm:closure-check:" : "__haxeon_invoke_";
-								helpers.set(key, callHelper(prefix + [for (_ in helpers.keys()) 1].length, signature, dynamicCall, isFunction));
+								helpers.set(key, callHelper(prefix + [for (_ in helpers.keys()) 1].length, signature, dynamicCall, isFunction, privateAbi));
 							}
 							var callee = closure;
 							if (dynamicCall) {
@@ -211,7 +212,7 @@ class WasmDynamicCalls {
 		return new IrFunction(name, b.arguments, result, b.blocks, ClosureVarargs(type), null, false, Keep);
 	}
 
-	static function callHelper(name:String, type:IrType, dynamicCall:Bool, isFunction:String):IrFunction {
+	static function callHelper(name:String, type:IrType, dynamicCall:Bool, isFunction:String, privateAbi:Bool):IrFunction {
 		var b = new IrBuilder(),
 			closure = b.argument("closure", dynamicCall ? Dyn : type),
 			params:Array<IrType> = [],
@@ -237,6 +238,6 @@ class WasmDynamicCalls {
 			b.select(callable);
 		}
 		b.returnValue(b.callClosure(dynamicCall ? b.safeCast(closure, type) : closure, args, result));
-		return new IrFunction(name, b.arguments, result, b.blocks, Ordinary);
+		return new IrFunction(name, b.arguments, result, b.blocks, privateAbi ? ScalarArguments : Ordinary);
 	}
 }

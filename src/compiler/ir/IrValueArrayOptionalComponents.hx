@@ -87,9 +87,9 @@ class IrValueArrayOptionalComponents {
 			shiftValue = shift.call(getName(), [shiftArray, shiftIndex], wrapper);
 		shift.call("__value_array_remove_at", [shiftArray, shiftIndex], Void);
 		shift.returnValue(shiftValue);
-		return [new IrFunction(getName(), get.arguments, wrapper, get.blocks, Ordinary), new IrFunction(setName(), set.arguments, Void, set.blocks, Ordinary),
-			new IrFunction(pushName(), push.arguments, I32, push.blocks, Ordinary), new IrFunction(insertName(), insert.arguments, Void, insert.blocks, Ordinary),
-			new IrFunction(unshiftName(), unshift.arguments, I32, unshift.blocks, Ordinary), new IrFunction(popName(), pop.arguments, wrapper, pop.blocks, Ordinary),
-			new IrFunction(shiftName(), shift.arguments, wrapper, shift.blocks, Ordinary)];
+		return [new IrFunction(getName(), get.arguments, wrapper, get.blocks, ValueArrayElement), new IrFunction(setName(), set.arguments, Void, set.blocks, ValueArrayElement),
+			new IrFunction(pushName(), push.arguments, I32, push.blocks, ValueArrayElement), new IrFunction(insertName(), insert.arguments, Void, insert.blocks, ValueArrayElement),
+			new IrFunction(unshiftName(), unshift.arguments, I32, unshift.blocks, ValueArrayElement), new IrFunction(popName(), pop.arguments, wrapper, pop.blocks, ValueArrayElement),
+			new IrFunction(shiftName(), shift.arguments, wrapper, shift.blocks, ValueArrayElement)];
 	}
 }

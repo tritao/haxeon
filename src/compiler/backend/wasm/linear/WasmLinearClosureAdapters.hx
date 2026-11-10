@@ -168,7 +168,7 @@ class WasmLinearClosureAdapters {
 		for (name in names) {
 			var type = helpers.get(name), b = new IrBuilder(), value = b.argument("closure", Dyn), signature = b.call(SIGNATURE_FUNCTION, [value], I32);
 			b.returnValue(b.equal(signature, b.constInt(signatureId(type))));
-			rewritten.push(new IrFunction(name, b.arguments, Bool, b.blocks, Ordinary));
+			rewritten.push(new IrFunction(name, b.arguments, Bool, b.blocks, GeneratedHelper));
 		}
 		program.functions = rewritten;
 	}

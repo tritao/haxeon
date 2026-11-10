@@ -1,5 +1,6 @@
 package compiler.types.typing;
 
+import compiler.types.TypedAst.TypedFunctionRole;
 import compiler.Source.SourceSpan;
 import compiler.syntax.Ast.AstEnumAbstract;
 import compiler.types.Type.CompilerType;
@@ -171,7 +172,7 @@ class FlagsGenerator {
 				throw "Missing Flags helper result";
 			statements.push(TReturn(result, span));
 			var fn:TypedFunction = {
-				name: name,
+				name: name, role: OtherFunction,
 				origin: request.origin,
 				originKind: Helper,
 				owner: null,

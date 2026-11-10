@@ -1,5 +1,6 @@
 package compiler.types.typing;
 
+import compiler.types.TypedAst.TypedFunctionRole;
 import compiler.Diagnostic;
 import compiler.Diagnostic.CompileError;
 import compiler.Source.SourceSpan;
@@ -236,6 +237,7 @@ class ClosureTyper {
 			session.closureConversion.addEnvironment(environment, captures);
 		session.closureConversion.addFunction({
 			name: lambdaName,
+			role: LambdaFunction,
 			origin: outerContext.name,
 			originKind: compiler.types.TypedAst.FunctionOriginKind.Lambda,
 			owner: environment,

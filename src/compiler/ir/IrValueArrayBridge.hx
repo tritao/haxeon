@@ -74,9 +74,9 @@ class IrValueArrayBridge {
 			accepts.select(present);
 		}
 		accepts.returnValue(matches);
-		return [new IrFunction(readName(), read.arguments, Dyn, read.blocks, Ordinary),
-			new IrFunction(writeName(), write.arguments, Void, write.blocks, Ordinary),
-			new IrFunction(acceptsName(), accepts.arguments, Bool, accepts.blocks, Ordinary)];
+		return [new IrFunction(readName(), read.arguments, Dyn, read.blocks, GeneratedHelper),
+			new IrFunction(writeName(), write.arguments, Void, write.blocks, GeneratedHelper),
+			new IrFunction(acceptsName(), accepts.arguments, Bool, accepts.blocks, GeneratedHelper)];
 	}
 
 	/** Snapshot every leaf before capacity allocation or an insertion can change any array place. */

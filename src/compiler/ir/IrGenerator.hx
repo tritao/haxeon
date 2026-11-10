@@ -240,9 +240,17 @@ class IrGenerator {
 			var cfg = CfgIteratorReplacement.run(generateCfg(fn)),
 				built = SsaBuilder.build(cfg);
 			var retention:compiler.ir.IrFunction.IrRetention = fn.isExposed == true ? Expose : fn.isKept == true ? Keep : Reachable;
-			return fn.isInline == true
-				|| retention != Reachable ? new IrFunction(built.name, built.arguments, built.result, built.blocks, built.kind, built.debugBindings, fn.isInline == true,
-					retention) : built;
+			var kind:compiler.ir.IrFunction.IrFunctionKind = switch fn.role {
+				case UserFunction: Ordinary;
+				case GenericFunction: GenericSpecialization;
+				case LambdaFunction: SourceLambda;
+				case EqualityFunction: Equality;
+				case HashFunction: Hash;
+				case KeyPathFunction: KeyPath;
+				case IterationFunction: IterationAdapter;
+				case OtherFunction: GeneratedHelper;
+			};
+			return new IrFunction(built.name, built.arguments, built.result, built.blocks, kind, built.debugBindings, fn.isInline == true, retention);
 		} catch (error:String) {
 			throw 'CFG generation failed for ${fn.name}: $error';
 		}

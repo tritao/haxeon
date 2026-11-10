@@ -188,7 +188,7 @@ class IrTypedInterfaceDispatch {
 					entry.returnValue((switch signature.result { case Void: true; default: false; }) ? result :
 						GenericOwnerErasure.convert(entry, result, signature.result, byName));
 				}
-				var entryFunction = new IrFunction(entryName, entry.arguments, signature.result, entry.blocks, Ordinary),
+				var entryFunction = new IrFunction(entryName, entry.arguments, signature.result, entry.blocks, TypedInterface),
 					entryIndex = functionIndices.get(entryName);
 				if (entryIndex == null) {
 					functionIndices.set(entryName, functions.length);
@@ -201,7 +201,7 @@ class IrTypedInterfaceDispatch {
 				builder.select(next);
 			}
 			builder.throwValue(builder.toDyn(builder.constString('Invalid receiver for $interfaceName.$method')));
-			var generated = new IrFunction(name, builder.arguments, signature.result, builder.blocks, Ordinary);
+			var generated = new IrFunction(name, builder.arguments, signature.result, builder.blocks, TypedInterface);
 			if (existing == null) functions.push(generated);
 			else {
 				var index = functionIndices.get(name);

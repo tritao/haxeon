@@ -50,6 +50,23 @@ class IrFunctionStateEquality {
 	static function sameKind(a:compiler.ir.IrFunction.IrFunctionKind, b:compiler.ir.IrFunction.IrFunctionKind):Bool
 		return switch [a, b] {
 			case [Ordinary, Ordinary]: true;
+			case [GenericSpecialization, GenericSpecialization]: true;
+			case [SourceLambda, SourceLambda]: true;
+			case [Equality, Equality]: true;
+			case [Hash, Hash]: true;
+			case [KeyPath, KeyPath]: true;
+			case [IterationAdapter, IterationAdapter]: true;
+			case [GeneratedHelper, GeneratedHelper]: true;
+			case [InlineEnumAccess, InlineEnumAccess]: true;
+			case [TypedInterface, TypedInterface]: true;
+			case [ValueUnbox, ValueUnbox]: true;
+			case [GenericMethodReference, GenericMethodReference]: true;
+			case [OptionalScalar(aOrigin), OptionalScalar(bOrigin)]: aOrigin == bOrigin;
+			case [OptionalValueBoundary, OptionalValueBoundary]: true;
+			case [NullableScalarArguments, NullableScalarArguments]: true;
+			case [ValueArrayElement, ValueArrayElement]: true;
+			case [WasmClosureRestore, WasmClosureRestore]: true;
+			case [ScalarArguments, ScalarArguments]: true;
 			case [ClosureAdapter(aSource, aTarget), ClosureAdapter(bSource, bTarget)]:
 				IrVerifier.sameType(aSource, bSource) && IrVerifier.sameType(aTarget, bTarget);
 			case [ClosureCast(aTarget), ClosureCast(bTarget)]: IrVerifier.sameType(aTarget, bTarget);

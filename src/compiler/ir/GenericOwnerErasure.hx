@@ -72,7 +72,7 @@ class GenericOwnerErasure {
 				builder.select(next);
 			}
 			builder.throwValue(builder.toDyn(builder.constString('Invalid receiver for $owner.$member')));
-			functions.push(new IrFunction(name, builder.arguments, signature.result, builder.blocks, Ordinary));
+			functions.push(new IrFunction(name, builder.arguments, signature.result, builder.blocks, GeneratedHelper));
 		}
 	}
 
@@ -99,7 +99,7 @@ class GenericOwnerErasure {
 			builder.returnValue(builder.constBool(false));
 			builder.select(matched);
 			builder.returnValue(builder.constBool(true));
-			functions.push(new IrFunction(name, builder.arguments, Bool, builder.blocks, Ordinary));
+			functions.push(new IrFunction(name, builder.arguments, Bool, builder.blocks, GeneratedHelper));
 		}
 	}
 
@@ -141,7 +141,7 @@ class GenericOwnerErasure {
 				default: throw 'Invalid receiver for generic method reference "$name"';
 			}
 			builder.returnValue(result);
-			functions.push(new IrFunction(name, builder.arguments, signature.result, builder.blocks, Ordinary));
+			functions.push(new IrFunction(name, builder.arguments, signature.result, builder.blocks, GenericMethodReference));
 		}
 	}
 

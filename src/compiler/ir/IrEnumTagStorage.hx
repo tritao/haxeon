@@ -61,8 +61,8 @@ class IrEnumTagStorage {
 		unbox.emit(EnumIndex(index, checked));
 		unbox.returnValue(unbox.call(IrScalarWordBits.UNPACK, [unbox.add(index, unbox.constInt(1))], storage));
 		return [
-			new IrFunction(boxName(name), box.arguments, Dyn, box.blocks, Ordinary),
-			new IrFunction(unboxName(name), unbox.arguments, storage, unbox.blocks, Ordinary)
+			new IrFunction(boxName(name), box.arguments, Dyn, box.blocks, GeneratedHelper),
+			new IrFunction(unboxName(name), unbox.arguments, storage, unbox.blocks, GeneratedHelper)
 		];
 	}
 

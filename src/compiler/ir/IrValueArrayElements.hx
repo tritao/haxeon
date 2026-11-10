@@ -93,17 +93,17 @@ class IrValueArrayElements {
 		}
 		shiftValue = shift.call(getName(), [shiftArray, shiftIndex], storage);
 		shift.call("__value_array_remove_at", [shiftArray, shiftIndex], Void); shift.returnValue(shiftValue);
-		var result = [new IrFunction(getName(), get.arguments, storage, get.blocks, Ordinary), new IrFunction(setName(), set.arguments, Void, set.blocks, Ordinary),
-			new IrFunction(pushName(), push.arguments, I32, push.blocks, Ordinary), new IrFunction(insertName(), insert.arguments, Void, insert.blocks, Ordinary),
-			new IrFunction(unshiftName(), unshift.arguments, I32, unshift.blocks, Ordinary), new IrFunction(popName(), pop.arguments, storage, pop.blocks, Ordinary),
-			new IrFunction(shiftName(), shift.arguments, storage, shift.blocks, Ordinary)];
+		var result = [new IrFunction(getName(), get.arguments, storage, get.blocks, ValueArrayElement), new IrFunction(setName(), set.arguments, Void, set.blocks, ValueArrayElement),
+			new IrFunction(pushName(), push.arguments, I32, push.blocks, ValueArrayElement), new IrFunction(insertName(), insert.arguments, Void, insert.blocks, ValueArrayElement),
+			new IrFunction(unshiftName(), unshift.arguments, I32, unshift.blocks, ValueArrayElement), new IrFunction(popName(), pop.arguments, storage, pop.blocks, ValueArrayElement),
+			new IrFunction(shiftName(), shift.arguments, storage, shift.blocks, ValueArrayElement)];
 		if (iteratorUsed) {
 			var next = new IrBuilder(), iterator = next.argument("iterator", Iterator(element)),
 				iteratorArray = next.call(iteratorArrayName(), [iterator], arrayType),
 				iteratorIndex = next.call(iteratorAdvanceName(), [iterator], I32);
 			next.call(helpers.checker([], false), [iteratorArray, iteratorIndex], Void);
 			next.returnValue(bridge.readValue(next, iteratorArray, iteratorIndex, storage, []));
-			result.push(new IrFunction(iteratorNextName(), next.arguments, storage, next.blocks, Ordinary));
+			result.push(new IrFunction(iteratorNextName(), next.arguments, storage, next.blocks, ValueArrayElement));
 		}
 		return result;
 	}

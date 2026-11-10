@@ -81,7 +81,7 @@ class WasmScalarClosureEscapes {
 			resultType = Dyn;
 		}
 		b.returnValue(result);
-		generatedFunctions.push(new IrFunction(name, b.arguments, resultType, b.blocks, Ordinary));
+		generatedFunctions.push(new IrFunction(name, b.arguments, resultType, b.blocks, GeneratedHelper));
 		mappings.set(fn.name, name);
 		return true;
 	}
@@ -175,7 +175,7 @@ class WasmScalarClosureEscapes {
 			probe = b.staticClosure(invoke, probeType),
 			found = b.call(receiverQuery("$wasm:closure-receiver:signature:" + suffix, Dyn, probeType), [closure, probe], Dyn);
 		b.returnValue(b.equal(b.equal(found, b.constNull(Dyn)), b.constBool(false)));
-		generatedFunctions.push(new IrFunction(name, b.arguments, Bool, b.blocks, Ordinary));
+		generatedFunctions.push(new IrFunction(name, b.arguments, Bool, b.blocks, GeneratedHelper));
 		return name;
 	}
 
@@ -197,7 +197,7 @@ class WasmScalarClosureEscapes {
 				b.branch(b.equal(closure, b.constNull(type)), missing, present);
 				b.select(missing); b.returnValue(b.constNull(Dyn));
 				b.select(present); b.returnValue(b.call(innerAdapter, [b.safeCast(closure, inner)], Dyn));
-				generatedFunctions.push(new IrFunction(maker, b.arguments, Dyn, b.blocks, Ordinary));
+				generatedFunctions.push(new IrFunction(maker, b.arguments, Dyn, b.blocks, GeneratedHelper));
 				restoration(type);
 				return maker;
 			case Function(_, _):
@@ -217,7 +217,7 @@ class WasmScalarClosureEscapes {
 			adapted.push((switch (signature.arguments[index]) { case Dyn: true; default: false; }) ? arguments[index] : fromDynamic(call, arguments[index], signature.arguments[index]));
 		var value = call.callClosure(closure, adapted, signature.result);
 		call.returnValue((switch (signature.result) { case Void: true; default: false; }) ? call.constNull(Dyn) : (switch (signature.result) { case Dyn: true; default: false; }) ? value : toDynamic(call, value, signature.result));
-		generatedFunctions.push(new IrFunction(invoke, call.arguments, Dyn, call.blocks, Ordinary));
+		generatedFunctions.push(new IrFunction(invoke, call.arguments, Dyn, call.blocks, GeneratedHelper));
 		var make = new IrBuilder(), original = make.argument("closure", type), missing = make.createBlock(), present = make.createBlock();
 		make.branch(make.equal(original, make.constNull(type)), missing, present);
 		make.select(missing);
@@ -235,7 +235,7 @@ class WasmScalarClosureEscapes {
 		var captured = make.newObject(environment);
 		make.fieldSet(captured, "closure", original);
 		make.returnValue(make.toDyn(make.instanceClosure(invoke, captured, erasedType)));
-		generatedFunctions.push(new IrFunction(maker, make.arguments, Dyn, make.blocks, Ordinary));
+		generatedFunctions.push(new IrFunction(maker, make.arguments, Dyn, make.blocks, GeneratedHelper));
 		return maker;
 	}
 
@@ -252,7 +252,7 @@ class WasmScalarClosureEscapes {
 				b.branch(b.equal(closure, b.constNull(Dyn)), missing, present);
 				b.select(missing); b.returnValue(b.constNull(type));
 				b.select(present); b.returnValue(b.safeCast(b.call(innerRestoration, [closure], inner), type));
-				generatedFunctions.push(new IrFunction(maker, b.arguments, type, b.blocks, Ordinary));
+				generatedFunctions.push(new IrFunction(maker, b.arguments, type, b.blocks, GeneratedHelper));
 				return maker;
 			case Function(_, _):
 			default: throw "A restored scalar closure must have a function type";
@@ -272,7 +272,7 @@ class WasmScalarClosureEscapes {
 			value = call.callClosure(closure, boxed, Dyn);
 		if ((switch (signature.result) { case Void: true; default: false; })) call.returnValue(call.constVoid());
 		else call.returnValue((switch (signature.result) { case Dyn: true; default: false; }) ? value : fromDynamic(call, value, signature.result));
-		generatedFunctions.push(new IrFunction(invoke, call.arguments, signature.result, call.blocks, Ordinary));
+		generatedFunctions.push(new IrFunction(invoke, call.arguments, signature.result, call.blocks, WasmClosureRestore));
 		var make = new IrBuilder(), original = make.argument("closure", Dyn), missing = make.createBlock(), present = make.createBlock();
 		make.branch(make.equal(original, make.constNull(Dyn)), missing, present);
 		make.select(missing);
@@ -290,7 +290,7 @@ class WasmScalarClosureEscapes {
 		var decoded = make.safeCast(original, dynamicType), captured = make.newObject(environment);
 		make.fieldSet(captured, "closure", decoded);
 		make.returnValue(make.instanceClosure(invoke, captured, type));
-		generatedFunctions.push(new IrFunction(maker, make.arguments, type, make.blocks, Ordinary));
+		generatedFunctions.push(new IrFunction(maker, make.arguments, type, make.blocks, GeneratedHelper));
 		return maker;
 	}
 }

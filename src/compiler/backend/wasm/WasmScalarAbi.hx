@@ -61,28 +61,19 @@ class WasmScalarAbi {
 			for (method in object.methods) instanceMethods.set(method.functionName, true);
 		}
 		for (fn in program.functions)
-			if (StringTools.startsWith(fn.name, "$generic:") && fn.arguments.length > 0 && fn.arguments[0].name == "this"
+			if ((switch fn.kind { case GenericSpecialization: true; default: false; }) && fn.arguments.length > 0 && fn.arguments[0].name == "this"
 				&& values.isValue(fn.arguments[0].type))
 				instanceMethods.set(fn.name, true);
 		// An optional-flow clone of a value method still mutates its receiver. Treating it as an ordinary
 		// direct function would pass the receiver by value and silently discard its writes.
-		for (fn in program.functions)
-			if (StringTools.startsWith(fn.name, compiler.ir.IrOptionalScalarFlow.PREFIX)
-				&& instanceMethods.exists(fn.name.substr(compiler.ir.IrOptionalScalarFlow.PREFIX.length)))
+		for (fn in program.functions) switch fn.kind {
+			case OptionalScalar(original) if (original != null && instanceMethods.exists(original)):
 				instanceMethods.set(fn.name, true);
+			default:
+		}
 		for (fn in program.functions) {
-			if ((StringTools.startsWith(fn.name, "$") && !StringTools.startsWith(fn.name, "$generic:") && !StringTools.startsWith(fn.name, compiler.ir.GenericOwnerErasure.METHOD_REFERENCE_PREFIX) && !StringTools.startsWith(fn.name, WasmScalarClosureEscapes.RESTORE_CALL_PREFIX) && !StringTools.startsWith(fn.name, "$value$equality:") && !StringTools.startsWith(fn.name, "$equality:") && !compiler.types.typing.HashGenerator.isHashName(fn.name)
-					&& !compiler.types.typing.EnumEqualityGenerator.isEqualityName(fn.name)
-					&& !StringTools.startsWith(fn.name, "$lambda:") && !StringTools.startsWith(fn.name, "$iteration-adapter:")
-					&& !StringTools.startsWith(fn.name, compiler.ir.IrInlineEnumCaseAccess.HELPER_PREFIX)
-					&& !StringTools.startsWith(fn.name, compiler.ir.IrTypedInterfaceDispatch.PREFIX)
-					&& !StringTools.startsWith(fn.name, compiler.ir.IrTypedInterfaceDispatch.ADAPTER_PREFIX)
-					&& !StringTools.startsWith(fn.name, compiler.ir.IrValueInterfaceBoxes.UNBOX_PREFIX)
-					&& !StringTools.startsWith(fn.name, compiler.ir.IrOptionalScalarFlow.PREFIX)
-					&& !StringTools.startsWith(fn.name, compiler.ir.IrNullableScalarFlow.CALL_PREFIX)
-					&& !StringTools.startsWith(fn.name, compiler.ir.IrValueArrayElements.PREFIX)
-					&& !StringTools.startsWith(fn.name, compiler.types.typing.KeyPathTyping.HELPER_PREFIX)
-					&& !compiler.ir.IrOptionalValueFlow.isBoundaryHelper(fn.name)) || instanceMethods.exists(fn.name)) continue;
+			var declared = compiler.ir.IrScalarAbiEligibility.permits(fn.kind, true) && !instanceMethods.exists(fn.name);
+			if (!declared) continue;
 			var args = [for (argument in fn.arguments) argument.type], hasValue = values.isValue(fn.result), safe = scalarizable(fn.result);
 			for (argument in args) { if (values.isValue(argument)) hasValue = true; if (!scalarizable(argument)) safe = false; }
 			if (hasValue && safe) {
@@ -97,10 +88,10 @@ class WasmScalarAbi {
 			for (method in object.methods) methodNames.push(method.functionName);
 		}
 		for (fn in program.functions)
-			if (StringTools.startsWith(fn.name, "$generic:") && fn.arguments.length > 0 && fn.arguments[0].name == "this"
+			if ((switch fn.kind { case GenericSpecialization: true; default: false; }) && fn.arguments.length > 0 && fn.arguments[0].name == "this"
 				&& values.isValue(fn.arguments[0].type)) methodNames.push(fn.name);
 		for (fn in program.functions)
-			if (StringTools.startsWith(fn.name, compiler.ir.IrOptionalScalarFlow.PREFIX) && instanceMethods.exists(fn.name))
+			if ((switch fn.kind { case OptionalScalar(_): true; default: false; }) && instanceMethods.exists(fn.name))
 				methodNames.push(fn.name);
 		for (name in methodNames) valueMethods.set(name, true);
 		var candidates:Map<String, Bool> = [];
@@ -537,10 +528,10 @@ class WasmScalarAbi {
 		result.functions = [for (fn in program.functions) rewriteFunction(fn)];
 		for (fn in program.functions) {
 			var direct = directClones.get(fn.name);
-			if (direct != null) result.functions.push(rewriteFunction(new IrFunction(direct, fn.arguments, fn.result, fn.blocks, Ordinary,
+			if (direct != null) result.functions.push(rewriteFunction(new IrFunction(direct, fn.arguments, fn.result, fn.blocks, GeneratedHelper,
 				fn.debugBindings, fn.inlineHint)));
 			var clone = methodClones.get(fn.name);
-			if (clone != null) result.functions.push(rewriteFunction(new IrFunction(clone, fn.arguments, fn.result, fn.blocks, Ordinary,
+			if (clone != null) result.functions.push(rewriteFunction(new IrFunction(clone, fn.arguments, fn.result, fn.blocks, GeneratedHelper,
 				fn.debugBindings, fn.inlineHint)));
 		}
 		result.objects = program.objects; result.interfaces = program.interfaces; result.enums = program.enums;

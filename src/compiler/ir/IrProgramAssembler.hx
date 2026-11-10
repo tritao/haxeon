@@ -1,5 +1,6 @@
 package compiler.ir;
 
+import compiler.types.TypedAst.TypedFunctionRole;
 import compiler.ir.IrStaticNullChecks.IrStaticCheckCache;
 import compiler.runtime.RuntimeType;
 import compiler.types.Type.NominalKind;
@@ -151,7 +152,7 @@ class IrProgramAssembler {
 			}
 			if (statements.length > 0)
 				functions.push(generator.generateFunction({
-					name: classDecl.name + "." + compiler.hl.incremental.HlModuleAssembler.LIVE_INITIALIZER,
+					name: classDecl.name + "." + compiler.hl.incremental.HlModuleAssembler.LIVE_INITIALIZER, role: UserFunction,
 					owner: classDecl.name,
 					isStatic: false,
 					// Gives it a receiver without a prototype slot, as a constructor has.
@@ -169,7 +170,7 @@ class IrProgramAssembler {
 
 	static function initializerFunction(generator:IrGenerator, name:String, statements:Array<TypedStatement>, span:compiler.Source.SourceSpan):IrFunction
 		return generator.generateFunction({
-			name: name,
+			name: name, role: UserFunction,
 			owner: null,
 			isStatic: true,
 			isConstructor: false,

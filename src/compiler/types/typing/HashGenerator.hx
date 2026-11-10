@@ -1,5 +1,6 @@
 package compiler.types.typing;
 
+import compiler.types.TypedAst.TypedFunctionRole;
 import compiler.Source.SourceSpan;
 import compiler.types.Type.CompilerType;
 import compiler.types.Type.NominalKind;
@@ -145,7 +146,7 @@ class HashGenerator {
 				BodyTyper.fail("E1025", 'Cannot synthesize Hashable for type "${compiler.semantic.SemanticSignature.display(type)}"', span);
 		}
 		return {
-			name: hashName(type), origin: req.origin, originKind: Helper, typeArguments: null,
+			name: hashName(type), role: HashFunction, origin: req.origin, originKind: Helper, typeArguments: null,
 			owner: null, isStatic: true, isConstructor: false,
 			arguments: [{name: "value", type: type}], result: TInt,
 			statements: statements, cells: [], cellCaptures: [], span: span

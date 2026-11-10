@@ -51,13 +51,13 @@ class IrEnumDynamicDispatch {
 		var boxNames = [for (name in boxes.keys()) name]; boxNames.sort(Reflect.compare);
 		for (name in boxNames) if (!functionNames.exists(name)) {
 			var builder = new IrBuilder(), value = builder.argument("value", requests.get(name));
-			builder.returnValue(builder.toDyn(value)); functions.push(new IrFunction(name, builder.arguments, Dyn, builder.blocks, Ordinary));
+			builder.returnValue(builder.toDyn(value)); functions.push(new IrFunction(name, builder.arguments, Dyn, builder.blocks, GeneratedHelper));
 			functionNames.set(name, true);
 		}
 		var viewNames = [for (name in views.keys()) name]; viewNames.sort(Reflect.compare);
 		for (name in viewNames) if (!functionNames.exists(name)) {
 			var builder = new IrBuilder(), array = builder.argument("array", Array(Dyn));
-			builder.returnValue(array); functions.push(new IrFunction(name, builder.arguments, Array(Dyn), builder.blocks, Ordinary));
+			builder.returnValue(array); functions.push(new IrFunction(name, builder.arguments, Array(Dyn), builder.blocks, GeneratedHelper));
 			functionNames.set(name, true);
 		}
 		var rewritten:Array<IrFunction> = [], unboxes:Map<String, IrType> = [], typeTests:Map<String, {type:IrType, exact:Bool}> = [];
@@ -129,7 +129,7 @@ class IrEnumDynamicDispatch {
 		builder.select(test); builder.branch(builder.call("__std_is_exact_type", [input, builder.typeValue(type)], Bool), matched, invalid);
 		builder.select(matched); builder.returnValue(builder.safeCast(input, type));
 		builder.select(invalid); builder.throwValue(builder.toDyn(builder.constString("Invalid enum cast")));
-		return new IrFunction(name, builder.arguments, type, builder.blocks, Ordinary);
+		return new IrFunction(name, builder.arguments, type, builder.blocks, GeneratedHelper);
 	}
 
 	static function typeTest(name:String, type:IrType, exact:Bool, names:Array<String>, requests:Map<String, IrType>):IrFunction {
@@ -143,7 +143,7 @@ class IrEnumDynamicDispatch {
 			builder.select(matched); builder.returnValue(builder.constBool(true)); builder.select(next);
 		}
 		builder.returnValue(builder.call(exact ? "__std_is_exact_type" : "__std_is_of_type", [input, builder.typeValue(type)], Bool));
-		return new IrFunction(name, builder.arguments, Bool, builder.blocks, Ordinary);
+		return new IrFunction(name, builder.arguments, Bool, builder.blocks, GeneratedHelper);
 	}
 
 	/** Enums have equality but no declared ordering. Never order their boxed addresses. */
@@ -163,6 +163,6 @@ class IrEnumDynamicDispatch {
 			builder.select(next);
 		}
 		builder.returnValue(builder.call("__dynamic_equal", [left, right], Bool));
-		return new IrFunction(name, builder.arguments, Bool, builder.blocks, Ordinary);
+		return new IrFunction(name, builder.arguments, Bool, builder.blocks, GeneratedHelper);
 	}
 }

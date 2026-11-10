@@ -60,7 +60,7 @@ class IrNullableScalarFlow {
 				builder.returnValue(builder.constBool(true));
 				builder.select(compare);
 				builder.returnValue(builder.equal(payload, otherPayload));
-				program.functions.push(new IrFunction(name, builder.arguments, Bool, builder.blocks, Ordinary));
+				program.functions.push(new IrFunction(name, builder.arguments, Bool, builder.blocks, GeneratedHelper));
 			} else {
 				var yes = builder.createBlock(), no = builder.createBlock();
 				builder.branch(present, yes, no);
@@ -68,7 +68,7 @@ class IrNullableScalarFlow {
 				builder.returnValue(payload);
 				builder.select(no);
 				builder.terminate(Throw(builder.toDyn(builder.constString("Null access"))));
-				program.functions.push(new IrFunction(name, builder.arguments, type, builder.blocks, Ordinary));
+				program.functions.push(new IrFunction(name, builder.arguments, type, builder.blocks, GeneratedHelper));
 			}
 		}
 	}
@@ -289,7 +289,8 @@ class IrNullableScalarFlow {
 		var debug = [for (binding in fn.debugBindings) if (!parts.exists(binding.value.id)) binding];
 		debug = IrInliner.substitute(blocks, substitutions, debug);
 		return {
-			fn: new IrFunction(clone ? specializationName(fn.name) : fn.name, arguments, fn.result, blocks, clone ? Ordinary : fn.kind, debug, fn.inlineHint,
+			fn: new IrFunction(clone ? specializationName(fn.name) : fn.name, arguments, fn.result, blocks,
+				clone ? (switch fn.kind { case ScalarArguments: GeneratedHelper; default: NullableScalarArguments; }) : fn.kind, debug, fn.inlineHint,
 				clone ? compiler.ir.IrFunction.IrRetention.Reachable : fn.retention),
 			eligible: true
 		};

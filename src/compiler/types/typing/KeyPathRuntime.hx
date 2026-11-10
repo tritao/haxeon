@@ -1,5 +1,6 @@
 package compiler.types.typing;
 
+import compiler.types.TypedAst.TypedFunctionRole;
 import compiler.Source.SourceSpan;
 import compiler.semantic.SemanticSignature;
 import compiler.types.KeyPathType;
@@ -99,6 +100,6 @@ class KeyPathRuntime {
 
 	static function fn(name:String, definition:KeyPathDefinition, arguments:Array<{name:String, type:CompilerType}>, result:CompilerType,
 			statements:Array<TypedStatement>):TypedFunction
-		return {name: name, origin: definition.origin, originKind: Helper, owner: null, isStatic: true, isConstructor: false,
+		return {name: name, role: KeyPathFunction, origin: definition.origin, originKind: Helper, owner: null, isStatic: true, isConstructor: false,
 			arguments: arguments, result: result, statements: statements, cells: [], cellCaptures: [], span: definition.span};
 }

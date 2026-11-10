@@ -1,5 +1,6 @@
 package compiler.types.typing;
 
+import compiler.types.TypedAst.TypedFunctionRole;
 import compiler.Source.SourceSpan;
 import compiler.types.Type.CompilerType;
 import compiler.types.Type.NominalKind;
@@ -129,7 +130,7 @@ class EnumEqualityGenerator {
 				BodyTyper.fail("E1025", 'Type.enumEq requires an enum value, got "${compiler.semantic.SemanticSignature.display(type)}"', span);
 		}
 		return {
-			name: reflective ? reflectiveName(type) : equalsName(type),
+			name: reflective ? reflectiveName(type) : equalsName(type), role: EqualityFunction,
 			origin: req.origin,
 			originKind: Helper,
 			typeArguments: null,

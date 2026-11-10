@@ -27,7 +27,7 @@ class IrCheckedDynamicCasts {
 			builder.returnValue(builder.safeCast(input, type));
 			builder.select(rejected);
 			builder.terminate(Throw(builder.toDyn(builder.constString('Invalid cast to $typeName'))));
-			generated.push(new IrFunction(name, builder.arguments, type, builder.blocks, Ordinary));
+			generated.push(new IrFunction(name, builder.arguments, type, builder.blocks, GeneratedHelper));
 			return name;
 		}
 		var rewritten:Array<IrFunction> = [];

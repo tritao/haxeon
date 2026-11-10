@@ -293,6 +293,18 @@ enum abstract FunctionOriginKind(String) {
 	var Helper = "helper";
 }
 
+/** The declared role of a typed function, independent of its generated linkage name. */
+enum TypedFunctionRole {
+	UserFunction;
+	GenericFunction;
+	LambdaFunction;
+	EqualityFunction;
+	HashFunction;
+	KeyPathFunction;
+	IterationFunction;
+	OtherFunction;
+}
+
 /**
  * Fully typed function or method body.
  *
@@ -301,6 +313,7 @@ enum abstract FunctionOriginKind(String) {
  */
 typedef TypedFunction = {
 	final name:String;
+	final role:TypedFunctionRole;
 
 	/**
 	 * The function this one is specialized from, written in, or made for. The two are typed, invalidated and kept together:

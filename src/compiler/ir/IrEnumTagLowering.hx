@@ -69,7 +69,7 @@ class IrEnumTagLowering {
 				default: called;
 			};
 			b.returnValue(returned);
-			generated.push(new IrFunction(wrapper, b.arguments, mapped(result), b.blocks, Ordinary));
+			generated.push(new IrFunction(wrapper, b.arguments, mapped(result), b.blocks, GeneratedHelper));
 			nativeWrappers.set(name, wrapper);
 		}
 		for (native in program.natives)

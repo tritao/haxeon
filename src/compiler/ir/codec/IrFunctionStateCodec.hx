@@ -20,7 +20,7 @@ import compiler.ir.SourceProvenance.SourceOrigin;
 
 /** Deterministic framing for a complete SSA IR function. */
 class IrFunctionStateCodec {
-	static inline final VERSION = 13;
+	static inline final VERSION = 14;
 	static inline final MAX_BLOCKS = 0x100000;
 	static inline final MAX_INSTRUCTIONS = 0x1000000;
 
@@ -67,7 +67,7 @@ class IrFunctionStateCodec {
 
 	/**
 	 * Identifies what a function does, leaving out its name and where its code came from: two functions with the same
-	 * fingerprint run the same code, wherever their source sits and whatever they are called. Lambda ordinals are left out of
+	 * fingerprint run the same code, wherever their source sits and whatever they are called. SourceLambda ordinals are left out of
 	 * the names it mentions (`IrTypeCodec.withoutOrdinals`), so a lambda that only moved among its siblings keeps its
 	 * fingerprint even though its environment and nested lambdas are renamed with it (see `LambdaAlignment`).
 	 */
@@ -114,6 +114,26 @@ class IrFunctionStateCodec {
 			case ClosureVarargs(target):
 				output.writeByte(3);
 				IrTypeCodec.writeType(output, target, 0, erase);
+			case GenericSpecialization: output.writeByte(4);
+			case SourceLambda: output.writeByte(5);
+			case Equality: output.writeByte(6);
+			case Hash: output.writeByte(7);
+			case KeyPath: output.writeByte(8);
+			case IterationAdapter: output.writeByte(9);
+			case GeneratedHelper: output.writeByte(10);
+			case InlineEnumAccess: output.writeByte(11);
+			case TypedInterface: output.writeByte(12);
+			case ValueUnbox: output.writeByte(13);
+			case GenericMethodReference: output.writeByte(14);
+			case OptionalScalar(original):
+				output.writeByte(15);
+				output.writeByte(original == null ? 0 : 1);
+				if (original != null) IrTypeCodec.writeString(output, original);
+			case OptionalValueBoundary: output.writeByte(16);
+			case NullableScalarArguments: output.writeByte(17);
+			case ValueArrayElement: output.writeByte(18);
+			case WasmClosureRestore: output.writeByte(19);
+			case ScalarArguments: output.writeByte(20);
 		}
 		var debugBindings = identified ? fn.debugBindings : [];
 		output.writeInt32(debugBindings.length);
@@ -189,6 +209,26 @@ class IrFunctionStateCodec {
 				case 1: ClosureAdapter(IrTypeCodec.readType(input, bytes.length, 0), IrTypeCodec.readType(input, bytes.length, 0));
 				case 2: ClosureCast(IrTypeCodec.readType(input, bytes.length, 0));
 				case 3: ClosureVarargs(IrTypeCodec.readType(input, bytes.length, 0));
+				case 4: GenericSpecialization;
+				case 5: SourceLambda;
+				case 6: Equality;
+				case 7: Hash;
+				case 8: KeyPath;
+				case 9: IterationAdapter;
+				case 10: GeneratedHelper;
+				case 11: InlineEnumAccess;
+				case 12: TypedInterface;
+				case 13: ValueUnbox;
+				case 14: GenericMethodReference;
+				case 15:
+					var present = input.readByte();
+					if (present != 0 && present != 1) throw "Invalid optional scalar origin";
+					OptionalScalar(present == 0 ? null : IrTypeCodec.readString(input, bytes.length));
+				case 16: OptionalValueBoundary;
+				case 17: NullableScalarArguments;
+				case 18: ValueArrayElement;
+				case 19: WasmClosureRestore;
+				case 20: ScalarArguments;
 				default: throw "Invalid IR function kind";
 			};
 			if (version >= 3) {

@@ -71,6 +71,7 @@ class TestCatalog {
 		"GenericDynamicArgumentMain",
 		"GenericScalarMapOwnerMain",
 		"WasmClosureVerificationOrderMain",
+		"ScalarAbiEligibilityMain",
 		"GenericStructFunctionMain",
 		"GenericOwnerPolicyMain",
 		"GenericOwnerRecursionMain",

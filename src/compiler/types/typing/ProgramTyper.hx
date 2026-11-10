@@ -1,5 +1,6 @@
 package compiler.types.typing;
 
+import compiler.types.TypedAst.TypedFunctionRole;
 import compiler.semantic.SemanticProgram;
 import compiler.ffi.HxiModel.HxiDeclaration;
 import compiler.ffi.NativeLayout;
@@ -982,6 +983,7 @@ class ProgramTyper {
 			&& (specialization != null || selected == null || selected.exists(classDecl.name + ".new")))
 			typedMethods.push({
 				name: (specialization == null ? classDecl.name : specialization.name) + ".new",
+				role: specialization == null ? UserFunction : GenericFunction,
 				origin: specialization == null ? null : classDecl.name + ".new",
 				originKind: specialization == null ? null : compiler.types.TypedAst.FunctionOriginKind.Specialization,
 				typeArguments: specialization == null ? null : specialization.typeArguments,
@@ -1180,6 +1182,7 @@ class ProgramTyper {
 			BodyTyper.fail("E1022", 'Native layout types cannot be returned by value from function "${owner}.${method.name}" yet', method.span);
 		return {
 			name: owner + "." + method.name,
+			role: UserFunction,
 			owner: owner,
 			isStatic: method.isStatic,
 			isConstructor: method.name == "new",
@@ -1196,6 +1199,7 @@ class ProgramTyper {
 		var statements = instanceInitializerStatements(fields, className, receiverType);
 		return {
 			name: method.name,
+			role: method.role,
 			origin: method.origin,
 			originKind: method.originKind,
 			typeArguments: method.typeArguments,

@@ -1,5 +1,6 @@
 package compiler.semantic;
 
+import compiler.types.TypedAst.TypedFunctionRole;
 import compiler.Source.SourceSpan;
 import compiler.modules.ModulePath;
 import compiler.syntax.Token;
@@ -623,7 +624,7 @@ class SemanticIndex {
 		currentCallerName = owner;
 		currentDependencyKind = SemanticDependencyKind.Initializer;
 		var synthetic:TypedFunction = {
-			name: owner,
+			name: owner, role: UserFunction,
 			owner: null,
 			isStatic: true,
 			isConstructor: false,

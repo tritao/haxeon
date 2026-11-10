@@ -12,8 +12,8 @@ interpolation are not markers.
 
 - [x] Closure adapter and cast signature hashes: linear Wasm uses planned signature IDs for linkage, and the verifier reads
   declared adapter, cast and varargs kinds and their semantic types instead of parsing hashes from names.
-- [ ] Function origins and scalar ABI eligibility: the duplicated prefix lists in `IrScalarArguments` and `WasmScalarAbi`,
-  including lambda, generic, equality/hash, iteration, interface, optional, nullable, key-path and array helpers.
+- [x] Function origins and scalar ABI eligibility: typing and generated IR functions declare their roles, and one shared
+  predicate selects the shared and Wasm ABIs, including their distinct nullable-scalar and closure-restoration boundaries.
 - [ ] Value-array slot, element, factory, bridge and place-method names (`$value-array:`), including encoded type and path.
 - [ ] Scalar word and lane pack/unpack, lane runtime/storage and HL scalar references (`$word:`, `$lane:`, `$lane-runtime:`,
   `$lane-storage:`, `$hl:scalar-*`); receiver and reference checks.

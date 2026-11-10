@@ -357,13 +357,13 @@ class ValueArrayAccessMain {
 		method.fieldSet(receiver, "signed", method.add(later, method.constInt(2)));
 		method.returnValue(method.constVoid());
 		var methodRewriter = new IrValueArrayPlaceMethods(IrObjectTable.of(objects), element, helpers);
-		var rewrittenMethod = methodRewriter.specialize("array_place_around",
+		var rewrittenMethod = methodRewriter.specialize(Ordinary, "array_place_around",
 			new IrFunction("LaneElement.around", method.arguments, Void, method.blocks, Ordinary), []);
 		var throwingMethod = new IrBuilder(), throwingReceiver = throwingMethod.argument("this", element);
 		var previous = throwingMethod.fieldGet(throwingReceiver, "signed", I32);
 		throwingMethod.fieldSet(throwingReceiver, "signed", throwingMethod.add(previous, throwingMethod.constInt(3)));
 		throwingMethod.terminate(Throw(throwingMethod.toDyn(throwingMethod.constString("changed"))));
-		var rewrittenThrow = methodRewriter.specialize("array_place_throw",
+		var rewrittenThrow = methodRewriter.specialize(Ordinary, "array_place_throw",
 			new IrFunction("LaneElement.changeThenThrow", throwingMethod.arguments, Void, throwingMethod.blocks, Ordinary), []);
 		var nestedMethod = new IrBuilder(), nestedReceiver = nestedMethod.argument("this", element),
 			nestedCallback = nestedMethod.argument("callback", callbackType), nestedArray = nestedMethod.argument("array", arrayType);
@@ -374,7 +374,7 @@ class ValueArrayAccessMain {
 		var nestedLater = nestedMethod.fieldGet(child, "value", I32);
 		nestedMethod.fieldSet(child, "value", nestedMethod.add(nestedLater, nestedMethod.constInt(2)));
 		nestedMethod.returnValue(nestedMethod.constVoid());
-		var rewrittenNested = methodRewriter.specialize("array_place_nested",
+		var rewrittenNested = methodRewriter.specialize(Ordinary, "array_place_nested",
 			new IrFunction("LaneElement.nestedAround", nestedMethod.arguments, Void, nestedMethod.blocks, Ordinary), []);
 		var snapshotMethod = new IrBuilder(), snapshotReceiver = snapshotMethod.argument("this", element),
 			snapshotCallback = snapshotMethod.argument("callback", callbackType), snapshotArray = snapshotMethod.argument("array", arrayType);
@@ -384,7 +384,7 @@ class ValueArrayAccessMain {
 		snapshotMethod.fieldSet(snapshot, "label", snapshotMethod.fieldGet(snapshotChild, "label", Obj("LaneOwner")));
 		snapshotMethod.callClosure(snapshotCallback, [snapshotArray], Void);
 		snapshotMethod.returnValue(snapshotMethod.fieldGet(snapshot, "value", I32));
-		var rewrittenSnapshot = methodRewriter.specialize("array_place_snapshot",
+		var rewrittenSnapshot = methodRewriter.specialize(Ordinary, "array_place_snapshot",
 			new IrFunction("LaneElement.snapshot", snapshotMethod.arguments, I32, snapshotMethod.blocks, Ordinary), []);
 		rewrittenSnapshot = IrScalarReplacement.rewrite(rewrittenSnapshot, IrObjectTable.of(objects), false, true);
 		for (block in rewrittenSnapshot.blocks) for (located in block.instructions) switch located.value {
@@ -401,14 +401,14 @@ class ValueArrayAccessMain {
 		var optionalInitial = optionalMethod.fieldGet(unwrapped, "value", I32);
 		optionalMethod.fieldSet(unwrapped, "value", optionalMethod.add(optionalInitial, optionalMethod.constInt(2)));
 		optionalMethod.returnValue(optionalMethod.fieldGet(unwrapped, "value", I32));
-		var rewrittenOptional = methodRewriter.specialize("array_place_optional",
+		var rewrittenOptional = methodRewriter.specialize(Ordinary, "array_place_optional",
 			new IrFunction("LaneElement.optionalValue", optionalMethod.arguments, I32, optionalMethod.blocks, Ordinary), []);
 		var scalarSnapshot = new IrBuilder(), scalarReceiver = scalarSnapshot.argument("this", element),
 			scalarCallback = scalarSnapshot.argument("callback", callbackType), scalarArray = scalarSnapshot.argument("array", arrayType);
 		var savedScalar = scalarSnapshot.fieldGet(scalarReceiver, "optional", Nullable(I32));
 		scalarSnapshot.callClosure(scalarCallback, [scalarArray], Void);
 		scalarSnapshot.returnValue(scalarSnapshot.safeCast(savedScalar, I32));
-		var rewrittenScalarSnapshot = methodRewriter.specialize("array_place_scalar_snapshot",
+		var rewrittenScalarSnapshot = methodRewriter.specialize(Ordinary, "array_place_scalar_snapshot",
 			new IrFunction("LaneElement.scalarSnapshot", scalarSnapshot.arguments, I32, scalarSnapshot.blocks, Ordinary), []);
 		var scalarWrite = new IrBuilder(), writeReceiver = scalarWrite.argument("this", element);
 		scalarWrite.fieldSet(writeReceiver, "optional", scalarWrite.constNull(Nullable(I32)));
@@ -420,7 +420,7 @@ class ValueArrayAccessMain {
 		scalarWrite.fieldSet(writeReceiver, "optional", scalarWrite.toDyn(scalarWrite.constInt(257), Nullable(I32)));
 		var assignedScalar = scalarWrite.fieldGet(writeReceiver, "optional", Nullable(I32));
 		scalarWrite.returnValue(scalarWrite.safeCast(assignedScalar, I32));
-		var rewrittenScalarWrite = methodRewriter.specialize("array_place_scalar_write",
+		var rewrittenScalarWrite = methodRewriter.specialize(Ordinary, "array_place_scalar_write",
 			new IrFunction("LaneElement.scalarWrite", scalarWrite.arguments, I32, scalarWrite.blocks, Ordinary), []);
 		var scalarNull = new IrBuilder(), nullReceiver = scalarNull.argument("this", element),
 			nullCallback = scalarNull.argument("callback", callbackType), nullArray = scalarNull.argument("array", arrayType);
@@ -430,7 +430,7 @@ class ValueArrayAccessMain {
 		scalarNull.branch(scalarNull.equal(nullSnapshot, scalarNull.constNull(Nullable(I32))), nullYes, nullNo);
 		scalarNull.select(nullYes); scalarNull.returnValue(scalarNull.constInt(42));
 		scalarNull.select(nullNo); scalarNull.returnValue(scalarNull.constInt(0));
-		var rewrittenScalarNull = methodRewriter.specialize("array_place_scalar_null",
+		var rewrittenScalarNull = methodRewriter.specialize(Ordinary, "array_place_scalar_null",
 			new IrFunction("LaneElement.scalarNull", scalarNull.arguments, I32, scalarNull.blocks, Ordinary), []);
 		var phiRead = new IrBuilder(), phiReceiver = phiRead.argument("this", element), choose = phiRead.argument("choose", Bool),
 			phiCallback = phiRead.argument("callback", callbackType), phiArray = phiRead.argument("array", arrayType);
@@ -446,7 +446,7 @@ class ValueArrayAccessMain {
 		phiRead.branch(phiRead.equal(selected, phiRead.constNull(Nullable(I32))), phiAbsent, phiPresent);
 		phiRead.select(phiAbsent); phiRead.returnValue(phiRead.constInt(0));
 		phiRead.select(phiPresent); phiRead.returnValue(phiRead.safeCast(selected, I32));
-		var rewrittenPhiRead = methodRewriter.specialize("array_place_phi_read",
+		var rewrittenPhiRead = methodRewriter.specialize(Ordinary, "array_place_phi_read",
 			new IrFunction("LaneElement.phiRead", phiRead.arguments, I32, phiRead.blocks, Ordinary), []);
 		var phiWrite = new IrBuilder(), phiWriteReceiver = phiWrite.argument("this", element), phiWriteChoose = phiWrite.argument("choose", Bool);
 		var writeYes = phiWrite.createBlock(), writeNo = phiWrite.createBlock(), writeJoin = phiWrite.createBlock();
@@ -461,25 +461,25 @@ class ValueArrayAccessMain {
 		phiWrite.branch(phiWrite.equal(written, phiWrite.constNull(Nullable(I32))), writtenNull, writtenSome);
 		phiWrite.select(writtenNull); phiWrite.returnValue(phiWrite.constInt(0));
 		phiWrite.select(writtenSome); phiWrite.returnValue(phiWrite.safeCast(written, I32));
-		var rewrittenPhiWrite = methodRewriter.specialize("array_place_phi_write",
+		var rewrittenPhiWrite = methodRewriter.specialize(Ordinary, "array_place_phi_write",
 			new IrFunction("LaneElement.phiWrite", phiWrite.arguments, I32, phiWrite.blocks, Ordinary), []);
 		var copyMethod = new IrBuilder(), copyReceiver = copyMethod.argument("this", element);
 		var copySource = copyMethod.fieldGet(copyReceiver, "inner2", Obj("LaneInner"));
 		copyMethod.fieldSet(copyReceiver, "inner", copySource);
 		copyMethod.returnValue(copyMethod.constVoid());
-		var rewrittenCopy = methodRewriter.specialize("array_place_copy",
+		var rewrittenCopy = methodRewriter.specialize(Ordinary, "array_place_copy",
 			new IrFunction("LaneElement.copyInner", copyMethod.arguments, Void, copyMethod.blocks, Ordinary), []);
 		var selfMethod = new IrBuilder(), selfReceiver = selfMethod.argument("this", element);
 		var selfSource = selfMethod.fieldGet(selfReceiver, "inner", Obj("LaneInner"));
 		selfMethod.fieldSet(selfReceiver, "inner", selfSource);
 		selfMethod.returnValue(selfMethod.constVoid());
-		var rewrittenSelf = methodRewriter.specialize("array_place_self_copy",
+		var rewrittenSelf = methodRewriter.specialize(Ordinary, "array_place_self_copy",
 			new IrFunction("LaneElement.copySelf", selfMethod.arguments, Void, selfMethod.blocks, Ordinary), []);
 		var optionalCopy = new IrBuilder(), optionalCopyReceiver = optionalCopy.argument("this", element);
 		var optionalSource = optionalCopy.fieldGet(optionalCopyReceiver, "maybe2", Nullable(Obj("LaneInner")));
 		optionalCopy.fieldSet(optionalCopyReceiver, "maybe", optionalSource);
 		optionalCopy.returnValue(optionalCopy.constVoid());
-		var rewrittenOptionalCopy = methodRewriter.specialize("array_place_optional_copy",
+		var rewrittenOptionalCopy = methodRewriter.specialize(Ordinary, "array_place_optional_copy",
 			new IrFunction("LaneElement.copyOptional", optionalCopy.arguments, Void, optionalCopy.blocks, Ordinary), []);
 		var construct = new IrBuilder(), constructReceiver = construct.argument("this", element),
 			constructValue = construct.argument("value", I32), constructLabel = construct.argument("label", Obj("LaneOwner"));
@@ -488,7 +488,7 @@ class ValueArrayAccessMain {
 		construct.fieldSet(freshPair, "label", constructLabel);
 		construct.fieldSet(constructReceiver, "pair", freshPair);
 		construct.returnValue(construct.constVoid());
-		var rewrittenConstruct = methodRewriter.specialize("array_place_construct",
+		var rewrittenConstruct = methodRewriter.specialize(Ordinary, "array_place_construct",
 			new IrFunction("LaneElement.constructPair", construct.arguments, Void, construct.blocks, Ordinary), []);
 		rewrittenConstruct = IrScalarReplacement.rewrite(rewrittenConstruct, IrObjectTable.of(objects), false, true);
 		for (block in rewrittenConstruct.blocks) for (located in block.instructions) switch located.value {
@@ -499,7 +499,7 @@ class ValueArrayAccessMain {
 			pairArgument = copyArgument.argument("pair", Obj("LanePair"));
 		copyArgument.fieldSet(argumentReceiver, "pair", pairArgument);
 		copyArgument.returnValue(copyArgument.constVoid());
-		var rewrittenArgument = methodRewriter.specialize("array_place_copy_argument",
+		var rewrittenArgument = methodRewriter.specialize(Ordinary, "array_place_copy_argument",
 			new IrFunction("LaneElement.copyArgument", copyArgument.arguments, Void, copyArgument.blocks, Ordinary), []);
 		var composite = new IrBuilder(), compositeReceiver = composite.argument("this", element),
 			compositeCallback = composite.argument("callback", callbackType), compositeArray = composite.argument("array", arrayType);
@@ -511,7 +511,7 @@ class ValueArrayAccessMain {
 		composite.callClosure(compositeCallback, [compositeArray], Void);
 		composite.fieldSet(compositeReceiver, "inner", compositeSaved);
 		composite.returnValue(composite.constVoid());
-		var rewrittenComposite = methodRewriter.specialize("array_place_composite_snapshot",
+		var rewrittenComposite = methodRewriter.specialize(Ordinary, "array_place_composite_snapshot",
 			new IrFunction("LaneElement.compositeSnapshot", composite.arguments, Void, composite.blocks, Ordinary), []);
 		for (block in rewrittenComposite.blocks) for (located in block.instructions) switch located.value {
 			case NewObject(_, "LaneInner"): throw "A composite snapshot must stay scalar";
@@ -521,13 +521,13 @@ class ValueArrayAccessMain {
 		var defaultInner = defaults.newObject("LaneInner");
 		defaults.fieldSet(defaultsReceiver, "inner", defaultInner);
 		defaults.returnValue(defaults.constVoid());
-		var rewrittenDefaults = methodRewriter.specialize("array_place_defaults",
+		var rewrittenDefaults = methodRewriter.specialize(Ordinary, "array_place_defaults",
 			new IrFunction("LaneElement.defaults", defaults.arguments, Void, defaults.blocks, Ordinary), []);
 		var nestedDefaults = new IrBuilder(), nestedDefaultsReceiver = nestedDefaults.argument("this", element);
 		var defaultOuter = nestedDefaults.newObject("LaneOuter");
 		nestedDefaults.fieldSet(nestedDefaultsReceiver, "outer", defaultOuter);
 		nestedDefaults.returnValue(nestedDefaults.constVoid());
-		var rewrittenNestedDefaults = methodRewriter.specialize("array_place_nested_defaults",
+		var rewrittenNestedDefaults = methodRewriter.specialize(Ordinary, "array_place_nested_defaults",
 			new IrFunction("LaneElement.nestedDefaults", nestedDefaults.arguments, Void, nestedDefaults.blocks, Ordinary), []);
 		var nestedConstruct = new IrBuilder(), nestedConstructReceiver = nestedConstruct.argument("this", element),
 			nestedConstructLabel = nestedConstruct.argument("label", Obj("LaneOwner"));
@@ -543,7 +543,7 @@ class ValueArrayAccessMain {
 		nestedConstruct.fieldSet(constructedOuter, "maybe", optionalConstructedInner);
 		nestedConstruct.fieldSet(nestedConstructReceiver, "outer", constructedOuter);
 		nestedConstruct.returnValue(nestedConstruct.constVoid());
-		var rewrittenNestedConstruct = methodRewriter.specialize("array_place_nested_construct",
+		var rewrittenNestedConstruct = methodRewriter.specialize(Ordinary, "array_place_nested_construct",
 			new IrFunction("LaneElement.nestedConstruct", nestedConstruct.arguments, Void, nestedConstruct.blocks, Ordinary), []);
 		for (block in rewrittenNestedConstruct.blocks) for (located in block.instructions) switch located.value {
 			case NewObject(_, "LaneInner" | "LaneOuter"): throw "A nested constructed snapshot must stay scalar";
@@ -555,7 +555,7 @@ class ValueArrayAccessMain {
 		nullConstruct.fieldSet(nullOuter, "maybe", nullConstruct.constNull(Nullable(Obj("LaneInner"))));
 		nullConstruct.fieldSet(nullConstructReceiver, "outer", nullOuter);
 		nullConstruct.returnValue(nullConstruct.constVoid());
-		var rewrittenNullConstruct = methodRewriter.specialize("array_place_null_construct",
+		var rewrittenNullConstruct = methodRewriter.specialize(Ordinary, "array_place_null_construct",
 			new IrFunction("LaneElement.nullConstruct", nullConstruct.arguments, Void, nullConstruct.blocks, Ordinary), []);
 		if (methodRewriter.requests.length != 0) throw "Unexpected nested array-place method request";
 		var adjustment = new IrBuilder(), adjustmentReceiver = adjustment.argument("this", Obj("LaneInner")),

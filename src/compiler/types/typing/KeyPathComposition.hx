@@ -1,5 +1,6 @@
 package compiler.types.typing;
 
+import compiler.types.TypedAst.TypedFunctionRole;
 import compiler.Source.SourceSpan;
 import compiler.types.Type.CompilerType;
 import compiler.types.TypedAst;
@@ -28,7 +29,7 @@ class KeyPathComposition {
 		function add(suffix:String, arguments:Array<{name:String, type:CompilerType}>, result:CompilerType, body:Array<TypedStatement>):Void {
 			if (session.keyPathCompositions.exists(name + suffix)) return;
 			session.keyPathCompositions.set(name + suffix, true);
-			session.closureConversion.addFunction({name: name + suffix, origin: session.currentContext.functionName, originKind: Helper,
+			session.closureConversion.addFunction({name: name + suffix, role: KeyPathFunction, origin: session.currentContext.functionName, originKind: Helper,
 				owner: environment, isStatic: false, isConstructor: false, arguments: arguments, result: result, statements: body,
 				cells: [], cellCaptures: [], span: span});
 		}

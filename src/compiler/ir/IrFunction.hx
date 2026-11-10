@@ -27,6 +27,23 @@ enum abstract IrRetention(Int) from Int to Int {
 /** Compiler-declared role and semantic signatures of generated closure boundary functions. */
 enum IrFunctionKind {
 	Ordinary;
+	GenericSpecialization;
+	SourceLambda;
+	Equality;
+	Hash;
+	KeyPath;
+	IterationAdapter;
+	GeneratedHelper;
+	ScalarArguments;
+	InlineEnumAccess;
+	TypedInterface;
+	ValueUnbox;
+	GenericMethodReference;
+	OptionalScalar(original:Null<String>);
+	OptionalValueBoundary;
+	NullableScalarArguments;
+	ValueArrayElement;
+	WasmClosureRestore;
 	ClosureAdapter(source:IrType, target:IrType);
 	ClosureCast(target:IrType);
 	ClosureVarargs(target:IrType);

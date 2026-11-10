@@ -53,8 +53,8 @@ class IrInlineEnumEscapes {
 			}
 			box.throwValue(box.toDyn(box.constString("Invalid inline enum tag")));
 			unbox.throwValue(unbox.toDyn(unbox.constString("Invalid enum case index")));
-			result.push(new IrFunction(boxName(name), box.arguments, Dyn, box.blocks, Ordinary));
-			result.push(new IrFunction(unboxName(name), unbox.arguments, storage, unbox.blocks, Ordinary));
+			result.push(new IrFunction(boxName(name), box.arguments, Dyn, box.blocks, InlineEnumAccess));
+			result.push(new IrFunction(unboxName(name), unbox.arguments, storage, unbox.blocks, InlineEnumAccess));
 		}
 		return result;
 	}
