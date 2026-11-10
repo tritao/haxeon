@@ -549,7 +549,7 @@ class SettingsTests {
 		var commands = sampleCommands(log);
 		check(commands.shortcutsFor("editor.palette").length == 2, "registered shortcuts, primary first");
 		commands.setShortcuts("scene.frame", [new Shortcut(UiKey.F2)]);
-		check(commands.dispatch(UiKey.F2, 0) && log.join(",") == "frame", "a custom binding runs its command");
+		check(commands.dispatch(UiKey.F2, haxeon.ui.core.UiModifier.empty()) && log.join(",") == "frame", "a custom binding runs its command");
 		commands.setShortcuts("editor.save", []);
 		check(!commands.dispatch(UiKey.S, UiModifier.Control) && log.length == 1, "an unbound command no longer runs");
 		commands.resetShortcuts("editor.save");
@@ -562,7 +562,7 @@ class SettingsTests {
 		commands.setShortcuts("plugin.later", [new Shortcut(UiKey.F5)]);
 		check(commands.customShortcutIds().indexOf("plugin.later") >= 0, "bindings for commands not registered yet are kept");
 		commands.register(new Command("plugin.later", "Later", () -> log.push("later")));
-		check(commands.dispatch(UiKey.F5, 0) && log[2] == "later", "and apply once the command is registered");
+		check(commands.dispatch(UiKey.F5, haxeon.ui.core.UiModifier.empty()) && log[2] == "later", "and apply once the command is registered");
 	}
 
 	static function shortcutPersistence():Void {

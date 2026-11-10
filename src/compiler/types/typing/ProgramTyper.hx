@@ -51,6 +51,7 @@ class ProgramTyper {
 		var program = semantic.program;
 		for (decl in program.enumAbstracts) {
 			RawRepresentableGenerator.validate(session, bodyTyper, decl);
+			FlagsGenerator.validate(session, bodyTyper, decl);
 			for (value in decl.values) EnumAbstractValues.raw(bodyTyper, decl, value);
 		}
 		session.bindNominalDeclarations();
@@ -326,9 +327,9 @@ class ProgramTyper {
 			hashes:Map<String, TypedFunction> = [],
 			enumMethods:Map<String, TypedFunction> = [],
 			enumAdapters:Map<String, TypedClass> = [],
-			codecs:Map<String, TypedFunction> = [], rawMethods:Map<String, TypedFunction> = [];
+			codecs:Map<String, TypedFunction> = [], rawMethods:Map<String, TypedFunction> = [], flagMethods:Map<String, TypedFunction> = [];
 		function requestCount():Int
-			return Lambda.count(session.rawRepresentableRequests) + Lambda.count(session.valueEqualityRequests) + Lambda.count(session.enumEqualityRequests) + Lambda.count(session.hashRequests)
+			return Lambda.count(session.flagsRequests) + Lambda.count(session.rawRepresentableRequests) + Lambda.count(session.valueEqualityRequests) + Lambda.count(session.enumEqualityRequests) + Lambda.count(session.hashRequests)
 				+ Lambda.count(session.enumMethodRequests) + Lambda.count(session.enumInterfaceAdapters) + Lambda.count(session.wireCodecRequests)
 				+ Lambda.count(session.jsonCodecRequests) + Lambda.count(session.keyPathDefinitions) + session.representation.genericOwnerRequestCount()
 				+ session.closureConversion.generatedFunctionCount() + session.enumRepresentations.count();
@@ -336,6 +337,8 @@ class ProgramTyper {
 			drainRuntimeTypes();
 			reflectNewClasses();
 			var before = requestCount();
+			for (method in FlagsGenerator.generate(session, bodyTyper, flagMethods))
+				assembler.registerProgramTypes([method], [], [], [], []);
 			for (method in RawRepresentableGenerator.generate(session, bodyTyper, rawMethods))
 				assembler.registerProgramTypes([method], [], [], [], []);
 			for (codec in WireCodecGenerator.generate(session, typedClasses, typedEnums)
@@ -369,6 +372,9 @@ class ProgramTyper {
 			if (before == requestCount())
 				break;
 		}
+		var flagNames = [for (name in flagMethods.keys()) name];
+		flagNames.sort(Reflect.compare);
+		for (name in flagNames) typedFunctions.push(flagMethods.get(name));
 		var rawNames = [for (name in rawMethods.keys()) name];
 		rawNames.sort(Reflect.compare);
 		for (name in rawNames) typedFunctions.push(rawMethods.get(name));

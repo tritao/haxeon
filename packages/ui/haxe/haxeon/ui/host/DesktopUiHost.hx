@@ -111,8 +111,8 @@ class DesktopUiHost {
 			var deferShowForIcon = options.icons != null && Sys.systemName() == "Windows";
 			var customChrome = options.customTitlebar && haxe.Int64.compare(haxe.Int64.and(
 				NativeKit.nk_get_capabilities(), Capabilities.windowCustomDecorations()), haxe.Int64.ofInt(0)) != 0;
-			windowOptions.set_flags(WindowFlags.Resizable | (customChrome ? WindowFlags.Borderless : 0) |
-				(deferShowForIcon ? WindowFlags.Hidden : 0));
+			windowOptions.set_flags(WindowFlags.Resizable | (customChrome ? WindowFlags.Borderless : WindowFlags.empty()) |
+				(deferShowForIcon ? WindowFlags.Hidden : WindowFlags.empty()));
 			windowOptions.set_owner(WindowHandle.invalid());
 			windowOptions.set_kind(WindowKind.Normal);
 			var createdWindow = NativeKit.nk_window_create(windowOptions);

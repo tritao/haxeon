@@ -69,7 +69,7 @@ class ComboBoxTests {
   for (_ in 0...3) {
    click(arrow()); check(open(), "Arrow failed to open");
    var expanded:Semantics = cast arrow().semantics;
-   check(expanded.label == "Hide options" && (expanded.states & AccessibilityState.Expanded) != 0, "Arrow did not expose expanded state");
+   check(expanded.label == "Hide options" && !(expanded.states & AccessibilityState.Expanded).isEmpty(), "Arrow did not expose expanded state");
    click(arrow()); check(!open(), "Arrow failed to close or reopened through the editor");
    var after:Semantics = cast input().semantics;
    check(after.selectionStart == before.selectionStart && after.selectionEnd == before.selectionEnd && after.value == "One",

@@ -256,20 +256,20 @@ class SettingsPanel implements View implements Observable {
 			if (target != null) { context.requestFocusAfterLayout(target); focusSearchPending = false; }
 		}
 		root.on(haxeon.ui.core.UiEventKind.KeyDown, function(event) {
-			if (event.key == haxeon.ui.core.UiKey.F && (event.modifiers & (haxeon.ui.core.UiModifier.Control | haxeon.ui.core.UiModifier.Super)) != 0) {
+			if (event.key == haxeon.ui.core.UiKey.F && !(event.modifiers & (haxeon.ui.core.UiModifier.Control | haxeon.ui.core.UiModifier.Super)).isEmpty()) {
 				if (focusRegion(searchNode)) { event.preventDefault(); event.stopPropagation(); }
 				return;
 			}
 			var inSearch = searchNode != null && searchNode.find(event.target) != null;
-			if (inSearch && event.key == haxeon.ui.core.UiKey.Down && event.modifiers == 0) {
+			if (inSearch && event.key == haxeon.ui.core.UiKey.Down && event.modifiers.isEmpty()) {
 				if (focusRegion(categoryNode)) { event.preventDefault(); event.stopPropagation(); }
 				return;
 			}
-			if (event.key != haxeon.ui.core.UiKey.F6 || (event.modifiers & ~(haxeon.ui.core.UiModifier.Shift)) != 0) return;
+			if (event.key != haxeon.ui.core.UiKey.F6 || !event.modifiers.remove(haxeon.ui.core.UiModifier.Shift).isEmpty()) return;
 			var regions = [searchNode, categoryNode, inspectorNode];
 			var index = 0;
 			for (i in 0...regions.length) if (regions[i] != null && regions[i].find(event.target) != null) index = i;
-			var step = (event.modifiers & haxeon.ui.core.UiModifier.Shift) != 0 ? -1 : 1;
+			var step = !(event.modifiers & haxeon.ui.core.UiModifier.Shift).isEmpty() ? -1 : 1;
 			for (offset in 1...4) if (focusRegion(regions[(index + step * offset + 6) % 3])) { event.preventDefault(); event.stopPropagation(); break; }
 		}, "capture");
 		return root;

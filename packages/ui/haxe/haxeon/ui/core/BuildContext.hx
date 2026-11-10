@@ -223,7 +223,7 @@ class BuildContext {
 		}
 		if (!hoverAnyType && !hoverTypes.exists(node.styleType)) return false;
 		var target = new StyleTarget(node.styleType, node.styleKey, node.styleId,
-			node.styleClasses, node.styleTags, -1);
+			node.styleClasses, node.styleTags);
 		return sheetHasHoverRule(theme.styles, target) || sheetHasHoverRule(styleSheet, target);
 	}
 
@@ -234,7 +234,7 @@ class BuildContext {
 
 	function collectHoverTypes(sheet:haxeon.ui.style.StyleSheet):Void {
 		for (rule in sheet.rules)
-			if ((rule.selector.stateMask & haxeon.ui.style.StyleState.Hovered) != 0) {
+			if (!(rule.selector.stateMask & haxeon.ui.style.StyleState.Hovered).isEmpty()) {
 				var type = rule.selector.widgetType;
 				if (type == null) hoverAnyType = true;
 				else hoverTypes.set(type, true);
@@ -243,7 +243,7 @@ class BuildContext {
 
 	static function sheetHasHoverRule(sheet:haxeon.ui.style.StyleSheet, target:StyleTarget):Bool {
 		for (rule in sheet.rules)
-			if ((rule.selector.stateMask & haxeon.ui.style.StyleState.Hovered) != 0 && rule.selector.matches(target)) return true;
+			if (!(rule.selector.stateMask & haxeon.ui.style.StyleState.Hovered).isEmpty() && rule.selector.matchesWithoutStates(target)) return true;
 		return false;
 	}
 

@@ -172,12 +172,12 @@ class StyleResolver {
 		return (theme != null && theme.transitions.length > 0) ||
 			(application != null && application.transitions.length > 0);
 
-	function cacheHash(targetHash:Int, states:Int, parentKey:String,
+	function cacheHash(targetHash:Int, states:StyleState, parentKey:String,
 			themeIdentity:Int, themeRevision:Int, applicationIdentity:Int,
 			applicationRevision:Int, localKey:String, environmentIdentity:Int,
 			environmentRevision:Int):Int {
 		var result = targetHash;
-		result = mix(result, states);
+		result = mix(result, states.rawValue());
 		result = mix(result, keyHash(parentKey));
 		result = mix(result, themeIdentity);
 		result = mix(result, themeRevision);
@@ -496,7 +496,7 @@ class StyleResolverLocalFingerprint {
 /** Collision-checked structural key for a cached computed style. */
 class StyleResolverCacheEntry {
 	final target:StyleTarget;
-	final states:Int;
+	final states:StyleState;
 	final parentKey:String;
 	final themeIdentity:Int;
 	final themeRevision:Int;
@@ -508,7 +508,7 @@ class StyleResolverCacheEntry {
 	public final style:ComputedStyle;
 	final localTextColor:Null<Color>;
 
-	public function new(target:StyleTarget, states:Int, parentKey:String,
+	public function new(target:StyleTarget, states:StyleState, parentKey:String,
 			themeIdentity:Int, themeRevision:Int, applicationIdentity:Int,
 			applicationRevision:Int, localKey:String, environmentIdentity:Int,
 			environmentRevision:Int, style:ComputedStyle, localTextColor:Null<Color>) {
@@ -526,7 +526,7 @@ class StyleResolverCacheEntry {
 		this.localTextColor = localTextColor;
 	}
 
-	public function matches(target:StyleTarget, states:Int, parentKey:String,
+	public function matches(target:StyleTarget, states:StyleState, parentKey:String,
 			themeIdentity:Int, themeRevision:Int, applicationIdentity:Int,
 			applicationRevision:Int, localKey:String, environmentIdentity:Int,
 			environmentRevision:Int, localTextColor:Null<Color>):Bool

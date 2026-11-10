@@ -21,7 +21,7 @@ class NativeInputAdapter {
 	public var coordinateScale:Float = 1.0;
 	var pointerX:Float;
 	var pointerY:Float;
-	var pointerModifiers:Int = 0;
+	var pointerModifiers:UiModifier = UiModifier.empty();
 	var heldModifierKeys:Int = 0;
 
 	public function new(context:UiContext, source:Handle, ?accessibilitySource:Handle) {
@@ -65,7 +65,7 @@ class NativeInputAdapter {
 
 	/** Stops routing events from the attached pump. */
 	public function detach():Void {
-		pointerModifiers = 0;
+		pointerModifiers = UiModifier.empty();
 		heldModifierKeys = 0;
 		if (attachedEvents != null) {
 			if (eventSubscription != null)
@@ -93,11 +93,11 @@ class NativeInputAdapter {
 			case PointerButton(eventSource, button, action, modifiers, x, y) if (matches(eventSource)):
 				pointerX = x;
 				pointerY = y;
-				snapshotModifiers(modifiers);
+				snapshotModifiers(UiModifier.fromRaw(modifiers.rawValue()));
 				if (action == InputAction.Press)
-					context.pointerDown(x / coordinateScale, y / coordinateScale, button, modifiers);
+					context.pointerDown(x / coordinateScale, y / coordinateScale, button, UiModifier.fromRaw(modifiers.rawValue()));
 				else if (action == InputAction.Release)
-					context.pointerUp(x / coordinateScale, y / coordinateScale, button, modifiers);
+					context.pointerUp(x / coordinateScale, y / coordinateScale, button, UiModifier.fromRaw(modifiers.rawValue()));
 				action == InputAction.Press || action == InputAction.Release;
 			case PointerScroll(eventSource, deltaX, deltaY) if (matches(eventSource)):
 				context.scroll(pointerX / coordinateScale, pointerY / coordinateScale, deltaX / coordinateScale, deltaY / coordinateScale, pointerModifiers);
@@ -118,8 +118,8 @@ class NativeInputAdapter {
 				}
 				true;
 			case WindowStateChanged(eventSource, flags) if (matches(eventSource)):
-				if ((flags & WindowStateFlags.Active) == 0) {
-					pointerModifiers = 0;
+				if ((flags & WindowStateFlags.Active).isEmpty()) {
+					pointerModifiers = UiModifier.empty();
 					heldModifierKeys = 0;
 					context.windowFocusLost();
 				} else context.windowFocusGained();
@@ -130,8 +130,8 @@ class NativeInputAdapter {
 				if (kind == null)
 					false;
 				else {
-					updateKeyModifiers(key, action, modifiers);
-					context.key(kind, key, modifiers, scancode);
+					updateKeyModifiers(key, action, UiModifier.fromRaw(modifiers.rawValue()));
+					context.key(kind, key, UiModifier.fromRaw(modifiers.rawValue()), scancode);
 					true;
 				}
 			case TextInput(eventSource, codepoint) if (matchesText(eventSource)):
@@ -152,13 +152,13 @@ class NativeInputAdapter {
 				var routedId = touchPointerId(pointerId);
 				var data = new UiTouchData(tool, pressure, tiltX, tiltY);
 				if (action == TouchAction.Begin)
-					context.pointerDown(x / coordinateScale, y / coordinateScale, 0, modifiers, routedId, data);
+					context.pointerDown(x / coordinateScale, y / coordinateScale, 0, UiModifier.fromRaw(modifiers.rawValue()), routedId, data);
 				else if (action == TouchAction.Move)
-					context.pointerMove(x / coordinateScale, y / coordinateScale, modifiers, routedId, data);
+					context.pointerMove(x / coordinateScale, y / coordinateScale, UiModifier.fromRaw(modifiers.rawValue()), routedId, data);
 				else if (action == TouchAction.End)
-					context.pointerUp(x / coordinateScale, y / coordinateScale, 0, modifiers, routedId, data);
+					context.pointerUp(x / coordinateScale, y / coordinateScale, 0, UiModifier.fromRaw(modifiers.rawValue()), routedId, data);
 				else if (action == TouchAction.Cancel)
-					context.pointerCancel(routedId, x / coordinateScale, y / coordinateScale, modifiers, data);
+					context.pointerCancel(routedId, x / coordinateScale, y / coordinateScale, UiModifier.fromRaw(modifiers.rawValue()), data);
 				action == TouchAction.Begin || action == TouchAction.Move ||
 					action == TouchAction.End || action == TouchAction.Cancel;
 			case _:
@@ -167,14 +167,14 @@ class NativeInputAdapter {
 	}
 
 	/** Mouse move/wheel events omit modifiers; retain ordered window input state. */
-	function snapshotModifiers(modifiers:Int):Void {
+	function snapshotModifiers(modifiers:UiModifier):Void {
 		pointerModifiers = modifiers;
 		for (index in 0...4)
-			if ((modifiers & (1 << index)) == 0)
+			if ((modifiers.rawValue() & (1 << index)) == 0)
 				heldModifierKeys &= ~((1 << index) | (1 << (index + 4)));
 	}
 
-	function updateKeyModifiers(key:Int, action:InputAction, modifiers:Int):Void {
+	function updateKeyModifiers(key:Int, action:InputAction, modifiers:UiModifier):Void {
 		// NativeKit normalizes left/right Shift, Control, Alt and Super to 340..347.
 		// GTK snapshots precede the key action; other hosts may snapshot afterward.
 		if (key < 340 || key > 347) {
@@ -185,11 +185,11 @@ class NativeInputAdapter {
 		var held = 1 << index;
 		if (action == InputAction.Release) heldModifierKeys &= ~held;
 		else heldModifierKeys |= held;
-		var modifier = 1 << (index & 3);
-		var pair = modifier | (modifier << 4);
+		var modifier = UiModifier.fromRaw(1 << (index & 3));
+		var pair = modifier.rawValue() | (modifier.rawValue() << 4);
 		pointerModifiers = modifiers;
-		if ((heldModifierKeys & pair) != 0) pointerModifiers |= modifier;
-		else pointerModifiers &= ~modifier;
+		if ((heldModifierKeys & pair) != 0) pointerModifiers = pointerModifiers.insert(modifier);
+		else pointerModifiers = pointerModifiers.remove(modifier);
 	}
 
 	function matches(eventSource:Handle):Bool

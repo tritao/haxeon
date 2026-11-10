@@ -489,7 +489,11 @@ class StatementTyper {
 					scope.refineExpression(entryPath, mapValue, FlowAnalysis.entryFactsSurviveCalls(scope, typedArray));
 				TMapAssign(typedArray, typedIndex, value, span);
 			default:
-				if ((switch (typedIndex.type) { case TNever: true; default: false; }))
+				if ((switch typedIndex.type {
+					case TNever: true;
+					case TAbstract(_, _, _): session.relations.isAssignable(typedIndex.type, TInt);
+					default: false;
+				}))
 					typedIndex = coerce(typedIndex, TInt, "array index", "E1014");
 				if ((switch (typedIndex.type) { case TInt: false; default: true; }))
 					fail("E1014", "Array index must be Int", typedIndex.span);

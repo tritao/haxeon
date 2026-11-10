@@ -86,7 +86,7 @@ class SearchPicker implements View {
 		var input = new TextField("cv-input", query, function(value) model.setQuery(value), inputStyle,
 			placeholder, new TextStyle(15), tokens.textPrimary);
 		input.placeholder = placeholder;
-		input.onSubmit = function(_) { model.navigate(UiKey.Enter, 0, 1); onChanged(); };
+		input.onSubmit = function(_) { model.navigate(UiKey.Enter, haxeon.ui.core.UiModifier.empty(), 1); onChanged(); };
 		var focusedInput = new SearchPickerInput(input, function(ctx, node) {
 			if (focusPending) { ctx.requestFocusAfterLayout(node.id); focusPending = false; }
 		});
@@ -158,10 +158,10 @@ private class SearchPickerRow implements View {
 	public function build(context:BuildContext):RenderNode {
 		var node = child.build(context);
 		node.semantics = new haxeon.ui.semantics.Semantics(haxeon.ui.semantics.AccessibilityRole.Button, label);
-		node.semantics.states = selected ? haxeon.ui.semantics.AccessibilityState.Selected : 0;
+		node.semantics.states = selected ? haxeon.ui.semantics.AccessibilityState.Selected : haxeon.ui.semantics.AccessibilityState.empty();
 		node.enabled = enabled;
 		if (!enabled) node.semantics.states |= haxeon.ui.semantics.AccessibilityState.Disabled;
-		node.semantics.actions = enabled ? haxeon.ui.semantics.AccessibilityAction.Activate : 0;
+		node.semantics.actions = enabled ? haxeon.ui.semantics.AccessibilityAction.Activate : haxeon.ui.semantics.AccessibilityAction.empty();
 		node.on(UiEventKind.Click, function(event) {
 			if (event.button != 0) return;
 			activate(); event.stopPropagation();

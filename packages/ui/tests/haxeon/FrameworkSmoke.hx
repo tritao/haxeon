@@ -211,7 +211,6 @@ import haxeon.ui.style.StyleSource;
 import haxeon.ui.style.StyleSelector;
 import haxeon.ui.style.StyleSheet;
 import haxeon.ui.style.StyleState;
-import haxeon.ui.style.StyleStateUtil;
 import haxeon.ui.style.StyleTarget;
 import haxeon.ui.style.StyleValue;
 import haxeon.ui.style.EffectChain;
@@ -695,7 +694,7 @@ class FrameworkSmoke {
 	}
 
 	static function clickEvent(time:Float, x:Float = 10.0, button:Int = 0):haxeon.ui.core.UiEvent
-		return new haxeon.ui.core.UiEvent(UiEventKind.Click, new WidgetId(90502), x, 10.0, 0.0, 0.0, button, 0, 0, null, null, 0, 0, time);
+		return new haxeon.ui.core.UiEvent(UiEventKind.Click, new WidgetId(90502), x, 10.0, 0.0, 0.0, button, 0, haxeon.ui.core.UiModifier.empty(), null, null, 0, 0, time);
 
 	static function viewportSelectionGeometryValid(fonts:FontCollection):Bool {
 		var lines = [for (index in 0...200) "line " + index + " abc אבג 🙂 é long wrapped content"];
@@ -760,6 +759,16 @@ class FrameworkSmoke {
 
 	@:access(haxeon.ui.core.TextInputBridge)
 	static function main():Int {
+		var uiModifierMask = (UiModifier.Shift | UiModifier.Control | UiModifier.Alt | UiModifier.Super | UiModifier.CapsLock | UiModifier.NumLock).rawValue();
+		if (uiModifierMask != NativeKit.__hxi_flags_from_native_nk_modifiers(-1).rawValue())
+			throw "UI modifiers must cover the native header's declared bits";
+
+		var hoverSelector = StyleSelector.widget("button").state(StyleState.Hovered | StyleState.Disabled);
+		var plainButton = new StyleTarget("button");
+		if (!hoverSelector.matchesWithoutStates(plainButton) || hoverSelector.matches(plainButton) ||
+			hoverSelector.matchesWithoutStates(new StyleTarget("text")))
+			throw "Potential hover rules must match structure without fabricating unknown state bits";
+
 		var result = run();
 		if (result != 0) Sys.println("FAIL: FrameworkSmoke check " + result);
 		return result;
@@ -1100,7 +1109,7 @@ class FrameworkSmoke {
 				clearBounds.x + clearBounds.width / 2.0))
 			return 227;
 		if (!context.accessibilityAction(searchRoot.children[2].id.value,
-			AccessibilityAction.Activate, null, -1, -1, 1) || search.value != "" ||
+			haxeon.ui.semantics.AccessibilityRequest.Activate, null, -1, -1, 1) || search.value != "" ||
 			searchChange != "")
 			return 228;
 		searchRoot = context.submit(search, new LayoutFrame(256.0, 38.0));
@@ -1134,7 +1143,7 @@ class FrameworkSmoke {
 		var applicationArrows = 0;
 		for (key in [UiKey.Left, UiKey.Right, UiKey.Up, UiKey.Down]) {
 			for (extend in [false, true]) {
-				var modifiers = UiModifier.Control | UiModifier.Alt | (extend ? UiModifier.Shift : 0);
+				var modifiers = UiModifier.Control | UiModifier.Alt | (extend ? UiModifier.Shift : UiModifier.empty());
 				var id = "test.application-arrow-" + key + "-" + modifiers;
 				context.commands.register(new Command(id, "Application navigation", function() applicationArrows++,
 					new Shortcut(key, modifiers)));
@@ -1470,19 +1479,19 @@ class FrameworkSmoke {
 		var wordClickX = wordTextGeometry.x + (wordStartX + wordNextX) * 0.5;
 		var wordClickY = wordTextGeometry.y + wordStartCaret.y +
 			(wordStartCaret.ascender + wordStartCaret.descender) * 0.5;
-		context.pointerDown(wordClickX, wordClickY, 0, 0, 0, null, 1.0);
+		context.pointerDown(wordClickX, wordClickY, 0, haxeon.ui.core.UiModifier.empty(), 0, null, 1.0);
 		if (wordEditor.selectionStart != wordEditor.selectionEnd ||
 			wordEditor.selectionFocus < 4 || wordEditor.selectionFocus > 5)
 			return 202;
 		context.pointerUp(wordClickX, wordClickY, 0);
-		context.pointerDown(wordClickX, wordClickY, 0, 0, 0, null, 1.1);
+		context.pointerDown(wordClickX, wordClickY, 0, haxeon.ui.core.UiModifier.empty(), 0, null, 1.1);
 		if (wordEditor.selectionStart != 4 || wordEditor.selectionEnd != 7)
 			return 192;
 		if (wordEditor.layout.selectionRects(new TextPosition(4, 0),
 			new TextPosition(7, 0)).length == 0)
 			return 200;
 		context.pointerUp(wordClickX, wordClickY, 0);
-		context.pointerDown(wordClickX, wordClickY, 0, 0, 0, null, 1.2);
+		context.pointerDown(wordClickX, wordClickY, 0, haxeon.ui.core.UiModifier.empty(), 0, null, 1.2);
 		if (wordEditor.selectionStart != 0 || wordEditor.selectionEnd != 8)
 			return 193;
 		context.pointerUp(wordClickX, wordClickY, 0);
@@ -1545,11 +1554,11 @@ class FrameworkSmoke {
 			var pageEditor:TextEditorState = cast pageState.value;
 			if (!context.focusWidget(pageRoot.id)) throw "page navigation field did not focus";
 			pageEditor.placeCaret(3, false);
-			context.key(UiEventKind.KeyDown, UiKey.PageDown, 0);
+			context.key(UiEventKind.KeyDown, UiKey.PageDown, haxeon.ui.core.UiModifier.empty());
 			var pageEnd = pageEditor.selectionFocus;
 			if (pageEnd <= 14 || pageEnd >= pageText.length || pageEnd % 11 != 3)
 				throw "PageDown did not move a page while preserving the column";
-			context.key(UiEventKind.KeyDown, UiKey.PageUp, 0);
+			context.key(UiEventKind.KeyDown, UiKey.PageUp, haxeon.ui.core.UiModifier.empty());
 			if (pageEditor.selectionFocus != 3) throw "PageUp did not return to the original line";
 			context.key(UiEventKind.KeyDown, UiKey.PageDown, UiModifier.Shift);
 			if (pageEditor.selectionAnchor != 3 || pageEditor.selectionFocus != pageEnd)
@@ -1654,7 +1663,7 @@ class FrameworkSmoke {
 		var areaRoot = context.submit(area, new LayoutFrame(256.0, 192.0));
 		var areaSemantics:Semantics = cast areaRoot.semantics;
 		var areaGeometry:ResolvedLayoutItem = cast areaRoot.resolved;
-		if ((areaSemantics.states & AccessibilityState.Multiline) == 0 || areaGeometry.height < 100.0 ||
+		if ((areaSemantics.states & AccessibilityState.Multiline).isEmpty() || areaGeometry.height < 100.0 ||
 			!context.focusWidget(areaRoot.id))
 			return 62;
 		context.key(UiEventKind.KeyDown, UiKey.Enter);
@@ -1727,12 +1736,12 @@ class FrameworkSmoke {
 		var checkboxRoot = context.submit(checkbox, new LayoutFrame(256.0, 192.0));
 		var checkboxSemantics:Semantics = cast checkboxRoot.semantics;
 		if (checkboxSemantics == null || checkboxSemantics.role != AccessibilityRole.Checkbox ||
-			(checkboxSemantics.states & AccessibilityState.Checked) != 0 ||
+			!(checkboxSemantics.states & AccessibilityState.Checked).isEmpty() ||
 			!context.focusWidget(checkboxRoot.id))
 			return 54;
 		context.key(UiEventKind.KeyDown, UiKey.Space);
 		if (!checkbox.checked || !checkboxChanged ||
-			(checkboxSemantics.states & AccessibilityState.Checked) == 0)
+			(checkboxSemantics.states & AccessibilityState.Checked).isEmpty())
 			return 55;
 		var narrowButtonStyle = new LayoutStyle();
 		narrowButtonStyle.width = LayoutAxis.fixed(88.0);
@@ -1763,7 +1772,7 @@ class FrameworkSmoke {
 		context.pointerUp(toggleGeometry.x + toggleGeometry.width * 0.5,
 			toggleGeometry.y + toggleGeometry.height * 0.5, 0);
 		if (!toggle.checked || !toggleChanged || toggleSemantics.role != AccessibilityRole.Switch ||
-			(toggleSemantics.actions & AccessibilityAction.Toggle) == 0)
+			(toggleSemantics.actions & AccessibilityAction.Toggle).isEmpty())
 			return 56;
 		var sliderChanged = 0.0;
 		var slider = new Slider("slider-smoke", "Level", 0.5, 0.0, 1.0, 0.1,
@@ -1801,7 +1810,7 @@ class FrameworkSmoke {
 			0.0, 1.0, "Transfer"), new LayoutFrame(256.0, 192.0));
 		var progressSemantics:Semantics = cast progressRoot.semantics;
 		if (progressSemantics == null || progressSemantics.role != AccessibilityRole.ProgressBar ||
-			(progressSemantics.states & AccessibilityState.ReadOnly) == 0 ||
+			(progressSemantics.states & AccessibilityState.ReadOnly).isEmpty() ||
 			progressSemantics.numericValue != 0.75)
 			return 61;
 		var indeterminateProgress = new ProgressBar("indeterminate-progress-smoke", 0.0,
@@ -1811,8 +1820,8 @@ class FrameworkSmoke {
 			new LayoutFrame(256.0, 192.0));
 		var indeterminateSemantics:Semantics = cast indeterminateRoot.semantics;
 		if (indeterminateSemantics == null ||
-			(indeterminateSemantics.states & AccessibilityState.Busy) == 0 ||
-			(indeterminateSemantics.states & AccessibilityState.ReadOnly) != 0 ||
+			(indeterminateSemantics.states & AccessibilityState.Busy).isEmpty() ||
+			!(indeterminateSemantics.states & AccessibilityState.ReadOnly).isEmpty() ||
 			context.animations.activeCount == 0)
 			return 232;
 		var imageBytes = haxe.io.Bytes.alloc(16);
@@ -2021,8 +2030,8 @@ class FrameworkSmoke {
 		});
 		var coordinatePoint = new Point(6.0, 7.0);
 		var coordinateGlobal = buttonNode.localToGlobal(coordinatePoint);
-		context.pointerDown(coordinateGlobal.x, coordinateGlobal.y, 0, 0, 0, "coordinate-test");
-		context.pointerUp(coordinateGlobal.x, coordinateGlobal.y, 0, 0, 0, "coordinate-test");
+		context.pointerDown(coordinateGlobal.x, coordinateGlobal.y, 0, haxeon.ui.core.UiModifier.empty(), 0, "coordinate-test");
+		context.pointerUp(coordinateGlobal.x, coordinateGlobal.y, 0, haxeon.ui.core.UiModifier.empty(), 0, "coordinate-test");
 		var expectedRootPoint = root.globalToLocal(coordinateGlobal);
 		if (!near(rootLocalX, expectedRootPoint.x) || !near(buttonLocalX, coordinatePoint.x) ||
 			!near(coordinateGlobal.x, buttonNode.localToGlobal(coordinatePoint).x))
@@ -2032,7 +2041,7 @@ class FrameworkSmoke {
 			semanticTree[0].parentId != 0 || semanticTree[0].role != AccessibilityRole.Button ||
 			(semanticTree[0].states & (AccessibilityState.Focusable | AccessibilityState.Focused)) !=
 			(AccessibilityState.Focusable | AccessibilityState.Focused) ||
-			(semanticTree[0].actions & AccessibilityAction.Activate) == 0 ||
+			(semanticTree[0].actions & AccessibilityAction.Activate).isEmpty() ||
 			semanticTree[0].semantics.label != "Increment")
 			return 25;
 
@@ -2142,26 +2151,26 @@ class FrameworkSmoke {
 		var scaledBounds = buttonNode.globalBounds();
 		var scaledX = (scaledBounds.x + scaledBounds.width * 0.75) * 2;
 		var scaledY = (scaledBounds.y + scaledBounds.height * 0.75) * 2;
-		if (!input.consume(PointerButton(source, 0, InputAction.Press, 0, scaledX, scaledY)) ||
-			!input.consume(PointerButton(source, 0, InputAction.Release, 0, scaledX, scaledY)) || clicks != 2)
+		if (!input.consume(PointerButton(source, 0, InputAction.Press, nativekit.ffi.NativeKitTypes.Modifiers.empty(), scaledX, scaledY)) ||
+			!input.consume(PointerButton(source, 0, InputAction.Release, nativekit.ffi.NativeKitTypes.Modifiers.empty(), scaledX, scaledY)) || clicks != 2)
 			return 14;
 		input.coordinateScale = 1;
-		if (!input.consume(Key(source, UiKey.Enter, 28, InputAction.Press, 0)) ||
-			!input.consume(Key(source, UiKey.Enter, 28, InputAction.Repeat, 0)) ||
+		if (!input.consume(Key(source, UiKey.Enter, 28, InputAction.Press, nativekit.ffi.NativeKitTypes.Modifiers.empty())) ||
+			!input.consume(Key(source, UiKey.Enter, 28, InputAction.Repeat, nativekit.ffi.NativeKitTypes.Modifiers.empty())) ||
 			keyEvents != 1 || repeatEvents != 1 || clicks != 3)
 			return 15;
 		var nextId = root.children[1].id;
-		if (!input.consume(Key(source, UiKey.Tab, 15, InputAction.Press, 0)) ||
+		if (!input.consume(Key(source, UiKey.Tab, 15, InputAction.Press, nativekit.ffi.NativeKitTypes.Modifiers.empty())) ||
 			context.focus.focusedId == null || !context.focus.focusedId.equals(nextId) ||
-			!input.consume(Key(source, UiKey.Tab, 15, InputAction.Repeat, 0)) ||
+			!input.consume(Key(source, UiKey.Tab, 15, InputAction.Repeat, nativekit.ffi.NativeKitTypes.Modifiers.empty())) ||
 			context.focus.focusedId == null || !context.focus.focusedId.equals(initialId) ||
-			!input.consume(Key(source, UiKey.Tab, 15, InputAction.Repeat, 0)) ||
+			!input.consume(Key(source, UiKey.Tab, 15, InputAction.Repeat, nativekit.ffi.NativeKitTypes.Modifiers.empty())) ||
 			context.focus.focusedId == null || !context.focus.focusedId.equals(nextId) ||
-			!input.consume(Key(source, UiKey.Tab, 15, InputAction.Press, UiModifier.Shift)) ||
+			!input.consume(Key(source, UiKey.Tab, 15, InputAction.Press, nativekit.ffi.NativeKitTypes.Modifiers.Shift)) ||
 			context.focus.focusedId == null || !context.focus.focusedId.equals(initialId) ||
-			!input.consume(Key(source, UiKey.Tab, 15, InputAction.Repeat, UiModifier.Shift)) ||
+			!input.consume(Key(source, UiKey.Tab, 15, InputAction.Repeat, nativekit.ffi.NativeKitTypes.Modifiers.Shift)) ||
 			context.focus.focusedId == null || !context.focus.focusedId.equals(nextId) ||
-			!input.consume(Key(source, UiKey.Tab, 15, InputAction.Repeat, UiModifier.Shift)) ||
+			!input.consume(Key(source, UiKey.Tab, 15, InputAction.Repeat, nativekit.ffi.NativeKitTypes.Modifiers.Shift)) ||
 			context.focus.focusedId == null || !context.focus.focusedId.equals(initialId))
 			return 24;
 		if (!input.consume(TextInput(source, 0x1f642)) || committedText != "🙂")
@@ -2177,17 +2186,17 @@ class FrameworkSmoke {
 		if (!input.consume(PointerEnter(source, false)) || hoverLeaves == 0)
 			return 18;
 		if (!input.consume(Touch(source, 3, TouchAction.Begin, TouchTool.Finger,
-			0, 4.0, 4.0, 0.75, 0.0, 0.0)) ||
+			nativekit.ffi.NativeKitTypes.Modifiers.empty(), 4.0, 4.0, 0.75, 0.0, 0.0)) ||
 			!input.consume(Touch(source, 3, TouchAction.End, TouchTool.Finger,
-			0, 4.0, 4.0, 0.0, 0.0, 0.0)) || clicks != 4 || touchPressure != 0.75)
+			nativekit.ffi.NativeKitTypes.Modifiers.empty(), 4.0, 4.0, 0.0, 0.0, 0.0)) || clicks != 4 || touchPressure != 0.75)
 			return 19;
 		input.consume(Touch(source, 4, TouchAction.Begin, TouchTool.Finger,
-			0, 4.0, 4.0, 0.5, 0.0, 0.0));
+			nativekit.ffi.NativeKitTypes.Modifiers.empty(), 4.0, 4.0, 0.5, 0.0, 0.0));
 		input.consume(Touch(source, 4, TouchAction.Cancel, TouchTool.Finger,
-			0, 4.0, 4.0, 0.0, 0.0, 0.0));
+			nativekit.ffi.NativeKitTypes.Modifiers.empty(), 4.0, 4.0, 0.0, 0.0, 0.0));
 		if (cancelEvents != 1 || clicks != 4)
 			return 20;
-		input.consume(WindowStateChanged(source, 0));
+		input.consume(WindowStateChanged(source, nativekit.ffi.NativeKitTypes.WindowStateFlags.empty()));
 		if (focusLostEvents != 1 || blurEvents != 4 || context.focus.focusedId != null)
 			return 21;
 
@@ -2212,35 +2221,35 @@ class FrameworkSmoke {
 			!context.accessibilityAction(initialId.value, 3, null, -1, -1, 1) ||
 			context.focus.focusedId != null)
 			return 29;
-		var moveModifiers = -1;
-		var wheelModifiers = -1;
+		var moveModifiers = UiModifier.empty();
+		var wheelModifiers = UiModifier.empty();
 		buttonNode.on(UiEventKind.PointerMove, function(event) moveModifiers = event.modifiers);
 		buttonNode.on(UiEventKind.Scroll, function(event) wheelModifiers = event.modifiers);
-		input.consume(Key(source, 340, 0, InputAction.Press, 0));
+		input.consume(Key(source, 340, 0, InputAction.Press, nativekit.ffi.NativeKitTypes.Modifiers.empty()));
 		input.consume(PointerMove(source, 4.0, 4.0));
 		input.consume(PointerScroll(source, 0, -40));
 		if (moveModifiers != UiModifier.Shift || wheelModifiers != UiModifier.Shift)
 			throw "modifier press must affect subsequent move and wheel events";
-		input.consume(Key(source, 344, 0, InputAction.Press, UiModifier.Shift));
-		input.consume(Key(source, 340, 0, InputAction.Release, UiModifier.Shift));
+		input.consume(Key(source, 344, 0, InputAction.Press, nativekit.ffi.NativeKitTypes.Modifiers.Shift));
+		input.consume(Key(source, 340, 0, InputAction.Release, nativekit.ffi.NativeKitTypes.Modifiers.Shift));
 		input.consume(PointerScroll(source, 0, -40));
 		if (wheelModifiers != UiModifier.Shift)
 			throw "releasing one Shift must preserve the other Shift";
-		input.consume(Key(source, 344, 0, InputAction.Release, UiModifier.Shift));
+		input.consume(Key(source, 344, 0, InputAction.Release, nativekit.ffi.NativeKitTypes.Modifiers.Shift));
 		input.consume(PointerScroll(source, 0, -40));
-		if (wheelModifiers != 0) throw "modifier release snapshot must not leave Shift stuck";
-		input.consume(Key(source, UiKey.A, 0, InputAction.Press, UiModifier.Control | UiModifier.Alt));
-		input.consume(Key(new Handle(18), UiKey.A, 0, InputAction.Press, 0));
+		if (!wheelModifiers.isEmpty()) throw "modifier release snapshot must not leave Shift stuck";
+		input.consume(Key(source, UiKey.A, 0, InputAction.Press, nativekit.ffi.NativeKitTypes.Modifiers.Control | nativekit.ffi.NativeKitTypes.Modifiers.Alt));
+		input.consume(Key(new Handle(18), UiKey.A, 0, InputAction.Press, nativekit.ffi.NativeKitTypes.Modifiers.empty()));
 		input.consume(PointerMove(source, 4.0, 4.0));
 		if (moveModifiers != (UiModifier.Control | UiModifier.Alt))
 			throw "foreign window must not change pointer modifiers";
-		input.consume(WindowStateChanged(source, 0));
+		input.consume(WindowStateChanged(source, nativekit.ffi.NativeKitTypes.WindowStateFlags.empty()));
 		input.consume(PointerScroll(source, 0, -40));
-		if (wheelModifiers != 0) throw "focus loss must clear pointer modifiers";
-		input.consume(Key(source, 341, 0, InputAction.Press, 0));
+		if (!wheelModifiers.isEmpty()) throw "focus loss must clear pointer modifiers";
+		input.consume(Key(source, 341, 0, InputAction.Press, nativekit.ffi.NativeKitTypes.Modifiers.empty()));
 		input.detach();
 		input.consume(PointerScroll(source, 0, -40));
-		if (wheelModifiers != 0) throw "detach must clear pointer modifiers";
+		if (!wheelModifiers.isEmpty()) throw "detach must clear pointer modifiers";
 		var sameTargetHandlers = 0;
 		var immediateTargetHandlers = 0;
 		var parentHandlers = 0;
@@ -2286,7 +2295,7 @@ class FrameworkSmoke {
 		root = context.submit(makeView(false), frame);
 		buttonNode = root.children[0];
 		semanticTree = AccessibilityBridge.project(root, null);
-		if ((semanticTree[0].states & AccessibilityState.Disabled) == 0)
+		if ((semanticTree[0].states & AccessibilityState.Disabled).isEmpty())
 			return 26;
 		if (context.focus.focusedId != null || context.focusWidget(buttonNode.id))
 			return 10;
@@ -2648,7 +2657,7 @@ class FrameworkSmoke {
 			return 163;
 		var selectedModelSemantics:Null<Semantics> = selectedModelItem.semantics;
 		if (selectedModelSemantics == null ||
-			(selectedModelSemantics.states & AccessibilityState.Selected) == 0)
+			(selectedModelSemantics.states & AccessibilityState.Selected).isEmpty())
 			return 164;
 		if (!context.focusWidget(selectedModelItem.id))
 			return 166;
@@ -2989,7 +2998,7 @@ class FrameworkSmoke {
 		var radioFrame = new LayoutFrame(256.0, 192.0);
 		var radioRoot = context.submit(radioGroup, radioFrame);
 		if (radioRoot.children.length != 3 ||
-			(cast(radioRoot.children[0].semantics, Semantics).states & AccessibilityState.Selected) == 0 ||
+			(cast(radioRoot.children[0].semantics, Semantics).states & AccessibilityState.Selected).isEmpty() ||
 			!context.focusWidget(radioRoot.children[0].id))
 			return 92;
 		var radioIndicator:ResolvedLayoutItem = cast radioRoot.children[0].children[0].resolved;
@@ -3005,7 +3014,7 @@ class FrameworkSmoke {
 			!context.focus.focusedId.equals(radioRoot.children[2].id))
 			return 93;
 		radioRoot = context.submit(radioGroup, radioFrame);
-		if ((cast(radioRoot.children[2].semantics, Semantics).states & AccessibilityState.Selected) == 0)
+		if ((cast(radioRoot.children[2].semantics, Semantics).states & AccessibilityState.Selected).isEmpty())
 			return 94;
 
 		var tabChanges = 0;
@@ -3046,7 +3055,7 @@ class FrameworkSmoke {
 		var secondPage:Semantics = cast tabsRoot.children[1].semantics;
 		if (secondPage.role != AccessibilityRole.TabPanel || secondPage.label != "Second" ||
 			(cast(tabStrip(tabsRoot).children[1].children[0].semantics, Semantics).states &
-			AccessibilityState.Selected) == 0)
+			AccessibilityState.Selected).isEmpty())
 			return 96;
 		if (!context.focusWidget(tabStrip(tabsRoot).children[1].children[0].id))
 			return 97;
@@ -3168,7 +3177,7 @@ class FrameworkSmoke {
 		localStyle.width = LayoutAxis.fixed(88.0);
 		var computed = new StyleResolver().resolve(
 			new StyleTarget("button", "style-key", "style-id", ["primary"], ["button"],
-				StyleStateUtil.withState(0, StyleState.Hovered, true)),
+				StyleState.Hovered),
 			null, styleTheme, styleApplication, localStyle);
 		var computedSource:Null<StyleSource> = computed.source(StyleProperty.Background);
 		var computedSourceStylesheet = computedSource == null ? "" : computedSource.stylesheet;
@@ -3302,7 +3311,7 @@ class FrameworkSmoke {
 		var transitionScheduler = new AnimationScheduler();
 		var transitionResolver = new StyleResolver(transitionScheduler);
 		var transitionTarget = new StyleTarget("button", "transition-key", "transition-id",
-			null, null, 0);
+			null, null, haxeon.ui.style.StyleState.empty());
 		var normalComputed = transitionResolver.resolve(transitionTarget, null, transitionSheet);
 		transitionTarget = new StyleTarget("button", "transition-key", "transition-id",
 			null, null, StyleState.Hovered);
@@ -3394,7 +3403,7 @@ class FrameworkSmoke {
 		var effectTransitionScheduler = new AnimationScheduler();
 		var effectTransitionResolver = new StyleResolver(effectTransitionScheduler);
 		var effectTransitionTarget = new StyleTarget("panel", "effect-transition-key", "effect-transition-id",
-			null, null, 0);
+			null, null, haxeon.ui.style.StyleState.empty());
 		effectTransitionResolver.resolve(effectTransitionTarget, null, effectTransitionSheet);
 		effectTransitionTarget = new StyleTarget("panel", "effect-transition-key", "effect-transition-id",
 			null, null, StyleState.Hovered);
@@ -3636,8 +3645,8 @@ class FrameworkSmoke {
 		theme.caption.textStyle = new TextStyle(11.0);
 		theme.button.textStyle = new TextStyle(15.0);
 		context.setTheme(theme);
-		if (!UiDirtyFlag.contains(context.dirtyFlags, UiDirtyFlag.NeedsStyle) ||
-			!UiDirtyFlag.contains(context.dirtyFlags, UiDirtyFlag.NeedsPaint))
+		if (!(context.dirtyFlags).contains(UiDirtyFlag.NeedsStyle) ||
+			!(context.dirtyFlags).contains(UiDirtyFlag.NeedsPaint))
 			return 222;
 		var themedTextRoot = context.submit(new Text("Theme typography"),
 			new LayoutFrame(256.0, 192.0));
@@ -3761,14 +3770,16 @@ class FrameworkSmoke {
 		if (splitDividerSemantics == null ||
 			splitDividerSemantics.role != AccessibilityRole.Separator ||
 			!splitRoot.children[1].focusable ||
-			(splitDividerSemantics.actions & AccessibilityAction.Increment) == 0 ||
-			(splitDividerSemantics.actions & AccessibilityAction.Decrement) == 0)
+			(splitDividerSemantics.actions & AccessibilityAction.Increment).isEmpty() ||
+			(splitDividerSemantics.actions & AccessibilityAction.Decrement).isEmpty())
 			return 230;
 		var splitDividerGeometry:ResolvedLayoutItem = cast splitRoot.children[1].resolved;
 		var splitPointerX = splitDividerGeometry.x + splitDividerGeometry.width * 0.5;
 		var splitPointerY = splitDividerGeometry.y + splitDividerGeometry.height * 0.5;
+		var observedCursor = UiCursorShape.Arrow;
+		context.setCursorHandler(function(shape) { observedCursor = shape; });
 		context.pointerMove(splitPointerX, splitPointerY);
-		if (context.events.cursorShape() != UiCursorShape.HorizontalResize)
+		if (context.events.cursorShape() != UiCursorShape.HorizontalResize || observedCursor != UiCursorShape.HorizontalResize)
 			return 236;
 		context.pointerDown(splitPointerX, splitPointerY, 0);
 		// The native showcase rebuilds its view tree between input events. The
@@ -3783,8 +3794,9 @@ class FrameworkSmoke {
 		context.pointerMove(splitPointerX, splitPointerY);
 		context.pointerDown(splitPointerX, splitPointerY, 0);
 		context.pointerCancel(0, splitPointerX + 40.0, splitPointerY);
-		if (context.events.cursorShape() != UiCursorShape.Arrow)
+		if (context.events.cursorShape() != UiCursorShape.Arrow || observedCursor != UiCursorShape.Arrow)
 			return 238;
+		context.setCursorHandler(null);
 		split.collapsed = true;
 		splitRoot = context.submit(split, new LayoutFrame(320.0, 192.0));
 		var collapsedSecondaryGeometry:ResolvedLayoutItem = cast splitRoot.children[2].resolved;
@@ -3860,11 +3872,11 @@ class FrameworkSmoke {
 		context.pointerMove(captureDividerX, captureDividerY);
 		// Physical capture is shared by the window, while logical capture stays
 		// independent per pointer. Releasing pointer 1 must not release pointer 0.
-		context.pointerDown(captureDividerX, captureDividerY, 0, 0, 1);
+		context.pointerDown(captureDividerX, captureDividerY, 0, haxeon.ui.core.UiModifier.empty(), 1);
 		if (!context.events.hasPointerCapture(captureDivider.id, 1) ||
 			platformCaptureStates.length != 1)
 			return 253;
-		context.pointerUp(captureDividerX, captureDividerY, 0, 0, 1);
+		context.pointerUp(captureDividerX, captureDividerY, 0, haxeon.ui.core.UiModifier.empty(), 1);
 		if (context.events.hasPointerCapture(captureDivider.id, 1) ||
 			!context.events.hasPointerCapture(captureDivider.id) || platformCaptureStates.length != 1)
 			return 254;
@@ -4039,7 +4051,7 @@ class FrameworkSmoke {
 			context.auditAccessibility().length != 0 || inspected[0].styleType != "button" ||
 			inspected[0].computedStyle == null ||
 			inspectedBackgroundSource == null || inspectedBackgroundSource.selector != "button:disabled" ||
-			(inspected[0].interactionStates & StyleState.Disabled) == 0)
+			(inspected[0].interactionStates & StyleState.Disabled).isEmpty())
 			return 99;
 		var inspectorEffects = new StyleSheet("InspectorEffects");
 		inspectorEffects.rule(StyleSelector.widget("button"), [
@@ -4247,8 +4259,8 @@ class FrameworkSmoke {
 		if (opacityRoot.geometryRevision != transformRoot.geometryRevision ||
 			opacityRoot.contentRevision != transformRoot.contentRevision ||
 			opacityRoot.compositeRevision <= transformRoot.compositeRevision ||
-			!UiDirtyFlag.contains(opacityRoot.invalidationFlags, UiDirtyFlag.NeedsComposite) ||
-			UiDirtyFlag.contains(opacityRoot.invalidationFlags, UiDirtyFlag.NeedsHitGeometry)) {
+			!(opacityRoot.invalidationFlags).contains(UiDirtyFlag.NeedsComposite) ||
+			(opacityRoot.invalidationFlags).contains(UiDirtyFlag.NeedsHitGeometry)) {
 				Sys.println('revision opacity check failed content=${opacityRoot.contentRevision}/${transformRoot.contentRevision} geometry=${opacityRoot.geometryRevision}/${transformRoot.geometryRevision} composite=${opacityRoot.compositeRevision}/${transformRoot.compositeRevision} flags=${opacityRoot.invalidationFlags}');
 				return 242;
 			}
@@ -4301,7 +4313,7 @@ class FrameworkSmoke {
 			spinnerRoot.resolved.height != 24.0 || spinnerSemantics == null ||
 			spinnerSemantics.role != AccessibilityRole.ProgressBar ||
 			spinnerSemantics.label != "Loading" ||
-			(spinnerSemantics.states & AccessibilityState.Busy) == 0 ||
+			(spinnerSemantics.states & AccessibilityState.Busy).isEmpty() ||
 			context.animations.activeCount != 1 || animationRequests == 0)
 			return 109;
 		// A running spinner steps at a fixed rate: the host waits for the next step instead of drawing every refresh, and its
@@ -4338,7 +4350,7 @@ class FrameworkSmoke {
 		spinnerRoot = context.submit(spinner, spinnerFrame);
 		spinnerSemantics = cast spinnerRoot.semantics;
 		if (context.animations.activeCount != 0 ||
-			(spinnerSemantics.states & AccessibilityState.Busy) != 0 ||
+			!(spinnerSemantics.states & AccessibilityState.Busy).isEmpty() ||
 			spinnerSemantics.value != "Paused" || context.needsAnimationFrame || context.isDirty())
 			return 111;
 		spinner.running = true;
@@ -4641,18 +4653,18 @@ class FrameworkSmoke {
 	static function interactionChangesReuseStorage():Bool {
 		var store = new InteractionStateStore();
 		var id = new WidgetId(1);
-		store.set(id, 1);
+		store.set(id, StyleState.Hovered);
 		var first = store.changes();
-		if (first.length != 1 || first[0].id != id.value || first[0].before != 0 || first[0].after != 1 ||
+		if (first.length != 1 || first[0].id != id.value || !first[0].before.isEmpty() || first[0].after != StyleState.Hovered ||
 			first != store.changes())
 			return false;
 		store.acknowledge();
 		if (store.changes().length != 0)
 			return false;
-		store.set(id, 2);
+		store.set(id, StyleState.Pressed);
 		var next = store.changes();
 		return next == first && next.length == 1 && next[0].id == id.value &&
-			next[0].before == 1 && next[0].after == 2;
+			next[0].before == StyleState.Hovered && next[0].after == StyleState.Pressed;
 	}
 
 	/** Retained views compare this fingerprint, so a light-to-dark swap must never reuse one. */
@@ -4833,7 +4845,7 @@ class FrameworkSmoke {
 		node.states = StyleState.Hovered;
 		var hovered = node.retainedPaintKey();
 		if (hovered == first) return false;
-		node.states = 0;
+		node.states = StyleState.empty();
 		var normal = node.retainedPaintKey();
 		if (normal == hovered) return false;
 		var before = new ComputedStyle();
@@ -4941,7 +4953,7 @@ class FrameworkSmoke {
 			[StyleValue.decorations(decorationsB)]);
 		var decorationResolver = new StyleResolver();
 		var decorationTarget = new StyleTarget("panel", "decoration-key", "decoration-id",
-			null, null, 0);
+			null, null, haxeon.ui.style.StyleState.empty());
 		var normalDecorated = decorationResolver.resolve(decorationTarget, null, null,
 			decorationSheet);
 		decorationTarget = new StyleTarget("panel", "decoration-key", "decoration-id",
@@ -4963,7 +4975,7 @@ class FrameworkSmoke {
 		var decorationScheduler = new AnimationScheduler();
 		var decorationTransitionResolver = new StyleResolver(decorationScheduler);
 		var decorationTransitionTarget = new StyleTarget("panel", "decoration-transition-key",
-			"decoration-transition-id", null, null, 0);
+			"decoration-transition-id", null, null, haxeon.ui.style.StyleState.empty());
 		decorationTransitionResolver.resolve(decorationTransitionTarget, null, null,
 			decorationTransitionSheet);
 		decorationTransitionTarget = new StyleTarget("panel", "decoration-transition-key",
@@ -5049,8 +5061,8 @@ class FrameworkSmoke {
 		var trailingDivider = trailingRoot.children[1];
 		var trailingSemantics:Semantics = cast trailingDivider.semantics;
 		if (trailingSemantics == null || !trailingDivider.focusable ||
-			(trailingSemantics.actions & AccessibilityAction.Increment) == 0 ||
-			(trailingSemantics.actions & AccessibilityAction.Decrement) == 0 ||
+			(trailingSemantics.actions & AccessibilityAction.Increment).isEmpty() ||
+			(trailingSemantics.actions & AccessibilityAction.Decrement).isEmpty() ||
 			trailingSemantics.numericValue != 96.0)
 			return false;
 		if (!context.focusWidget(trailingDivider.id))
@@ -5150,9 +5162,9 @@ class FrameworkSmoke {
 			return false;
 		if (requireChanged && metrics.styleChangedNodes <= 0)
 			return false;
-		if (requireChanged && !UiDirtyFlag.contains(metrics.styleInvalidationFlags, UiDirtyFlag.NeedsStyle))
+		if (requireChanged && !(metrics.styleInvalidationFlags).contains(UiDirtyFlag.NeedsStyle))
 			return false;
-		if (requirePaint && !UiDirtyFlag.contains(metrics.styleInvalidationFlags, UiDirtyFlag.NeedsPaint))
+		if (requirePaint && !(metrics.styleInvalidationFlags).contains(UiDirtyFlag.NeedsPaint))
 			return false;
 		return !requirePaint || metrics.paintInvalidatedNodes > 0;
 	}
@@ -5433,9 +5445,9 @@ class FrameworkSmoke {
 		if (viewportRoot == null || viewportRoot.semantics == null ||
 			viewportRoot.semantics.label != "GPU viewport")
 			return false;
-		uiContext.pointerDown(40.0, 40.0, 0, 0, 7);
-		uiContext.pointerMove(55.0, 52.0, 0, 7);
-		uiContext.pointerUp(55.0, 52.0, 0, 0, 7);
+		uiContext.pointerDown(40.0, 40.0, 0, haxeon.ui.core.UiModifier.empty(), 7);
+		uiContext.pointerMove(55.0, 52.0, haxeon.ui.core.UiModifier.empty(), 7);
+		uiContext.pointerUp(55.0, 52.0, 0, haxeon.ui.core.UiModifier.empty(), 7);
 		if (viewportCamera.panX == 0.0 || viewportCamera.panY == 0.0)
 			return false;
 
@@ -5563,7 +5575,7 @@ class FrameworkSmoke {
 		if (commandButton == null || commandButton.semantics == null ||
 			commandButton.semantics.label != "Run simulation")
 			return false;
-		if (!uiContext.accessibilityAction(commandButton.id.value, AccessibilityAction.Activate,
+		if (!uiContext.accessibilityAction(commandButton.id.value, haxeon.ui.semantics.AccessibilityRequest.Activate,
 			null, -1, -1, 1) || surfaceRuns != 1)
 			return false;
 		var commandMenu = new CommandMenu("surface-menu", ["surface.run", "surface.stop"],
@@ -5669,7 +5681,7 @@ class FrameworkSmoke {
 			return false;
 		var disabledSemantics:Semantics = cast disabledRow.semantics;
 		if (disabledSemantics.label != "Unavailable" ||
-			(disabledSemantics.states & AccessibilityState.Disabled) == 0 ||
+			(disabledSemantics.states & AccessibilityState.Disabled).isEmpty() ||
 			disabledRow.focusable)
 			return false;
 		uiContext.key(UiEventKind.KeyDown, UiKey.Enter);

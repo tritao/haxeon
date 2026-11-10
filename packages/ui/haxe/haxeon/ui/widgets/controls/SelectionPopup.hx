@@ -262,7 +262,7 @@ class SelectionPopup {
 			optionButton.enabled = isEnabled(originalIndex);
 			optionButton.selected = sameValue(option.value, selectedValue);
 			optionButton.semanticRole = AccessibilityRole.ListItem;
-			optionButton.semanticActions = optionButton.enabled ? AccessibilityAction.Select : 0;
+			optionButton.semanticActions = optionButton.enabled ? AccessibilityAction.Select : AccessibilityAction.empty();
 			var optionNode = context.withScope(new haxeon.ui.core.Key("option-" + option.key),
 				function() return optionButton.build(context));
 			var optionSemantics:Semantics = cast optionNode.semantics;

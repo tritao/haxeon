@@ -3,6 +3,7 @@ package haxeon.ui.core;
 import haxeon.ui.widgets.text.Text;
 
 import nativekit.ffi.NativeKitTypes;
+import nativekit.ffi.NativeKitTypes.CursorShape as NativeCursorShape;
 
 import nativekit.ffi.NativeKit;
 import haxeon.ui.core.CursorShape as UiCursorShape;
@@ -38,7 +39,7 @@ class NativeCursorController {
 		if (!supportsCursor())
 			return;
 
-		var key:Int = cast shape;
+		var key:Int = cast nativeShape(shape);
 		var owner = cursors.get(key);
 		if (owner == null || owner.isClosed()) {
 			try {
@@ -89,18 +90,18 @@ class NativeCursorController {
 		}
 	}
 
-	static function nativeShape(shape:UiCursorShape):CursorShape {
+	static function nativeShape(shape:UiCursorShape):NativeCursorShape {
 		return cast switch shape {
-			case UiCursorShape.Text: CursorShape.Ibeam;
-			case UiCursorShape.Crosshair: CursorShape.Crosshair;
-			case UiCursorShape.Hand: CursorShape.Hand;
-			case UiCursorShape.HorizontalResize: CursorShape.HorizontalResize;
-			case UiCursorShape.VerticalResize: CursorShape.VerticalResize;
-			case UiCursorShape.DiagonalResize: CursorShape.NwseResize;
-			case UiCursorShape.DiagonalResizeNesw: CursorShape.NeswResize;
-			case UiCursorShape.Move: CursorShape.Move;
-			case UiCursorShape.NotAllowed: CursorShape.NotAllowed;
-			case _: CursorShape.Arrow;
+			case UiCursorShape.Text: NativeCursorShape.Ibeam;
+			case UiCursorShape.Crosshair: NativeCursorShape.Crosshair;
+			case UiCursorShape.Hand: NativeCursorShape.Hand;
+			case UiCursorShape.HorizontalResize: NativeCursorShape.HorizontalResize;
+			case UiCursorShape.VerticalResize: NativeCursorShape.VerticalResize;
+			case UiCursorShape.DiagonalResize: NativeCursorShape.NwseResize;
+			case UiCursorShape.DiagonalResizeNesw: NativeCursorShape.NeswResize;
+			case UiCursorShape.Move: NativeCursorShape.Move;
+			case UiCursorShape.NotAllowed: NativeCursorShape.NotAllowed;
+			case _: NativeCursorShape.Arrow;
 		};
 	}
 }

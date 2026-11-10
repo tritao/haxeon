@@ -41,6 +41,8 @@ class RawRepresentableMain {
 		rejected(decl + 'enum abstract Other(Int) implements RawRepresentable { var A=4; } function main():Int { var bad:Other=Code.A; return 42; }',
 			"Type mismatch");
 
+		rejected(decl + 'function main():Int { var values:Array<Code>=[Code.A]; return values.indexOf(4); }', "Type mismatch");
+		rejected(decl + 'function main():Int { var values=[42]; return values[Code.A]; }', "Array index must be Int");
 		incremental();
 		for (target in ["hl", "wasm32", "wasm-gc"])
 			for (inlining in [false, true])
@@ -81,6 +83,17 @@ class RawRepresentableMain {
 		var result = c.compile("Main"), p = result.ir;
 		if (new compiler.ir.IrInterpreter(p).run("main") != 42)
 			throw "Raw interpreter result";
+		var raw32 = Lambda.find(p.functions, f -> f.name == "$raw-representable:Code32:fromRaw");
+		if (raw32 != null) {
+			var branches = 0;
+			for (block in raw32.blocks)
+				switch block.terminator.value {
+					case Branch(_, _, _):
+						branches++;
+					default:
+				}
+			Sys.println('CODE fromRaw32 $target inline=$inlining blocks=${raw32.blocks.length} conditional-branches=$branches');
+		}
 		var holder = Lambda.find(p.objects, o -> o.name == "Holder");
 		if (holder == null || holder.fields.length != 1 || !compiler.ir.IrVerifier.sameType(holder.fields[0].type, I32))
 			throw "A raw Int field must stay I32";
@@ -147,6 +160,18 @@ class RawRepresentableMain {
 				b.branch(b.equal(value, b.constInt(11 * n)), next, bad);
 				b.select(next);
 			}
+			b.call("Probe.fromRaw32", [b.constInt(2)], I32);
+			for (n in [8, 1024]) {
+				b.call("rawReset", [], Void);
+				b.call("rawStart", [b.constInt(0)], Void);
+				var value = b.call("Probe.fromRaw32", [b.constInt(n)], I32);
+				b.call("rawStop", [], Void);
+				b.call("rawDump", [b.constString(stem + "-fromraw-" + n + ".json")], Void);
+				var next = b.createBlock();
+				b.branch(b.equal(value, b.constInt(n == 8 ? 28 : 15872)), next, bad);
+				b.select(next);
+			}
+
 			b.call("rawExit", [b.constInt(42)], Void);
 			b.returnValue(b.constVoid());
 			b.select(bad);
@@ -167,18 +192,32 @@ class RawRepresentableMain {
 			var js = 'const e=new WebAssembly.Instance(new WebAssembly.Module(require("fs").readFileSync(process.argv[1]))).exports;'
 				+ 'if(e.main()!==42)throw Error("raw semantics"); const count=e.__allocation_count||e["haxeon.memory.allocation_count"];'
 				+
-				'e["Probe.raw"](2);for(const n of [8,1024]){const before=count();if(e["Probe.raw"](n)!==11*n)throw Error("raw loop");if(count()!==before)throw Error("raw values boxed");}';
+				'e["Probe.raw"](2);for(const n of [8,1024]){const before=count();if(e["Probe.raw"](n)!==11*n)throw Error("raw loop");if(count()!==before)throw Error("raw values boxed");}'
+				+
+				'e["Probe.fromRaw32"](2);for(const n of [8,1024]){const before=count();if(e["Probe.fromRaw32"](n)!==(n===8?28:15872))throw Error("raw switch result");const objects=count()-before;if(objects>n)throw Error("extra raw switch boxes");console.log("CENSUS fromRaw32 n="+n+" objects="+objects);}';
 			var child = new sys.io.Process(target == "hl" ? "scripts/hl" : "node", target == "hl" ? [path] : ["--expose-gc", "-e", js, path]);
 			var output = child.stdout.readAll().toString() + child.stderr.readAll().toString(),
 				code = child.exitCode();
 			child.close();
 			if (code != (target == "hl" ? 42 : 0))
 				throw 'Raw $target inline=$inlining failed ($code): $output';
+			if (output.length != 0)
+				Sys.print(output);
 			if (target == "hl")
 				for (n in [8, 1024]) {
 					var census:Dynamic = haxe.Json.parse(sys.io.File.getContent(stem + "-" + n + ".json"));
 					if (census.allocations != 0)
 						throw "Raw values allocated " + census.allocations + " objects";
+				}
+			if (target == "hl")
+				for (n in [8, 1024]) {
+					var census:Dynamic = haxe.Json.parse(sys.io.File.getContent(stem + "-fromraw-" + n + ".json"));
+					if (census.allocations > n)
+						throw "Extra fromRaw32 boxes";
+					var bytes = 0.0;
+					for (type in (cast census.types : Array<Dynamic>))
+						bytes += type.bytes;
+					Sys.println('CENSUS fromRaw32 hl inline=$inlining n=$n objects=${census.allocations} bytes=$bytes');
 				}
 		} catch (error:Dynamic) {
 			cleanup(stem);

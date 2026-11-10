@@ -652,7 +652,7 @@ class RestyleInPlaceTests {
 			"A public inspection snapshot lost style entries");
 		InspectionDecoration.copies = 0;
 		check(haxeon.ui.debug.UiInspector.dump(node, null) ==
-			haxeon.ui.debug.UiInspector.formatDump(snapshots, 0), "A tree dump changed when unused inspection data was skipped");
+			haxeon.ui.debug.UiInspector.formatDump(snapshots, haxeon.ui.style.StyleState.empty()), "A tree dump changed when unused inspection data was skipped");
 		check(InspectionDecoration.copies == snapshotCopies, "A tree dump skipped an inspection copy hook");
 		InspectionDecoration.fail = true;
 		var snapshotFailed = false, dumpFailed = false;
@@ -722,7 +722,7 @@ class RestyleInPlaceTests {
     root.walk(function(node) {
       var style = node.layout.style, color = style.background, text = node.layout.textColor;
       // State routed onto a node that no widget built from is invisible; a rebuilt node starts without it.
-      out.add(node.id.value + "|" + node.styleType + "|" + (node.recordsInteraction ? node.states : -1) + "|" + color.red + "," + color.green + "," + color.blue + "," + color.alpha
+      out.add(node.id.value + "|" + node.styleType + "|" + (node.recordsInteraction ? node.states.rawValue() : -1) + "|" + color.red + "," + color.green + "," + color.blue + "," + color.alpha
         + "|" + (text == null ? "-" : text.red + "," + text.green + "," + text.blue + "," + text.alpha) + "|" + style.visible + "|" + style.zIndex
         + "|" + node.layout.text + "|" + node.children.length + "|");
       var bounds = node.resolved == null ? null : node.globalBounds();
@@ -1048,7 +1048,7 @@ class RestyleInPlaceTests {
       var root = ui.submitCached(build, frame, "list-selection-" + selected.value), count = 0;
       root.walk(node -> {
         if (node.semantics != null && node.semantics.role == AccessibilityRole.CollectionItem &&
-          (node.semantics.states & haxeon.ui.semantics.AccessibilityState.Selected) != 0) count++;
+          !(node.semantics.states & haxeon.ui.semantics.AccessibilityState.Selected).isEmpty()) count++;
       });
       check(count == (selected.value < 0 || selected.value >= 40 ? 0 : 1), "Controlled list selection is stale");
       check(notifications == 0, "External list selection notified its owner");
@@ -1093,7 +1093,7 @@ class RestyleInPlaceTests {
 
   static function verifyPointerFlags(fonts:FontCollection):Void {
     var ui = new UiContext(null, fonts), frame = new LayoutFrame(240, 120);
-    var flags:Int = haxeon.ui.style.StyleState.Checked;
+    var flags:haxeon.ui.style.StyleState = haxeon.ui.style.StyleState.Checked;
     var label = "hovered pressed";
     var view:View = new RetainedView("flag-verification", _ -> new DecoratedControl("flags", context -> {
       var node = new RenderNode(context.id("flags"), LayoutVisualKind.Box);
@@ -1106,7 +1106,7 @@ class RestyleInPlaceTests {
     // Routing may add pointer flags to a node that did not build from them. Checked still has to compare.
     root.states |= haxeon.ui.style.StyleState.Hovered | haxeon.ui.style.StyleState.Pressed;
     check(ui.verifyRetention(build, frame) == null, "Pointer normalization corrupted combined checked flags");
-    flags = 0;
+    flags = haxeon.ui.style.StyleState.empty();
     check(ui.verifyRetention(build, frame) != null, "Pointer normalization hid a checked-state mismatch");
     label = "pressed hovered";
     check(ui.verifyRetention(build, frame) != null, "Pointer normalization hid hovered/pressed words in a label");
@@ -1238,8 +1238,8 @@ class RestyleInPlaceTests {
     check(haxeon.Equality.equals(metrics, new haxeon.ui.TextLayout.TextMetrics(1, 2, 3, 4))
       && !haxeon.Equality.equals(metrics, new haxeon.ui.TextLayout.TextMetrics(1, 2, 3, 5)),
       "Text metrics equality ignores a field");
-    check(new haxeon.ui.core.Shortcut(65, 2) == new haxeon.ui.core.Shortcut(65, 2)
-      && new haxeon.ui.core.Shortcut(65, 2) != new haxeon.ui.core.Shortcut(65, 4),
+    check(new haxeon.ui.core.Shortcut(65, haxeon.ui.core.UiModifier.Control) == new haxeon.ui.core.Shortcut(65, haxeon.ui.core.UiModifier.Control)
+      && new haxeon.ui.core.Shortcut(65, haxeon.ui.core.UiModifier.Control) != new haxeon.ui.core.Shortcut(65, haxeon.ui.core.UiModifier.Alt),
       "Shortcut equality is wrong");
     check(haxeon.ui.style.EffectParameter.vec2(1.0, 2.0) == haxeon.ui.style.EffectParameter.vec2(1.0, 2.0)
       && haxeon.ui.style.EffectParameter.vec2(1.0, 2.0) != haxeon.ui.style.EffectParameter.vec2(1.0, 3.0)

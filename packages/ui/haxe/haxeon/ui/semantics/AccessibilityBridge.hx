@@ -6,6 +6,7 @@ import nativekit.ffi.NativeKitTypes;
 
 import nativekit.ffi.NativeKit;
 import haxeon.ui.Rect;
+import haxeon.ui.semantics.AccessibilityAction as UiAccessibilityAction;
 import haxeon.ui.core.RenderNode;
 import haxeon.ui.core.WidgetId;
 
@@ -87,7 +88,7 @@ class AccessibilityBridge {
 		update.set_removed_node_count(0);
 		var focusTarget = NativeKitConstants.NK_ACCESSIBILITY_ROOT;
 		for (item in snapshot)
-			if (item.id == focus && (item.states & AccessibilityState.Disabled) == 0) {
+			if (item.id == focus && (item.states & AccessibilityState.Disabled).isEmpty()) {
 				focusTarget = item.id;
 				break;
 			}
@@ -122,8 +123,8 @@ class AccessibilityBridge {
 		node.set_parent_id(item.parentId);
 		node.set_child_index(item.childIndex);
 		node.set_role(cast(item.role, AccessibilityRole));
-		node.set_states(cast(item.states, AccessibilityStates));
-		node.set_actions(cast(item.actions, AccessibilityActions));
+		node.set_states(AccessibilityStates.fromRaw(item.states.rawValue()));
+		node.set_actions(AccessibilityActions.fromRaw(item.actions.rawValue()));
 		node.set_reserved0(0);
 		node.set_x(item.bounds.x * coordinateScale);
 		node.set_y(item.bounds.y * coordinateScale);
@@ -165,7 +166,7 @@ class AccessibilityBridge {
 		var explicitlyDisabled = false;
 		if (node.semantics != null) {
 			var declared:Semantics = cast node.semantics;
-			explicitlyDisabled = (declared.states & AccessibilityState.Disabled) != 0;
+			explicitlyDisabled = !(declared.states & AccessibilityState.Disabled).isEmpty();
 		}
 		var enabled = ancestorsEnabled && node.enabled && !explicitlyDisabled;
 		var nextParent = semanticParent;
@@ -178,15 +179,15 @@ class AccessibilityBridge {
 				states |= AccessibilityState.Focusable;
 			if (!enabled) {
 				states |= AccessibilityState.Disabled;
-				states &= ~(AccessibilityState.Focusable | AccessibilityState.Focused);
+				states = states.remove(AccessibilityState.Focusable | AccessibilityState.Focused);
 			}
 			if (enabled && focused != null && node.id.equals(focused))
 				states |= AccessibilityState.Focused;
 			var actions = semantics.actions;
 			if (node.focusable && enabled)
-				actions |= AccessibilityAction.Focus;
+				actions |= UiAccessibilityAction.Focus;
 			if (!enabled)
-				actions = 0;
+				actions = UiAccessibilityAction.empty();
 			output.push(new AccessibilitySnapshotNode(node.id.value, semanticParent,
 				childIndex, semantics.role, states, actions,
 				node.resolved.clippedViewportBounds(), semantics));

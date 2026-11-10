@@ -293,7 +293,7 @@ interface NativeKitUI @target("portable-abi64") @library("nativekit_ui") @depend
 	/**
 	 * Flags describing why a layer needs an isolated render target.
 	 */
-	enum nkui_layer_flags : u32 {
+	flags nkui_layer_flags : u32 {
 		/**
 		 * Allocate a separate target even when opacity is 1.
 		 */

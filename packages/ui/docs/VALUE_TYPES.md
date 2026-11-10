@@ -4479,3 +4479,51 @@ Compiler modules are stable within each side: 36,082,265 → 36,083,601 bytes
 `2f6d551710b7b859d9581fa6baffe86496dcd68c43029e56a395b6cf47966b70` →
 `a448197f90e906370ea4bc797c8146c7cd798252d3a33834fef1ea20952508a1`.
 Editor/Showcase module comparison runs at the batch head under Tier 3.
+
+### Flags and checked raw conversion follow-ups
+
+The 32-case `RawRepresentable` fixture compares the previous equality chain with
+one typed integer switch, using identical input and runtime. Successful
+`fromRaw` calls allocate 8 / 1,024 objects for 8 / 1,024 calls on HashLink,
+Wasm32 and Wasm GC, both without and with inlining. HashLink's exact byte census
+is 128 / 16,384 bytes on both sides. These are the existing nullable-Int result
+boxes (a2), not enum boxes. Unknown values return null. Integer aliases share a
+switch case; String constants retain equality checks. The emitted-IR census is
+65 blocks / 32 conditional branches on every target, with inlining off and on;
+the current general switch lowering has not introduced a jump table.
+
+The Flags fixture stores a set in four bytes (an eight-byte two-field struct),
+and repeated operations allocate zero objects for 8 and 1,024 calls on all
+three targets, with inlining off and on. The census excludes readable String
+formatting. Checked raw construction, immutable updates and the signed high bit
+are included. Native boundary checks in the same loop also allocate zero:
+8/16/32/64-bit all-ones words are masked to the schema's declared bits,
+including each signed high bit. Direct `Flags.fromRaw` still rejects unknown
+bits. Generated native field, out/inout, array and result readers apply this
+mask explicitly; the event decoder fixture supplies an undeclared modifier bit
+and expects only the declared Control bit to survive.
+
+A diagnostic identical-input compiler comparison isolates the canonical operand
+visitor cleanup: old visitor IR assembly 2,435,090,920 bytes / 56,200,626 objects;
+shared visitor 2,435,094,344 / 56,200,841. The early collector implementation
+allocated about 255 MB more and was discarded. These overlapping runs are not a
+paired timing acceptance measurement; batch timing and editor measurements are
+recorded after the final ports.
+
+
+Flags validation: compiler suite **849 passed, 0 failed** (8 workers),
+self-hosting fixed point, and all six target/inlining combinations pass. The UI
+framework passes, including unknown native modifier bits and the native/UI
+modifier-mask alignment check; the frozen outer app suite also passes. Detached
+app setup uses the existing OCCT prefix, an explicit `MATERIA_INSTALL_ROOT`, and
+fixture output directories `build`, `app/build` and `app/build-cad`.
+
+The framework compile exposed a large flow-fact scan: candidate compile
+734,089 ms, metadata typing 398,344 ms and 98,021,442,280 typing/lowering bytes.
+Two stack samples land in `FlowFacts.resolve`, allocating `prefix + "."` while
+merging refinements. The preceding `4fb8b1c7` compiler lands in the same scan;
+its original UI source fails nominal native-enum binding checks already ported
+in this change. This is not a completed paired compile-time comparison or an
+acceptance result. A control with the required boundary casts is being checked;
+the flow-fact scaling issue remains a follow-up until that comparison completes.
+Batch editor/Web allocation and memory measurements remain pending Tier 3.

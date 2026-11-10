@@ -118,6 +118,8 @@ class TypingSession {
 
 	/** Hash implementations generated from declared `Hashable` conformance. */
 	public final hashRequests:Map<String, EqualityRequest> = [];
+	public final flagsMasks:Map<String, Int> = [];
+	public final flagsRequests:Map<String, {owner:String, method:String, origin:String, span:SourceSpan}> = [];
 	public final rawRepresentableRequests:Map<String, {owner:String, method:String, origin:String, span:SourceSpan}> = [];
 
 	public final cNativeFunctions:Map<String, Bool> = [];
@@ -149,6 +151,12 @@ class TypingSession {
 	inline function get_currentContext():TypingContext
 		return bodyContexts[bodyContexts.length - 1];
 
+	/** Helpers requested while checking defaults belong to the callee's real function, not its pseudo-body. */
+	public function generatedFunctionOrigin():String {
+		var name = currentContext.name;
+		return StringTools.startsWith(name, "$default:") ? name.substr("$default:".length) : name;
+	}
+
 	public function new(externals:Null<Map<String, {arguments:Array<CompilerType>, result:CompilerType}>>,
 			specializations:Null<GenericSpecializationRegistry>, ?nativeAbiTarget:String) {
 		this.externals = externals == null ? [] : externals;
@@ -175,6 +183,7 @@ class TypingSession {
 
 	public function bindSemantic(semantic:SemanticProgram):Void {
 		enumAbstractConstants.clear();
+		flagsMasks.clear();
 		enumAbstractConstantsInProgress.clear();
 		for (declaration in semantic.program.enums)
 			helperSpans.set(declaration.name, declaration.span);

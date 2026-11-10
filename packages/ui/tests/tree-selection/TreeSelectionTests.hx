@@ -50,7 +50,7 @@ class TreeSelectionTests {
     var keys:Array<String> = [];
     root.walk(function(node) {
       if (node.semantics != null && node.semantics.role == AccessibilityRole.TreeItem
-          && (node.semantics.states & AccessibilityState.Selected) != 0) keys.push(node.semantics.label);
+          && !(node.semantics.states & AccessibilityState.Selected).isEmpty()) keys.push(node.semantics.label);
     });
     return keys.join(",");
   }
@@ -72,7 +72,7 @@ class TreeSelectionTests {
     var frame = new LayoutFrame(240.0, 320.0);
     var build = function():View return tree;
     var root = ui.submit(build(), frame);
-    function click(key:String, modifiers:Int = 0, button:Int = 0):Void {
+    function click(key:String, modifiers:UiModifier = UiModifier.empty(), button:Int = 0):Void {
       var y = rowY(root, key);
       ui.pointerDown(60, y, button, modifiers);
       ui.pointerUp(60, y, button, modifiers);

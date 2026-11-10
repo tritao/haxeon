@@ -1459,7 +1459,11 @@ class ExpressionTyper {
 					refined = entryPath == null ? null : scope.resolveExpression(entryPath);
 				new TypedExpression(TMapGet(typedArray, typedKey), refined == null ? CallResolver.nullableMapValue(value) : refined, span);
 			default:
-				if ((switch (typedIndex.type) { case TNever: true; default: false; }))
+				if ((switch typedIndex.type {
+					case TNever: true;
+					case TAbstract(_, _, _): session.relations.isAssignable(typedIndex.type, TInt);
+					default: false;
+				}))
 					typedIndex = coerce(typedIndex, TInt, "array index", "E1014");
 				if ((switch (typedIndex.type) { case TInt: false; default: true; }))
 					fail("E1014", "Array index must be Int", typedIndex.span);
@@ -1952,6 +1956,9 @@ class ExpressionTyper {
 	public function bitwise(a:AstExpression, b:AstExpression, scope:Scope, operation:Int, span:SourceSpan):TypedExpression {
 		var left = typeExpressionCallback(a, scope, null, false),
 			right = typeExpressionCallback(b, scope, null, false);
+		var overloaded = callResolver.typeAbstractOperator(["&", "^", "|", "<<", ">>", ">>>"][operation], [left, right], span, scope);
+		if (overloaded != null) return overloaded;
+
 		var dynamicResult = dynamicOperation(["bitAnd", "bitXor", "bitOr", "shiftLeft", "shiftRight", "unsignedShiftRight"][operation], [left, right], TInt,
 			span);
 		if (dynamicResult != null)

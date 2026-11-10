@@ -40,6 +40,7 @@ class HxiAbi {
 	final declarations:Map<String, HxiDeclaration> = [];
 	final model:Null<HxiInterface>;
 	final classifications:Map<String, HxiAbiValue> = [];
+	final flagMasks:Map<String, haxe.Int64> = [];
 	final voidClassifications:Map<String, HxiAbiValue> = [];
 	var cachedFunctions:Null<Array<HxiFunctionAbi>>;
 
@@ -137,6 +138,31 @@ class HxiAbi {
 			case Nullable(element) | Const(element): pointerLike(element);
 			case _: false;
 		};
+
+	public function isFlagsValue(value:HxiAbiValue):Bool
+		return switch value {
+			case EnumerationValue(name, _, _): switch declarations.get(name) {
+					case Enumeration(_, _, true, _, _): true;
+					default: false;
+				};
+			default: false;
+		};
+
+	/** The schema is immutable; compute each native flags mask once per ABI. */
+	public function flagsMask(name:String):haxe.Int64 {
+		if (flagMasks.exists(name))
+			return flagMasks.get(name);
+		var mask = haxe.Int64.ofInt(0);
+		switch declarations.get(name) {
+			case Enumeration(_, _, true, values, _):
+				for (value in values)
+					mask = haxe.Int64.or(mask, value.value);
+			default:
+				throw 'Not a native flags declaration "$name"';
+		}
+		flagMasks.set(name, mask);
+		return mask;
+	}
 
 	public function semanticDeclarations():Map<String, HxiDeclaration>
 		return declarations.copy();

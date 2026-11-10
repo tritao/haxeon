@@ -259,9 +259,9 @@ class TextEditorLayout {
 				Std.int((remaining + paragraphsPerLayout - 1) / paragraphsPerLayout);
 			var chunkSize = Std.int((remaining + chunksRemaining - 1) / chunksRemaining);
 			var paragraphEnd = paragraph + chunkSize - 1;
-			var chunkStart = paragraph == firstParagraph ? firstOffset :
+			var chunkStart:Int = paragraph == firstParagraph ? firstOffset :
 				nextOffsets.paragraphRangeAtIndex(paragraph).start;
-			var chunkEnd = paragraphEnd == lastParagraph ? lastOffset :
+			var chunkEnd:Int = paragraphEnd == lastParagraph ? lastOffset :
 				nextOffsets.paragraphRangeAtIndex(paragraphEnd).end;
 			var chunkText = nextOffsets.sliceCodepoints(chunkStart, chunkEnd);
 			var record:TextEditorParagraphRecord = null;

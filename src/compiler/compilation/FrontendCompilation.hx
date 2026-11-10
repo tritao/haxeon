@@ -1079,6 +1079,7 @@ class FrontendCompilation {
 					&& !StringTools.startsWith(cached, "$enum-custom:")
 					&& !StringTools.startsWith(cached, "$hash$value$equality:")
 					&& !StringTools.startsWith(cached, compiler.types.typing.RawRepresentableGenerator.PREFIX)
+					&& !StringTools.startsWith(cached, compiler.types.typing.FlagsGenerator.PREFIX)
 					&& !StringTools.startsWith(cached, "$wire:")
 					&& !StringTools.startsWith(cached, "$json:"))
 					continue;
@@ -1297,7 +1298,7 @@ class FrontendCompilation {
 		visiting.set(fn.name, true);
 		var origin = fn.origin;
 		if (origin == null)
-			throw 'No source module owns typed function "${fn.name}"';
+			throw 'No source module owns typed function "${fn.name}" (origin: ${fn.origin})';
 		var module:String;
 		if (owners.exists(origin))
 			module = owners.get(origin);
@@ -1306,7 +1307,7 @@ class FrontendCompilation {
 		else if (typedByName.exists(origin))
 			module = resolveFunctionModule(typedByName.get(origin), owners, typedByName, visiting);
 		else
-			throw 'No source module owns typed function "${fn.name}"';
+			throw 'No source module owns typed function "${fn.name}" (origin: ${fn.origin})';
 		owners.set(fn.name, module);
 		visiting.remove(fn.name);
 		return module;

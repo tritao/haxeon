@@ -401,6 +401,10 @@ class IrInterpreter {
 				checkArrayCast(arguments[0], cast(arguments[1], InterpTypeRef).type);
 			case "__array_alloc_i32", "__array_alloc_i64", "__array_alloc_bool", "__array_alloc_f64", "__array_alloc_bytes", "__array_alloc_ref":
 				new InterpArray([for (_ in 0...Std.int(arguments[0])) null], Std.int(arguments[0]) + 8);
+			case "__array_index_of_i32", "__array_index_of_bool", "__array_index_of_f64", "__array_index_of_bytes", "__array_index_of_ref":
+				interpArray(arguments[0]).values.indexOf(arguments[1]);
+			case "__array_join_bytes":
+				interpArray(arguments[0]).values.join(Std.string(arguments[1]));
 			case "__array_copy_i32", "__array_copy_i64", "__array_copy_bool", "__array_copy_f64", "__array_copy_bytes", "__array_copy_ref", "__array_copy_any":
 				var source = interpArray(arguments[0]);
 				new InterpArray(source.values.copy(), source.capacity, source.elementType);
@@ -436,6 +440,8 @@ class IrInterpreter {
 			case "haxe.Int64.ofInt": haxe.Int64.ofInt(arguments[0]);
 			case "haxe.Int64.ushr": haxe.Int64.ushr(cast arguments[0], Std.int(arguments[1]));
 			case "haxe.Int64.xor": haxe.Int64.xor(cast arguments[0], cast arguments[1]);
+			case "haxe.Int64.and": haxe.Int64.and(cast arguments[0], cast arguments[1]);
+			case "haxe.Int64.compare": haxe.Int64.compare(cast arguments[0], cast arguments[1]);
 			case "haxe.Int64.toInt":
 				var bits:haxe.Int64 = cast arguments[0];
 				haxe.Int64.toInt(haxe.Int64.shr(haxe.Int64.shl(bits, 32), 32));

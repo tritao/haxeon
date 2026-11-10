@@ -120,7 +120,7 @@ class HxiParserMain {
 		var flagsCompiler = new Compiler();
 		flagsCompiler.addStandardLibrarySourceRoot("stdlib");
 		flagsCompiler.addFfiInterface("flag-widths.hxi", flagWidthsSource);
-		var flagsMainSource = 'import flag_widths.*; function main():Int { var combined:WordFlags = WordFlags.First | WordFlags.Second; var unknown:WordFlags = cast 8; var preserved:WordFlags = combined | unknown; var wide:WideFlags = WideFlags.first().with(WideFlags.high()); return wide.contains(WideFlags.high()) && preserved == 11 ? 42 : 0; }';
+		var flagsMainSource = 'import flag_widths.*; function main():Int { var combined:WordFlags = WordFlags.First | WordFlags.Second; var preserved:WordFlags = combined; var rejected = false; try { WordFlags.fromRaw(8); } catch (error:Dynamic) { rejected = true; } var wide:WideFlags = WideFlags.first().with(WideFlags.high()); return wide.contains(WideFlags.high()) && rejected && preserved.rawValue() == 3 ? 42 : 0; }';
 		flagsCompiler.update("FlagsMain.hx", flagsMainSource);
 		flagsCompiler.analyze("FlagsMain");
 		expectError('interface bad @target("x86_64-linux-gnu") { flags value : i32 { A = 1; } }', "require an unsigned 8/16/32/64-bit integer representation");

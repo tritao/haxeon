@@ -34,6 +34,7 @@ class TestCatalog {
 		"ValueLaneRuntimeMain",
 		"EnumTagStorageMain",
 		"RawRepresentableMain",
+		"FlagsMain",
 		"InterpreterInt32Main",
 		"EnumTagRewriteMain",
 		"SourceEnumTagMain",

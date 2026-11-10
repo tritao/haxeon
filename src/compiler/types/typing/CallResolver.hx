@@ -109,6 +109,17 @@ class CallResolver {
 
 	/** Resolve an abstract's declared @:op method using the semantic operand types. */
 	public function typeAbstractOperator(symbol:String, operands:Array<TypedExpression>, span:SourceSpan, scope:Scope):Null<TypedExpression> {
+		if ((symbol == "|" || symbol == "&") && operands.length == 2) for (operand in operands) switch operand.type {
+			case TAbstract(owner, _, _):
+				var declaration = session.enumAbstractDecls.get(owner);
+				if (declaration != null && FlagsGenerator.conforms(session, declaration)) {
+					if (!sameType(operands[0].type, operand.type) || !sameType(operands[1].type, operand.type))
+						fail("E1010", "Flags operators require two values of the same flags type", span);
+					return new TypedExpression(TCall(FlagsGenerator.request(session, owner, symbol == "|" ? "$or" : "$and", span), operands), operand.type, span);
+				}
+			default:
+		}
+
 		var owners:Array<String> = [];
 		for (operand in operands)
 			switch operand.type {
@@ -685,6 +696,11 @@ class CallResolver {
 				return null;
 		}
 		var rawDeclaration = session.enumAbstractDecls.get(abstractName);
+		if (rawDeclaration != null && FlagsGenerator.conforms(session, rawDeclaration) && FlagsGenerator.isMember(name, false)) {
+			var info = FlagsGenerator.signature(abstractName, name), typed = typeCallArguments(arguments, info.arguments.slice(1), scope, name);
+			return new TypedExpression(TCall(FlagsGenerator.request(session, abstractName, name, span), [receiver].concat(typed)), info.result, span);
+		}
+
 		if (name == "rawValue" && rawDeclaration != null && RawRepresentableGenerator.conforms(session, rawDeclaration)) {
 			if (arguments.length != 0) fail("E1008", "rawValue expects no arguments", span);
 			return new TypedExpression(TCall(RawRepresentableGenerator.request(session, abstractName, name, span), [receiver]),
@@ -938,6 +954,14 @@ class CallResolver {
 
 	public function typeNamedCall(name:String, arguments:Array<AstExpression>, span:SourceSpan, scope:Scope, expectedType:Null<CompilerType>):TypedExpression {
 		var rawOwnerEnd = name.lastIndexOf(".");
+		if (rawOwnerEnd > 0) {
+			var owner = name.substring(0, rawOwnerEnd), member = name.substring(rawOwnerEnd + 1), declaration = session.enumAbstractDecls.get(owner);
+			if (declaration != null && FlagsGenerator.conforms(session, declaration) && FlagsGenerator.isMember(member, true)) {
+				var info = FlagsGenerator.signature(owner, member), typed = typeCallArguments(arguments, info.arguments, scope, name);
+				return new TypedExpression(TCall(FlagsGenerator.request(session, owner, member, span), typed), info.result, span);
+			}
+		}
+
 		if (rawOwnerEnd > 0 && name.substring(rawOwnerEnd + 1) == "fromRaw") {
 			var rawOwner = name.substring(0, rawOwnerEnd), declaration = session.enumAbstractDecls.get(rawOwner);
 			if (declaration != null && RawRepresentableGenerator.conforms(session, declaration)) {
@@ -1862,14 +1886,14 @@ class CallResolver {
 			scope.invalidateAllExpressions();
 			return new TypedExpression(TArraySort(receiver, comparator), TVoid, span);
 		}
-		if (name == "join" && sameType(element, TString)) {
+		if (name == "join" && sameType(enumAbstractStorage(element), TString)) {
 			if (arguments.length != 1)
 				fail("E1008", "Array.join expects one separator", span);
 			var separator = coerce(typeExpressionValue(arguments[0], scope, TString), TString, "join separator", "E1002");
 			return new TypedExpression(TCollectionCall(receiver, "join", [separator]), TString, span);
 		}
 		if (name == "indexOf") {
-			switch element {
+			switch enumAbstractStorage(element) {
 				case TInt, TFloat, TBool, TString, TNativeScalar("u32"):
 				default:
 					if (RuntimeType.arrayName(element) != "ref")
@@ -1897,6 +1921,13 @@ class CallResolver {
 			return library;
 		throw new CompileError(new Diagnostic("E1007", 'Unknown array method "$name"', span));
 	}
+
+	/** Choose a raw collection operation without changing the nominal element checked at the call site. */
+	function enumAbstractStorage(type:CompilerType):CompilerType
+		return switch type {
+			case TAbstract(owner, _, representation) if (session.enumAbstractDecls.exists(owner)): enumAbstractStorage(representation);
+			default: type;
+		};
 
 	static function isDynamicType(type:CompilerType):Bool return switch type { case TDynamic: true; default: false; };
 

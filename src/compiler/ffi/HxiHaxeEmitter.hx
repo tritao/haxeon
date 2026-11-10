@@ -25,8 +25,16 @@ import compiler.ffi.HxiSemantics.HxiSemanticResultKind;
 import compiler.ffi.HxiNativeSignature.HxiFunctionAbi;
 import compiler.ffi.HxiProjectedModule;
 
-/** Projects bridgeable HXI functions into a synthetic, source-visible module. */
-/** An output sized by an @inout count: a byte buffer, or an array of UTF-8 strings or typed elements. */
+/** An element read through a native array projection. */
+private typedef ProjectedArrayElement = {
+	final haxeType:String;
+	final code:Int;
+	final size:Int;
+	final structure:Bool;
+	final flagsMask:Null<String>;
+}
+
+/** An output sized by an @inout count: bytes, UTF-8 strings or typed elements. */
 typedef QueriedOutput = {
 	final name:String;
 	final count:String;
@@ -34,14 +42,10 @@ typedef QueriedOutput = {
 	final stride:Int;
 	final buffer:Bool;
 	final strings:Bool;
-	final element:Null<{
-		haxeType:String,
-		code:Int,
-		size:Int,
-		structure:Bool
-	}>;
+	final element:Null<ProjectedArrayElement>;
 }
 
+/** Projects bridgeable HXI functions into a synthetic, source-visible module. */
 class HxiHaxeEmitter {
 	public static function declarationName(declaration:HxiDeclaration):String
 		return switch declaration {
@@ -208,6 +212,9 @@ class HxiHaxeEmitter {
 					directed.set(fn.name, true);
 				case _:
 			}
+		for (fn in abi.functions())
+			if (abi.isFlagsValue(fn.result))
+				directed.set(fn.name, true);
 		for (fn in abi.functions())
 			switch fn.semantics.result {
 				case OwnedHandle(_, _) | NativeSpan(_, _):
@@ -513,6 +520,24 @@ class HxiHaxeEmitter {
 			}
 			output.add('}\n');
 		}
+		if (emitFunctions)
+			for (declaration in enumDeclarations)
+				switch declaration {
+					case Enumeration(name, representation, true, _, _):
+						var value = abi.classify(Named(name)),
+							projected = project(value, false, profile),
+							mask = nativeFlagsMask(value, abi);
+						if (projected == null || mask == null)
+							throw "Missing native flags projection";
+						var layout = abi.layout(representation);
+						if (layout == null)
+							throw "Missing native flags layout";
+						var wide = layout.size == 8,
+							rawType = wide ? "haxe.Int64" : "Int";
+						output.add('/** Native boundary: discard bits not declared by this interface; fromRaw remains strict. */\n');
+						output.add('@:pure inline function __hxi_flags_from_native_$name(value:$rawType):${projected.haxeType} return ${nativeFlagsRead(projected.haxeType, "value", mask, wide)};\n');
+					default:
+				}
 		if (emitTypes && hasCallbacks)
 			output.add('enum abstract $callbackErrorType(Int) from Int to Int { var None = 0; var Exception = 1; var WrongThread = 2; var PointerContract = 3; var AggregateContract = 4; var StringContract = 5; }\n');
 		if (emitTypes)
@@ -679,7 +704,7 @@ class HxiHaxeEmitter {
 							output.add('\tpublic inline function rawValue():haxe.Int64 return this;\n');
 							output.add('}\n');
 						} else {
-							output.add('enum abstract $projectedName(${underlying.haxeType}) from ${underlying.haxeType} to ${underlying.haxeType} {\n');
+							output.add(flags ? 'enum abstract $projectedName(${underlying.haxeType}) implements Flags {\n' : 'enum abstract $projectedName(${underlying.haxeType}) from ${underlying.haxeType} to ${underlying.haxeType} {\n');
 							for (value in values) {
 								emitDocumentation(output, model, '$name.${value.name}', "\t");
 								var projectedValue = projectedEnumValueName(projectedEnum, value.name),
@@ -879,7 +904,12 @@ class HxiHaxeEmitter {
 								continue;
 							var arrayIsHandle = isHandleAbi(abi.classify(array.element)),
 								arrayRead = arrayIsHandle ? 'cast ${model.name}.__hxi_struct_get${arrayAccess}(this, $fieldOffset + index * $stride)' : '${model.name}.__hxi_struct_get${arrayAccess}(this, $fieldOffset + index * $stride)',
-								arrayWrite = arrayIsHandle ? "value.rawValue()" : "value";
+								arrayWrite = arrayIsHandle
+									|| abi.isFlagsValue(abi.classify(array.element))
+									&& element.haxeType != "haxe.Int64" ? "value.rawValue()" : "value";
+							var nativeMask = nativeFlagsMask(abi.classify(array.element), abi);
+							if (nativeMask != null)
+								arrayRead = nativeFlagsRead(element.haxeType, arrayRead, nativeMask, stride == 8);
 							structAccesses.set(arrayAccess, {type: structAccessHaxeType(arrayAccess), setterType: structAccessHaxeType(arrayAccess)});
 							emitDocumentation(output, model, '$name.${field.name}', "\t");
 							output.add('\tpublic inline function get_${fieldName}(index:Int):${element.haxeType} { if (index < 0 || index >= ${array.length}) throw "HXI array index out of bounds"; return $arrayRead; }\n');
@@ -921,7 +951,10 @@ class HxiHaxeEmitter {
 							output.add('\tpublic inline function set_$fieldName(value:${value.haxeType}):Void ${model.name}.__hxi_struct_set_utf8(this, $fieldOffset, value, ${value.nullable});\n');
 							continue;
 						}
-						if (value != null && value.code == 11 && value.nativePointer && (switch (field.ownership) { case Borrowed: true; default: false; })) {
+						if (value != null && value.code == 11 && value.nativePointer && (switch (field.ownership) {
+							case Borrowed: true;
+							default: false;
+						})) {
 							usesPointerFields = true;
 							emitDocumentation(output, model, '$name.${field.name}', "\t");
 							output.add('\tpublic inline function get_$fieldName():${value.haxeType} return cast ${model.name}.__hxi_struct_get_pointer(this, $fieldOffset, ${value.nullable});\n');
@@ -935,7 +968,12 @@ class HxiHaxeEmitter {
 							continue;
 						var isHandle = isHandleAbi(abi.classify(field.type)),
 							readExpression = isHandle ? 'cast ${model.name}.__hxi_struct_get${access}(this, $fieldOffset)' : '${model.name}.__hxi_struct_get${access}(this, $fieldOffset)',
-							writeExpression = isHandle ? "value.rawValue()" : "value";
+							writeExpression = isHandle
+								|| abi.isFlagsValue(abi.classify(field.type))
+								&& value.haxeType != "haxe.Int64" ? "value.rawValue()" : "value";
+						var nativeMask = nativeFlagsMask(abi.classify(field.type), abi);
+						if (nativeMask != null)
+							readExpression = nativeFlagsRead(value.haxeType, readExpression, nativeMask, structSize(value.code) == 8);
 						structAccesses.set(access, {type: structAccessHaxeType(access), setterType: structAccessHaxeType(access)});
 						emitDocumentation(output, model, '$name.${field.name}', "\t");
 						output.add('\tpublic inline function get_$fieldName():${value.haxeType} return $readExpression;\n');
@@ -970,7 +1008,9 @@ class HxiHaxeEmitter {
 							var access = value.code == 15 ? "I32" : structAccess(value.code);
 							if (access == null)
 								continue;
-							var write = value.code == 15 ? "value ? 1 : 0" : isHandleAbi(abi.classify(field.type)) ? "value.rawValue()" : "value";
+							var write = value.code == 15 ? "value ? 1 : 0" : (isHandleAbi(abi.classify(field.type))
+								|| abi.isFlagsValue(abi.classify(field.type))
+								&& value.haxeType != "haxe.Int64") ? "value.rawValue()" : "value";
 							output.add('\tpublic function set_$fieldName(index:Int, value:${value.haxeType}):Void ${model.name}.__hxi_struct_set${access}(this.bytes, this.offset(index) + $fieldOffset, $write);\n');
 						}
 						output.add('}\n');
@@ -1134,10 +1174,17 @@ class HxiHaxeEmitter {
 						case OutputValues:
 							emitOutputWrapper(output, fn.name, publicName, parameters, argumentTypes, resultType, abi, profile, library, nativeSymbol,
 								signature, pointerOwnedSlotHelper, model.documentation.get(fn.name), functionModule, ownedHandleResult,
-								aggregateResult == null ? null : aggregateResult.name);
+								aggregateResult == null ? null : aggregateResult.name, nativeFlagsMask(fn.result, abi), structSize(result.code) == 8);
 						case NoOutputWrapper:
 							throw 'Output parameters were not normalized for "${fn.name}"';
 					}
+				} else if (abi.isFlagsValue(fn.result)) {
+					var arguments = [for (index in 0...argumentTypes.length) 'arg$index:${argumentTypes[index]}'],
+						callArguments = [for (index in 0...argumentTypes.length) 'arg$index'].join(", "),
+						mask = nativeFlagsMask(fn.result, abi);
+					if (mask == null)
+						throw "Native result mask disappeared";
+					output.add('function $publicName(${arguments.join(", ")}):$resultType return ${nativeFlagsRead(resultType, (resultType == "haxe.Int64" ? '$rawName($callArguments)' : '$rawName($callArguments).rawValue()'), mask, structSize(result.code) == 8)};\n');
 				} else if (spanResult != null) {
 					var countName = switch functionDeclarationForSymbol(model.declarations, spanResult.count) {
 						case Function(value, _, _, _, _, _, _, _): projectedFunctionName(value, profile);
@@ -1291,7 +1338,10 @@ class HxiHaxeEmitter {
 
 	public static function hasOutput(parameters:Array<compiler.ffi.HxiModel.HxiParameter>):Bool {
 		for (parameter in parameters)
-			if ((switch (parameter.direction) { case In: false; default: true; }))
+			if ((switch (parameter.direction) {
+				case In: false;
+				default: true;
+			}))
 				return true;
 		return false;
 	}
@@ -1349,6 +1399,7 @@ class HxiHaxeEmitter {
 		alignment:Int,
 		structure:Bool,
 		handle:Bool,
+		flagsMask:Null<String>,
 		ownedValueHandle:Bool,
 		opaquePointer:Bool,
 		nullable:Bool,
@@ -1371,6 +1422,7 @@ class HxiHaxeEmitter {
 					alignment: alignment,
 					structure: true,
 					handle: false,
+					flagsMask: null,
 					ownedValueHandle: false,
 					opaquePointer: false,
 					nullable: false,
@@ -1388,6 +1440,7 @@ class HxiHaxeEmitter {
 					alignment: 4,
 					structure: false,
 					handle: true,
+					flagsMask: null,
 					ownedValueHandle: ownedValueHandle,
 					opaquePointer: false,
 					nullable: false,
@@ -1405,6 +1458,7 @@ class HxiHaxeEmitter {
 					alignment: size,
 					structure: false,
 					handle: false,
+					flagsMask: nativeFlagsMask(classified, abi),
 					ownedValueHandle: false,
 					opaquePointer: false,
 					nullable: false,
@@ -1424,6 +1478,7 @@ class HxiHaxeEmitter {
 					alignment: Std.int(abi.pointerBits / 8),
 					structure: false,
 					handle: false,
+					flagsMask: null,
 					ownedValueHandle: false,
 					opaquePointer: true,
 					nullable: nullable,
@@ -1664,7 +1719,7 @@ class HxiHaxeEmitter {
 	static function emitOutputWrapper(output:StringBuf, nativeName:String, publicName:String, parameters:Array<compiler.ffi.HxiModel.HxiParameter>,
 			rawArgumentTypes:Array<String>, resultType:String, abi:HxiAbi, profile:HxiProjectionProfile, library:String, nativeSymbol:String,
 			signature:String, pointerOwnedSlotHelper:String, documentation:Null<HxiDocumentation>, moduleName:String, ?ownedHandleResult:String,
-			?aggregateResultType:String):Void {
+			?aggregateResultType:String, ?nativeResultMask:String, nativeResultWide:Bool = false):Void {
 		var arguments:Array<String> = [], queryArguments:Array<String> = [], callArguments:Array<String> = [], setup:Array<String> = [],
 			reads:Array<String> = [], values:Array<{
 				name:String,
@@ -1716,14 +1771,22 @@ class HxiHaxeEmitter {
 				case Out | InOut:
 					var info = outputInfo(parameter, abi, profile),
 						local = "__out_" + parameter.name;
-					if ((switch (parameter.direction) { case InOut: true; default: false; }))
+					if ((switch (parameter.direction) {
+						case InOut: true;
+						default: false;
+					}))
 						arguments.push('${parameter.name}:${info.haxeType}');
 					if (info.structure)
 						setup.push('var $local:${info.haxeType} = ${(switch (parameter.direction) { case InOut: true; default: false; }) ? parameter.name : "new " + info.haxeType + "()"};');
 					else {
 						setup.push('var $local = haxe.io.Bytes.alloc(${info.size});');
-						if ((switch (parameter.direction) { case InOut: true; default: false; })) {
-							var nativeValue = info.handle ? '${parameter.name}.rawValue()' : info.code == 15 ? '(${parameter.name} ? 1 : 0)' : parameter.name;
+						if ((switch (parameter.direction) {
+							case InOut: true;
+							default: false;
+						})) {
+							var nativeValue = info.handle
+								|| info.flagsMask != null
+								&& info.haxeType != "haxe.Int64" ? '${parameter.name}.rawValue()' : info.code == 15 ? '(${parameter.name} ? 1 : 0)' : parameter.name;
 							setup.push('__hxi_struct_set${structAccess(info.code)}($local, 0, $nativeValue);');
 						}
 					}
@@ -1747,6 +1810,8 @@ class HxiHaxeEmitter {
 							expression = '${info.haxeType}.adopt($expression)';
 					} else if (info.opaquePointer)
 						expression = 'cast($expression, ${info.haxeType})';
+					else if (info.flagsMask != null)
+						expression = nativeFlagsRead(info.haxeType, expression, info.flagsMask, info.size == 8);
 					values.push({
 						name: parameter.name,
 						type: info.haxeType,
@@ -1896,14 +1961,16 @@ class HxiHaxeEmitter {
 			output.add('\tvar __managed_result = $ownedHandleResult.adopt(__status);\n');
 		else if (aggregateResultType != null)
 			output.add('\tvar __managed_result = $aggregateResultType.__hxi_attach(__status);\n');
+		else if (nativeResultMask != null)
+			output.add('\tvar __managed_result = ${nativeFlagsRead(resultType, resultType == "haxe.Int64" ? "__status" : "__status.rawValue()", nativeResultMask, nativeResultWide)};\n');
 		if (resultOnly) {
 			if (resultType != "Void")
-				output.add('\treturn ${ownedHandleResult == null && aggregateResultType == null ? "__status" : "__managed_result"};\n');
+				output.add('\treturn ${ownedHandleResult == null && aggregateResultType == null && nativeResultMask == null ? "__status" : "__managed_result"};\n');
 		} else if (direct)
 			output.add('\treturn ${values[0].expression};\n');
 		else {
 			var resultValues:Array<String> = resultType == "Void" ? [] : [
-				ownedHandleResult == null && aggregateResultType == null ? "__status" : "__managed_result"];
+				ownedHandleResult == null && aggregateResultType == null && nativeResultMask == null ? "__status" : "__managed_result"];
 			for (value in values)
 				resultValues.push(value.expression);
 			output.add('\treturn new $wrapperResult(${resultValues.join(", ")});\n');
@@ -1937,11 +2004,17 @@ class HxiHaxeEmitter {
 			switch parameter.direction {
 				case OutBuffer(count):
 					var countParameter = Lambda.find(parameters, value -> value.name == count);
-					if (countParameter != null && (switch (countParameter.direction) { case InOut: true; default: false; }))
+					if (countParameter != null && (switch (countParameter.direction) {
+						case InOut: true;
+						default: false;
+					}))
 						result.set(count, parameter.name);
 				case OutArray(count):
 					var countParameter = Lambda.find(parameters, value -> value.name == count);
-					if (countParameter != null && (switch (countParameter.direction) { case InOut: true; default: false; }))
+					if (countParameter != null && (switch (countParameter.direction) {
+						case InOut: true;
+						default: false;
+					}))
 						result.set(count, parameter.name);
 				case _:
 			}
@@ -2049,12 +2122,7 @@ class HxiHaxeEmitter {
 			case _: false;
 		};
 
-	static function arrayElementInfo(type:compiler.ffi.HxiModel.HxiType, abi:HxiAbi, profile:HxiProjectionProfile):{
-		haxeType:String,
-		code:Int,
-		size:Int,
-		structure:Bool
-	} {
+	static function arrayElementInfo(type:compiler.ffi.HxiModel.HxiType, abi:HxiAbi, profile:HxiProjectionProfile):ProjectedArrayElement {
 		var elementType = arrayPointeeType(type);
 		if (elementType == null)
 			throw "HXI counted array must use a pointer type";
@@ -2067,7 +2135,8 @@ class HxiHaxeEmitter {
 			haxeType: projected.haxeType,
 			code: projected.code,
 			size: layout.size,
-			structure: projected.code == 12
+			structure: projected.code == 12,
+			flagsMask: nativeFlagsMask(value, abi)
 		};
 	}
 
@@ -2098,7 +2167,8 @@ class HxiHaxeEmitter {
 				'if ($name.length > ${maxArrayCount(element.size)}) throw "HXI input array exceeds the 256 MiB safety limit"; var __array_$name = ${element.haxeType}.array($name);'
 			];
 		var access = structAccess(element.code),
-			value = element.code == 15 ? '$name[__index] ? 1 : 0' : '$name[__index]';
+			value = element.code == 15 ? '$name[__index] ? 1 : 0' : element.flagsMask != null
+				&& element.haxeType != "haxe.Int64" ? '$name[__index].rawValue()' : '$name[__index]';
 		return [
 			'if ($name.length > ${maxArrayCount(element.size)}) throw "HXI input array exceeds the 256 MiB safety limit"; var __array_$name = __hxi_struct_alloc($name.length * ${element.size}); for (__index in 0...$name.length) __hxi_struct_set$access(__array_$name, __index * ${element.size}, $value);'
 		];
@@ -2132,12 +2202,7 @@ class HxiHaxeEmitter {
 			case _: null;
 		};
 
-	static function arrayValueRead(element:{
-		haxeType:String,
-		code:Int,
-		size:Int,
-		structure:Bool
-	}, bytes:String, index:String, modelName:String):String {
+	static function arrayValueRead(element:ProjectedArrayElement, bytes:String, index:String, modelName:String):String {
 		var offset = '$index * ${element.size}';
 		if (element.structure)
 			return '${element.haxeType}.__hxi_attach($modelName.__hxi_struct_slice($bytes, $offset, ${element.size}))';
@@ -2145,6 +2210,8 @@ class HxiHaxeEmitter {
 			read = '$modelName.__hxi_struct_get$access($bytes, $offset)';
 		if (element.code == 15)
 			return '$read != 0';
+		if (element.flagsMask != null)
+			return nativeFlagsRead(element.haxeType, read, element.flagsMask, element.size == 8);
 		return element.haxeType == "Int" || element.haxeType == "Float" || element.haxeType == "haxe.Int64" ? read : 'cast $read';
 	}
 
@@ -2806,6 +2873,23 @@ class HxiHaxeEmitter {
 			case "F32" | "F64": "Float";
 			case _: "Int";
 		};
+
+	/** Native reads discard bits outside the imported schema; source fromRaw stays strict. */
+	static function nativeFlagsRead(type:String, value:String, mask:String, wide:Bool):String
+		return wide ? 'cast(haxe.Int64.and($value, $mask), $type)' : '$type.fromRaw(($value) & $mask)';
+
+	static function nativeFlagsMask(value:HxiAbiValue, abi:HxiAbi):Null<String> {
+		if (!abi.isFlagsValue(value))
+			return null;
+		return switch value {
+			case EnumerationValue(name, bits, _):
+				var mask = abi.flagsMask(name),
+					high = int64PartAsInt(haxe.Int64.ushr(mask, 32)),
+					low = int64PartAsInt(haxe.Int64.and(mask, haxe.Int64.parseString("4294967295")));
+				bits <= 32 ? int64PartAsInt(mask) : 'haxe.Int64.make($high, $low)';
+			default: throw "Native flags ABI disappeared";
+		};
+	}
 
 	static function isHandleAbi(value:HxiAbiValue):Bool
 		return switch value {

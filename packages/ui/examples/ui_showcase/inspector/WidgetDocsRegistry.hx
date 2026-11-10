@@ -174,32 +174,32 @@ class WidgetDocsRegistry {
 		};
 	}
 
-	public static function semanticStateNames(states:Int):String {
+	public static function semanticStateNames(states:AccessibilityState):String {
 		var values:Array<String> = [];
-		if ((states & AccessibilityState.Focusable) != 0) values.push("Focusable");
-		if ((states & AccessibilityState.Focused) != 0) values.push("Focused");
-		if ((states & AccessibilityState.Selected) != 0) values.push("Selected");
-		if ((states & AccessibilityState.Checked) != 0) values.push("Checked");
-		if ((states & AccessibilityState.Disabled) != 0) values.push("Disabled");
-		if ((states & AccessibilityState.ReadOnly) != 0) values.push("ReadOnly");
-		if ((states & AccessibilityState.Multiline) != 0) values.push("Multiline");
-		if ((states & AccessibilityState.Password) != 0) values.push("Password");
-		if ((states & AccessibilityState.Expanded) != 0) values.push("Expanded");
+		if (!(states & AccessibilityState.Focusable).isEmpty()) values.push("Focusable");
+		if (!(states & AccessibilityState.Focused).isEmpty()) values.push("Focused");
+		if (!(states & AccessibilityState.Selected).isEmpty()) values.push("Selected");
+		if (!(states & AccessibilityState.Checked).isEmpty()) values.push("Checked");
+		if (!(states & AccessibilityState.Disabled).isEmpty()) values.push("Disabled");
+		if (!(states & AccessibilityState.ReadOnly).isEmpty()) values.push("ReadOnly");
+		if (!(states & AccessibilityState.Multiline).isEmpty()) values.push("Multiline");
+		if (!(states & AccessibilityState.Password).isEmpty()) values.push("Password");
+		if (!(states & AccessibilityState.Expanded).isEmpty()) values.push("Expanded");
 		return values.length == 0 ? "(none)" : values.join(", ");
 	}
 
-	public static function actionNames(actions:Int):String {
+	public static function actionNames(actions:AccessibilityAction):String {
 		var values:Array<String> = [];
-		if ((actions & AccessibilityAction.Activate) != 0) values.push("Activate");
-		if ((actions & AccessibilityAction.Focus) != 0) values.push("Focus");
-		if ((actions & AccessibilityAction.SetValue) != 0) values.push("SetValue");
-		if ((actions & AccessibilityAction.SetSelection) != 0) values.push("SetSelection");
-		if ((actions & AccessibilityAction.Increment) != 0) values.push("Increment");
-		if ((actions & AccessibilityAction.Decrement) != 0) values.push("Decrement");
-		if ((actions & AccessibilityAction.ScrollForward) != 0) values.push("ScrollForward");
-		if ((actions & AccessibilityAction.ScrollBackward) != 0) values.push("ScrollBackward");
-		if ((actions & AccessibilityAction.MoveNext) != 0) values.push("MoveNext");
-		if ((actions & AccessibilityAction.MovePrevious) != 0) values.push("MovePrevious");
+		if (!(actions & AccessibilityAction.Activate).isEmpty()) values.push("Activate");
+		if (!(actions & AccessibilityAction.Focus).isEmpty()) values.push("Focus");
+		if (!(actions & AccessibilityAction.SetValue).isEmpty()) values.push("SetValue");
+		if (!(actions & AccessibilityAction.SetSelection).isEmpty()) values.push("SetSelection");
+		if (!(actions & AccessibilityAction.Increment).isEmpty()) values.push("Increment");
+		if (!(actions & AccessibilityAction.Decrement).isEmpty()) values.push("Decrement");
+		if (!(actions & AccessibilityAction.ScrollForward).isEmpty()) values.push("ScrollForward");
+		if (!(actions & AccessibilityAction.ScrollBackward).isEmpty()) values.push("ScrollBackward");
+		if (!(actions & AccessibilityAction.MoveNext).isEmpty()) values.push("MoveNext");
+		if (!(actions & AccessibilityAction.MovePrevious).isEmpty()) values.push("MovePrevious");
 		return values.length == 0 ? "(none)" : values.join(", ");
 	}
 

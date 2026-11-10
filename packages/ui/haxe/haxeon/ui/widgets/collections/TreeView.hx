@@ -33,7 +33,6 @@ import haxeon.ui.semantics.AccessibilityRole;
 import haxeon.ui.semantics.AccessibilityState;
 import haxeon.ui.semantics.Semantics;
 import haxeon.ui.style.StyleState;
-import haxeon.ui.style.StyleStateUtil;
 import haxeon.ui.widgets.layout.Column;
 import haxeon.ui.widgets.KeyedView;
 import haxeon.ui.widgets.layout.Spacer;
@@ -246,14 +245,14 @@ class TreeView implements View {
 	}
 
 	/** Shift extends and Control/Super toggles a multi-selection; returns whether the click was used. */
-	function selectWithModifiers(nodeKey:String, modifiers:Int):Bool {
+	function selectWithModifiers(nodeKey:String, modifiers:UiModifier):Bool {
 		if (!multiSelect)
 			return false;
-		if ((modifiers & UiModifier.Shift) != 0) {
+		if (!(modifiers & UiModifier.Shift).isEmpty()) {
 			extendSelection(nodeKey);
 			return true;
 		}
-		if ((modifiers & (UiModifier.Control | UiModifier.Super)) != 0) {
+		if (!(modifiers & (UiModifier.Control | UiModifier.Super)).isEmpty()) {
 			toggleSelection(nodeKey);
 			return true;
 		}
@@ -374,7 +373,7 @@ class TreeView implements View {
 			var treeId = context.id("tree");
 			drag = context.resourceState(context.id("tree-drag"),
 				function() return new TreeItemDrag(), function(value) value.dispose()).value;
-			var activeGuides = StyleStateUtil.contains(context.interactionStates.get(treeId), StyleState.Hovered)
+			var activeGuides = (context.interactionStates.get(treeId)).contains(StyleState.Hovered)
 				|| guideVisibility.hasFocus(context);
 			guideVisibility.configure(!guidesOnInteraction || activeGuides, !guidesOnInteraction || context.environment.reducedMotion);
 			var guideOpacity = guideVisibility.opacity() * (guidesOnInteraction ? 0.65 : 1.0);
@@ -558,7 +557,7 @@ class TreeView implements View {
 		if (nextKey == null || nextKey == entry.key)
 			return;
 		event.preventDefault();
-		if (multiSelect && (event.modifiers & UiModifier.Shift) != 0) extendSelection(nextKey);
+		if (multiSelect && !(event.modifiers & UiModifier.Shift).isEmpty()) extendSelection(nextKey);
 		else select(nextKey);
 		scrollTo(nextKey);
 		var target = itemIds.get(nextKey);
@@ -958,7 +957,7 @@ private class TreeGuideVisibility {
 	}
 
 	function focusedWithin(node:RenderNode, context:BuildContext):Bool {
-		if (StyleStateUtil.contains(context.interactionStates.get(node.id), StyleState.Focused)) return true;
+		if ((context.interactionStates.get(node.id)).contains(StyleState.Focused)) return true;
 		for (child in node.children) if (focusedWithin(child, context)) return true;
 		return false;
 	}
@@ -1037,7 +1036,7 @@ private class TreeViewRow implements View {
 			var normalHover = context.theme.tokens.selectionHover;
 			var selectedColor = context.theme.tokens.selectionHighlight;
 			node.onPaint(function(canvas, geometry) {
-				var hovered = StyleStateUtil.contains(context.interactionStates.get(id), StyleState.Hovered);
+				var hovered = (context.interactionStates.get(id)).contains(StyleState.Hovered);
 				if (selected || hovered) canvas.fillRectIfPositive(new haxeon.ui.Rect(0.0, 0.0, geometry.width, geometry.height),
 					selected ? selectedColor : normalHover);
 			}, "tree-row-background:" + selected + ":" + normalHover.red + ":" + normalHover.green + ":" + normalHover.blue + ":" + normalHover.alpha

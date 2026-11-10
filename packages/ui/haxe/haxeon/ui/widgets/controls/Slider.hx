@@ -16,7 +16,6 @@ import haxeon.ui.core.UiKey;
 import haxeon.ui.core.View;
 import haxeon.ui.style.StyleProperty;
 import haxeon.ui.style.StyleState;
-import haxeon.ui.style.StyleStateUtil;
 import haxeon.ui.style.StyleTarget;
 import haxeon.ui.semantics.AccessibilityAction;
 import haxeon.ui.semantics.AccessibilityActionData;
@@ -61,7 +60,7 @@ class Slider implements View {
 
 	function buildControl(context:BuildContext, nodeId:haxeon.ui.core.WidgetId):RenderNode {
 		var flags = context.interactionStates.get(nodeId);
-		flags = StyleStateUtil.withState(flags, StyleState.Disabled, !enabled);
+		flags = (!enabled ? flags.insert(StyleState.Disabled) : flags.remove(StyleState.Disabled));
 		var computed = context.styleResolver.resolve(
 			new StyleTarget("slider", key, key, null, ["slider"], flags),
 			context.inheritedStyle, context.theme.styles, context.styleSheet, style, context.environment);

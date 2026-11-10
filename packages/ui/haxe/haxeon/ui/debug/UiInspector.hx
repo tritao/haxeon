@@ -9,7 +9,6 @@ import haxeon.ui.core.RenderNode;
 import haxeon.ui.core.WidgetId;
 import haxeon.ui.semantics.Semantics;
 import haxeon.ui.style.StyleState;
-import haxeon.ui.style.StyleStateUtil;
 import haxeon.ui.style.StyleSource;
 import haxeon.ui.style.StyleInspectionEntry;
 import haxeon.ui.style.EffectChain;
@@ -46,12 +45,12 @@ class UiInspector {
 		return result;
 	}
 
-	public static function dump(root:Null<RenderNode>, focused:Null<WidgetId>, ignoredInteractionStates:Int = 0):String {
+	public static function dump(root:Null<RenderNode>, focused:Null<WidgetId>, ignoredInteractionStates:StyleState = StyleState.empty()):String {
 		// Dumps do not use inspection entries or rule provenance. Keep the full public snapshot unchanged.
 		return formatDump(collect(root, focused, null, null, false), ignoredInteractionStates);
 	}
 
-	static function formatDump(records:Array<UiNodeSnapshot>, ignoredInteractionStates:Int):String {
+	static function formatDump(records:Array<UiNodeSnapshot>, ignoredInteractionStates:StyleState):String {
 		var lines:Array<String> = [];
 		for (record in records) {
 			var prefix = "";
@@ -64,9 +63,9 @@ class UiInspector {
 				line += " hidden";
 			if (record.focused)
 				line += " focused";
-			if (record.hovered && (ignoredInteractionStates & StyleState.Hovered) == 0)
+			if (record.hovered && (ignoredInteractionStates & StyleState.Hovered).isEmpty())
 				line += " hovered";
-			if (record.pressed && (ignoredInteractionStates & StyleState.Pressed) == 0)
+			if (record.pressed && (ignoredInteractionStates & StyleState.Pressed).isEmpty())
 				line += " pressed";
 			if (record.styleType != null)
 				line += " type=" + record.styleType;
@@ -85,15 +84,15 @@ class UiInspector {
 			if (record.estimatedIntermediateTargets > 0)
 				line += " rtTargets=" + Std.string(record.estimatedIntermediateTargets) +
 					" rtBytes=" + number(record.estimatedRenderTargetBytes);
-			var states = record.interactionStates & ~ignoredInteractionStates;
-			if (states != 0)
+			var states = record.interactionStates.remove(ignoredInteractionStates);
+			if (!states.isEmpty())
 				line += " states=" + interactionStateNames(states);
 			if (record.focusable)
 				line += " focusable";
 			if (record.zIndex != 0)
 				line += " z=" + Std.string(record.zIndex);
 			if (record.role >= 0)
-				line += " role=" + Std.string(record.role) + " states=" + Std.string(record.semanticStates);
+				line += " role=" + Std.string(record.role) + " states=" + Std.string(record.semanticStates.rawValue());
 			if (record.label != null && record.label.length > 0)
 				line += ' label="' + escape(record.label) + '"';
 			if (record.value != null)
@@ -158,14 +157,14 @@ class UiInspector {
 			cast node.layout.visualKind, bounds, clip, content,
 			geometry != null && geometry.visible, node.enabled, node.focusable,
 			focused != null && focused.equals(node.id),
-			StyleStateUtil.contains(node.states, StyleState.Hovered) ||
+			(node.states).contains(StyleState.Hovered) ||
 				hovered != null && hovered.equals(node.id),
-			StyleStateUtil.contains(node.states, StyleState.Pressed) ||
+			(node.states).contains(StyleState.Pressed) ||
 				pressed != null && pressed.equals(node.id), node.layout.style.zIndex,
-			role, semantics == null ? 0 : semantics.states,
+			role, semantics == null ? haxeon.ui.semantics.AccessibilityState.empty() : semantics.states,
 			semantics == null ? null : semantics.label,
 			semantics == null ? null : semantics.value,
-			semantics == null ? 0 : semantics.actions,
+			semantics == null ? haxeon.ui.semantics.AccessibilityAction.empty() : semantics.actions,
 			node.states, node.styleType, node.computedStyle,
 			styleEntries, matchingStyleRules, isolated, overflow, paintBounds,
 			effectPasses, estimatedBytes,
@@ -243,14 +242,14 @@ class UiInspector {
 	static function number(value:Float):String
 		return Std.string(Std.int(value * 100.0) / 100.0);
 
-	static function interactionStateNames(flags:Int):String {
+	static function interactionStateNames(flags:StyleState):String {
 		var names:Array<String> = [];
-		if (StyleStateUtil.contains(flags, StyleState.Hovered)) names.push("hovered");
-		if (StyleStateUtil.contains(flags, StyleState.Pressed)) names.push("pressed");
-		if (StyleStateUtil.contains(flags, StyleState.Focused)) names.push("focused");
-		if (StyleStateUtil.contains(flags, StyleState.Disabled)) names.push("disabled");
-		if (StyleStateUtil.contains(flags, StyleState.Selected)) names.push("selected");
-		if (StyleStateUtil.contains(flags, StyleState.Checked)) names.push("checked");
+		if (flags.contains(StyleState.Hovered)) names.push("hovered");
+		if (flags.contains(StyleState.Pressed)) names.push("pressed");
+		if (flags.contains(StyleState.Focused)) names.push("focused");
+		if (flags.contains(StyleState.Disabled)) names.push("disabled");
+		if (flags.contains(StyleState.Selected)) names.push("selected");
+		if (flags.contains(StyleState.Checked)) names.push("checked");
 		return names.join(",");
 	}
 

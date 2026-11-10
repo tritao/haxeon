@@ -196,7 +196,7 @@ class FileWatch {
 		if (path == null)
 			return null;
 		return new FileWatchChange(header.get_change_type(), header.get_item_kind(), path, pathIn(data, true),
-			(header.get_flags() & FileEventFlags.RescanRequired) != 0);
+			!(header.get_flags() & FileEventFlags.RescanRequired).isEmpty());
 	}
 
 	static function pathIn(data:Bytes, old:Bool):Null<String> {

@@ -126,7 +126,7 @@ class IrEnumTagLowering {
 				}
 		];
 		function valueChanges(value:IrValue):Bool return changes(value.type);
-		function instructionChanges(instruction:IrInstruction):Bool {
+		function nonOutputChanges(instruction:IrInstruction):Bool {
 			switch instruction {
 				case Call(_, name, _) | CNativeCall(_, name, _) if (nativeWrappers.exists(name)):
 					return true;
@@ -138,8 +138,10 @@ class IrEnumTagLowering {
 					}
 				default:
 			}
-			return IrOperands.anyValue(instruction, valueChanges);
+			return false;
 		}
+		function instructionChanges(instruction:IrInstruction):Bool
+			return nonOutputChanges(instruction) || IrOperands.anyValue(instruction, valueChanges);
 		function functionChanges(fn:IrFunction):Bool {
 			if (changes(fn.result)) return true;
 			for (argument in fn.arguments) if (valueChanges(argument)) return true;
@@ -149,17 +151,7 @@ class IrEnumTagLowering {
 			for (block in fn.blocks) for (located in block.instructions) {
 				var output = IrOperands.output(located.value);
 				if (output != null && valueChanges(output)) return true;
-				switch located.value {
-					case Call(_, name, _) | CNativeCall(_, name, _) if (nativeWrappers.exists(name)):
-						return true;
-					case TypeValue(_, type):
-						switch type {
-							case Enum(_):
-							default:
-								if (changes(type)) return true;
-						}
-					default:
-				}
+				if (nonOutputChanges(located.value)) return true;
 			}
 			return false;
 		}

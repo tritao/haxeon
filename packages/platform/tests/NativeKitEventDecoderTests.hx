@@ -102,21 +102,21 @@ class NativeKitEventDecoderTests {
 
 		var keyPayload = haxe.io.Bytes.alloc(16);
 		putU32(keyPayload, 0, Key.Escape); putU32(keyPayload, 4, 41);
-		putU32(keyPayload, 8, InputAction.Press); putU32(keyPayload, 12, Modifiers.Control);
+		putU32(keyPayload, 8, InputAction.Press); putU32(keyPayload, 12, Modifiers.Control.rawValue() | (1 << 30));
 		var keyContext = new EventSnapshot(EventKind.Key, handle(12), zero, 0, 0, 0, keyPayload);
 		var typedKeyOk = switch NativeEvent.decodeSnapshot(keyContext) {
 			case Key(source, key, scancode, action, modifiers):
 				source.rawValue() == 12 && key == Key.Escape && scancode == 41 && action == InputAction.Press
-					&& (modifiers & Modifiers.Control) != 0;
+					&& modifiers == Modifiers.Control;
 			case _: false;
 		};
 		var hatPayload = haxe.io.Bytes.alloc(8);
-		putU32(hatPayload, 0, 2); putU32(hatPayload, 4, JoystickHatFlags.Up | JoystickHatFlags.Left);
+		putU32(hatPayload, 0, 2); putU32(hatPayload, 4, (JoystickHatFlags.Up | JoystickHatFlags.Left).rawValue());
 		var hatContext = new EventSnapshot(EventKind.JoystickHat, handle(13), zero, 0, 0, 0, hatPayload);
 		var typedHatOk = switch NativeEvent.decodeSnapshot(hatContext) {
 			case JoystickHat(source, hat, value):
-				source.rawValue() == 13 && hat == 2 && (value & JoystickHatFlags.Up) != 0
-					&& (value & JoystickHatFlags.Left) != 0;
+				source.rawValue() == 13 && hat == 2 && !(value & JoystickHatFlags.Up).isEmpty()
+					&& !(value & JoystickHatFlags.Left).isEmpty();
 			case _: false;
 		};
 		var navigationContext = new EventSnapshot(EventKind.WebviewNavigationFailed, handle(14), zero, 0,
@@ -226,7 +226,7 @@ class NativeKitEventDecoderTests {
 		var uriOffset = 32, mimeOffset = uriOffset + uri.length + 1, nameOffset = mimeOffset + mime.length + 1;
 		var payload = haxe.io.Bytes.alloc(nameOffset + name.length + 1);
 		putU32(payload, 0, 1); putU32(payload, 4, 1); putU32(payload, 8, 16); putU32(payload, 12, 32);
-		putU32(payload, 16, ResourceFlags.Readable | ResourceFlags.Persisted);
+		putU32(payload, 16, (ResourceFlags.Readable | ResourceFlags.Persisted).rawValue());
 		putU32(payload, 20, uriOffset); putU32(payload, 24, mimeOffset); putU32(payload, 28, nameOffset);
 		payload.blit(uriOffset, uri, 0, uri.length);
 		payload.blit(mimeOffset, mime, 0, mime.length);

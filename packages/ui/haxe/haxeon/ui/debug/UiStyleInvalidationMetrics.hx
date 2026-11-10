@@ -11,7 +11,7 @@ import haxeon.ui.style.StyleDiff;
 class UiStyleInvalidationMetrics {
 	public var styleChangedNodes(default, null):Int;
 	public var styleUnchangedNodes(default, null):Int;
-	public var invalidationFlags(default, null):Int;
+	public var invalidationFlags(default, null):UiDirtyFlag;
 	public var layoutInvalidatedNodes(default, null):Int;
 	public var textLayoutInvalidatedNodes(default, null):Int;
 	public var paintInvalidatedNodes(default, null):Int;
@@ -23,7 +23,7 @@ class UiStyleInvalidationMetrics {
 	/** Whether this frame requires a fresh native layout/render snapshot. */
 	public var nativeLayoutRequired(default, null):Bool;
 
-	function new(styleChangedNodes:Int, styleUnchangedNodes:Int, invalidationFlags:Int,
+	function new(styleChangedNodes:Int, styleUnchangedNodes:Int, invalidationFlags:UiDirtyFlag,
 			layoutInvalidatedNodes:Int, textLayoutInvalidatedNodes:Int,
 			paintInvalidatedNodes:Int, compositeInvalidatedNodes:Int,
 			semanticsInvalidatedNodes:Int, hitGeometryInvalidatedNodes:Int,
@@ -57,7 +57,7 @@ class UiStyleInvalidationMetrics {
 			for (id => node in priorOverrides)
 				previousIndex.set(id, node);
 
-		var result = new UiStyleInvalidationMetrics(0, 0, 0, 0, 0, 0, 0, 0, 0,
+		var result = new UiStyleInvalidationMetrics(0, 0, UiDirtyFlag.empty(), 0, 0, 0, 0, 0, 0,
 			previous == null && current != null, false);
 		var matched = current == null ? 0 : compareNode(current, previousIndex, currentIndex, frame, result);
 		// Every visited prior was matched by ID; a smaller count means a node was removed.
@@ -65,7 +65,7 @@ class UiStyleInvalidationMetrics {
 		if (result.treeChanged) result.invalidationFlags |= UiDirtyFlag.NeedsBuild;
 		var nativeWork = UiDirtyFlag.NeedsBuild | UiDirtyFlag.NeedsTextLayout |
 			UiDirtyFlag.NeedsLayout | UiDirtyFlag.NeedsPaint | UiDirtyFlag.NeedsHitGeometry;
-		result.nativeLayoutRequired = (result.invalidationFlags & nativeWork) != 0;
+		result.nativeLayoutRequired = !(result.invalidationFlags & nativeWork).isEmpty();
 		return result;
 	}
 
@@ -104,12 +104,12 @@ class UiStyleInvalidationMetrics {
 		else
 			result.styleUnchangedNodes++;
 		result.invalidationFlags |= flags;
-		if (UiDirtyFlag.contains(flags, UiDirtyFlag.NeedsLayout)) result.layoutInvalidatedNodes++;
-		if (UiDirtyFlag.contains(flags, UiDirtyFlag.NeedsTextLayout)) result.textLayoutInvalidatedNodes++;
-		if (UiDirtyFlag.contains(flags, UiDirtyFlag.NeedsPaint)) result.paintInvalidatedNodes++;
-		if (UiDirtyFlag.contains(flags, UiDirtyFlag.NeedsComposite)) result.compositeInvalidatedNodes++;
-		if (UiDirtyFlag.contains(flags, UiDirtyFlag.NeedsSemantics)) result.semanticsInvalidatedNodes++;
-		if (UiDirtyFlag.contains(flags, UiDirtyFlag.NeedsHitGeometry)) result.hitGeometryInvalidatedNodes++;
+		if (flags.contains(UiDirtyFlag.NeedsLayout)) result.layoutInvalidatedNodes++;
+		if (flags.contains(UiDirtyFlag.NeedsTextLayout)) result.textLayoutInvalidatedNodes++;
+		if (flags.contains(UiDirtyFlag.NeedsPaint)) result.paintInvalidatedNodes++;
+		if (flags.contains(UiDirtyFlag.NeedsComposite)) result.compositeInvalidatedNodes++;
+		if (flags.contains(UiDirtyFlag.NeedsSemantics)) result.semanticsInvalidatedNodes++;
+		if (flags.contains(UiDirtyFlag.NeedsHitGeometry)) result.hitGeometryInvalidatedNodes++;
 		var matched = prior == null ? 0 : 1;
 		for (child in node.children) matched += compareNode(child, previousIndex, currentIndex, frame, result);
 		return matched;
@@ -122,7 +122,7 @@ class UiStyleInvalidationMetrics {
 			if (node == null) continue;
 			node.syncRevisions(prior, StyleDiff.compare(prior.computedStyle, node.computedStyle), true);
 			node.syncSceneRevisions();
-			if ((node.invalidationFlags & UiDirtyFlag.NativeInputs) != 0) changes.inputs.set(id, 0);
+			if (!(node.invalidationFlags & UiDirtyFlag.NativeInputs).isEmpty()) changes.inputs.set(id, 0);
 			if (!sameChildOrder(prior, node)) changes.children.set(id, 0);
 		}
 	}

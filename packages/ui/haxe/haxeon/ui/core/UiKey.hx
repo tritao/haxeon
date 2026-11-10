@@ -43,6 +43,6 @@ class UiKey {
 	public static inline var V:Int = 86;
 	public static inline var X:Int = 88;
 
-	public static inline function isContextMenuRequest(key:Int, modifiers:Int):Bool
-		return key == Menu || (key == F10 && (modifiers & UiModifier.Shift) != 0);
+	public static inline function isContextMenuRequest(key:Int, modifiers:UiModifier):Bool
+		return key == Menu || (key == F10 && !(modifiers & UiModifier.Shift).isEmpty());
 }

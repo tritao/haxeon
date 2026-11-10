@@ -53,7 +53,7 @@ class KeyChordTests {
     return value == null ? "" : value;
   }
 
-  static function selectAll(fonts:FontCollection, modifiers:Int):String {
+  static function selectAll(fonts:FontCollection, modifiers:UiModifier):String {
     var ui = new UiContext(null, fonts);
     var frame = new LayoutFrame(240.0, 60.0);
     var field = new TextField("name", "abc");

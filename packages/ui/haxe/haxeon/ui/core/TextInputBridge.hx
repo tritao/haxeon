@@ -110,8 +110,9 @@ class TextInputBridge {
 			selectionRects = scaleRects(selectionRects);
 			compositionRects = scaleRects(compositionRects);
 		}
+		var windowStart:Int = window.start;
 		var stateChanged = publishedText != window.text || publishedState.length == 0 ||
-			publishedState[0] != window.start || publishedState[1] != documentLength ||
+			publishedState[0] != windowStart || publishedState[1] != documentLength ||
 			publishedState[2] != selectionStart || publishedState[3] != selectionEnd ||
 			publishedState[4] != compositionStart || publishedState[5] != compositionEnd ||
 			publishedState[6] != inputType || publishedState[7] != flags ||
@@ -131,7 +132,7 @@ class TextInputBridge {
 			var result = TextInput.updateResult(surface, state);
 			if (!checkPlatformResult(result, "text-input update")) return;
 			publishedText = window.text;
-			publishedState[0] = window.start;
+			publishedState[0] = windowStart;
 			publishedState[1] = documentLength;
 			publishedState[2] = selectionStart;
 			publishedState[3] = selectionEnd;

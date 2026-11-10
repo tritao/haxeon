@@ -105,7 +105,7 @@ class ScrollView implements View {
 			var policy:Int = scrollbarVisibility == null ? context.environment.scrollbarVisibility : scrollbarVisibility;
 			visibility.value.configure(showScrollbar ? policy : ScrollbarVisibility.Hidden, context.environment.reducedMotion);
 
-			visibility.value.setViewportHovered((flags & StyleState.Hovered) != 0);
+			visibility.value.setViewportHovered(!(flags & StyleState.Hovered).isEmpty());
 			viewport.onTargetBubble(UiEventKind.HoverEnter, function(event) {
 				if (event.target.equals(viewport.id)) visibility.value.setViewportHovered(true);
 			});
@@ -131,7 +131,7 @@ class ScrollView implements View {
 				function() return new ScrollbarVisibilityController(), function(value) value.dispose());
 			horizontalVisibility.value.bindSource(controller);
 			horizontalVisibility.value.configure(showScrollbar ? policy : ScrollbarVisibility.Hidden, context.environment.reducedMotion);
-			horizontalVisibility.value.setViewportHovered((flags & StyleState.Hovered) != 0);
+			horizontalVisibility.value.setViewportHovered(!(flags & StyleState.Hovered).isEmpty());
 			viewport.onTargetBubble(UiEventKind.HoverEnter, function(event) { if (event.target.equals(viewport.id)) horizontalVisibility.value.setViewportHovered(true); });
 			viewport.onTargetBubble(UiEventKind.HoverLeave, function(event) { if (event.target.equals(viewport.id)) horizontalVisibility.value.setViewportHovered(false); });
 			var lastOffsetX = controller.offsetX, lastOffsetY = controller.offsetY;
@@ -213,7 +213,7 @@ class ScrollView implements View {
 					return;
 				var dx = axis == ScrollAxis.Horizontal || axis == ScrollAxis.Both ? event.deltaX : 0.0;
 				var dy = axis == ScrollAxis.Vertical || axis == ScrollAxis.Both ? event.deltaY : 0.0;
-				if (axis != ScrollAxis.Vertical && (event.modifiers & UiModifier.Shift) != 0 && dx == 0) { dx = dy; dy = 0; }
+				if (axis != ScrollAxis.Vertical && !(event.modifiers & UiModifier.Shift).isEmpty() && dx == 0) { dx = dy; dy = 0; }
 				if (dx != 0 || dy != 0) visibility.value.reveal();
 				if (controller.scrollBy(dx, dy))
 					event.stopPropagation();

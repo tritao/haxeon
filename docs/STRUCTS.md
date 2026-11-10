@@ -823,10 +823,44 @@ Enum abstracts retain their nominal type during checking and use their underlyin
 scalar/reference representation in storage. Bare constants resolve from that
 nominal expected type; no declaration-side hint table survives erasure. Generic
 `T:RawRepresentable` calls resolve against the concrete enum abstract. Synthesized
-helpers are requested on demand and regenerated when constants change.
+helpers are requested on demand and regenerated when constants change. Array search
+and String-array joining choose the raw storage operation while keeping the
+nominal element type for argument checks.
 `rawValue()` and constrained reads allocate nothing with inlining disabled too.
 `fromRaw()` follows the existing `Null<Int>`/`Null<String>` ABI; this feature does
 not introduce scalar nullable specialization (queue item a2).
+
+## Closed flags
+
+`enum abstract Access(Int) implements Flags` declares named bits and combinations.
+Every nonzero constant must be a single bit or contain only declared single bits;
+zero and the signed high bit are supported. Implicit `from`/`to` conversions are
+rejected. Conformance uses the same declared-interface lookup as `Equatable`,
+`Hashable` and `RawRepresentable`, including inherited interfaces.
+
+The compiler synthesizes inline `|`, `&`, `contains`, `insert`, `remove`,
+`isEmpty`, `isSingle`, `empty`, `rawValue`, `fromRaw` and `toString`. Set updates
+return a new value. `contains(mask)` tests all bits, including an empty mask;
+use `!(value & mask).isEmpty()` to test any bit. `fromRaw(Int):Self` throws when
+unknown bits are present. Sets occupy one Int and operations do not allocate,
+including calls without inlining; formatting a combination creates a String.
+Haxeon's own flags use this conformance rather than `haxe.EnumFlags`.
+
+Native reads have a separate, explicit policy: generated field, out/inout,
+buffer and return-value projections mask the raw word with the union of the
+bits declared in the HXI schema before constructing the flags value. This drops
+platform or future native bits the Haxe type does not model; it does not weaken
+`Flags.fromRaw` for Haxeon data. Generated `__hxi_flags_from_native_*` helpers
+apply the same policy to handwritten event/persisted-data decoders. Raw pointer
+access remains raw memory: such decoders must use the boundary helper rather
+than call `fromRaw` directly. Signed high bits and 8/16/32/64-bit native words
+retain their declared bits.
+
+
+Integer `RawRepresentable.fromRaw` helpers use one typed switch with duplicate
+raw values combined; String helpers retain equality tests. General IR switch
+lowering currently emits branches, so backend jump-table selection remains a
+follow-up rather than a claimed benefit of this synthesis.
 
 ## Equality and hashing
 

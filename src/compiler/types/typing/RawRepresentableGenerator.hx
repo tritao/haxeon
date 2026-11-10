@@ -3,7 +3,6 @@ package compiler.types.typing;
 import compiler.Source.SourceSpan;
 import compiler.syntax.Ast.AstEnumAbstract;
 import compiler.types.Type.CompilerType;
-import compiler.types.Type.NominalKind;
 import compiler.types.TypedAst.TypedExpression;
 import compiler.types.TypedAst.TypedFunction;
 import compiler.types.TypedAst.TypedStatement;
@@ -14,16 +13,9 @@ import compiler.types.InlineConstantEvaluator;
 class RawRepresentableGenerator {
 	public static inline final PREFIX = "$raw-representable:";
 
-	public static function conforms(session:TypingSession, declaration:AstEnumAbstract):Bool {
-		if (declaration.conformances != null)
-			for (type in declaration.conformances)
-				switch session.declarations.resolve(type, declaration.span) {
-					case TInstance(Interface, "RawRepresentable", []):
-						return true;
-					default:
-				}
-		return false;
-	}
+	public static function conforms(session:TypingSession, declaration:AstEnumAbstract):Bool
+		return DeclaredConformance.has(session, TAbstract(declaration.name, [], session.declarations.resolve(declaration.underlying, declaration.span)),
+			"RawRepresentable");
 
 	public static function name(owner:String, method:String):String
 		return PREFIX + owner + ":" + method;
@@ -55,7 +47,7 @@ class RawRepresentableGenerator {
 			session.rawRepresentableRequests.set(helper, {
 				owner: owner,
 				method: method,
-				origin: session.currentContext.name,
+				origin: session.generatedFunctionOrigin(),
 				span: span
 			});
 		return helper;
@@ -84,15 +76,48 @@ class RawRepresentableGenerator {
 			if (request.method == "rawValue")
 				statements.push(TReturn(new TypedExpression(TAbiCast(input), raw, span), span));
 			else {
+				var present = new TypedExpression(TNullableWrap(new TypedExpression(TAbiCast(input), nominal, span)), outputType, span),
+					missing = TReturn(new TypedExpression(TNullableWrap(new TypedExpression(TNullLiteral, TNull, span)), outputType, span), span),
+					cases:Array<compiler.types.TypedAst.TypedSwitchCase> = [],
+					seen:Map<Int, Bool> = [];
 				for (value in declaration.values) {
 					var constant = InlineConstantEvaluator.evaluate(EnumAbstractValues.raw(typer, declaration, value));
 					if (constant == null)
 						throw "Nonconstant raw value after conformance validation";
-					var present = new TypedExpression(TNullableWrap(new TypedExpression(TAbiCast(input), nominal, span)), outputType, span);
-					statements.push(TIf(new TypedExpression(TEqual(input, constant), TBool, span), [TReturn(present, span)], [], span));
+					switch raw {
+						case TInt:
+							var code = switch constant.expression {
+								case TIntLiteral(value): value;
+								default: throw "Noninteger raw constant";
+							};
+							if (seen.exists(code))
+								continue;
+							seen.set(code, true);
+							cases.push({
+								value: constant,
+								subjectBinding: null,
+								arrayPattern: null,
+								isCatchAll: false,
+								guard: null,
+								statements: [TReturn(present, span)],
+								enumName: null,
+								constructorIndex: -1,
+								bindings: [],
+								predicates: [],
+								span: span
+							});
+						default:
+							statements.push(TIf(new TypedExpression(TEqual(input, constant), TBool, span), [TReturn(present, span)], [], span));
+					}
 				}
-				statements.push(TReturn(new TypedExpression(TNullableWrap(new TypedExpression(TNullLiteral, TNull, span)), outputType, span), span));
+				switch raw {
+					case TInt:
+						statements.push(TSwitch(input, cases, [missing], true, span));
+					default:
+						statements.push(missing);
+				}
 			}
+
 			var fn:TypedFunction = {
 				name: helper,
 				origin: request.origin,

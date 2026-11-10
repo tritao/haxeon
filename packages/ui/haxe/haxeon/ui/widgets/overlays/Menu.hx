@@ -89,7 +89,7 @@ class Menu implements View {
 			if (item.shortcut != null && item.shortcut.length > 0)
 				button.trailingView = new Text(item.shortcut, null, context.theme.tokens.textSecondary, TextStyleOverride.text(13));
 			var computed = context.resolveStyle(new StyleTarget("button", item.key, item.key,
-				["menu-item", "navigation"], ["button"], 0), button.style);
+				["menu-item", "navigation"], ["button"], haxeon.ui.style.StyleState.empty()), button.style);
 			var itemStyle = computed.toLayoutStyle();
 			var typography = context.resolveTextRole(TextRole.Button, TextStyleOverride.combine(
 				TextStyleOverride.text(13), TextStyleOverride.paragraph(TextWrap.None)));

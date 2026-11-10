@@ -2,6 +2,7 @@ package haxeon.platform.internal.event;
 
 import haxeon.platform.BindingError;
 import haxeon.platform.resource.Resource;
+import nativekit.ffi.NativeKit;
 
 /** Validates and decodes byte-oriented NativeKit event payloads. */
 class EventBytes {
@@ -38,7 +39,7 @@ class EventBytes {
 			if (uri == null || uri.length == 0) throw BindingError.invalidData("EventBytes.decodeResourceList", "NativeKit resource payload has an invalid URI");
 			values.push(new Resource(uri,
 				readOptionalString(data, readU32(data, base + 8), strings),
-				readOptionalString(data, readU32(data, base + 12), strings), readU32(data, base)));
+				readOptionalString(data, readU32(data, base + 12), strings), NativeKit.__hxi_flags_from_native_nk_resource_flags(readU32(data, base))));
 		}
 		return {accepted: accepted, items: values};
 	}

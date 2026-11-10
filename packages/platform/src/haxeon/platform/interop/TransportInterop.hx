@@ -60,7 +60,7 @@ class TransportInterop {
 			throw BindingError.invalidArgument("TransportInterop.websocket", "Invalid WebSocket timeout");
 		var value = options(port, host);
 		value.set_kind(TransportKind.Websocket);
-		value.set_flags(TransportFlags.Messages | TransportFlags.Text | (secure ? TransportFlags.Secure : 0));
+		value.set_flags(TransportFlags.Messages | TransportFlags.Text | (secure ? TransportFlags.Secure : TransportFlags.empty()));
 		value.set_path(path);
 		value.set_timeout_ms(Std.int(timeout * 1000));
 		var result = NativeKit.nk_transport_connect(value);
