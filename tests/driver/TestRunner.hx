@@ -20,9 +20,15 @@ private typedef ProgramResult = {
 	var output:String;
 }
 
+/** A program case built and run once as a live build (a `Compiler`'s default) and once as a plain build, which prunes what nothing reaches. */
+private typedef ProgramRun = {
+	var test:ProgramCase;
+	var plain:Bool;
+}
+
 private typedef ActiveProgram = {
 	var index:Int;
-	var test:ProgramCase;
+	var run:ProgramRun;
 	var process:Process;
 }
 
@@ -65,9 +71,17 @@ class TestRunner {
 	}
 
 	/** Compile a program to HashLink: with the prebuilt compiler when available, else `haxe --run Main`. */
-	function compileProgram(source:String, output:String):Process
+	function compileProgram(source:String, output:String, plain:Bool):Process {
+		var arguments = [source, output].concat(plain ? ["--plain"] : []);
 		return prebuiltMain != null ? new Process(hl,
-			[prebuiltMain, source, output]) : new Process(haxe, ["--cwd", root, "common.hxml", "--run", "Main", source, output]);
+			[prebuiltMain].concat(arguments)) : new Process(haxe, ["--cwd", root, "common.hxml", "--run", "Main"].concat(arguments));
+	}
+
+	static function runName(run:ProgramRun):String
+		return run.test.name + (run.plain ? " (plain build)" : "");
+
+	static function runOutput(root:String, run:ProgramRun):String
+		return Path.join([root, "out", run.test.name + (run.plain ? ".plain" : "") + ".hl"]);
 
 	/**
 	 * Test mains are compiled to HashLink and run there: faster than re-interpreting the compiler
@@ -166,24 +180,31 @@ class TestRunner {
 	}
 
 	public function runProgram(test:ProgramCase):Bool {
-		var result = runProgramCaptured(test, 0);
-		Sys.print(result.output);
-		return result.passed;
+		var failed = false;
+		for (plain in [false, true]) {
+			var result = runProgramCaptured({test: test, plain: plain}, 0);
+			Sys.print(result.output);
+			failed = failed || !result.passed;
+		}
+		return !failed;
 	}
 
+	/** Every program is built and run twice, live and plain, so a difference between the two modes (what a plain build prunes) fails a case. */
 	public function runPrograms(tests:Array<ProgramCase>, jobs:Int):Int {
 		if (tests.length == 0)
 			return 0;
+		var runs:Array<ProgramRun> = [for (test in tests) for (plain in [false, true]) {test: test, plain: plain}];
 		if (jobs == 1) {
 			var failures = 0;
-			for (test in tests)
-				if (!runProgram(test))
+			for (run in runs) {
+				var result = runProgramCaptured(run, 0);
+				Sys.print(result.output);
+				if (!result.passed)
 					failures++;
+			}
 			return failures;
 		}
-
-		var ordered = runProgramsParallel(tests, Std.int(Math.min(jobs, tests.length)));
-		return reportResults(ordered);
+		return reportResults(runProgramsParallel(runs, Std.int(Math.min(jobs, runs.length))));
 	}
 
 	function reportResults(results:Array<ProgramResult>):Int {
@@ -196,21 +217,20 @@ class TestRunner {
 		return failures;
 	}
 
-	function runProgramsParallel(tests:Array<ProgramCase>, jobs:Int):Array<ProgramResult> {
+	function runProgramsParallel(runs:Array<ProgramRun>, jobs:Int):Array<ProgramResult> {
 		var results:Array<ProgramResult> = [];
 		var compileOutput:Array<String> = [];
 		var compiled = [];
 		var next = 0;
 		var active:Array<ActiveProgram> = [];
-		while (next < tests.length || active.length > 0) {
-			while (next < tests.length && active.length < jobs) {
-				var test = tests[next];
-				var source = Path.join([root, "tests", "programs", test.name + ".hx"]);
-				var output = Path.join([root, "out", test.name + ".hl"]);
+		while (next < runs.length || active.length > 0) {
+			while (next < runs.length && active.length < jobs) {
+				var run = runs[next];
+				var source = Path.join([root, "tests", "programs", run.test.name + ".hx"]);
 				active.push({
 					index: next,
-					test: test,
-					process: compileProgram(source, output)
+					run: run,
+					process: compileProgram(source, runOutput(root, run), run.plain)
 				});
 				next++;
 			}
@@ -223,7 +243,7 @@ class TestRunner {
 				results[job.index] = {
 					index: job.index,
 					passed: false,
-					output: compilation.output + 'FAIL: ${job.test.name} failed to compile\n'
+					output: compilation.output + 'FAIL: ${runName(job.run)} failed to compile\n'
 				};
 		}
 
@@ -232,14 +252,14 @@ class TestRunner {
 		while (next < compiled.length || active.length > 0) {
 			while (next < compiled.length && active.length < jobs) {
 				var index = compiled[next++];
-				var test = tests[index];
-				var output = Path.join([root, "out", test.name + ".hl"]);
-				active.push({index: index, test: test, process: new Process(hl, [output])});
+				var run = runs[index];
+				active.push({index: index, run: run, process: new Process(hl, [runOutput(root, run)])});
 			}
 			var job = active.shift();
 			var execution = finishCommand(job.process);
-			var passed = execution.status == job.test.expectedExit;
-			var message = passed ? 'PASS: ${job.test.name} source compiled and executed (exit ${job.test.expectedExit})\n' : 'FAIL: ${job.test.name} expected exit ${job.test.expectedExit}, got ${execution.status}\n';
+			var expected = job.run.test.expectedExit;
+			var passed = execution.status == expected;
+			var message = passed ? 'PASS: ${runName(job.run)} source compiled and executed (exit $expected)\n' : 'FAIL: ${runName(job.run)} expected exit $expected, got ${execution.status}\n';
 			results[job.index] = {
 				index: job.index,
 				passed: passed,
@@ -249,15 +269,15 @@ class TestRunner {
 		return results;
 	}
 
-	function runProgramCaptured(test:ProgramCase, index:Int):ProgramResult {
-		var source = Path.join([root, "tests", "programs", test.name + ".hx"]);
-		var output = Path.join([root, "out", test.name + ".hl"]);
-		var compilation = finishCommand(compileProgram(source, output));
+	function runProgramCaptured(run:ProgramRun, index:Int):ProgramResult {
+		var source = Path.join([root, "tests", "programs", run.test.name + ".hx"]);
+		var output = runOutput(root, run), test = run.test;
+		var compilation = finishCommand(compileProgram(source, output, run.plain));
 		if (compilation.status != 0) {
 			return {
 				index: index,
 				passed: false,
-				output: compilation.output + 'FAIL: ${test.name} failed to compile\n'
+				output: compilation.output + 'FAIL: ${runName(run)} failed to compile\n'
 			};
 		}
 		var execution = runCommand(hl, [output]);
@@ -265,13 +285,13 @@ class TestRunner {
 			return {
 				index: index,
 				passed: false,
-				output: compilation.output + execution.output + 'FAIL: ${test.name} expected exit ${test.expectedExit}, got ${execution.status}\n'
+				output: compilation.output + execution.output + 'FAIL: ${runName(run)} expected exit ${test.expectedExit}, got ${execution.status}\n'
 			};
 		}
 		return {
 			index: index,
 			passed: true,
-			output: compilation.output + execution.output + 'PASS: ${test.name} source compiled and executed (exit ${test.expectedExit})\n'
+			output: compilation.output + execution.output + 'PASS: ${runName(run)} source compiled and executed (exit ${test.expectedExit})\n'
 		};
 	}
 

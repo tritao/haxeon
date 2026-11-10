@@ -9,9 +9,13 @@ import sys.io.File;
 class Main {
 	static function main():Void {
 		var arguments = Sys.args();
+		// `--plain` builds as `haxeon build` does: not for live patching, so what nothing reaches is not in the module.
+		var plain = arguments.indexOf("--plain") >= 0;
+		arguments = [for (argument in arguments) if (argument != "--plain") argument];
 		var sourcePath = arguments.length > 0 ? arguments[0] : "tests/programs/add.hx";
 		var outputPath = arguments.length > 1 ? arguments[1] : "out/program.hl";
 		var compiler = new Compiler();
+		compiler.livePatching = !plain;
 		CompilerIntrinsics.register(compiler);
 		compiler.addStandardLibrarySourceRoot("stdlib");
 		// Modules the file refers to are found beside it, as with `-cp .` in Haxe.
