@@ -377,13 +377,10 @@ class IrVerifier {
 			else if (IrValueLaneReference.isCarrier(arg.type) && !StringTools.startsWith(fn.name, IrScalarArguments.PREFIX)
 				&& !(carrierSlots.exists(fn.name) && carrierSlots.get(fn.name)))
 				throw "A value lane reference cannot cross an ordinary function boundary";
-		var graph = new IrGraph(fn),
-			values:Map<Int, IrType> = [],
-			definitions:Map<Int, {block:Int, position:Int}> = [];
-		for (argument in fn.arguments) {
-			define(values, argument);
-			definitions.set(argument.id, {block: fn.blocks[0].id, position: -1});
-		}
+		var graph = new IrGraph(fn), values = scratchValues;
+		values.reset();
+		for (argument in fn.arguments)
+			values.define(argument, fn.blocks[0].id, -1);
 		for (id in graph.order) {
 			var block = graph.block(id), ordinary = false;
 			for (position in 0...block.instructions.length) {
@@ -401,10 +398,8 @@ class IrVerifier {
 						ordinary = true;
 				}
 				var output = IrOperands.output(instruction);
-				if (output != null) {
-					define(values, output);
-					definitions.set(output.id, {block: id, position: position});
-				}
+				if (output != null)
+					values.define(output, id, position);
 			}
 		}
 		for (id in graph.order) {
@@ -412,18 +407,20 @@ class IrVerifier {
 			for (position in 0...block.instructions.length) {
 				var instruction = block.instructions[position].value;
 				for (value in IrOperands.inputs(instruction))
-					verifyUse(value, id, position, values, definitions, graph);
+					verifyUse(value, id, position, values, graph);
 				switch instruction {
 					case Phi(out, inputs):
-						var expected = graph.predecessors.get(id),
-							seen:Map<Int, Bool> = [];
+						var expected = graph.predecessors.get(id);
 						if (expected == null || inputs.length != expected.length)
 							throw 'Phi ${out.id} does not cover every predecessor';
-						for (input in inputs) {
-							if (expected.indexOf(input.block) < 0 || seen.exists(input.block))
+						for (position in 0...inputs.length) {
+							var input = inputs[position], repeated = false;
+							for (earlier in 0...position)
+								if (inputs[earlier].block == input.block)
+									repeated = true;
+							if (expected.indexOf(input.block) < 0 || repeated)
 								throw 'Invalid phi predecessor ${input.block}';
-							seen.set(input.block, true);
-							verifyUse(input.value, input.block, graph.block(input.block).instructions.length, values, definitions, graph);
+							verifyUse(input.value, input.block, graph.block(input.block).instructions.length, values, graph);
 							if (!sameType(input.value.type, out.type))
 								throw 'Wrong phi input type for ${out.id}';
 						}
@@ -436,15 +433,15 @@ class IrVerifier {
 				throw 'Reachable IR block $id has no terminator';
 			switch terminator.value {
 				case Return(value):
-					verifyUse(value, id, block.instructions.length, values, definitions, graph);
+					verifyUse(value, id, block.instructions.length, values, graph);
 					if (!sameType(value.type, fn.result))
 						throw 'Wrong return type in ${fn.name}';
 				case Throw(value), Rethrow(value):
-					verifyUse(value, id, block.instructions.length, values, definitions, graph);
+					verifyUse(value, id, block.instructions.length, values, graph);
 					if ((switch (value.type) { case Dyn: false; default: true; }))
 						throw "IR throw value is not Dyn";
 				case Branch(condition, _, _):
-					verifyUse(condition, id, block.instructions.length, values, definitions, graph);
+					verifyUse(condition, id, block.instructions.length, values, graph);
 					if ((switch (condition.type) { case Bool: false; default: true; }))
 						throw "IR branch condition is not Bool";
 				case Jump(_):
@@ -589,17 +586,16 @@ class IrVerifier {
 			default: false;
 		};
 
-	static function verifyUse(value:IrValue, block:Int, position:Int, values:Map<Int, IrType>, definitions:Map<Int, {block:Int, position:Int}>,
-			graph:IrGraph):Void {
+	static function verifyUse(value:IrValue, block:Int, position:Int, values:IrVerifyValues, graph:IrGraph):Void {
 		require(values, value);
-		var definition = definitions.get(value.id);
-		if (definition == null)
+		if (!values.exists(value.id))
 			throw 'Unknown IR definition ${value.id}';
-		if (definition.block == block ? definition.position >= position : !graph.dominates(definition.block, block))
+		var definitionBlock = values.blockOf(value.id), definitionPosition = values.positionOf(value.id);
+		if (definitionBlock == block ? definitionPosition >= position : !graph.dominates(definitionBlock, block))
 			throw 'IR value ${value.id} does not dominate its use in block $block';
 	}
 
-	static function verifyInstruction(instruction:IrInstruction, values:Map<Int, IrType>, signatures, objects:IrVerifyTable<IrObject>,
+	static function verifyInstruction(instruction:IrInstruction, values:IrVerifyValues, signatures, objects:IrVerifyTable<IrObject>,
 			interfaces:IrVerifyTable<IrInterface>, enums:IrVerifyTable<IrEnum>, globals:IrVerifyTable<IrType>):Void
 		switch instruction {
 			case Phi(_, _):
@@ -973,7 +969,7 @@ class IrVerifier {
 					throw 'Invalid IR enum field';
 		}
 
-	static function requireObject(value:IrValue, values:Map<Int, IrType>, objects:IrVerifyTable<IrObject>):IrObject {
+	static function requireObject(value:IrValue, values:IrVerifyValues, objects:IrVerifyTable<IrObject>):IrObject {
 		require(values, value);
 		return switch value.type {
 			case Obj(name):
@@ -1072,13 +1068,10 @@ class IrVerifier {
 		map.set(name, {arguments: arguments, result: result});
 	}
 
-	static function define(values:Map<Int, IrType>, value:IrValue):Void {
-		if (values.exists(value.id))
-			throw 'Duplicate IR value ${value.id}';
-		values.set(value.id, value.type);
-	}
+	/** The one table of value types and definition sites, cleared and reused by every function (`IrVerifyValues`). */
+	static final scratchValues = new IrVerifyValues();
 
-	static function require(values:Map<Int, IrType>, value:IrValue):Void {
+	static function require(values:IrVerifyValues, value:IrValue):Void {
 		if (!values.exists(value.id))
 			throw 'IR value ${value.id} is used before definition';
 		if (!sameType(values.get(value.id), value.type))
@@ -1215,5 +1208,58 @@ class IrVerifier {
 			if (interfaceExtends(base, expected, interfaces))
 				return true;
 		return false;
+	}
+}
+
+/**
+ * The type and definition site (block id and position) of each value of one function, by value id, in arrays that every function
+ * reuses: a verification allocates no table and no record per value. `reset` clears only the ids the last function defined.
+ */
+final class IrVerifyValues {
+	var types:Array<Null<IrType>> = [];
+	var blocks:Array<Int> = [];
+	var positions:Array<Int> = [];
+	var defined:Array<Int> = [];
+	var count = 0;
+
+	public function new() {}
+
+	public function reset():Void {
+		for (index in 0...count)
+			types[defined[index]] = null;
+		count = 0;
+	}
+
+	public inline function exists(id:Int):Bool
+		return id >= 0 && id < types.length && types[id] != null;
+
+	public inline function get(id:Int):IrType
+		return types[id];
+
+	public inline function blockOf(id:Int):Int
+		return blocks[id];
+
+	public inline function positionOf(id:Int):Int
+		return positions[id];
+
+	public function define(value:IrValue, block:Int, position:Int):Void {
+		var id = value.id;
+		if (id < 0)
+			throw 'Invalid IR value id $id';
+		if (exists(id))
+			throw 'Duplicate IR value $id';
+		while (types.length <= id) {
+			types.push(null);
+			blocks.push(0);
+			positions.push(0);
+		}
+		types[id] = value.type;
+		blocks[id] = block;
+		positions[id] = position;
+		if (count == defined.length)
+			defined.push(id);
+		else
+			defined[count] = id;
+		count++;
 	}
 }
