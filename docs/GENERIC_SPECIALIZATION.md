@@ -502,20 +502,25 @@ at genuine Dynamic/reflection callable boundaries remain E7 widening work in STR
 
 ### Scalar map storage in an opaque generic owner (a2)
 
-An unspecialized class field `Map<String, V>` chooses reference-map storage when its shared body erases `V`. Before
-the diagnostic below, a minimal `ReadView<Bool>` storing that map reached `Can't cast map_string_bool to map_string_ref`
-on HashLink at construction. Concrete scalar map values (and String's specialized bytes-map storage) may not be
-reinterpreted as reference-map storage.
+A map created and used inside a shared generic body keeps the body's erased storage consistently. In particular,
+the original `UiHostPendingResources<String>` smoke test and its Bool counterpart work on HashLink, Wasm32 and Wasm GC,
+with inlining off/on. This was reproduced with the pre-diagnostic compiler at `093617bb`; neither owner is rejected.
 
-The compiler now rejects such an unspecialized owner at its field with **E1009**, naming the concrete owner and field:
-`scalar map values in unspecialized generic owners are not supported yet`. The check compares semantic and erased map
-storage through aliases and container types, including inherited fields. Concrete fields whose representation does
-not depend on an owner parameter, reference-map storage, and already specialized owners remain supported. Successful
-checks are cached per concrete type and declaration in the typing session. The negative probe is checked on HashLink,
-Wasm32 and Wasm GC with inlining off/on. **a2 deletes this diagnostic and its rejection tests** when typed standard-map
-storage and scalar owner specialization preserve the layout. This commit does not implement scalar specialization.
+The unsupported operation is a **storage-changing ABI crossing**, such as passing a concrete `Map<String, V>` into
+`ReadView<V>` whose constructor expects the erased reference-map representation. Before the diagnostic, the Bool
+probe failed on HashLink with `Can't cast map_string_bool to map_string_ref`. The String probe fails on HashLink with
+`Can't cast map_string_bytes to map_string_ref` and on Wasm GC with `RuntimeError: illegal cast`, in both inlining modes;
+Wasm32 accepts that String probe. Those String results were reproduced with `093617bb`.
 
- The compiler's read-only verifier tables now accept typed lookup and membership
+The compiler rejects these crossings with **E1009**, naming the concrete owner when available and both boundary types:
+`scalar map values in unspecialized generic owners are not supported yet at a storage-changing boundary`. It compares
+actual runtime map kinds through aliases and containers at ABI adaptation, rather than banning generic fields or
+instantiations. Null arguments, consistently erased owned maps, concrete fields and compatible specialized storage
+remain supported. The negative probes and the original String/Bool pending-resource runtime positives run on all three
+targets with inlining off/on. **a2 deletes this diagnostic and its rejection tests** when typed standard-map storage and
+scalar owner specialization preserve these crossings. This does not implement scalar specialization.
+
+The compiler's read-only verifier tables now accept typed lookup and membership
 callbacks instead of owning an erased map: each callback reads its concrete map kind, and the generic view preserves
 its nullable result type. The `generic-map-read-view` fixture checks false, true, missing keys and reference values on
 all three targets with both inlining settings. This does not add scalar specialization or claim allocation-free

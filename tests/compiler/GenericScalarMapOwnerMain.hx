@@ -3,6 +3,8 @@ import compiler.Compiler;
 import compiler.runtime.CompilerIntrinsics;
 import compiler.tools.CompilerDriver;
 import sys.io.File;
+import compiler.hl.HlWriter;
+import compiler.backend.wasm.WasmBackend;
 
 /** A shared generic owner must not reinterpret scalar map storage as a reference map. */
 class GenericScalarMapOwnerMain {
@@ -32,7 +34,7 @@ class GenericScalarMapOwnerMain {
 		rejects('typedef Values<V> = Map<String,V>;\n' + StringTools.replace(declaration, "Map<String,V>", "Values<V>")
 			+ 'function main():Int { var map:Map<String,Bool>=[]; var view=new ReadView<Bool>(map); return 0; }', 'ReadView<Bool>');
 		rejects(declaration + 'class Child<T> extends ReadView<T> { public function new(map:Map<String,T>) super(map); }\n'
-			+ 'function main():Int { var map:Map<String,Bool>=[]; var view=new Child<Bool>(map); return 0; }', 'ReadView<Bool>');
+			+ 'function main():Int { var map:Map<String,Bool>=[]; var view=new Child<Bool>(map); return 0; }', 'Child<Bool>');
 		rejects(StringTools.replace(declaration, "String", "Int")
 			+ 'function main():Int { var map:Map<Int,Bool>=[]; var view=new ReadView<Bool>(map); return 0; }', 'ReadView<Bool>');
 		rejects('class NullableView<V> { final values:Null<Map<String,V>>; public function new(values:Null<Map<String,V>>) this.values=values; } '
@@ -62,7 +64,35 @@ class GenericScalarMapOwnerMain {
 			expectDiagnostic(failure, "ReadView<Bool>");
 			compiler.update("Probe.hx", fixed);
 			compiler.compile("Probe");
+			checkOwnedMaps(target, inlining);
 		}
 		Sys.println("PASS: unsupported scalar-map owners fail closed; supported concrete and specialized fields remain valid");
 	}
+	static function checkOwnedMaps(target:String, inlining:Bool):Void {
+		var compiler = new Compiler(null, CompilerIntrinsics.configuration());
+		compiler.livePatching = false;
+		compiler.configure("owned-map-" + target + inlining, "owned-map",
+			CompilerDriver.targetDefines(target).concat(["haxeon-inline=" + (inlining ? 1 : 0)]));
+		compiler.update("haxeon/ui/host/UiHostPendingResources.hx", File.getContent("packages/ui/haxe/haxeon/ui/host/UiHostPendingResources.hx"));
+		compiler.update("Main.hx", 'import haxeon.ui.host.UiHostPendingResources; function main():Int {'
+			+ 'var p=new UiHostPendingResources<String>(); p.add("first","font-a"); p.add("second","font-b"); '
+			+ 'if(p.remaining!=2 || p.resolve("first")!="font-a" || p.remaining!=1)return 1; p.cancel(); '
+			+ 'if(p.remaining!=0 || p.resolve("second")!=null)return 2; '
+			+ 'var b=new UiHostPendingResources<Bool>(); b.add("false",false); b.add("true",true); '
+			+ 'if(b.resolve("false")!=false || b.remaining!=1)return 3; b.cancel(); '
+			+ 'return b.remaining==0 && b.resolve("true")==null ?42:4; }');
+		var result = compiler.compile("Main"), root = Sys.getEnv("TMPDIR");
+		if (root == null) root = "out";
+		var path = root + "/owned-map-" + target + inlining + "-" + Std.random(0x7fffffff) + (target == "hl" ? ".hl" : ".wasm");
+		File.saveBytes(path, target == "hl" ? HlWriter.encode(result.module) : new WasmBackend().compile(result.ir,
+			{target:target == "wasm32" ? Wasm32 : WasmGc, debugNames:true}).bytes);
+		var js = 'const e=new WebAssembly.Instance(new WebAssembly.Module(require("fs").readFileSync(process.argv[1]))).exports;const r=e.main();if(r!==42)throw Error("owned map "+r);';
+		var child = new sys.io.Process(target == "hl" ? "scripts/hl" : "node", target == "hl" ? [path] : ["-e", js, path]);
+		var output = child.stdout.readAll().toString(), error = child.stderr.readAll().toString(), status = child.exitCode();
+		child.close();
+		sys.FileSystem.deleteFile(path);
+		if (status != (target == "hl" ? 42 : 0)) throw 'Owned maps failed on $target inline=$inlining: $status $output $error';
+		Sys.println('PASS: original String and Bool pending resources on $target, inline=$inlining');
+	}
+
 }
