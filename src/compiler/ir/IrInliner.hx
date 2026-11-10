@@ -235,6 +235,18 @@ class IrInliner {
 
 	var depth = 0;
 
+	/**
+	 * The strongly connected component of each function in the call graph of the original bodies. Inlining never goes into a call
+	 * to a function of the caller's own component (a cycle): a function's inlined form then depends only on its own source and on
+	 * the callees outside its component, not on where the walk happened to enter the cycle. Before, a call to an ancestor of the walk
+	 * was skipped, which made the result depend on the order and kept every function in a cycle (and every caller of one) out of the
+	 * memo.
+	 */
+	final components:Map<String, Int> = [];
+
+	/** HAXEON_CHECK_REUSE=1: a function with a usable memo is inlined again and the two results must be equal. */
+	static final checkingMemo = Sys.getEnv("HAXEON_CHECK_REUSE") == "1";
+
 	function new(program:IrProgram, cache:IrInlineCache, profile:TargetProfile, allowInline:Bool) {
 		this.allowInline = allowInline;
 		this.profile = profile;
@@ -272,6 +284,75 @@ class IrInliner {
 			objectPrints.set(name, cache.objectPrintId(name, text));
 		}
 		table = new IrObjectTable(objects, subclasses);
+		computeComponents();
+	}
+
+	/** Tarjan's algorithm over the call edges of the original bodies, visiting functions in name order so the numbering is deterministic. */
+	function computeComponents():Void {
+		var names = [for (name in byName.keys()) name];
+		names.sort(Reflect.compare);
+		var edges:Map<String, Array<String>> = [];
+		for (name in names) {
+			var targets:Array<String> = [];
+			for (block in byName.get(name).blocks)
+				for (located in block.instructions)
+					switch located.value {
+						case Call(_, callee, _):
+							if (byName.exists(callee))
+								targets.push(callee);
+						case MethodCall(_, receiver, method, _, _):
+							var callee = resolveMethod(receiver, method);
+							if (callee != null && byName.exists(callee))
+								targets.push(callee);
+						default:
+					}
+			edges.set(name, targets);
+		}
+		var order:Map<String, Int> = [], low:Map<String, Int> = [], onStack:Map<String, Bool> = [], stack:Array<String> = [], counter = 0, component = 0;
+		for (root in names) {
+			if (order.exists(root))
+				continue;
+			var path:Array<String> = [root], cursors:Array<Int> = [0];
+			order.set(root, counter);
+			low.set(root, counter);
+			counter++;
+			stack.push(root);
+			onStack.set(root, true);
+			while (path.length > 0) {
+				var node = path[path.length - 1], cursor = cursors[cursors.length - 1], targets = edges.get(node);
+				if (cursor < targets.length) {
+					cursors[cursors.length - 1] = cursor + 1;
+					var next = targets[cursor];
+					if (!order.exists(next)) {
+						order.set(next, counter);
+						low.set(next, counter);
+						counter++;
+						stack.push(next);
+						onStack.set(next, true);
+						path.push(next);
+						cursors.push(0);
+					} else if (onStack.exists(next) && order.get(next) < low.get(node))
+						low.set(node, order.get(next));
+				} else {
+					if (low.get(node) == order.get(node)) {
+						var member:String;
+						do {
+							member = stack.pop();
+							onStack.remove(member);
+							components.set(member, component);
+						} while (member != node);
+						component++;
+					}
+					path.pop();
+					cursors.pop();
+					if (path.length > 0) {
+						var parent = path[path.length - 1];
+						if (low.get(node) < low.get(parent))
+							low.set(parent, low.get(node));
+					}
+				}
+			}
+		}
 	}
 
 	/** Include every field storage fact consulted by scalar replacement and load/store forwarding. */
@@ -414,12 +495,12 @@ class IrInliner {
 		var original = byName.get(name);
 		if (original == null)
 			return null;
-		var memo = cache.memo.get(name);
-		if (memo != null
+		var memo = cache.memo.get(name), usable = memo != null
 			&& memo.source == original
 			&& memo.fingerprint == fingerprint
 			&& dependenciesCurrent(memo.dependencies)
-			&& objectsCurrent(memo.objects)) {
+			&& objectsCurrent(memo.objects);
+		if (usable && !checkingMemo) {
 			done.set(name, memo.result);
 			dependenciesOf.set(name, memo.dependencies);
 			objectsOf.set(name, memo.objects);
@@ -452,13 +533,18 @@ class IrInliner {
 		for (dependencyName in names)
 			dependencies.push(consulted.get(dependencyName));
 		var objectPrintsOf:Map<String, Int> = [for (objectName in consultedObjects.keys()) objectName => printOf(objectName)];
+		if (usable && checkingMemo) {
+			if (!compiler.ir.codec.IrFunctionStateEquality.same(memo.result, result))
+				throw 'HAXEON_CHECK_REUSE: the inlined form of $name differs from the one its memo holds';
+			result = memo.result;
+		}
 		done.set(name, result);
 		dependenciesOf.set(name, dependencies);
 		objectsOf.set(name, objectPrintsOf);
 		if (isImpure)
 			impure.set(name, true);
 		else
-			nextMemo.set(name, new InlineMemo(original, fingerprint, dependencies, objectPrintsOf, result));
+			nextMemo.set(name, usable && checkingMemo ? memo : new InlineMemo(original, fingerprint, dependencies, objectPrintsOf, result));
 		consultResult(name);
 		return result;
 	}
@@ -509,10 +595,12 @@ class IrInliner {
 		var original = byName.get(target);
 		if (frames.length > 0)
 			frames[frames.length - 1].set(target, original);
+		// A call into the caller's own cycle is never inlined (see `components`); this covers recursion and every ancestor of the walk.
+		if (frameNames.length > 0 && components.get(target) == components.get(frameNames[frameNames.length - 1]))
+			return null;
 		if (visiting.exists(target)) {
-			// Skipping the function being inlined is context-free; skipping an ancestor depends on the order of the walk.
-			if (frameNames.length == 0 || frameNames[frameNames.length - 1] != target)
-				frameImpure[frameImpure.length - 1] = true;
+			// Unreachable now (an ancestor is always in the caller's component); kept as the guard it was.
+			frameImpure[frameImpure.length - 1] = true;
 			return null;
 		}
 		if (depth > MaxChainDepth) {

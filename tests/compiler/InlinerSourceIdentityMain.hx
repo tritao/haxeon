@@ -40,7 +40,7 @@ class InlinerSourceIdentityMain {
 			elapsed = Sys.time() - wall;
 		if (cache.memo.get("caller0") != memo || changed.length != 0)
 			throw "Regenerated identical input must reuse the inlining memo";
-		if (bytes > 8 * 1024 * 1024)
+		if (Sys.getEnv("HAXEON_CHECK_REUSE") != "1" && bytes > 8 * 1024 * 1024)
 			throw 'Regenerated input allocated $bytes bytes, expected less than 8 MiB';
 		var fork = cache.copy();
 		var edited = program(2);
