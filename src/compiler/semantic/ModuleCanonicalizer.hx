@@ -8,7 +8,7 @@ import compiler.syntax.Ast.AstStatement;
 
 /** Canonicalizes module-relative syntax into compiler-wide declaration names. */
 class ModuleCanonicalizer {
-	public static function canonicalFunction(fn:AstFunction, module:String, entry:String, moduleLocals:Map<String, Bool>, ?explicitName:String,
+	public static function canonicalFunction(fn:AstFunction, module:String, entry:String, moduleLocals:LocalScope, ?explicitName:String,
 			?moduleAliases:AliasTable):AstFunction {
 		var locals = moduleLocals, aliases = moduleAliases;
 		var name = explicitName != null ? explicitName : module == entry && fn.name == "main" ? "main" : module + "." + fn.name,
@@ -56,12 +56,12 @@ class ModuleCanonicalizer {
 		any module declaration or import of the same name, so it is left for the
 		typer to resolve by scope.
 	**/
-	public static function canonicalBlock(statements:Array<AstStatement>, module:String, entry:String, locals:Map<String, Bool>, ?aliases:AliasTable,
+	public static function canonicalBlock(statements:Array<AstStatement>, module:String, entry:String, locals:LocalScope, ?aliases:AliasTable,
 			?bound:Array<Null<String>>):Array<AstStatement>
 		return canonicalScope(statements, null, module, entry, locals, aliases, bound).statements;
 
 	/** A block and its value expression, which sees the block's locals. */
-	static function canonicalScope(statements:Array<AstStatement>, value:Null<AstExpression>, module:String, entry:String, locals:Map<String, Bool>,
+	static function canonicalScope(statements:Array<AstStatement>, value:Null<AstExpression>, module:String, entry:String, locals:LocalScope,
 			aliases:Null<AliasTable>, bound:Null<Array<Null<String>>>):{
 		statements:Array<AstStatement>,
 		value:Null<AstExpression>
@@ -99,13 +99,8 @@ class ModuleCanonicalizer {
 	}
 
 	/** `locals` with `names` bound: each maps to false, neither qualified as a module declaration nor resolved as an import. */
-	static function bindNames(locals:Map<String, Bool>, names:Array<Null<String>>):Map<String, Bool> {
-		var scope = [for (name => value in locals) name => value];
-		for (name in names)
-			if (name != null)
-				scope.set(name, false);
-		return scope;
-	}
+	static function bindNames(locals:LocalScope, names:Array<Null<String>>):LocalScope
+		return locals.bind(names);
 
 	/** A scope for a function's or method's own type parameters, which shadow program types without changing the module's table. */
 	static inline function copyAliases(aliases:AliasTable):AliasTable
@@ -160,7 +155,7 @@ class ModuleCanonicalizer {
 		};
 
 	public static function canonicalEnum(enumDecl:compiler.syntax.Ast.AstEnum, aliases:AliasTable, packageName:Null<String>, module:String,
-			entry:String, locals:Map<String, Bool>):compiler.syntax.Ast.AstEnum {
+			entry:String, locals:LocalScope):compiler.syntax.Ast.AstEnum {
 		var enumAliases = aliases.child();
 		for (parameter in enumDecl.typeParameters) enumAliases.set(parameter, parameter);
 		return {
@@ -192,7 +187,7 @@ class ModuleCanonicalizer {
 	}
 
 	public static function canonicalEnumAbstract(decl:compiler.syntax.Ast.AstEnumAbstract, aliases:AliasTable, packageName:Null<String>, module:String,
-			entry:String, locals:Map<String, Bool>):compiler.syntax.Ast.AstEnumAbstract
+			entry:String, locals:LocalScope):compiler.syntax.Ast.AstEnumAbstract
 		return {
 			name: qualifiedTypeName(packageName, decl.name),
 			metadata: canonicalMetadata(decl.metadata, module, entry, locals, aliases),
@@ -210,7 +205,7 @@ class ModuleCanonicalizer {
 			span: decl.span
 		};
 
-	public static function canonicalMetadata(metadata:Array<compiler.syntax.Ast.AstMetadata>, module:String, entry:String, locals:Map<String, Bool>,
+	public static function canonicalMetadata(metadata:Array<compiler.syntax.Ast.AstMetadata>, module:String, entry:String, locals:LocalScope,
 			aliases:AliasTable):Array<compiler.syntax.Ast.AstMetadata>
 		return [
 			for (annotation in metadata)
@@ -225,7 +220,7 @@ class ModuleCanonicalizer {
 		];
 
 	public static function canonicalAbstract(decl:compiler.syntax.Ast.AstAbstract, aliases:AliasTable, packageName:Null<String>, module:String, entry:String,
-			locals:Map<String, Bool>):compiler.syntax.Ast.AstAbstract
+			locals:LocalScope):compiler.syntax.Ast.AstAbstract
 		return {
 			name: qualifiedTypeName(packageName, decl.name),
 			isExtern: decl.isExtern,
@@ -243,7 +238,7 @@ class ModuleCanonicalizer {
 		};
 
 	static function canonicalAbstractMethod(method:AstFunction, ownerTypeParameters:Array<String>, module:String, entry:String,
-			moduleLocals:Map<String, Bool>, name:String, moduleAliases:AliasTable):AstFunction {
+			moduleLocals:LocalScope, name:String, moduleAliases:AliasTable):AstFunction {
 		var locals = moduleLocals, aliases = moduleAliases;
 		var parameters = combinedTypeParameters(ownerTypeParameters, method.typeParameters),
 			methodAliases = parameters.length == 0 ? aliases : copyAliases(aliases);
@@ -362,7 +357,7 @@ class ModuleCanonicalizer {
 	 * declared in this module is left alone: that is how a local declaration shadows an import. Reads, member chains and
 	 * assignment targets all qualify a dotted path this way, so they must agree.
 	 */
-	static function importedReference(path:String, locals:Map<String, Bool>, aliases:Null<AliasTable>):Null<String>
+	static function importedReference(path:String, locals:LocalScope, aliases:Null<AliasTable>):Null<String>
 		return locals.exists(compiler.QualifiedName.first(path)) ? null : resolveOptionalExpressionAlias(path, aliases);
 
 	/**
@@ -370,14 +365,14 @@ class ModuleCanonicalizer {
 	 * "Cache.entries" and its receiver must be qualified like any other reference to an imported class. A bare name is
 	 * a local, a field of `this`, or a static of the enclosing class, and is never an import.
 	 */
-	static function canonicalAssignmentTarget(name:String, locals:Map<String, Bool>, aliases:Null<AliasTable>):String {
+	static function canonicalAssignmentTarget(name:String, locals:LocalScope, aliases:Null<AliasTable>):String {
 		if (name.indexOf(".") < 0)
 			return name;
 		var imported = importedReference(name, locals, aliases);
 		return imported == null ? name : imported;
 	}
 
-	public static function canonicalStatement(s:AstStatement, module:String, entry:String, locals:Map<String, Bool>, ?aliases:AliasTable):AstStatement
+	public static function canonicalStatement(s:AstStatement, module:String, entry:String, locals:LocalScope, ?aliases:AliasTable):AstStatement
 		return switch s {
 			case ErrorStatement(_): s;
 			case UninitializedDeclaration(n, t, span): UninitializedDeclaration(n, canonicalType(t, aliases), span);
@@ -431,7 +426,7 @@ class ModuleCanonicalizer {
 			case Expression(e, span): Expression(canonicalExpression(e, module, entry, locals, aliases), span);
 		}
 
-	public static function canonicalExpression(e:AstExpression, module:String, entry:String, locals:Map<String, Bool>, ?aliases:AliasTable):AstExpression
+	public static function canonicalExpression(e:AstExpression, module:String, entry:String, locals:LocalScope, ?aliases:AliasTable):AstExpression
 		return switch e {
 			case IntegerLiteral(_, _), FloatLiteral(_, _), StringLiteral(_, _), BoolLiteral(_, _), NullLiteral(_), Unreachable(_), EmptyExpression(_),
 				ErrorExpression(_): e;
@@ -577,7 +572,7 @@ class ModuleCanonicalizer {
 					canonicalBlock(body, module, entry, locals, aliases, [for (argument in arguments) argument.name]), identity, s);
 		}
 
-	public static function canonicalOptionalExpression(e:Null<AstExpression>, module:String, entry:String, locals:Map<String, Bool>,
+	public static function canonicalOptionalExpression(e:Null<AstExpression>, module:String, entry:String, locals:LocalScope,
 			aliases:Null<AliasTable>):Null<AstExpression> {
 		if (e == null)
 			return null;
@@ -647,7 +642,7 @@ class ModuleCanonicalizer {
 	 * The second argument of `Std.isOfType` and its siblings names a type. A bare name reaches here as an expression, so
 	 * an imported enum constructor of the same name (`Bool`, `Int`) must not capture it.
 	 */
-	static function canonicalTypeArgument(e:AstExpression, module:String, entry:String, locals:Map<String, Bool>, aliases:Null<AliasTable>):AstExpression
+	static function canonicalTypeArgument(e:AstExpression, module:String, entry:String, locals:LocalScope, aliases:Null<AliasTable>):AstExpression
 		return switch e {
 			case Variable(name, _) if (aliases != null && aliases.exists(EXPRESSION_ONLY_PREFIX + name)): e;
 			default: canonicalExpression(e, module, entry, locals, aliases);
