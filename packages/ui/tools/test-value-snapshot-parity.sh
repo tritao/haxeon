@@ -17,7 +17,7 @@ JSON
 export LD_LIBRARY_PATH="$root/out:$("$root/scripts/hashlink-path.sh"):$root/out/packages/ui/native${LD_LIBRARY_PATH:+:$LD_LIBRARY_PATH}"
 common=(--root="$ui/tests/value-types" --root="$ui/haxe"
     --root="$ui/bindings/haxe" --root="$root/packages/editor/src" --root="$root/packages/platform/src")
-entries=(local-snapshot host-lifecycle style-kinds cursor-shape layout-codes layout-policies text-codes widget-kinds)
+entries=(local-snapshot host-lifecycle style-kinds cursor-shape layout-codes layout-policies text-codes widget-kinds presentation-kinds)
 negative_entries=(
     host-lifecycle-raw-int
     host-lifecycle-to-int
@@ -76,6 +76,18 @@ negative_entries=(
     widget-kinds-split-orientation-to-int
     widget-kinds-split-orientation-raw-string
     widget-kinds-split-orientation-to-string
+    presentation-kinds-text-role-raw-int
+    presentation-kinds-text-role-to-int
+    presentation-kinds-text-role-raw-string
+    presentation-kinds-text-role-to-string
+    presentation-kinds-icon-name-raw-int
+    presentation-kinds-icon-name-to-int
+    presentation-kinds-icon-name-raw-string
+    presentation-kinds-icon-name-to-string
+    presentation-kinds-dock-panel-header-mode-raw-int
+    presentation-kinds-dock-panel-header-mode-to-int
+    presentation-kinds-dock-panel-header-mode-raw-string
+    presentation-kinds-dock-panel-header-mode-to-string
 )
 if (( $# > 0 )); then
     for requested in "$@"; do

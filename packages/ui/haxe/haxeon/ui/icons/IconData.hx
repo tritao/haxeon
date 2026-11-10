@@ -85,7 +85,6 @@ class IconData {
 				.moveTo(4, 12).lineTo(14, 12).cubicTo(18, 12, 20, 14, 20, 18).build();
 			case IconName.Redo: new PathBuilder().moveTo(15, 7).lineTo(20, 12).lineTo(15, 17)
 				.moveTo(20, 12).lineTo(10, 12).cubicTo(6, 12, 4, 14, 4, 18).build();
-			case _: throw "Unsupported icon name";
 		};
 	}
 

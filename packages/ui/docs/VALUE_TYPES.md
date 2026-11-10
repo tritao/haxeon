@@ -5151,3 +5151,21 @@ conversion checks pass. The compiler suite passes **856/856**, and the framework
 smoke test including 4,000-node layout pressure passes. Production binary-size
 and paired allocation results are collected at the next Tier 2 batch head before
 publication; the control is `fcfd253b` and its archived `style-field` modules.
+
+### Plain presentation choices (2026-11-10, next gated batch)
+
+`TextRole`, `IconName` and `DockPanelHeaderMode` are plain `Hashable` enums.
+Their old integers selected Haxe typography, procedural icon paths and dock
+header ownership; none is a native, wire or persisted-number contract. Theme
+role and icon rendering switches cover every case explicitly. Icon cache keys
+retain their previous numeric case-index prefix rather than allocating longer
+case-name strings. Dock fingerprints likewise use the case index, including the
+existing `-1` sentinel for an absent icon.
+
+The group fixture verifies three tag fields plus a marker occupy 16 bytes,
+copying array elements, equality/hash and nullable icon reflection get/set with
+wrong-enum rejection. All six target/inlining combinations pass, as do all 72
+negative Int/String conversion checks. The framework smoke test including
+4,000-node layout pressure passes. The compiler suite passes **856/856** under the shared heavy-build lock
+with eight workers. Production binary-size and paired allocation results
+are collected with the next Tier 2 batch against `fcfd253b`.
