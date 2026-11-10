@@ -127,7 +127,7 @@ class TextLayout extends NativeKitUIResource {
 
 	static function nativeTextStyle(style:TextStyle):nkui_text_style {
 		var result = new nkui_text_style();
-		result.set_family(cast(style.font, NativeKitUI.UiFontFamily));
+		result.set_family(style.font.rawValue());
 		result.set_font_size(style.fontSize);
 		result.set_letter_spacing(style.letterSpacing);
 		return result;
@@ -138,9 +138,9 @@ class TextLayout extends NativeKitUIResource {
 		result.set_line_height(style.lineHeight == null ? 0.0 : style.lineHeight);
 		if (style.tabWidth < 0) throw "Tab width cannot be negative";
 		result.set_tab_width(style.tabWidth);
-		result.set_wrap(cast(style.wrap, NativeKitUI.UiTextWrap));
-		result.set_alignment(cast(style.alignment, NativeKitUI.UiTextAlignment));
-		result.set_direction(cast(style.direction, NativeKitUI.UiTextDirection));
+		result.set_wrap(style.wrap.rawValue());
+		result.set_alignment(style.alignment.rawValue());
+		result.set_direction(style.direction.rawValue());
 		return result;
 	}
 
@@ -315,7 +315,7 @@ class TextLayout extends NativeKitUIResource {
 				Math.isFinite(bottom) && right > left && bottom > top)
 			{
 				var rect = new TextRangeRect(cursor, next, left, top, right - left, bottom - top,
-					startCaret.direction != TextDirection.Rtl);
+					startCaret.direction != TextDirection.Rtl.rawValue());
 				result.push(rect);
 				if (wholeGrapheme && canonicalStart && cached == null && cachedGraphemes < maximumCachedGraphemes &&
 					(next != last || (lastPosition.offset == last && lastPosition.affinity == 0))) {

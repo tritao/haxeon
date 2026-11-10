@@ -197,14 +197,14 @@ class LayoutTransaction {
 			writeInt(output, record, NativeKitUIConstants.NKUI_LAYOUT_NODE_TEXT_OFFSET_OFFSET, textOffset);
 			writeInt(output, record, NativeKitUIConstants.NKUI_LAYOUT_NODE_TEXT_LENGTH_OFFSET, this.stringBytes[index].length);
 			writeColor(output, record, NativeKitUIConstants.NKUI_LAYOUT_NODE_TEXT_COLOR_OFFSET, node.textColor);
-			writeInt(output, record, NativeKitUIConstants.NKUI_LAYOUT_NODE_FONT_FAMILY_OFFSET, cast nodeTextStyle.font);
+			writeInt(output, record, NativeKitUIConstants.NKUI_LAYOUT_NODE_FONT_FAMILY_OFFSET, nodeTextStyle.font.rawValue());
 			writeFloat(output, record, NativeKitUIConstants.NKUI_LAYOUT_NODE_FONT_SIZE_OFFSET, nodeTextStyle.fontSize);
 			writeFloat(output, record, NativeKitUIConstants.NKUI_LAYOUT_NODE_LETTER_SPACING_OFFSET, nodeTextStyle.letterSpacing);
 			writeFloat(output, record, NativeKitUIConstants.NKUI_LAYOUT_NODE_LINE_HEIGHT_OFFSET,
 				lineHeight);
-			writeInt(output, record, NativeKitUIConstants.NKUI_LAYOUT_NODE_TEXT_WRAP_OFFSET, cast nodeParagraphStyle.wrap);
-			writeInt(output, record, NativeKitUIConstants.NKUI_LAYOUT_NODE_TEXT_ALIGNMENT_OFFSET, cast nodeParagraphStyle.alignment);
-			writeInt(output, record, NativeKitUIConstants.NKUI_LAYOUT_NODE_TEXT_DIRECTION_OFFSET, cast nodeParagraphStyle.direction);
+			writeInt(output, record, NativeKitUIConstants.NKUI_LAYOUT_NODE_TEXT_WRAP_OFFSET, nodeParagraphStyle.wrap.rawValue());
+			writeInt(output, record, NativeKitUIConstants.NKUI_LAYOUT_NODE_TEXT_ALIGNMENT_OFFSET, nodeParagraphStyle.alignment.rawValue());
+			writeInt(output, record, NativeKitUIConstants.NKUI_LAYOUT_NODE_TEXT_DIRECTION_OFFSET, nodeParagraphStyle.direction.rawValue());
 			if (nodeParagraphStyle.tabWidth < 0) throw "Tab width cannot be negative";
 			writeInt(output, record, NativeKitUIConstants.NKUI_LAYOUT_NODE_TAB_WIDTH_OFFSET, nodeParagraphStyle.tabWidth);
 			writeInt(output, record, NativeKitUIConstants.NKUI_LAYOUT_NODE_TEXT_FLAGS_OFFSET, 0);

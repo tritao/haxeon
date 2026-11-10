@@ -1230,9 +1230,9 @@ class RestyleInPlaceTests {
 
     check(haxeon.Equality.equals(new haxeon.ui.Rect(1.0, 2.0, 3.0, 4.0), new haxeon.ui.Rect(1.0, 2.0, 3.0, 4.0))
       && !haxeon.Equality.equals(new haxeon.ui.Rect(1.0, 2.0, 3.0, 4.0), new haxeon.ui.Rect(1.0, 2.0, 3.0, 5.0)), "Rect equality is wrong");
-    var caret = new haxeon.ui.TextLayout.TextCaret(1, 2, -3, 4, 0.5, 1);
-    check(haxeon.Equality.equals(caret, new haxeon.ui.TextLayout.TextCaret(1, 2, -3, 4, 0.5, 1))
-      && !haxeon.Equality.equals(caret, new haxeon.ui.TextLayout.TextCaret(1, 2, -3, 4, 0.5, -1)),
+    var caret = new haxeon.ui.TextLayout.TextCaret(1, 2, -3, 4, 0.5, haxeon.ui.TextDirection.Ltr.rawValue());
+    check(haxeon.Equality.equals(caret, new haxeon.ui.TextLayout.TextCaret(1, 2, -3, 4, 0.5, haxeon.ui.TextDirection.Ltr.rawValue()))
+      && !haxeon.Equality.equals(caret, new haxeon.ui.TextLayout.TextCaret(1, 2, -3, 4, 0.5, haxeon.ui.TextDirection.Rtl.rawValue())),
       "Caret geometry equality ignores a field");
     var metrics = new haxeon.ui.TextLayout.TextMetrics(1, 2, 3, 4);
     check(haxeon.Equality.equals(metrics, new haxeon.ui.TextLayout.TextMetrics(1, 2, 3, 4))

@@ -4806,3 +4806,25 @@ editor and headless modules build; allocation and size comparison is performed a
 
 Validation for this group: compiler suite **856/856**; the complete UI snapshot matrix passes **36 positive and
 150 negative** checks across the three targets with inlining off/on. Both frozen production modules build.
+
+### Closed native text codes (2026-11-10)
+
+`FontFamily`, `TextAlignment`, `TextWrap` and `TextDirection` retain their native integer contracts from
+`include/nativekit_ui.h` and implement `RawRepresentable`. Font family is the finite native role code
+(Default 0, Emoji 1, Monospace 4), not an arbitrary font identifier; reserved codes 2 and 3 are rejected.
+The four types have no implicit Int conversion. Text-layout calls, font registration and transaction encoding
+project their values explicitly with `rawValue()`.
+
+`TextCaret.direction` retains its existing scalar native-code ABI. Comparisons and geometry equality tests
+project declared direction cases explicitly with `rawValue()`. Converting every native caret through nullable
+`fromRaw()` would introduce a 16-byte scalar box per query (the already measured nullable ABI assigned to a2),
+so that conversion is not introduced. Scalar field storage and the native transaction format are unchanged.
+
+The text-code fixture checks every declared value, unknown values, reserved font codes and encoded transaction
+bytes. Eight negative fixtures reject implicit Int conversions in both directions for every type. Batch gates,
+allocation and module-size comparisons are recorded at the measured batch head.
+
+Validation: compiler suite **856/856**; full Wasm parity and the expanded UI snapshot matrix pass, with
+**42 positive and 198 negative** checks across HashLink, Wasm32 and Wasm GC with inlining off/on. Final editor,
+headless and both Web modules build, and the app/CAD and all retention scenarios pass. The remaining batch UI
+and paired performance gates are recorded at the measured batch head.

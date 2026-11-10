@@ -32,7 +32,7 @@ for inline in 0 1; do
             net_hxi="$root/packages/platform/bindings/nativekit-net-wasm.hxi"
             ui_hxi="$ui/bindings/nativekit-ui-wasm.hxi"
         fi
-        for entry in local-snapshot host-lifecycle style-kinds cursor-shape layout-codes layout-policies; do
+        for entry in local-snapshot host-lifecycle style-kinds cursor-shape layout-codes layout-policies text-codes; do
             artifact="$tmp/$entry-$inline-$target.$suffix"
             if ! HAXEON_INLINE="$inline" "$hl" "$compiler" "${options[@]}" --entry="$entry" --output="$artifact" "${common[@]}" \
                     --ffi-interface="$platform_hxi" --ffi-projection="$root/packages/platform/bindings/nativekit.hxmap" \
@@ -74,7 +74,7 @@ JS
             fi
             echo "PASS: $entry on $target, inline=$inline"
         done
-        for entry in host-lifecycle-raw-int host-lifecycle-to-int style-kinds-raw-string style-kinds-to-string cursor-shape-raw-int cursor-shape-to-int layout-codes-sizing-raw-int layout-codes-sizing-to-int layout-codes-visual-raw-int layout-codes-visual-to-int layout-policies-direction-raw-int layout-policies-direction-to-int layout-policies-alignment-x-raw-int layout-policies-alignment-x-to-int layout-policies-alignment-y-raw-int layout-policies-alignment-y-to-int layout-policies-distribution-raw-int layout-policies-distribution-to-int layout-policies-positioning-raw-int layout-policies-positioning-to-int layout-policies-wrap-raw-int layout-policies-wrap-to-int layout-policies-self-alignment-raw-int layout-policies-self-alignment-to-int layout-policies-integer-property; do
+        for entry in host-lifecycle-raw-int host-lifecycle-to-int style-kinds-raw-string style-kinds-to-string cursor-shape-raw-int cursor-shape-to-int layout-codes-sizing-raw-int layout-codes-sizing-to-int layout-codes-visual-raw-int layout-codes-visual-to-int layout-policies-direction-raw-int layout-policies-direction-to-int layout-policies-alignment-x-raw-int layout-policies-alignment-x-to-int layout-policies-alignment-y-raw-int layout-policies-alignment-y-to-int layout-policies-distribution-raw-int layout-policies-distribution-to-int layout-policies-positioning-raw-int layout-policies-positioning-to-int layout-policies-wrap-raw-int layout-policies-wrap-to-int layout-policies-self-alignment-raw-int layout-policies-self-alignment-to-int layout-policies-integer-property text-codes-font-family-raw-int text-codes-font-family-to-int text-codes-alignment-raw-int text-codes-alignment-to-int text-codes-wrap-raw-int text-codes-wrap-to-int text-codes-direction-raw-int text-codes-direction-to-int; do
             if HAXEON_INLINE="$inline" "$hl" "$compiler" "${options[@]}" --entry="$entry" \
                     --output="$tmp/rejected.$suffix" "${common[@]}" \
                     --ffi-interface="$platform_hxi" --ffi-projection="$root/packages/platform/bindings/nativekit.hxmap" \
