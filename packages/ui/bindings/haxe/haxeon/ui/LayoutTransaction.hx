@@ -168,10 +168,10 @@ class LayoutTransaction {
 			writeInt(output, record, NativeKitUIConstants.NKUI_LAYOUT_NODE_ID_OFFSET, node.id);
 			writeInt(output, record, NativeKitUIConstants.NKUI_LAYOUT_NODE_PARENT_OFFSET, parents[index]);
 			writeInt(output, record, NativeKitUIConstants.NKUI_LAYOUT_NODE_VISUAL_KIND_OFFSET,
-				cast node.visualKind);
-			writeInt(output, record, NativeKitUIConstants.NKUI_LAYOUT_NODE_WIDTH_SIZING_OFFSET, cast style.width.sizing);
+				node.visualKind.rawValue());
+			writeInt(output, record, NativeKitUIConstants.NKUI_LAYOUT_NODE_WIDTH_SIZING_OFFSET, style.width.sizing.rawValue());
 			writeFloat(output, record, NativeKitUIConstants.NKUI_LAYOUT_NODE_WIDTH_VALUE_OFFSET, style.width.value);
-			writeInt(output, record, NativeKitUIConstants.NKUI_LAYOUT_NODE_HEIGHT_SIZING_OFFSET, cast style.height.sizing);
+			writeInt(output, record, NativeKitUIConstants.NKUI_LAYOUT_NODE_HEIGHT_SIZING_OFFSET, style.height.sizing.rawValue());
 			writeFloat(output, record, NativeKitUIConstants.NKUI_LAYOUT_NODE_HEIGHT_VALUE_OFFSET, style.height.value);
 			writeFloat(output, record, NativeKitUIConstants.NKUI_LAYOUT_NODE_WIDTH_MIN_OFFSET, style.width.min);
 			writeFloat(output, record, NativeKitUIConstants.NKUI_LAYOUT_NODE_WIDTH_MAX_OFFSET, style.width.max);
@@ -348,12 +348,12 @@ class LayoutTransaction {
 		return finite(value) && value > 0.0;
 
 	static function axisDescription(axis:LayoutAxis):String {
-		return "[" + (axis.sizing:Int) + "," + axis.value + "," + axis.min + "," + axis.max + "," + axis.growWeight + "]";
+		return "[" + axis.sizing.rawValue() + "," + axis.value + "," + axis.min + "," + axis.max + "," + axis.growWeight + "]";
 	}
 
 	static function validAxis(axis:LayoutAxis):Bool {
-		var sizing:Int = cast axis.sizing;
-		if (sizing < LayoutSizing.Fit || sizing > LayoutSizing.Percent ||
+		var sizing = axis.sizing.rawValue();
+		if (sizing < LayoutSizing.Fit.rawValue() || sizing > LayoutSizing.Percent.rawValue() ||
 			!finite(axis.value) || axis.value < 0.0 || !finite(axis.min) ||
 			axis.min < 0.0 || !finite(axis.max) || axis.max < 0.0 ||
 			!finite(axis.growWeight) || axis.growWeight <= 0.0)

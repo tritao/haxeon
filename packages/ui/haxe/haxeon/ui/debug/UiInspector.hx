@@ -154,7 +154,7 @@ class UiInspector {
 		var effectDescriptions = describeEffects(effects);
 		var backdropEffectDescriptions = describeEffects(backdropEffects);
 		output.push(new UiNodeSnapshot(node.id.value, parentId, depth,
-			cast node.layout.visualKind, bounds, clip, content,
+			node.layout.visualKind.rawValue(), bounds, clip, content,
 			geometry != null && geometry.visible, node.enabled, node.focusable,
 			focused != null && focused.equals(node.id),
 			(node.states).contains(StyleState.Hovered) ||

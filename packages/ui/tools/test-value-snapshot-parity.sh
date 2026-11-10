@@ -32,7 +32,7 @@ for inline in 0 1; do
             net_hxi="$root/packages/platform/bindings/nativekit-net-wasm.hxi"
             ui_hxi="$ui/bindings/nativekit-ui-wasm.hxi"
         fi
-        for entry in local-snapshot host-lifecycle style-kinds cursor-shape; do
+        for entry in local-snapshot host-lifecycle style-kinds cursor-shape layout-codes; do
             artifact="$tmp/$entry-$inline-$target.$suffix"
             if ! HAXEON_INLINE="$inline" "$hl" "$compiler" "${options[@]}" --entry="$entry" --output="$artifact" "${common[@]}" \
                     --ffi-interface="$platform_hxi" --ffi-projection="$root/packages/platform/bindings/nativekit.hxmap" \
@@ -74,7 +74,7 @@ JS
             fi
             echo "PASS: $entry on $target, inline=$inline"
         done
-        for entry in host-lifecycle-raw-int host-lifecycle-to-int style-kinds-raw-string style-kinds-to-string cursor-shape-raw-int cursor-shape-to-int; do
+        for entry in host-lifecycle-raw-int host-lifecycle-to-int style-kinds-raw-string style-kinds-to-string cursor-shape-raw-int cursor-shape-to-int layout-codes-sizing-raw-int layout-codes-sizing-to-int layout-codes-visual-raw-int layout-codes-visual-to-int; do
             if HAXEON_INLINE="$inline" "$hl" "$compiler" "${options[@]}" --entry="$entry" \
                     --output="$tmp/rejected.$suffix" "${common[@]}" \
                     "$ui/tests/value-types/$entry.hx" > "$tmp/rejected.log" 2>&1; then

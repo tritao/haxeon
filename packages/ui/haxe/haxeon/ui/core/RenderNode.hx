@@ -262,7 +262,7 @@ class RenderNode {
 	 */
 	public function fingerprint():Int {
 		var hash = fingerprintHash.reset();
-		hash.addInt(haxeon.Diff.fingerprint(layout.style)).addInt(cast layout.visualKind).addString(layout.text)
+		hash.addInt(haxeon.Diff.fingerprint(layout.style)).addInt(layout.visualKind.rawValue()).addString(layout.text)
 			.addInt(layout.measureVersion).addBool(hitTestSelf).addBool(focusable).addBool(enabled)
 			.addString(semantics == null ? null : semantics.label);
 		var text = layout.textColor;

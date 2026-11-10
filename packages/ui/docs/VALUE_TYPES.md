@@ -4767,3 +4767,21 @@ Every Wasm32 run again records 3,840 allocation calls / 132,480 bytes, one colle
 | 5 | 572,144 / 10,528 | 572,144 / 10,528 |
 
 All ten selection captures and ten Web captures pass. Successful captures were removed after extracting these measurements. Aggregate records retain every pair, module hash and result; budget ceilings and measurement rules are unchanged.
+
+### Closed layout transaction codes (2026-11-10)
+
+`LayoutVisualKind` and the currently retained `LayoutSizing` code type are native contracts: their values are the
+`nkui_layout_visual_kind` (1–4) and `nkui_layout_sizing` (0–3) fields of the NativeUI binary transaction declared in
+`include/nativekit_ui_layout.h`. They now implement `RawRepresentable`, with synthesized `rawValue()` and checked
+`fromRaw()` and no implicit Int conversions. The encoder, content fingerprint and snapshot boundary use explicit
+raw projections; native record values and scalar storage are unchanged.
+
+This does not land the withheld payload sizing conversion: its measured E3/E6/E7 blocker remains recorded in
+STRUCTS.md. `LayoutAxis.value`/`growWeight` remain part of that unfinished conversion, with one existing sizing API.
+The payload-free UI alignment/direction policies are separate from these native code contracts and remain assigned
+to the plain-enum group.
+
+The layout-code fixture checks every declared value, unknown inputs, value equality and encoded native bytes on
+HashLink, Wasm32 and Wasm GC with inlining off/on. Four negative fixtures reject implicit Int conversions in both
+directions for both types. The expanded UI snapshot matrix passes 30 positive and 60 negative checks; the compiler
+suite passes 856/856. Production allocation and module-size comparisons are recorded at the next gated batch head.
