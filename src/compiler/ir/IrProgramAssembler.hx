@@ -510,7 +510,7 @@ class IrProgramAssembler {
 	public static function assemble(generator:IrGenerator, functions:Array<IrFunction>, ?natives:Array<IrNative>, ?objects:Array<IrObject>, ?interfaces:Array<IrInterface>,
 			?enums:Array<IrEnum>, ?staticFields:Array<IrStaticField>, ?staticInitializers:Array<IrFunction>, ?entryPoint:String, ?cNatives:Array<IrCNative>,
 			?reflectableObjects:Array<String>, ?staticChecks:IrStaticCheckCache,
-			?valueTarget:compiler.ir.IrValueLaneLayout.IrValueLaneTarget, ?exportedFunctions:Array<String>):IrProgram {
+			?valueTarget:compiler.ir.IrValueLaneLayout.IrValueLaneTarget, ?exportedFunctions:Array<String>, ?pruneUnreachable:Bool):IrProgram {
 		var program = new IrProgram("__entry");
 		var allFunctions:Array<IrFunction> = [];
 		if (staticInitializers != null)
@@ -527,6 +527,33 @@ class IrProgramAssembler {
 				builder.returnValue(builder.constInt(count));
 				allFunctions.push(new IrFunction(object.name + ".$haxeonObservableFieldCount", builder.arguments, I32, builder.blocks));
 			}
+		// A plain HashLink build drops what nothing reaches before any pass looks at it: the passes, the program-wide enum and closure
+		// classifications and the verifier then see only the program that runs, and a runtime module that nothing uses cannot change how
+		// the rest is represented. The roots are the entry, the static initializers and the exported functions.
+		if (pruneUnreachable == true && objects != null) {
+			var entryName = entryPoint;
+			if (entryName == null)
+				for (fn in allFunctions)
+					if (fn.name == "main" || fn.name == "Main.main")
+						entryName = fn.name;
+			if (entryName != null) {
+				var scope = new IrProgram(entryName);
+				scope.functions = allFunctions;
+				scope.objects = objects;
+				scope.interfaces = interfaces == null ? [] : interfaces;
+				scope.natives = natives == null ? [] : natives;
+				var roots:Array<String> = [];
+				if (staticInitializers != null)
+					for (initializer in staticInitializers)
+						roots.push(initializer.name);
+				if (exportedFunctions != null)
+					for (name in exportedFunctions)
+						roots.push(name);
+				IrReachability.prune(scope, IrReachability.withGeneratedRuntimeRoots(scope, entryName, roots, true));
+				allFunctions = scope.functions;
+				objects = scope.objects;
+			}
+		}
 		if (objects != null)
 			allFunctions = IrEnumDynamicDispatch.rewrite(allFunctions);
 		if (objects != null)

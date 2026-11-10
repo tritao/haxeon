@@ -3,11 +3,11 @@ import compiler.runtime.CompilerIntrinsics;
 import compiler.hl.HlWriter;
 
 class GeneratedEqualityProvenanceMain {
-	static function create(sources:Map<String, String>):Compiler {
+	static function create(sources:Map<String, String>, live = false):Compiler {
 		var c = new Compiler();
 		CompilerIntrinsics.register(c);
 		c.addStandardLibrarySourceRoot("stdlib");
-		c.livePatching = false;
+		c.livePatching = live;
 		c.developmentMetadata = true;
 		for (path => source in sources)
 			c.update(path, source);
@@ -43,8 +43,10 @@ class GeneratedEqualityProvenanceMain {
 					c.update(path, edited.get(path));
 					var warmResult = c.compile("Main");
 					if (valueType.indexOf("height") >= 0) {
-						var generatedOps = 0;
-						for (fn in warmResult.ir.functions)
+						// The helpers for nullable fields are generated even when nothing calls them; a plain build prunes them as unreachable,
+						// so their provenance is checked on a live build, which keeps every function.
+						var generatedOps = 0, liveResult = create(edited, true).compile("Main");
+						for (fn in liveResult.ir.functions)
 							for (block in fn.blocks)
 								for (located in block.instructions)
 									switch located.provenance.origin {
