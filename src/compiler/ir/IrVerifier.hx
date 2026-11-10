@@ -54,6 +54,9 @@ class IrVerifier {
 			var name = forbidden(type);
 			if (name != null) throw 'IR inline enum "$name" retains nominal value storage in $where';
 		}
+		// The hot checks build their message only when they fail: `check(type, 'operand ${fn.name}')` concatenated a string for every
+		// operand of every instruction, passing or not.
+		function fails(type:IrType):Bool return forbidden(type) != null;
 		var escapes:Map<String, Bool> = [], functions = [for (fn in program.functions) fn.name => fn],
 			nativeSymbols = [for (native in program.natives) native.name => native.symbol];
 		for (name => declaration in selected) {
@@ -93,13 +96,16 @@ class IrVerifier {
 			if (memo != null && memo.enumChecked.get(fn.name) == fn) continue;
 			var original = IrTypedInterfaceDispatch.originalEntryName(fn.name);
 			if (escapes.exists(original)) continue;
-			for (argument in fn.arguments) check(argument.type, 'argument ${fn.name}');
-			check(fn.result, 'result ${fn.name}');
-			var descriptors:Map<Int, IrType> = [];
+			for (argument in fn.arguments) if (fails(argument.type)) check(argument.type, 'argument ${fn.name}');
+			if (fails(fn.result)) check(fn.result, 'result ${fn.name}');
+			var descriptors:Null<Map<Int, IrType>> = null;
 			for (block in fn.blocks) for (located in block.instructions) switch located.value {
-				case TypeValue(out, type) if (forbidden(type) != null): descriptors.set(out.id, type);
+				case TypeValue(out, type) if (forbidden(type) != null):
+					if (descriptors == null) descriptors = [];
+					descriptors.set(out.id, type);
 				default:
 			}
+			var anyDescriptors = descriptors != null;
 			function descriptorUse(value:IrValue, instruction:Null<IrInstruction>):Void {
 				var type = descriptors.get(value.id);
 				if (type == null) return;
@@ -129,20 +135,31 @@ class IrVerifier {
 				}
 				if (!valid) check(type, 'non-array descriptor use ${fn.name}');
 			}
-			for (binding in fn.debugBindings) { check(binding.value.type, 'debug binding ${fn.name}'); descriptorUse(binding.value, null); }
+			for (binding in fn.debugBindings) {
+				if (fails(binding.value.type)) check(binding.value.type, 'debug binding ${fn.name}');
+				if (anyDescriptors) descriptorUse(binding.value, null);
+			}
 			for (block in fn.blocks) {
 				for (located in block.instructions) {
 					var instruction = located.value, out = IrOperands.output(instruction);
-					if (out != null) check(out.type, 'instruction output ${fn.name}');
-					for (input in IrOperands.inputs(instruction)) { check(input.type, 'instruction operand ${fn.name}'); descriptorUse(input, instruction); }
+					if (out != null && fails(out.type)) check(out.type, 'instruction output ${fn.name}');
+					for (input in IrOperands.inputs(instruction)) {
+						if (fails(input.type)) check(input.type, 'instruction operand ${fn.name}');
+						if (anyDescriptors) descriptorUse(input, instruction);
+					}
 					switch instruction {
-						case Phi(_, inputs): for (input in inputs) { check(input.value.type, 'phi input ${fn.name}'); descriptorUse(input.value, null); }
+						case Phi(_, inputs): for (input in inputs) {
+							if (fails(input.value.type)) check(input.value.type, 'phi input ${fn.name}');
+							if (anyDescriptors) descriptorUse(input.value, null);
+						}
 						case MakeEnum(_, name, _, _) if (selected.exists(name)): check(Enum(name), 'boxed constructor ${fn.name}');
 						default:
 					}
 				}
 				if (block.terminator != null) switch block.terminator.value {
-					case Return(value), Throw(value), Rethrow(value), Branch(value, _, _): check(value.type, 'terminator ${fn.name}'); descriptorUse(value, null);
+					case Return(value), Throw(value), Rethrow(value), Branch(value, _, _):
+						if (fails(value.type)) check(value.type, 'terminator ${fn.name}');
+						if (anyDescriptors) descriptorUse(value, null);
 					default:
 				}
 			}
