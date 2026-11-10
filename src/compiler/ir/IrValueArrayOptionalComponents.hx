@@ -88,9 +88,9 @@ class IrValueArrayOptionalComponents {
 			shiftValue = shift.call(getName(), [shiftArray, shiftIndex], wrapper);
 		shift.call("__value_array_remove_at", [shiftArray, shiftIndex], Void);
 		shift.returnValue(shiftValue);
-		return [new IrFunction(getName(), get.arguments, wrapper, get.blocks, Serves(TypeKey.of(element), ProviderOperation.detailed(ProviderOperation.ValueArrayHelper, getName()))), new IrFunction(setName(), set.arguments, Void, set.blocks, Serves(TypeKey.of(element), ProviderOperation.detailed(ProviderOperation.ValueArrayHelper, setName()))),
-			new IrFunction(pushName(), push.arguments, I32, push.blocks, Serves(TypeKey.of(element), ProviderOperation.detailed(ProviderOperation.ValueArrayHelper, pushName()))), new IrFunction(insertName(), insert.arguments, Void, insert.blocks, Serves(TypeKey.of(element), ProviderOperation.detailed(ProviderOperation.ValueArrayHelper, insertName()))),
-			new IrFunction(unshiftName(), unshift.arguments, I32, unshift.blocks, Serves(TypeKey.of(element), ProviderOperation.detailed(ProviderOperation.ValueArrayHelper, unshiftName()))), new IrFunction(popName(), pop.arguments, wrapper, pop.blocks, Serves(TypeKey.of(element), ProviderOperation.detailed(ProviderOperation.ValueArrayHelper, popName()))),
-			new IrFunction(shiftName(), shift.arguments, wrapper, shift.blocks, Serves(TypeKey.of(element), ProviderOperation.detailed(ProviderOperation.ValueArrayHelper, shiftName())))];
+		return [new IrFunction(getName(), get.arguments, wrapper, get.blocks, Serves(TypeKey.of(element), ProviderOperation.detailed(ProviderOperation.ValueArrayElement, getName()))), new IrFunction(setName(), set.arguments, Void, set.blocks, Serves(TypeKey.of(element), ProviderOperation.detailed(ProviderOperation.ValueArrayElement, setName()))),
+			new IrFunction(pushName(), push.arguments, I32, push.blocks, Serves(TypeKey.of(element), ProviderOperation.detailed(ProviderOperation.ValueArrayElement, pushName()))), new IrFunction(insertName(), insert.arguments, Void, insert.blocks, Serves(TypeKey.of(element), ProviderOperation.detailed(ProviderOperation.ValueArrayElement, insertName()))),
+			new IrFunction(unshiftName(), unshift.arguments, I32, unshift.blocks, Serves(TypeKey.of(element), ProviderOperation.detailed(ProviderOperation.ValueArrayElement, unshiftName()))), new IrFunction(popName(), pop.arguments, wrapper, pop.blocks, Serves(TypeKey.of(element), ProviderOperation.detailed(ProviderOperation.ValueArrayElement, popName()))),
+			new IrFunction(shiftName(), shift.arguments, wrapper, shift.blocks, Serves(TypeKey.of(element), ProviderOperation.detailed(ProviderOperation.ValueArrayElement, shiftName())))];
 	}
 }

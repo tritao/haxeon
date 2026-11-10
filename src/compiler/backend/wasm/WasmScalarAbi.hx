@@ -72,18 +72,7 @@ class WasmScalarAbi {
 				&& instanceMethods.exists(fn.name.substr(compiler.ir.IrOptionalScalarFlow.PREFIX.length)))
 				instanceMethods.set(fn.name, true);
 		for (fn in program.functions) {
-			if ((StringTools.startsWith(fn.name, "$") && !StringTools.startsWith(fn.name, "$generic:") && !StringTools.startsWith(fn.name, compiler.ir.GenericOwnerErasure.METHOD_REFERENCE_PREFIX) && !StringTools.startsWith(fn.name, WasmScalarClosureEscapes.RESTORE_CALL_PREFIX) && !StringTools.startsWith(fn.name, "$value$equality:") && !StringTools.startsWith(fn.name, "$equality:") && !compiler.types.typing.HashGenerator.isHashName(fn.name)
-					&& !compiler.types.typing.EnumEqualityGenerator.isEqualityName(fn.name)
-					&& !StringTools.startsWith(fn.name, "$lambda:") && !StringTools.startsWith(fn.name, "$iteration-adapter:")
-					&& !StringTools.startsWith(fn.name, compiler.ir.IrInlineEnumCaseAccess.HELPER_PREFIX)
-					&& !StringTools.startsWith(fn.name, compiler.ir.IrTypedInterfaceDispatch.PREFIX)
-					&& !StringTools.startsWith(fn.name, compiler.ir.IrTypedInterfaceDispatch.ADAPTER_PREFIX)
-					&& !StringTools.startsWith(fn.name, compiler.ir.IrValueInterfaceBoxes.UNBOX_PREFIX)
-					&& !StringTools.startsWith(fn.name, compiler.ir.IrOptionalScalarFlow.PREFIX)
-					&& !StringTools.startsWith(fn.name, compiler.ir.IrNullableScalarFlow.CALL_PREFIX)
-					&& !StringTools.startsWith(fn.name, compiler.ir.IrValueArrayElements.PREFIX)
-					&& !StringTools.startsWith(fn.name, compiler.types.typing.KeyPathTyping.HELPER_PREFIX)
-					&& !compiler.ir.IrOptionalValueFlow.isBoundaryHelper(fn.name)) || instanceMethods.exists(fn.name)) continue;
+			if ((StringTools.startsWith(fn.name, "$") && !compiler.ir.IrProviders.scalarAbiHelper(fn, true)) || instanceMethods.exists(fn.name)) continue;
 			var args = [for (argument in fn.arguments) argument.type], hasValue = values.isValue(fn.result), safe = scalarizable(fn.result);
 			for (argument in args) { if (values.isValue(argument)) hasValue = true; if (!scalarizable(argument)) safe = false; }
 			if (hasValue && safe) {

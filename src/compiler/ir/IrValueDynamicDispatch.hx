@@ -1,6 +1,7 @@
 package compiler.ir;
 
 import compiler.Provides.ProviderOperation;
+import compiler.Provides.ProviderOperation;
 import compiler.ir.Ir;
 import compiler.ir.SourceProvenance.Located;
 
@@ -8,6 +9,12 @@ import compiler.ir.SourceProvenance.Located;
 class IrValueDynamicDispatch {
 	static inline final EQUAL = "$value-dynamic-equal";
 	static inline final EQUALITY_PREFIX = "$value$equality:";
+
+	static function isValueEquality(fn:IrFunction):Bool
+		return switch fn.provides {
+			case Serves(type, operation): !type.isEnum() && IrProviders.base(operation) == ProviderOperation.Equals;
+			case None: false;
+		};
 
 	public static function rewrite(functions:Array<IrFunction>, objects:Array<IrObject>):Array<IrFunction> {
 		var values:Map<String, Bool> = [for (object in objects) if (object.isValue) object.name => true];
@@ -28,7 +35,7 @@ class IrValueDynamicDispatch {
 		}
 		// Reflection can box a field without a source-level conversion. Its requested
 		// equality function still carries the concrete value type in its signature.
-		for (fn in functions) if (StringTools.startsWith(fn.name, EQUALITY_PREFIX) && fn.arguments.length == 2
+		for (fn in functions) if (isValueEquality(fn) && fn.arguments.length == 2
 				&& (switch fn.arguments[0].type { case Obj(name): values.exists(name); default: false; }))
 			register(fn.name.substr(EQUALITY_PREFIX.length), fn.arguments[0].type);
 		for (fn in functions) for (block in fn.blocks) for (located in block.instructions) switch located.value {

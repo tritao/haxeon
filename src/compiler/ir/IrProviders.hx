@@ -1,33 +1,135 @@
 package compiler.ir;
 
 import compiler.Provides;
+import compiler.Provides.ProviderOperation;
+
+/** Kinds of derived function (see `IrProviders.families`). */
+enum DerivedFamily {
+	Lambda;
+	FunctionAdapter;
+	IterationAdapter;
+	Generic;
+	KeyPathCompose;
+	ScalarArgumentsClone;
+	OptionalScalarClone;
+	NullableArgumentsClone;
+	WasmRestoreCall;
+	Other;
+}
 
 /**
  * The table of generated helpers: which function serves which operation on which type. A generator states it when it creates the
  * function (`IrFunction.provides`), so the table is an index over the functions, not a second thing to keep in step with them.
  *
- * Nothing reads the table yet except `check`. It exists so that the passes that today recognize a helper by the prefix of its name
- * (the hand-kept lists in `FrontendCompilation.generatedHelpersStillCalled`, `WasmScalarAbi`, `IrScalarArguments`,
- * `IrOptionalScalarFlow`, `EnumEqualityGenerator.isEqualityName` and `HashGenerator.isHashName`, and the prefix scans of
- * `IrEnumDynamicDispatch`, `IrValueDynamicDispatch` and `IrTypedInterfaceDispatch`) can ask it instead, and the lists be deleted.
- * That is the next step (ADR 0003 section 13): do not add another prefix list in the meantime.
+ * The passes that need to know what a generated function is (the scalar call ABI of the HashLink and Wasm backends, the optional-scalar
+ * flow, the dispatchers, the typing-time liveness of shared helpers) ask this table through the functions below; none of them
+ * recognizes a helper by the prefix of its name any more. Do not add a prefix list: give the generator's operation a place here.
+ * The names that remain are those of derived functions (`families`), which serve no type.
  */
 class IrProviders {
-	/**
-	 * `$`-named functions that are not helpers for a type, by name prefix: a lambda, an adapter, a clone of another function made for
-	 * a calling convention, a specialization of a generic, a marker the backends read. Everything else starting with `$` must say what it
-	 * serves. This is the one list that remains; it names families of derived functions, which have no type to be keyed by.
-	 */
-	static final derivedPrefixes = [
-		"$enum-interface:", "$keypath.compose:", "$lambda:", "$lambda-env:", "$function-adapter:", "$iteration-adapter:", "$generic:", "$scalar-arguments:", "$optional-scalar:", "$nullable-scalar:arguments:",
-		"$scalar-closure:", "$word:", "$lane:", "$lane-runtime:", "$lane-storage:", "$value-dynamic-equal", "$enum-dynamic-equal", "$enum-dynamic-reflect", "$value-interface-object-type-id", "$hl:", "$wasm", "$type-dependency:", "$to-string", "$fresh-constructor:",
-		"$receiver-readonly:", "$haxeon"
+	/** Kinds of `$`-named function that are not helpers for a type: copies of another function, closures, adapters, markers. */
+	public static final families:Array<{prefix:String, family:DerivedFamily}> = [
+		{prefix: "$lambda:", family: Lambda},
+		{prefix: "$lambda-env:", family: Lambda},
+		{prefix: "$function-adapter:", family: FunctionAdapter},
+		{prefix: "$iteration-adapter:", family: IterationAdapter},
+		{prefix: "$enum-interface:", family: Other},
+		{prefix: "$keypath.compose:", family: KeyPathCompose},
+		{prefix: "$generic:", family: Generic},
+		{prefix: "$scalar-arguments:", family: ScalarArgumentsClone},
+		{prefix: "$optional-scalar:", family: OptionalScalarClone},
+		{prefix: "$nullable-scalar:arguments:", family: NullableArgumentsClone},
+		{prefix: "$scalar-closure:", family: Other},
+		{prefix: "$wasm:closure-restore-call:", family: WasmRestoreCall},
+		{prefix: "$wasm", family: Other},
+		{prefix: "$word:", family: Other},
+		{prefix: "$lane:", family: Other},
+		{prefix: "$lane-runtime:", family: Other},
+		{prefix: "$lane-storage:", family: Other},
+		{prefix: "$hl:", family: Other},
+		{prefix: "$value-dynamic-equal", family: Other},
+		{prefix: "$enum-dynamic-equal", family: Other},
+		{prefix: "$enum-dynamic-reflect", family: Other},
+		{prefix: "$value-interface-object-type-id", family: Other},
+		{prefix: "$type-dependency:", family: Other},
+		{prefix: "$to-string", family: Other},
+		{prefix: "$fresh-constructor:", family: Other},
+		{prefix: "$receiver-readonly:", family: Other},
+		{prefix: "$haxeon", family: Other}
 	];
 
-	public static function isDerivedName(name:String):Bool {
-		for (prefix in derivedPrefixes)
-			if (StringTools.startsWith(name, prefix))
-				return true;
+	/** The kind of derived function `name` is, or null when it is not one. This list is the one place such names are recognized. */
+	public static function familyOf(name:String):Null<DerivedFamily> {
+		if (!StringTools.startsWith(name, "$"))
+			return null;
+		for (entry in families)
+			if (StringTools.startsWith(name, entry.prefix))
+				return entry.family;
+		return null;
+	}
+
+	public static function isDerivedName(name:String):Bool
+		return familyOf(name) != null;
+
+	/** The operation without the detail words after its first colon. */
+	public static function base(operation:String):String {
+		var colon = operation.indexOf(":");
+		return colon < 0 ? operation : operation.substr(0, colon);
+	}
+
+	/**
+	 * Whether a `$`-named function takes part in the scalar call ABI as an ordinary function does (the others are boundary helpers
+	 * whose signatures the ABI must not change). Functions not named `$` always take part: callers test that themselves. `wasm` adds
+	 * the kinds only the Wasm backends make.
+	 */
+	public static function scalarAbiHelper(fn:IrFunction, wasm:Bool = false):Bool
+		return switch fn.provides {
+			case Serves(_, operation):
+				switch base(operation) {
+					case ProviderOperation.Equals, ProviderOperation.ReflectEquals, ProviderOperation.Hash, ProviderOperation.InlineEnumHelper,
+						ProviderOperation.TypedInterfaceEntry, ProviderOperation.InterfaceUnbox, ProviderOperation.GenericMethodReference,
+						ProviderOperation.KeyPath, ProviderOperation.OptionalBox, ProviderOperation.OptionalUnbox, ProviderOperation.ValueArrayElement,
+						ProviderOperation.DynamicDispatch: true;
+					default: false;
+				}
+			case None:
+				switch familyOf(fn.name) {
+					case Lambda, IterationAdapter, Generic, KeyPathCompose, OptionalScalarClone: true;
+					case WasmRestoreCall, NullableArgumentsClone: wasm;
+					default: false;
+				}
+		};
+
+	/** Whether a call to `fn` may pass an optional-scalar alias as an argument: `$` functions that do not keep it. */
+	public static function passesAliases(fn:IrFunction):Bool
+		return switch fn.provides {
+			case Serves(type, operation):
+				switch base(operation) {
+					case ProviderOperation.Equals: !type.isEnum();
+					case ProviderOperation.Hash: true;
+					default: false;
+				}
+			case None:
+				switch familyOf(fn.name) {
+					case Lambda, Generic: true;
+					default: false;
+				}
+		};
+
+	/** Whether `fn` is the equality helper of a value type, or a copy of one made for the scalar call ABI. */
+	public static function isValueEquality(fn:IrFunction, byName:Map<String, IrFunction>):Bool {
+		var current = fn;
+		while (current != null) {
+			switch current.provides {
+				case Serves(type, operation):
+					return base(operation) == ProviderOperation.Equals && !type.isEnum();
+				case None:
+			}
+			if (familyOf(current.name) != ScalarArgumentsClone)
+				return false;
+			var original = IrScalarArguments.originalName(current.name);
+			current = original == null ? null : byName.get(original);
+		}
 		return false;
 	}
 

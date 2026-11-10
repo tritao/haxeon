@@ -27,13 +27,25 @@ enum abstract ProviderOperation(String) to String {
 	var OptionalFieldHelper = "optional-field-helper";
 	var NullableScalarHelper = "nullable-scalar-helper";
 	var CheckedCast = "checked-cast";
-	var ValueArrayHelper = "value-array-helper";
+	var ValueArrayElement = "value-array-element";
+	var ValueArraySlot = "value-array-slot";
+	var ValueArrayMethod = "value-array-method";
+	var ValueArrayAccess = "value-array-access";
 	var GenericErased = "generic-erased";
 	var GenericTypeTest = "generic-type-test";
 	var GenericMethodReference = "generic-method-reference";
 	var DynamicStructure = "dynamic-structure";
 	var StaticInitializer = "static-initializer";
 	var ReceiverCheck = "receiver-check";
+
+	/**
+	 * Whether the helpers of this operation are generated on demand from a request in one module and called from others, so a module
+	 * that is no longer reachable still holds helpers that reachable code calls (`FrontendCompilation.generatedHelpersStillCalled`).
+	 */
+	public static function sharedAcrossModules(operation:String):Bool {
+		var colon = operation.indexOf(":"), base = colon < 0 ? operation : operation.substr(0, colon);
+		return base == Equals || base == ReflectEquals || base == CustomMethod || base == Hash || base == Wire || base == Json;
+	}
 
 	/** An operation with a further word that tells apart the helpers of one family for a type: `custom-method:hash`, `wire:value-encode`. */
 	public static inline function detailed(base:String, detail:String):ProviderOperation

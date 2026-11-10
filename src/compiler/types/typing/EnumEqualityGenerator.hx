@@ -17,9 +17,6 @@ class EnumEqualityGenerator {
 	public static inline final REFLECTIVE_PREFIX = "$enum-reflect-equals:";
 
 	/** Both generated operations keep a semantic value signature when eligible enums become inline values. */
-	public static function isEqualityName(name:String):Bool
-		return StringTools.startsWith(name, EQUALS_PREFIX) || StringTools.startsWith(name, REFLECTIVE_PREFIX);
-
 	public static function equalsName(type:CompilerType):String
 		return EQUALS_PREFIX + Sha256.encode(compiler.semantic.SemanticSignature.type(type)).substr(0, 32);
 

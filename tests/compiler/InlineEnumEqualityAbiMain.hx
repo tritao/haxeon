@@ -44,7 +44,8 @@ class InlineEnumEqualityAbiMain {
 			};
 			b.returnValue(result);
 			program.functions.push(new IrFunction(field == "tag" ? tagName : field == "number" ? numberName : ownerName,
-				b.arguments, result.type, b.blocks, None));
+				b.arguments, result.type, b.blocks, compiler.Provides.Serves(compiler.ir.TypeKey.of(Obj(shape.valueObject.name)),
+					compiler.Provides.ProviderOperation.detailed(compiler.Provides.ProviderOperation.InlineEnumHelper, field))));
 		}
 		for (name in [equality, reflective]) {
 			var b = new IrBuilder(), a = b.argument("first", storage), z = b.argument("second", storage),
@@ -57,7 +58,9 @@ class InlineEnumEqualityAbiMain {
 			b.select(payload);
 			b.branch(b.equal(b.call(numberName, [a], I32), b.call(numberName, [z], I32)), owners, different);
 			b.select(owners); b.returnValue(b.equal(b.call(ownerName, [a], Obj(owner.name)), b.call(ownerName, [z], Obj(owner.name))));
-			program.functions.push(new IrFunction(name, b.arguments, Bool, b.blocks, None));
+			program.functions.push(new IrFunction(name, b.arguments, Bool, b.blocks,
+				compiler.Provides.Serves(compiler.ir.TypeKey.of(Enum(declaration.name)),
+					name == equality ? compiler.Provides.ProviderOperation.Equals : compiler.Provides.ProviderOperation.ReflectEquals)));
 		}
 		var prepare = new IrBuilder(), reference = prepare.newObject(owner.name);
 		prepare.fieldSet(reference, "id", prepare.constInt(2));

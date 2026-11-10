@@ -82,7 +82,7 @@ class IrValueArrayPlaceMethods {
 				position = builder.argument("index", I32);
 			builder.call(helpers.checker(request.path, false), [array, position], Void);
 			builder.returnValue(bridge.readValue(builder, array, position, request.type, request.path));
-			result.push(new IrFunction(name, builder.arguments, request.type, builder.blocks, Serves(TypeKey.of(element), ProviderOperation.detailed(ProviderOperation.ValueArrayHelper, name))));
+			result.push(new IrFunction(name, builder.arguments, request.type, builder.blocks, Serves(TypeKey.of(element), ProviderOperation.detailed(ProviderOperation.ValueArrayElement, name))));
 		}
 		for (name in writes) {
 			var request = valueWrites.get(name), builder = new IrBuilder(), array = builder.argument("array", Array(element)),
@@ -90,7 +90,7 @@ class IrValueArrayPlaceMethods {
 			builder.call(helpers.checker(request.path, false), [array, position], Void);
 			bridge.writeValue(builder, array, position, value, request.type, request.path);
 			builder.returnValue(builder.constVoid());
-			result.push(new IrFunction(name, builder.arguments, Void, builder.blocks, Serves(TypeKey.of(element), ProviderOperation.detailed(ProviderOperation.ValueArrayHelper, name))));
+			result.push(new IrFunction(name, builder.arguments, Void, builder.blocks, Serves(TypeKey.of(element), ProviderOperation.detailed(ProviderOperation.ValueArrayElement, name))));
 		}
 		finished = true;
 		return result;
@@ -462,7 +462,7 @@ class IrValueArrayPlaceMethods {
 		var debug = [for (binding in fn.debugBindings) if (!aliases.exists(binding.value.id) && !optionalScalars.exists(binding.value.id)
 			&& !virtualFresh.exists(binding.value.id) && !optionalFresh.exists(binding.value.id)) binding];
 		return new IrFunction(name, [array, index].concat(fn.arguments.slice(1)), fn.result, blocks,
-			Serves(TypeKey.of(element), ProviderOperation.detailed(ProviderOperation.ValueArrayHelper, name)), debug, fn.inlineHint, fn.retention);
+			Serves(TypeKey.of(element), ProviderOperation.detailed(ProviderOperation.ValueArrayMethod, name)), debug, fn.inlineHint, fn.retention);
 	}
 
 	function request(receiverType:IrType, method:String, path:Array<String>):String {

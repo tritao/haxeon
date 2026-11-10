@@ -25,6 +25,10 @@ abstract TypeKey(String) {
 	public inline function toString():String
 		return this;
 
+	/** Whether this is the key of an enum type. */
+	public inline function isEnum():Bool
+		return StringTools.startsWith(this, "enum:");
+
 	static function text(type:IrType):String
 		return switch type {
 			case Void: "void";

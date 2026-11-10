@@ -17,9 +17,6 @@ class HashGenerator {
 	public static function hashName(type:CompilerType):String
 		return "$hash" + ValueEqualityGenerator.equalsName(type);
 
-	public static function isHashName(name:String):Bool
-		return StringTools.startsWith(name, HASH_PREFIX);
-
 	public static function request(session:TypingSession, type:CompilerType, origin:String, span:SourceSpan):Void {
 		var name = hashName(type);
 		if (!session.hashRequests.exists(name))

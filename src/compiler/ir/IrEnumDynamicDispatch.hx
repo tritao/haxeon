@@ -20,8 +20,15 @@ class IrEnumDynamicDispatch {
 			requests.set(name, type);
 		}
 		for (fn in functions) {
-			var prefix = StringTools.startsWith(fn.name, "$enum-equals:") ? "$enum-equals:"
-				: StringTools.startsWith(fn.name, "$enum-reflect-equals:") ? "$enum-reflect-equals:" : null;
+			var prefix = switch fn.provides {
+				case Serves(type, operation) if (type.isEnum()):
+					switch IrProviders.base(operation) {
+						case ProviderOperation.Equals: compiler.types.typing.EnumEqualityGenerator.EQUALS_PREFIX;
+						case ProviderOperation.ReflectEquals: compiler.types.typing.EnumEqualityGenerator.REFLECTIVE_PREFIX;
+						default: null;
+					}
+				default: null;
+			};
 			if (prefix != null && fn.arguments.length == 2) switch fn.arguments[0].type {
 				case Enum(_): register(EnumDynamicBox.PREFIX + fn.name.substr(prefix.length), fn.arguments[0].type);
 				default:
@@ -103,8 +110,12 @@ class IrEnumDynamicDispatch {
 
 	/** Keep typed reflective equality roots and their nested enum dependencies. */
 	static function pruneReflectiveHelpers(functions:Array<IrFunction>):Array<IrFunction> {
-		var prefix = "$enum-reflect-equals:", helpers:Map<String, IrFunction> = [], live:Map<String, Bool> = [], pending:Array<String> = [];
-		for (fn in functions) if (StringTools.startsWith(fn.name, prefix)) helpers.set(fn.name, fn);
+		var helpers:Map<String, IrFunction> = [], live:Map<String, Bool> = [], pending:Array<String> = [];
+		for (fn in functions)
+			switch fn.provides {
+				case Serves(type, operation) if (type.isEnum() && IrProviders.base(operation) == ProviderOperation.ReflectEquals): helpers.set(fn.name, fn);
+				default:
+			}
 		function mark(name:String):Void {
 			if (helpers.exists(name) && !live.exists(name)) { live.set(name, true); pending.push(name); }
 		}
@@ -115,11 +126,11 @@ class IrEnumDynamicDispatch {
 			}
 		}
 		for (fn in functions)
-			if (!StringTools.startsWith(fn.name, prefix)) scan(fn);
+			if (!helpers.exists(fn.name)) scan(fn);
 			else if (fn.retention != compiler.ir.IrFunction.IrRetention.Reachable) mark(fn.name);
 		var index = 0;
 		while (index < pending.length) scan(helpers.get(pending[index++]));
-		return [for (fn in functions) if (!StringTools.startsWith(fn.name, prefix) || live.exists(fn.name)) fn];
+		return [for (fn in functions) if (!helpers.exists(fn.name) || live.exists(fn.name)) fn];
 	}
 
 	static function isEnum(type:IrType):Bool return switch type { case Enum(_): true; default: false; };

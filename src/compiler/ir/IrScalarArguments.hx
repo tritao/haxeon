@@ -31,22 +31,12 @@ class IrScalarArguments {
 				case StaticClosure(_, name), InstanceClosure(_, name, _): closureTargets.set(name, true);
 				default:
 			}
+		var byName:Map<String, IrFunction> = [for (fn in program.functions) fn.name => fn];
 		var candidates:Map<String, IrFunction> = [], pinnedCandidates:Map<String, IrFunction> = [], freshOnly:Map<String, Bool> = [], terminalOnly:Map<String, Bool> = [];
 		// Methods that call out may snapshot only a fresh receiver: a field place can be changed by an alias
 		// while the method runs, and must keep its original receiver ABI.
 		for (fn in program.functions) {
-			if (StringTools.startsWith(fn.name, "$") && !StringTools.startsWith(fn.name, "$lambda:")
-				&& !StringTools.startsWith(fn.name, "$iteration-adapter:")
-				&& !StringTools.startsWith(fn.name, IrInlineEnumCaseAccess.HELPER_PREFIX)
-				&& !StringTools.startsWith(fn.name, IrTypedInterfaceDispatch.PREFIX)
-				&& !StringTools.startsWith(fn.name, IrTypedInterfaceDispatch.ADAPTER_PREFIX)
-				&& !StringTools.startsWith(fn.name, IrValueInterfaceBoxes.UNBOX_PREFIX)
-				&& !StringTools.startsWith(fn.name, GenericOwnerErasure.METHOD_REFERENCE_PREFIX)
-				&& !compiler.types.typing.HashGenerator.isHashName(fn.name)
-				&& !compiler.types.typing.EnumEqualityGenerator.isEqualityName(fn.name)
-				&& !StringTools.startsWith(fn.name, compiler.types.typing.KeyPathTyping.HELPER_PREFIX)
-				&& !StringTools.startsWith(fn.name, "$generic:") && !StringTools.startsWith(fn.name, "$value$equality:") && !StringTools.startsWith(fn.name, "$equality:") && !StringTools.startsWith(fn.name, IrOptionalScalarFlow.PREFIX)
-				&& !IrOptionalValueFlow.isBoundaryHelper(fn.name) && !StringTools.startsWith(fn.name, IrValueArrayElements.PREFIX)) continue;
+			if (StringTools.startsWith(fn.name, "$") && !IrProviders.scalarAbiHelper(fn)) continue;
 			var hasValue = isValue(fn.result, objects), eligible = true, pinnedEligible = !argumentsOnly, pinnedHasValue = hasValue,
 				argumentCount = 0, pinnedArgumentCount = 1;
 			if (argumentsOnly && hasValue) eligible = false;
@@ -95,7 +85,7 @@ class IrScalarArguments {
 					if (freshOnly.exists(fn.name) && arg.name == "this" && !receiverSnapshotOnly(fn, arg, objects, candidates, resolution, terminalOnly.exists(fn.name))) retained = true;
 				}
 				var table = IrObjectTable.of(objects), layouts = new IrInlineValueLayout(table);
-				var prepared = rewriteCalls(clone(fn, objects), candidates, pinnedCandidates, objects, resolution, methodNames, freshOnly, terminalOnly, argumentsOnly);
+				var prepared = rewriteCalls(clone(fn, objects), byName, candidates, pinnedCandidates, objects, resolution, methodNames, freshOnly, terminalOnly, argumentsOnly);
 				// Scalar call rewriting can introduce value constructions into a join. Split those joins before
 				// judging whether the specialized callee can keep its value arguments and result in registers.
 				prepared = IrValuePhiScalarization.rewriteFunction(prepared, objects, table, layouts);
@@ -118,7 +108,7 @@ class IrScalarArguments {
 					if (isValue(arg.type, objects) && !fieldOnly(fn, arg, objects, allCandidates, resolution, methodNames)) retained = true;
 				}
 				var table = IrObjectTable.of(objects), layouts = new IrInlineValueLayout(table);
-				var prepared = rewriteCalls(clone(fn, objects, true), candidates, pinnedCandidates, objects, resolution, methodNames, freshOnly, terminalOnly, argumentsOnly);
+				var prepared = rewriteCalls(clone(fn, objects, true), byName, candidates, pinnedCandidates, objects, resolution, methodNames, freshOnly, terminalOnly, argumentsOnly);
 				prepared = IrValuePhiScalarization.rewriteFunction(prepared, objects, table, layouts);
 				var specialized = IrScalarReplacement.rewrite(prepared, table, true, true);
 				var scalarLocals = new compiler.ir.hl.HlScalarValueLocals(specialized, new compiler.ir.hl.HlLoweringView([], objects), _ -> 0);
@@ -135,7 +125,7 @@ class IrScalarArguments {
 		}
 		if (!candidates.keys().hasNext() && !pinnedCandidates.keys().hasNext()) return;
 		var rewritten:Array<IrFunction> = [];
-		for (fn in program.functions) rewritten.push(rewriteCalls(fn, candidates, pinnedCandidates, objects, resolution, methodNames, freshOnly, terminalOnly, argumentsOnly));
+		for (fn in program.functions) rewritten.push(rewriteCalls(fn, byName, candidates, pinnedCandidates, objects, resolution, methodNames, freshOnly, terminalOnly, argumentsOnly));
 		for (fn in program.functions) if (candidates.exists(fn.name))
 			rewritten.push(clones.get(fn.name));
 		// Receiver-preserving variants are only useful when a rewritten call selects one.
@@ -426,7 +416,7 @@ class IrScalarArguments {
 		return new IrFunction(PREFIX + (preserveReceiver ? "$receiver:" : "") + fn.name, args, returnSlots.length > 0 ? Void : fn.result, blocks, None, fn.debugBindings, fn.inlineHint);
 	}
 
-	static function rewriteCalls(fn:IrFunction, candidates:Map<String, IrFunction>, pinnedCandidates:Map<String, IrFunction>, objects:Map<String, IrObject>,
+	static function rewriteCalls(fn:IrFunction, byName:Map<String, IrFunction>, candidates:Map<String, IrFunction>, pinnedCandidates:Map<String, IrFunction>, objects:Map<String, IrObject>,
 			resolution:IrMethodResolution, methodNames:Map<String, Bool>, freshOnly:Map<String, Bool>, terminalOnly:Map<String, Bool>, argumentsOnly:Bool):IrFunction {
 		var next = nextId(fn), changed = false, blocks:Array<IrBlock> = [];
 		var closures:Map<Int, {name:String, receiver:Null<IrValue>}> = [];
@@ -451,7 +441,7 @@ class IrScalarArguments {
 							terminalFresh = freshForTerminal(fn, receiver, objects, name, resolution);
 						var ordinaryFresh = name != null && !terminalOnly.exists(name) && freshForCandidate(fn, receiver, objects, candidates, name, resolution);
 						if (name == null || (!candidates.exists(name) && !pinnedCandidates.exists(name)) || ((argumentsOnly || freshOnly.exists(name)) && !pinnedCandidates.exists(name) && !terminalFresh && !ordinaryFresh
-							&& !(argumentsOnly && !terminalOnly.exists(name) && safeArrayEquality(located.provenance, fn.name)))) located.value;
+							&& !(argumentsOnly && !terminalOnly.exists(name) && safeArrayEquality(located.provenance, fn, byName)))) located.value;
 						else {
 							if (!argumentsOnly && !terminalFresh && !ordinaryFresh) {
 								var checked = new IrValue(next++, "$hl:receiver-check", Void);
@@ -464,8 +454,8 @@ class IrScalarArguments {
 				switch instruction {
 				case Call(out, name, arguments) if ((candidates.exists(name) || pinnedCandidates.exists(name))
 					&& (pinnedCandidates.exists(name) || !freshOnly.exists(name) || terminalFresh || !terminalOnly.exists(name) && arguments.length > 0 && freshForCandidate(fn, arguments[0], objects, candidates, name, resolution)
-						|| argumentsOnly && !terminalOnly.exists(name) && safeArrayEquality(located.provenance, fn.name))
-					&& (!argumentsOnly || terminalFresh || !terminalOnly.exists(name) && (safeArrayEquality(located.provenance, fn.name) || freshValueArguments(fn, arguments, objects)))):
+						|| argumentsOnly && !terminalOnly.exists(name) && safeArrayEquality(located.provenance, fn, byName))
+					&& (!argumentsOnly || terminalFresh || !terminalOnly.exists(name) && (safeArrayEquality(located.provenance, fn, byName) || freshValueArguments(fn, arguments, objects)))):
 					var pinned = pinnedCandidates.exists(name) && (!candidates.exists(name) || freshOnly.exists(name) && !terminalFresh && arguments.length > 0
 						&& (terminalOnly.exists(name) || !freshForCandidate(fn, arguments[0], objects, candidates, name, resolution)));
 					var target = pinned ? pinnedCandidates.get(name) : candidates.get(name), expanded:Array<IrValue> = [];
@@ -531,9 +521,12 @@ class IrScalarArguments {
 		return true;
 	}
 
-	static function safeArrayEquality(provenance:SourceProvenance, functionName:String):Bool {
-		if (StringTools.startsWith(functionName, "$value$equality:")
-			|| StringTools.startsWith(functionName, PREFIX + "$value$equality:")) return true;
+	/** The function `name` is a copy of for the scalar call ABI, or null when it is not such a copy. */
+	public static function originalName(name:String):Null<String>
+		return StringTools.startsWith(name, PREFIX) ? name.substr(PREFIX.length) : null;
+
+	static function safeArrayEquality(provenance:SourceProvenance, fn:IrFunction, byName:Map<String, IrFunction>):Bool {
+		if (IrProviders.isValueEquality(fn, byName)) return true;
 		return switch provenance.origin {
 			case CompilerGenerated("value-array-index-equality"): true;
 			default: false;

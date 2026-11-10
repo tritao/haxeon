@@ -1095,13 +1095,11 @@ class FrontendCompilation {
 			pending:Array<String> = [];
 		for (name => state in modules) {
 			for (cached => fn in state.typedFunctions) {
-				if (!StringTools.startsWith(cached, "$value$equality:")
-					&& !StringTools.startsWith(cached, "$enum-equals:")
-					&& !StringTools.startsWith(cached, "$enum-reflect-equals:")
-					&& !StringTools.startsWith(cached, "$enum-custom:")
-					&& !StringTools.startsWith(cached, "$hash$value$equality:")
-					&& !StringTools.startsWith(cached, "$wire:")
-					&& !StringTools.startsWith(cached, "$json:"))
+				var shared = switch fn.provides {
+					case Serves(_, operation): compiler.Provides.ProviderOperation.sharedAcrossModules(operation);
+					case null, None: false;
+				};
+				if (!shared)
 					continue;
 				if (!holders.exists(cached) || reachable.exists(name))
 					holders.set(cached, state);
