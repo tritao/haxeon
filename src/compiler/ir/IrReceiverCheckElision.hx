@@ -5,13 +5,25 @@ import compiler.ir.Ir;
 /** Remove receiver checks only when a shared must-analysis proves the receiver non-null. */
 class IrReceiverCheckElision {
 	public static function run(fn:IrFunction):IrFunction {
-		var uses:Map<Int, Bool> = [], hasCheck = false;
+		// Most functions have no receiver check: find that out before collecting every use.
+		var hasCheck = false;
+		for (block in fn.blocks) {
+			for (located in block.instructions)
+				switch located.value {
+					case Call(_, name, _) if (name == IrReceiverCheck.NAME): hasCheck = true;
+					default:
+				}
+			if (hasCheck)
+				break;
+		}
+		if (!hasCheck)
+			return fn;
+		var uses:Map<Int, Bool> = [];
 		for (block in fn.blocks) {
 			for (located in block.instructions) {
 				for (value in IrOperands.inputs(located.value)) uses.set(value.id, true);
 				switch located.value {
 					case Phi(_, inputs): for (input in inputs) uses.set(input.value.id, true);
-					case Call(_, name, _) if (name == IrReceiverCheck.NAME): hasCheck = true;
 					default:
 				}
 			}
@@ -21,7 +33,6 @@ class IrReceiverCheckElision {
 			}
 		}
 		for (binding in fn.debugBindings) uses.set(binding.value.id, true);
-		if (!hasCheck) return fn;
 		var facts = new IrNonNullFacts(fn), changed = false, blocks:Array<IrBlock> = [];
 		for (block in fn.blocks) {
 			var copy = new IrBlock(block.id);

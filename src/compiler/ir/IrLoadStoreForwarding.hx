@@ -29,13 +29,14 @@ class IrLoadStoreForwarding {
 				value = substitutions.get(value.id);
 			return value;
 		};
-		var incoming = incomingFields(fn, objects), blocks:Array<IrBlock> = [];
+		// Nothing is copied until a load is forwarded: most functions forward nothing, and a copy of every block that is then thrown away
+		// (with a remapped instruction for each analyzed one) was most of this pass's allocation.
+		var incoming = incomingFields(fn, objects), dropped:Null<haxe.ds.ObjectMap<Dynamic, Bool>> = null, substituted = 0;
 		for (block in fn.blocks) {
 			var fields:Array<KnownField> = incoming.exists(block.id) ? incoming.get(block.id).copy() : [],
 				elements:Array<KnownElement> = [];
-			var copy = new IrBlock(block.id);
 			for (located in block.instructions) {
-				var instruction = IrInliner.remap(located.value, use, function(id:Int):Int return id), drop = false;
+				var instruction = substituted == 0 ? located.value : IrInliner.remap(located.value, use, function(id:Int):Int return id), drop = false;
 				switch instruction {
 					case FieldSet(object, field, value):
 						if (excludedField(value.type, objects) || !plainObject(object.type)) {
@@ -58,6 +59,7 @@ class IrLoadStoreForwarding {
 									known = entry.value;
 							if (known != null && sameType(out.type, known.type)) {
 								substitutions.set(out.id, known);
+								substituted++;
 								drop = true;
 							} else {
 								fields = [
@@ -91,6 +93,7 @@ class IrLoadStoreForwarding {
 									known = entry.value;
 							if (known != null && sameType(out.type, known.type)) {
 								substitutions.set(out.id, known);
+								substituted++;
 								drop = true;
 							} else {
 								elements = [
@@ -106,14 +109,24 @@ class IrLoadStoreForwarding {
 							elements = [];
 						}
 				}
-				if (!drop)
-					copy.instructions.push(located);
+				if (drop) {
+					if (dropped == null)
+						dropped = new haxe.ds.ObjectMap();
+					dropped.set(located, true);
+				}
 			}
+		}
+		if (substituted == 0)
+			return fn;
+		var blocks:Array<IrBlock> = [];
+		for (block in fn.blocks) {
+			var copy = new IrBlock(block.id);
+			for (located in block.instructions)
+				if (dropped == null || !dropped.exists(located))
+					copy.instructions.push(located);
 			copy.terminator = block.terminator;
 			blocks.push(copy);
 		}
-		if (!substitutions.keys().hasNext())
-			return fn;
 		// Rewrite the whole function: successor phis and debug bindings may use deleted outputs.
 		for (block in blocks) {
 			for (index in 0...block.instructions.length) {

@@ -11,6 +11,9 @@ class IrDeadPureValues {
 		default: false;
 	};
 
+	/** What replaces a removed instruction: nothing. Shared, since the rewrite only reads it. */
+	static final none:Array<compiler.ir.SourceProvenance.Located<IrInstruction>> = [];
+
 	public static function run(fn:IrFunction):IrFunction {
 		var definitions:Map<Int, IrInstruction> = [], live:Map<Int, Bool> = [], pending:Array<IrValue> = [];
 		function mark(value:IrValue):Void {
@@ -42,17 +45,9 @@ class IrDeadPureValues {
 			var value = pending.pop(), definition = definitions.get(value.id);
 			if (definition != null) inputs(definition);
 		}
-		var changed = false, blocks:Array<IrBlock> = [];
-		for (block in fn.blocks) {
-			var copy = new IrBlock(block.id);
-			for (located in block.instructions) {
-				var output = IrOperands.output(located.value);
-				if (output != null && !live.exists(output.id) && removable(located.value)) changed = true;
-				else copy.instructions.push(located);
-			}
-			copy.terminator = block.terminator;
-			blocks.push(copy);
-		}
-		return changed ? new IrFunction(fn.name, fn.arguments, fn.result, blocks, fn.debugBindings, fn.inlineHint, fn.retention) : fn;
+		return IrFunctionRewrite.instructions(fn, located -> {
+			var output = IrOperands.output(located.value);
+			return output != null && !live.exists(output.id) && removable(located.value) ? none : null;
+		});
 	}
 }
