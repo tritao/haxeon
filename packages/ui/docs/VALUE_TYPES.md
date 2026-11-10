@@ -4739,3 +4739,31 @@ Loaded module SHA-256 identities:
 | webgc.wasm | `ea8f61e73e8434cacf7afff98b47933417587bb27f8769eb440453bd6a75acfc` | `f663371e9dac47c9bc3c15456b5cad9657b6e5728c7114775a49c5fc92e76721` |
 
 The control editor worker lost its connection before producing a module; the existing one-shot path compiled the explicitly selected control source successfully. This was not a guest measurement retry. Captures were deleted after extraction; the exact-action harness was restored and remains measurement-only in the detached checkout. New build and capture outputs are on root; recorded superseded DATA1 outputs were removed.
+
+### Quiet-machine selection and Wasm32 timing check (2026-11-10)
+
+The timing findings in the preceding checkpoint were investigated before starting the next enum conversion group. Five fixed alternating pairs repeat **selection-stress only**, using the original `093617bb` control and `19843cdd` candidate modules and the unchanged 60-cycle budget scenario. A further five pairs repeat the Wasm32 full scene with the same guests and 120 warmup / 120 measured frames. No capture was selected or retried.
+
+An unrelated eight-worker compiler suite and its subsequent Wasm parity run were allowed to finish first; no other session’s process was stopped. Live sampling before the repeat showed about 93% idle CPU and no active compiler work. The pre-existing background Node process remained unchanged. Only the benchmark’s own browser workers were active during the Web comparisons.
+
+| Pair | Selection control ms | Selection candidate ms | Wasm32 control median / p95 ms | Wasm32 candidate median / p95 ms |
+|---|---:|---:|---:|---:|
+| 1 | 2.44 | 2.42 | 1.50 / 2.00 | 1.50 / 2.00 |
+| 2 | 2.43 | 2.41 | 1.60 / 2.10 | 1.80 / 2.30 |
+| 3 | 2.41 | 2.46 | 1.40 / 2.10 | 1.50 / 2.00 |
+| 4 | 2.43 | 2.43 | 1.50 / 2.00 | 1.50 / 2.10 |
+| 5 | 2.45 | 2.43 | 1.40 / 2.10 | 1.50 / 2.10 |
+
+**Selection medians tie at 2.43 ms; Wasm32 median/p95 tie at 1.50 / 2.10 ms.** Neither earlier timing shift reproduces in the quiet window. This supports host contention rather than a persistent compiler regression; the individual interfering process was not isolated experimentally. Per the investigation’s stopping rule, no bisect or code change is justified by these results. Source and loaded-module hashes are unchanged from the preceding checkpoint.
+
+Every Wasm32 run again records 3,840 allocation calls / 132,480 bytes, one collection and a 262,160-byte largest allocation. Heap medians tie at 572,144-byte high-water and 10,528-byte measured growth; individual readings are retained below rather than described as identical:
+
+| Pair | Control heap high-water / growth bytes | Candidate heap high-water / growth bytes |
+|---|---:|---:|
+| 1 | 572,864 / 10,752 | 572,144 / 10,528 |
+| 2 | 572,144 / 10,528 | 572,176 / 10,752 |
+| 3 | 572,144 / 10,528 | 572,144 / 10,528 |
+| 4 | 572,144 / 10,528 | 572,144 / 10,528 |
+| 5 | 572,144 / 10,528 | 572,144 / 10,528 |
+
+All ten selection captures and ten Web captures pass. Successful captures were removed after extracting these measurements. Aggregate records retain every pair, module hash and result; budget ceilings and measurement rules are unchanged.
