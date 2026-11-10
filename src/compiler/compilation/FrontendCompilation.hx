@@ -653,7 +653,7 @@ class FrontendCompilation {
 		} else {
 			ir = IrProgramAssembler.assemble(generator, cached, irNatives, generated.objects, generated.interfaces, generated.enums,
 				generated.staticFields, generated.initializers, entryPoint, irCNatives, generated.reflectable, context.inlineCache().staticChecks,
-				context.valueArrayTarget(), context.exportedFunctions(), !context.isWasmTarget() && !context.livePatching);
+				context.valueArrayTarget(), context.exportedFunctions());
 			var cNativeNames = [for (native in irCNatives) native.name].join(","),
 				ownPrints:Map<String, String> = [];
 			for (fn in cached)

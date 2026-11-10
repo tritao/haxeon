@@ -19,9 +19,9 @@ class ReachabilityPruneMain {
 		compiler.addStandardLibrarySourceRoot("stdlib");
 		compiler.update("Main.hx", source);
 		var result = compiler.compile("Main", null, false);
-		// The passes already see only what is reachable, so the program in the result is pruned too.
+		// The program in the result keeps everything; the module is what is pruned.
 		var irNames:Map<String, Bool> = [for (fn in result.ir.functions) fn.name => true];
-		expect(!irNames.exists("Main.unusedFree") && !irNames.exists("Dead.never"), "the program the passes produce has no unreachable function");
+		expect(irNames.exists("Main.unusedFree") && irNames.exists("Dead.never"), "the program in the result is complete");
 		var names = result.functionIndices;
 		expect(names.exists("main"), "main stays");
 		expect(!names.exists("Main.unusedFree") && !names.exists("unusedFree"), "a function nothing calls is not in the module");
