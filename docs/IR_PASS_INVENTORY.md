@@ -4,6 +4,29 @@ Status: proposal, no code. Builds on section B of [`WARM_REBUILD_REUSE.md`](WARM
 file:line evidence). This document adds the measured edit-build cost per pass and proposes the order and the per-pass interface.
 Out of scope: the Wasm builders' own internal passes (ADR 0004 moves the runtime library code, so they will change first).
 
+## Internal marker migration (a1)
+
+These unchecked families encode compiler meaning in names today. Each family must move its producers and consumers together;
+the boxes are checked only when the string representation and its parser are gone. Ordinary source names and diagnostic
+interpolation are not markers.
+
+- [ ] Closure adapter and cast signature hashes (`__haxeon_closure_adapter_`, `__haxeon_closure_cast_`); verifier and Wasm adapters.
+- [ ] Function origins and scalar ABI eligibility: the duplicated prefix lists in `IrScalarArguments` and `WasmScalarAbi`,
+  including lambda, generic, equality/hash, iteration, interface, optional, nullable, key-path and array helpers.
+- [ ] Value-array slot, element, factory, bridge and place-method names (`$value-array:`), including encoded type and path.
+- [ ] Scalar word and lane pack/unpack, lane runtime/storage and HL scalar references (`$word:`, `$lane:`, `$lane-runtime:`,
+  `$lane-storage:`, `$hl:scalar-*`); receiver and reference checks.
+- [ ] Scalar arguments/closures and Wasm scalar return, result, rethrow, function and closure-restore markers.
+- [ ] Enum dynamic box/view/unbox/test, equality/reflection, tag, inline enum and enum specialization markers.
+- [ ] Value dynamic and interface box/unbox/type-test, typed interface dispatch, checked casts and generic erasure markers.
+- [ ] Optional field/value/scalar and nullable scalar helper markers, including wrappers and call boundaries.
+- [ ] Typing-generated flags, raw-representable, equality/hash, wire/JSON, key-path and receiver-readonly markers; runtime
+  type dependencies and fresh-constructor markers where consumed as compiler metadata.
+- [ ] Wasm GC holder/place and lane-storage markers, and backend-generated array accessors and runtime names that are parsed.
+
+Canonical IR serialization must change version with the typed representation. Generated symbols may still need unique
+linkage names, but compiler decisions must use declared data rather than recover meaning from those names.
+
 ## Measurement
 
 App edit build (one-line edit in `src/Main.hx` of the app, after a cold build and two no-op builds in the same worker), pre-merge
