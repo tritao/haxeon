@@ -69,6 +69,7 @@ class TestCatalog {
 		"OpportunityCensusMain",
 		"AllocationReportMain",
 		"GenericDynamicArgumentMain",
+		"GenericScalarMapOwnerMain",
 		"GenericStructFunctionMain",
 		"GenericOwnerPolicyMain",
 		"GenericOwnerRecursionMain",

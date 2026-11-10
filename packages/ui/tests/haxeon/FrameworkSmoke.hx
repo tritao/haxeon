@@ -257,6 +257,7 @@ import haxeon.ui.host.UiHostContext;
 import haxeon.ui.host.UiHostRuntime;
 import haxeon.ui.host.UiApplication;
 import haxeon.ui.host.UiHostPendingResources;
+import haxeon.ui.host.BrowserUiHostOptions.BrowserUiFontAsset;
 
 class FrameworkSmoke {
 	@:access(haxeon.ui.core.UiContext)
@@ -4864,10 +4865,12 @@ class FrameworkSmoke {
 	}
 
 	static function hostPendingResourcesValid():Bool {
-		var pending = new UiHostPendingResources<String>();
-		pending.add("first", "font-a");
-		pending.add("second", "font-b");
-		if (pending.remaining != 2 || pending.resolve("first") != "font-a" ||
+		var pending = new UiHostPendingResources<BrowserUiFontAsset>();
+		var first = new BrowserUiFontAsset("font-a", "first", "first.ttf", FontFamily.Default);
+		var second = new BrowserUiFontAsset("font-b", "second", "second.ttf", FontFamily.Default);
+		pending.add("first", first);
+		pending.add("second", second);
+		if (pending.remaining != 2 || pending.resolve("first") != first ||
 			pending.remaining != 1) return false;
 		pending.cancel();
 		return pending.remaining == 0 && pending.resolve("second") == null;

@@ -53,6 +53,11 @@ typedef GenericCallRepresentationResult = {
 
 typedef GenericArgumentTypeResolver = (AstArgument, Null<Map<String, CompilerType>>) -> CompilerType;
 
+typedef ScalarMapRecordPair = {
+	final semantic:Array<compiler.types.Type.AnonymousField>;
+	final physical:Array<compiler.types.Type.AnonymousField>;
+};
+
 /**
  * Owns the boundary between source-level types and emitted representations.
  *
@@ -72,6 +77,7 @@ class TypeRepresentation {
 	final ownerRequests:Map<String, GenericOwnerRepresentation> = [];
 	final requestedOwners:Array<GenericOwnerRepresentation> = [];
 	final ownerAliases:Map<String, String> = [];
+	final checkedSharedMapOwners:Map<String, AstClass> = [];
 
 	public function new(session:TypingSession) {
 		this.session = session;
@@ -206,8 +212,10 @@ class TypeRepresentation {
 			if (ownerContainsValue(argument) || (switch argument { case TDynamic: false; default: ownerUsesGenericEnum(declaration, declaration.typeParameters[index]); }))
 				needsSpecialization = true;
 		}
-		if (!needsSpecialization)
+		if (!needsSpecialization) {
+			validateSharedMapStorage(type, name, declaration, arguments);
 			return null;
+		}
 		var substitutions:Map<String, CompilerType> = [], policies:Array<String> = [], representations:Array<CompilerType> = [];
 		for (index in 0...arguments.length) {
 			var parameter = declaration.typeParameters[index],
@@ -233,6 +241,87 @@ class TypeRepresentation {
 		ownerRequests.set(result.name, result);
 		requestedOwners.push(result);
 		return result;
+	}
+
+	/** a2 removes this rejection when shared owners preserve scalar map storage. */
+	function validateSharedMapStorage(type:CompilerType, owner:String, declaration:AstClass, arguments:Array<CompilerType>):Void {
+		var scalarArgument = false;
+		for (argument in arguments) if (mayEraseScalarMapArgument(argument)) scalarArgument = true;
+		if (!scalarArgument) return;
+		var key = SemanticSignature.type(type);
+		if (checkedSharedMapOwners.get(key) == declaration) return;
+		var semantic = nominalSubstitutions(type), erased = erasedNominalSubstitutions(owner);
+		for (field in declaration.fields) {
+			if (field.isStatic) continue;
+			var syntax = session.declarations.resolvedFieldType(owner, field),
+				actual = session.declarations.resolve(syntax, field.span, semantic),
+				physical = session.declarations.resolve(syntax, field.span, erased);
+			if (hasScalarMapErasure(actual, physical, []))
+				throw new CompileError(new Diagnostic("E1009",
+					'Type "${SemanticSignature.display(type)}", field "${field.name}": scalar map values in unspecialized generic owners are not supported yet (${SemanticSignature.display(actual)})', field.span));
+		}
+		if (declaration.base != null)
+			genericOwner(session.declarations.resolve(declaration.base, declaration.span, semantic));
+		checkedSharedMapOwners.set(key, declaration);
+	}
+
+	static function mayEraseScalarMapArgument(type:CompilerType):Bool
+		return switch type {
+			case TInt, TInt64, TBool, TFloat, TString: true;
+			case TAbstract(_, _, representation), TNullable(representation): mayEraseScalarMapArgument(representation);
+			default: false;
+		};
+
+	static function hasScalarMapErasure(actual:CompilerType, physical:CompilerType,
+			seen:Array<ScalarMapRecordPair>):Bool {
+		return switch actual {
+			case TAbstract(_, _, representation):
+				hasScalarMapErasure(representation, switch physical { case TAbstract(_, _, value): value; default: physical; }, seen);
+			case TMap(key, value): switch physical {
+				case TMap(erasedKey, erasedValue):
+					var storage = RuntimeType.mapName(TString, value);
+					(storage != null && storage != "map_string_ref" && storage != RuntimeType.mapName(TString, erasedValue))
+						|| hasScalarMapErasure(key, erasedKey, seen) || hasScalarMapErasure(value, erasedValue, seen);
+				default: false;
+			};
+			case TNullable(value), TArray(value), TIterator(value): switch physical {
+				case TNullable(erasedValue), TArray(erasedValue), TIterator(erasedValue): hasScalarMapErasure(value, erasedValue, seen);
+				default: false;
+			};
+			case TInstance(_, _, values): switch physical {
+				case TInstance(_, _, erasedValues): scalarMapArguments(values, erasedValues, seen);
+				default: false;
+			};
+			case TFunction(values, result): switch physical {
+				case TFunction(erasedValues, erasedResult): scalarMapArguments(values, erasedValues, seen) || hasScalarMapErasure(result, erasedResult, seen);
+				default: false;
+			};
+			case TKeyPath(root, value, _): switch physical {
+				case TKeyPath(erasedRoot, erasedValue, _): hasScalarMapErasure(root, erasedRoot, seen) || hasScalarMapErasure(value, erasedValue, seen);
+				default: false;
+			};
+			case TAnonymous(_, fields): switch physical {
+				case TAnonymous(_, erasedFields) if (fields.length == erasedFields.length):
+					var active = false;
+					for (pair in seen) if (pair.semantic == fields && pair.physical == erasedFields) active = true;
+					if (active) false else {
+						seen.push({semantic: fields, physical: erasedFields});
+						var found = false;
+						for (index in 0...fields.length) if (hasScalarMapErasure(fields[index].type, erasedFields[index].type, seen)) found = true;
+						seen.pop();
+						found;
+					}
+				default: false;
+			};
+			default: false;
+		};
+	}
+
+	static function scalarMapArguments(actual:Array<CompilerType>, physical:Array<CompilerType>,
+			seen:Array<ScalarMapRecordPair>):Bool {
+		if (actual.length != physical.length) return false;
+		for (index in 0...actual.length) if (hasScalarMapErasure(actual[index], physical[index], seen)) return true;
+		return false;
 	}
 
 	static function validateOwnerComplexity(arguments:Array<CompilerType>, name:String, span:SourceSpan):Void {

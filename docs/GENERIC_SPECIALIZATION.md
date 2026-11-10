@@ -502,10 +502,20 @@ at genuine Dynamic/reflection callable boundaries remain E7 widening work in STR
 
 ### Scalar map storage in an opaque generic owner (a2)
 
-An unspecialized class field `Map<String, V>` still chooses reference-map storage when `V` is a scalar. A minimal
-`ReadView<V>` storing that map, instantiated with `Bool`, reproduces `Can't cast map_string_bool to map_string_ref`
-on HashLink at construction. This is part of a2's typed standard-map/scalar specialization work, not a representation
-that may be reinterpreted unchecked. The compiler's read-only verifier tables now accept typed lookup and membership
+An unspecialized class field `Map<String, V>` chooses reference-map storage when its shared body erases `V`. Before
+the diagnostic below, a minimal `ReadView<Bool>` storing that map reached `Can't cast map_string_bool to map_string_ref`
+on HashLink at construction. Concrete scalar map values (and String's specialized bytes-map storage) may not be
+reinterpreted as reference-map storage.
+
+The compiler now rejects such an unspecialized owner at its field with **E1009**, naming the concrete owner and field:
+`scalar map values in unspecialized generic owners are not supported yet`. The check compares semantic and erased map
+storage through aliases and container types, including inherited fields. Concrete fields whose representation does
+not depend on an owner parameter, reference-map storage, and already specialized owners remain supported. Successful
+checks are cached per concrete type and declaration in the typing session. The negative probe is checked on HashLink,
+Wasm32 and Wasm GC with inlining off/on. **a2 deletes this diagnostic and its rejection tests** when typed standard-map
+storage and scalar owner specialization preserve the layout. This commit does not implement scalar specialization.
+
+ The compiler's read-only verifier tables now accept typed lookup and membership
 callbacks instead of owning an erased map: each callback reads its concrete map kind, and the generic view preserves
 its nullable result type. The `generic-map-read-view` fixture checks false, true, missing keys and reference values on
 all three targets with both inlining settings. This does not add scalar specialization or claim allocation-free
