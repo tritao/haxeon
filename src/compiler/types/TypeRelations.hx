@@ -8,6 +8,7 @@ import compiler.types.StructProperties;
 enum ConversionPlan {
 	Identity;
 	IntToFloat;
+	AbstractIntToFloat;
 	IntToInt64;
 	FromDynamic;
 	AbstractCast;
@@ -55,6 +56,8 @@ class TypeRelations {
 			return WrapNullable;
 		if (abstractConversion(actual, expected))
 			return AbstractCast;
+		if (abstractIntToFloat(actual, expected))
+			return AbstractIntToFloat;
 		if (!isAssignable(actual, expected))
 			return Incompatible;
 		switch actual {
@@ -120,6 +123,8 @@ class TypeRelations {
 			default:
 		}
 		if (abstractConversion(actual, expected))
+			return true;
+		if (abstractIntToFloat(actual, expected))
 			return true;
 		return switch expected {
 			case TDynamic: true;
@@ -475,4 +480,10 @@ class TypeRelations {
 	function abstractConversion(actual:CompilerType, expected:CompilerType):Bool {
 		return declarations.conversions.allows(actual, expected);
 	}
+
+	function abstractIntToFloat(actual:CompilerType, expected:CompilerType):Bool
+		return switch [actual, expected] {
+			case [TAbstract(_, _, TInt), TFloat]: declarations.conversions.allowsDirectTo(actual, TInt);
+			default: false;
+		};
 }

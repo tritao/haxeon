@@ -75,6 +75,19 @@ class AbstractConversionGraph {
 				}
 		};
 
+	/** A representation conversion declared with `to`, excluding conversion methods. */
+	public function allowsDirectTo(actual:CompilerType, expected:CompilerType):Bool
+		return switch actual {
+			case TAbstract(name, arguments, _):
+				var decl = declarations.abstractDeclaration(name);
+				if (decl == null) return false;
+				var substitutions = appliedSubstitutions(decl.typeParameters, arguments), found = false;
+				for (type in decl.toTypes)
+					if (TypeRelations.equals(expected, declarations.resolve(type, decl.span, substitutions))) found = true;
+				found;
+			default: false;
+		};
+
 	function declaredFrom(actual:CompilerType, name:String, arguments:Array<CompilerType>):Bool {
 		var decl = declarations.abstractDeclaration(name);
 		if (decl == null)

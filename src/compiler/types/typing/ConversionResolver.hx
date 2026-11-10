@@ -77,6 +77,8 @@ class ConversionResolver {
 			case Identity: ValueCopy.bind(session, value, expected);
 			case IntToFloat:
 				new TypedExpression(TIntToFloat(value), TFloat, value.span);
+			case AbstractIntToFloat:
+				new TypedExpression(TIntToFloat(coerce(value, TInt, context, code)), TFloat, value.span);
 			case IntToInt64:
 				new TypedExpression(TIntToInt64(value), TInt64, value.span);
 			case FromDynamic:
