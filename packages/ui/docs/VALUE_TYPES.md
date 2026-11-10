@@ -4660,3 +4660,82 @@ label renaming. The existing enum-tag IR fixture was ported to the new explicit 
 Full parity also found an independent integration issue in f5fe8b0a: frontend verification runs before Wasm constructs
 its closure escape adapters, so `inline-enum-callback-escape` is rejected prematurely. This is the next correctness
 fix; this checkpoint does not claim a Tier 2 pass or authorize publication.
+
+### Closed raw/flags conversions: rebased integration checkpoint (2026-11-10)
+
+Frozen compiler control: `093617bb`; candidate: `19843cdd`, rebased onto `090589e5`. The frozen outer app remains `2de94628c` with the same explicit Flags ports and the already committed NativeIdentity API port from outer `e0b912540`. Both sides use current stdlib/UI sources and the checkout VM at `3ea38fcf`. Compiler source is selected explicitly with `HAXEON_COMPILER_SOURCE`; setting `HAXEON_COMPILER_HL` alone does not select the project compiler. Earlier same-worker attempts were discarded and are excluded here.
+
+All ten UI scripts, full three-target parity including UI snapshots, the freshly compiled app suite (including CAD), and all nine retention scenarios pass. The compiler suite passes **856/856** and self-hosting reaches a fixed point. The String pending-resource smoke test is restored and its original runtime behavior is preserved on all three targets, in both inlining modes. The Wasm closure-verification ordering fixture also checks cold/edit/restore builds, fresh recomputation and rejection of unadapted payloads.
+
+All four production modules differ, so paired measurements were required. Three fixed alternating pairs use one capture per side, without retries or best-run selection. Per-action medians:
+
+| Action | Control KiB | Candidate KiB | Control ms | Candidate ms |
+|---|---:|---:|---:|---:|
+| console->telemetry | 73.00 | 73.00 | 1.23 | 1.01 |
+| hierarchy->sensors | 109.30 | 111.00 | 1.78 | 1.46 |
+| sensors->hierarchy | 78.30 | 78.30 | 1.38 | 1.12 |
+| telemetry->console | 89.40 | 89.40 | 1.30 | 1.07 |
+| hover-away | 13.60 | 13.60 | 0.43 | 0.42 |
+| hover-enter | 0.50 | 0.50 | 0.00 | 0.00 |
+| hover-field | 12.30 | 12.30 | 0.44 | 0.43 |
+| hover-inside | 0.50 | 0.50 | 0.00 | 0.00 |
+| hover-other | 9.90 | 9.90 | 0.42 | 0.42 |
+| idle | 0.30 | 0.30 | 0.01 | 0.01 |
+| idle-focused | 0.30 | 0.30 | 0.01 | 0.01 |
+| scroll-inspector | 21.70 | 21.70 | 0.72 | 0.71 |
+| type-backspace | 16.10 | 16.10 | 0.42 | 0.41 |
+| type-char | 16.10 | 16.10 | 0.42 | 0.42 |
+| selection | — | — | 2.45 | 3.28 |
+
+The hierarchy KiB increase is shared-buffer refill granularity, not additional program allocation: the exact warm second-action window ties in objects and bytes. The same exact comparison includes every tab transition and selection, stopping before timeline serialization. Selection-stress frame time rose 2.45 → 3.28 ms despite identical allocation; this timing finding is retained for follow-up rather than hidden by rerunning.
+
+| Action | Control objects / bytes | Candidate objects / bytes |
+|---|---:|---:|
+| hierarchy->sensors | 1,677 / 117,240 | 1,677 / 117,240 |
+| telemetry->console | 1,713 / 93,208 | 1,713 / 93,208 |
+| console->telemetry | 1,178 / 78,584 | 1,178 / 78,584 |
+| sensors->hierarchy | 1,149 / 79,656 | 1,149 / 79,656 |
+| selection | 8,621 / 580,816 | 8,621 / 580,816 |
+
+All six 500-cycle memory captures pass the unchanged gate. Raw paired results (MiB):
+
+| Pair / version | RSS after warmup | Growth windows | Frame p95 ms |
+|---|---:|---|---:|
+| 1 / control | 10.16 | [30.0, 3.75, 0.78, 5.62] | 3.67 |
+| 1 / candidate | 10.00 | [29.69, 3.59, 0.62, 5.78] | 3.21 |
+| 2 / candidate | 10.47 | [29.84, 3.75, 0.78, 5.94] | 3.03 |
+| 2 / control | 10.00 | [29.84, 3.44, 0.94, 5.62] | 3.78 |
+| 3 / control | 10.00 | [30.47, 3.59, 0.78, 5.62] | 1.84 |
+| 3 / candidate | 10.16 | [29.84, 3.75, 0.78, 5.62] | 2.17 |
+
+Warmup RSS medians are 10.00 → 10.16 MiB; growth-window medians are `[30.00, 3.59, 0.78, 5.62]` → `[29.84, 3.75, 0.78, 5.78]` MiB. The +0.16 MiB shifts remain recorded within the established paired-window bounds; no ceiling changed.
+
+Browser comparisons use 120 warmup and 120 measured frames. Each Wasm GC pair has identical object counts; all thirty browser runs pass:
+
+| Target / scene | Control objects | Candidate objects | Control median / p95 ms | Candidate median / p95 ms |
+|---|---:|---:|---:|---:|
+| Wasm GC / full | 4320 | 4320 | 2.30 / 3.00 | 2.30 / 2.80 |
+| Wasm GC / static | 4320 | 4320 | 2.30 / 2.80 | 2.20 / 2.70 |
+| Wasm GC / text-heavy | 4320 | 4320 | 2.30 / 2.80 | 2.30 / 3.10 |
+| Wasm GC / editing | 8604 | 8604 | 2.70 / 3.50 | 2.50 / 3.10 |
+| Wasm32 / full | — | — | 2.20 / 2.90 | 2.40 / 3.20 |
+
+Wasm32 also ties exactly in every pair: 3,840 measured allocation calls, 132,480 allocated bytes, 572,144-byte heap high-water, 10,528-byte measured heap growth and one collection. Its full-scene median/p95 and Wasm GC text-heavy p95 increases above are recorded timing findings. Wasm32 does not expose a Wasm GC object count.
+
+| Module | Control bytes | Candidate bytes |
+|---|---:|---:|
+| HashLink editor | 105,173,529 | 105,172,608 |
+| HashLink headless editor | 105,979,410 | 105,978,489 |
+| Wasm32 Showcase | 12,041,570 | 12,041,570 |
+| Wasm GC Showcase | 5,903,055 | 5,903,055 |
+
+Loaded module SHA-256 identities:
+
+| Module | Control SHA-256 | Candidate SHA-256 |
+|---|---|---|
+| editor.hl | `5a90c9e1af23e8793c17a60e10a49de902a43bcaaaea72a361a4fc3b6fda7377` | `a6604dd7624cde41c94253029328efd7a506a38cad23d47b78946bb4ff46a475` |
+| headless.hl | `29c93655ad9ff97823b5c0468be8aaa199217229a0f7bbcfb3e97e533f1eec87` | `280640a5b33e5ce3fddccc1ccb282860a1bd7a9dbb244c308428a77be183218f` |
+| web32.wasm | `cb14fbd18e3786cb1746a497b21a4e10a71ce53095a64a12f9a40a122df6a09e` | `3116b56dbab77881a844aafb3642694fbc1ed42f2a96e9ae5502ab519e4b1136` |
+| webgc.wasm | `ea8f61e73e8434cacf7afff98b47933417587bb27f8769eb440453bd6a75acfc` | `f663371e9dac47c9bc3c15456b5cad9657b6e5728c7114775a49c5fc92e76721` |
+
+The control editor worker lost its connection before producing a module; the existing one-shot path compiled the explicitly selected control source successfully. This was not a guest measurement retry. Captures were deleted after extraction; the exact-action harness was restored and remains measurement-only in the detached checkout. New build and capture outputs are on root; recorded superseded DATA1 outputs were removed.
