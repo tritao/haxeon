@@ -183,3 +183,9 @@ recorded no allocation samples, probably because the JIT's inline allocation pat
 transient and retained is therefore by phase and by size class, not by site.
 
 No byte-buffer arena (decided 2026-11-09): per-build byte buffers explain at most about 0.35 GB of the empty pointer-free space; the rest is small-object fragmentation, which is the target of the allocation-regions work.
+
+## Encode phase (2026-11-10)
+
+The encode phase of an app edit build allocated 1379 MB / 18.7M objects; it allocates 376 MB / 10.3M objects after: a chunked, never-reallocating output (`haxeon.io.ByteSink`), per-function span-group bytes in the writer cache, shared snapshot contents, the snapshot cross-check only under `HAXEON_CHECK_REUSE=1`, validation marks that survive a new debug file list, no per-instruction records in `writeFunction`, and the module and its debug sections kept as `SegmentedBytes` (no final copy). Left: the validator (the changed functions plus the tables), the prefix (rebuilt from the symbol tables on every edit that changes them) and re-encoding the changed functions.
+
+Not done, on purpose: Haxeon's own `BytesOutput` (native `realloc` buffer, one exact copy in `getBytes`) is not GC memory and does not fragment pages, so it does not grow in chunks. Follow-up: `.build-id` hashes the written 100 MB file by reading it back; a streaming SHA-256 over the segments would remove that read and its allocation.
