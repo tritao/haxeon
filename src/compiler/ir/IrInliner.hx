@@ -213,6 +213,9 @@ class IrInliner {
 	/** The program's objects and the direct subclasses of each (for resolving a virtual call when every override agrees). */
 	final table:IrObjectTable;
 
+	/** Which function each class and method resolve to, shared with the other passes that resolve calls. */
+	final resolution:IrMethodResolution;
+
 	/** The print of every object of the program, by name. */
 	final objectPrints:Map<String, Int> = [];
 
@@ -284,6 +287,7 @@ class IrInliner {
 			objectPrints.set(name, cache.objectPrintId(name, text));
 		}
 		table = new IrObjectTable(objects, subclasses);
+		resolution = IrMethodResolution.of(program.objects);
 		computeComponents();
 	}
 
@@ -634,35 +638,19 @@ class IrInliner {
 			case Obj(name): name;
 			default: return null;
 		};
-		var target:Null<String> = null, work = [typeName], visited = 0;
-		while (work.length > 0 && visited < 256) {
-			var name = work.pop();
-			visited++;
-			var implementation = implementationIn(name, method);
-			if (implementation == null || (target != null && target != implementation))
-				return null;
-			target = implementation;
-			var children = table.subclassesOf(name);
-			if (children != null)
-				for (child in children)
-					work.push(child);
+		// The answer comes from the shared table; what the walk used to read is recorded for the memo's dependencies: the class
+		// and its bases, and every class that extends it.
+		var consulted = table.consulted;
+		if (consulted != null) {
+			var name:Null<String> = typeName;
+			while (name != null) {
+				var descriptor = table.get(name);
+				name = descriptor == null || descriptor.base == null ? null : Std.string(descriptor.base);
+			}
+			for (name in resolution.subtreeOf(typeName))
+				consulted.set(name, true);
 		}
-		return work.length > 0 ? null : target;
-	}
-
-	function implementationIn(typeName:String, method:String):Null<String> {
-		var name:Null<String> = typeName, steps = 0;
-		while (name != null && steps < 64) {
-			var descriptor = table.get(name);
-			if (descriptor == null)
-				return null;
-			for (candidate in descriptor.methods)
-				if (candidate.name == method)
-					return candidate.functionName;
-			name = descriptor.base == null ? null : Std.string(descriptor.base);
-			steps++;
-		}
-		return null;
+		return resolution.uniqueImplementation(typeName, method);
 	}
 
 	/** Cheap syntactic screen on the original body, before the callee's own calls are inlined. */
