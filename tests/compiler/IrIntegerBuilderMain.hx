@@ -20,7 +20,7 @@ class IrIntegerBuilderMain {
 		var unsigned = builder.unsignedShiftRight(signed, builder.constInt(1));
 		builder.returnValue(builder.add(unsigned, builder.constInt(28, I64)));
 		var program = new IrProgram("main");
-		program.functions = [new IrFunction("main", builder.arguments, I64, builder.blocks)];
+		program.functions = [new IrFunction("main", builder.arguments, I64, builder.blocks, None)];
 		IrVerifier.verify(program);
 		var actual:haxe.Int64 = cast new IrInterpreter(program).run();
 		if (actual != haxe.Int64.ofInt(42)) throw "64-bit integer builder operations gave the wrong result";
@@ -79,9 +79,9 @@ class IrIntegerBuilderMain {
 		b.returnValue(b.constInt(42)); b.select(failed); b.returnValue(b.constInt(1));
 		var program = new IrProgram("main");
 		program.objects = [{name: "WideDefault", isValue: false, base: null, interfaces: [], methods: [], fields: [{name: "word", type: I64}]}];
-		program.functions = [new IrFunction("main", b.arguments, I32, b.blocks)];
+		program.functions = [new IrFunction("main", b.arguments, I32, b.blocks, None)];
 		var entry = new IrBuilder(); entry.call("__exit", [entry.call("main", [], I32)], Void); entry.returnValue(entry.constVoid());
-		program.functions.push(new IrFunction("entry", entry.arguments, Void, entry.blocks));
+		program.functions.push(new IrFunction("entry", entry.arguments, Void, entry.blocks, None));
 		program.natives = [
 			{name: "__array_alloc_i64", library: "haxeon_runtime", symbol: "__array_alloc_i64", arguments: [I32], result: compiler.ir.Ir.IrType.Array(I64)},
 			{name: "__dynamic_equal", library: "haxeon_runtime", symbol: "__dynamic_equal", arguments: [Dyn, Dyn], result: Bool},

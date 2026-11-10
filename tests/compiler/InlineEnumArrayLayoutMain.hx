@@ -17,7 +17,7 @@ class InlineEnumArrayLayoutMain {
 			var shape = planner.shape(declaration.name);
 			if (shape == null) throw "Expected inline element";
 			var program = new IrProgram("main"), body = new IrBuilder(); body.returnValue(body.constInt(42));
-			program.functions = [new IrFunction("main", body.arguments, I32, body.blocks)];
+			program.functions = [new IrFunction("main", body.arguments, I32, body.blocks, None)];
 			program.objects = planner.generatedObjects();
 			program.enums = [{name:declaration.name, cases:declaration.cases, isRecursive:false, inlineStorage:shape.valueObject.name}];
 			var inlineAbi = compiler.abi.RuntimeAbi.describe(program);
@@ -34,7 +34,7 @@ class InlineEnumArrayLayoutMain {
 			}
 			var unchanged = CanonicalIrCodec.decode(CanonicalIrCodec.encode(program));
 			var edited = new IrBuilder(); edited.returnValue(edited.constInt(43));
-			unchanged.functions = [new IrFunction("main", edited.arguments, I32, edited.blocks)];
+			unchanged.functions = [new IrFunction("main", edited.arguments, I32, edited.blocks, None)];
 			switch compiler.abi.PatchPlanner.plan(inlineAbi, compiler.abi.RuntimeAbi.describe(unchanged)) {
 				case Patch:
 				default: throw "A body edit with unchanged enum storage must remain patchable";
@@ -71,8 +71,8 @@ class InlineEnumArrayLayoutMain {
 			var invoke = new IrBuilder(), argument = invoke.argument("payload", Obj(shape.valueObject.name));
 			var closure = invoke.staticClosure("callback", Function([argument.type], I32));
 			invoke.returnValue(invoke.callClosure(closure, [argument], I32));
-			closures.functions = [new IrFunction("main", invoke.arguments, I32, invoke.blocks),
-				new IrFunction("callback", callback.arguments, I32, callback.blocks)];
+			closures.functions = [new IrFunction("main", invoke.arguments, I32, invoke.blocks, None),
+				new IrFunction("callback", callback.arguments, I32, callback.blocks, None)];
 			compiler.ir.IrScalarArguments.rewrite(closures);
 			compiler.ir.IrScalarClosures.rewrite(closures);
 			if (closures.enums[0].inlineStorage != shape.valueObject.name || closures.enums[0].isRecursive != false)
@@ -89,10 +89,10 @@ class InlineEnumArrayLayoutMain {
 						program.natives = [{name:"ordinary", library:"haxeon_runtime", symbol:"__array_get_ref", arguments:[Array(element), I32], result:element}];
 				}
 				bad.returnValue(bad.constInt(42));
-				program.functions = [new IrFunction("main", bad.arguments, I32, bad.blocks)];
+				program.functions = [new IrFunction("main", bad.arguments, I32, bad.blocks, None)];
 				rejected(() -> IrVerifier.verifyValueArraysLowered(program), "ordinary array operation on inline value lanes");
 			}
-			program.functions = [new IrFunction("main", body.arguments, I32, body.blocks)]; program.natives = [];
+			program.functions = [new IrFunction("main", body.arguments, I32, body.blocks, None)]; program.natives = [];
 			var storage = program.enums[0].inlineStorage;
 			for (bad in ["Missing", "Element", "$inline-enum:Other"]) {
 				program.enums = [{name:declaration.name, cases:declaration.cases, inlineStorage:bad}];

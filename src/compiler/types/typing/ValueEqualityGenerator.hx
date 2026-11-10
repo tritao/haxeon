@@ -4,6 +4,8 @@ import compiler.Source.SourceSpan;
 import compiler.types.Type.CompilerType;
 import compiler.types.Type.NominalKind;
 import compiler.types.TypedAst.TypedExpression;
+import compiler.Provides.ProviderOperation;
+import compiler.Provides;
 import compiler.types.TypedAst.TypedFunction;
 import compiler.types.TypedAst.TypedStatement;
 import compiler.types.typing.TypingSession.EqualityRequest;
@@ -157,6 +159,7 @@ class ValueEqualityGenerator {
 			owner: null,
 			isStatic: true,
 			isConstructor: false,
+			provides: Serves(compiler.semantic.SemanticSignature.type(type), Equals),
 			arguments: [
 				{
 					name: "left",

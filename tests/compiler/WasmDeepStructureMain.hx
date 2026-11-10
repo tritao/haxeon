@@ -17,7 +17,7 @@ class WasmDeepStructureMain {
 		}
 		builder.returnValue(builder.constInt(42));
 		var program = new IrProgram("main");
-		program.functions = [new IrFunction("main", builder.arguments, I32, builder.blocks)];
+		program.functions = [new IrFunction("main", builder.arguments, I32, builder.blocks, None)];
 		for (target in [Wasm32, WasmGc]) {
 			var binary = new WasmBackend().compile(program, {target: target, debugNames: false});
 			var path = 'out/wasm-deep-structure-$target.wasm';

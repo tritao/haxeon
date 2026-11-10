@@ -1,5 +1,6 @@
 package compiler.ir;
 
+import compiler.Provides.ProviderOperation;
 import compiler.ir.Ir;
 import compiler.ir.SourceProvenance.Located;
 
@@ -56,7 +57,7 @@ class IrValueInterfaceBoxes {
 				var result = builder.call(implementation.name, [payload].concat(adapted), implementation.result);
 				builder.returnValue((switch (contract.result) { case Void: true; default: false; }) ? result : GenericOwnerErasure.convert(builder, result, contract.result, objectMap));
 				methods.push({name: methodName, functionName: wrapper});
-				generated.push(new IrFunction(wrapper, builder.arguments, contract.result, builder.blocks));
+				generated.push(new IrFunction(wrapper, builder.arguments, contract.result, builder.blocks, Serves(valueName, ProviderOperation.detailed(ProviderOperation.InterfaceBox, methodName))));
 			}
 			methods.sort((a, b) -> Reflect.compare(a.name, b.name));
 			var box:IrObject = {name: boxName, isValue: false, base: null, interfaces: value.interfaces.copy(),
@@ -77,7 +78,7 @@ class IrValueInterfaceBoxes {
 			builder.returnValue(builder.fieldGet(builder.safeCast(input, Obj(boxName)), "value", Obj(valueName)));
 			builder.select(direct);
 			builder.returnValue(builder.safeCast(input, Obj(valueName)));
-			generated.push(new IrFunction(name, builder.arguments, Obj(valueName), builder.blocks));
+			generated.push(new IrFunction(name, builder.arguments, Obj(valueName), builder.blocks, Serves(valueName, ProviderOperation.InterfaceUnbox)));
 			return name;
 		}
 		function typeTestFor(valueName:String, exact:Bool):String {
@@ -93,7 +94,7 @@ class IrValueInterfaceBoxes {
 			builder.returnValue(builder.constBool(true));
 			builder.select(boxed);
 			builder.returnValue(builder.call(intrinsic, [input, builder.typeValue(Obj(boxName))], Bool));
-			generated.push(new IrFunction(name, builder.arguments, Bool, builder.blocks));
+			generated.push(new IrFunction(name, builder.arguments, Bool, builder.blocks, Serves(valueName, ProviderOperation.detailed(ProviderOperation.InterfaceTypeTest, exact ? "exact" : "instance"))));
 			return name;
 		}
 		function interfaceCastFor(interfaceName:String):String {
@@ -132,7 +133,7 @@ class IrValueInterfaceBoxes {
 				builder.select(next);
 			}
 			builder.returnValue(builder.safeCast(input, Virtual(interfaceName)));
-			generated.push(new IrFunction(name, builder.arguments, Virtual(interfaceName), builder.blocks));
+			generated.push(new IrFunction(name, builder.arguments, Virtual(interfaceName), builder.blocks, Serves(interfaceName, ProviderOperation.InterfaceCast)));
 			return name;
 		}
 		var rewritten:Array<IrFunction> = [], needsTypeId = false;
@@ -227,7 +228,7 @@ class IrValueInterfaceBoxes {
 				builder.jump(missing);
 			}, missing);
 			builder.select(missing); builder.returnValue(physical);
-			generated.push(new IrFunction(TYPE_ID, builder.arguments, I32, builder.blocks));
+			generated.push(new IrFunction(TYPE_ID, builder.arguments, I32, builder.blocks, Serves(TYPE_ID, ProviderOperation.DynamicDispatch)));
 		}
 		return rewritten.concat(generated);
 	}

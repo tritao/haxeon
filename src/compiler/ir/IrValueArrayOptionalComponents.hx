@@ -1,5 +1,6 @@
 package compiler.ir;
 
+import compiler.Provides.ProviderOperation;
 import compiler.ir.Ir;
 import compiler.ir.SourceProvenance;
 import compiler.ir.SourceProvenance.Located;
@@ -87,9 +88,9 @@ class IrValueArrayOptionalComponents {
 			shiftValue = shift.call(getName(), [shiftArray, shiftIndex], wrapper);
 		shift.call("__value_array_remove_at", [shiftArray, shiftIndex], Void);
 		shift.returnValue(shiftValue);
-		return [new IrFunction(getName(), get.arguments, wrapper, get.blocks), new IrFunction(setName(), set.arguments, Void, set.blocks),
-			new IrFunction(pushName(), push.arguments, I32, push.blocks), new IrFunction(insertName(), insert.arguments, Void, insert.blocks),
-			new IrFunction(unshiftName(), unshift.arguments, I32, unshift.blocks), new IrFunction(popName(), pop.arguments, wrapper, pop.blocks),
-			new IrFunction(shiftName(), shift.arguments, wrapper, shift.blocks)];
+		return [new IrFunction(getName(), get.arguments, wrapper, get.blocks, Serves(Std.string(element), ProviderOperation.detailed(ProviderOperation.ValueArrayHelper, getName()))), new IrFunction(setName(), set.arguments, Void, set.blocks, Serves(Std.string(element), ProviderOperation.detailed(ProviderOperation.ValueArrayHelper, setName()))),
+			new IrFunction(pushName(), push.arguments, I32, push.blocks, Serves(Std.string(element), ProviderOperation.detailed(ProviderOperation.ValueArrayHelper, pushName()))), new IrFunction(insertName(), insert.arguments, Void, insert.blocks, Serves(Std.string(element), ProviderOperation.detailed(ProviderOperation.ValueArrayHelper, insertName()))),
+			new IrFunction(unshiftName(), unshift.arguments, I32, unshift.blocks, Serves(Std.string(element), ProviderOperation.detailed(ProviderOperation.ValueArrayHelper, unshiftName()))), new IrFunction(popName(), pop.arguments, wrapper, pop.blocks, Serves(Std.string(element), ProviderOperation.detailed(ProviderOperation.ValueArrayHelper, popName()))),
+			new IrFunction(shiftName(), shift.arguments, wrapper, shift.blocks, Serves(Std.string(element), ProviderOperation.detailed(ProviderOperation.ValueArrayHelper, shiftName())))];
 	}
 }

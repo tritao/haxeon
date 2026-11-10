@@ -42,6 +42,6 @@ class IrFunctionRewrite {
 			copy.terminator = block.terminator;
 			blocks.push(copy);
 		}
-		return blocks == null ? fn : new IrFunction(fn.name, fn.arguments, fn.result, blocks, fn.debugBindings, fn.inlineHint, fn.retention);
+		return blocks == null ? fn : fn.derive(blocks);
 	}
 }

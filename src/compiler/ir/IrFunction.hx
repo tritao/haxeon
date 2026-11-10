@@ -1,5 +1,6 @@
 package compiler.ir;
 
+import compiler.Provides;
 import compiler.ir.Ir;
 
 /** Source binding identity, lexical range, and SSA value after mutable stores vanish. */
@@ -37,13 +38,26 @@ class IrFunction {
 
 	public final retention:IrRetention;
 
-	public function new(name, arguments, result, blocks, ?debugBindings, inlineHint = false, retention:IrRetention = Reachable) {
+	/** The operation this function serves for a type when a generator made it as a helper, else `None`. */
+	public final provides:Provides;
+
+	/** `provides` is required: a function made without saying what it serves does not compile. */
+	public function new(name, arguments, result, blocks, provides:Provides, ?debugBindings, inlineHint = false, retention:IrRetention = Reachable) {
 		this.name = name;
 		this.arguments = arguments;
 		this.result = result;
 		this.blocks = blocks;
+		this.provides = provides;
 		this.debugBindings = debugBindings == null ? [] : debugBindings;
 		this.inlineHint = inlineHint;
 		this.retention = retention;
 	}
+
+	/**
+	 * This function with other blocks (and so possibly other arguments and result), keeping everything else it carries. Under another
+	 * name it is a copy, not the provider of the original, so it serves nothing.
+	 */
+	public function derive(blocks:Array<IrBlock>, ?arguments:Array<IrValue>, ?result:IrType, ?debugBindings:Array<IrDebugBinding>, ?name:String):IrFunction
+		return new IrFunction(name == null ? this.name : name, arguments == null ? this.arguments : arguments, result == null ? this.result : result,
+			blocks, name == null || name == this.name ? provides : None, debugBindings == null ? this.debugBindings : debugBindings, inlineHint, retention);
 }

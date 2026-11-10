@@ -163,13 +163,13 @@ class WasmLinearClosureAdapters {
 				}
 				target.terminator = block.terminator; blocks.push(target);
 			}
-			rewritten.push(changed ? new IrFunction(fn.name, fn.arguments, fn.result, blocks, fn.debugBindings, fn.inlineHint, fn.retention) : fn);
+			rewritten.push(changed ? fn.derive(blocks) : fn);
 		}
 		var names = [for (name in helpers.keys()) name]; names.sort(Reflect.compare);
 		for (name in names) {
 			var type = helpers.get(name), b = new IrBuilder(), value = b.argument("closure", Dyn), signature = b.call(SIGNATURE_FUNCTION, [value], I32);
 			b.returnValue(b.equal(signature, b.constInt(signatureId(type))));
-			rewritten.push(new IrFunction(name, b.arguments, Bool, b.blocks));
+			rewritten.push(new IrFunction(name, b.arguments, Bool, b.blocks, None));
 		}
 		program.functions = rewritten;
 	}
@@ -179,7 +179,7 @@ class WasmLinearClosureAdapters {
 		var builder = new IrBuilder();
 		builder.argument("closure", Dyn);
 		builder.returnValue(builder.constInt(0));
-		return new IrFunction(SIGNATURE_FUNCTION, builder.arguments, I32, builder.blocks, null, false, Keep);
+		return new IrFunction(SIGNATURE_FUNCTION, builder.arguments, I32, builder.blocks, None, null, false, Keep);
 	}
 
 	public function defineSignatureQuery(module:WasmModule, functions:Map<String, Int>):Void {
@@ -214,7 +214,7 @@ class WasmLinearClosureAdapters {
 				() -> builder.returnValue(builder.toDyn(builder.instanceClosure(source.key == "varargs" ? WasmDynamicCalls.varargsAdapterName(targetType) :
 					adapterName(source.key, closureKey(targetType)), closure, targetType))));
 		builder.throwValue(builder.toDyn(builder.constString('Cannot cast to ${Std.string(targetType)}')));
-		return new IrFunction(castName(targetType), builder.arguments, Dyn, builder.blocks);
+		return new IrFunction(castName(targetType), builder.arguments, Dyn, builder.blocks, None);
 	}
 
 	/** Receives the original closure and the target's arguments; converts each way through Dynamic. */
@@ -228,7 +228,7 @@ class WasmLinearClosureAdapters {
 			], sourceResult = result(sourceType), targetResult = result(targetType), value = builder.callClosure(callee, converted, sourceResult);
 		builder.returnValue((switch (targetResult) { case Void: true; default: false; }) ? ((switch (sourceResult) { case Void: true; default: false; }) ? value : builder.constVoid()) : (switch (sourceResult) { case Void: true; default: false; }) ? zero(builder,
 			targetResult) : convert(builder, value, targetResult));
-		return new IrFunction(adapterName(source, target), builder.arguments, targetResult, builder.blocks);
+		return new IrFunction(adapterName(source, target), builder.arguments, targetResult, builder.blocks, None);
 	}
 
 	function convert(builder:IrBuilder, value:IrValue, type:IrType):IrValue {

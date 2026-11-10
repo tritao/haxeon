@@ -1,5 +1,6 @@
 package compiler.ir;
 
+import compiler.Provides.ProviderOperation;
 import compiler.ir.Ir;
 import compiler.ir.SourceProvenance.Located;
 
@@ -27,7 +28,7 @@ class IrCheckedDynamicCasts {
 			builder.returnValue(builder.safeCast(input, type));
 			builder.select(rejected);
 			builder.terminate(Throw(builder.toDyn(builder.constString('Invalid cast to $typeName'))));
-			generated.push(new IrFunction(name, builder.arguments, type, builder.blocks));
+			generated.push(new IrFunction(name, builder.arguments, type, builder.blocks, Serves(key, ProviderOperation.CheckedCast)));
 			return name;
 		}
 		function replacement(located:Located<IrInstruction>):Null<Array<Located<IrInstruction>>>

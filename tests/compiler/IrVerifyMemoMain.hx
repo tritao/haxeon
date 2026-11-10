@@ -14,14 +14,14 @@ class IrVerifyMemoMain {
 		var builder = new IrBuilder();
 		builder.argument("x", argument);
 		builder.returnValue(builder.constVoid());
-		return new IrFunction(name, builder.arguments, Void, builder.blocks);
+		return new IrFunction(name, builder.arguments, Void, builder.blocks, None);
 	}
 
 	static function caller():IrFunction {
 		var builder = new IrBuilder();
 		builder.call("g", [builder.constInt(1)], Void);
 		builder.returnValue(builder.constInt(0));
-		return new IrFunction("f", builder.arguments, I32, builder.blocks);
+		return new IrFunction("f", builder.arguments, I32, builder.blocks, None);
 	}
 
 	static function program(functions:Array<IrFunction>):IrProgram {

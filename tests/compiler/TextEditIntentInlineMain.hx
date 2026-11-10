@@ -54,7 +54,7 @@ class TextEditIntentInlineMain {
 			entry.call("exit", [entry.constInt(42)], Void);
 			entry.returnValue(entry.constVoid());
 			entry.select(failure); entry.call("exit", [entry.constInt(1)], Void); entry.returnValue(entry.constVoid());
-			program.functions.push(new IrFunction("entry", entry.arguments, Void, entry.blocks));
+			program.functions.push(new IrFunction("entry", entry.arguments, Void, entry.blocks, None));
 			program.entryPoint = "entry";
 			sys.io.File.saveBytes(module, new compiler.backend.hl.HlBackend().compile(program, {target:HashLink, debugNames:true}).bytes);
 			var vm = Sys.getEnv("HAXEON_HASHLINK_DIR"), process = new sys.io.Process(vm == null ? "scripts/hl" : vm + "/hl", [module]),

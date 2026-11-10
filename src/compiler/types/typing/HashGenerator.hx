@@ -4,6 +4,8 @@ import compiler.Source.SourceSpan;
 import compiler.types.Type.CompilerType;
 import compiler.types.Type.NominalKind;
 import compiler.types.TypedAst.TypedExpression;
+import compiler.Provides.ProviderOperation;
+import compiler.Provides;
 import compiler.types.TypedAst.TypedFunction;
 import compiler.types.TypedAst.TypedStatement;
 import compiler.types.typing.TypingSession.EqualityRequest;
@@ -147,6 +149,7 @@ class HashGenerator {
 		return {
 			name: hashName(type), origin: req.origin, originKind: Helper, typeArguments: null,
 			owner: null, isStatic: true, isConstructor: false,
+			provides: Serves(compiler.semantic.SemanticSignature.type(type), Hash),
 			arguments: [{name: "value", type: type}], result: TInt,
 			statements: statements, cells: [], cellCaptures: [], span: span
 		};

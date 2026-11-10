@@ -423,7 +423,7 @@ class IrScalarArguments {
 			}
 			blocks.push(copy);
 		}
-		return new IrFunction(PREFIX + (preserveReceiver ? "$receiver:" : "") + fn.name, args, returnSlots.length > 0 ? Void : fn.result, blocks, fn.debugBindings, fn.inlineHint);
+		return new IrFunction(PREFIX + (preserveReceiver ? "$receiver:" : "") + fn.name, args, returnSlots.length > 0 ? Void : fn.result, blocks, None, fn.debugBindings, fn.inlineHint);
 	}
 
 	static function rewriteCalls(fn:IrFunction, candidates:Map<String, IrFunction>, pinnedCandidates:Map<String, IrFunction>, objects:Map<String, IrObject>,
@@ -520,7 +520,7 @@ class IrScalarArguments {
 			copy.terminator = block.terminator;
 			blocks.push(copy);
 		}
-		return changed ? new IrFunction(fn.name, fn.arguments, fn.result, blocks, fn.debugBindings, fn.inlineHint, fn.retention) : fn;
+		return changed ? fn.derive(blocks) : fn;
 	}
 
 	/** The Wasm scalar ABI reads fields at the call site. Only an unaliased value is stable there;

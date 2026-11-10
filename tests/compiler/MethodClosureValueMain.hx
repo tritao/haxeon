@@ -24,7 +24,7 @@ class MethodClosureValueMain {
 					args[1] = new compiler.ir.Ir.IrValue(arg.id, arg.name,
 						compiler.ir.Ir.IrType.Function([compiler.ir.Ir.IrType.Dyn], compiler.ir.Ir.IrType.I32));
 					changed = true;
-					new compiler.ir.IrFunction(fn.name, args, fn.result, fn.blocks, fn.debugBindings, fn.inlineHint, fn.retention);
+					fn.derive(fn.blocks, args);
 				} else fn;
 			}
 		];

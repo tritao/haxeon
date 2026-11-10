@@ -707,11 +707,15 @@ class FrontendCompilation {
 			// The final IR is verified here, once, whatever backend follows: only the functions whose IR or reads of the program changed.
 			if (!context.livePatching) {
 				compiler.compilation.IrPassMeter.measureVoid("verifier", () -> IrVerifier.verifyReusing(ir, context.verifyMemo));
-				if (checkingReuse)
+				if (checkingReuse) {
 					try
 						IrVerifier.verify(ir)
 					catch (error:String)
 						throw 'HAXEON_CHECK_REUSE: verification skipped a function that fails in full: $error';
+					var providerProblem = compiler.ir.IrProviders.check(ir.functions);
+					if (providerProblem != null)
+						throw 'HAXEON_CHECK_REUSE: $providerProblem';
+				}
 			}
 			if (matchesPrevious) {
 				var difference = PipelineSnapshot.irDifference(previousPipeline.ir, ir);

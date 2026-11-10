@@ -1,5 +1,6 @@
 package compiler.ir;
 
+import compiler.Provides.ProviderOperation;
 import compiler.ir.Ir;
 import compiler.ir.SourceProvenance.Located;
 
@@ -76,6 +77,6 @@ class IrValueDynamicDispatch {
 		}, fallback);
 		builder.select(fallback);
 		builder.returnValue(builder.call("__dynamic_equal", [left, right], Bool));
-		return new IrFunction(EQUAL, builder.arguments, Bool, builder.blocks);
+		return new IrFunction(EQUAL, builder.arguments, Bool, builder.blocks, Serves(EQUAL, ProviderOperation.DynamicDispatch));
 	}
 }

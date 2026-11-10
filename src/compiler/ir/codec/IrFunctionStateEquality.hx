@@ -14,6 +14,7 @@ class IrFunctionStateEquality {
 		if (left.name != right.name
 			|| left.inlineHint != right.inlineHint
 			|| left.retention != right.retention
+			|| !Type.enumEq(left.provides, right.provides)
 			|| !IrVerifier.sameType(left.result, right.result)
 			|| left.arguments.length != right.arguments.length
 			|| left.blocks.length != right.blocks.length

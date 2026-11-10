@@ -51,7 +51,7 @@ class IrValueArrayRangeRewrite {
 			replacement.terminator = block.terminator;
 			blocks.push(replacement);
 		}
-		return changed ? new IrFunction(fn.name, fn.arguments, fn.result, blocks, fn.debugBindings, fn.inlineHint, fn.retention) : fn;
+		return changed ? fn.derive(blocks) : fn;
 	}
 
 	static function rangeOperation(name:String):String {

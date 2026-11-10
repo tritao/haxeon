@@ -1,5 +1,6 @@
 package compiler.ir;
 
+import compiler.Provides.ProviderOperation;
 import compiler.ir.Ir;
 import compiler.ir.IrFunction;
 
@@ -53,8 +54,8 @@ class IrInlineEnumEscapes {
 			}
 			box.throwValue(box.toDyn(box.constString("Invalid inline enum tag")));
 			unbox.throwValue(unbox.toDyn(unbox.constString("Invalid enum case index")));
-			result.push(new IrFunction(boxName(name), box.arguments, Dyn, box.blocks));
-			result.push(new IrFunction(unboxName(name), unbox.arguments, storage, unbox.blocks));
+			result.push(new IrFunction(boxName(name), box.arguments, Dyn, box.blocks, Serves(name, ProviderOperation.detailed(ProviderOperation.InlineEnumHelper, "box"))));
+			result.push(new IrFunction(unboxName(name), unbox.arguments, storage, unbox.blocks, Serves(name, ProviderOperation.detailed(ProviderOperation.InlineEnumHelper, "unbox"))));
 		}
 		return result;
 	}

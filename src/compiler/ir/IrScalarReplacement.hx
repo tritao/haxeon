@@ -74,7 +74,7 @@ class IrScalarReplacement {
 				return fn;
 		}
 		var bindings = IrInliner.substitute(blocks, result.substitutions, fn.debugBindings);
-		return new IrFunction(fn.name, fn.arguments, fn.result, blocks, bindings, fn.inlineHint, fn.retention);
+		return fn.derive(blocks, null, null, bindings);
 	}
 
 	public static function run(blocks:Array<IrBlock>, objects:IrObjectTable, nextValue:Int, forcePhis = false):ScalarReplacementResult {
@@ -90,7 +90,7 @@ class IrScalarReplacement {
 						hasHandlers = true;
 					default:
 				}
-		var graph = new IrGraph(new IrFunction("scalar-replacement", [], Void, blocks));
+		var graph = new IrGraph(new IrFunction("scalar-replacement", [], Void, blocks, None));
 		var frontier = dominanceFrontiers(graph),
 			children = dominatorChildren(graph);
 		for (found in candidates) {

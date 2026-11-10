@@ -28,7 +28,7 @@ class FunctionValueLanesMain {
 			var inc = new IrBuilder(), input = inc.argument("input", I32); inc.returnValue(inc.add(input, inc.constInt(1)));
 			var program = new IrProgram("main");
 			program.objects = [object];
-			program.functions = [new IrFunction("main",builder.arguments,I32,builder.blocks), new IrFunction("increment",inc.arguments,I32,inc.blocks)]
+			program.functions = [new IrFunction("main",builder.arguments,I32,builder.blocks, None), new IrFunction("increment",inc.arguments,I32,inc.blocks, None)]
 				.concat(factory.functions()).concat(factory.helpers.functions());
 			var natives:Map<String, IrNative> = [];
 			for (native in factory.natives().concat(factory.helpers.natives()).concat(access.natives())) natives.set(native.name,native);
@@ -37,7 +37,7 @@ class FunctionValueLanesMain {
 			if (target == HashLink) {
 				var wrapper=new IrBuilder(), result=wrapper.call("main",[],I32);
 				wrapper.call("exit",[result],Void); wrapper.returnValue(wrapper.constVoid());
-				program.functions.push(new IrFunction("run",wrapper.arguments,Void,wrapper.blocks));
+				program.functions.push(new IrFunction("run",wrapper.arguments,Void,wrapper.blocks, None));
 				program.natives.push({name:"exit",library:"std",symbol:"sys_exit",arguments:[I32],result:Void}); program.entryPoint="run";
 				var path="out/function-value-lanes.hl";
 				sys.io.File.saveBytes(path,compiler.hl.HlWriter.encode(compiler.ir.hl.HlLower.lower(program)).flatten());

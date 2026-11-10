@@ -52,7 +52,7 @@ class OpportunityCensusMain {
 		b.select(no); b.jump(exit);
 		b.select(bridge); b.jump(exit);
 		b.select(exit); b.returnValue(b.constInt(42));
-		var flow = new IrFunction("flow", b.arguments, I32, b.blocks),
+		var flow = new IrFunction("flow", b.arguments, I32, b.blocks, None),
 			flowRow = IrOpportunityCensus.inspect(flow, pure, objects, true);
 		expect(flowRow.counts[9] == 2, "unused call results count even when the call may have side effects");
 		expect(flowRow.counts[13] == 1, "pure unused results exclude side-effecting calls");
@@ -65,14 +65,14 @@ class OpportunityCensusMain {
 		b.safeCast(fresh, Obj("Box"));
 		b.safeCast(fresh, Dyn);
 		b.returnValue(b.constInt(42));
-		var checks = IrOpportunityCensus.inspect(new IrFunction("checks", b.arguments, I32, b.blocks), pure, objects, true);
+		var checks = IrOpportunityCensus.inspect(new IrFunction("checks", b.arguments, I32, b.blocks, None), pure, objects, true);
 		expect(checks.counts[14] == 1, "only a receiver check on a fresh value is counted");
 		expect(checks.counts[15] == 1, "count casts with identical source and destination types");
 		b = new IrBuilder(); unknown = b.argument("unknown", Obj("Box"));
 		b.fieldSet(unknown, "value", b.constInt(1)); b.fieldSet(unknown, "value", b.constInt(2));
 		b.fieldGet(unknown, "value", I32); b.fieldSet(unknown, "value", b.constInt(3));
 		b.call("small", [], I32); b.returnValue(b.constInt(42));
-		var stores = IrOpportunityCensus.inspect(new IrFunction("stores", b.arguments, I32, b.blocks), pure, objects, true, ["small" => true]);
+		var stores = IrOpportunityCensus.inspect(new IrFunction("stores", b.arguments, I32, b.blocks, None), pure, objects, true, ["small" => true]);
 		expect(stores.counts[16] == 1, "a field read stops the overwritten-store candidate scan");
 		expect(stores.counts[17] == 1, "count direct calls to small known functions");
 		expect(before.compare(IrFunctionStateCodec.encode(fn)) == 0, "diagnostics do not mutate IR");

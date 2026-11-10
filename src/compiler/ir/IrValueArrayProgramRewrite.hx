@@ -348,7 +348,7 @@ class IrValueArrayProgramRewrite {
 			target.terminator = block.terminator;
 			blocks.push(target);
 		}
-		return changed ? new IrFunction(fn.name, fn.arguments, fn.result, blocks, fn.debugBindings, fn.inlineHint, fn.retention) : fn;
+		return changed ? fn.derive(blocks) : fn;
 	}
 
 	/** Dynamic views must dispatch by their runtime storage even when the frontend omitted native checks. */
@@ -398,7 +398,7 @@ class IrValueArrayProgramRewrite {
 			target.terminator = block.terminator;
 			blocks.push(target);
 		}
-		return changed ? new IrFunction(fn.name, fn.arguments, fn.result, blocks, fn.debugBindings, fn.inlineHint, fn.retention) : fn;
+		return changed ? fn.derive(blocks) : fn;
 	}
 
 	static function rewriteAllocations(fn:IrFunction, element:IrType, allocator:String):IrFunction {
@@ -465,6 +465,6 @@ class IrValueArrayProgramRewrite {
 			target.terminator = block.terminator;
 			blocks.push(target);
 		}
-		return changed ? new IrFunction(fn.name, fn.arguments, fn.result, blocks, fn.debugBindings, fn.inlineHint, fn.retention) : fn;
+		return changed ? fn.derive(blocks) : fn;
 	}
 }

@@ -428,7 +428,7 @@ class IrScalarClosures {
 					scopeEnd: binding.scopeEnd
 				}
 		];
-		return new IrFunction(fn.name, [for (argument in fn.arguments) map(argument)], mapType(fn.result), blocks, debug, fn.inlineHint, fn.retention);
+		return fn.derive(blocks, [for (argument in fn.arguments) map(argument)], mapType(fn.result), debug);
 	}
 
 	/** A scalar closure escapes through a signature-specific adapter; only that target proves its original type. */
@@ -454,7 +454,7 @@ class IrScalarClosures {
 			probe = b.staticClosure(wrapper, probeType),
 			found = b.call(receiverQuery("$scalar-closure:receiver:signature:" + suffix, Dyn, probeType), [closure, probe], Dyn);
 		b.returnValue(b.equal(b.equal(found, b.constNull(Dyn)), b.constBool(false)));
-		generatedMakers.push(new IrFunction(name, b.arguments, Bool, b.blocks));
+		generatedMakers.push(new IrFunction(name, b.arguments, Bool, b.blocks, None));
 		return name;
 	}
 
@@ -486,7 +486,7 @@ class IrScalarClosures {
 				b.returnValue(b.constNull(outputType));
 				b.select(present);
 				b.returnValue(b.safeCast(b.call(innerErasure.maker, [b.safeCast(source, inner)], erasedType(inner)), outputType));
-				generatedMakers.push(new IrFunction(maker, b.arguments, outputType, b.blocks));
+				generatedMakers.push(new IrFunction(maker, b.arguments, outputType, b.blocks, None));
 				return result;
 			case Function(_, _):
 			default:
@@ -520,7 +520,7 @@ class IrScalarClosures {
 			case Dyn: true;
 			default: false;
 		}) ? call : toDynamic(body, call, logical.result));
-		generatedFunctions.push(new IrFunction(wrapper, body.arguments, Dyn, body.blocks));
+		generatedFunctions.push(new IrFunction(wrapper, body.arguments, Dyn, body.blocks, None));
 		generatedObjects.push({
 			name: environment,
 			isValue: false,
@@ -554,7 +554,7 @@ class IrScalarClosures {
 		var captured = make.newObject(environment);
 		make.fieldSet(captured, "closure", source);
 		make.returnValue(make.instanceClosure(wrapper, captured, erasedType(type)));
-		generatedMakers.push(new IrFunction(maker, make.arguments, erasedType(type), make.blocks));
+		generatedMakers.push(new IrFunction(maker, make.arguments, erasedType(type), make.blocks, None));
 		return result;
 	}
 
@@ -602,7 +602,7 @@ class IrScalarClosures {
 				b.returnValue(b.constNull(type));
 				b.select(present);
 				b.returnValue(b.safeCast(b.call(innerMaker, [original], inner), type));
-				generatedMakers.push(new IrFunction(maker, b.arguments, type, b.blocks));
+				generatedMakers.push(new IrFunction(maker, b.arguments, type, b.blocks, None));
 				return maker;
 			case Function(_, _):
 			default:
@@ -696,7 +696,7 @@ class IrScalarClosures {
 			}
 			call.returnValue(call.constVoid());
 		}
-		generatedMakers.push(new IrFunction(wrapper, call.arguments, resultSlots.length == 0 ? mapType(logical.result) : Void, call.blocks));
+		generatedMakers.push(new IrFunction(wrapper, call.arguments, resultSlots.length == 0 ? mapType(logical.result) : Void, call.blocks, None));
 		var make = new IrBuilder(),
 			boxed = make.argument("closure", Dyn),
 			missing = make.createBlock(),
@@ -724,7 +724,7 @@ class IrScalarClosures {
 			captured = make.newObject(environment);
 		make.fieldSet(captured, "closure", decoded);
 		make.returnValue(make.instanceClosure(wrapper, captured, physical));
-		generatedMakers.push(new IrFunction(maker, make.arguments, physical, make.blocks));
+		generatedMakers.push(new IrFunction(maker, make.arguments, physical, make.blocks, None));
 		return maker;
 	}
 

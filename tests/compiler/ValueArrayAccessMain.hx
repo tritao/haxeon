@@ -172,7 +172,7 @@ class ValueArrayAccessMain {
 		var optionalSnapshotParts = optionalSnapshot.call(compiler.ir.IrOptionalValueFlow.unboxName("LanePair"), [optionalSnapshotRaw], Obj(pairWrapperName));
 		optionalSnapshot.returnValue(optionalSnapshot.fieldGet(optionalSnapshotParts, "$slot1", I32));
 		var rewrittenOptionalSnapshot = compiler.ir.IrValueArrayOptionalRewrite.rewrite(
-			new IrFunction("array_optional_snapshot", optionalSnapshot.arguments, I32, optionalSnapshot.blocks), optionalPairType, optionalPairComponents);
+			new IrFunction("array_optional_snapshot", optionalSnapshot.arguments, I32, optionalSnapshot.blocks, None), optionalPairType, optionalPairComponents);
 		var nestedPairType:IrType = Obj("LaneNestedPair"), nestedPairArrayType:IrType = Array(nestedPairType);
 		var nestedPairShape = new IrValueLaneLayout(IrObjectTable.of(objects), 64, HashLink).shape(nestedPairType);
 		var nestedPairHelpers = new IrValueArraySlotHelpers(nestedPairType, nestedPairShape);
@@ -358,13 +358,13 @@ class ValueArrayAccessMain {
 		method.returnValue(method.constVoid());
 		var methodRewriter = new IrValueArrayPlaceMethods(IrObjectTable.of(objects), element, helpers);
 		var rewrittenMethod = methodRewriter.specialize("array_place_around",
-			new IrFunction("LaneElement.around", method.arguments, Void, method.blocks), []);
+			new IrFunction("LaneElement.around", method.arguments, Void, method.blocks, None), []);
 		var throwingMethod = new IrBuilder(), throwingReceiver = throwingMethod.argument("this", element);
 		var previous = throwingMethod.fieldGet(throwingReceiver, "signed", I32);
 		throwingMethod.fieldSet(throwingReceiver, "signed", throwingMethod.add(previous, throwingMethod.constInt(3)));
 		throwingMethod.terminate(Throw(throwingMethod.toDyn(throwingMethod.constString("changed"))));
 		var rewrittenThrow = methodRewriter.specialize("array_place_throw",
-			new IrFunction("LaneElement.changeThenThrow", throwingMethod.arguments, Void, throwingMethod.blocks), []);
+			new IrFunction("LaneElement.changeThenThrow", throwingMethod.arguments, Void, throwingMethod.blocks, None), []);
 		var nestedMethod = new IrBuilder(), nestedReceiver = nestedMethod.argument("this", element),
 			nestedCallback = nestedMethod.argument("callback", callbackType), nestedArray = nestedMethod.argument("array", arrayType);
 		var child = nestedMethod.fieldGet(nestedReceiver, "inner", Obj("LaneInner"));
@@ -375,7 +375,7 @@ class ValueArrayAccessMain {
 		nestedMethod.fieldSet(child, "value", nestedMethod.add(nestedLater, nestedMethod.constInt(2)));
 		nestedMethod.returnValue(nestedMethod.constVoid());
 		var rewrittenNested = methodRewriter.specialize("array_place_nested",
-			new IrFunction("LaneElement.nestedAround", nestedMethod.arguments, Void, nestedMethod.blocks), []);
+			new IrFunction("LaneElement.nestedAround", nestedMethod.arguments, Void, nestedMethod.blocks, None), []);
 		var snapshotMethod = new IrBuilder(), snapshotReceiver = snapshotMethod.argument("this", element),
 			snapshotCallback = snapshotMethod.argument("callback", callbackType), snapshotArray = snapshotMethod.argument("array", arrayType);
 		var snapshotChild = snapshotMethod.fieldGet(snapshotReceiver, "inner", Obj("LaneInner"));
@@ -385,7 +385,7 @@ class ValueArrayAccessMain {
 		snapshotMethod.callClosure(snapshotCallback, [snapshotArray], Void);
 		snapshotMethod.returnValue(snapshotMethod.fieldGet(snapshot, "value", I32));
 		var rewrittenSnapshot = methodRewriter.specialize("array_place_snapshot",
-			new IrFunction("LaneElement.snapshot", snapshotMethod.arguments, I32, snapshotMethod.blocks), []);
+			new IrFunction("LaneElement.snapshot", snapshotMethod.arguments, I32, snapshotMethod.blocks, None), []);
 		rewrittenSnapshot = IrScalarReplacement.rewrite(rewrittenSnapshot, IrObjectTable.of(objects), false, true);
 		for (block in rewrittenSnapshot.blocks) for (located in block.instructions) switch located.value {
 			case NewObject(_, "LaneInner"): throw "A copied array value must stay scalar across a callback";
@@ -402,14 +402,14 @@ class ValueArrayAccessMain {
 		optionalMethod.fieldSet(unwrapped, "value", optionalMethod.add(optionalInitial, optionalMethod.constInt(2)));
 		optionalMethod.returnValue(optionalMethod.fieldGet(unwrapped, "value", I32));
 		var rewrittenOptional = methodRewriter.specialize("array_place_optional",
-			new IrFunction("LaneElement.optionalValue", optionalMethod.arguments, I32, optionalMethod.blocks), []);
+			new IrFunction("LaneElement.optionalValue", optionalMethod.arguments, I32, optionalMethod.blocks, None), []);
 		var scalarSnapshot = new IrBuilder(), scalarReceiver = scalarSnapshot.argument("this", element),
 			scalarCallback = scalarSnapshot.argument("callback", callbackType), scalarArray = scalarSnapshot.argument("array", arrayType);
 		var savedScalar = scalarSnapshot.fieldGet(scalarReceiver, "optional", Nullable(I32));
 		scalarSnapshot.callClosure(scalarCallback, [scalarArray], Void);
 		scalarSnapshot.returnValue(scalarSnapshot.safeCast(savedScalar, I32));
 		var rewrittenScalarSnapshot = methodRewriter.specialize("array_place_scalar_snapshot",
-			new IrFunction("LaneElement.scalarSnapshot", scalarSnapshot.arguments, I32, scalarSnapshot.blocks), []);
+			new IrFunction("LaneElement.scalarSnapshot", scalarSnapshot.arguments, I32, scalarSnapshot.blocks, None), []);
 		var scalarWrite = new IrBuilder(), writeReceiver = scalarWrite.argument("this", element);
 		scalarWrite.fieldSet(writeReceiver, "optional", scalarWrite.constNull(Nullable(I32)));
 		var emptyScalar = scalarWrite.fieldGet(writeReceiver, "optional", Nullable(I32));
@@ -421,7 +421,7 @@ class ValueArrayAccessMain {
 		var assignedScalar = scalarWrite.fieldGet(writeReceiver, "optional", Nullable(I32));
 		scalarWrite.returnValue(scalarWrite.safeCast(assignedScalar, I32));
 		var rewrittenScalarWrite = methodRewriter.specialize("array_place_scalar_write",
-			new IrFunction("LaneElement.scalarWrite", scalarWrite.arguments, I32, scalarWrite.blocks), []);
+			new IrFunction("LaneElement.scalarWrite", scalarWrite.arguments, I32, scalarWrite.blocks, None), []);
 		var scalarNull = new IrBuilder(), nullReceiver = scalarNull.argument("this", element),
 			nullCallback = scalarNull.argument("callback", callbackType), nullArray = scalarNull.argument("array", arrayType);
 		var nullSnapshot = scalarNull.fieldGet(nullReceiver, "optional", Nullable(I32));
@@ -431,7 +431,7 @@ class ValueArrayAccessMain {
 		scalarNull.select(nullYes); scalarNull.returnValue(scalarNull.constInt(42));
 		scalarNull.select(nullNo); scalarNull.returnValue(scalarNull.constInt(0));
 		var rewrittenScalarNull = methodRewriter.specialize("array_place_scalar_null",
-			new IrFunction("LaneElement.scalarNull", scalarNull.arguments, I32, scalarNull.blocks), []);
+			new IrFunction("LaneElement.scalarNull", scalarNull.arguments, I32, scalarNull.blocks, None), []);
 		var phiRead = new IrBuilder(), phiReceiver = phiRead.argument("this", element), choose = phiRead.argument("choose", Bool),
 			phiCallback = phiRead.argument("callback", callbackType), phiArray = phiRead.argument("array", arrayType);
 		var phiSnapshot = phiRead.fieldGet(phiReceiver, "optional", Nullable(I32));
@@ -447,7 +447,7 @@ class ValueArrayAccessMain {
 		phiRead.select(phiAbsent); phiRead.returnValue(phiRead.constInt(0));
 		phiRead.select(phiPresent); phiRead.returnValue(phiRead.safeCast(selected, I32));
 		var rewrittenPhiRead = methodRewriter.specialize("array_place_phi_read",
-			new IrFunction("LaneElement.phiRead", phiRead.arguments, I32, phiRead.blocks), []);
+			new IrFunction("LaneElement.phiRead", phiRead.arguments, I32, phiRead.blocks, None), []);
 		var phiWrite = new IrBuilder(), phiWriteReceiver = phiWrite.argument("this", element), phiWriteChoose = phiWrite.argument("choose", Bool);
 		var writeYes = phiWrite.createBlock(), writeNo = phiWrite.createBlock(), writeJoin = phiWrite.createBlock();
 		phiWrite.branch(phiWriteChoose, writeYes, writeNo);
@@ -462,25 +462,25 @@ class ValueArrayAccessMain {
 		phiWrite.select(writtenNull); phiWrite.returnValue(phiWrite.constInt(0));
 		phiWrite.select(writtenSome); phiWrite.returnValue(phiWrite.safeCast(written, I32));
 		var rewrittenPhiWrite = methodRewriter.specialize("array_place_phi_write",
-			new IrFunction("LaneElement.phiWrite", phiWrite.arguments, I32, phiWrite.blocks), []);
+			new IrFunction("LaneElement.phiWrite", phiWrite.arguments, I32, phiWrite.blocks, None), []);
 		var copyMethod = new IrBuilder(), copyReceiver = copyMethod.argument("this", element);
 		var copySource = copyMethod.fieldGet(copyReceiver, "inner2", Obj("LaneInner"));
 		copyMethod.fieldSet(copyReceiver, "inner", copySource);
 		copyMethod.returnValue(copyMethod.constVoid());
 		var rewrittenCopy = methodRewriter.specialize("array_place_copy",
-			new IrFunction("LaneElement.copyInner", copyMethod.arguments, Void, copyMethod.blocks), []);
+			new IrFunction("LaneElement.copyInner", copyMethod.arguments, Void, copyMethod.blocks, None), []);
 		var selfMethod = new IrBuilder(), selfReceiver = selfMethod.argument("this", element);
 		var selfSource = selfMethod.fieldGet(selfReceiver, "inner", Obj("LaneInner"));
 		selfMethod.fieldSet(selfReceiver, "inner", selfSource);
 		selfMethod.returnValue(selfMethod.constVoid());
 		var rewrittenSelf = methodRewriter.specialize("array_place_self_copy",
-			new IrFunction("LaneElement.copySelf", selfMethod.arguments, Void, selfMethod.blocks), []);
+			new IrFunction("LaneElement.copySelf", selfMethod.arguments, Void, selfMethod.blocks, None), []);
 		var optionalCopy = new IrBuilder(), optionalCopyReceiver = optionalCopy.argument("this", element);
 		var optionalSource = optionalCopy.fieldGet(optionalCopyReceiver, "maybe2", Nullable(Obj("LaneInner")));
 		optionalCopy.fieldSet(optionalCopyReceiver, "maybe", optionalSource);
 		optionalCopy.returnValue(optionalCopy.constVoid());
 		var rewrittenOptionalCopy = methodRewriter.specialize("array_place_optional_copy",
-			new IrFunction("LaneElement.copyOptional", optionalCopy.arguments, Void, optionalCopy.blocks), []);
+			new IrFunction("LaneElement.copyOptional", optionalCopy.arguments, Void, optionalCopy.blocks, None), []);
 		var construct = new IrBuilder(), constructReceiver = construct.argument("this", element),
 			constructValue = construct.argument("value", I32), constructLabel = construct.argument("label", Obj("LaneOwner"));
 		var freshPair = construct.newObject("LanePair");
@@ -489,7 +489,7 @@ class ValueArrayAccessMain {
 		construct.fieldSet(constructReceiver, "pair", freshPair);
 		construct.returnValue(construct.constVoid());
 		var rewrittenConstruct = methodRewriter.specialize("array_place_construct",
-			new IrFunction("LaneElement.constructPair", construct.arguments, Void, construct.blocks), []);
+			new IrFunction("LaneElement.constructPair", construct.arguments, Void, construct.blocks, None), []);
 		rewrittenConstruct = IrScalarReplacement.rewrite(rewrittenConstruct, IrObjectTable.of(objects), false, true);
 		for (block in rewrittenConstruct.blocks) for (located in block.instructions) switch located.value {
 			case NewObject(_, "LanePair"): throw "A constructed array value must stay scalar";
@@ -500,7 +500,7 @@ class ValueArrayAccessMain {
 		copyArgument.fieldSet(argumentReceiver, "pair", pairArgument);
 		copyArgument.returnValue(copyArgument.constVoid());
 		var rewrittenArgument = methodRewriter.specialize("array_place_copy_argument",
-			new IrFunction("LaneElement.copyArgument", copyArgument.arguments, Void, copyArgument.blocks), []);
+			new IrFunction("LaneElement.copyArgument", copyArgument.arguments, Void, copyArgument.blocks, None), []);
 		var composite = new IrBuilder(), compositeReceiver = composite.argument("this", element),
 			compositeCallback = composite.argument("callback", callbackType), compositeArray = composite.argument("array", arrayType);
 		var compositeSource = composite.fieldGet(compositeReceiver, "inner2", Obj("LaneInner"));
@@ -512,7 +512,7 @@ class ValueArrayAccessMain {
 		composite.fieldSet(compositeReceiver, "inner", compositeSaved);
 		composite.returnValue(composite.constVoid());
 		var rewrittenComposite = methodRewriter.specialize("array_place_composite_snapshot",
-			new IrFunction("LaneElement.compositeSnapshot", composite.arguments, Void, composite.blocks), []);
+			new IrFunction("LaneElement.compositeSnapshot", composite.arguments, Void, composite.blocks, None), []);
 		for (block in rewrittenComposite.blocks) for (located in block.instructions) switch located.value {
 			case NewObject(_, "LaneInner"): throw "A composite snapshot must stay scalar";
 			default:
@@ -522,13 +522,13 @@ class ValueArrayAccessMain {
 		defaults.fieldSet(defaultsReceiver, "inner", defaultInner);
 		defaults.returnValue(defaults.constVoid());
 		var rewrittenDefaults = methodRewriter.specialize("array_place_defaults",
-			new IrFunction("LaneElement.defaults", defaults.arguments, Void, defaults.blocks), []);
+			new IrFunction("LaneElement.defaults", defaults.arguments, Void, defaults.blocks, None), []);
 		var nestedDefaults = new IrBuilder(), nestedDefaultsReceiver = nestedDefaults.argument("this", element);
 		var defaultOuter = nestedDefaults.newObject("LaneOuter");
 		nestedDefaults.fieldSet(nestedDefaultsReceiver, "outer", defaultOuter);
 		nestedDefaults.returnValue(nestedDefaults.constVoid());
 		var rewrittenNestedDefaults = methodRewriter.specialize("array_place_nested_defaults",
-			new IrFunction("LaneElement.nestedDefaults", nestedDefaults.arguments, Void, nestedDefaults.blocks), []);
+			new IrFunction("LaneElement.nestedDefaults", nestedDefaults.arguments, Void, nestedDefaults.blocks, None), []);
 		var nestedConstruct = new IrBuilder(), nestedConstructReceiver = nestedConstruct.argument("this", element),
 			nestedConstructLabel = nestedConstruct.argument("label", Obj("LaneOwner"));
 		var constructedOuter = nestedConstruct.newObject("LaneOuter"), constructedInner = nestedConstruct.newObject("LaneInner");
@@ -544,7 +544,7 @@ class ValueArrayAccessMain {
 		nestedConstruct.fieldSet(nestedConstructReceiver, "outer", constructedOuter);
 		nestedConstruct.returnValue(nestedConstruct.constVoid());
 		var rewrittenNestedConstruct = methodRewriter.specialize("array_place_nested_construct",
-			new IrFunction("LaneElement.nestedConstruct", nestedConstruct.arguments, Void, nestedConstruct.blocks), []);
+			new IrFunction("LaneElement.nestedConstruct", nestedConstruct.arguments, Void, nestedConstruct.blocks, None), []);
 		for (block in rewrittenNestedConstruct.blocks) for (located in block.instructions) switch located.value {
 			case NewObject(_, "LaneInner" | "LaneOuter"): throw "A nested constructed snapshot must stay scalar";
 			case ToDyn(out, _) if (Type.enumEq(out.type, Nullable(Obj("LaneInner")))): throw "An optional nested snapshot must stay scalar";
@@ -556,20 +556,20 @@ class ValueArrayAccessMain {
 		nullConstruct.fieldSet(nullConstructReceiver, "outer", nullOuter);
 		nullConstruct.returnValue(nullConstruct.constVoid());
 		var rewrittenNullConstruct = methodRewriter.specialize("array_place_null_construct",
-			new IrFunction("LaneElement.nullConstruct", nullConstruct.arguments, Void, nullConstruct.blocks), []);
+			new IrFunction("LaneElement.nullConstruct", nullConstruct.arguments, Void, nullConstruct.blocks, None), []);
 		if (methodRewriter.requests.length != 0) throw "Unexpected nested array-place method request";
 		var adjustment = new IrBuilder(), adjustmentReceiver = adjustment.argument("this", Obj("LaneInner")),
 			delta = adjustment.argument("delta", I32);
 		var oldInner = adjustment.fieldGet(adjustmentReceiver, "value", I32);
 		adjustment.fieldSet(adjustmentReceiver, "value", adjustment.add(oldInner, delta));
 		adjustment.returnValue(adjustment.constVoid());
-		var adjustmentFunction = new IrFunction("LaneInner.adjust", adjustment.arguments, Void, adjustment.blocks);
+		var adjustmentFunction = new IrFunction("LaneInner.adjust", adjustment.arguments, Void, adjustment.blocks, None);
 		var caller = new IrBuilder(), callerReceiver = caller.argument("this", element), callerDelta = caller.argument("delta", I32),
 			callerChild = caller.fieldGet(callerReceiver, "inner", Obj("LaneInner"));
 		caller.currentBlock().instructions.push(new Located(MethodCall(new IrValue(900000, "$nested-call", Void), callerChild, "adjust", [callerDelta], false),
 			SourceProvenance.generated("array-place-test")));
 		caller.returnValue(caller.constVoid());
-		var callerFunction = new IrFunction("LaneElement.nestedCall", caller.arguments, Void, caller.blocks);
+		var callerFunction = new IrFunction("LaneElement.nestedCall", caller.arguments, Void, caller.blocks, None);
 		var callerName = methodRewriter.method(element, callerFunction.name, []);
 		var placeCaller = new IrBuilder(), placeArray = placeCaller.argument("array", arrayType), placeIndex = placeCaller.argument("index", I32),
 			placeDelta = placeCaller.argument("delta", I32), placeRoot = new IrValue(900000, "$element-place", element),
@@ -580,7 +580,7 @@ class ValueArrayAccessMain {
 		placeCaller.currentBlock().instructions.push(new Located(ArraySet(placeArray, placeIndex, placeRoot), placeProvenance));
 		placeCaller.returnValue(placeCaller.fieldGet(placeChild, "value", I32));
 		var rewrittenPlaceCaller = compiler.ir.IrValueArrayPlaceRewrite.rewrite(
-			new IrFunction("array_place_caller", placeCaller.arguments, I32, placeCaller.blocks), element, IrObjectTable.of(objects), helpers,
+			new IrFunction("array_place_caller", placeCaller.arguments, I32, placeCaller.blocks, None), element, IrObjectTable.of(objects), helpers,
 			methodRewriter, [placeRoot.id => true]);
 		var growthCaller = new IrBuilder(), growthArray = growthCaller.argument("array", arrayType), growthIndex = growthCaller.argument("index", I32),
 			growthCallback = growthCaller.argument("callback", callbackType), growthRoot = new IrValue(900002, "$growth-place", element);
@@ -590,7 +590,7 @@ class ValueArrayAccessMain {
 		growthCaller.currentBlock().instructions.push(new Located(ArraySet(growthArray, growthIndex, growthRoot), placeProvenance));
 		growthCaller.returnValue(growthCaller.constVoid());
 		var rewrittenGrowthCaller = compiler.ir.IrValueArrayPlaceRewrite.rewrite(
-			new IrFunction("array_place_growth_caller", growthCaller.arguments, Void, growthCaller.blocks), element, IrObjectTable.of(objects), helpers,
+			new IrFunction("array_place_growth_caller", growthCaller.arguments, Void, growthCaller.blocks, None), element, IrObjectTable.of(objects), helpers,
 			methodRewriter, [growthRoot.id => true]);
 		var valueCaller = new IrBuilder(), valueArray = valueCaller.argument("array", arrayType), valueIndex = valueCaller.argument("index", I32),
 			valuePair = valueCaller.argument("value", pairType), valueRoot = new IrValue(900005, "$value-place", element);
@@ -599,7 +599,7 @@ class ValueArrayAccessMain {
 		valueCaller.currentBlock().instructions.push(new Located(ArraySet(valueArray, valueIndex, valueRoot), placeProvenance));
 		valueCaller.returnValue(valueCaller.constVoid());
 		var rewrittenValueCaller = compiler.ir.IrValueArrayPlaceRewrite.rewrite(
-			new IrFunction("array_place_value_caller", valueCaller.arguments, Void, valueCaller.blocks), element, IrObjectTable.of(objects), helpers,
+			new IrFunction("array_place_value_caller", valueCaller.arguments, Void, valueCaller.blocks, None), element, IrObjectTable.of(objects), helpers,
 			methodRewriter, [valueRoot.id => true]);
 		var escapingPlace = new IrBuilder(), escapingArray = escapingPlace.argument("array", arrayType), escapingIndex = escapingPlace.argument("index", I32),
 			escapingRoot = new IrValue(900004, "$escaping-place", element);
@@ -607,11 +607,11 @@ class ValueArrayAccessMain {
 		escapingPlace.returnValue(escapingRoot);
 		var rejectedEscape = false;
 		try {
-			compiler.ir.IrValueArrayPlaceRewrite.rewrite(new IrFunction("escaping_place", escapingPlace.arguments, element, escapingPlace.blocks),
+			compiler.ir.IrValueArrayPlaceRewrite.rewrite(new IrFunction("escaping_place", escapingPlace.arguments, element, escapingPlace.blocks, None),
 				element, IrObjectTable.of(objects), helpers, methodRewriter, [escapingRoot.id => true]);
 		} catch (_:Dynamic) rejectedEscape = true;
 		if (!rejectedEscape) throw "An escaping array place must not be silently treated as a live alias";
-		var nestedOriginal = new IrFunction("LaneElement.nestedAround", nestedMethod.arguments, Void, nestedMethod.blocks);
+		var nestedOriginal = new IrFunction("LaneElement.nestedAround", nestedMethod.arguments, Void, nestedMethod.blocks, None);
 		var generatedMethods = methodRewriter.generate([callerFunction.name => callerFunction, adjustmentFunction.name => adjustmentFunction,
 			nestedOriginal.name => nestedOriginal]);
 		if (generatedMethods.length != 4) throw "Nested array-place method dispatch was not specialized";
@@ -1045,17 +1045,17 @@ class ValueArrayAccessMain {
 		optionalSnapshotBody.call(optionalPairHelpers.setter(optionalPairHelpers.slot(["value"])),
 			[optionalSnapshotInput, optionalSnapshotBody.constInt(0), optionalSnapshotBody.constInt(999)], Void);
 		optionalSnapshotBody.returnValue(optionalSnapshotBody.constVoid());
-		program.functions = [new IrFunction("main", [], Void, builder.blocks), rewrittenMethod, rewrittenThrow, rewrittenNested, rewrittenSnapshot,
+		program.functions = [new IrFunction("main", [], Void, builder.blocks, None), rewrittenMethod, rewrittenThrow, rewrittenNested, rewrittenSnapshot,
 			rewrittenOptional, rewrittenScalarSnapshot, rewrittenScalarWrite, rewrittenScalarNull, rewrittenPhiRead, rewrittenPhiWrite,
 			rewrittenCopy, rewrittenSelf, rewrittenOptionalCopy, rewrittenConstruct, rewrittenArgument, rewrittenComposite, rewrittenDefaults,
 			rewrittenNestedDefaults, rewrittenNestedConstruct, rewrittenNullConstruct, rewrittenPlaceCaller, rewrittenGrowthCaller, rewrittenValueCaller,
 			rewrittenOptionalSnapshot, adjustmentFunction,
-			new IrFunction("array_place_callback", callbackBody.arguments, Void, callbackBody.blocks),
-			new IrFunction("array_place_nested_callback", nestedBody.arguments, Void, nestedBody.blocks),
-			new IrFunction("array_place_snapshot_callback", snapshotBody.arguments, Void, snapshotBody.blocks),
-			new IrFunction("array_place_scalar_callback", scalarBody.arguments, Void, scalarBody.blocks),
-			new IrFunction("array_place_composite_callback", compositeBody.arguments, Void, compositeBody.blocks),
-			new IrFunction("array_optional_snapshot_callback", optionalSnapshotBody.arguments, Void, optionalSnapshotBody.blocks)].concat(generatedMethods)
+			new IrFunction("array_place_callback", callbackBody.arguments, Void, callbackBody.blocks, None),
+			new IrFunction("array_place_nested_callback", nestedBody.arguments, Void, nestedBody.blocks, None),
+			new IrFunction("array_place_snapshot_callback", snapshotBody.arguments, Void, snapshotBody.blocks, None),
+			new IrFunction("array_place_scalar_callback", scalarBody.arguments, Void, scalarBody.blocks, None),
+			new IrFunction("array_place_composite_callback", compositeBody.arguments, Void, compositeBody.blocks, None),
+			new IrFunction("array_optional_snapshot_callback", optionalSnapshotBody.arguments, Void, optionalSnapshotBody.blocks, None)].concat(generatedMethods)
 			.concat(helperFunctions).concat(pairBridgeFunctions).concat(pairElementFunctions).concat(pairHelperFunctions)
 			.concat(optionalPairBridgeFunctions).concat(optionalPairHelperFunctions).concat(nestedPairBridgeFunctions).concat(nestedPairHelperFunctions)
 			.concat(outerBridgeFunctions).concat(outerHelperFunctions);
@@ -1099,7 +1099,7 @@ class ValueArrayAccessMain {
 			missing.call(checkOptional, [missingArray, missingIndex], Void);
 			missing.call("std.sys_exit", [missing.constInt(0)], Void);
 			missing.returnValue(missing.constVoid());
-			program.functions.push(new IrFunction(initialized ? "missing_optional" : "uninitialized", [], Void, missing.blocks));
+			program.functions.push(new IrFunction(initialized ? "missing_optional" : "uninitialized", [], Void, missing.blocks, None));
 		}
 		for (outOfBounds in [false, true]) {
 			var badRead = new IrBuilder(), values = badRead.call(pairFactory.allocateName(), [badRead.constInt(1)], pairArrayType);
@@ -1107,7 +1107,7 @@ class ValueArrayAccessMain {
 			badRead.currentBlock().instructions.push(new Located(ArrayGet(ignored, values, invalid), SourceProvenance.generated("array-element-test")));
 			badRead.call("std.sys_exit", [badRead.constInt(0)], Void);
 			badRead.returnValue(badRead.constVoid());
-			program.functions.push(new IrFunction(outOfBounds ? "element_out_of_bounds" : "element_uninitialized", [], Void, badRead.blocks));
+			program.functions.push(new IrFunction(outOfBounds ? "element_out_of_bounds" : "element_uninitialized", [], Void, badRead.blocks, None));
 		}
 		var exception = new IrBuilder(), exceptionIndex = exception.constInt(0);
 		var exceptionArray = exception.call("__value_array_alloc", [
@@ -1137,7 +1137,7 @@ class ValueArrayAccessMain {
 		exception.select(checkUpdated); exception.branch(exception.equal(updated, exception.constInt(23)), pass, fail);
 		exception.select(pass); exception.call("std.sys_exit", [exception.constInt(42)], Void); exception.returnValue(exception.constVoid());
 		exception.select(fail); exception.call("std.sys_exit", [exception.constInt(1)], Void); exception.returnValue(exception.constVoid());
-		program.functions.push(new IrFunction("method_exception", [], Void, exception.blocks));
+		program.functions.push(new IrFunction("method_exception", [], Void, exception.blocks, None));
 		var scalarException = new IrBuilder(), scalarExceptionIndex = scalarException.constInt(0);
 		var scalarExceptionArray = scalarException.call("__value_array_alloc", [
 			scalarException.constInt(1), scalarException.typeValue(element), scalarException.constInt(shape.scalarStrideBits),
@@ -1165,7 +1165,7 @@ class ValueArrayAccessMain {
 		scalarException.select(scalarCheck); scalarException.branch(scalarException.equal(scalarCurrent, scalarException.constInt(20)), scalarPass, scalarFail);
 		scalarException.select(scalarPass); scalarException.call("std.sys_exit", [scalarException.constInt(42)], Void); scalarException.returnValue(scalarException.constVoid());
 		scalarException.select(scalarFail); scalarException.call("std.sys_exit", [scalarException.constInt(1)], Void); scalarException.returnValue(scalarException.constVoid());
-		program.functions.push(new IrFunction("scalar_exception", [], Void, scalarException.blocks));
+		program.functions.push(new IrFunction("scalar_exception", [], Void, scalarException.blocks, None));
 		var optionalStorage = new compiler.ir.IrOptionalFieldStorage(program.objects);
 		program.functions = optionalStorage.rewrite(program.functions);
 		program.objects = optionalStorage.physicalObjects(program.objects);

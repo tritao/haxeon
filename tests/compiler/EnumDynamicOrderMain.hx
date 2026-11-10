@@ -65,7 +65,7 @@ class EnumDynamicOrderMain {
 		builder.returnValue(builder.constInt(1));
 		builder.select(valid);
 		builder.returnValue(builder.constInt(42));
-		program.functions = [new compiler.ir.IrFunction("main", builder.arguments, I32, builder.blocks)];
+		program.functions = [new compiler.ir.IrFunction("main", builder.arguments, I32, builder.blocks, compiler.Provides.None)];
 		program.natives = [{name: "enumKind", library: "haxeon_runtime", symbol: "__reflect_is_enum", arguments: [Dyn], result: Bool}];
 		sys.io.File.saveBytes(path,
 			new WasmBackend().compile(program, {target: target == "wasm32" ? Wasm32 : WasmGc, debugNames: true}).bytes);

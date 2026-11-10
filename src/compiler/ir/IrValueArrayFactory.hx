@@ -1,5 +1,6 @@
 package compiler.ir;
 
+import compiler.Provides.ProviderOperation;
 import compiler.ir.Ir;
 import compiler.ir.IrValueLaneLayout.IrValueLaneTarget;
 import compiler.ir.codec.IrTypeCodec;
@@ -33,11 +34,11 @@ class IrValueArrayFactory {
 		var args = layoutArguments(builder), array = builder.call(allocNative(), [length].concat(args), arrayType);
 		builder.call(setBridgeNative(), [array].concat(closures(builder)), Void);
 		builder.returnValue(array);
-		var allocate = new IrFunction(allocateName(), builder.arguments, arrayType, builder.blocks);
+		var allocate = new IrFunction(allocateName(), builder.arguments, arrayType, builder.blocks, Serves(suffix, ProviderOperation.detailed(ProviderOperation.ValueArrayHelper, allocateName())));
 		var retype = new IrBuilder(), input = retype.argument("array", Array(Dyn));
 		var retyped = retype.call(retypeNative(), [input].concat(layoutArguments(retype)).concat(closures(retype)), arrayType);
 		retype.returnValue(retyped);
-		return [allocate, new IrFunction(retypeName(), retype.arguments, arrayType, retype.blocks)].concat(bridge.functions());
+		return [allocate, new IrFunction(retypeName(), retype.arguments, arrayType, retype.blocks, Serves(suffix, ProviderOperation.detailed(ProviderOperation.ValueArrayHelper, retypeName())))].concat(bridge.functions());
 	}
 
 	public function natives():Array<IrNative> {

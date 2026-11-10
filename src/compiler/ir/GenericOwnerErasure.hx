@@ -1,5 +1,6 @@
 package compiler.ir;
 
+import compiler.Provides.ProviderOperation;
 import compiler.ir.Ir;
 
 /** Operations through G<Dynamic> dispatch to the physical owner without changing object identity. */
@@ -72,7 +73,7 @@ class GenericOwnerErasure {
 				builder.select(next);
 			}
 			builder.throwValue(builder.toDyn(builder.constString('Invalid receiver for $owner.$member')));
-			functions.push(new IrFunction(name, builder.arguments, signature.result, builder.blocks));
+			functions.push(new IrFunction(name, builder.arguments, signature.result, builder.blocks, Serves(owner, ProviderOperation.detailed(ProviderOperation.GenericErased, operation + ":" + member))));
 		}
 	}
 
@@ -99,7 +100,7 @@ class GenericOwnerErasure {
 			builder.returnValue(builder.constBool(false));
 			builder.select(matched);
 			builder.returnValue(builder.constBool(true));
-			functions.push(new IrFunction(name, builder.arguments, Bool, builder.blocks));
+			functions.push(new IrFunction(name, builder.arguments, Bool, builder.blocks, Serves(owner, ProviderOperation.detailed(ProviderOperation.GenericTypeTest, exact ? "exact" : "instance"))));
 		}
 	}
 
@@ -141,7 +142,7 @@ class GenericOwnerErasure {
 				default: throw 'Invalid receiver for generic method reference "$name"';
 			}
 			builder.returnValue(result);
-			functions.push(new IrFunction(name, builder.arguments, signature.result, builder.blocks));
+			functions.push(new IrFunction(name, builder.arguments, signature.result, builder.blocks, Serves(owner, ProviderOperation.detailed(ProviderOperation.GenericMethodReference, name))));
 		}
 	}
 

@@ -1,5 +1,6 @@
 package compiler.ir;
 
+import compiler.Provides.ProviderOperation;
 import compiler.ir.Ir;
 import compiler.ir.SourceProvenance.Located;
 
@@ -50,7 +51,7 @@ class IrNullableScalarFields {
 			copy.terminator = block.terminator;
 			blocks.push(copy);
 		}
-		return changed ? new IrFunction(fn.name, fn.arguments, fn.result, blocks, fn.debugBindings, fn.inlineHint, fn.retention) : fn;
+		return changed ? fn.derive(blocks) : fn;
 	}
 
 	function needsRewrite(fn:IrFunction):Bool {
@@ -99,7 +100,7 @@ class IrNullableScalarFields {
 		builder.returnValue(value);
 		builder.select(changed);
 		builder.returnValue(builder.toDyn(normalized, type));
-		helpers.set(name, new IrFunction(name, builder.arguments, type, builder.blocks));
+		helpers.set(name, new IrFunction(name, builder.arguments, type, builder.blocks, Serves(name, ProviderOperation.detailed(ProviderOperation.NullableScalarHelper, "field"))));
 		return name;
 	}
 

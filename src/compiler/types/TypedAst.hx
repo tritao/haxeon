@@ -329,6 +329,9 @@ typedef TypedFunction = {
 	/** Declared `@:expose`: kept and exported to the host where the target has one. */
 	final ?isExposed:Bool;
 
+	/** What this function serves for a type when a generator made it as a helper (`compiler.Provides`); absent for any other function. */
+	final ?provides:compiler.Provides;
+
 	final arguments:Array<{name:String, type:CompilerType}>;
 	final result:CompilerType;
 	final statements:Array<TypedStatement>;

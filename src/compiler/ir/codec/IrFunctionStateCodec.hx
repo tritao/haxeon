@@ -20,7 +20,7 @@ import compiler.ir.SourceProvenance.SourceOrigin;
 
 /** Deterministic framing for a complete SSA IR function. */
 class IrFunctionStateCodec {
-	static inline final VERSION = 12;
+	static inline final VERSION = 13;
 	static inline final MAX_BLOCKS = 0x100000;
 	static inline final MAX_INSTRUCTIONS = 0x1000000;
 
@@ -102,6 +102,8 @@ class IrFunctionStateCodec {
 		IrTypeCodec.writeType(output, fn.result, 0, erase);
 		output.writeByte(fn.inlineHint ? 1 : 0);
 		output.writeByte(fn.retention);
+		if (identified)
+			writeProvides(output, fn.provides);
 		var debugBindings = identified ? fn.debugBindings : [];
 		output.writeInt32(debugBindings.length);
 		for (binding in debugBindings) {
@@ -151,6 +153,27 @@ class IrFunctionStateCodec {
 		return output.getBytes();
 	}
 
+	/** What a function serves is part of its persisted state, not of its code fingerprint: it never changes the body. */
+	static function writeProvides(output:BytesOutput, provides:compiler.Provides):Void {
+		switch provides {
+			case None:
+				output.writeByte(0);
+			case Serves(typeKey, operation):
+				output.writeByte(1);
+				IrTypeCodec.writeString(output, typeKey);
+				IrTypeCodec.writeString(output, operation);
+		}
+	}
+
+	static function readProvides(input:BytesInput, limit:Int):compiler.Provides
+		return switch input.readByte() {
+			case 0: None;
+			case 1:
+				var typeKey = IrTypeCodec.readString(input, limit);
+				Serves(typeKey, cast IrTypeCodec.readString(input, limit));
+			default: throw "Invalid IR function provider";
+		};
+
 	public static function decode(bytes:Bytes):IrFunction {
 		var input = new BytesInput(bytes);
 		input.bigEndian = false;
@@ -170,7 +193,8 @@ class IrFunctionStateCodec {
 				result = IrTypeCodec.readType(input, bytes.length, 0),
 				debugBindings:Array<compiler.ir.IrFunction.IrDebugBinding> = [];
 			var inlineHint = version >= 9 && input.readByte() != 0,
-				retention:compiler.ir.IrFunction.IrRetention = version >= 10 ? input.readByte() : Reachable;
+				retention:compiler.ir.IrFunction.IrRetention = version >= 10 ? input.readByte() : Reachable,
+				provides = version >= 13 ? readProvides(input, bytes.length) : compiler.Provides.None;
 			if (version >= 3) {
 				var bindingCount = input.readInt32();
 				if (bindingCount < 0 || bindingCount > IrValueTableCodec.MAX_VALUES)
@@ -230,7 +254,7 @@ class IrFunctionStateCodec {
 			}
 			if (input.position != bytes.length)
 				throw "Trailing IR function state data";
-			return new IrFunction(name, arguments, result, blocks, debugBindings, inlineHint, retention);
+			return new IrFunction(name, arguments, result, blocks, provides, debugBindings, inlineHint, retention);
 		} catch (error:haxe.io.Eof) {
 			throw "Truncated IR function state";
 		}

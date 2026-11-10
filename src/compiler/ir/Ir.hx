@@ -298,6 +298,10 @@ class IrProgram {
 
 	public var positionalSources:Map<String, String> = [];
 
+	/** The generated helpers of this program, by what each serves (`IrProviders`); an index over `functions`, built when asked. */
+	public function providers():Map<String, String>
+		return IrProviders.rows(functions);
+
 	public function new(entryPoint:String)
 		this.entryPoint = entryPoint;
 

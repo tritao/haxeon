@@ -150,7 +150,7 @@ class IrValueArrayOptionalRewrite {
 		}
 		var debug = [for (binding in fn.debugBindings) if (!unboxes.exists(binding.value.id) && !writes.exists(binding.value.id)
 			&& !rawReads.exists(binding.value.id) && !dynamicWrites.exists(binding.value.id) && !dynamicBoxes.exists(binding.value.id)) binding];
-		return new IrFunction(fn.name, fn.arguments, fn.result, blocks, debug, fn.inlineHint, fn.retention);
+		return fn.derive(blocks, null, null, debug);
 	}
 
 	static function mutation(name:String, args:Array<IrValue>, output:IrValue, arrayType:IrType):Null<String> {
