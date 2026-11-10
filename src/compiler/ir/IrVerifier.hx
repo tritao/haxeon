@@ -379,13 +379,28 @@ class IrVerifier {
 				throw "A value lane reference cannot cross an ordinary function boundary";
 		var graph = new IrGraph(fn), values = scratchValues;
 		values.reset();
+		// Lane and scalar stack references are rare. A function whose arguments and outputs have none of those types has no operand of
+		// those types either (an operand has the type of its definition, checked below), so the operand scans for them are skipped.
+		var lanes = false, scalarRefs = false;
+		for (argument in fn.arguments) {
+			lanes = lanes || IrValueLaneReference.isCarrier(argument.type);
+			scalarRefs = scalarRefs || IrHlScalarRef.element(argument.type) != null;
+		}
+		for (block in fn.blocks)
+			for (located in block.instructions) {
+				var produced = IrOperands.output(located.value);
+				if (produced != null) {
+					lanes = lanes || IrValueLaneReference.isCarrier(produced.type);
+					scalarRefs = scalarRefs || IrHlScalarRef.element(produced.type) != null;
+				}
+			}
 		for (argument in fn.arguments)
 			values.define(argument, fn.blocks[0].id, -1);
 		for (id in graph.order) {
 			var block = graph.block(id), ordinary = false;
 			for (position in 0...block.instructions.length) {
 				var instruction = block.instructions[position].value;
-				verifyScalarReferenceUse(instruction, scalarFunctions, carrierSlots, physicalValues, fn, signatures);
+				verifyScalarReferenceUse(instruction, scalarFunctions, carrierSlots, physicalValues, fn, signatures, lanes, scalarRefs);
 				switch instruction {
 					case Phi(_, _):
 						if (ordinary)
@@ -518,7 +533,8 @@ class IrVerifier {
 	}
 
 	static function verifyScalarReferenceUse(instruction:IrInstruction, scalarFunctions:IrVerifyTable<Bool>, carrierSlots:IrVerifyTable<Bool>,
-			physicalValues:IrVerifyTable<Bool>, fn:IrFunction, signatures:IrVerifyTable<{arguments:Array<IrType>, result:IrType}>):Void {
+			physicalValues:IrVerifyTable<Bool>, fn:IrFunction, signatures:IrVerifyTable<{arguments:Array<IrType>, result:IrType}>, lanes:Bool,
+			scalarRefs:Bool):Void {
 		switch instruction {
 			case ToDyn(output, value) if (sameType(output.type, Dyn) && !IrValueLaneReference.isCarrier(value.type) && requiresLogicalValueAdapter(value.type, physicalValues)
 				&& !isGeneratedClosureAdapterValue(fn, value, signatures)):
@@ -547,7 +563,7 @@ class IrVerifier {
 			case Call(_, name, _) if (name == IrHlScalarRef.LOAD || carrierSlots.exists(name) && !carrierSlots.get(name)):
 			default: throw "Only a value lane operation can create a lane reference";
 		}
-		for (input in IrOperands.inputs(instruction)) if (IrValueLaneReference.isCarrier(input.type)) switch instruction {
+		if (lanes) for (input in IrOperands.inputs(instruction)) if (IrValueLaneReference.isCarrier(input.type)) switch instruction {
 			case FieldSet(_, _, value) if (value.id == input.id):
 			case Phi(_, _):
 			case Call(_, name, _) if (scalarFunctions.exists(name) || carrierSlots.exists(name) && carrierSlots.get(name)):
@@ -562,7 +578,7 @@ class IrVerifier {
 			case Call(_, name, _) if (name == IrHlScalarRef.ADDRESS):
 			default: throw "Only a scalar address operation can create a stack reference";
 		}
-		for (input in IrOperands.inputs(instruction)) if (IrHlScalarRef.element(input.type) != null) switch instruction {
+		if (scalarRefs) for (input in IrOperands.inputs(instruction)) if (IrHlScalarRef.element(input.type) != null) switch instruction {
 			case Call(_, name, args) if ((name == IrHlScalarRef.LOAD || name == IrHlScalarRef.STORE) && args.length > 0 && args[0].id == input.id):
 			case Call(_, name, _) if (scalarFunctions.exists(name)):
 			case CallClosure(_, closure, args) if (scalarClosureArgument(closure.type, args, input)):
