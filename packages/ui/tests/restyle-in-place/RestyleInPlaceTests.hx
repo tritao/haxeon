@@ -1048,7 +1048,7 @@ class RestyleInPlaceTests {
       var root = ui.submitCached(build, frame, "list-selection-" + selected.value), count = 0;
       root.walk(node -> {
         if (node.semantics != null && node.semantics.role == AccessibilityRole.CollectionItem &&
-          !(node.semantics.states & haxeon.ui.semantics.AccessibilityState.Selected).isEmpty()) count++;
+          node.semantics.states.contains(haxeon.ui.semantics.AccessibilityState.Selected)) count++;
       });
       check(count == (selected.value < 0 || selected.value >= 40 ? 0 : 1), "Controlled list selection is stale");
       check(notifications == 0, "External list selection notified its owner");

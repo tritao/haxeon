@@ -68,14 +68,15 @@ struct Shortcut implements Hashable {
 		return key >= 340 && key <= 347;
 
 	function modifierNames(stable:Bool):Array<String> {
+		var modifiers = this.modifiers;
 		var parts:Array<String> = [];
-		if (!(modifiers & UiModifier.Control).isEmpty())
+		if (modifiers.contains(UiModifier.Control))
 			parts.push(stable ? "ctrl" : "Ctrl");
-		if (!(modifiers & UiModifier.Shift).isEmpty())
+		if (modifiers.contains(UiModifier.Shift))
 			parts.push(stable ? "shift" : "Shift");
-		if (!(modifiers & UiModifier.Alt).isEmpty())
+		if (modifiers.contains(UiModifier.Alt))
 			parts.push(stable ? "alt" : "Alt");
-		if (!(modifiers & UiModifier.Super).isEmpty())
+		if (modifiers.contains(UiModifier.Super))
 			parts.push(stable ? "super" : "Super");
 		return parts;
 	}

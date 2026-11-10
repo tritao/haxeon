@@ -99,7 +99,7 @@ class SearchPickerTests {
 		check(focus != null && focus.styleType == "text-field", "Picker did not focus its input");
 		var focusedNode:RenderNode = cast focus;
 		var focusSemantics:Semantics = cast focusedNode.semantics;
-		check(!(focusSemantics.states & AccessibilityState.Focused).isEmpty(), "Focused input state was not applied during submit");
+		check(focusSemantics.states.contains(AccessibilityState.Focused), "Focused input state was not applied during submit");
 		ui.key(UiEventKind.KeyDown, UiKey.Up);
 		root = ui.submit(picker, frame);
 		root = ui.submit(picker, frame);
@@ -113,7 +113,7 @@ class SearchPickerTests {
 		check(model.query() == "filter" && model.selected == 0, "Typing escaped the search input");
 		var first = row(root, "Result 0"), disabled = row(root, "Result 1");
 		var disabledSemantics:haxeon.ui.semantics.Semantics = cast disabled.semantics;
-		check(!(disabledSemantics.states & AccessibilityState.Disabled).isEmpty(), "Disabled result lost its accessible state");
+		check(disabledSemantics.states.contains(AccessibilityState.Disabled), "Disabled result lost its accessible state");
 		click(ui, first, 1); check(model.accepted == -1, "Secondary click accepted a result");
 		click(ui, disabled, 0); check(model.accepted == -1, "Disabled result was accepted");
 		click(ui, first, 0); check(model.accepted == 0, "Primary click did not accept its result");

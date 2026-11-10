@@ -248,11 +248,11 @@ class TreeView implements View {
 	function selectWithModifiers(nodeKey:String, modifiers:UiModifier):Bool {
 		if (!multiSelect)
 			return false;
-		if (!(modifiers & UiModifier.Shift).isEmpty()) {
+		if (modifiers.contains(UiModifier.Shift)) {
 			extendSelection(nodeKey);
 			return true;
 		}
-		if (!(modifiers & (UiModifier.Control | UiModifier.Super)).isEmpty()) {
+		if (modifiers.contains(UiModifier.Control) || modifiers.contains(UiModifier.Super)) {
 			toggleSelection(nodeKey);
 			return true;
 		}
@@ -557,7 +557,7 @@ class TreeView implements View {
 		if (nextKey == null || nextKey == entry.key)
 			return;
 		event.preventDefault();
-		if (multiSelect && !(event.modifiers & UiModifier.Shift).isEmpty()) extendSelection(nextKey);
+		if (multiSelect && event.modifiers.contains(UiModifier.Shift)) extendSelection(nextKey);
 		else select(nextKey);
 		scrollTo(nextKey);
 		var target = itemIds.get(nextKey);
@@ -957,7 +957,7 @@ private class TreeGuideVisibility {
 	}
 
 	function focusedWithin(node:RenderNode, context:BuildContext):Bool {
-		if ((context.interactionStates.get(node.id)).contains(StyleState.Focused)) return true;
+		if (context.interactionStates.get(node.id).contains(StyleState.Focused)) return true;
 		for (child in node.children) if (focusedWithin(child, context)) return true;
 		return false;
 	}

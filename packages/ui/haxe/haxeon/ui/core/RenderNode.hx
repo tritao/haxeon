@@ -669,7 +669,7 @@ class RenderNode {
 	function syncLayoutInputs(changes:LayoutChanges):Void {
 		syncHitTestPolicy();
 		syncSceneRevisions();
-		if (!(invalidationFlags & UiDirtyFlag.NativeInputs).isEmpty()) changes.inputs.set(id.value, 0);
+		if ((invalidationFlags & UiDirtyFlag.NativeInputs) != UiDirtyFlag.empty()) changes.inputs.set(id.value, 0);
 		for (child in children) child.syncLayoutInputs(changes);
 	}
 
@@ -851,23 +851,21 @@ class RenderNode {
 		var compositeChanged = false;
 		if (diff.changed) {
 			invalidationFlags = UiDirtyFlag.NeedsStyle | styleDirtyFlags(diff.impact);
-			if (!(diff.impact & (StyleImpact.Paint | StyleImpact.TextLayout)).isEmpty())
+			if (diff.impact.contains(StyleImpact.Paint) || diff.impact.contains(StyleImpact.TextLayout))
 				contentChanged = true;
-			if (!(diff.impact & (StyleImpact.Layout | StyleImpact.TextLayout |
-				StyleImpact.HitGeometry)).isEmpty())
+			if (diff.impact.contains(StyleImpact.Layout) || diff.impact.contains(StyleImpact.TextLayout) || diff.impact.contains(StyleImpact.HitGeometry))
 				geometryChanged = true;
-			if (!(diff.impact & StyleImpact.Composite).isEmpty())
+			if (diff.impact.contains(StyleImpact.Composite))
 				compositeChanged = true;
 		}
 
 		var rawFlags = layoutInputDiffFlags(previous);
 		invalidationFlags |= rawFlags;
-		if (!(rawFlags & (UiDirtyFlag.NeedsPaint | UiDirtyFlag.NeedsTextLayout)).isEmpty())
+		if (rawFlags.contains(UiDirtyFlag.NeedsPaint) || rawFlags.contains(UiDirtyFlag.NeedsTextLayout))
 			contentChanged = true;
-		if (!(rawFlags & (UiDirtyFlag.NeedsLayout | UiDirtyFlag.NeedsTextLayout |
-			UiDirtyFlag.NeedsHitGeometry)).isEmpty())
+		if (rawFlags.contains(UiDirtyFlag.NeedsLayout) || rawFlags.contains(UiDirtyFlag.NeedsTextLayout) || rawFlags.contains(UiDirtyFlag.NeedsHitGeometry))
 			geometryChanged = true;
-		if (!(rawFlags & UiDirtyFlag.NeedsComposite).isEmpty())
+		if (rawFlags.contains(UiDirtyFlag.NeedsComposite))
 			compositeChanged = true;
 
 		// Text and external intrinsic content are not represented by computed

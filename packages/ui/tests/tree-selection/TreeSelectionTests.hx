@@ -50,7 +50,7 @@ class TreeSelectionTests {
     var keys:Array<String> = [];
     root.walk(function(node) {
       if (node.semantics != null && node.semantics.role == AccessibilityRole.TreeItem
-          && !(node.semantics.states & AccessibilityState.Selected).isEmpty()) keys.push(node.semantics.label);
+          && node.semantics.states.contains(AccessibilityState.Selected)) keys.push(node.semantics.label);
     });
     return keys.join(",");
   }

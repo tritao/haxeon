@@ -4708,7 +4708,7 @@ All six 500-cycle memory captures pass the unchanged gate. Raw paired results (M
 | 3 / control | 10.00 | [30.47, 3.59, 0.78, 5.62] | 1.84 |
 | 3 / candidate | 10.16 | [29.84, 3.75, 0.78, 5.62] | 2.17 |
 
-Warmup RSS medians are 10.00 → 10.16 MiB; growth-window medians are `[30.00, 3.59, 0.78, 5.62]` → `[29.84, 3.75, 0.78, 5.78]` MiB. The +0.16 MiB shifts remain recorded within the established paired-window bounds; no ceiling changed.
+RSS-growth medians from cycles 200–500 are 10.00 → 10.16 MiB; growth-window medians are `[30.00, 3.59, 0.78, 5.62]` → `[29.84, 3.75, 0.78, 5.78]` MiB. The +0.16 MiB shifts remain recorded within the established paired-window bounds; no ceiling changed.
 
 Browser comparisons use 120 warmup and 120 measured frames. Each Wasm GC pair has identical object counts; all thirty browser runs pass:
 
@@ -4895,10 +4895,10 @@ Per-type histograms also match after summing entries with the same printed type 
 keys entries by type pointer, so printed labels can repeat). Hierarchy-to-sensors moves between refill
 boundaries; its lower KiB counter is not a reduction in allocated object bytes. No budget ceiling changes.
 
-All six 500-cycle headless memory runs pass. Values below are MiB: RSS after warmup followed by growth in
-each of the four windows.
+All six 500-cycle headless memory runs pass. Values below are MiB: cumulative RSS growth from cycles
+200–500, followed by growth in windows 100–200, 200–300, 300–400 and 400–500.
 
-| Pair | Build | After warmup | Window 1 | Window 2 | Window 3 | Window 4 |
+| Pair | Build | 200–500 growth | Window 1 | Window 2 | Window 3 | Window 4 |
 |---|---|---:|---:|---:|---:|---:|
 | 1 | control | 10.47 | 29.22 | 3.59 | 1.09 | 5.78 |
 | 1 | candidate | 10.16 | 30.00 | 3.75 | 0.78 | 5.62 |
@@ -4907,10 +4907,12 @@ each of the four windows.
 | 3 | control | 12.03 | 29.69 | 3.75 | 0.78 | 7.50 |
 | 3 | candidate | 9.84 | 29.84 | 3.28 | 0.78 | 5.78 |
 
-Median absolute RSS at the four endpoints is **40.16 / 43.75 / 44.53 / 50.15 MiB** for control and
-**40.16 / 43.91 / 44.69 / 50.31 MiB** for candidate. The late-window median is +0.16 MiB; this is inside the
-control spread (the final endpoint spans 50.15–53.75 MiB) and does not establish a persistent memory regression.
-It is recorded rather than described as an exact tie. No run is discarded or repeated.
+The cumulative growth medians from cycles 200–500 are **10.47 → 10.16 MiB**. Window-growth
+medians are **29.69 / 3.59 / 0.78 / 5.78** → **30.00 / 3.75 / 0.78 / 5.62 MiB**.
+Correction: `rssAfterWarmupMiB` is growth from cycle 200 to 500, not an absolute RSS baseline.
+The previous endpoint estimates added it to windows that it already includes and double-counted
+that growth. Those endpoint estimates are withdrawn; the raw window rows above are unchanged.
+No run is discarded or repeated.
 
 Browser pairs use the same host, explicit guest hashes above, 120 warmup frames and 120 measured frames.
 Numbers below are medians across all three pairs.
@@ -4936,3 +4938,198 @@ and calls are unchanged.
 Raw aggregate reports, guest hashes, exact type tables and build scripts are retained in the session’s disk
 measurement archive; individual captures are deleted after extracting their numbers. The final FFI enum group
 uses this batch as its next control.
+
+### Discrete style properties and generated closure size (2026-11-10)
+
+The layout/text enum batch above grew the default development Showcase modules by
+458,706 bytes on Wasm32 and 107,818 bytes on Wasm GC. A per-function body census
+identified an unused capability on `StyleProperty<T>`: even discrete properties
+instantiated its nullable `T -> T -> Float -> T` interpolation field. Seven enum
+signatures entered the closure-cast graph. Wasm32 consequently emitted 152 extra
+closure adapters and eight extra cast dispatchers; their bodies alone added
+78,405 and 15,764 bytes. The resulting functions also expanded GC-root, patch,
+slot and name metadata. Wasm GC emitted seven 808-byte enum varargs adapters,
+along with other closure and type-dispatch growth.
+
+Interpolation now belongs to `StyleInterpolatedProperty<T>`. Discrete properties
+retain their typed default and no interpolation function signature. Float and
+reference properties that actually interpolate use the explicit capability;
+color retains its dedicated typed implementation. There is no second legacy
+constructor or fallback implementation.
+
+| Development Showcase module | Before enum batch | Enum batch (`4b16f69d`) | Callback split, virtual-getter trial |
+| --- | ---: | ---: | ---: |
+| Wasm32 bytes | 12,041,570 | 12,500,276 | 12,194,793 |
+| Wasm GC bytes | 5,903,055 | 6,010,873 | 5,958,117 |
+| Wasm32 defined functions | 6,901 | 7,249 | 7,005 |
+| Wasm GC defined functions | 4,309 | 4,436 | 4,349 |
+
+The fix removes 305,483 / 52,756 bytes respectively. Both targets' closure-adapter
+and closure-cast body counts and bytes return exactly to their pre-enum-batch
+values. The remaining growth includes the seven concrete style value classes,
+enum equality/hash and tag escape helpers, and metadata for those types. On
+Wasm32 the residual 153,223 bytes comprise 45,511 bytes of GC-root metadata,
+43,117 patch metadata, 39,882 code, and 24,713 other sections. On Wasm GC the
+remaining 55,062 bytes comprise 27,916 patch metadata, 17,529 code, and 9,617
+other sections. These are measured development modules, with patch metadata
+retained. The final native-enum group must compare its own function/section
+sizes against this corrected control.
+
+In the virtual-getter trial, HashLink editor size falls from 105,419,778 to **105,377,728 bytes**; the headless
+module falls from 106,223,172 to **106,183,652 bytes**. Exact action-window
+censuses tie the published control, including the aggregated per-type tables:
+**1,677 objects / 117,240 bytes** for hierarchy-to-sensors and **8,621 / 580,816**
+for selection. Native census rows with the same printed type name are summed,
+rather than overwritten.
+
+Validation: compiler suite **856 passed / 0 failed**, all ten UI scripts, full
+Wasm parity and UI snapshots (both inlining modes), app suite including CAD plate
+workflow, and all nine retention scenarios. The snapshot fixture checks float
+and reference interpolation as well as rejection of discrete interpolation.
+The detached app's native configure step reported `CadKit needs a prebuilt OCCT
+and none was found.` at its relative cache path; the freshly compiled app tests
+passed with the existing unchanged native libraries used by the preceding gate.
+
+One editor build before serialization ended with **SIGTERM** (HashLink status
+`1073741839`) and no compiler diagnostic. The machine was reported at load 37
+on 20 cores. The failed attempt is excluded. A one-shot rebuild under the shared
+heavy-build lock succeeded; signal tracing recorded no SIGTERM in that run.
+The original sender was not observed, so resource pressure remains the likely
+explanation, rather than a confirmed signal source.
+
+The virtual-getter trial used three alternating pairs under both shared locks.
+All samples are retained; this is the pre-field revision, not a selected passing retry.
+
+| Action | Control KiB | Trial KiB | Control ms | Trial ms |
+|---|---:|---:|---:|---:|
+| console->telemetry | 73.0 | 73.0 | 1.42 | 1.56 |
+| hierarchy->sensors | 109.3 | 111.0 | 2.03 | 2.21 |
+| hover-away | 13.6 | 13.6 | 0.47 | 0.45 |
+| hover-enter | 0.5 | 0.5 | 0.00 | 0.00 |
+| hover-field | 12.3 | 12.3 | 0.49 | 0.46 |
+| hover-inside | 0.5 | 0.5 | 0.00 | 0.00 |
+| hover-other | 9.9 | 9.9 | 0.50 | 0.46 |
+| idle | 0.3 | 0.3 | 0.01 | 0.01 |
+| idle-focused | 0.3 | 0.3 | 0.01 | 0.01 |
+| scroll-inspector | 21.7 | 21.7 | 0.77 | 0.73 |
+| selection | 567.203125 (exact) | 567.203125 (exact) | 2.87 | 2.95 |
+| sensors->hierarchy | 78.3 | 78.3 | 1.57 | 1.71 |
+| telemetry->console | 89.4 | 89.4 | 1.52 | 1.63 |
+| type-backspace | 16.1 | 16.1 | 0.44 | 0.43 |
+| type-char | 16.1 | 16.1 | 0.45 | 0.43 |
+
+Hierarchy’s refill counter rises 109.3 → 111.0 KiB, while its exact object/byte census above ties.
+No budget ceiling changes. Frame medians vary substantially within these runs; the table includes all pairs.
+
+| Pair | Build | 200–500 growth MiB | Window 1 | Window 2 | Window 3 | Window 4 |
+|---|---|---:|---:|---:|---:|---:|
+| 1 | control | 10.47 | 29.53 | 3.91 | 0.94 | 5.62 |
+| 1 | candidate | 10.62 | 29.53 | 4.06 | 0.94 | 5.62 |
+| 2 | candidate | 10.31 | 30.16 | 3.75 | 0.62 | 5.94 |
+| 2 | control | 10.00 | 29.53 | 3.59 | 0.78 | 5.62 |
+| 3 | control | 10.47 | 29.06 | 4.06 | 0.78 | 5.62 |
+| 3 | candidate | 10.31 | 29.53 | 3.75 | 0.78 | 5.78 |
+
+All six memory gates pass. Cumulative RSS-growth medians from cycles 200–500 are
+10.47 → 10.31 MiB; last-window growth medians are 5.62 → 5.78 MiB. The earlier
+49.99 → 50.77 MiB “absolute” estimate double-counted the cumulative growth and is invalid.
+The final source retains the original constructor-initialized, externally read-only metadata
+field to avoid introducing virtual dispatch on this path. The callback remains confined to
+interpolated properties. That source is measured separately against the same published control.
+
+Every browser trial retains 4,320 GC objects in full/static/text-heavy and 8,604 in editing,
+including identical per-frame allocation histograms. Wasm32 retains 3,840 allocation calls / 132,480 bytes.
+
+#### Final constructor-initialized metadata field
+
+The final source keeps `hasInterpolation` as an externally read-only field initialized by constructors.
+Discrete properties carry no interpolation callback; interpolated properties own their non-null typed callback.
+This preserves the original direct metadata read. All ten UI scripts and all-target snapshots pass on this
+revision, as do the freshly built app suite and all nine retention scenarios. The compiler is unchanged from
+the 856/0 suite and full compiler parity run.
+
+Control is published `4b16f69d`; candidate is the source in this commit. Both use frozen outer `2de94628c`
+with identical required Flags/NativeIdentity ports, VM `3ea38fcf`, and the same machine. Heavy builds are
+serialized with `haxeon-heavy.lock`. Each fixed three-pair measurement holds the measurement lock and
+heavy-build lock, includes every sample, and deletes captures after extracting results. All six budget runs,
+six 500-cycle memory runs and thirty browser runs pass. No budget ceiling changes.
+
+| Development module | Published control bytes | Final bytes | Reduction |
+|---|---:|---:|---:|
+| editor | 105,419,778 | 105,384,762 | 35,016 |
+| headless | 106,223,172 | 106,190,686 | 32,486 |
+| web32 | 12,500,276 | 12,193,198 | 307,078 |
+| webgc | 6,010,873 | 5,956,459 | 54,414 |
+
+Final Wasm32 / GC defined-function counts are **7,002 / 4,346** (published **7,249 / 4,436**).
+Closure-adapter and closure-cast counts and body bytes return exactly to the pre-enum-batch values on both
+targets. Residual growth over that older control is 151,628 / 53,404 bytes: on Wasm32, 45,872 GC-root
+metadata, 42,763 patch metadata, 38,680 code and 24,313 other bytes; on GC, 27,562 patch metadata,
+16,610 code and 9,232 other bytes. Remaining additions include the concrete style value types, enum equality/
+hash and tag escape helpers, and their development metadata. The next native-enum group compares its own
+function/section sizes against this corrected result.
+
+| Action | Control KiB | Final KiB | Control ms | Final ms |
+|---|---:|---:|---:|---:|
+| console->telemetry | 73.0 | 71.0 | 1.41 | 1.44 |
+| hierarchy->sensors | 111.0 | 111.0 | 1.93 | 2.01 |
+| hover-away | 13.6 | 13.6 | 0.53 | 0.47 |
+| hover-enter | 0.5 | 0.5 | 0.00 | 0.00 |
+| hover-field | 12.3 | 12.3 | 0.56 | 0.49 |
+| hover-inside | 0.5 | 0.5 | 0.00 | 0.00 |
+| hover-other | 9.9 | 9.9 | 0.56 | 0.50 |
+| idle | 0.3 | 0.3 | 0.02 | 0.01 |
+| idle-focused | 0.3 | 0.3 | 0.01 | 0.01 |
+| scroll-inspector | 21.7 | 21.7 | 0.85 | 0.75 |
+| selection | 567.203125 (exact) | 567.203125 (exact) | 3.03 | 3.17 |
+| sensors->hierarchy | 78.3 | 78.3 | 1.51 | 1.53 |
+| telemetry->console | 89.4 | 89.4 | 1.44 | 1.64 |
+| type-backspace | 16.1 | 16.1 | 0.52 | 0.45 |
+| type-char | 16.1 | 16.1 | 0.52 | 0.46 |
+
+Timing spread is material: console-to-telemetry pairs are **1.41 → 2.16**, **1.42 → 1.44**,
+and **1.28 → 1.33 ms**; telemetry-to-console pairs are **1.44 → 2.24**, **1.48 → 1.64**,
+and **1.35 → 1.52 ms**. Selection samples are control **3.03 / 3.02 / 5.47 ms**, final
+**3.07 / 3.24 / 3.17 ms**. The table includes every run; these samples do not isolate a small
+instruction-cost difference from machine variation. No fastest sample is selected.
+
+Exact final-source censuses again tie, including the aggregated type histograms: hierarchy-to-sensors
+**1,677 objects / 117,240 bytes**, selection **8,621 / 580,816**. The refill-quantized KiB counter and exact
+census measure different quantities; the exact counts settle any refill-boundary difference.
+
+| Pair | Build | RSS growth 200–500 MiB | 100–200 | 200–300 | 300–400 | 400–500 |
+|---|---|---:|---:|---:|---:|---:|
+| 1 | control | 9.84 | 30.47 | 3.28 | 0.94 | 5.62 |
+| 1 | candidate | 10.62 | 29.22 | 4.06 | 0.78 | 5.78 |
+| 2 | candidate | 10.16 | 29.22 | 3.44 | 0.94 | 5.78 |
+| 2 | control | 10.31 | 30.00 | 3.91 | 0.78 | 5.62 |
+| 3 | control | 10.16 | 29.38 | 3.91 | 0.78 | 5.47 |
+| 3 | candidate | 10.16 | 30.31 | 3.59 | 0.78 | 5.78 |
+
+Cumulative RSS-growth medians from cycles 200–500 are **10.16 → 10.16 MiB**. Window medians are
+**30.00 / 3.91 / 0.78 / 5.62** → **29.22 / 3.59 / 0.78 / 5.78 MiB**. Last-window growth is +0.16 MiB,
+offset by lower earlier-window growth; cumulative growth ties. These are growth measurements, not absolute
+RSS or an absolute baseline to which the windows can be added. No run is retried or discarded.
+
+| Target / scene | Control median / p95 ms | Final median / p95 ms | Control objects | Final objects |
+|---|---:|---:|---:|---:|
+| Wasm GC / full | 2.20 / 2.80 | 2.10 / 2.90 | 4320 | 4320 |
+| Wasm GC / static | 2.10 / 2.90 | 2.10 / 2.90 | 4320 | 4320 |
+| Wasm GC / text-heavy | 2.30 / 3.70 | 2.40 / 3.90 | 4320 | 4320 |
+| Wasm GC / editing | 2.60 / 3.30 | 2.40 / 3.20 | 8604 | 8604 |
+| Wasm 32 / full | 2.10 / 2.60 | 2.10 / 2.70 | — | — |
+
+All GC allocation histograms tie: 120 frames at 36 objects in full/static/text-heavy; editing has
+93 frames at 79, 24 at 47, and three at 43. Wasm32 retains **3,840 allocation calls / 132,480 bytes**,
+one collection and a largest allocation of 262,160 bytes in every sample. Heap high-water and growth
+samples are retained in the aggregate report; these counters do not show additional allocated objects/bytes.
+
+Module SHA-256 pairs (published control → final source):
+
+- `editor`: `2c5e92b5f8d1a9b1c16a08f7535c388f823019be0399c6ed4f314987ad339f7f` → `449a72e3b71dbf5e7809f2442c169dca4146fe38c135fc4cd5ea6ded78fca693`.
+- `headless`: `c38e087832eb1da313f504c8f205ac2c0f0e4bba8bffcc23ee1fb6986cdbde35` → `219356e5595e1d0d8b680e7d76af8ec75f1ef97aa59e5158c657c37d7e4dc379`.
+- `web32`: `2769d31b4b32bce1dfe011e44dbe8ffa4eead136822fddc0e79f4f366efd01c1` → `abb2cf770beef17eacde22f11f121027c240a76b40c9206ae0e184498b914596`.
+- `webgc`: `c1cbfa6c2689805237bbe01002d078b42543a3ac458e75ea62cdfc6155e32c09` → `b62e9e52ea08a8f5a9b0f625783020f0df80a4a63b9ced6216141c306d28bdf6`.
+
+Per-function/section diffs and complete paired/census aggregate reports are archived with the session
+measurement records. Individual captures and superseded build artifacts are removed after recording.

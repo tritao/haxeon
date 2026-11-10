@@ -176,30 +176,30 @@ class WidgetDocsRegistry {
 
 	public static function semanticStateNames(states:AccessibilityState):String {
 		var values:Array<String> = [];
-		if (!(states & AccessibilityState.Focusable).isEmpty()) values.push("Focusable");
-		if (!(states & AccessibilityState.Focused).isEmpty()) values.push("Focused");
-		if (!(states & AccessibilityState.Selected).isEmpty()) values.push("Selected");
-		if (!(states & AccessibilityState.Checked).isEmpty()) values.push("Checked");
-		if (!(states & AccessibilityState.Disabled).isEmpty()) values.push("Disabled");
-		if (!(states & AccessibilityState.ReadOnly).isEmpty()) values.push("ReadOnly");
-		if (!(states & AccessibilityState.Multiline).isEmpty()) values.push("Multiline");
-		if (!(states & AccessibilityState.Password).isEmpty()) values.push("Password");
-		if (!(states & AccessibilityState.Expanded).isEmpty()) values.push("Expanded");
+		if (states.contains(AccessibilityState.Focusable)) values.push("Focusable");
+		if (states.contains(AccessibilityState.Focused)) values.push("Focused");
+		if (states.contains(AccessibilityState.Selected)) values.push("Selected");
+		if (states.contains(AccessibilityState.Checked)) values.push("Checked");
+		if (states.contains(AccessibilityState.Disabled)) values.push("Disabled");
+		if (states.contains(AccessibilityState.ReadOnly)) values.push("ReadOnly");
+		if (states.contains(AccessibilityState.Multiline)) values.push("Multiline");
+		if (states.contains(AccessibilityState.Password)) values.push("Password");
+		if (states.contains(AccessibilityState.Expanded)) values.push("Expanded");
 		return values.length == 0 ? "(none)" : values.join(", ");
 	}
 
 	public static function actionNames(actions:AccessibilityAction):String {
 		var values:Array<String> = [];
-		if (!(actions & AccessibilityAction.Activate).isEmpty()) values.push("Activate");
-		if (!(actions & AccessibilityAction.Focus).isEmpty()) values.push("Focus");
-		if (!(actions & AccessibilityAction.SetValue).isEmpty()) values.push("SetValue");
-		if (!(actions & AccessibilityAction.SetSelection).isEmpty()) values.push("SetSelection");
-		if (!(actions & AccessibilityAction.Increment).isEmpty()) values.push("Increment");
-		if (!(actions & AccessibilityAction.Decrement).isEmpty()) values.push("Decrement");
-		if (!(actions & AccessibilityAction.ScrollForward).isEmpty()) values.push("ScrollForward");
-		if (!(actions & AccessibilityAction.ScrollBackward).isEmpty()) values.push("ScrollBackward");
-		if (!(actions & AccessibilityAction.MoveNext).isEmpty()) values.push("MoveNext");
-		if (!(actions & AccessibilityAction.MovePrevious).isEmpty()) values.push("MovePrevious");
+		if (actions.contains(AccessibilityAction.Activate)) values.push("Activate");
+		if (actions.contains(AccessibilityAction.Focus)) values.push("Focus");
+		if (actions.contains(AccessibilityAction.SetValue)) values.push("SetValue");
+		if (actions.contains(AccessibilityAction.SetSelection)) values.push("SetSelection");
+		if (actions.contains(AccessibilityAction.Increment)) values.push("Increment");
+		if (actions.contains(AccessibilityAction.Decrement)) values.push("Decrement");
+		if (actions.contains(AccessibilityAction.ScrollForward)) values.push("ScrollForward");
+		if (actions.contains(AccessibilityAction.ScrollBackward)) values.push("ScrollBackward");
+		if (actions.contains(AccessibilityAction.MoveNext)) values.push("MoveNext");
+		if (actions.contains(AccessibilityAction.MovePrevious)) values.push("MovePrevious");
 		return values.length == 0 ? "(none)" : values.join(", ");
 	}
 

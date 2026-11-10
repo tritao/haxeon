@@ -68,8 +68,8 @@ class AccessibilityContract {
 		var firstTabRecord:AccessibilitySnapshotNode = cast firstTab;
 		var tabOrientation:Int = cast tabListRecord.orientation;
 		var expectedTabOrientation:Int = cast AccessibilityOrientation.Horizontal;
-		var tabHasSelect = !(firstTabRecord.actions & AccessibilityAction.Select).isEmpty();
-		var firstTabSelected = !(firstTabRecord.states & AccessibilityState.Selected).isEmpty();
+		var tabHasSelect = firstTabRecord.actions.contains(AccessibilityAction.Select);
+		var firstTabSelected = firstTabRecord.states.contains(AccessibilityState.Selected);
 		if (tabOrientation != expectedTabOrientation || !tabHasSelect || !firstTabSelected)
 			return 1;
 		if (!context.accessibilityAction(secondTabNode.id.value, AccessibilityRequest.Select,
@@ -78,7 +78,7 @@ class AccessibilityContract {
 		tabsRoot = context.submit(tabs, frame);
 		var selectedTab:Null<Semantics> = cast findAccessibleNode(tabsRoot,
 			AccessibilityRole.Tab, "Second").semantics;
-		if (selectedTab == null || (selectedTab.states & AccessibilityState.Selected).isEmpty())
+		if (selectedTab == null || !selectedTab.states.contains(AccessibilityState.Selected))
 			return 3;
 
 		var parents:Map<Int, Int> = new Map();
@@ -88,8 +88,7 @@ class AccessibilityContract {
 		if (atomic.nativeUpdate.get_struct_size() != AccessibilityUpdate.size() ||
 			atomic.nativeUpdate.get_node_count() != tabsSnapshot.length || atomic.removedNodeCount != 0 ||
 			atomic.nativeUpdate.get_focus() != secondTabNode.id.value ||
-			(atomic.nativeUpdate.get_flags() &
-			AccessibilityUpdateFlags.NkAccessibilityUpdateFocus).isEmpty())
+			!atomic.nativeUpdate.get_flags().contains(AccessibilityUpdateFlags.NkAccessibilityUpdateFocus))
 			return 4;
 		var allRemoved = AccessibilityBridge.buildUpdate([], parents,
 			NativeKitConstants.NK_ACCESSIBILITY_ROOT);
@@ -116,7 +115,7 @@ class AccessibilityContract {
 		var dialogSemantics:Semantics = cast dialogRoot.semantics;
 		var dialogSnapshot = AccessibilityBridge.project(dialogRoot, context.focus.focusedId);
 		if (dialogSemantics.role != AccessibilityRole.Dialog ||
-			(dialogSemantics.states & AccessibilityState.Modal).isEmpty() || !dialogRoot.focusTrap ||
+			!dialogSemantics.states.contains(AccessibilityState.Modal) || !dialogRoot.focusTrap ||
 			dialogSnapshot.length == 0 || dialogSnapshot[0].role != AccessibilityRole.Dialog ||
 			!context.accessibilityAction(dialogRoot.id.value, AccessibilityRequest.Dismiss,
 				null, -1, -1, 1) || dismissals != 1)
@@ -138,8 +137,8 @@ class AccessibilityContract {
 				menuItemId = node.id.value;
 		});
 		if (menuRootSemantics.role != AccessibilityRole.Menu ||
-			(menuRootSemantics.states & AccessibilityState.Modal).isEmpty() || !menuRoot.focusTrap ||
-			menuItem == null || (menuItem.actions & AccessibilityAction.Select).isEmpty() || menuItemId == 0 ||
+			!menuRootSemantics.states.contains(AccessibilityState.Modal) || !menuRoot.focusTrap ||
+			menuItem == null || !menuItem.actions.contains(AccessibilityAction.Select) || menuItemId == 0 ||
 			!context.accessibilityAction(menuItemId, AccessibilityRequest.Select, null, -1, -1, 1) ||
 			selectedMenu != "save" || menuDismissals != 1)
 			return 8;
@@ -160,9 +159,9 @@ class AccessibilityContract {
 		if (selectRoot.children.length != 1 || selectSemantics.role != AccessibilityRole.ComboBox ||
 			selectSemantics.value != "Öne" ||
 			selectSemantics.documentLength != Utf8Text.length("Öne") ||
-			(selectSemantics.states & AccessibilityState.HasPopup).isEmpty() ||
-			(selectSemantics.actions & AccessibilityAction.SetValue).isEmpty() ||
-			(selectSemantics.actions & AccessibilityAction.Expand).isEmpty() ||
+			!selectSemantics.states.contains(AccessibilityState.HasPopup) ||
+			!selectSemantics.actions.contains(AccessibilityAction.SetValue) ||
+			!selectSemantics.actions.contains(AccessibilityAction.Expand) ||
 			!context.focusWidget(selectTrigger.id))
 			return 19;
 		context.key(UiEventKind.KeyDown, UiKey.Down);
@@ -171,12 +170,12 @@ class AccessibilityContract {
 		var optionListSemantics:Semantics = cast selectRoot.children[1].semantics;
 		var selectedOptionSemantics:Semantics = cast selectRoot.children[1].children[0].semantics;
 		if (selectRoot.children.length != 2 || !selectRoot.focusTrap ||
-			select.value != "one" || (openSelectSemantics.states & AccessibilityState.Expanded).isEmpty() ||
-			(openSelectSemantics.actions & AccessibilityAction.Collapse).isEmpty() ||
+			select.value != "one" || !openSelectSemantics.states.contains(AccessibilityState.Expanded) ||
+			!openSelectSemantics.actions.contains(AccessibilityAction.Collapse) ||
 			optionListSemantics.role != AccessibilityRole.List ||
 			optionListSemantics.orientation != AccessibilityOrientation.Vertical ||
 			selectedOptionSemantics.setSize != 3 || selectedOptionSemantics.positionInSet != 1 ||
-			(selectedOptionSemantics.states & AccessibilityState.Selected).isEmpty() ||
+			!selectedOptionSemantics.states.contains(AccessibilityState.Selected) ||
 			selectRoot.children[1].children[1].enabled ||
 			context.focus.focusedId == null || !context.focus.focusedId.equals(selectRoot.children[0].id))
 			return 20;
@@ -238,7 +237,7 @@ class AccessibilityContract {
 		var toggleRoot = context.submit(toggle, frame);
 		var toggleSemantics:Semantics = cast toggleRoot.semantics;
 		if (toggleSemantics.role != AccessibilityRole.Switch ||
-			(toggleSemantics.actions & AccessibilityAction.Toggle).isEmpty() ||
+			!toggleSemantics.actions.contains(AccessibilityAction.Toggle) ||
 			!context.accessibilityAction(toggleRoot.id.value, AccessibilityRequest.Toggle,
 				null, -1, -1, 1) || !toggle.checked || toggles != 1)
 			return 9;
@@ -249,7 +248,7 @@ class AccessibilityContract {
 		if (progressSemantics.role != AccessibilityRole.ProgressBar ||
 			progressSemantics.numericValue != 7.0 || progressSemantics.numericMinimum != 2.0 ||
 			progressSemantics.numericMaximum != 10.0 ||
-			(progressSemantics.states & AccessibilityState.ReadOnly).isEmpty())
+			!progressSemantics.states.contains(AccessibilityState.ReadOnly))
 			return 10;
 
 		var listStyle = new LayoutStyle();
@@ -287,15 +286,14 @@ class AccessibilityContract {
 			cell.columnIndex != 2 || cell.rowSpan != 1 || cell.columnSpan != 1 ||
 			cell.orientation != AccessibilityOrientation.Horizontal || treeItems.length != 2 ||
 		treeItems[0].hierarchyLevel != 1 || treeItems[1].hierarchyLevel != 2 ||
-			(treeItems[0].states & AccessibilityState.Expanded).isEmpty())
+			!treeItems[0].states.contains(AccessibilityState.Expanded))
 			return 12;
 		var focusFound = false;
 		for (item in metadataSnapshot)
 			if (item.id == metadataRoot.children[1].children[0].id.value &&
-				!(item.states & AccessibilityState.Focused).isEmpty())
+				item.states.contains(AccessibilityState.Focused))
 				focusFound = true;
-		if (!focusFound || !(AccessibilityBridge.project(metadataRoot, null)[0].states &
-			AccessibilityState.Focused).isEmpty())
+		if (!focusFound || AccessibilityBridge.project(metadataRoot, null)[0].states.contains(AccessibilityState.Focused))
 			return 13;
 		var metadataNative = AccessibilityBridge.buildNodes(metadataSnapshot);
 		var nativeCell:Null<AccessibilityNode> = null;
@@ -324,8 +322,8 @@ class AccessibilityContract {
 		var disabledRoot = context.submit(disabled, frame);
 		var disabledSnapshot = AccessibilityBridge.project(disabledRoot, null);
 		if (disabledSnapshot.length != 1 ||
-			(disabledSnapshot[0].states & AccessibilityState.Disabled).isEmpty() ||
-			!(disabledSnapshot[0].states & AccessibilityState.Focusable).isEmpty() ||
+			!disabledSnapshot[0].states.contains(AccessibilityState.Disabled) ||
+			disabledSnapshot[0].states.contains(AccessibilityState.Focusable) ||
 			!disabledSnapshot[0].actions.isEmpty() ||
 			AccessibilityBridge.buildUpdate(disabledSnapshot, new Map(), disabledSnapshot[0].id)
 				.nativeUpdate.get_focus() != NativeKitConstants.NK_ACCESSIBILITY_ROOT)
@@ -334,8 +332,8 @@ class AccessibilityContract {
 		var disabledTreeSnapshot = AccessibilityBridge.project(disabledTree,
 			disabledTree.children[0].id);
 		if (disabledTreeSnapshot.length != 2 ||
-			(disabledTreeSnapshot[1].states & AccessibilityState.Disabled).isEmpty() ||
-			!(disabledTreeSnapshot[1].states & AccessibilityState.Focusable).isEmpty() ||
+			!disabledTreeSnapshot[1].states.contains(AccessibilityState.Disabled) ||
+			disabledTreeSnapshot[1].states.contains(AccessibilityState.Focusable) ||
 			!disabledTreeSnapshot[1].actions.isEmpty())
 			return 18;
 
@@ -496,7 +494,7 @@ class AccessibilityContract {
 		var content = viewport.children[0];
 		var viewportGeometry:ResolvedLayoutItem = cast viewport.resolved;
 		var contentGeometry:ResolvedLayoutItem = cast content.resolved;
-		if ((listSemantics.actions & AccessibilityAction.ScrollForward).isEmpty() ||
+		if (!listSemantics.actions.contains(AccessibilityAction.ScrollForward) ||
 			viewportGeometry.height >= 144.0 || contentGeometry.transform.ty != 0.0)
 			return false;
 		var beforeWheel = contentGeometry.transform.ty;
@@ -553,9 +551,9 @@ class AccessibilityContract {
 		var input = root.children[0].children[0];
 		var semantics:Semantics = cast input.semantics;
 		if (root.children.length != 1 || semantics.role != AccessibilityRole.ComboBox ||
-			semantics.value != "One" || (semantics.states & AccessibilityState.HasPopup).isEmpty() ||
-			(semantics.actions & AccessibilityAction.SetValue).isEmpty() ||
-			(semantics.actions & AccessibilityAction.Expand).isEmpty() ||
+			semantics.value != "One" || !semantics.states.contains(AccessibilityState.HasPopup) ||
+			!semantics.actions.contains(AccessibilityAction.SetValue) ||
+			!semantics.actions.contains(AccessibilityAction.Expand) ||
 			!context.focusWidget(input.id))
 			return false;
 		var inputGeometry:ResolvedLayoutItem = cast input.resolved;
@@ -604,8 +602,8 @@ class AccessibilityContract {
 		semantics = cast input.semantics;
 		var listSemantics:Semantics = cast root.children[1].semantics;
 		if (root.children.length != 2 || !root.focusTrap ||
-			(semantics.states & AccessibilityState.Expanded).isEmpty() ||
-			(semantics.actions & AccessibilityAction.Collapse).isEmpty() ||
+			!semantics.states.contains(AccessibilityState.Expanded) ||
+			!semantics.actions.contains(AccessibilityAction.Collapse) ||
 			listSemantics.role != AccessibilityRole.List ||
 			root.children[1].children.length != 3)
 			return false;

@@ -559,7 +559,7 @@ class UiExplorer {
 					return;
 				var semantics:Semantics = cast node.semantics;
 				if (semantics.role == AccessibilityRole.ComboBox &&
-					!(semantics.states & AccessibilityState.Expanded).isEmpty())
+					semantics.states.contains(AccessibilityState.Expanded))
 					result = node.id;
 			});
 		return result;

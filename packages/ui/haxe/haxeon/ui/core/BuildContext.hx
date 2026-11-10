@@ -234,7 +234,7 @@ class BuildContext {
 
 	function collectHoverTypes(sheet:haxeon.ui.style.StyleSheet):Void {
 		for (rule in sheet.rules)
-			if (!(rule.selector.stateMask & haxeon.ui.style.StyleState.Hovered).isEmpty()) {
+			if (rule.selector.stateMask.contains(haxeon.ui.style.StyleState.Hovered)) {
 				var type = rule.selector.widgetType;
 				if (type == null) hoverAnyType = true;
 				else hoverTypes.set(type, true);
@@ -243,7 +243,7 @@ class BuildContext {
 
 	static function sheetHasHoverRule(sheet:haxeon.ui.style.StyleSheet, target:StyleTarget):Bool {
 		for (rule in sheet.rules)
-			if (!(rule.selector.stateMask & haxeon.ui.style.StyleState.Hovered).isEmpty() && rule.selector.matchesWithoutStates(target)) return true;
+			if (rule.selector.stateMask.contains(haxeon.ui.style.StyleState.Hovered) && rule.selector.matchesWithoutStates(target)) return true;
 		return false;
 	}
 

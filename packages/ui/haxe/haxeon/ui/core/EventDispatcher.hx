@@ -292,7 +292,7 @@ class EventDispatcher {
 			if (kind == UiEventKind.KeyDown || kind == UiEventKind.KeyRepeat) {
 				var handled = routeCommand(key, modifiers, [], kind == UiEventKind.KeyRepeat);
 				if (!handled && key == UiKey.Tab && modifiers.remove(UiModifier.Shift).isEmpty())
-					moveFocus(!(modifiers & UiModifier.Shift).isEmpty());
+					moveFocus(modifiers.contains(UiModifier.Shift));
 			}
 			return;
 		}
@@ -323,7 +323,7 @@ class EventDispatcher {
 			return;
 		if (tabMovesFocus && key == UiKey.Tab && modifiers.remove(UiModifier.Shift).isEmpty() &&
 			(kind == UiEventKind.KeyDown || kind == UiEventKind.KeyRepeat)) {
-			moveFocus(!(modifiers & UiModifier.Shift).isEmpty());
+			moveFocus(modifiers.contains(UiModifier.Shift));
 			return;
 		}
 		// A modal focus trap owns keyboard input, including keys its focused child
@@ -335,7 +335,7 @@ class EventDispatcher {
 		}
 		if (key == UiKey.Tab &&
 			(kind == UiEventKind.KeyDown || kind == UiEventKind.KeyRepeat))
-			moveFocus(!(modifiers & UiModifier.Shift).isEmpty());
+			moveFocus(modifiers.contains(UiModifier.Shift));
 		else if (kind == UiEventKind.KeyDown && (key == UiKey.Enter || key == UiKey.Space))
 				dispatchPath(path, new UiEvent(UiEventKind.Activate, node.id, 0.0, 0.0,
 				0.0, 0.0, 0, key, modifiers, null, null, scancode));

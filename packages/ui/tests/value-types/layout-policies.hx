@@ -13,8 +13,20 @@ import haxeon.ui.LayoutTransaction;
 import haxeon.ui.style.StyleValue;
 import haxeon.ui.style.StyleProperty;
 import haxeon.ui.style.ComputedStyle;
+import haxeon.ui.style.EffectChain;
 
 function main():Int {
+    // Discrete properties carry no interpolation function; continuous properties retain it.
+    if (StyleProperty.Direction.hasInterpolation || StyleProperty.RowGap.hasInterpolation
+        || !StyleProperty.Opacity.hasInterpolation || !StyleProperty.Effects.hasInterpolation) return 7;
+    var halfway = StyleValue.opacity(0.0).interpolateTo(StyleValue.opacity(1.0), 0.25);
+    if (StyleValue.numberOf(halfway) != 0.25) return 8;
+    var effects = StyleValue.effects(EffectChain.empty());
+    if (!StyleValue.effectsOf(effects.interpolateTo(effects, 0.5)).isEqual(EffectChain.empty())) return 9;
+    var discreteRejected = false;
+    try StyleValue.direction(LayoutDirection.LeftToRight).interpolateTo(
+        StyleValue.direction(LayoutDirection.TopToBottom), 0.5) catch (_:Dynamic) discreteRejected = true;
+    if (!discreteRejected) return 10;
     var declarations = [StyleValue.direction(LayoutDirection.LeftToRight),
         StyleValue.alignX(LayoutAlignmentX.End), StyleValue.alignY(LayoutAlignmentY.Baseline),
         StyleValue.distribution(LayoutDistribution.SpaceAround), StyleValue.positioning(LayoutPositioning.Absolute),

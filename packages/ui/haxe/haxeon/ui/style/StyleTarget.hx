@@ -107,7 +107,7 @@ class StyleTarget {
 		return value == null ? "-1:" : value.length + ":" + value;
 
 	public function hasState(state:StyleState):Bool
-		return !(states & state).isEmpty();
+		return (states & state) != StyleState.empty();
 
 	public function hasClass(name:String):Bool
 		return contains(classes, name);

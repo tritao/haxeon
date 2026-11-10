@@ -18,8 +18,8 @@ class WindowControls {
 		observe(state.out_state.get_flags());
 	}
 	public function observe(flags:WindowStateFlags):Void {
-		var nextMaximized = !(flags & WindowStateFlags.Maximized).isEmpty();
-		var nextFullscreen = !(flags & WindowStateFlags.Fullscreen).isEmpty();
+		var nextMaximized = flags.contains(WindowStateFlags.Maximized);
+		var nextFullscreen = flags.contains(WindowStateFlags.Fullscreen);
 		if (maximized == nextMaximized && fullscreen == nextFullscreen) return;
 		maximized = nextMaximized; fullscreen = nextFullscreen; revision++; host.requestFrame();
 	}

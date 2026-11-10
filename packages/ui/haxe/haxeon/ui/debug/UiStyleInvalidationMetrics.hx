@@ -65,7 +65,7 @@ class UiStyleInvalidationMetrics {
 		if (result.treeChanged) result.invalidationFlags |= UiDirtyFlag.NeedsBuild;
 		var nativeWork = UiDirtyFlag.NeedsBuild | UiDirtyFlag.NeedsTextLayout |
 			UiDirtyFlag.NeedsLayout | UiDirtyFlag.NeedsPaint | UiDirtyFlag.NeedsHitGeometry;
-		result.nativeLayoutRequired = !(result.invalidationFlags & nativeWork).isEmpty();
+		result.nativeLayoutRequired = ((result.invalidationFlags & nativeWork) != UiDirtyFlag.empty());
 		return result;
 	}
 
@@ -122,7 +122,7 @@ class UiStyleInvalidationMetrics {
 			if (node == null) continue;
 			node.syncRevisions(prior, StyleDiff.compare(prior.computedStyle, node.computedStyle), true);
 			node.syncSceneRevisions();
-			if (!(node.invalidationFlags & UiDirtyFlag.NativeInputs).isEmpty()) changes.inputs.set(id, 0);
+			if ((node.invalidationFlags & UiDirtyFlag.NativeInputs) != UiDirtyFlag.empty()) changes.inputs.set(id, 0);
 			if (!sameChildOrder(prior, node)) changes.children.set(id, 0);
 		}
 	}

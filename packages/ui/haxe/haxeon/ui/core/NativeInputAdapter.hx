@@ -118,7 +118,7 @@ class NativeInputAdapter {
 				}
 				true;
 			case WindowStateChanged(eventSource, flags) if (matches(eventSource)):
-				if ((flags & WindowStateFlags.Active).isEmpty()) {
+				if (!flags.contains(WindowStateFlags.Active)) {
 					pointerModifiers = UiModifier.empty();
 					heldModifierKeys = 0;
 					context.windowFocusLost();

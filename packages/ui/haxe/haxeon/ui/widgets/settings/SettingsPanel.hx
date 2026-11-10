@@ -256,7 +256,7 @@ class SettingsPanel implements View implements Observable {
 			if (target != null) { context.requestFocusAfterLayout(target); focusSearchPending = false; }
 		}
 		root.on(haxeon.ui.core.UiEventKind.KeyDown, function(event) {
-			if (event.key == haxeon.ui.core.UiKey.F && !(event.modifiers & (haxeon.ui.core.UiModifier.Control | haxeon.ui.core.UiModifier.Super)).isEmpty()) {
+			if (event.key == haxeon.ui.core.UiKey.F && (event.modifiers.contains(haxeon.ui.core.UiModifier.Control) || event.modifiers.contains(haxeon.ui.core.UiModifier.Super))) {
 				if (focusRegion(searchNode)) { event.preventDefault(); event.stopPropagation(); }
 				return;
 			}
@@ -269,7 +269,7 @@ class SettingsPanel implements View implements Observable {
 			var regions = [searchNode, categoryNode, inspectorNode];
 			var index = 0;
 			for (i in 0...regions.length) if (regions[i] != null && regions[i].find(event.target) != null) index = i;
-			var step = !(event.modifiers & haxeon.ui.core.UiModifier.Shift).isEmpty() ? -1 : 1;
+			var step = event.modifiers.contains(haxeon.ui.core.UiModifier.Shift) ? -1 : 1;
 			for (offset in 1...4) if (focusRegion(regions[(index + step * offset + 6) % 3])) { event.preventDefault(); event.stopPropagation(); break; }
 		}, "capture");
 		return root;

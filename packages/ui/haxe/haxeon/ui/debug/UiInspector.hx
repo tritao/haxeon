@@ -63,9 +63,9 @@ class UiInspector {
 				line += " hidden";
 			if (record.focused)
 				line += " focused";
-			if (record.hovered && (ignoredInteractionStates & StyleState.Hovered).isEmpty())
+			if (record.hovered && !ignoredInteractionStates.contains(StyleState.Hovered))
 				line += " hovered";
-			if (record.pressed && (ignoredInteractionStates & StyleState.Pressed).isEmpty())
+			if (record.pressed && !ignoredInteractionStates.contains(StyleState.Pressed))
 				line += " pressed";
 			if (record.styleType != null)
 				line += " type=" + record.styleType;

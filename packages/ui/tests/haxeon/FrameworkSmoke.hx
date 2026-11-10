@@ -1663,7 +1663,7 @@ class FrameworkSmoke {
 		var areaRoot = context.submit(area, new LayoutFrame(256.0, 192.0));
 		var areaSemantics:Semantics = cast areaRoot.semantics;
 		var areaGeometry:ResolvedLayoutItem = cast areaRoot.resolved;
-		if ((areaSemantics.states & AccessibilityState.Multiline).isEmpty() || areaGeometry.height < 100.0 ||
+		if (!areaSemantics.states.contains(AccessibilityState.Multiline) || areaGeometry.height < 100.0 ||
 			!context.focusWidget(areaRoot.id))
 			return 62;
 		context.key(UiEventKind.KeyDown, UiKey.Enter);
@@ -1736,12 +1736,12 @@ class FrameworkSmoke {
 		var checkboxRoot = context.submit(checkbox, new LayoutFrame(256.0, 192.0));
 		var checkboxSemantics:Semantics = cast checkboxRoot.semantics;
 		if (checkboxSemantics == null || checkboxSemantics.role != AccessibilityRole.Checkbox ||
-			!(checkboxSemantics.states & AccessibilityState.Checked).isEmpty() ||
+			checkboxSemantics.states.contains(AccessibilityState.Checked) ||
 			!context.focusWidget(checkboxRoot.id))
 			return 54;
 		context.key(UiEventKind.KeyDown, UiKey.Space);
 		if (!checkbox.checked || !checkboxChanged ||
-			(checkboxSemantics.states & AccessibilityState.Checked).isEmpty())
+			!checkboxSemantics.states.contains(AccessibilityState.Checked))
 			return 55;
 		var narrowButtonStyle = new LayoutStyle();
 		narrowButtonStyle.width = LayoutAxis.fixed(88.0);
@@ -1772,7 +1772,7 @@ class FrameworkSmoke {
 		context.pointerUp(toggleGeometry.x + toggleGeometry.width * 0.5,
 			toggleGeometry.y + toggleGeometry.height * 0.5, 0);
 		if (!toggle.checked || !toggleChanged || toggleSemantics.role != AccessibilityRole.Switch ||
-			(toggleSemantics.actions & AccessibilityAction.Toggle).isEmpty())
+			!toggleSemantics.actions.contains(AccessibilityAction.Toggle))
 			return 56;
 		var sliderChanged = 0.0;
 		var slider = new Slider("slider-smoke", "Level", 0.5, 0.0, 1.0, 0.1,
@@ -1810,7 +1810,7 @@ class FrameworkSmoke {
 			0.0, 1.0, "Transfer"), new LayoutFrame(256.0, 192.0));
 		var progressSemantics:Semantics = cast progressRoot.semantics;
 		if (progressSemantics == null || progressSemantics.role != AccessibilityRole.ProgressBar ||
-			(progressSemantics.states & AccessibilityState.ReadOnly).isEmpty() ||
+			!progressSemantics.states.contains(AccessibilityState.ReadOnly) ||
 			progressSemantics.numericValue != 0.75)
 			return 61;
 		var indeterminateProgress = new ProgressBar("indeterminate-progress-smoke", 0.0,
@@ -1820,8 +1820,8 @@ class FrameworkSmoke {
 			new LayoutFrame(256.0, 192.0));
 		var indeterminateSemantics:Semantics = cast indeterminateRoot.semantics;
 		if (indeterminateSemantics == null ||
-			(indeterminateSemantics.states & AccessibilityState.Busy).isEmpty() ||
-			!(indeterminateSemantics.states & AccessibilityState.ReadOnly).isEmpty() ||
+			!indeterminateSemantics.states.contains(AccessibilityState.Busy) ||
+			indeterminateSemantics.states.contains(AccessibilityState.ReadOnly) ||
 			context.animations.activeCount == 0)
 			return 232;
 		var imageBytes = haxe.io.Bytes.alloc(16);
@@ -2041,7 +2041,7 @@ class FrameworkSmoke {
 			semanticTree[0].parentId != 0 || semanticTree[0].role != AccessibilityRole.Button ||
 			(semanticTree[0].states & (AccessibilityState.Focusable | AccessibilityState.Focused)) !=
 			(AccessibilityState.Focusable | AccessibilityState.Focused) ||
-			(semanticTree[0].actions & AccessibilityAction.Activate).isEmpty() ||
+			!semanticTree[0].actions.contains(AccessibilityAction.Activate) ||
 			semanticTree[0].semantics.label != "Increment")
 			return 25;
 
@@ -2295,7 +2295,7 @@ class FrameworkSmoke {
 		root = context.submit(makeView(false), frame);
 		buttonNode = root.children[0];
 		semanticTree = AccessibilityBridge.project(root, null);
-		if ((semanticTree[0].states & AccessibilityState.Disabled).isEmpty())
+		if (!semanticTree[0].states.contains(AccessibilityState.Disabled))
 			return 26;
 		if (context.focus.focusedId != null || context.focusWidget(buttonNode.id))
 			return 10;
@@ -2657,7 +2657,7 @@ class FrameworkSmoke {
 			return 163;
 		var selectedModelSemantics:Null<Semantics> = selectedModelItem.semantics;
 		if (selectedModelSemantics == null ||
-			(selectedModelSemantics.states & AccessibilityState.Selected).isEmpty())
+			!selectedModelSemantics.states.contains(AccessibilityState.Selected))
 			return 164;
 		if (!context.focusWidget(selectedModelItem.id))
 			return 166;
@@ -2998,7 +2998,7 @@ class FrameworkSmoke {
 		var radioFrame = new LayoutFrame(256.0, 192.0);
 		var radioRoot = context.submit(radioGroup, radioFrame);
 		if (radioRoot.children.length != 3 ||
-			(cast(radioRoot.children[0].semantics, Semantics).states & AccessibilityState.Selected).isEmpty() ||
+			!cast(radioRoot.children[0].semantics, Semantics).states.contains(AccessibilityState.Selected) ||
 			!context.focusWidget(radioRoot.children[0].id))
 			return 92;
 		var radioIndicator:ResolvedLayoutItem = cast radioRoot.children[0].children[0].resolved;
@@ -3014,7 +3014,7 @@ class FrameworkSmoke {
 			!context.focus.focusedId.equals(radioRoot.children[2].id))
 			return 93;
 		radioRoot = context.submit(radioGroup, radioFrame);
-		if ((cast(radioRoot.children[2].semantics, Semantics).states & AccessibilityState.Selected).isEmpty())
+		if (!cast(radioRoot.children[2].semantics, Semantics).states.contains(AccessibilityState.Selected))
 			return 94;
 
 		var tabChanges = 0;
@@ -3054,8 +3054,7 @@ class FrameworkSmoke {
 		tabsRoot = context.submit(tabs, tabsFrame);
 		var secondPage:Semantics = cast tabsRoot.children[1].semantics;
 		if (secondPage.role != AccessibilityRole.TabPanel || secondPage.label != "Second" ||
-			(cast(tabStrip(tabsRoot).children[1].children[0].semantics, Semantics).states &
-			AccessibilityState.Selected).isEmpty())
+			!cast(tabStrip(tabsRoot).children[1].children[0].semantics, Semantics).states.contains(AccessibilityState.Selected))
 			return 96;
 		if (!context.focusWidget(tabStrip(tabsRoot).children[1].children[0].id))
 			return 97;
@@ -3770,8 +3769,8 @@ class FrameworkSmoke {
 		if (splitDividerSemantics == null ||
 			splitDividerSemantics.role != AccessibilityRole.Separator ||
 			!splitRoot.children[1].focusable ||
-			(splitDividerSemantics.actions & AccessibilityAction.Increment).isEmpty() ||
-			(splitDividerSemantics.actions & AccessibilityAction.Decrement).isEmpty())
+			!splitDividerSemantics.actions.contains(AccessibilityAction.Increment) ||
+			!splitDividerSemantics.actions.contains(AccessibilityAction.Decrement))
 			return 230;
 		var splitDividerGeometry:ResolvedLayoutItem = cast splitRoot.children[1].resolved;
 		var splitPointerX = splitDividerGeometry.x + splitDividerGeometry.width * 0.5;
@@ -4051,7 +4050,7 @@ class FrameworkSmoke {
 			context.auditAccessibility().length != 0 || inspected[0].styleType != "button" ||
 			inspected[0].computedStyle == null ||
 			inspectedBackgroundSource == null || inspectedBackgroundSource.selector != "button:disabled" ||
-			(inspected[0].interactionStates & StyleState.Disabled).isEmpty())
+			!inspected[0].interactionStates.contains(StyleState.Disabled))
 			return 99;
 		var inspectorEffects = new StyleSheet("InspectorEffects");
 		inspectorEffects.rule(StyleSelector.widget("button"), [
@@ -4313,7 +4312,7 @@ class FrameworkSmoke {
 			spinnerRoot.resolved.height != 24.0 || spinnerSemantics == null ||
 			spinnerSemantics.role != AccessibilityRole.ProgressBar ||
 			spinnerSemantics.label != "Loading" ||
-			(spinnerSemantics.states & AccessibilityState.Busy).isEmpty() ||
+			!spinnerSemantics.states.contains(AccessibilityState.Busy) ||
 			context.animations.activeCount != 1 || animationRequests == 0)
 			return 109;
 		// A running spinner steps at a fixed rate: the host waits for the next step instead of drawing every refresh, and its
@@ -4350,7 +4349,7 @@ class FrameworkSmoke {
 		spinnerRoot = context.submit(spinner, spinnerFrame);
 		spinnerSemantics = cast spinnerRoot.semantics;
 		if (context.animations.activeCount != 0 ||
-			!(spinnerSemantics.states & AccessibilityState.Busy).isEmpty() ||
+			spinnerSemantics.states.contains(AccessibilityState.Busy) ||
 			spinnerSemantics.value != "Paused" || context.needsAnimationFrame || context.isDirty())
 			return 111;
 		spinner.running = true;
@@ -5061,8 +5060,8 @@ class FrameworkSmoke {
 		var trailingDivider = trailingRoot.children[1];
 		var trailingSemantics:Semantics = cast trailingDivider.semantics;
 		if (trailingSemantics == null || !trailingDivider.focusable ||
-			(trailingSemantics.actions & AccessibilityAction.Increment).isEmpty() ||
-			(trailingSemantics.actions & AccessibilityAction.Decrement).isEmpty() ||
+			!trailingSemantics.actions.contains(AccessibilityAction.Increment) ||
+			!trailingSemantics.actions.contains(AccessibilityAction.Decrement) ||
 			trailingSemantics.numericValue != 96.0)
 			return false;
 		if (!context.focusWidget(trailingDivider.id))
@@ -5681,7 +5680,7 @@ class FrameworkSmoke {
 			return false;
 		var disabledSemantics:Semantics = cast disabledRow.semantics;
 		if (disabledSemantics.label != "Unavailable" ||
-			(disabledSemantics.states & AccessibilityState.Disabled).isEmpty() ||
+			!disabledSemantics.states.contains(AccessibilityState.Disabled) ||
 			disabledRow.focusable)
 			return false;
 		uiContext.key(UiEventKind.KeyDown, UiKey.Enter);

@@ -1078,7 +1078,7 @@ class UiContext {
 			actions |= haxeon.ui.semantics.AccessibilityAction.Focus;
 		if (!enabled)
 			actions = haxeon.ui.semantics.AccessibilityAction.empty();
-		if ((actions & request.capability).isEmpty())
+		if (!actions.contains(request.capability))
 			return false;
 		var geometry:ResolvedLayoutItem = cast node.resolved;
 		if (action == AccessibilityRequest.Focus)

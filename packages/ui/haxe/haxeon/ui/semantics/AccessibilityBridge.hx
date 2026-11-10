@@ -88,7 +88,7 @@ class AccessibilityBridge {
 		update.set_removed_node_count(0);
 		var focusTarget = NativeKitConstants.NK_ACCESSIBILITY_ROOT;
 		for (item in snapshot)
-			if (item.id == focus && (item.states & AccessibilityState.Disabled).isEmpty()) {
+			if (item.id == focus && !item.states.contains(AccessibilityState.Disabled)) {
 				focusTarget = item.id;
 				break;
 			}
@@ -166,7 +166,7 @@ class AccessibilityBridge {
 		var explicitlyDisabled = false;
 		if (node.semantics != null) {
 			var declared:Semantics = cast node.semantics;
-			explicitlyDisabled = !(declared.states & AccessibilityState.Disabled).isEmpty();
+			explicitlyDisabled = declared.states.contains(AccessibilityState.Disabled);
 		}
 		var enabled = ancestorsEnabled && node.enabled && !explicitlyDisabled;
 		var nextParent = semanticParent;

@@ -15,6 +15,7 @@ import haxeon.ui.LayoutSelfAlignment;
 import haxeon.ui.LayoutWrapMode;
 import haxeon.ui.Transform2D;
 import haxeon.ui.style.StyleProperty.StylePropertyBase;
+import haxeon.ui.style.StyleProperty.StyleInterpolatedProperty;
 import haxeon.ui.style.StyleProperty.StyleColorProperty;
 import haxeon.ui.style.StyleProperty.StyleInsetsProperty;
 import haxeon.ui.style.StyleProperty.StyleAxisProperty;
@@ -361,9 +362,9 @@ private class StyleFloatValue extends StyleValue {
 		return other != null && property == other.property && Std.isOfType(other, StyleFloatValue) &&
 			value == (cast other:StyleFloatValue).value;
 	override public function interpolateTo(other:StyleValue, amount:Float):StyleValue {
-		var typed:StyleProperty<Float> = cast property, interpolate = typed.interpolate;
-		if (interpolate == null || other.property != property) throw "Style property does not support interpolation";
-		return new StyleFloatValue(typed, interpolate(value, (cast other:StyleFloatValue).value, amount));
+		if (!property.hasInterpolation || other.property != property) throw "Style property does not support interpolation";
+		var typed:StyleInterpolatedProperty<Float> = cast property;
+		return new StyleFloatValue(typed, typed.interpolate(value, (cast other:StyleFloatValue).value, amount));
 	}
 }
 
@@ -485,8 +486,8 @@ private class StyleReferenceValue<T> extends StyleValue {
 		throw 'Unknown reference property ${property.name}';
 	}
 	override public function interpolateTo(other:StyleValue, amount:Float):StyleValue {
-		var typed:StyleProperty<T> = cast property, interpolate = typed.interpolate;
-		if (interpolate == null || other.property != property) throw "Style property does not support interpolation";
-		return new StyleReferenceValue(typed, interpolate(value, (cast other:StyleReferenceValue<T>).value, amount));
+		if (!property.hasInterpolation || other.property != property) throw "Style property does not support interpolation";
+		var typed:StyleInterpolatedProperty<T> = cast property;
+		return new StyleReferenceValue(typed, typed.interpolate(value, (cast other:StyleReferenceValue<T>).value, amount));
 	}
 }
