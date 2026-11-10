@@ -1,10 +1,10 @@
 package haxeon.ui;
 
 /** Cross-axis alignment for children in a left-to-right layout. */
-enum abstract LayoutAlignmentY(Int) from Int to Int {
-	var Start = 0;
-	var End = 1;
-	var Center = 2;
+enum LayoutAlignmentY implements Hashable {
+	Start;
+	End;
+	Center;
 	/** Aligns baselines; baseline-less children use their bottom edge. */
-	var Baseline = 3;
+	Baseline;
 }

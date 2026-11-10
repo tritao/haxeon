@@ -4785,3 +4785,24 @@ The layout-code fixture checks every declared value, unknown inputs, value equal
 HashLink, Wasm32 and Wasm GC with inlining off/on. Four negative fixtures reject implicit Int conversions in both
 directions for both types. The expanded UI snapshot matrix passes 30 positive and 60 negative checks; the compiler
 suite passes 856/856. Production allocation and module-size comparisons are recorded at the next gated batch head.
+
+### Plain layout policies (2026-11-10)
+
+`LayoutDirection`, `LayoutAlignmentX`, `LayoutAlignmentY`, `LayoutDistribution`, `LayoutPositioning`,
+`LayoutWrapMode` and `LayoutSelfAlignment` are UI policy choices, not raw native codes. They are plain Hashable enums.
+The transaction matches every case to the corresponding native binding literal; absolute positioning becomes native
+flags. UI case order is not the native ABI. The redundant sizing-code and policy-code range tests are removed;
+numeric size, spacing and transform validation stays in place.
+
+Style declarations now retain each policy's enum type in a scalar field. Typed declaration readers replace the old
+integer casts, and `setInteger` accepts only `StyleProperty<Int>`. The untyped `integerProperty` factory is deleted.
+The existing opaque cache keys keep their numeric case-index form through the enum-index intrinsic. No new cache or
+ownership mechanism is introduced.
+
+The policy fixture covers all seven declarations, equality/copying, inspection, arrays, native transaction bytes and
+negative numeric sizing validation. Fourteen negative fixtures reject implicit Int conversions for every policy;
+a further negative fixture rejects `setInteger` on an enum property with its exact argument diagnostic. Production
+editor and headless modules build; allocation and size comparison is performed at the gated batch head.
+
+Validation for this group: compiler suite **856/856**; the complete UI snapshot matrix passes **36 positive and
+150 negative** checks across the three targets with inlining off/on. Both frozen production modules build.

@@ -65,8 +65,8 @@ class ComputedStyle {
 		setDeclaration(StyleValue.matrix(property, value), source);
 	public function setNumber(property:StyleProperty<Float>, value:Float, source:Null<StyleSource>):Void
 		setDeclaration(StyleValue.number(property, value), source);
-	public function setInteger(property:StylePropertyBase, value:Int, source:Null<StyleSource>):Void
-		setDeclaration(StyleValue.integerProperty(property, value), source);
+	public function setInteger(property:StyleProperty<Int>, value:Int, source:Null<StyleSource>):Void
+		setDeclaration(StyleValue.integer(property, value), source);
 	public function setBoolean(property:StyleProperty<Bool>, value:Bool, source:Null<StyleSource>):Void
 		setDeclaration(StyleValue.boolean(property, value), source);
 	public function setDecorations(value:DecorationChain, source:Null<StyleSource>):Void
@@ -164,16 +164,16 @@ class ComputedStyle {
 		var result = base == null ? new LayoutStyle() : base.copy();
 		if (isSet(StyleProperty.Width.slot)) result.width = getAxis(StyleProperty.Width);
 		if (isSet(StyleProperty.Height.slot)) result.height = getAxis(StyleProperty.Height);
-		if (isSet(StyleProperty.Direction.slot)) result.direction = cast StyleValue.integerOf(values[StyleProperty.Direction.slot]);
-		if (isSet(StyleProperty.ChildAlignX.slot)) result.childAlignX = cast StyleValue.integerOf(values[StyleProperty.ChildAlignX.slot]);
-		if (isSet(StyleProperty.ChildAlignY.slot)) result.childAlignY = cast StyleValue.integerOf(values[StyleProperty.ChildAlignY.slot]);
-		if (isSet(StyleProperty.ChildDistribution.slot)) result.childDistribution = cast StyleValue.integerOf(values[StyleProperty.ChildDistribution.slot]);
-		if (isSet(StyleProperty.Positioning.slot)) result.positioning = cast StyleValue.integerOf(values[StyleProperty.Positioning.slot]);
+		if (isSet(StyleProperty.Direction.slot)) result.direction = StyleValue.directionOf(values[StyleProperty.Direction.slot]);
+		if (isSet(StyleProperty.ChildAlignX.slot)) result.childAlignX = StyleValue.alignmentXOf(values[StyleProperty.ChildAlignX.slot]);
+		if (isSet(StyleProperty.ChildAlignY.slot)) result.childAlignY = StyleValue.alignmentYOf(values[StyleProperty.ChildAlignY.slot]);
+		if (isSet(StyleProperty.ChildDistribution.slot)) result.childDistribution = StyleValue.distributionOf(values[StyleProperty.ChildDistribution.slot]);
+		if (isSet(StyleProperty.Positioning.slot)) result.positioning = StyleValue.positioningOf(values[StyleProperty.Positioning.slot]);
 		if (isSet(StyleProperty.AspectRatio.slot)) result.aspectRatio = getNumber(StyleProperty.AspectRatio);
-		if (isSet(StyleProperty.WrapMode.slot)) result.wrapMode = cast StyleValue.integerOf(values[StyleProperty.WrapMode.slot]);
+		if (isSet(StyleProperty.WrapMode.slot)) result.wrapMode = StyleValue.wrapModeOf(values[StyleProperty.WrapMode.slot]);
 		if (isSet(StyleProperty.RowGap.slot)) result.rowGap = getNumber(StyleProperty.RowGap);
 		if (isSet(StyleProperty.ColumnGap.slot)) result.columnGap = getNumber(StyleProperty.ColumnGap);
-		if (isSet(StyleProperty.AlignSelf.slot)) result.alignSelf = cast StyleValue.integerOf(values[StyleProperty.AlignSelf.slot]);
+		if (isSet(StyleProperty.AlignSelf.slot)) result.alignSelf = StyleValue.selfAlignmentOf(values[StyleProperty.AlignSelf.slot]);
 		if (isSet(StyleProperty.PositionX.slot)) result.positionX = getNumber(StyleProperty.PositionX);
 		if (isSet(StyleProperty.PositionY.slot)) result.positionY = getNumber(StyleProperty.PositionY);
 		if (isSet(StyleProperty.ZIndex.slot)) result.zIndex = getInteger(StyleProperty.ZIndex);

@@ -2,6 +2,11 @@ package haxeon.ui;
 
 import haxe.io.Bytes;
 import NativeKitUI.NkuiLayoutClipFlags;
+import NativeKitUI.UiLayoutDirection as NativeDirection;
+import NativeKitUI.UiLayoutAlignment as NativeAlignment;
+import NativeKitUI.NkuiLayoutDistribution as NativeDistribution;
+import NativeKitUI.NkuiLayoutWrapMode as NativeWrapMode;
+import NativeKitUI.NkuiLayoutSelfAlignment as NativeSelfAlignment;
 
 /** Encodes a retained Haxe node tree into the single native frame payload. */
 @:noCompletion
@@ -145,20 +150,13 @@ class LayoutTransaction {
 					+ ", height=" + axisDescription(style.height) + ", aspect=" + style.aspectRatio;
 			var determinant = style.transform.a * style.transform.d -
 				style.transform.b * style.transform.c;
-			var childAlignX:Int = style.childAlignX;
-			var childAlignY:Int = style.childAlignY;
-			var childDistribution:Int = style.childDistribution;
-			var positioning:Int = style.positioning;
-			var wrapMode:Int = style.wrapMode;
-			var alignSelf:Int = style.alignSelf;
-			if (childAlignX < LayoutAlignmentX.Start || childAlignX > LayoutAlignmentX.Center ||
-				childAlignY < LayoutAlignmentY.Start || childAlignY > LayoutAlignmentY.Baseline ||
-				childDistribution < LayoutDistribution.Start ||
-				childDistribution > LayoutDistribution.SpaceEvenly ||
-				wrapMode < LayoutWrapMode.NoWrap || wrapMode > LayoutWrapMode.Wrap ||
-				alignSelf < LayoutSelfAlignment.Inherit || alignSelf > LayoutSelfAlignment.Baseline ||
-				(positioning != LayoutPositioning.Flow && positioning != LayoutPositioning.Absolute) ||
-				!validSpacing(style.padding.left) || !validSpacing(style.padding.right) ||
+			var childAlignX = alignmentXCode(style.childAlignX);
+			var childAlignY = alignmentYCode(style.childAlignY);
+			var childDistribution = distributionCode(style.childDistribution);
+			var positioning = style.positioning;
+			var wrapMode = wrapModeCode(style.wrapMode);
+			var alignSelf = selfAlignmentCode(style.alignSelf);
+			if (!validSpacing(style.padding.left) || !validSpacing(style.padding.right) ||
 				!validSpacing(style.padding.top) || !validSpacing(style.padding.bottom) ||
 				!validSpacing(style.childGap) || !validSpacing(style.rowGap) ||
 				!validSpacing(style.columnGap) ||
@@ -182,7 +180,7 @@ class LayoutTransaction {
 				style.width.growWeight);
 			writeFloat(output, record, NativeKitUIConstants.NKUI_LAYOUT_NODE_HEIGHT_GROW_WEIGHT_OFFSET,
 				style.height.growWeight);
-			writeInt(output, record, NativeKitUIConstants.NKUI_LAYOUT_NODE_DIRECTION_OFFSET, cast style.direction);
+			writeInt(output, record, NativeKitUIConstants.NKUI_LAYOUT_NODE_DIRECTION_OFFSET, directionCode(style.direction));
 			writeFloat(output, record, NativeKitUIConstants.NKUI_LAYOUT_NODE_PADDING_LEFT_OFFSET, style.padding.left);
 			writeFloat(output, record, NativeKitUIConstants.NKUI_LAYOUT_NODE_PADDING_RIGHT_OFFSET, style.padding.right);
 			writeFloat(output, record, NativeKitUIConstants.NKUI_LAYOUT_NODE_PADDING_TOP_OFFSET, style.padding.top);
@@ -336,6 +334,53 @@ class LayoutTransaction {
 		if (index == stringBytes.length) stringBytes.push(text); else stringBytes[index] = text;
 	}
 
+	/** UI case order is independent of the integer codes declared by the native binding. */
+	static inline function directionCode(value:LayoutDirection):Int
+		return switch value {
+			case LeftToRight: NativeDirection.LeftToRight;
+			case TopToBottom: NativeDirection.TopToBottom;
+		};
+
+	static inline function alignmentXCode(value:LayoutAlignmentX):Int
+		return switch value {
+			case Start: NativeAlignment.Start;
+			case End: NativeAlignment.End;
+			case Center: NativeAlignment.Center;
+		};
+
+	static inline function alignmentYCode(value:LayoutAlignmentY):Int
+		return switch value {
+			case Start: NativeAlignment.Start;
+			case End: NativeAlignment.End;
+			case Center: NativeAlignment.Center;
+			case Baseline: NativeAlignment.Baseline;
+		};
+
+	static inline function distributionCode(value:LayoutDistribution):Int
+		return switch value {
+			case Start: NativeDistribution.Start;
+			case Center: NativeDistribution.Center;
+			case End: NativeDistribution.End;
+			case SpaceBetween: NativeDistribution.SpaceBetween;
+			case SpaceAround: NativeDistribution.SpaceAround;
+			case SpaceEvenly: NativeDistribution.SpaceEvenly;
+		};
+
+	static inline function wrapModeCode(value:LayoutWrapMode):Int
+		return switch value {
+			case NoWrap: NativeWrapMode.NoWrap;
+			case Wrap: NativeWrapMode.Wrap;
+		};
+
+	static inline function selfAlignmentCode(value:LayoutSelfAlignment):Int
+		return switch value {
+			case Inherit: NativeSelfAlignment.Inherit;
+			case Start: NativeSelfAlignment.Start;
+			case End: NativeSelfAlignment.End;
+			case Center: NativeSelfAlignment.Center;
+			case Baseline: NativeSelfAlignment.Baseline;
+		};
+
 	static function finite(value:Float):Bool {
 		return value == value && value - value == 0.0;
 	}
@@ -352,9 +397,7 @@ class LayoutTransaction {
 	}
 
 	static function validAxis(axis:LayoutAxis):Bool {
-		var sizing = axis.sizing.rawValue();
-		if (sizing < LayoutSizing.Fit.rawValue() || sizing > LayoutSizing.Percent.rawValue() ||
-			!finite(axis.value) || axis.value < 0.0 || !finite(axis.min) ||
+		if (!finite(axis.value) || axis.value < 0.0 || !finite(axis.min) ||
 			axis.min < 0.0 || !finite(axis.max) || axis.max < 0.0 ||
 			!finite(axis.growWeight) || axis.growWeight <= 0.0)
 			return false;

@@ -325,23 +325,23 @@ class StyleResolver {
 		bit = haxeon.Diff.bit(\LayoutStyle.direction);
 		handled |= bit;
 		if ((changed & bit) != 0)
-			result.setInteger(StyleProperty.Direction, cast local.direction, source);
+			result.setDeclaration(StyleValue.direction(local.direction), source);
 		bit = haxeon.Diff.bit(\LayoutStyle.childAlignX);
 		handled |= bit;
 		if ((changed & bit) != 0)
-			result.setInteger(StyleProperty.ChildAlignX, cast local.childAlignX, source);
+			result.setDeclaration(StyleValue.alignX(local.childAlignX), source);
 		bit = haxeon.Diff.bit(\LayoutStyle.childAlignY);
 		handled |= bit;
 		if ((changed & bit) != 0)
-			result.setInteger(StyleProperty.ChildAlignY, cast local.childAlignY, source);
+			result.setDeclaration(StyleValue.alignY(local.childAlignY), source);
 		bit = haxeon.Diff.bit(\LayoutStyle.childDistribution);
 		handled |= bit;
 		if ((changed & bit) != 0)
-			result.setInteger(StyleProperty.ChildDistribution, cast local.childDistribution, source);
+			result.setDeclaration(StyleValue.distribution(local.childDistribution), source);
 		bit = haxeon.Diff.bit(\LayoutStyle.positioning);
 		handled |= bit;
 		if ((changed & bit) != 0)
-			result.setInteger(StyleProperty.Positioning, cast local.positioning, source);
+			result.setDeclaration(StyleValue.positioning(local.positioning), source);
 		bit = haxeon.Diff.bit(\LayoutStyle.aspectRatio);
 		handled |= bit;
 		if ((changed & bit) != 0)
@@ -349,7 +349,7 @@ class StyleResolver {
 		bit = haxeon.Diff.bit(\LayoutStyle.wrapMode);
 		handled |= bit;
 		if ((changed & bit) != 0)
-			result.setInteger(StyleProperty.WrapMode, cast local.wrapMode, source);
+			result.setDeclaration(StyleValue.wrapMode(local.wrapMode), source);
 		bit = haxeon.Diff.bit(\LayoutStyle.rowGap);
 		handled |= bit;
 		if ((changed & bit) != 0)
@@ -361,7 +361,7 @@ class StyleResolver {
 		bit = haxeon.Diff.bit(\LayoutStyle.alignSelf);
 		handled |= bit;
 		if ((changed & bit) != 0)
-			result.setInteger(StyleProperty.AlignSelf, cast local.alignSelf, source);
+			result.setDeclaration(StyleValue.alignSelf(local.alignSelf), source);
 		bit = haxeon.Diff.bit(\LayoutStyle.positionX);
 		handled |= bit;
 		if ((changed & bit) != 0)
