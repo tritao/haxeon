@@ -243,7 +243,7 @@ The check mode is a test aid, never a fallback.
 
 With layers 2 and 5 explicit, a package can be compiled against the stored interface of its dependencies: their
 signatures plus the summaries they export. It is then linked. This is the Roslyn model, and it bounds both cold and warm
-cost by package. It is not scheduled. Decisions 1–7 are designed so that it needs no further restructuring.
+cost by package. It is not scheduled. Decisions 1–7 are designed so that it needs no further restructuring. The design is in ADR 0005.
 
 ### 12. The compiler worker is built by Haxeon (direction, added 2026-11-09)
 
