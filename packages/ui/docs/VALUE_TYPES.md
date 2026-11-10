@@ -4828,3 +4828,111 @@ Validation: compiler suite **856/856**; full Wasm parity and the expanded UI sna
 **42 positive and 198 negative** checks across HashLink, Wasm32 and Wasm GC with inlining off/on. Final editor,
 headless and both Web modules build, and the app/CAD and all retention scenarios pass. The remaining batch UI
 and paired performance gates are recorded at the measured batch head.
+
+### Gated layout and text enum batch (2026-11-10)
+
+This comparison freezes source at `8897ddd1` against published `9180b6d8` (the same compiler/UI code as
+`19843cdd`, before this batch). Both use outer app `2de94628c` with the same required Flags and NativeIdentity
+ports, checkout VM `3ea38fcf`, and this machine. The compiler sources are unchanged. No own compiler jobs ran
+during the paired measurements. Each measure uses three alternating control/candidate pairs; every sample is
+included, with no retries or selected fastest run.
+
+All ten final-source UI scripts, full parity including UI snapshots (**42 positive / 198 negative**, three
+targets with inlining off/on), app/CAD, retention, editor budgets and headless memory gates pass. The compiler
+suite passes **856/856**. All production modules differ, so no Tier 3 comparison was skipped.
+
+| Development module | Control bytes | Candidate bytes |
+|---|---:|---:|
+| editor.hl | 105,172,608 | 105,419,778 |
+| headless.hl | 105,978,489 | 106,223,172 |
+| webgc.wasm | 5,903,055 | 6,010,873 |
+| web32.wasm | 12,041,570 | 12,500,276 |
+
+Module SHA-256 pairs (control → candidate):
+
+- `editor.hl`: `a6604dd7624cde41c94253029328efd7a506a38cad23d47b78946bb4ff46a475` → `2c5e92b5f8d1a9b1c16a08f7535c388f823019be0399c6ed4f314987ad339f7f`.
+- `headless.hl`: `280640a5b33e5ce3fddccc1ccb282860a1bd7a9dbb244c308428a77be183218f` → `c38e087832eb1da313f504c8f205ac2c0f0e4bba8bffcc23ee1fb6986cdbde35`.
+- `webgc.wasm`: `f663371e9dac47c9bc3c15456b5cad9657b6e5728c7114775a49c5fc92e76721` → `c1cbfa6c2689805237bbe01002d078b42543a3ac458e75ea62cdfc6155e32c09`.
+- `web32.wasm`: `3116b56dbab77881a844aafb3642694fbc1ed42f2a96e9ae5502ab519e4b1136` → `2769d31b4b32bce1dfe011e44dbe8ffa4eead136822fddc0e79f4f366efd01c1`.
+
+The added policy declarations and typed helpers increase metadata/code size; the action measurements below
+show no allocation increase. Allocation medians use the existing refill-quantized KiB counter for fourteen
+actions. Selection has no allocation field in this harness output: its allocation column uses the exact
+second-action window census below instead. Times are medians of the three per-run frame medians.
+
+| Action | Control KiB | Candidate KiB | Control ms | Candidate ms |
+|---|---:|---:|---:|---:|
+| hover-away | 13.6 | 13.6 | 0.43 | 0.43 |
+| hover-enter | 0.5 | 0.5 | 0.00 | 0.00 |
+| hover-field | 12.3 | 12.3 | 0.44 | 0.43 |
+| hover-inside | 0.5 | 0.5 | 0.00 | 0.00 |
+| hover-other | 9.9 | 9.9 | 0.43 | 0.42 |
+| idle | 0.3 | 0.3 | 0.01 | 0.01 |
+| idle-focused | 0.3 | 0.3 | 0.01 | 0.01 |
+| scroll-inspector | 21.7 | 21.7 | 0.72 | 0.72 |
+| type-backspace | 16.1 | 16.1 | 0.42 | 0.42 |
+| type-char | 16.1 | 16.1 | 0.42 | 0.42 |
+| selection | 567.203125 (exact) | 567.203125 (exact) | 2.45 | 2.49 |
+| console->telemetry | 73.0 | 73.0 | 1.01 | 1.03 |
+| hierarchy->sensors | 111.0 | 109.5 | 1.48 | 1.49 |
+| sensors->hierarchy | 78.3 | 78.3 | 1.12 | 1.13 |
+| telemetry->console | 89.4 | 89.4 | 1.07 | 1.09 |
+
+Selection frame samples are control **2.40 / 2.69 / 2.45 ms**, candidate **2.49 / 2.67 / 2.44 ms**.
+The +0.04 ms median difference lies inside the paired spread; the earlier 34% timing finding is not reproduced.
+
+The exact HashLink census starts before the second input action and stops after its frame/GC work, before
+timeline serialization. Its instrumentation exists only in the detached gate checkout. Both programs are built
+with the same compiler and VM; the control UI sources are frozen at `9180b6d8`. The seven new policy value
+classes are absent from the control module and present in the candidate, confirming the intended source variants.
+
+| Exact action window | Control objects | Candidate objects | Control bytes | Candidate bytes |
+|---|---:|---:|---:|---:|
+| hierarchy->sensors | 1,677 | 1,677 | 117,240 | 117,240 |
+| selection | 8,621 | 8,621 | 580,816 | 580,816 |
+
+Per-type histograms also match after summing entries with the same printed type name (the native census
+keys entries by type pointer, so printed labels can repeat). Hierarchy-to-sensors moves between refill
+boundaries; its lower KiB counter is not a reduction in allocated object bytes. No budget ceiling changes.
+
+All six 500-cycle headless memory runs pass. Values below are MiB: RSS after warmup followed by growth in
+each of the four windows.
+
+| Pair | Build | After warmup | Window 1 | Window 2 | Window 3 | Window 4 |
+|---|---|---:|---:|---:|---:|---:|
+| 1 | control | 10.47 | 29.22 | 3.59 | 1.09 | 5.78 |
+| 1 | candidate | 10.16 | 30.00 | 3.75 | 0.78 | 5.62 |
+| 2 | candidate | 10.16 | 30.00 | 3.75 | 0.78 | 5.62 |
+| 2 | control | 10.00 | 30.16 | 3.59 | 0.78 | 5.62 |
+| 3 | control | 12.03 | 29.69 | 3.75 | 0.78 | 7.50 |
+| 3 | candidate | 9.84 | 29.84 | 3.28 | 0.78 | 5.78 |
+
+Median absolute RSS at the four endpoints is **40.16 / 43.75 / 44.53 / 50.15 MiB** for control and
+**40.16 / 43.91 / 44.69 / 50.31 MiB** for candidate. The late-window median is +0.16 MiB; this is inside the
+control spread (the final endpoint spans 50.15–53.75 MiB) and does not establish a persistent memory regression.
+It is recorded rather than described as an exact tie. No run is discarded or repeated.
+
+Browser pairs use the same host, explicit guest hashes above, 120 warmup frames and 120 measured frames.
+Numbers below are medians across all three pairs.
+
+| Target / scene | Control median / p95 ms | Candidate median / p95 ms | Control objects | Candidate objects |
+|---|---:|---:|---:|---:|
+| Wasm GC / full | 1.80 / 2.20 | 1.80 / 2.30 | 4320 | 4320 |
+| Wasm GC / static | 1.60 / 2.20 | 1.70 / 2.10 | 4320 | 4320 |
+| Wasm GC / text-heavy | 1.70 / 2.20 | 1.70 / 2.20 | 4320 | 4320 |
+| Wasm GC / editing | 1.80 / 2.30 | 1.70 / 2.40 | 8604 | 8604 |
+| Wasm 32 / full | 1.70 / 2.20 | 1.70 / 2.20 | — | — |
+
+Every Wasm GC pair has the same allocation histogram: full/static/text-heavy are 120 frames at 36 objects;
+editing is 93 frames at 79, 24 at 47, and 3 at 43 (8,604 total). Editing phase indices differ between runs;
+the histograms and totals match, rather than every indexed frame.
+
+Wasm32 records **3,840 allocation calls / 132,480 bytes**, one collection and a largest allocation of
+262,160 bytes in every run. Heap high-water samples are control **572,144 / 572,864 / 572,864 bytes**,
+candidate **572,536 / 571,816 / 572,536**; growth samples are **10,528 / 10,752 / 10,752** and
+**10,592 / 10,368 / 10,592** respectively. Medians decrease by 328 and 160 bytes; measured allocation bytes
+and calls are unchanged.
+
+Raw aggregate reports, guest hashes, exact type tables and build scripts are retained in the session’s disk
+measurement archive; individual captures are deleted after extracting their numbers. The final FFI enum group
+uses this batch as its next control.
