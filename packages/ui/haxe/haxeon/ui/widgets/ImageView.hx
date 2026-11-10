@@ -58,7 +58,7 @@ class ImageView implements View {
 					case ImageFit.Contain: Math.min(geometry.width / image.width, geometry.height / image.height);
 					case ImageFit.Cover: Math.max(geometry.width / image.width, geometry.height / image.height);
 					case ImageFit.None: 1.0;
-					default: 0.0;
+					case ImageFit.Stretch: 0.0;
 				};
 				if (fit == ImageFit.Stretch) {
 					canvas.drawImage(image, new Rect(0.0, 0.0, geometry.width, geometry.height));

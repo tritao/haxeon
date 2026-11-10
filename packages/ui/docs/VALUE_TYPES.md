@@ -5133,3 +5133,21 @@ Module SHA-256 pairs (published control → final source):
 
 Per-function/section diffs and complete paired/census aggregate reports are archived with the session
 measurement records. Individual captures and superseded build artifacts are removed after recording.
+
+### Plain widget choices (2026-11-10, next gated batch)
+
+`ButtonVariant`, `SpinnerKind`, `ProgressMode`, `ImageFit`, `SplitSide` and
+`SplitOrientation` are plain `Hashable` enums. Their old integers selected Haxe
+rendering or layout behaviour; none is a native, wire or persisted-number
+contract. Callers continue to use named cases. Spinner kind and split direction/
+side numeric validation is removed; speed, dimensions and other float checks
+remain. Image fitting switches explicitly cover all four cases.
+
+The group fixture checks six enum fields in a 28-byte struct (including its
+4-byte marker), copied array elements, equality/hash, exhaustive matching,
+reflection get/set and rejection of another enum at a field boundary. It passes
+on HashLink, Wasm32 and Wasm GC with inlining off/on; all 144 negative Int/String
+conversion checks pass. The compiler suite passes **856/856**, and the framework
+smoke test including 4,000-node layout pressure passes. Production binary-size
+and paired allocation results are collected at the next Tier 2 batch head before
+publication; the control is `fcfd253b` and its archived `style-field` modules.
