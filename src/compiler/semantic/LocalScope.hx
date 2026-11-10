@@ -20,7 +20,7 @@ abstract LocalScope(LocalScopeNode) {
 		this = node;
 
 	/** A scope that is `names` and nothing else: the module's table, shared, not copied. */
-	@:from public static function ofNames(names:Map<String, Bool>):LocalScope
+	public static function ofNames(names:Map<String, Bool>):LocalScope
 		return new LocalScope(new LocalScopeNode(names, null));
 
 	/** This scope with `names` bound as locals (each maps to false). The scope itself is unchanged. */

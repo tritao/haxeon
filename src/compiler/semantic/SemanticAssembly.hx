@@ -201,7 +201,7 @@ class SemanticAssembly {
 				contributionReuseMs += Sys.time() * 1000.0 - contributionStartedAt;
 				continue;
 			}
-			var locals:Map<String, Bool> = [],
+			var locals = LocalScope.ofNames([]),
 				aliases = AliasTable.of(context.importAliases(ast.imports, ast.importAliases));
 			// An explicit import outranks a same-named type elsewhere in the
 			// program, such as an unpackaged `Path` shadowing `import nav.Path`.
