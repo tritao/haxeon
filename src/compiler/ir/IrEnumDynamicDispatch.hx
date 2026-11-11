@@ -1,6 +1,5 @@
 package compiler.ir;
 
-import compiler.Provides.ProviderOperation;
 import compiler.ir.Ir;
 import compiler.ir.SourceProvenance.Located;
 import compiler.types.typing.EnumRuntimeType;
@@ -83,11 +82,11 @@ class IrEnumDynamicDispatch {
 		for (id in names) {
 			if (boxes.exists(id)) {
 				var builder = new IrBuilder(), value = builder.argument("value", requests.get(id));
-				builder.returnValue(builder.toDyn(value)); functions.push(new IrFunction(boxNames.get(id), builder.arguments, Dyn, builder.blocks, Provider(TypeKey.of(requests.get(id)), compiler.Provides.ProviderOperation.BoxDynamic)));
+				builder.returnValue(builder.toDyn(value)); functions.push(new IrFunction(boxNames.get(id), builder.arguments, Dyn, builder.blocks, GeneratedHelper));
 			}
 			if (views.exists(id)) {
 				var builder = new IrBuilder(), array = builder.argument("array", Array(Dyn));
-				builder.returnValue(array); functions.push(new IrFunction(viewNames.get(id), builder.arguments, Array(Dyn), builder.blocks, Provider(TypeKey.of(requests.get(id)), compiler.Provides.ProviderOperation.ViewDynamic)));
+				builder.returnValue(array); functions.push(new IrFunction(viewNames.get(id), builder.arguments, Array(Dyn), builder.blocks, GeneratedHelper));
 			}
 		}
 		var rewritten:Array<IrFunction> = [], unboxes:Map<String, IrType> = [], typeTests:Map<String, {type:IrType, exact:Bool}> = [], nextExtraUnbox = 0;
@@ -118,6 +117,7 @@ class IrEnumDynamicDispatch {
 						target.instructions.push(new Located(Call(output, helper, [arguments[0]]), located.provenance)); changed = true;
 					default: target.instructions.push(located);
 				}
+				target.terminator = block.terminator; blocks.push(target);
 			}
 			rewritten.push(changed ? fn.withBlocks(blocks) : fn);
 		}
@@ -170,7 +170,7 @@ class IrEnumDynamicDispatch {
 		builder.select(test); builder.branch(builder.call("__std_is_exact_type", [input, builder.typeValue(type)], Bool), matched, invalid);
 		builder.select(matched); builder.returnValue(builder.safeCast(input, type));
 		builder.select(invalid); builder.throwValue(builder.toDyn(builder.constString("Invalid enum cast")));
-		return new IrFunction(name, builder.arguments, type, builder.blocks, Provider(TypeKey.of(type), ProviderOperation.DynamicUnbox));
+		return new IrFunction(name, builder.arguments, type, builder.blocks, EnumDynamicUnbox(type));
 	}
 
 	static function typeTest(name:String, type:IrType, exact:Bool, names:Array<String>, requests:Map<String, IrType>):IrFunction {
@@ -184,7 +184,7 @@ class IrEnumDynamicDispatch {
 			builder.select(matched); builder.returnValue(builder.constBool(true)); builder.select(next);
 		}
 		builder.returnValue(builder.call(exact ? "__std_is_exact_type" : "__std_is_of_type", [input, builder.typeValue(type)], Bool));
-		return new IrFunction(name, builder.arguments, Bool, builder.blocks, Provider(TypeKey.of(type), ProviderOperation.DynamicTest));
+		return new IrFunction(name, builder.arguments, Bool, builder.blocks, GeneratedHelper);
 	}
 
 	/** Enums have equality but no declared ordering. Never order their boxed addresses. */

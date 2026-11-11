@@ -126,7 +126,9 @@ class IrFunction {
 	 * is a provider (two functions never serve one operation for one subject).
 	 */
 	public function withBlocks(blocks:Array<IrBlock>, ?bindings:Array<IrDebugBinding>, ?arguments:Array<IrValue>, ?result:IrType, ?name:String,
-			?kind:IrFunctionKind):IrFunction
+			?kind:IrFunctionKind):IrFunction {
+		if (blocks.length == 0 && this.blocks.length > 0) throw 'DEBUG empty withBlocks on ';
 		return new IrFunction(name == null ? this.name : name, arguments == null ? this.arguments : arguments, result == null ? this.result : result,
 			blocks, kind == null ? this.kind : kind, bindings == null ? debugBindings : bindings, inlineHint, retention);
+	}
 }
