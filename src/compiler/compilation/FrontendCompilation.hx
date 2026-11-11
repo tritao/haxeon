@@ -1410,6 +1410,9 @@ class FrontendCompilation {
 				owner = context.declarationOwner(dependency.functionName.substr(compiler.types.typing.RuntimeDependencyTracker.TYPE_ORIGIN_PREFIX.length));
 			else if (fn != null)
 				owner = resolveFunctionModule(fn, owners, typedByName, []);
+			else if (owners.exists(dependency.functionName))
+				// Typed in an earlier build and kept: it is not among this pass's typed functions, but its module is known.
+				owner = owners.get(dependency.functionName);
 			else
 				owner = initializerModule(dependency.functionName, owners);
 			if (owner == null)
