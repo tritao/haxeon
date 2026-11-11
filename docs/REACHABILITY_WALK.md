@@ -1,15 +1,18 @@
 # The type-aware reachability walk (ADR 0003 §13, migration steps 2 and 3)
 
-Status: proposal for dev-71 review; no code until it is reviewed. It is the walk and the prune of [ADR 0003 §13](adr/0003-compiler-architecture.md),
-built on the unified function kinds ([PROVIDER_REQUESTS.md](PROVIDER_REQUESTS.md), now superseded by `IrFunctionKind`) and placed in the phase
+Status: approved as the plan by dev-71 (2026-11-11), with the changes folded in below. Step 1, the diagnostic, comes first and decides whether
+the prune is done at all (see "Decision gate"). The note is the walk and the prune of [ADR 0003 §13](adr/0003-compiler-architecture.md),
+built on the unified function kinds ([PROVIDER_REQUESTS.md](PROVIDER_REQUESTS.md), superseded by `IrFunctionKind`) and placed in the phase
 order of [ENUM_PASS_PHASE_ORDER.md](ENUM_PASS_PHASE_ORDER.md). It is not a second provider design.
 
 ## What exists
 
 - `IrReachability` is a walk over name edges: calls, closures, and method calls over every class or implementor that could receive them.
-  Roots are the entry, `@:keep`/`@:expose` functions, `toString` implementations for dynamic stringification, and the functions native
-  declarations generate calls to. Wasm builders and the HashLink backend run it **after assembly** (`BackendAssembly`), so the passes
-  still see every function typing produced, including unused helpers.
+  Wasm builders and the plain HashLink backend run it **after assembly** (`BackendAssembly`), so the passes still see every function typing
+  produced, including unused helpers.
+- **Live builds today.** A live HashLink module (`livePatching`) is not pruned: its host can call any function by id, and a reachability
+  change must not move its layout. A plain HashLink build prunes from the entry (`withGeneratedRuntimeRoots(..., keepLiveClasses = true)`),
+  where a class that a reachable function mentions by type keeps all its methods. The Wasm builders emit only what is reachable.
 - Every function declares what it is: `IrFunction.kind`. `IrFunction.provides` maps a kind to a row `Serves(TypeKey, operation)`, and
   `IrProviders.rows/check` index and verify those rows (`$`-named functions must have a non-`Ordinary` kind; one function per
   (subject, operation)). That is the provider table, without a side table.
@@ -18,44 +21,62 @@ order of [ENUM_PASS_PHASE_ORDER.md](ENUM_PASS_PHASE_ORDER.md). It is not a secon
 
 ## The walk
 
-State, all monotone, so a worklist reaches a fixpoint:
+State, all monotone, so a worklist reaches a fixpoint: `reached` (function names), `created` (the `TypeKey`s that can exist at run time),
+`used` ((operation, subject-or-any) pairs seen at reachable sites).
 
-- `reached`: function names. `created`: the set of `TypeKey`s that can exist at run time. `used`: (operation, subject-or-any) pairs seen at
-  reachable sites.
+Roots, each stated:
+
+1. **The entry** of the build kind: the app's `main`, a test runner's entry, the live host's entry. Each build kind names its own.
+2. **Static initializers**, and the types of the fields they initialize (those types are created).
+3. **`@:keep` / `@:expose`** functions (`IrFunction.retention`), and the types in their signatures.
+4. **Native callbacks**: the functions native declarations generate calls to (`generatedFunctionDependencies`), the enum and class
+   constructors that a callback signature or a reflected native type names (their types are created), and reflection roots by Wasm's rules.
+5. **Dynamic stringification**: each class's `toString` when `__std_string` is used, as now.
+6. **Declared live-host entries** in builds that have a host.
 
 Edges:
 
-1. **Direct**: calls and closures by name, and method calls over created classes, as now (restricted to *created* classes, which is
-   the new part: today every class counts).
-2. **Typed operation with a subject**: a reachable instruction `Intrinsic(op)` with `typedOperation(op) = {T, o}` adds `(T, o)` to `used`.
-   The row `(T, o)` of the provider table, if any, is reached. A missing row is a check-mode error naming the instruction (the
-   "every typed operation has a provider" check, `IrProviders.check`, once a1's producers are in).
-3. **Dynamic site over all types**: dynamic equality, compare, hash, `toString`, dynamic enum test, reflection field access. The site is
+1. **Direct**: calls and closures by name.
+2. **Method calls over created classes only** (new; today every class counts). A call to a method of class `C` reaches that method's
+   implementation in `C` and in **every created subclass of `C`** (so inherited methods are reached through the subclass that inherits
+   them, and each override in a created subclass is reached). An **interface call** reaches the implementation in each **created
+   implementor** only; an implementor that is never created contributes nothing. A class that is only mentioned by type, not created, is
+   in the layout but its methods are not reached through dispatch.
+3. **Typed operation with a subject**: a reachable instruction `Intrinsic(op)` with `typedOperation(op) = {T, o}` adds `(T, o)` to `used`
+   and reaches the row `(T, o)` of the provider table. A missing row is a check-mode error naming the instruction.
+4. **Dynamic site over all types**: dynamic equality, compare, hash, `toString`, dynamic enum test, reflection field access. The site is
    an operation with no subject; it reaches the rows `(T, o)` of every **created** `T`. When `created` grows, the rows are revisited.
-4. **Kind-specific**: a copy kind (`ScalarArguments`, `OptionalScalar(original)`, `ClosureAdapter`, ...) is reached by name from its
-   callers and brings nothing of its own. `EnumEquality`, `EnumDynamicUnbox`, `EnumTagAdapter` and `ValueArraySlot` are reached only
-   through their rows, so an enum's helpers disappear with the enum.
+5. **Kinds**: a copy kind (`ScalarArguments`, `OptionalScalar(original)`, `ClosureAdapter`, ...) is reached by name from its callers and
+   brings nothing of its own. `EnumEquality`, `EnumDynamicUnbox`, `EnumTagAdapter` and `ValueArraySlot` are reached only through their
+   rows, so an enum's helpers disappear with the enum. A helper that serves a (type, operation) is a `Provider` row; `GeneratedHelper` is
+   only for helpers with **no subject**. There are no name-based keep lists anywhere: a target-only helper without a kind is a bug to fix
+   before the prune, and the diagnostic lists every one it finds.
 
-`created` (the soft spot): a first version counts a type as created when any reachable function constructs it, converts to it
-(`ToDynamic`/cast target), or has it in a native boundary signature, a static field or an object field of a created class. Anything that
-cannot be placed (reflection by Wasm's rules, native callbacks, declared live-host entries) is a root that marks its types created.
-Construction sites refine it later; a coarser `created` only keeps more, never miscompiles.
+`created` is deliberately coarse in the first version, and the over-approximation is documented here: a type is created when a reachable
+function constructs it, converts to it (`ToDynamic` or cast target), or has it in a native boundary signature, a static field or an
+object field of a created class, and when a root marks it. It is a type *mention*, not a construction site. A coarser `created` only keeps
+more, never miscompiles. Refine to construction sites only if the diagnostic numbers say the difference is worth it.
 
 ## Where it runs (step 3)
 
 ENUM_PASS_PHASE_ORDER puts reachability first (phase 1), but the enum providers do not exist then: `IrEnumDynamicDispatch.rewrite`
-(`IrProgramAssembler`, before generic owner erasure) synthesizes them from all enums present. So step 3 has two parts:
+(`IrProgramAssembler`, before generic owner erasure) synthesizes them from all enums present.
 
-- **3a** (this proposal): run the walk and the prune **right after** `IrEnumDynamicDispatch` and `IrEnumRuntimeSpecializations.materialize`, before
-  generic owner erasure, boxes, scalar rewrites and inlining. Providers exist as rows, so rule 2 and 3 work unchanged. Everything after
-  that sees the reachable program. Dispatchers that the enum code builds over "all enums" must be built over reachable providers: that
-  means running the walk once before `IrEnumDynamicDispatch` to decide which enums are created (rules 1 and 3 without providers), then
-  once more after it. Two walks, both linear.
+- **3a**: the sequence is **walk → dispatch(created, used) → walk**. `IrEnumDynamicDispatch.rewrite` and
+  `IrEnumRuntimeSpecializations.materialize` take the created set and the used operations as parameters instead of reading "all enums in the
+  program"; no reachability call appears inside the enum code and there is no hidden global. The second walk is the same function
+  (`IrReachability`), rerun on the grown program; it is not a second walker. The prune happens after the second walk, before generic owner
+  erasure, boxes, scalar rewrites and inlining, so everything after sees the reachable program. Dispatchers are built from reachable
+  providers only.
 - **3b** (later): move provider generation to demand, driven by typed operations, so one walk before everything is enough (phase 1).
-  This depends on a1's producers and is not part of the first prune.
+  3b removes the first walk without changing the dispatch's signature beyond its input. It depends on a1's producers.
+- The backends' own prune after assembly stays until it removes nothing in check mode, then goes. Until then the same `IrReachability` is
+  called from both places.
 
-The backends' own prune after assembly stays until it removes nothing in check mode, then goes (no second walker: the same
-`IrReachability` is called from both places until then).
+**Live and hot-reload builds.** The first version does not prune live builds: a patch can still call any function, and a reachability
+change must not move the module's layout. This matches the backends today. The walk and the invariant still run on live builds in check
+mode (so a missed edge is caught there too) and the prune is skipped; revisit after measuring. This is also why the driver runs every
+program case pruned and unpruned, plain and live.
 
 ## The invariant (decision 4)
 
@@ -65,19 +86,19 @@ test failure. Cost: one set lookup per call edge, check mode only.
 
 ## Evidence and gates
 
-1. **Diagnostic first, no behavior change**: run the new walk next to the conservative one on the program corpus, the self-hosting project
-   and the app; print how many functions, objects and providers each keeps. The step is worth doing only if the difference is large; the
-   self-hosting and app numbers decide.
-2. Equal behavior of pruned and unpruned builds (decision 6): the driver runs both on every program case.
-3. Gates: `gate.sh wave` per commit (warm-edit sweep included), `full` and the outer app gates before publishing.
-4. Cold-build effect measured with `scripts/measure-cold.sh` (app and `self-hosting` targets), and the warm-rebuild reuse unchanged: the
-   walk's result must be a function of the program graph, so cached results stay valid (it reads module reachability that reuse already
-   tracks; this is to be confirmed in step 1 by running `HAXEON_CHECK_REUSE=1`).
+1. **Step 1, the diagnostic (no behavior change).** Run the new walk next to the conservative one on the program corpus, the self-hosting
+   project and the app, and print how many functions, objects and providers each keeps, plus the list of helpers that have no kind. The
+   "every typed operation has a provider" check (`IrProviders.check`, built on `typedOperation`) lands here, as a check-mode error; it does
+   not need the prune and catches a missing producer early. Its timing is coordinated with a1's producer commit through dev-71.
+2. **Decision gate.** Record the kept functions, objects and providers of the conservative and the new walk for self-hosting and the app in
+   this note. If both keep less than about 5% fewer functions than the conservative walk, stop after step 2 and do not do the prune.
+3. **Pruned and unpruned equal** (decision 6): the driver runs both on every program case, plain and live.
+4. **Warm equals cold with the prune on.** In step 3 the warm-edit sweep and `HAXEON_CHECK_REUSE=1` run with the prune on, not just in step
+   1. An edit that changes the reachable set must give the same bytes as a cold build. The walk's result must be a function of the
+   program graph, so cached results stay valid; this is confirmed by those runs.
+5. Gates: `gate.sh wave` per commit (warm-edit sweep included), `full` and the outer app gates before publishing. The cold-build effect is
+   measured with `scripts/measure-cold.sh` (the app and `self-hosting` targets).
 
-## Questions for review
+## Results of step 1
 
-- Is two walks in 3a acceptable, or should the enum dispatch be changed to take the created set as an input instead?
-- Is a coarse `created` (mention, not construction) the right first cut?
-- Should the "every typed operation has a provider" check land with step 2 (the diagnostic) rather than with the prune?
-- Wasm GC and Wasm32 reach providers through the same rows; any target-only provider (a linear-memory helper) must be a `Provider` or
-  `GeneratedHelper` kind before the prune, or its callers keep it by name. Is that the intended reading of `GeneratedHelper`?
+(To be filled in by the diagnostic: conservative vs. type-aware, functions / objects / providers, for the self-hosting project and the app.)
