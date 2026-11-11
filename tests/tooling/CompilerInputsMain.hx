@@ -45,6 +45,7 @@ class CompilerInputsMain {
 		}
 		var first = compile();
 		expect(first.exists("Main") && first.exists("Value"), "the report lists the program's modules");
+		expect(first.get("Main")[1] == FileSystem.fullPath(main), "explicit sources report physical paths rather than diagnostic paths");
 		expect(first.get("Value")[2] == ContentDigest.makeHex(File.getBytes(value)), "the digest is the module text's");
 		expect(first.get("Value")[1] == FileSystem.fullPath(value) || StringTools.endsWith(first.get("Value")[1], "/late/Value.hx"),
 			"the path is the file read");

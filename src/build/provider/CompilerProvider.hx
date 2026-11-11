@@ -25,7 +25,8 @@ class CompilerProvider {
 				"--target=" + (project.manifest.target == "host" ? "hl" : project.manifest.target),
 				"--build-mode=" + (context.live || context.developmentMetadata ? "development" : "release"),
 				"--output=" + output,
-				"--entry=" + project.manifest.entry
+				"--entry=" + project.manifest.entry,
+				"--inputs-output=" + output + ".inputs.json"
 			], inputs:Array<String> = [];
 		for (resolvedPackage in project.packages.packages) {
 			for (sourceRoot in resolvedPackage.sourceRoots)
@@ -120,6 +121,7 @@ class CompilerProvider {
 		};
 		return new ExecutionAction(actionId, dependencies, inputs, [
 			output,
+			output + ".inputs.json",
 			output + ".functions",
 			output + ".hli",
 			output + ".live.json",

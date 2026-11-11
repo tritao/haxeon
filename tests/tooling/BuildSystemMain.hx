@@ -601,6 +601,26 @@ class BuildSystemMain {
 		expect(firstCompile.exitCode == 0 && !firstCompile.actions[0].skipped && secondCompile.exitCode == 0 && secondCompile.actions[0].skipped
 			&& compilerInvocations == 1,
 			"unchanged compiler actions with existing outputs should be skipped");
+		var discovered = Path.join([root, "Discovered.hx"]), report = compilerOutput + ".inputs.json";
+		File.saveContent(discovered, "first");
+		var reportedAction = new ExecutionAction(new ActionId("compile-discovered"), [], [source], [compilerOutput, report], "compile discovered Haxe",
+			Compiler("haxeon-compiler", ["--inputs-output=" + report], root, new Map(), () -> {
+				compilerInvocations++;
+				File.saveContent(compilerOutput, File.getContent(discovered));
+				File.saveContent(report, haxe.Json.stringify([["Discovered", discovered, build.execution.ContentDigest.makeHex(File.getBytes(discovered))], ["Generated", "ffi/Generated.hx", "generated digest"]]));
+				return 0;
+			}));
+		function executeReported() return new Executor(environment, 1, _ -> {}).execute(new ExecutionPlan([reportedAction]));
+		expect(executeReported().exitCode == 0 && executeReported().actions[0].skipped, "discovered dependencies are cached after the first compile");
+		File.saveContent(discovered, "second");
+		expect(!executeReported().actions[0].skipped && File.getContent(compilerOutput) == "second", "editing an unlisted loaded module rebuilds the binary");
+		expect(executeReported().actions[0].skipped, "rebuilt discovered inputs become clean");
+		var compiledFingerprint = ActionFingerprint.compute(reportedAction, buildRoot, environment.target.toString(), [], null, true);
+		File.saveContent(discovered, "saved during compilation");
+		expect(ActionFingerprint.compute(reportedAction, buildRoot, environment.target.toString(), []) != compiledFingerprint,
+			"an edit made after the compiler read a module must not be saved as clean");
+		FileSystem.deleteFile(report);
+		expect(!executeReported().actions[0].skipped, "missing dependency reports force compilation");
 		removeTree(root);
 	}
 
