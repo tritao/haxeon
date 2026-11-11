@@ -178,9 +178,13 @@ compiler understands, and the worker is built with the stock Haxe compiler (the 
 structs, not for `hl.Bytes` buffers. A byte-buffer arena would need a small native in `haxeon_runtime` (allocate a block, return `hl.Bytes` over it, free
 at the end of the build) and its owner must guarantee that nothing keeps a reference past the build.
 
-Not measured: allocation sites. The allocation profiler (`hlprof-live --sources alloc`, via `HAXEON_COMPILER_PROFILE_PORT`) attached to the worker but
-recorded no allocation samples, probably because the JIT's inline allocation path does not call the hook; I did not pursue it. The split between
-transient and retained is therefore by phase and by size class, not by site.
+Allocation sites (2026-11-11): the allocation profiler (`hlprof-live --sources alloc`) did record samples; the earlier note that it recorded none was wrong,
+and so was the guess that the JIT's inline path skips the hook (the shared allocation policy sends every allocation to the full allocator, which calls it,
+while the callback is set). Its samples are counted per thread, one per N allocations, and carry only the allocator's return address, so they never name
+a compiler site. The tool for allocation sites is the runtime's allocation census: `HAXEON_COMPILER_ALLOC_CENSUS=<file>` makes the worker count allocations by
+type and sample call stacks by bytes during a build, and `scripts/alloc-sites.py <file>` ranks sites and types. Cold build of the app at a937d563's parent:
+720.7M allocations, 29.8 GiB; `bytes` and `array` backing stores are 59% of the bytes; the top site was `IrInlineEnumEligibility.reflectedUnsupportedEnums` at 6.9%
+(a string built per static field per object walked), then `IrOperands.inputs` at 4.4% across its three array literals, and nothing else above 2%.
 
 No byte-buffer arena (decided 2026-11-09): per-build byte buffers explain at most about 0.35 GB of the empty pointer-free space; the rest is small-object fragmentation, which is the target of the allocation-regions work.
 
