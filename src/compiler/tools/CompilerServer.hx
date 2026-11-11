@@ -201,6 +201,7 @@ class CompilerServer {
 		};
 		Thread.create(function() {
 			runtime.ThreadName.setCurrent("haxeon.compile");
+			var counting = AllocationCensus.begin();
 			try
 				result = CompilerDriver.compile(cast staged, message -> {
 					cancellation.check();
@@ -210,6 +211,8 @@ class CompilerServer {
 				}, session, cancellation, publishEarly)
 			catch (error:Dynamic)
 				failure = error;
+			if (counting)
+				AllocationCensus.end();
 			done.release();
 		});
 		// A background compile has no requester to disconnect.
