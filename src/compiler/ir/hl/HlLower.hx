@@ -1560,10 +1560,28 @@ class HlLower {
 		return symbols.internFunction(arguments, result);
 	}
 
+	/**
+	 * The type index of object `name`. An object the program no longer has can still be named by a function the module keeps
+	 * for the running program's closures (`HlModuleAssembler.dropGuards`), such as a lambda an edit deleted or whose captures
+	 * changed, with its environment. A resident session reuses that function's lowered code, but a resumed one lowers it again
+	 * from its IR, so such an object resolves to the type the running module has (`publishedObjectType`).
+	 */
 	function requireObjectType(name:String):Int {
-		if (!objectTypeIndices.exists(name))
+		var index = objectTypeIndices.get(name);
+		if (index != null)
+			return index;
+		var published = publishedObjectType(name);
+		if (published == null)
 			throw 'Unknown IR object "$name"';
-		return objectTypeIndices.get(name);
+		return published;
+	}
+
+	/** The published type index of object `name` when the program does not declare it, else null (see `requireObjectType`). */
+	function publishedObjectType(name:String):Null<Int> {
+		if (objects.exists(name))
+			return null;
+		var published = symbols.objectDefinition(name);
+		return published == null ? null : published.index;
 	}
 
 	function requireEnumConstructor(typeName:String, type:IrType, constructor:Int):Int {
@@ -1600,8 +1618,18 @@ class HlLower {
 		var owner = typeName;
 		while (true) {
 			var descriptor = objects.get(owner);
-			if (descriptor == null)
+			if (descriptor == null) {
+				// An object only a function the program no longer has names: its fields are where the running module has them.
+				if (owner == typeName && publishedObjectType(typeName) != null) {
+					var published = publishedFieldIndex(typeName, name);
+					if (published == null)
+						throw 'Field "$typeName.$name" is not in the published type of an object the program no longer has';
+					var resolved:Int = published;
+					fieldIndices.set(key, resolved);
+					return resolved;
+				}
 				throw 'Unknown IR object "$owner"';
+			}
 			var declares = false;
 			for (field in descriptor.fields)
 				if (field.name == name)
@@ -1618,6 +1646,25 @@ class HlLower {
 		var resolved:Int = index;
 		fieldIndices.set(key, resolved);
 		return resolved;
+	}
+
+	/** HashLink's index of field `name` in published object `typeName`, declared by it or one of its published bases. */
+	function publishedFieldIndex(typeName:String, name:String):Null<Int> {
+		var owner:Null<String> = typeName;
+		while (owner != null) {
+			var index = symbols.objectFieldIndex(owner, name), published = symbols.objectDefinition(owner);
+			if (index != null)
+				return index;
+			owner = published == null ? null : switch published.definition {
+				case Object(_, base, _, _, _, _) if (base >= 0):
+					switch symbols.types[base] {
+						case Object(baseName, _, _, _, _, _): symbols.strings[baseName];
+						default: null;
+					}
+				default: null;
+			};
+		}
+		return null;
 	}
 
 	/**
