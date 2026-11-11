@@ -217,6 +217,7 @@ class TestCatalog {
 		"UnreachableDeclarationMain",
 		"WasmBackendMain",
 		"WasmStringFinalizationMain",
+		"ReflectionTagProjectionMain",
 		"WasmDeepStructureMain",
 		"CHeaderImporterMain",
 		"CxxHeaderImporterMain",

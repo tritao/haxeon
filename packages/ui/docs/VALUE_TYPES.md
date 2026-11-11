@@ -5454,3 +5454,13 @@ replaces the existing stringifier body. The slot test finalizes twice and checks
 that the function count and indices stay fixed. Executed fixtures cover numbers,
 enums, class `toString`, booleans and null on all three targets, with inlining off
 and on. This preserves early numeric-helper registration for Wasm32 GC wrapping.
+
+The next reflection checkpoint shares HashLink's presence, deletion and copy
+operations for tag-only layouts. Get/set still project nominal values at an
+actual reflective boundary, and field listings retain their constant names: the
+native listing helpers allocate temporary field arrays. The new fixture checks
+the helper set and get/set/list/copy/delete semantics, including a tag-typed
+closure field, on all three targets with inlining off/on. Tier 1: 862 passed,
+0 failed; self-hosting fixed point `8044e4d7f1608c185a8e51f0def6b9768788a2747116de8ec5ece3c725df663f`.
+Release size attribution follows after the remaining representation fixes; no
+new paired timing series is used for this closeout.

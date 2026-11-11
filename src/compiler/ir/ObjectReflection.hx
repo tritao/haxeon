@@ -2,8 +2,14 @@ package compiler.ir;
 
 import compiler.ir.Ir;
 
-private typedef ReflectedLayout = {final name:String; final fields:Array<IrObjectField>; final methods:Array<{name:String, functionName:String, type:IrType}>;
-	final payload:Null<String>; final observable:Bool; final observableBits:Null<Map<String, Int>>;}
+private typedef ReflectedLayout = {
+	final name:String;
+	final fields:Array<IrObjectField>;
+	final methods:Array<{name:String, functionName:String, type:IrType}>;
+	final payload:Null<String>;
+	final observable:Bool;
+	final observableBits:Null<Map<String, Int>>;
+}
 
 /**
  * Field reflection over compiled object layouts, for runtimes that cannot look up object fields by
@@ -24,13 +30,24 @@ class ObjectReflection {
 		var remaining:Array<IrNative> = [],
 			layouts:Null<Array<ReflectedLayout>> = null;
 		for (native in natives) {
-			if (isHashLinkReflection(native.symbol) && objects != null && hasSpecialFields(objects)) {
+			// Field listings keep their allocation-free constant names; the native helpers allocate field arrays.
+			var projectValues = switch native.symbol {
+				case "__reflect_field", "__reflect_set_field", "__reflect_field_count", "__reflect_field_name": true;
+				default: false;
+			};
+			if (isHashLinkReflection(native.symbol) && objects != null && hasSpecialFields(objects, projectValues)) {
 				if (layouts == null)
 					layouts = layoutsOf(facts, objects, reflectable == null ? [] : reflectable, functions);
-				var affected = affectedLayouts(layouts, objects);
+				var affected = affectedLayouts(layouts, objects, projectValues);
 				if (affected.length > 0) {
 					var fallback = '$' + 'optional-reflect-native:' + native.name;
-					remaining.push({name: fallback, library: native.library, symbol: native.symbol, arguments: native.arguments, result: native.result});
+					remaining.push({
+						name: fallback,
+						library: native.library,
+						symbol: native.symbol,
+						arguments: native.arguments,
+						result: native.result
+					});
 					functions.push(hashLinkReflection(native, fallback, affected, functions));
 					continue;
 				}
@@ -69,77 +86,93 @@ class ObjectReflection {
 	/** Whether assembly will generate object-layout reflection helpers from this native surface. */
 	public static function usesObjectLayouts(natives:Array<IrNative>):Bool {
 		for (native in natives)
-			if (isHashLinkReflection(native.symbol) || StringTools.startsWith(native.symbol, "__reflect_object_")) return true;
+			if (isHashLinkReflection(native.symbol) || StringTools.startsWith(native.symbol, "__reflect_object_"))
+				return true;
 		return false;
 	}
 
 	static function isHashLinkReflection(symbol:String):Bool
 		return switch symbol {
-			case "__reflect_field", "__reflect_set_field", "__reflect_has_field", "__reflect_delete_field", "__reflect_field_count",
-				"__reflect_field_name", "__reflect_copy": true;
+			case "__reflect_field", "__reflect_set_field", "__reflect_has_field", "__reflect_delete_field", "__reflect_field_count", "__reflect_field_name",
+				"__reflect_copy": true;
 			default: false;
 		};
 
-	static function hasSpecialFields(objects:Array<IrObject>):Bool {
+	static function hasSpecialFields(objects:Array<IrObject>, projectValues:Bool):Bool {
 		var values:Map<String, Bool> = [for (object in objects) if (object.isValue) object.name => true];
 		for (object in objects) {
-			if (StringTools.startsWith(object.name, IrValueInterfaceBoxes.BOX_PREFIX)) return true;
+			if (StringTools.startsWith(object.name, IrValueInterfaceBoxes.BOX_PREFIX))
+				return true;
 			for (field in object.fields)
-				if (field.name == "$haxeonObservableState" || needsLogicalReflection(field.type, values)) return true;
+				if (field.name == "$haxeonObservableState" || needsLogicalReflection(field.type, values, projectValues))
+					return true;
 		}
 		return false;
 	}
 
-	static function needsLogicalReflection(type:IrType, values:Map<String, Bool>):Bool
+	static function needsLogicalReflection(type:IrType, values:Map<String, Bool>, projectValues:Bool):Bool
 		return switch type {
 			case Obj(name): values.exists(name);
-			case EnumTag(_): true;
-			case Nullable(inner): needsLogicalReflection(inner, values);
-			case Function(arguments, result):
-				Lambda.exists(arguments, argument -> needsLogicalReflection(argument, values)) || needsLogicalReflection(result, values);
+			case EnumTag(_): projectValues;
+			case Nullable(inner): needsLogicalReflection(inner, values, projectValues);
+			case Function(arguments, result): projectValues && (Lambda.exists(arguments, argument -> needsLogicalReflection(argument, values, true))
+					|| needsLogicalReflection(result, values, true));
 			default: false;
 		};
 
-	static function affectedLayouts(layouts:Array<ReflectedLayout>, objects:Array<IrObject>):Array<ReflectedLayout> {
+	static function affectedLayouts(layouts:Array<ReflectedLayout>, objects:Array<IrObject>, projectValues:Bool):Array<ReflectedLayout> {
 		var values:Map<String, Bool> = [for (object in objects) if (object.isValue) object.name => true];
-		return [for (layout in layouts) {
-			var affected = layout.payload != null || layout.observable;
-			for (field in layout.fields)
-				if (needsLogicalReflection(field.type, values)) affected = true;
-			if (affected) layout;
-		}];
+		return [
+			for (layout in layouts) {
+				var affected = layout.payload != null || layout.observable;
+				for (field in layout.fields)
+					if (needsLogicalReflection(field.type, values, projectValues))
+						affected = true;
+				if (affected) layout;
+			}
+		];
 	}
 
 	/** Preserve logical fields when HashLink storage uses inline values or scalar closure ABIs. */
 	static function hashLinkReflection(native:IrNative, fallback:String, layouts:Array<ReflectedLayout>, functions:Array<IrFunction>):IrFunction {
-		var builder = new IrBuilder(), object = builder.argument("object", Dyn),
-			arguments = [for (index in 1...native.arguments.length) builder.argument('argument$index', native.arguments[index])];
+		var builder = new IrBuilder(), object = builder.argument("object", Dyn), arguments = [
+			for (index in 1...native.arguments.length) builder.argument('argument$index', native.arguments[index])
+		];
 		forEachLayout(builder, object, layouts, (layout, typed) -> {
-			var parameters = [for (index in 1...native.arguments.length) {name: 'argument$index', type: native.arguments[index]}];
-			var body:(IrBuilder, ReflectedLayout, IrValue, Array<IrValue>)->Void = switch native.symbol {
+			var parameters = [
+				for (index in 1...native.arguments.length) {name: 'argument$index', type: native.arguments[index]}
+			];
+			var body:(IrBuilder, ReflectedLayout, IrValue, Array<IrValue>) -> Void = switch native.symbol {
 				case "__reflect_field": fieldBody;
 				case "__reflect_field_count": (inner, entry, _, _) -> inner.returnValue(inner.constInt(entry.fields.length));
 				case "__reflect_field_name": fieldNameBody;
 				case "__reflect_delete_field": deleteFieldBody;
 				case "__reflect_copy": (inner, entry, source, _) -> {
-					var result = inner.newObject(entry.name);
-					if (entry.observable) recordObservableCreation(inner, result);
-					if (entry.payload != null) inner.fieldSet(result, "value", inner.fieldGet(source, "value", Obj(entry.payload)));
-					else for (field in entry.fields) inner.fieldSet(result, field.name, inner.fieldGet(source, field.name, field.type));
-					inner.returnValue(inner.toDyn(result));
-				};
+						var result = inner.newObject(entry.name);
+						if (entry.observable)
+							recordObservableCreation(inner, result);
+						if (entry.payload != null)
+							inner.fieldSet(result, "value", inner.fieldGet(source, "value", Obj(entry.payload)));
+						else
+							for (field in entry.fields)
+								inner.fieldSet(result, field.name, inner.fieldGet(source, field.name, field.type));
+						inner.returnValue(inner.toDyn(result));
+					};
 				case "__reflect_has_field": (inner, entry, _, args) -> {
-					forEachField(inner, args[0], entry, _ -> inner.returnValue(inner.constBool(true)));
-					inner.returnValue(inner.constBool(false));
-				};
+						forEachField(inner, args[0], entry, _ -> inner.returnValue(inner.constBool(true)));
+						inner.returnValue(inner.constBool(false));
+					};
 				case "__reflect_set_field": (inner, entry, target, args) -> {
-					forEachField(inner, args[0], entry, field -> {
-						guardObservableWrite(inner, entry, target, field.name);
-						inner.fieldSet(logicalObject(inner, entry, target), field.name, (switch (field.type) { case Dyn: true; default: false; }) ? args[1] : inner.safeCast(args[1], field.type));
-						inner.returnValue(inner.constVoid());
-					});
-					inner.returnValue(inner.call(fallback, [inner.toDyn(target)].concat(args), Void));
-				};
+						forEachField(inner, args[0], entry, field -> {
+							guardObservableWrite(inner, entry, target, field.name);
+							inner.fieldSet(logicalObject(inner, entry, target), field.name, (switch (field.type) {
+								case Dyn: true;
+								default: false;
+							}) ? args[1] : inner.safeCast(args[1], field.type));
+							inner.returnValue(inner.constVoid());
+						});
+						inner.returnValue(inner.call(fallback, [inner.toDyn(target)].concat(args), Void));
+					};
 				default: throw 'Unsupported HashLink reflection native "${native.symbol}"';
 			};
 			var helper = layoutFunction('${native.name}.${layout.name}', layout, functions, native.result, parameters, body);
@@ -171,10 +204,13 @@ class ObjectReflection {
 			}
 			var fields:Array<IrObjectField> = [], observable = false;
 			var fieldOwners = payload == null ? chain : [byName.get(payload)];
-			for (owner in fieldOwners) if (owner != null)
-				for (field in owner.fields)
-					if (field.name == "$haxeonObservableState") observable = true;
-					else fields.push(field);
+			for (owner in fieldOwners)
+				if (owner != null)
+					for (field in owner.fields)
+						if (field.name == "$haxeonObservableState")
+							observable = true;
+						else
+							fields.push(field);
 			var methods:Map<String, {name:String, functionName:String, type:IrType}> = [];
 			for (owner in chain)
 				for (method in owner.methods) {
@@ -185,7 +221,14 @@ class ObjectReflection {
 				}
 			var names = [for (name in methods.keys()) name];
 			names.sort(Reflect.compare);
-			result.push({layout: {name: name, fields: fields, methods: [for (name in names) methods.get(name)], payload: payload, observable: observable, observableBits: facts.observableFieldBits.get(name)}, depth: chain.length});
+			result.push({layout: {
+				name: name,
+				fields: fields,
+				methods: [for (name in names) methods.get(name)],
+				payload: payload,
+				observable: observable,
+				observableBits: facts.observableFieldBits.get(name)
+			}, depth: chain.length});
 		}
 		result.sort((left, right) -> right.depth - left.depth);
 		return [for (entry in result) entry.layout];
@@ -194,10 +237,13 @@ class ObjectReflection {
 	static function copy(name:String, layouts:Array<ReflectedLayout>, functions:Array<IrFunction>):IrFunction
 		return perLayout(name, layouts, functions, Dyn, [], (builder, layout, typed, _) -> {
 			var result = builder.newObject(layout.name);
-			if (layout.observable) recordObservableCreation(builder, result);
-			if (layout.payload != null) builder.fieldSet(result, "value", builder.fieldGet(typed, "value", Obj(layout.payload)));
-			else for (field in layout.fields)
-				builder.fieldSet(result, field.name, builder.fieldGet(typed, field.name, field.type));
+			if (layout.observable)
+				recordObservableCreation(builder, result);
+			if (layout.payload != null)
+				builder.fieldSet(result, "value", builder.fieldGet(typed, "value", Obj(layout.payload)));
+			else
+				for (field in layout.fields)
+					builder.fieldSet(result, field.name, builder.fieldGet(typed, field.name, field.type));
 			builder.returnValue(builder.toDyn(result));
 		}, builder -> builder.constNull(Dyn));
 
@@ -208,7 +254,8 @@ class ObjectReflection {
 		return perLayout(name, layouts, functions, Dyn, [{name: "field", type: Bytes}], fieldBody, builder -> builder.constNull(Dyn));
 
 	static function fieldBody(builder:IrBuilder, layout:ReflectedLayout, typed:IrValue, arguments:Array<IrValue>):Void {
-		forEachField(builder, arguments[0], layout, field -> builder.returnValue(builder.toDyn(builder.fieldGet(logicalObject(builder, layout, typed), field.name, field.type))));
+		forEachField(builder, arguments[0], layout,
+			field -> builder.returnValue(builder.toDyn(builder.fieldGet(logicalObject(builder, layout, typed), field.name, field.type))));
 		for (method in layout.methods) {
 			var matched = builder.createBlock(), next = builder.createBlock();
 			builder.branch(builder.call("__string_equal", [arguments[0], builder.constString(method.name)], Bool), matched, next);
@@ -227,7 +274,10 @@ class ObjectReflection {
 		var value = arguments[1];
 		forEachField(builder, arguments[0], layout, field -> {
 			guardObservableWrite(builder, layout, typed, field.name);
-			builder.fieldSet(logicalObject(builder, layout, typed), field.name, (switch (field.type) { case Dyn: true; default: false; }) ? value : builder.safeCast(value, field.type));
+			builder.fieldSet(logicalObject(builder, layout, typed), field.name, (switch (field.type) {
+				case Dyn: true;
+				default: false;
+			}) ? value : builder.safeCast(value, field.type));
 			builder.returnValue(builder.constBool(true));
 		});
 		builder.returnValue(builder.constBool(false));
@@ -255,9 +305,11 @@ class ObjectReflection {
 	}
 
 	static function guardObservableWrite(builder:IrBuilder, layout:ReflectedLayout, object:IrValue, field:String):Void {
-		if (!layout.observable) return;
+		if (!layout.observable)
+			return;
 		var bit = layout.observableBits == null ? null : layout.observableBits.get(field);
-		if (bit == null) return;
+		if (bit == null)
+			return;
 		var source = builder.fieldGet(object, "$haxeonObservableState", Obj("haxeon.reactive.ObservableSource"));
 		var status = builder.call("haxeon.reactive.ReactiveRuntime.observableWriteStatus", [source, builder.constInt(bit), builder.toDyn(object)], I32);
 		var allowed = builder.createBlock(), denied = builder.createBlock();

@@ -15,10 +15,6 @@ class EnumEqualityGenerator {
 	public static inline final EQUALS_PREFIX = "$enum-equals:";
 	public static inline final REFLECTIVE_PREFIX = "$enum-reflect-equals:";
 
-	/** Both generated operations keep a semantic value signature when eligible enums become inline values. */
-	public static function isEqualityName(name:String):Bool
-		return StringTools.startsWith(name, EQUALS_PREFIX) || StringTools.startsWith(name, REFLECTIVE_PREFIX);
-
 	public static function equalsName(type:CompilerType):String
 		return EQUALS_PREFIX + Sha256.encode(compiler.semantic.SemanticSignature.type(type)).substr(0, 32);
 
@@ -134,7 +130,8 @@ class EnumEqualityGenerator {
 				BodyTyper.fail("E1025", 'Type.enumEq requires an enum value, got "${compiler.semantic.SemanticSignature.display(type)}"', span);
 		}
 		return {
-			name: reflective ? reflectiveName(type) : equalsName(type), role: EqualityFunction,
+			name: reflective ? reflectiveName(type) : equalsName(type),
+			role: EqualityFunction,
 			origin: req.origin,
 			originKind: Helper,
 			typeArguments: null,
