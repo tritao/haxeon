@@ -80,6 +80,33 @@ class TestRunner {
 			[prebuiltMain].concat(arguments)) : new Process(haxe, ["--cwd", root, "common.hxml", "--run", "Main"].concat(arguments));
 	}
 
+	/**
+	 * Programs whose warm edit rebuild is known to differ from a fresh build, by name, with the design item that fixes each. A name here
+	 * is an expected failure: the case passes while the rebuild still differs in that way, and FAILS once it stops differing, so the
+	 * marker cannot outlive its cause. Nothing else is allowed to fail; do not add a name without a note that explains it.
+	 */
+	static final warmEditKnownFailures:Map<String, String> = [
+		"enum-generated-dependencies" => "docs/HELPER_OWNERSHIP.md: a shared helper's origin is chosen by the first requester"
+	];
+
+	/** The result for a warm edit build of a program that is marked as a known failure, or null when `run` is not such a build. */
+	static function knownWarmFailure(run:ProgramRun, compilation:CommandResult):Null<{passed:Bool, output:String}> {
+		var note = run.warm ? warmEditKnownFailures.get(run.test.name) : null;
+		if (note == null)
+			return null;
+		if (compilation.status == 0)
+			return {
+				passed: false,
+				output: compilation.output + 'FAIL: ${runName(run)} is marked as a known failure ($note) but its warm rebuild now equals a fresh build: remove the marker\n'
+			};
+		if (compilation.output.indexOf("differs from a fresh build") < 0)
+			return {
+				passed: false,
+				output: compilation.output + 'FAIL: ${runName(run)} is marked as a known failure ($note) but failed in another way\n'
+			};
+		return {passed: true, output: 'PASS: ${runName(run)} is a known failure, as marked ($note)\n'};
+	}
+
 	static function runName(run:ProgramRun):String
 		return run.test.name + (run.warm ? " (warm edit rebuilds)" : run.plain ? " (plain build)" : "");
 
@@ -251,7 +278,10 @@ class TestRunner {
 			var job = active.shift();
 			var compilation = finishCommand(job.process);
 			compileOutput[job.index] = compilation.output;
-			if (compilation.status == 0)
+			var known = knownWarmFailure(job.run, compilation);
+			if (known != null)
+				results[job.index] = {index: job.index, passed: known.passed, output: known.output};
+			else if (compilation.status == 0)
 				compiled.push(job.index);
 			else
 				results[job.index] = {
@@ -287,6 +317,9 @@ class TestRunner {
 		var source = Path.join([root, "tests", "programs", run.test.name + ".hx"]);
 		var output = runOutput(root, run), test = run.test;
 		var compilation = finishCommand(compileProgram(source, output, run));
+		var known = knownWarmFailure(run, compilation);
+		if (known != null)
+			return {index: index, passed: known.passed, output: known.output};
 		if (compilation.status != 0) {
 			return {
 				index: index,
