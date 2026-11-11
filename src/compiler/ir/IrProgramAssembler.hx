@@ -278,8 +278,12 @@ class IrProgramAssembler {
 		return result;
 	}
 
-	public static function enumsFrom(generator:IrGenerator, typed:TypedProgram):Array<IrEnum>
-		return [
+	/**
+	 * Sorted by name: the typed program lists specialized enums in the order they were first made, which depends on which functions a
+	 * session typed (a warm session types fewer than a fresh compiler), and the order is the order of the module's type table.
+	 */
+	public static function enumsFrom(generator:IrGenerator, typed:TypedProgram):Array<IrEnum> {
+		var result:Array<IrEnum> = [
 			for (enumDecl in typed.enums)
 				{
 					name: enumDecl.name,
@@ -290,6 +294,9 @@ class IrProgramAssembler {
 					]
 				}
 		];
+		result.sort((left, right) -> Reflect.compare(left.name, right.name));
+		return result;
+	}
 
 	public static function interfacesFrom(generator:IrGenerator, typed:TypedProgram):Array<IrInterface> {
 		return [
