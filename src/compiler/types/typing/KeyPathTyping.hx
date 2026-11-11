@@ -125,7 +125,9 @@ class KeyPathTyping {
 			writable: writable,
 			rootWriteback: rootWriteback,
 			writeError: writeError,
-			span: span,
+			// The generated accessors are placed at the declaration of the first field, not at whichever use was typed last: one definition
+			// serves every use of the path, and a session that types only some of them must place it where a fresh compiler does.
+			span: fields.length > 0 ? fields[0].field.span : span,
 			origin: origin
 		});
 		session.recordKeyPathUse(session.currentContext.name, name);
