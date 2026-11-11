@@ -104,7 +104,7 @@ class ConversionResolver {
 			case AbstractCast:
 				var conversion = abstractFromFunction(value.type, expected);
 				conversion == null ? session.representation.boundaryCast(value,
-					expected) : new TypedExpression(TCall(conversion, [value]), expected, value.span);
+					expected) : new TypedExpression(TCall(conversion.name, [coerce(value, conversion.argument, context, code)]), expected, value.span);
 			case ToDynamic:
 				// A dynamic box stores a pointer, not an inline copy. Own a value-class payload before boxing it.
 				var owned = ValueCopy.bind(session, value, value.type), enumType = EnumDynamicBox.enumType(value.type);
@@ -330,27 +330,28 @@ class ConversionResolver {
 			expected, span);
 	}
 
-	function abstractFromFunction(actual:CompilerType, expected:CompilerType):Null<String> {
+	function abstractFromFunction(actual:CompilerType, expected:CompilerType):Null<{name:String, argument:CompilerType}> {
 		return switch expected {
 			case TAbstract(name, arguments, _):
 				var declaration = session.declarations.abstracts.get(name);
 				if (declaration == null)
 					return null;
 				var substitutions = session.representation.typeParameterSubstitutions(declaration.typeParameters, arguments);
-				for (method in declaration.methods) {
-					if (!method.isStatic || method.arguments.length != 1)
-						continue;
-					var metadata = method.metadata;
-					if (metadata == null)
-						continue;
-					var isFrom = false;
-					for (entry in metadata)
-						if (entry.name == "from")
-							isFrom = true;
-					if (isFrom
-						&& TypeRelations.equals(actual, session.declarations.resolve(method.arguments[0].type, method.span, substitutions)))
-						return name + "." + method.name;
-				}
+				for (exact in [true, false])
+					for (method in declaration.methods) {
+						if (!method.isStatic || method.arguments.length != 1)
+							continue;
+						var metadata = method.metadata;
+						if (metadata == null)
+							continue;
+						var isFrom = false;
+						for (entry in metadata)
+							if (entry.name == "from")
+								isFrom = true;
+						var argument = session.declarations.resolve(method.arguments[0].type, method.span, substitutions);
+						if (isFrom && (exact ? TypeRelations.equals(actual, argument) : compiler.types.AbstractConversionGraph.acceptsFromArgument(actual, argument)))
+							return {name: name + "." + method.name, argument: argument};
+					}
 				null;
 			default: null;
 		};

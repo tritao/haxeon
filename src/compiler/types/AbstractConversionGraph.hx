@@ -89,11 +89,18 @@ class AbstractConversionGraph {
 				continue;
 			for (entry in metadata)
 				if (entry.name == "from"
-					&& TypeRelations.equals(actual, declarations.resolve(method.arguments[0].type, method.span, substitutions)))
+					&& acceptsFromArgument(actual, declarations.resolve(method.arguments[0].type, method.span, substitutions)))
 					return true;
 		}
 		return false;
 	}
+
+	/** Numeric widening is allowed before a @:from call, without chaining abstract conversions. */
+	public static function acceptsFromArgument(actual:CompilerType, expected:CompilerType):Bool
+		return TypeRelations.equals(actual, expected) || (switch [actual, expected] {
+			case [TInt, TFloat]: true;
+			default: false;
+		});
 
 	function declaredTo(name:String, arguments:Array<CompilerType>, expected:CompilerType):Bool {
 		if (!declarations.abstracts.exists(name))
