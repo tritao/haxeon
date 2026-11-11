@@ -78,6 +78,22 @@ change must not move the module's layout. This matches the backends today. The w
 mode (so a missed edge is caught there too) and the prune is skipped; revisit after measuring. This is also why the driver runs every
 program case pruned and unpruned, plain and live.
 
+## Prerequisite of the prune: dynamic sites are typed, not named
+
+The diagnostic finds a dynamic site by the **name of the native** it calls (`IrTypeAwareWalk.defaultDynamicSites`: `__dynamic_equal`, the enum
+dispatch's `REFLECT`, `__std_is_of_type`, `__std_is_exact_type`). That is accepted for the diagnostic only, and it is incomplete: dynamic
+`toString` / `Std.string`, `Reflect.compare`, `Reflect.field` / `setField` / `callMethod`, `Type.getClass` / `enumIndex` / `enumParameters` /
+`enumConstructor`, `Std.downcast` and the dynamic map-key hash are sites too. Before step 3 prunes anything:
+
+- the list comes from the native registry in **one place**, with a test that fails when a type-dispatching native is not classified (so a new
+  native cannot be forgotten); and
+- the long-term form replaces names: the instruction carries a typed operation with an any-subject operation (an a1 marker-family item),
+  and the walk reads the operation from the instruction.
+
+`keepCreatedClassMethods` (every method of a created class is reached, as a mentioned class keeps its methods in the plain HashLink prune
+today, because `Reflect.field` can reach a method by name) goes away once reflective field access is such a dynamic site: it then reaches the
+methods of created classes by itself.
+
 ## The invariant (decision 4)
 
 In check mode, after each pass, every call target is in the function set and is either in the reachable snapshot or in the set of functions

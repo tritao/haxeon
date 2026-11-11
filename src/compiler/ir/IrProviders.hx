@@ -2,6 +2,7 @@ package compiler.ir;
 
 import compiler.Provides;
 import compiler.Provides.ProviderOperation;
+import compiler.Provides.ProviderOperations;
 import compiler.ir.Ir;
 
 /**
@@ -60,6 +61,8 @@ class IrProviders {
 			case EnumDynamicView(type): {subject: TypeKey.of(type), operation: ProviderOperation.ViewDynamic};
 			case EnumTagBox(type): {subject: TypeKey.of(type), operation: ProviderOperation.EnumTagBox};
 			case EnumTagUnbox(type): {subject: TypeKey.of(type), operation: ProviderOperation.EnumTagUnbox};
+			case InlineEnumBox(type): {subject: TypeKey.of(type), operation: ProviderOperations.detailed(ProviderOperation.InlineEnumHelper, "box")};
+			case InlineEnumUnbox(type): {subject: TypeKey.of(type), operation: ProviderOperations.detailed(ProviderOperation.InlineEnumHelper, "unbox")};
 		};
 
 	/**
@@ -71,6 +74,7 @@ class IrProviders {
 		for (fn in functions)
 			switch fn.provides {
 				case Serves(type, operation):
+					served.set(operation + "\n" + type.toString(), true);
 					served.set(base(operation) + "\n" + type.toString(), true);
 				case None:
 			}
@@ -80,7 +84,7 @@ class IrProviders {
 					switch located.value {
 						case Intrinsic(_, operation, _):
 							var typed = typedOperation(operation);
-							if (typed != null && !served.exists(base(typed.operation) + "\n" + typed.subject.toString()))
+							if (typed != null && !served.exists(typed.operation + "\n" + typed.subject.toString()))
 								return '"${fn.name}" asks for ${typed.operation} of ${typed.subject.toString()}, which no function provides';
 						default:
 					}

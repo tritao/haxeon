@@ -185,13 +185,11 @@ private class IrTypeAwareWalkState {
 			byName.set(fn.name, fn);
 			switch fn.provides {
 				case Serves(type, operation):
-					var key = IrProviders.base(operation) + "\n" + type.toString();
-					var names = providers.get(key);
-					if (names == null) {
-						names = [];
-						providers.set(key, names);
-					}
-					names.push(fn.name);
+					// Indexed by the whole operation and by its base: a typed operation names the former (`inline-enum-helper:box`), a dynamic
+					// site asks for the latter (every `equals:...` helper of a type).
+					addProvider(operation + "\n" + type.toString(), fn.name);
+					if (IrProviders.base(operation) != operation)
+						addProvider(IrProviders.base(operation) + "\n" + type.toString(), fn.name);
 				case None:
 			}
 		}
@@ -199,6 +197,15 @@ private class IrTypeAwareWalkState {
 			natives.set(native.name, native);
 		for (field in program.staticFields)
 			staticTypes.set(field.name, field.type);
+	}
+
+	function addProvider(key:String, name:String):Void {
+		var names = providers.get(key);
+		if (names == null) {
+			names = [];
+			providers.set(key, names);
+		}
+		names.push(name);
 	}
 
 	public function run():IrWalkResult {
@@ -296,7 +303,7 @@ private class IrTypeAwareWalkState {
 			case Intrinsic(_, operation, _):
 				var typed = IrProviders.typedOperation(operation);
 				if (typed != null) {
-					var key = IrProviders.base(typed.operation) + "\n" + typed.subject.toString();
+					var key = typed.operation + "\n" + typed.subject.toString();
 					demanded.set(key, true);
 					create(typeOfKey(operation));
 					var names = providers.get(key);
@@ -314,7 +321,7 @@ private class IrTypeAwareWalkState {
 
 	static function typeOfKey(operation:IrIntrinsic):IrType
 		return switch operation {
-			case EnumDynamicBox(type), EnumDynamicView(type), EnumTagBox(type), EnumTagUnbox(type):
+			case EnumDynamicBox(type), EnumDynamicView(type), EnumTagBox(type), EnumTagUnbox(type), InlineEnumBox(type), InlineEnumUnbox(type):
 				type;
 		};
 

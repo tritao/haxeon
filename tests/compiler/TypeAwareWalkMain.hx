@@ -13,6 +13,7 @@ class TypeAwareWalkMain {
 		dynamicSite();
 		interfaceCall();
 		typedOperation();
+		inlineEnumOperations();
 		Sys.println("PASS: type-aware walk: dynamic sites over created types, interface calls over created implementors, typed operations need a provider");
 	}
 
@@ -128,5 +129,31 @@ class TypeAwareWalkMain {
 		expect(IrProviders.checkTypedOperations(program.functions) == null, "the check passes with the row");
 		program.functions.push(empty("$helper", Ordinary));
 		expect(IrTypeAwareWalk.kindlessHelpers(program).join(",") == "$helper", "a $ function with no kind is listed");
+	}
+
+	/** The inline enum boundary operations name the box or the unbox helper of the enum, not both. */
+	static function inlineEnumOperations():Void {
+		var builder = new IrBuilder();
+		var payload = builder.argument("payload", I32);
+		builder.intrinsic(InlineEnumBox(Enum("Opt")), [payload], Dyn);
+		builder.returnValue(builder.constVoid());
+		var program = new IrProgram("main");
+		program.functions = [new IrFunction("main", builder.arguments, Void, builder.blocks, Ordinary)];
+		var helper = function(name:String, detail:String):IrFunction {
+			var fn = empty(name, Ordinary, [I32], Dyn);
+			return new IrFunction(name, fn.arguments, Dyn, fn.blocks,
+				Provider(TypeKey.of(Enum("Opt")), compiler.Provides.ProviderOperations.detailed(ProviderOperation.InlineEnumHelper, detail)));
+		};
+		var missing = IrTypeAwareWalk.run(program, {functions: ["main"], types: []}, null, true);
+		expect(missing.missingProviders.length == 1, "an inline enum box with no helper is reported");
+		expect(IrProviders.checkTypedOperations(program.functions) != null, "the check names the missing inline enum helper");
+		program.functions.push(helper("$unbox_Opt", "unbox"));
+		expect(IrTypeAwareWalk.run(program, {functions: ["main"], types: []}, null, true).missingProviders.length == 1,
+			"the unbox helper does not answer a box");
+		program.functions.push(helper("$box_Opt", "box"));
+		var served = IrTypeAwareWalk.run(program, {functions: ["main"], types: []}, null, true);
+		expect(served.missingProviders.length == 0 && served.reached.exists("$box_Opt"), "the box helper answers the box");
+		expect(!served.reached.exists("$unbox_Opt"), "the unbox helper is not reached by a box");
+		expect(IrProviders.checkTypedOperations(program.functions) == null, "the check passes with the box helper");
 	}
 }
