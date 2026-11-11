@@ -14,35 +14,47 @@ enum abstract DeclarationStage(Int) from Int to Int {
 
 /** Candidate-local declaration state machine. */
 class DeclarationLifecycle {
-	final stages:Map<String, DeclarationStage> = [];
+	/** The identities and their stages side by side, so advancing all of them walks arrays rather than a map's iterator. */
+	final ids:Array<String> = [];
+
+	final current:Array<DeclarationStage> = [];
+	final positions:Map<String, Int> = [];
 
 	public function new(declarations:DeclarationIndex, ?initial:DeclarationStage = Declared)
-		for (symbol in declarations.symbols)
-			stages.set(symbol.id, initial);
+		for (symbol in declarations.symbols) {
+			var position = positions.get(symbol.id);
+			if (position == null) {
+				positions.set(symbol.id, ids.length);
+				ids.push(symbol.id);
+				current.push(initial);
+			} else
+				current[position] = initial;
+		}
 
 	public function stage(id:DeclarationId):DeclarationStage {
-		var result = stages.get(id);
-		if (result == null)
+		var position = positions.get(id);
+		if (position == null)
 			throw 'Unknown declaration lifecycle identity "$id"';
-		return result;
+		return current[position];
 	}
 
 	public function advanceAll(next:DeclarationStage):Void
-		for (id => current in stages) {
-			if ((next : Int) < (current : Int))
+		for (position in 0...ids.length) {
+			var stage = current[position];
+			if ((next : Int) < (stage : Int))
 				continue;
-			if ((next : Int) > (current : Int) + 1)
-				throw 'Declaration "$id" cannot advance from ${name(current)} to ${name(next)}';
-			stages.set(id, next);
+			if ((next : Int) > (stage : Int) + 1)
+				throw 'Declaration "${ids[position]}" cannot advance from ${name(stage)} to ${name(next)}';
+			current[position] = next;
 		}
 
 	public function requireAtLeast(required:DeclarationStage):Void
-		for (id => current in stages)
-			if ((current : Int) < (required : Int))
-				throw 'Declaration "$id" is ${name(current)}; ${name(required)} is required';
+		for (position in 0...ids.length)
+			if ((current[position] : Int) < (required : Int))
+				throw 'Declaration "${ids[position]}" is ${name(current[position])}; ${name(required)} is required';
 
 	public function snapshot():Map<String, DeclarationStage>
-		return [for (id => state in stages) id => state];
+		return [for (position in 0...ids.length) ids[position] => current[position]];
 
 	public static function name(stage:DeclarationStage):String
 		return switch stage {
