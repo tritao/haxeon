@@ -1,4 +1,0 @@
-interface MixedSpans @target("portable-abi32") @library("mixed_spans") {
-	extern fn check(data: ptr<const<u8>> @in_array("data_size"), data_size: u32,
-		records: ptr<const<u8>> @in_array("records_size"), records_size: u32) -> i32;
-}

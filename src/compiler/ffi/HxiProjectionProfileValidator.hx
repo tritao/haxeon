@@ -34,7 +34,6 @@ class HxiProjectionProfileValidator {
 			declarations.set(name, declaration);
 			local.set(name, declaration);
 		}
-		var abiFunctions = [for (fn in HxiAbi.forInterface(model, declarations).functions()) fn.name => fn];
 
 		for (name in HxiHaxeEmitter.sortedKeys(profile.typeNames)) {
 			var declaration = declarations.get(name),
@@ -263,16 +262,6 @@ class HxiProjectionProfileValidator {
 						HxiHaxeEmitter.addProjectedName(path, "module", publicName + "_span", 'span wrapper for "$name"', functionModuleNames);
 						HxiHaxeEmitter.addProjectedName(path, "module", '__hxi_span_$name', 'raw span call for "$name"', functionModuleNames);
 					}
-					var nativeFunction = abiFunctions.get(name);
-					var spanInputs = nativeFunction == null ? null : HxiHaxeEmitter.spanCompanionInputs(nativeFunction.semantics);
-					if (spanInputs != null && Lambda.count(spanInputs) > 1)
-						for (index in 0...parameters.length) if (spanInputs.exists(index)) {
-							var parameterName = parameters[index].name;
-							HxiHaxeEmitter.addProjectedName(path, "module", publicName + '_' + parameterName + '_span',
-								'span wrapper for "$name.$parameterName"', functionModuleNames);
-							HxiHaxeEmitter.addProjectedName(path, "module", '__hxi_span_${name}_$parameterName',
-								'raw span call for "$name.$parameterName"', functionModuleNames);
-						}
 					if (resultSpan != null)
 						HxiHaxeEmitter.addProjectedName(path, "module", '__hxi_raw_$name', 'raw span result call for "$name"', functionModuleNames);
 				case Constant(name, _, _):

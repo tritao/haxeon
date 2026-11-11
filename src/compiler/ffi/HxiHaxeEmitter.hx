@@ -349,7 +349,7 @@ class HxiHaxeEmitter {
 					fixedResult: fixedResult
 				});
 			var spanInputs = supported && returnValue != null ? spanCompanionInputs(fn.semantics) : null;
-			if (spanInputs != null && returnValue != null) {
+			if (spanInputs != null && returnValue != null)
 				result.push({
 					name: nativeModule + ".__hxi_span_" + fn.name,
 					library: library,
@@ -371,24 +371,6 @@ class HxiHaxeEmitter {
 					pointerSize: Std.int(abi.pointerBits / 8),
 					fixedResult: null
 				});
-				if (Lambda.count(spanInputs) > 1)
-					for (index in 0...arguments.length) if (spanInputs.exists(index))
-						result.push({
-							name: nativeModule + ".__hxi_span_" + fn.name + "_" + parameters[index].name,
-							library: library,
-							symbol: fn.symbol,
-							signature: callSignature(codes.join(",") + ">" + abiDescriptor(fn.result, declarations, abi, aggregateDescriptors), fn.callConvention),
-							arguments: [for (i in 0...arguments.length) i == index ? IrType.RawPtr : arguments[i]],
-							argumentModes: [for (i in 0...argumentModes.length) i == index ? Value : argumentModes[i]],
-							result: irType(returnValue.code, true),
-							pointerOwnership: "unspecified",
-							pointerRelease: null,
-							pointerLength: null,
-							pointerNullable: false,
-							pointerSize: Std.int(abi.pointerBits / 8),
-							fixedResult: null
-						});
-			}
 		}
 		return result;
 	}
@@ -1274,17 +1256,9 @@ class HxiHaxeEmitter {
 				if (projectedFunction.checked != null)
 					emitCheckedResultWrapper(output, model, fn.name, publicName, parameters, argumentTypes, projectedFunction.checked, abi, profile);
 				var spanInputs = spanCompanionInputs(fn.semantics);
-				if (spanInputs != null) {
+				if (spanInputs != null)
 					emitSpanCompanion(output, library, fn.symbol, signature, fn.name, publicName, parameters, argumentTypes, resultType, fn.result, spanInputs, abi,
 						profile);
-					if (Lambda.count(spanInputs) > 1)
-						for (index in 0...parameters.length) if (spanInputs.exists(index)) {
-							var one:Map<Int, String> = [];
-							one.set(index, spanInputs.get(index));
-							emitSpanCompanion(output, library, fn.symbol, signature, fn.name, publicName, parameters, argumentTypes, resultType, fn.result,
-								one, abi, profile, parameters[index].name);
-						}
-				}
 			}
 		var source = output.toString();
 		if (moduleKind == "types" && splitTypes)
@@ -1659,10 +1633,10 @@ class HxiHaxeEmitter {
 	**/
 	static function emitSpanCompanion(output:StringBuf, library:String, symbol:String, signature:String, nativeName:String, publicName:String,
 			parameters:Array<HxiParameter>, rawArgumentTypes:Array<String>, resultType:String, resultAbi:HxiAbiValue, spanInputs:Map<Int, String>, abi:HxiAbi,
-			profile:HxiProjectionProfile, ?singleName:String):Void {
+			profile:HxiProjectionProfile):Void {
 		// Each count is the length of the first array it counts: a span's length() or an array's length.
 		var counts:Map<String, String> = [],
-			rawName = '__hxi_span_$nativeName' + (singleName == null ? "" : '_$singleName'),
+			rawName = '__hxi_span_$nativeName',
 			arguments:Array<String> = [],
 			callArguments:Array<String> = [],
 			checks:Array<String> = [];
@@ -1709,7 +1683,7 @@ class HxiHaxeEmitter {
 		].join(", "));
 		output.add('):$resultType;\n');
 		output.add('/** Calls $publicName with its numeric arrays read in place from native spans, without copying them. */\n');
-		output.add('function ${publicName}' + (singleName == null ? "" : '_$singleName') + '_span(${arguments.join(", ")}):$resultType {\n');
+		output.add('function ${publicName}_span(${arguments.join(", ")}):$resultType {\n');
 		for (check in checks)
 			output.add(check);
 		var call = '$rawName(${callArguments.join(", ")})', mask = nativeFlagsMask(resultAbi, abi), decoder = nativeEnumDecoder(resultAbi, abi, profile);
