@@ -434,19 +434,37 @@ class FrontendCompilation {
 				// Retained generated functions own further closures and adapters. Follow
 				// that ownership transitively, but never revive children of a retyped body.
 				var pending = [for (functionName in retainedSpecializations.keys()) functionName];
+				// The functions a function owns, by owner, found once: an origin, or the function a lambda is written in
+				// (`LambdaName.enclosing`). Looking for them among all the module's functions for each owner was quadratic.
+				var ownedBy:Map<String, Array<String>> = [];
+				function ownedFor(owner:String):Array<String> {
+					var list = ownedBy.get(owner);
+					if (list == null) {
+						list = [];
+						ownedBy.set(owner, list);
+					}
+					return list;
+				}
+				for (nested => fn in state.typedFunctions) {
+					if (fn.origin != null)
+						ownedFor(fn.origin).push(nested);
+					var enclosing = LambdaName.is(nested) ? LambdaName.enclosing(nested) : null;
+					if (enclosing != null && enclosing != fn.origin)
+						ownedFor(enclosing).push(nested);
+				}
 				while (pending.length > 0) {
 					var parent = pending.pop();
 					if (typedByName.exists(parent))
 						continue;
-					for (nested => fn in state.typedFunctions) {
-						if (valid.exists(nested) || invalidated.exists(nested))
-							continue;
-						if (fn.origin == parent || StringTools.startsWith(nested, "$lambda:" + parent + ":")) {
+					var owned = ownedBy.get(parent);
+					if (owned != null)
+						for (nested in owned) {
+							if (valid.exists(nested) || invalidated.exists(nested))
+								continue;
 							valid.set(nested, true);
 							owners.set(nested, name);
 							pending.push(nested);
 						}
-					}
 				}
 			}
 			if (lowerToIr)
