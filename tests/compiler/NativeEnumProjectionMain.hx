@@ -53,7 +53,7 @@ class NativeEnumProjectionMain {
 		if (Lambda.exists(program.functions, fn -> fn.name == "__init")) entry.call("__init", [], Void);
 		entry.call("callbackExit", [entry.call("main", [], I32)], Void);
 		entry.returnValue(entry.constVoid());
-		program.functions.push(new IrFunction("callbackEntry", entry.arguments, Void, entry.blocks));
+		program.functions.push(new IrFunction("callbackEntry", entry.arguments, Void, entry.blocks, Ordinary));
 		program.entryPoint = "callbackEntry";
 		var temp = Sys.getEnv("TMPDIR");
 		if (temp == null) temp = "out";
@@ -130,7 +130,7 @@ class NativeEnumProjectionMain {
 			entry.select(bad);
 			entry.call("cacheExit", [entry.constInt(1)], Void);
 			entry.returnValue(entry.constVoid());
-			program.functions.push(new IrFunction("cacheEntry", entry.arguments, Void, entry.blocks));
+			program.functions.push(new IrFunction("cacheEntry", entry.arguments, Void, entry.blocks, Ordinary));
 			program.entryPoint = "cacheEntry";
 		}
 		compiler.ir.IrVerifier.verify(program);
