@@ -325,6 +325,10 @@ void append_android_fonts(std::vector<SystemFontFallback> &fonts) {
     static const char *const names[] = {
         "NotoSansSymbols-Regular-Subsetted.ttf",
         "NotoSansSymbols-Regular-Subsetted2.ttf",
+        // Other Android releases and vendor images ship these instead of (or next to) the subsetted ones.
+        "NotoSansSymbols-Regular.ttf",
+        "NotoSansSymbols2-Regular.ttf",
+        "NotoSansMath-Regular.ttf",
         "Roboto-Regular.ttf",
         "DroidSansMono.ttf",
     };
