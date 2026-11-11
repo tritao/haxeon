@@ -489,3 +489,30 @@ of the 0405feb5 app build, three fresh-worker cold builds each, interleaved, loa
 Allocation count drops 5.0% and is stable across runs, but wall median (65.2 vs 72.8 s, within the load noise) and compiler time median
 (63.4 vs 63.1 s) show no gain, and peak RSS does not move. Under the 2% wall bar, so no override is kept: it would be a
 fork of a stock std file for no measurable time. Revisit when the Haxeon-built worker (ADR 0003 section 12) applies our own Array policy.
+
+
+## Warm output equals fresh output: what the edit sweep found
+
+The checked suite builds every program a third time (`Main --warm-edit`): it compiles, appends a function nothing reaches, rebuilds in
+the same compiler session, appends a kept function and rebuilds, then puts both inside the file and rebuilds again. Each rebuild must be
+the bytes of a fresh compiler's build of the same text. It found 20 programs where that was false; they fail the same way on
+origin/main (090589e5 fails 23), so the warm path was wrong before this branch. Causes and fixes:
+
+- **Stale file hash.** A function whose own range did not change is kept when its file is edited, and its locations still carried the
+  content hash of the old text, so the debug spans named a source snapshot the module does not have. `IrSourceRehash` gives cached
+  functions and static initializers the current hashes; a module remembers that its file was edited (`editedSinceIrScan`) and only then
+  is every cached function checked, allocation-free when nothing is stale. Check mode asserts it for every cached function.
+  Byte offsets need no such repair: a function that moved is typed again (change detection compares the line, and generics the offset).
+  The position-independent design remains the later option: spans carry a path, and the hash is looked up from the current snapshot
+  when the debug section is encoded; it changes the IR codec, `HlLower`, `HlWriter`'s section 2, the snapshot collection and the
+  hot-reload patch format, so it needs its own version bump and gate.
+- **Process-wide counters in names.** `DiffIntrinsics` numbered its temporaries with a static counter, so a name depended on what the
+  process had compiled before. Every temporary is now numbered per function being typed.
+- **Order-dependent shared artifacts.** The enum list followed specialization creation order (now sorted by name); a key path definition
+  took the span of the last use typed (now a generated span that is a function of the path); the environment of a moved key path
+  composition outlived its functions (now orphaned like a lambda's).
+- **An owner lookup** for a function typed in an earlier build and kept (`includeTypedRuntimeDependencies`).
+- **Open: a shared helper's origin** is chosen by the first requester; see HELPER_OWNERSHIP.md. One program, listed by name in the sweep.
+
+The audit rule that came out of it: a shared generated artifact's attributes are a function of its subject, never of its uses; and no
+name may contain a counter that a process keeps across builds.
