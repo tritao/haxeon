@@ -10,8 +10,6 @@ import compiler.ir.SourceProvenance.SourceOrigin;
 /** Pending phi definition populated while mutable locals are renamed. */
 private typedef SsaPhi = {output:IrValue, inputs:Array<IrPhiInput>};
 
-private typedef SsaDefinitionBlocks = {blocks:Array<Int>, contains:Map<Int, Bool>};
-
 /** Constructs minimal SSA with dominance frontiers, then renames mutable locals. */
 class SsaBuilder {
 	var cfg:CfgFunction;
@@ -24,12 +22,17 @@ class SsaBuilder {
 	var frontiers:Array<Map<Int, Bool>> = [];
 	var frontierKeys:Array<Array<Int>> = [];
 	var liveIn:Array<Array<Int>> = [];
-	var liveSlots:Map<String, Int> = [];
+	/** Every local gets a dense number once; everything after that is indexed by it, so a name is hashed once per use. */
+	var slots:Map<String, Int> = [];
+	var slotNames:Array<String> = [];
+	/** The slot of each LoadLocal and StoreLocal of a block, in the order they appear. */
+	var blockSlots:Array<Array<Int>> = [];
+	var debugLocalBySlot:Array<Null<compiler.ir.cfg.Cfg.CfgDebugLocal>> = [];
 	static final emptyWords:Array<Int> = [];
-	var phis:Array<Map<String, SsaPhi>> = [];
-	var phiNames:Array<Array<String>> = [];
+	var phis:Array<Map<Int, SsaPhi>> = [];
+	var phiSlots:Array<Array<Int>> = [];
 	var roots:Array<Int> = [];
-	var stacks:Map<String, Array<IrValue>> = [];
+	var stackBySlot:Array<Null<Array<IrValue>>> = [];
 	var temporaries:Array<Null<IrValue>> = [];
 	var nextValue:Int = 0;
 	var renamed:Array<Bool> = [];
@@ -59,20 +62,22 @@ class SsaBuilder {
 		frontierKeys = [for (_ in cfg.blocks) []];
 		liveIn = [for (_ in cfg.blocks) []];
 		phis = [for (_ in cfg.blocks) []];
-		phiNames = [for (_ in cfg.blocks) []];
+		phiSlots = [for (_ in cfg.blocks) []];
 		renamed = [for (_ in cfg.blocks) false];
 		temporaries = [for (_ in 0...cfg.valueCount) null];
 		buildGraph();
 		computeDominators();
 		computeFrontiers();
+		numberLocals();
 		computeLiveness();
 		insertPhis();
 		var arguments:Array<IrValue> = [];
 		for (argument in cfg.arguments) {
 			var value = allocate(argument.name, argument.type);
 			arguments.push(value);
-			push(argument.name, value);
-			addDebugBinding(debugLocal(argument.name), value);
+			var slot = slots.get(argument.name);
+			push(slot, value);
+			addDebugBinding(debugLocalBySlot[slot], value);
 		}
 		var orderedRoots = roots.copy();
 		orderedRoots.sort(function(a, b) return a - b);
@@ -225,18 +230,39 @@ class SsaBuilder {
 	 * Which locals are live on entry to each block. Each local gets a slot number once; the sets are bit sets over those slots, so the
 	 * fixpoint compares and merges words instead of hashing names.
 	 */
-	function computeLiveness():Void {
-		liveSlots = [];
-		var count = 0;
+	function slotFor(name:String):Int {
+		var slot = slots.get(name);
+		if (slot == null) {
+			slot = slotNames.length;
+			slots.set(name, slot);
+			slotNames.push(name);
+		}
+		return slot;
+	}
+
+	function numberLocals():Void {
+		slots = [];
+		slotNames = [];
+		blockSlots = [for (_ in cfg.blocks) emptyWords];
+		for (argument in cfg.arguments)
+			slotFor(argument.name);
 		for (block in cfg.blocks)
-			if (reachable[block.id])
+			if (reachable[block.id]) {
+				var list:Array<Int> = [];
 				for (located in block.instructions)
 					switch located.value {
 						case LoadLocal(_, name), StoreLocal(name, _):
-							if (!liveSlots.exists(name))
-								liveSlots.set(name, count++);
+							list.push(slotFor(name));
 						default:
 					}
+				blockSlots[block.id] = list;
+			}
+		debugLocalBySlot = [for (name in slotNames) debugLocal(name)];
+		stackBySlot = [for (_ in slotNames) null];
+	}
+
+	function computeLiveness():Void {
+		var count = slotNames.length;
 		var words = (count + 31) >> 5,
 			uses:Array<Array<Int>> = [for (_ in cfg.blocks) emptyWords],
 			defs:Array<Array<Int>> = [for (_ in cfg.blocks) emptyWords];
@@ -247,15 +273,15 @@ class SsaBuilder {
 			var id = block.id;
 			if (!reachable[id])
 				continue;
-			var use = [for (_ in 0...words) 0], def = [for (_ in 0...words) 0];
+			var use = [for (_ in 0...words) 0], def = [for (_ in 0...words) 0], mine = blockSlots[id], cursor = 0;
 			for (located in cfg.blocks[id].instructions)
 				switch located.value {
-					case LoadLocal(_, name):
-						var slot = liveSlots.get(name);
+					case LoadLocal(_, _):
+						var slot = mine[cursor++];
 						if (def[slot >> 5] & (1 << (slot & 31)) == 0)
 							use[slot >> 5] |= 1 << (slot & 31);
-					case StoreLocal(name, _):
-						var slot = liveSlots.get(name);
+					case StoreLocal(_, _):
+						var slot = mine[cursor++];
 						def[slot >> 5] |= 1 << (slot & 31);
 					default:
 				}
@@ -297,39 +323,55 @@ class SsaBuilder {
 		}
 	}
 
-	function isLiveIn(block:Int, name:String):Bool {
-		var slot = liveSlots.get(name);
-		return slot != null && liveIn[block].length > (slot >> 5) && liveIn[block][slot >> 5] & (1 << (slot & 31)) != 0;
-	}
+	function isLiveIn(block:Int, slot:Int):Bool
+		return liveIn[block].length > (slot >> 5) && liveIn[block][slot >> 5] & (1 << (slot & 31)) != 0;
 
 	function insertPhis():Void {
-		var definitions:Map<String, SsaDefinitionBlocks> = [],
-			definitionNames:Array<String> = [];
+		var definitionBlocks:Array<Null<Array<Int>>> = [for (_ in slotNames) null], definitionSlots:Array<Int> = [];
+		// Blocks are visited in increasing order, so a block already added for a slot is the last one in its list.
+		function addDefinition(slot:Int, id:Int):Void {
+			var list = definitionBlocks[slot];
+			if (list == null) {
+				list = [];
+				definitionBlocks[slot] = list;
+				definitionSlots.push(slot);
+			}
+			if (list.length == 0 || list[list.length - 1] != id)
+				list.push(id);
+		}
 		for (argument in cfg.arguments)
-			addDefinition(definitions, definitionNames, argument.name, 0);
+			addDefinition(slots.get(argument.name), 0);
 		for (block in cfg.blocks)
-			if (reachable[block.id])
+			if (reachable[block.id]) {
+				var mine = blockSlots[block.id], cursor = 0;
 				for (located in block.instructions)
 					switch located.value {
-						case StoreLocal(name, _):
-							addDefinition(definitions, definitionNames, name, block.id);
+						case LoadLocal(_, _):
+							cursor++;
+						case StoreLocal(_, _):
+							addDefinition(mine[cursor++], block.id);
 						default:
 					}
-		for (name in definitionNames) {
-			var definitionBlocks = definitions.get(name);
-			if (definitionBlocks == null)
-				throw 'Missing SSA definitions for local "$name"';
-			var work = definitionBlocks.blocks.copy(),
-				placed:Map<Int, Bool> = [];
+			}
+		// Stamps replace a set per slot: a block is in the slot's set when its stamp is the slot's.
+		var defined:Array<Int> = [for (_ in cfg.blocks) -1], placed:Array<Int> = [for (_ in cfg.blocks) -1];
+		for (slot in definitionSlots) {
+			var blocks = definitionBlocks[slot];
+			if (blocks == null)
+				throw 'Missing SSA definitions for local "${slotNames[slot]}"';
+			for (block in blocks)
+				defined[block] = slot;
+			var work = blocks.copy();
 			var cursor = 0;
 			while (cursor < work.length) {
 				var block = work[cursor++];
 				for (join in frontierKeys[block])
-					if (!placed.exists(join) && isLiveIn(join, name)) {
-						placed.set(join, true);
-						phis[join].set(name, {output: allocate(name, cfg.localTypes.get(name)), inputs: []});
-						phiNames[join].push(name);
-						if (!definitionBlocks.contains.exists(join))
+					if (placed[join] != slot && isLiveIn(join, slot)) {
+						placed[join] = slot;
+						var name = slotNames[slot];
+						phis[join].set(slot, {output: allocate(name, cfg.localTypes.get(name)), inputs: []});
+						phiSlots[join].push(slot);
+						if (defined[join] != slot)
 							work.push(join);
 					}
 			}
@@ -342,7 +384,7 @@ class SsaBuilder {
 		var pending:Array<{
 			id:Int,
 			nextChild:Int,
-			pushed:Array<String>,
+			pushed:Array<Int>,
 			entered:Bool
 		}> = [
 			{
@@ -372,40 +414,41 @@ class SsaBuilder {
 				var pushedIndex = frame.pushed.length;
 				while (pushedIndex > 0) {
 					pushedIndex--;
-					stacks.get(frame.pushed[pushedIndex]).pop();
+					stackBySlot[frame.pushed[pushedIndex]].pop();
 				}
 				pending.pop();
 			}
 		}
 	}
 
-	function renameBlock(id:Int):Array<String> {
+	function renameBlock(id:Int):Array<Int> {
 		var block = cfg.blocks[id],
 			target = output[id],
-			pushed:Array<String> = [];
-		if (phiNames[id].length > 0) {
+			mine = blockSlots[id], cursor = 0,
+			pushed:Array<Int> = [];
+		if (phiSlots[id].length > 0) {
 			var blockPhis = phis[id];
-			for (name in phiNames[id]) {
-				if (!blockPhis.exists(name))
-					throw 'Missing SSA phi "$name" for block $id';
-				var phi = blockPhis.get(name);
+			for (slot in phiSlots[id]) {
+				var phi = blockPhis.get(slot);
+				if (phi == null)
+					throw 'Missing SSA phi "${slotNames[slot]}" for block $id';
 				target.instructions.push(new Located(Phi(phi.output, phi.inputs), phiProvenance(id)));
-				addDebugBinding(debugLocal(name), phi.output);
-				push(name, phi.output);
-				pushed.push(name);
+				addDebugBinding(debugLocalBySlot[slot], phi.output);
+				push(slot, phi.output);
+				pushed.push(slot);
 			}
 		}
 		for (located in block.instructions) {
 			var provenance = located.provenance;
 			switch located.value {
-				case LoadLocal(out, name):
-					var id:Int = out.id;
-					temporaries[id] = current(name);
-				case StoreLocal(name, value):
-					var resolved = resolve(value);
-					push(name, resolved);
-					addDebugBinding(debugLocal(name), resolved);
-					pushed.push(name);
+				case LoadLocal(out, _):
+					var outId:Int = out.id;
+					temporaries[outId] = current(mine[cursor++]);
+				case StoreLocal(_, value):
+					var slot = mine[cursor++], resolved = resolve(value);
+					push(slot, resolved);
+					addDebugBinding(debugLocalBySlot[slot], resolved);
+					pushed.push(slot);
 				case ConstVoid(out):
 					var result = define(out);
 					emit(target, ConstVoid(result), provenance);
@@ -581,14 +624,14 @@ class SsaBuilder {
 			case Branch(condition, yes, no): Branch(resolve(condition), yes, no);
 		}, terminator.provenance);
 		for (successor in successors[id])
-			if (phiNames[successor].length > 0) {
+			if (phiSlots[successor].length > 0) {
 				var successorPhis = phis[successor];
-				for (name in phiNames[successor]) {
-					if (!successorPhis.exists(name))
-						throw 'Missing SSA phi "$name" for successor block $successor';
-					var phi = successorPhis.get(name);
+				for (slot in phiSlots[successor]) {
+					var phi = successorPhis.get(slot);
+					if (phi == null)
+						throw 'Missing SSA phi "${slotNames[slot]}" for successor block $successor';
 					var inputs = phi.inputs;
-					inputs.push({block: id, value: current(name)});
+					inputs.push({block: id, value: current(slot)});
 				}
 			}
 		return pushed;
@@ -643,36 +686,19 @@ class SsaBuilder {
 			});
 	}
 
-	function push(name:String, value:IrValue):Void {
-		var stack:Array<IrValue>;
-		if (stacks.exists(name))
-			stack = stacks.get(name);
-		else {
+	function push(slot:Int, value:IrValue):Void {
+		var stack = stackBySlot[slot];
+		if (stack == null) {
 			stack = [];
-			stacks.set(name, stack);
+			stackBySlot[slot] = stack;
 		}
 		stack.push(value);
 	}
 
-	function current(name:String):IrValue {
-		if (!stacks.exists(name))
-			throw 'Local "$name" used before definition';
-		var stack = stacks.get(name);
-		if (stack.length == 0)
-			throw 'Local "$name" used before definition';
+	function current(slot:Int):IrValue {
+		var stack = stackBySlot[slot];
+		if (stack == null || stack.length == 0)
+			throw 'Local "${slotNames[slot]}" used before definition';
 		return stack[stack.length - 1];
-	}
-
-	function addDefinition(map:Map<String, SsaDefinitionBlocks>, names:Array<String>, name:String, id:Int):Void {
-		var found = map.get(name);
-		if (found == null) {
-			found = {blocks: [], contains: []};
-			map.set(name, found);
-			names.push(name);
-		}
-		if (!found.contains.exists(id)) {
-			found.contains.set(id, true);
-			found.blocks.push(id);
-		}
 	}
 }
