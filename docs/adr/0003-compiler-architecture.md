@@ -279,13 +279,16 @@ Two attempts on 2026-11-10 failed for the same reason: some dependencies are not
 
 Decision:
 
-1. **Providers.** Every generator of a type-dispatched helper registers what it provides as a (type, operation) pair in
+1. **Providers.** Every generator of a type-dispatched helper declares what it provides as a (type, operation) pair in
    one provider table on the program. Operations include dynamic equality, hash, compare, `toString`, dynamic enum test,
    reflection field access, boxing and interface dispatch. The knowledge lives with the generator, never in a list of
    names in the walker.
 2. **A type-aware walk** (rapid type analysis). The walk follows explicit edges: calls, closures, dispatch over the
    subtypes of *created* types, and provider edges. A provider (T, op) is reachable when T is created and op is used at a
    reachable dynamic site.
+   - A use of a helper that does not exist yet is a typed operation in the instruction that carries its subject type
+     (e.g. `Intrinsic(EnumDynamicBox(T))`), not a name and not a side table of requests. The walk derives the provider
+     edge from the operation.
    - Roots: the entry, static initializers, `@:keep`/`@:expose`, reflection by Wasm's rules, native callbacks, and
      declared live-host entries.
    - There is one walker (`IrReachability`) for every target.
