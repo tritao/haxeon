@@ -452,7 +452,7 @@ class Scope {
 		return result;
 	}
 
-	function visibleValues():Array<ScopeValue> {
+	public function visibleValues():Array<ScopeValue> {
 		var outer = parent,
 			result:Array<ScopeValue> = outer == null ? [] : outer.visibleValues();
 		for (value in valueList)

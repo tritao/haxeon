@@ -296,10 +296,17 @@ class TypingSession {
 
 	/** Only closure-written declarations can change during a call; respect local shadowing. */
 	public function closureWritableNames(scope:Scope):Array<String> {
-		return [
-			for (name => declaration in scope.visibleDeclarations())
-				if (currentContext.storage.closureWrites.exists(declaration)) name
-		];
+		// The innermost declaration of each name decides, so walk from the innermost scope out and take each name once.
+		var values = scope.visibleValues(), seen:Map<String, Bool> = [], result:Array<String> = [], index = values.length;
+		while (index > 0) {
+			var value = values[--index];
+			if (seen.exists(value.source))
+				continue;
+			seen.set(value.source, true);
+			if (currentContext.storage.closureWrites.exists(value.declaration))
+				result.push(value.source);
+		}
+		return result;
 	}
 
 	/** An impure call may invoke an escaped closure, including one forwarded through a named function. */
