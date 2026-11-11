@@ -68,6 +68,24 @@ class ConversionResolver {
 				return new TypedExpression(TNullableWrap(converted), expected, value.span);
 			default:
 		}
+		// Preserve null while converting a present nullable element through the abstract's @:from.
+		switch [value.type, expected] {
+			case [TNullable(element), TNullable(target)] if ((switch (target) { case TAbstract(_, _, _): true; default: false; }) && (switch (session.relations.conversion(element, target)) {
+				case AbstractCast: true;
+				default: false;
+			})):
+				var span = value.span,
+					id = '$' + 'nullable-abstract-value:${session.currentContext.nullableAbstractTemporary++}',
+					local = new TypedExpression(TLocal(id), value.type, span),
+					nilValue = new TypedExpression(TNullableWrap(new TypedExpression(TNullLiteral, TNull, span)), value.type, span),
+					isNull = new TypedExpression(TEqual(local, nilValue), TBool, span),
+					present = coerce(new TypedExpression(TCast(local), element, span), target, context, code),
+					nilResult = new TypedExpression(TNullableWrap(new TypedExpression(TNullLiteral, TNull, span)), expected, span),
+					result = new TypedExpression(TNullableWrap(present), expected, span);
+				return new TypedExpression(TBlockExpression([TVar(id, value, span)],
+					new TypedExpression(TConditional(isNull, nilResult, result), expected, span)), expected, span);
+			default:
+		}
 		// A nullable converts through the abstract's @:from function for its element, so unwrap it first, as Haxe does.
 		switch [value.type, expected] {
 			case [TNullable(element), TAbstract(_, _, _)] if ((switch (session.relations.conversion(element, expected)) { case AbstractCast: true; default: false; })):
@@ -89,7 +107,7 @@ class ConversionResolver {
 			case AbstractCast:
 				var conversion = abstractFromFunction(value.type, expected);
 				conversion == null ? session.representation.boundaryCast(value,
-					expected) : new TypedExpression(TCall(conversion, [value]), expected, value.span);
+					expected) : new TypedExpression(TCall(conversion.name, [coerce(value, conversion.argument, context, code)]), expected, value.span);
 			case ToDynamic:
 				// A dynamic box stores a pointer, not an inline copy. Own a value-class payload before boxing it.
 				var owned = ValueCopy.bind(session, value, value.type), enumType = EnumDynamicBox.enumType(value.type);
@@ -315,27 +333,28 @@ class ConversionResolver {
 			expected, span);
 	}
 
-	function abstractFromFunction(actual:CompilerType, expected:CompilerType):Null<String> {
+	function abstractFromFunction(actual:CompilerType, expected:CompilerType):Null<{name:String, argument:CompilerType}> {
 		return switch expected {
 			case TAbstract(name, arguments, _):
 				var declaration = session.declarations.abstracts.get(name);
 				if (declaration == null)
 					return null;
 				var substitutions = session.representation.typeParameterSubstitutions(declaration.typeParameters, arguments);
-				for (method in declaration.methods) {
-					if (!method.isStatic || method.arguments.length != 1)
-						continue;
-					var metadata = method.metadata;
-					if (metadata == null)
-						continue;
-					var isFrom = false;
-					for (entry in metadata)
-						if (entry.name == "from")
-							isFrom = true;
-					if (isFrom
-						&& TypeRelations.equals(actual, session.declarations.resolve(method.arguments[0].type, method.span, substitutions)))
-						return name + "." + method.name;
-				}
+				for (exact in [true, false])
+					for (method in declaration.methods) {
+						if (!method.isStatic || method.arguments.length != 1)
+							continue;
+						var metadata = method.metadata;
+						if (metadata == null)
+							continue;
+						var isFrom = false;
+						for (entry in metadata)
+							if (entry.name == "from")
+								isFrom = true;
+						var argument = session.declarations.resolve(method.arguments[0].type, method.span, substitutions);
+						if (isFrom && (exact ? TypeRelations.equals(actual, argument) : compiler.types.AbstractConversionGraph.acceptsFromArgument(actual, argument)))
+							return {name: name + "." + method.name, argument: argument};
+					}
 				null;
 			default: null;
 		};

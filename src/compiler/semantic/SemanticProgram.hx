@@ -270,6 +270,7 @@ class SemanticProgram {
 			name: method.name,
 			isStatic: method.isStatic,
 			isPublic: method.isPublic,
+			isOverride: method.isOverride,
 			typeParameters: parameters.length == 0 ? null : parameters,
 			typeConstraints: method.typeConstraints,
 			arguments: method.arguments,

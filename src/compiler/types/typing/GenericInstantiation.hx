@@ -135,6 +135,7 @@ class GenericInstantiation {
 				name: fn.name,
 				isStatic: fn.isStatic,
 				isPublic: fn.isPublic,
+				isOverride: fn.isOverride,
 				isExtern: fn.isExtern,
 				isInline: fn.isInline,
 				metadata: fn.metadata,

@@ -6,6 +6,8 @@ class InheritedMethodContractMain {
 	static final base = 'class Base {public function new(){} public function connector(name:String):Int return 42;}';
 	static final invalid = [
 		'function connector():Int return 1;',
+		'override public function record():Int return 1;',
+		'override public static function connector(name:String):Int return 1;',
 		'private function connector():Int return 1;',
 		'public function connector(name:Int):Int return name;',
 		'public function connector(name:String):String return name;',
@@ -47,6 +49,13 @@ class InheritedMethodContractMain {
 			if (GeneratedProgramRunner.exitCode(warm.compile("Main")) != 42)
 				throw "A valid inherited method stopped dispatching correctly";
 		}
+		// Renaming the base method must reject an unchanged override on an incremental compile.
+		warm.update("Base.hx", base.split("connector(").join("recordGeometry("));
+		reject(warm);
+		warm.update("Base.hx", base);
+		var noBase = new Compiler();
+		noBase.update("Main.hx", 'class Child {public function new(){} override public function record():Int return 1;} function main():Int return new Child().record();');
+		reject(noBase);
 		// A base signature edit must invalidate an unchanged subclass, even without semantic indexing.
 		warm.update("Base.hx", base.split("name:String").join("name:Int"));
 		reject(warm);

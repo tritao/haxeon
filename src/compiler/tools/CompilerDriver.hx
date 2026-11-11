@@ -160,7 +160,7 @@ class CompilerDriver {
 			if (request.irOutput != null)
 				File.saveBytes(request.irOutput, CanonicalIrCodec.encode(result.ir));
 			if (request.inputsOutput != null)
-				File.saveContent(request.inputsOutput, inputsReport(compiler, result.moduleNames));
+				File.saveContent(request.inputsOutput, inputsReport(compiler, result.moduleNames, request));
 			if (request.ffiHeader != null && request.ffiLibrary != null)
 				File.saveContent(request.ffiHeader, CHeaderEmitter.emit(result.ir.natives, request.ffiLibrary));
 			var typedProgram = compiler.lastTypedProgram;
@@ -211,7 +211,11 @@ class CompilerDriver {
 
 	/** Keep the last patch available until the live host has had a chance to observe its stamp. */
 	/** The modules the compile read, as JSON: `[name, path, sha256 of the module's text]` (for the generated identity table, of its file), sorted by name. */
-	static function inputsReport(session:compiler.Compiler, names:Array<String>):String {
+	static function inputsReport(session:compiler.Compiler, names:Array<String>, request:CompilerRequest):String {
+		// Explicit manifests use root-relative diagnostic paths; reports must name the physical input files.
+		var physicalPaths:Map<String, String> = [];
+		for (path in request.paths)
+			physicalPaths.set(SourceManifestLoader.projectPath(path, request.roots, request.packageRoots), FileSystem.fullPath(path));
 		var sorted = names.copy();
 		sorted.sort(Reflect.compare);
 		var rows:Array<Array<String>> = [];
@@ -220,10 +224,14 @@ class CompilerDriver {
 			if (state == null)
 				throw "Compiled module has no source: " + name;
 			// The identity table's text is generated from every other module during the compile; its file is the input.
-			var text = name == compiler.modules.CodeIdentityTable.MODULE ? File.getContent(state.source.path) : state.source.text;
+			var path = physicalPaths.get(state.source.path);
+			if (path == null)
+				path = !haxe.io.Path.isAbsolute(state.source.path) && FileSystem.exists("stdlib/" + state.source.path)
+					? FileSystem.fullPath("stdlib/" + state.source.path) : state.source.path;
+			var text = state.loadedText;
 			rows.push([
 				name,
-				state.source.path,
+				path,
 				build.execution.ContentDigest.makeHex(Bytes.ofString(text))
 			]);
 		}

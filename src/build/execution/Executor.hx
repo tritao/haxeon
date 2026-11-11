@@ -350,6 +350,9 @@ class Executor implements ExecutionBackend {
 			if (status == 0)
 				requireOutputs(action);
 			if (status == 0 && isCacheable(action)) {
+				// Compilation may discover a different set of source dependencies. Save their completed fingerprint.
+				if (isCompiler(action))
+					fingerprint = ActionFingerprint.compute(action, environment.buildRoot, environment.target.toString(), dependencyFingerprints, digests, true);
 				ActionFingerprint.save(environment.buildRoot, action, fingerprint);
 				if (ArtifactCache.isShareable(action))
 					artifactCache.publish(action, ActionFingerprint.globalKey(action, environment.target.toString(), dependencyFingerprints, digests));

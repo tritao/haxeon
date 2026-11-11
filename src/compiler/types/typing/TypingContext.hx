@@ -29,6 +29,7 @@ class TypingContext {
 	/** Scoped binding identities, used to reject conversions that erase their lifetime. */
 	public final scopedBindings:Map<String, String> = [];
 	public var enumInterfaceTemporary:Int = 0;
+	public var nullableAbstractTemporary:Int = 0;
 	public var keyPathTemporary:Int = 0;
 	public var diffTemporary:Int = 0;
 

@@ -890,6 +890,7 @@ class DeclarationIndex {
 	function validateInheritedMethods(program:AstProgram):Void {
 		for (decl in program.classes) {
 			var own = declarationSubstitutions(decl.name, decl.typeParameters);
+			var overrides:Map<String, Bool> = [];
 			var base = decl.base == null ? null : resolve(decl.base, decl.span, own);
 			while (base != null) {
 				var baseName = NominalInheritance.name(base);
@@ -903,6 +904,8 @@ class DeclarationIndex {
 					for (original in parent.methods) {
 						if (method.name != original.name || method.isStatic && original.isStatic)
 							continue;
+						if (!method.isStatic && !original.isStatic)
+							overrides.set(method.name, true);
 						var member = decl.name + "." + method.name,
 							ancestor = baseName + "." + original.name;
 						if (method.isStatic != original.isStatic)
@@ -915,6 +918,9 @@ class DeclarationIndex {
 				}
 				base = parent.base == null ? null : resolve(parent.base, parent.span, inherited);
 			}
+			for (method in decl.methods)
+				if (method.isOverride == true && !overrides.exists(method.name))
+					fail('Method "${decl.name}.${method.name}" is declared override but has no inherited instance method', method.span);
 		}
 	}
 

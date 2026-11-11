@@ -31,7 +31,7 @@ private class FingerprintFields {
 
 /** Conservative project-local fingerprints for process actions. */
 class ActionFingerprint {
-	public static function compute(action:ExecutionAction, buildRoot:String, target:String, dependencies:Array<String>, ?digests:ContentDigestCache):String {
+	public static function compute(action:ExecutionAction, buildRoot:String, target:String, dependencies:Array<String>, ?digests:ContentDigestCache, compiledInputs:Bool = false):String {
 		if (digests == null)
 			digests = new ContentDigestCache();
 		var fields = new FingerprintFields();
@@ -47,6 +47,7 @@ class ActionFingerprint {
 			case Compiler(command, arguments, cwd, environment, _):
 				appendCommand(fields, command, arguments, cwd, environment, digests);
 				appendCompilerOptions(fields);
+				appendCompilerInputs(fields, arguments, buildRoot, digests, compiledInputs);
 		}
 		for (input in action.inputs) {
 			fields.add('input:$input');
@@ -57,6 +58,39 @@ class ActionFingerprint {
 		for (dependency in orderedDependencies)
 			fields.push('dependency:$dependency');
 		return fields.digest();
+	}
+
+	/** Read the compiler's dependency report rather than guessing which source-root modules it loaded. */
+	static function appendCompilerInputs(fields:FingerprintFields, arguments:Array<String>, buildRoot:String, digests:ContentDigestCache, compiledInputs:Bool):Void {
+		for (argument in arguments) {
+			if (!StringTools.startsWith(argument, "--inputs-output="))
+				continue;
+			var path = argument.substr("--inputs-output=".length);
+			if (!FileSystem.exists(path)) {
+				fields.add("missing-compiler-inputs");
+				continue;
+			}
+			try {
+				var rows:Array<Array<String>> = Json.parse(File.getContent(path));
+				for (row in rows) {
+					if (row.length != 3)
+						throw "Invalid compiler input row";
+					fields.add("module:" + row[0]);
+					if (!Path.isAbsolute(row[1])) {
+						// Generated FFI modules have virtual paths; their interface/projection files are declared inputs.
+						fields.add("generated:" + row[1]);
+						fields.add(row[2]);
+					} else if (compiledInputs) {
+						// Save the bytes the compiler read, even if the file was edited during compilation.
+						fields.push('file:${row[1]}');
+						fields.push(row[2]);
+					} else
+						appendPath(fields, row[1], new Map(), buildRoot, digests);
+				}
+			} catch (_:Dynamic) {
+				fields.add("invalid-compiler-inputs");
+			}
+		}
 	}
 
 	/** Options the compiler reads from its environment change what it emits, so a cached output is only valid for them. */
