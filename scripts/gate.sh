@@ -7,7 +7,7 @@
 #   wave   quick, then the driver again with HAXEON_CHECK_REUSE=1 (adds the warm-edit rebuilds and the reuse comparisons), then the Wasm
 #          backend script (scripts/test-wasm-backend.sh; a broken Wasm fixture once reached main because no gate ran it) and the
 #          self-hosting compile (tests/integration/test-compiler-embedding.sh: Haxeon compiles the compiler's own sources, which stock
-#          Haxe does not check)
+#          Haxe does not check) and the external-tool build (a tool outside the tree links the compiler sources through common.hxml)
 #   full   wave, then scripts/test.sh (the integration scripts CI runs)
 #
 # The compiler entry point and the build tool are built once, here, and handed to the driver; if either build fails the gate stops.
@@ -89,6 +89,7 @@ if [ "$mode" != quick ]; then
 	suite driver-checked env HAXEON_CHECK_REUSE=1 "$root/scripts/test-driver.sh" "$jobs"
 	suite wasm-backend "$root/scripts/test-wasm-backend.sh"
 	suite self-hosting bash "$root/tests/integration/test-compiler-embedding.sh"
+	suite external-tool bash "$root/tests/integration/test-external-tool-build.sh"
 fi
 if [ "$mode" = full ]; then
 	# scripts/test.sh stops at its first failing stage, and several stages are red on main (the formatter, the Wasm fixtures, the

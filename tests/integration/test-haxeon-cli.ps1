@@ -34,7 +34,7 @@ try {
     if ($LASTEXITCODE -ne 0) { throw "Android haxeon init failed with $LASTEXITCODE" }
     Pop-Location
     $AndroidAsset = Join-Path $AndroidProjectDir "build/app.hl"
-    & $Haxe --cwd $RepoDir -cp (Join-Path $RepoDir "src") --run tools.AndroidBuild --project `
+    & $Haxe --cwd $RepoDir common.hxml --run tools.AndroidBuild --project `
         (Join-Path $AndroidProjectDir "haxeon.json") $AndroidAsset
     if ($LASTEXITCODE -ne 0) { throw "Android asset generation failed with $LASTEXITCODE" }
     foreach ($Artifact in @("app.hl", "app.hli", "app.entry", "app.hcs")) {
@@ -44,7 +44,7 @@ try {
     }
     $AndroidDemoDir = Join-Path $ProjectDir "android demo"
     $AndroidDemoAsset = Join-Path $AndroidDemoDir "app.hl"
-    & $Haxe --cwd $RepoDir -cp (Join-Path $RepoDir "src") --run tools.AndroidBuild `
+    & $Haxe --cwd $RepoDir common.hxml --run tools.AndroidBuild `
         (Join-Path $RepoDir "android/demo/Main.hx") $AndroidDemoAsset
     if ($LASTEXITCODE -ne 0) { throw "legacy Android asset generation failed with $LASTEXITCODE" }
     foreach ($Artifact in @("app.hl", "app.hli", "app.entry", "app.hcs")) {

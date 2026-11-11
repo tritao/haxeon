@@ -34,6 +34,21 @@ and core test workflow without Bash. This is the path used by Windows CI:
 .tools/haxe/haxe common.hxml --run build.HaxeonBuild test 16
 ```
 
+### Building the compiler's sources from outside (the contract)
+
+The class paths of the compiler are listed once, in `common.hxml` (`src` and `lib/haxeon-io`). Anything that builds or runs these sources
+with stock Haxe, in this repository or in another one (the editor's project-module builds do), passes `common.hxml` and adds only its
+own class paths:
+
+```sh
+.tools/haxe/haxe --cwd <haxeon root> common.hxml -cp <tool sources> -main <Tool> -hl <output.hl>
+```
+
+Do not list `src` (or any other directory of this tree) by hand: a source that moves to a directory `common.hxml` does not list breaks
+every external tool, and a hand-written list is exactly what missed `lib/haxeon-io` when `haxeon.io` moved there. A tool that caches its
+build by hashing sources must hash the directories `common.hxml` names, not a fixed pair. `tests/integration/test-external-tool-build.sh`
+builds and runs a small external tool this way and is part of the wave gate.
+
 `bootstrap/compiler.hl` is checked in. For ordinary compiler development,
 `bootstrap-compiler.sh --self` rebuilds it with the checked-in compiler and
 pinned HashLink without invoking the reference Haxe compiler.
