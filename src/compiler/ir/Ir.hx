@@ -58,10 +58,18 @@ typedef IrPhiInput = {final block:Int; final value:IrValue;}
 
 /** Compiler operations whose operands include semantic data rather than encoded linkage names. */
 enum IrIntrinsic {
+	/** Answered by ProviderOperation.BoxDynamic. */
 	EnumDynamicBox(type:IrType);
+	/** Answered by ProviderOperation.ViewDynamic. */
 	EnumDynamicView(type:IrType);
+	/** Answered by ProviderOperation.EnumTagBox. */
 	EnumTagBox(type:IrType);
+	/** Answered by ProviderOperation.EnumTagUnbox. */
 	EnumTagUnbox(type:IrType);
+	/** Answered by ProviderOperation.InlineEnumHelper(box); type is the logical enum and the operand uses its inline storage. */
+	InlineEnumBox(type:IrType);
+	/** Answered by ProviderOperation.InlineEnumHelper(unbox); type is the logical enum and the result uses its inline storage. */
+	InlineEnumUnbox(type:IrType);
 }
 
 /** Typed SSA operations independent of HashLink register and symbol indices. */

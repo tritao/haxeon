@@ -796,6 +796,12 @@ class IrVerifier {
 					case EnumTagUnbox(type):
 						switch type { case EnumTag(_): default: throw "IR enum tag unbox requires a tag type"; }
 						if (!sameType(args[0].type, Dyn) || !sameType(out.type, type)) throw "Invalid IR enum tag unbox signature";
+					case InlineEnumBox(type):
+						var storage = inlineEnumStorage(type, enums);
+						if (!sameType(args[0].type, storage) || !sameType(out.type, Dyn)) throw "Invalid IR inline enum box signature";
+					case InlineEnumUnbox(type):
+						var storage = inlineEnumStorage(type, enums);
+						if (!sameType(args[0].type, Dyn) || !sameType(out.type, storage)) throw "Invalid IR inline enum unbox signature";
 				}
 			case Call(out, name, args), CNativeCall(out, name, args):
 				if (name == IrArrayFactory.NAME) {
@@ -1062,6 +1068,13 @@ class IrVerifier {
 			case Obj(value): value == name;
 			default: false;
 		};
+
+	static function inlineEnumStorage(type:IrType, enums:IrVerifyTable<IrEnum>):IrType {
+		var name = switch type { case Enum(name): name; default: throw "IR inline enum intrinsic requires a nominal enum type"; };
+		var declaration = enums.get(name);
+		if (declaration == null || declaration.inlineStorage == null) throw "IR inline enum intrinsic requires declared inline storage";
+		return Obj(declaration.inlineStorage);
+	}
 
 	static function isEnumType(type:IrType, name:String, enums:IrVerifyTable<IrEnum>):Bool
 		return switch type {

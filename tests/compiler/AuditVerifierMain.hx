@@ -80,7 +80,56 @@ class AuditVerifierMain {
 		throw 'Selective verifier accepted malformed IR: $expected';
 	}
 
+	static function verifyInlineEnumIntrinsics():Void {
+		var first:IrEnum = {name: "InlineFirst", cases: [{name: "Value", params: [I32]}]},
+			second:IrEnum = {name: "InlineSecond", cases: [{name: "Value", params: [I32]}]},
+			planner = new compiler.ir.IrInlineEnumLayout([first, second], [], 64, HashLink),
+			firstShape = planner.shape(first.name), secondShape = planner.shape(second.name);
+		if (firstShape == null || secondShape == null) throw "Expected inline enum fixtures";
+		var program = new IrProgram("main");
+		program.objects = planner.generatedObjects();
+		program.enums = [
+			{name: first.name, cases: first.cases, inlineStorage: firstShape.valueObject.name},
+			{name: second.name, cases: second.cases, inlineStorage: secondShape.valueObject.name}
+		];
+		var box = new IrBuilder(), storage = box.argument("storage", Obj(firstShape.valueObject.name));
+		box.returnValue(box.intrinsic(InlineEnumBox(Enum(first.name)), [storage], Dyn));
+		var unbox = new IrBuilder(), dynamicValue = unbox.argument("value", Dyn);
+		unbox.returnValue(unbox.intrinsic(InlineEnumUnbox(Enum(first.name)), [dynamicValue], Obj(firstShape.valueObject.name)));
+		program.functions = [new IrFunction("main", box.arguments, Dyn, box.blocks, Ordinary),
+			new IrFunction("unbox", unbox.arguments, Obj(firstShape.valueObject.name), unbox.blocks, Ordinary)];
+		IrVerifier.verify(program);
+		var bytes = compiler.ir.codec.CanonicalIrCodec.encode(program);
+		var restored = compiler.ir.codec.CanonicalIrCodec.decode(bytes);
+		if (compiler.ir.codec.CanonicalIrCodec.encode(restored).compare(bytes) != 0) throw "Inline enum intrinsics did not round-trip";
+		for (index in 0...program.functions.length)
+			if (!compiler.ir.codec.IrFunctionStateEquality.same(program.functions[index], restored.functions[index]))
+				throw "Inline enum intrinsic function state changed in the codec";
+		var badBox = new IrBuilder(), wrongStorage = badBox.argument("storage", Obj(secondShape.valueObject.name));
+		badBox.returnValue(badBox.intrinsic(InlineEnumBox(Enum(first.name)), [wrongStorage], Dyn));
+		program.functions = [new IrFunction("main", badBox.arguments, Dyn, badBox.blocks, Ordinary)];
+		rejected(program, "Invalid IR inline enum box signature");
+		var badUnbox = new IrBuilder(), input = badUnbox.argument("value", Dyn);
+		badUnbox.returnValue(badUnbox.intrinsic(InlineEnumUnbox(Enum(first.name)), [input], Obj(secondShape.valueObject.name)));
+		program.functions = [new IrFunction("main", badUnbox.arguments, Obj(secondShape.valueObject.name), badUnbox.blocks, Ordinary)];
+		rejected(program, "Invalid IR inline enum unbox signature");
+		var badType = new IrBuilder(), badInput = badType.argument("storage", Obj(firstShape.valueObject.name));
+		badType.returnValue(badType.intrinsic(InlineEnumBox(I32), [badInput], Dyn));
+		program.functions = [new IrFunction("main", badType.arguments, Dyn, badType.blocks, Ordinary)];
+		rejected(program, "IR inline enum intrinsic requires a nominal enum type");
+		var missingStorage = new IrBuilder(), missingInput = missingStorage.argument("storage", Obj(firstShape.valueObject.name));
+		missingStorage.returnValue(missingStorage.intrinsic(InlineEnumBox(Enum("NoStorage")), [missingInput], Dyn));
+		program.enums.push({name: "NoStorage", cases: [{name: "Value", params: [I32]}]});
+		program.functions = [new IrFunction("main", missingStorage.arguments, Dyn, missingStorage.blocks, Ordinary)];
+		rejected(program, "IR inline enum intrinsic requires declared inline storage");
+		var wrongArity = new IrBuilder();
+		wrongArity.returnValue(wrongArity.intrinsic(InlineEnumBox(Enum(first.name)), [], Dyn));
+		program.functions = [new IrFunction("main", wrongArity.arguments, Dyn, wrongArity.blocks, Ordinary)];
+		rejected(program, "IR enum Dynamic intrinsic requires one argument");
+	}
+
 	static function main():Void {
+		verifyInlineEnumIntrinsics();
 		verifyLaneArrayInvariant();
 		var intrinsicBuilder = new IrBuilder(), invalidInput = intrinsicBuilder.argument("value", I32);
 		intrinsicBuilder.returnValue(intrinsicBuilder.intrinsic(EnumDynamicBox(Enum("Example")), [invalidInput], Dyn));
