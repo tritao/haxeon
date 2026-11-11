@@ -123,7 +123,7 @@ once (a failed build stops it), refuses a tree with tracked changes (`GATE_ALLOW
 |---|---|
 | quick | the NUL guard; the driver in its default configuration (each program built live and plain, named cases, executables) |
 | wave | quick, then the driver with `HAXEON_CHECK_REUSE=1` (adds the warm-edit rebuilds and the reuse comparisons), then `scripts/test-wasm-backend.sh` and the self-hosting compile (`tests/integration/test-compiler-embedding.sh`) |
-| full | wave, then `scripts/test.sh` |
+| full | wave, then `scripts/test.sh` run to the end (a copy that continues past a failing stage; the summary lists every failing stage) |
 
 Results go to `out/gate/<commit>-<mode>-<time>/`: a log per suite and `summary.txt` with the commit, mode, jobs, load at start and end,
 cores, per suite the exit code, seconds and the driver's pass/fail line, a coverage line per driver run (`programs: N live, N plain,

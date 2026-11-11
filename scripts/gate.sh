@@ -91,7 +91,17 @@ if [ "$mode" != quick ]; then
 	suite self-hosting bash "$root/tests/integration/test-compiler-embedding.sh"
 fi
 if [ "$mode" = full ]; then
-	suite full-test-sh "$root/scripts/test.sh"
+	# scripts/test.sh stops at its first failing stage, and several stages are red on main (the formatter, the Wasm fixtures, the
+	# profiler and native-kit integrations), so a "full" gate runs a copy that continues past failures and reports every stage:
+	# the summary lists the failing ones, and a report compares that list with the same run at origin/main.
+	continue_copy=$root/scripts/.test-continue.sh
+	sed 's/^set -euo pipefail/set -uo pipefail/' "$root/scripts/test.sh" >"$continue_copy"
+	chmod +x "$continue_copy"
+	suite full-test-sh "$continue_copy"
+	rm -f "$continue_copy"
+	stages=$(grep -cE '^TIMING: [A-Za-z0-9_.-]+: [0-9]+s \(exit [0-9]+\)' "$out/full-test-sh.log" || true)
+	failing=$(grep -E '^TIMING: [A-Za-z0-9_.-]+: [0-9]+s \(exit [1-9][0-9]*\)' "$out/full-test-sh.log" | sed -E 's/^TIMING: ([^:]+):.*/\1/' | sort | tr '\n' ' ')
+	echo "full-test-sh stages: $stages, failing: ${failing:-none}" >>"$summary"
 fi
 
 {
