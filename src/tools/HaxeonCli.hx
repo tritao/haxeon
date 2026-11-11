@@ -15,6 +15,7 @@ import build.execution.JobServer;
 import build.native.NativeCMakeProvider;
 import build.WorkspaceManifest;
 import build.execution.ProcessRunner;
+import build.execution.OutputCapture;
 import project.PackageLockfile;
 import project.PackageResolver;
 import project.PackageSourceTools;
@@ -727,6 +728,8 @@ class HaxeonCli {
 							if (windows)
 								Sys.putEnv("PATH", runPath);
 							Sys.stderr().writeString("haxeon: " + Std.string(error) + "\n");
+							// The watch loop reports the failure from what the build printed.
+							OutputCapture.record("haxeon: " + Std.string(error) + "\n");
 							return null;
 						}
 					}, session);

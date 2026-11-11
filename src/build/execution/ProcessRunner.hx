@@ -237,6 +237,7 @@ class ProcessRunner {
 				if (output != null) {
 					output.writeBytes(bytes, 0, count);
 					output.flush();
+					OutputCapture.recordBytes(bytes, 0, count);
 				}
 				count = input.readBytes(bytes, 0, bytes.length);
 			}

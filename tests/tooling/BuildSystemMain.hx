@@ -11,6 +11,8 @@ import build.execution.CompilerClient;
 import build.execution.ContentDigestCache;
 import tools.DirectoryWatcher;
 import tools.WatchRun;
+import tools.WatchEvents;
+import build.execution.OutputCapture;
 import build.Target;
 import build.TargetLayout;
 import build.NativeArtifactDemand.NativeArtifactDemand;
@@ -81,6 +83,7 @@ class BuildSystemMain {
 		testWorkerVersionMemo();
 		testWatchChangeClassification();
 		testWatchSnapshot();
+		testWatchEventsFile();
 		testDirectoryWatcher();
 		#if (target.threaded && !eval)
 		testWatchBuildsSavesMadeDuringABuild();
@@ -760,9 +763,45 @@ class BuildSystemMain {
 		expect(status == 0, "the watched app exits normally");
 		expect(builds.length == 3, 'every save made during a build is built: ${builds.length} builds for 3 saves');
 		expect(builds[2] == File.getContent(source), "the last build saw the last save");
+		var kinds = [
+			for (line in File.getContent(WatchEvents.pathFor(program)).split("\n"))
+				if (line.length > 0) (haxe.Json.parse(line).kind : String)
+		];
+		expect(kinds.join(",") == "rebuild-started,build-failed,rebuild-started,build-ok,reload,rebuild-started,build-failed",
+			"the events file records each rebuild and its result: " + kinds.join(","));
+		expect(Sys.getEnv(WatchEvents.ENVIRONMENT) == WatchEvents.pathFor(program), "the watched app learns the events file from its environment");
+		FileSystem.deleteFile(WatchEvents.pathFor(program));
 		removeTree(root);
 	}
 	#end
+
+	/** Build output reaches the events file line by line, however a child process splits it, as one JSON object per line. */
+	static function testWatchEventsFile():Void {
+		var lines:Array<String> = [];
+		OutputCapture.begin(line -> lines.push(line));
+		OutputCapture.record("src/A.hx:4:2: E1005: Missing return\r\nsecond ");
+		OutputCapture.record("half\n");
+		OutputCapture.println("compiler: 12 ms");
+		OutputCapture.record("unterminated");
+		OutputCapture.end();
+		OutputCapture.record("not captured\n");
+		expect(lines.join("|") == "src/A.hx:4:2: E1005: Missing return|second half|compiler: 12 ms|unterminated",
+			"each printed line is delivered once, whole: " + lines.join("|"));
+		var root = temporaryDirectory("watch-events"), path = WatchEvents.pathFor(Path.join([root, "live.hl"]));
+		File.saveContent(path, "stale\n");
+		WatchEvents.reset(path);
+		WatchEvents.emit(path, "rebuild-started", 1, null, null, ["src/A.hx"]);
+		WatchEvents.emit(path, "output-line", 1, null, "src/A.hx:4:2: E1005: \"quoted\"");
+		WatchEvents.emit(path, "patch-rejected", null, 3, null, null, null, "refused");
+		WatchEvents.emit(null, "ignored");
+		var events:Array<Dynamic> = [for (line in File.getContent(path).split("\n")) if (line.length > 0) haxe.Json.parse(line)];
+		expect(events.length == 3, "a new watch starts the file empty, one line per event: " + events.length);
+		expect(events[0].kind == "rebuild-started" && events[0].build == 1 && events[0].changedFiles[0] == "src/A.hx" && events[0].time > 0,
+			"an event carries its kind, time and fields");
+		expect(events[1].line == "src/A.hx:4:2: E1005: \"quoted\"", "an output line survives JSON quoting");
+		expect(events[2].revision == 3 && events[2].message == "refused" && events[2].build == null, "fields that do not apply are null");
+		removeTree(root);
+	}
 
 	static function testWatchChangeClassification():Void {
 		var before = ["src/A.hx" => "1:10", "src/B.hx" => "1:20", "haxeon.json" => "1:30"];

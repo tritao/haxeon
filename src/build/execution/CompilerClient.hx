@@ -132,7 +132,7 @@ class CompilerClient {
 			while (true) {
 				var response:Dynamic = Json.parse(socket.input.readLine());
 				if (response.message != null)
-					Sys.println(response.message);
+					OutputCapture.println(response.message);
 				if (response.status != null) {
 					socket.close();
 					markUsed(statePath);

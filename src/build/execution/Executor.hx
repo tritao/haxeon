@@ -25,7 +25,7 @@ class Executor implements ExecutionBackend {
 		this.sharedDigests = sharedDigests;
 		this.environment = environment;
 		this.workerCount = workerCount < 1 ? 1 : workerCount;
-		this.print = print == null ? Sys.println : print;
+		this.print = print == null ? OutputCapture.println : print;
 		this.artifactCache = new ArtifactCache();
 	}
 

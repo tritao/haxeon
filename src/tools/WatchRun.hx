@@ -6,6 +6,7 @@ import project.ResolvedProject;
 import sys.FileSystem;
 import sys.io.File;
 import sys.io.Process;
+import build.execution.OutputCapture;
 
 /** Profiles every launch of a watched app into its own capture under root. */
 typedef WatchProfiling = {
@@ -30,6 +31,10 @@ class WatchRun {
 			profiling:Null<WatchProfiling>, rebuild:WatchChange->Null<ResolvedProject>, ?session:build.BuildSession):Int {
 		if (Sys.systemName() != "Linux" && Sys.systemName() != "Mac" && Sys.systemName() != "Windows")
 			throw "haxeon run --watch currently requires Linux, macOS or Windows";
+		// Each edit's result goes to the events file too, and the app (and a live host) learns its path from the environment.
+		var events = WatchEvents.pathFor(output), rebuilds = 0;
+		WatchEvents.reset(events);
+		Sys.putEnv(WatchEvents.ENVIRONMENT, events);
 		var project = initial, baseline = snapshot(project), logPath = output + ".watch.log", profile = startProfile(profiling),
 			process = launch(runtime, output, arguments, project.root, logPath, liveHost, entry, profile), logOffset = 0, result = 0;
 		var watcher = openWatcher(project, baseline);
@@ -89,13 +94,27 @@ class WatchRun {
 				Sys.println("haxeon: source changed; rebuilding" + (compilerOnly ? " Haxe code" : " project"));
 				// `baseline` stays the snapshot this build started from: a save that lands while it runs differs from it, so the
 				// next pass builds again. Snapshotting after the build would take such a save as built.
-				var updated = rebuild(change);
+				var build = ++rebuilds;
+				rotateEvents(events);
+				WatchEvents.emit(events, "rebuild-started", build, null, null, changedPaths(previous, baseline));
+				// The build's output streams into the events file as it prints: its console is not where anyone looks.
+				OutputCapture.begin(line -> WatchEvents.emit(events, "output-line", build, null, line));
+				var updated = try rebuild(change) catch (error:Dynamic) {
+					OutputCapture.end();
+					throw error;
+				}
+				OutputCapture.end();
 				if (updated == null) {
 					Sys.stderr().writeString("haxeon: build failed; keeping the current app open\n");
+					WatchEvents.emit(events, "build-failed", build);
 					continue;
 				}
 				project = updated;
 				watcher = reopenWatcher(watcher, project);
+				var published = liveHost == null ? null : publication(output);
+				WatchEvents.emit(events, "build-ok", build, published == null ? null : published.revision);
+				if (liveHost != null && compilerOnly && published != null)
+					WatchEvents.emit(events, "patch-published", build, published.revision, null, null, published.reloadReasons);
 				if (liveHost != null && compilerOnly) {
 					if (profile != null)
 						profile.keepRevision(output);
@@ -112,6 +131,7 @@ class WatchRun {
 				process.close();
 				finishProfile(profile);
 				profile = startProfile(profiling);
+				WatchEvents.emit(events, "reload", build, null, null, null, null, "restarting the app");
 				process = launch(runtime, output, arguments, project.root, logPath, liveHost, entry, profile);
 				logOffset = 0;
 			}
@@ -392,5 +412,51 @@ class WatchRun {
 			if (!before.exists(path) && Path.extension(path) != "hx")
 				return false;
 		return true;
+	}
+
+	/** Moves a file that grew past `WatchEvents.MAX_BYTES` to `<file>.1`, so a long session keeps the recent events and a bounded file. */
+	static function rotateEvents(path:String):Void {
+		try {
+			if (!FileSystem.exists(path) || FileSystem.stat(path).size < WatchEvents.MAX_BYTES)
+				return;
+			var previous = path + ".1";
+			if (FileSystem.exists(previous))
+				FileSystem.deleteFile(previous);
+			FileSystem.rename(path, previous);
+		} catch (_:Dynamic) {
+			WatchEvents.reset(path);
+		}
+	}
+
+	/** Paths that differ between two watch snapshots, sorted. */
+	static function changedPaths(before:Map<String, String>, after:Map<String, String>):Array<String> {
+		var result:Array<String> = [];
+		for (path in after.keys())
+			if (before.get(path) != after.get(path))
+				result.push(path);
+		for (path in before.keys())
+			if (!after.exists(path))
+				result.push(path);
+		result.sort(Reflect.compare);
+		return result;
+	}
+
+	/** The revision and reload reasons of the live publication the compiler just wrote, or null without one. */
+	static function publication(output:String):Null<{revision:Int, reloadReasons:Array<String>}> {
+		try {
+			var value:Dynamic = Json.parse(File.getContent(output + ".live.patch.json"));
+			if (!Std.isOfType(value.revision, Int))
+				return null;
+			var reasons:Null<Array<Dynamic>> = value.reloadReasons;
+			var described = reasons == null ? [] : [
+				for (reason in reasons)
+					reason.code == null ? Std.string(reason) : Std.string(reason.code) + (reason.entityId == null ? "" : " " + Std.string(reason.entityId))
+			];
+			if (value.requiresReload == true && described.length == 0)
+				described.push("the build requires a reload");
+			return {revision: (value.revision : Int), reloadReasons: described};
+		} catch (_:Dynamic) {
+			return null;
+		}
 	}
 }
