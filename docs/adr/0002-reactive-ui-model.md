@@ -340,6 +340,49 @@ retention scenarios, budgets that may only go down, memory runs, compiler suites
    against the incremental bridge. Go (migrate the remaining channels and delete the transaction code): a net
    simplification with no frame-time or allocation regression. No-go: keep the incremental bridge, record why here, and
    continue with stage 3.
+
+   **Prototype design (2026-11-11).** Today `RenderNode.syncLayoutInputs` turns dirty flags into
+   `LayoutChanges.inputs`; `LayoutTransaction` walks the tree and encodes a whole mixed-channel record for each
+   changed node. `LayoutSession.submit` passes those bytes to `read_layout_transaction`, which validates and decodes
+   them into native `LayoutNode`s; resolved geometry returns through a separate byte buffer and
+   `ResolvedLayoutItem.decode`. The census attributes 146,040 bytes across the 15 actions to native bridge copies,
+   including geometry and FFI outputs, so removing paint serialization alone is not assumed to remove that total.
+
+   The proposed paint record is 104 bytes, aligned to eight: background RGBA `Float64` at bytes 0–31, top-left,
+   top-right, bottom-left and bottom-right `Float64` radii at 32–63, text RGBA `Float64` at 64–95, then 32-bit slot
+   generation and paint dirty state at 96 and 100. The 64-bit values preserve the existing Haxe `Float` reads; native
+   consumers convert to their existing 32-bit rendering values at use. These are the paint values currently encoded in
+   the layout record; visibility, clipping and visual kind also affect other channels and stay with those channels during
+   the prototype.
+   Custom paint callbacks, display lists, effects and other managed references remain in their existing side tables;
+   they are not pointers embedded in the flat record. The native declaration and Haxe flat struct must agree on
+   field offsets, size and alignment on each target. Native rendering reads the record directly, without reconstructing
+   a second paint copy. Existing color and radius validation remains at the boundary.
+
+   The layout session owns the native arena and its record slots for its lifetime, and disposes them with the session;
+   temporary owners use scoped cleanup. A slot handle is an index and generation, checked on access; removing a node
+   invalidates its generation before reuse. Growth must not leave native consumers holding a stale pointer: publish the
+   current span after growth and retain it only while its owner is live. HashLink and both Wasm targets write the same
+   native memory, including Wasm GC linear memory; there is no managed-array staging copy per frame. `RenderNode` remains
+   the public view and resolves its handle to the record; callers retain the existing API. Rebuilt nodes for the same
+   live identity must resolve to the same slot, while stand-ins and verify builds must not mutate the live record.
+   Nodes and mutable `LayoutStyle` values can also be created before a session and a style can be passed to more than
+   one node. The prototype must preserve those construction and shared-mutation semantics when attaching records; it
+   cannot silently make style assignment a per-node copy. Test both attachment and subsequent shared-style writes.
+
+   A paint write marks its slot dirty using the existing `Diff`-based paint classification, including direct layout
+   mutations and text color. Native consumes those bits before rendering and acknowledges them only after a successful
+   submit; failure preserves pending changes. Clay currently copies background and text colors into its declarations;
+   the prototype must use the current record when producing those declarations and invalidate retained paint when a
+   record changes, even if geometry is unchanged. Topology, layout, text, geometry and composite invalidation retain their
+   existing paths until migrated. Verification continues to compare the live result with an independent fresh tree,
+   including paint values. Inspector snapshots and dumps read paint through the handle, with managed style provenance
+   still available; a test must demonstrate that a changed record is visible to inspection and verification.
+   The target tests also cover exact Haxe-side color and radius reads (including signed zero), shared-style mutation,
+   slot reuse and stale handles, failed-submit dirty retention, and disposal. Paint-only updates are measured after warmup on all three
+   targets; Wasm GC must pass the linear-memory record to native without a per-frame managed-to-native copy.
+   Borrowed views of managed flat arrays and optional flat values are not needed by this design yet.
+
 3. **Component model experiment.** Compare run-once bindings and small re-running scopes using the same builder-style
    panel code and tracked model. Measure allocation and frame time, decide decision 2, and amend this record; authors do
    not rewrite panels when the implementation changes.
