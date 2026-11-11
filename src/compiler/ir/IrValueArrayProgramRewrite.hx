@@ -11,7 +11,7 @@ private class ValueArrayFunctionIndex {
 
 	public function new() {}
 
-	static function key(type:IrType):Null<String>
+	public static function key(type:IrType):Null<String>
 		return switch type {
 			case Obj(name): "value:" + name;
 			case Nullable(Obj(name)): "nullable:" + name;
@@ -64,10 +64,9 @@ private class ValueArrayFunctionIndex {
 		return known;
 	}
 
-	public function has(fn:IrFunction, element:IrType):Bool {
-		var name = key(element);
-		return name != null && summary(fn).elements.exists(name);
-	}
+	/** `elementKey` is `key(element)`, made once per shape by the caller and not per function. */
+	public function has(fn:IrFunction, elementKey:Null<String>):Bool
+		return elementKey != null && summary(fn).elements.exists(elementKey);
 
 	public function needsDynamic(fn:IrFunction):Bool
 		return dynamicDone.get(fn.name) != fn && summary(fn).dynamicViews;
@@ -160,15 +159,16 @@ class IrValueArrayProgramRewrite {
 			factory = new IrValueArrayFactory(objects, element, pointerBits, target, program.enums),
 			elements = new IrValueArrayElements(element, factory.helpers, factory.bridge),
 			methods = new IrValueArrayPlaceMethods(objects, element, factory.helpers),
-			originals:Map<String, IrFunction> = [for (fn in program.functions) fn.name => fn],
-			rewritten:Array<IrFunction> = [];
+			// One allocation of the right size: pushing one function at a time grows the array by doubling, once per shape.
+			rewritten = program.functions.copy(),
+			elementKey = ValueArrayFunctionIndex.key(element);
 		var optional:Null<IrValueArrayOptionalComponents> = switch element {
 			case Nullable(Obj(name)) if (declarations.exists(IrOptionalScalarFlow.wrapperName(name))):
 				new IrValueArrayOptionalComponents(objects, element, factory.helpers);
 			default: null;
 		};
-		for (fn in program.functions) {
-			var selected = index.has(fn, element), current = fn;
+		for (position in 0...program.functions.length) {
+			var fn = program.functions[position], selected = index.has(fn, elementKey), current = fn;
 			if (selected) {
 				current = IrValueArrayRangeRewrite.rewrite(current, element, factory);
 				var roots = IrValueArrayPlaceRewrite.roots(current, element);
@@ -185,18 +185,22 @@ class IrValueArrayProgramRewrite {
 				current = rewriteCasts(current, element, factory.retypeName());
 			}
 			index.finish(current);
-			rewritten.push(current);
+			rewritten[position] = current;
 		}
+		// The originals are the functions as they were before this shape's rewrite; the lookup is built only when a method has to be specialized.
+		var originals:Map<String, IrFunction> = [];
+		if (methods.requests.length > 0)
+			for (fn in program.functions)
+				originals.set(fn.name, fn);
 		var generatedMethods = methods.generate(originals),
 			generatedFactories = factory.functions(),
 			generatedElements = elements.functions(),
 			generatedOptional = optional == null ? [] : optional.functions(),
 			generatedSlots = factory.helpers.functions();
-		program.functions = rewritten.concat(generatedMethods)
-			.concat(generatedFactories)
-			.concat(generatedElements)
-			.concat(generatedOptional)
-			.concat(generatedSlots);
+		for (generated in [generatedMethods, generatedFactories, generatedElements, generatedOptional, generatedSlots])
+			for (fn in generated)
+				rewritten.push(fn);
+		program.functions = rewritten;
 		var nullableScalars = false;
 		for (slot in factory.layout.lanes.slots)
 			if (slot.nullablePayload)
