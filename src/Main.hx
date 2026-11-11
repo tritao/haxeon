@@ -15,7 +15,8 @@ class Main {
 		// compiler's build of the edited source; the output is the last rebuild. It implies a plain build, the only kind that reuses.
 		var warmEdit = arguments.indexOf("--warm-edit") >= 0;
 		arguments = [
-			for (argument in arguments) if (argument != "--plain" && argument != "--warm-edit") argument
+			for (argument in arguments)
+				if (argument != "--plain" && argument != "--warm-edit") argument
 		];
 		var sourcePath = arguments.length > 0 ? arguments[0] : "tests/programs/add.hx";
 		var outputPath = arguments.length > 1 ? arguments[1] : "out/program.hl";

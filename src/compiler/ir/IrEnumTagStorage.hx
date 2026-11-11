@@ -16,12 +16,16 @@ class IrEnumTagStorage {
 	public static function adapterNames(program:IrProgram):Map<String, {box:String, unbox:String}> {
 		var names = [for (entry in program.enums) if (eligible(entry)) entry.name];
 		names.sort(Reflect.compare);
-		var occupied:Map<String, Bool> = [], boxes:Map<String, String> = [], unboxes:Map<String, String> = [];
+		var occupied:Map<String, Bool> = [],
+			boxes:Map<String, String> = [],
+			unboxes:Map<String, String> = [];
 		for (fn in program.functions) {
 			occupied.set(fn.name, true);
 			switch fn.kind {
-				case EnumTagAdapter(EnumTag(type), true): boxes.set(type, fn.name);
-				case EnumTagAdapter(EnumTag(type), false): unboxes.set(type, fn.name);
+				case EnumTagAdapter(EnumTag(type), true):
+					boxes.set(type, fn.name);
+				case EnumTagAdapter(EnumTag(type), false):
+					unboxes.set(type, fn.name);
 				default:
 			}
 		}
@@ -29,11 +33,13 @@ class IrEnumTagStorage {
 		for (name in names) {
 			var box = boxes.get(name), unbox = unboxes.get(name);
 			if (box == null) {
-				do box = "$haxeon_enum_tag_box_" + nextBox++ while (occupied.exists(box));
+				do
+					box = "$haxeon_enum_tag_box_" + nextBox++ while (occupied.exists(box));
 				occupied.set(box, true);
 			}
 			if (unbox == null) {
-				do unbox = "$haxeon_enum_tag_unbox_" + nextUnbox++ while (occupied.exists(unbox));
+				do
+					unbox = "$haxeon_enum_tag_unbox_" + nextUnbox++ while (occupied.exists(unbox));
 				occupied.set(unbox, true);
 			}
 			result.set(name, {box: box, unbox: unbox});
@@ -44,24 +50,39 @@ class IrEnumTagStorage {
 	/** Request the checked boundary when a later helper introduces a tag escape. */
 	public static function request(program:IrProgram, name:String):{box:String, unbox:String} {
 		var symbols = adapterNames(program).get(name);
-		if (symbols == null) throw 'Unknown enum tag adapter type "$name"';
+		if (symbols == null)
+			throw 'Unknown enum tag adapter type "$name"';
 		var box = symbols.box, unbox = symbols.unbox;
 		var foundBox = false, foundUnbox = false;
-		for (fn in program.functions) switch fn.kind {
-			case EnumTagAdapter(EnumTag(actual), true) if (actual == name): box = fn.name; foundBox = true;
-			case EnumTagAdapter(EnumTag(actual), false) if (actual == name): unbox = fn.name; foundUnbox = true;
-			default:
-		}
-		if (!foundBox || !foundUnbox) {
-			var declaration = Lambda.find(program.enums, entry -> entry.name == name);
-			for (fn in adapters(declaration, box, unbox)) switch fn.kind {
-				case EnumTagAdapter(_, true) if (!foundBox): program.functions.push(fn);
-				case EnumTagAdapter(_, false) if (!foundUnbox): program.functions.push(fn);
+		for (fn in program.functions)
+			switch fn.kind {
+				case EnumTagAdapter(EnumTag(actual), true) if (actual == name):
+					box = fn.name;
+					foundBox = true;
+				case EnumTagAdapter(EnumTag(actual), false) if (actual == name):
+					unbox = fn.name;
+					foundUnbox = true;
 				default:
 			}
+		if (!foundBox || !foundUnbox) {
+			var declaration = Lambda.find(program.enums, entry -> entry.name == name);
+			for (fn in adapters(declaration, box, unbox))
+				switch fn.kind {
+					case EnumTagAdapter(_, true) if (!foundBox):
+						program.functions.push(fn);
+					case EnumTagAdapter(_, false) if (!foundUnbox):
+						program.functions.push(fn);
+					default:
+				}
 		}
 		if (!Lambda.exists(program.natives, native -> native.name == "__std_is_exact_type"))
-			program.natives.push({name: "__std_is_exact_type", library: "haxeon_runtime", symbol: "__std_is_exact_type", arguments: [Dyn, TypeRef], result: Bool});
+			program.natives.push({
+				name: "__std_is_exact_type",
+				library: "haxeon_runtime",
+				symbol: "__std_is_exact_type",
+				arguments: [Dyn, TypeRef],
+				result: Bool
+			});
 		return {box: box, unbox: unbox};
 	}
 

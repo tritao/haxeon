@@ -133,7 +133,8 @@ class EnumEqualityGenerator {
 				BodyTyper.fail("E1025", 'Type.enumEq requires an enum value, got "${compiler.semantic.SemanticSignature.display(type)}"', span);
 		}
 		return {
-			name: reflective ? reflectiveName(type) : equalsName(type), role: ProviderFunction(type, reflective ? ReflectEquals : Equals),
+			name: reflective ? reflectiveName(type) : equalsName(type),
+			role: ProviderFunction(type, reflective ? ReflectEquals : Equals),
 			origin: req.origin,
 			originKind: Helper,
 			typeArguments: null,

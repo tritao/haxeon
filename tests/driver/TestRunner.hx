@@ -264,11 +264,13 @@ class TestRunner {
 		if (tests.length == 0)
 			return 0;
 		var named = [
-			for (test in tests) if (sharedTreeReference(Path.join([root, "tests", "programs", test.name + ".hx"]))) test.name
+			for (test in tests)
+				if (sharedTreeReference(Path.join([root, "tests", "programs", test.name + ".hx"]))) test.name
 		];
 		if (named.length > 0) {
 			Sys.print([
-				for (name in named) 'FAIL: $name names the shared tree ($root); a program reaches files by relative path, which resolves in its own directory\n'
+				for (name in named)
+					'FAIL: $name names the shared tree ($root); a program reaches files by relative path, which resolves in its own directory\n'
 			].join(""));
 			return named.length;
 		}
