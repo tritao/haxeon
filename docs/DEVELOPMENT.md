@@ -38,6 +38,13 @@ and core test workflow without Bash. This is the path used by Windows CI:
 `bootstrap-compiler.sh --self` rebuilds it with the checked-in compiler and
 pinned HashLink without invoking the reference Haxe compiler.
 
+Keep the checked-in compiler fresh. A change to `src/` or `stdlib/` is ready to
+merge when `scripts/check-self-hosting.sh` passes and does not report
+`STALE`. If it does, run `scripts/check-self-hosting.sh --update` and commit
+`bootstrap/compiler.hl` and `bootstrap/compiler.hl.functions` with the change
+(once per merged stack is enough). Tools that build with the checked-in
+compiler, instead of the pinned Haxe, depend on it building current sources.
+
 The full bootstrap uses pinned reference Haxe to build the compiler, then asks
 that compiler to build itself and requires byte-for-byte equality. Both modes
 derive the same sorted source manifest from `src/` and build the native runtime

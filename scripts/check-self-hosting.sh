@@ -4,7 +4,20 @@
 # The seed is built by running the compiler sources under the pinned Haxe interpreter; stage 1 is built by the seed and
 # stage 2 by stage 1. Stages 1 and 2 must be identical. Unlike `bootstrap-compiler.sh --self` this does not use the
 # checked-in compiler, so it also catches a change that the sources can no longer be built with.
+#
+# Afterwards it compares stage 2 with the checked-in `bootstrap/compiler.hl` and says when that file is stale. With
+# `--update` it copies stage 2 over it; commit the result with the compiler change it belongs to.
 set -euo pipefail
+
+update=0
+case "${1:-}" in
+"") ;;
+--update) update=1 ;;
+*)
+	echo "usage: $0 [--update]" >&2
+	exit 2
+	;;
+esac
 
 root_dir=$(cd "$(dirname "$0")/.." && pwd)
 haxe="$root_dir/.tools/haxe/haxe"
@@ -56,3 +69,14 @@ for suffix in "" ".functions"; do
 	fi
 done
 echo "PASS: the compiler builds itself to a fixed point"
+
+checked="$root_dir/bootstrap/compiler.hl"
+if cmp -s "$work/stage-2.hl" "$checked" && cmp -s "$work/stage-2.hl.functions" "$checked.functions"; then
+	echo "bootstrap/compiler.hl is up to date"
+elif [[ $update == 1 ]]; then
+	cp "$work/stage-2.hl" "$checked"
+	cp "$work/stage-2.hl.functions" "$checked.functions"
+	echo "UPDATED: bootstrap/compiler.hl now matches stage 2; commit it"
+else
+	echo "STALE: bootstrap/compiler.hl differs from stage 2; run $0 --update and commit it"
+fi
