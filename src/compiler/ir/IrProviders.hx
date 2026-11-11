@@ -2,6 +2,7 @@ package compiler.ir;
 
 import compiler.Provides;
 import compiler.Provides.ProviderOperation;
+import compiler.ir.Ir;
 
 /**
  * The table of generated helpers: which function serves which operation on which type. A generator states it when it creates the
@@ -47,6 +48,43 @@ class IrProviders {
 			current = original == null ? null : byName.get(original);
 		}
 		return false;
+	}
+
+	/**
+	 * The provider operation a typed instruction asks for, and the type it asks it of: the walk reaches the row `(subject, operation)`,
+	 * and `checkTypedOperations` requires it to exist. Null for an intrinsic that needs no helper.
+	 */
+	public static function typedOperation(operation:IrIntrinsic):Null<{subject:TypeKey, operation:ProviderOperation}>
+		return switch operation {
+			case EnumDynamicBox(type): {subject: TypeKey.of(type), operation: ProviderOperation.BoxDynamic};
+			case EnumDynamicView(type): {subject: TypeKey.of(type), operation: ProviderOperation.ViewDynamic};
+			case EnumTagBox(type): {subject: TypeKey.of(type), operation: ProviderOperation.EnumTagBox};
+			case EnumTagUnbox(type): {subject: TypeKey.of(type), operation: ProviderOperation.EnumTagUnbox};
+		};
+
+	/**
+	 * HAXEON_CHECK_REUSE=1, once the producers of the typed operations have run: every typed operation in `functions` has a provider row.
+	 * Returns the first problem found (function, operation, type), or null.
+	 */
+	public static function checkTypedOperations(functions:Array<IrFunction>):Null<String> {
+		var served:Map<String, Bool> = [];
+		for (fn in functions)
+			switch fn.provides {
+				case Serves(type, operation):
+					served.set(base(operation) + "\n" + type.toString(), true);
+				case None:
+			}
+		for (fn in functions)
+			for (block in fn.blocks)
+				for (located in block.instructions)
+					switch located.value {
+						case Intrinsic(_, operation, _):
+							var typed = typedOperation(operation);
+							if (typed != null && !served.exists(base(typed.operation) + "\n" + typed.subject.toString()))
+								return '"${fn.name}" asks for ${typed.operation} of ${typed.subject.toString()}, which no function provides';
+						default:
+					}
+		return null;
 	}
 
 	/** (type key, operation) to function name, for every helper in `functions`. */
