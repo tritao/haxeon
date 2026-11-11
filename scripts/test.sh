@@ -89,6 +89,7 @@ run_timed checkout-hashlink bash "$root_dir/tests/integration/test-checkout-hash
 run_timed hashlink-launchers bash "$root_dir/tests/integration/test-hashlink-launchers.sh"
 export HAXEON_NATIVE_READY=1
 run_timed gc-root-index "$root_dir/tests/integration/test-gc-root-index.sh"
+run_timed gc-flush-scan bash "$root_dir/tests/integration/test-gc-flush-scan.sh"
 run_timed no-nul-literals bash "$root_dir/tests/integration/test-no-nul-literals.sh"
 mkdir -p "$root_dir/out"
 
