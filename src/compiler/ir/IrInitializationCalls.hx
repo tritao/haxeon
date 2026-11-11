@@ -8,12 +8,16 @@ class IrInitializationCalls {
 	final methods:Map<String, Array<String>> = [];
 	final invoked:Map<String, Bool> = [];
 	final objects:Map<String, IrObject>;
+
+	/** The same objects as a list, for the walk over all of them. */
+	final objectList:Array<IrObject>;
 	final resolvedMethods:Map<String, Array<String>> = [];
 	final globals:Map<String, Array<String>> = [];
 	final returns:Map<String, Array<String>> = [];
 
 	public function new(program:Array<IrFunction>, ?objects:Array<IrObject>) {
 		this.objects = objects == null ? [] : [for (object in objects) object.name => object];
+		objectList = objects == null ? [] : objects;
 		functions = [for (fn in program) fn.name => fn];
 		for (fn in program) {
 			var dot = fn.name.lastIndexOf(".");
@@ -140,7 +144,7 @@ class IrInitializationCalls {
 		if (resolvedMethods.exists(key))
 			return resolvedMethods.get(key);
 		var result:Array<String> = [];
-		for (object in objects) {
+		for (object in objectList) {
 			var current:Null<IrObject> = object, matches = false;
 			while (current != null) {
 				if (current.name == owner) {
