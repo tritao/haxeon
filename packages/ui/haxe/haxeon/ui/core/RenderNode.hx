@@ -415,6 +415,41 @@ class RenderNode {
 	 * callers added stay where they are. `built` becomes the new build's children.
 	 */
 	function swapChildren(fresh:RenderNode, built:Array<RenderNode>, topology:Null<RenderTreeTopology>):Void {
+		var movedEarlier = false;
+		for (index in 0...built.length) {
+			var child = built[index];
+			if (child.parent != this) {
+				var next = fresh.children.indexOf(child);
+				if (next >= 0 && next < index) { movedEarlier = true; break; }
+			}
+		}
+		if (!movedEarlier) { swapChildrenUnmoved(fresh, built, topology); return; }
+		var count = fresh.children.length;
+		var slots:Array<Int> = [];
+		for (index in 0...built.length) {
+			var old = built[index];
+			var slot = topology == null ? children.indexOf(old) : topology.childPosition(id.value, old.id.value);
+			slots.push(slot < 0 ? index : slot);
+		}
+		// Remove the old builder-owned children before placing any replacements. A retained
+		// child can be moved to an earlier slot and must not then be removed as its old self.
+		for (old in built) if (old.parent == this) old.detach();
+		var position = -1;
+		for (index in 0...count) {
+			var child = fresh.children[0].detach();
+			if (index < built.length) built[index] = child; else built.push(child);
+			if (children == NoChildren) children = [];
+			var slot = index < slots.length ? slots[index] : position + 1;
+			position = Std.int(Math.max(0, Math.min(slot, children.length)));
+			child.parent = this;
+			children.insert(position, child);
+			layout.children.insert(position, child.layout);
+		}
+		built.resize(count);
+	}
+
+
+	function swapChildrenUnmoved(fresh:RenderNode, built:Array<RenderNode>, topology:Null<RenderTreeTopology>):Void {
 		var count = fresh.children.length;
 		var position = -1;
 		// Each new child is taken from the front of the new build's list as it is detached, and recorded in `built` over the
