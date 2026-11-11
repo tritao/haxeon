@@ -1,27 +1,40 @@
 package compiler.ir;
 
-/** A program table as the function-level verifier sees it: `get` and `exists` only, noted in the memo when one is recording. */
+import compiler.ir.IrVerifyMemo.IrVerifyRead;
+
+/**
+ * A program table as the function-level verifier sees it: `get` and `exists` only, noted in the memo when one is recording. The table
+ * holds the map its reads go to, so a read costs the lookup in the program table and, for the first read of a key in a function, one
+ * more in the reads; it never looks its own name up.
+ */
 final class IrVerifyTable<V> {
 	final inner:Map<String, V>;
 	final name:String;
 	final memo:Null<IrVerifyMemo>;
+	final reads:Null<Map<String, IrVerifyRead>>;
 
 	public function new(name:String, inner:Map<String, V>, ?memo:IrVerifyMemo) {
 		this.name = name;
 		this.inner = inner;
 		this.memo = memo;
+		reads = memo == null ? null : memo.readsOf(name);
 	}
 
 	public function get(key:String):Null<V> {
 		var value = inner.get(key);
-		if (memo != null)
-			memo.note(name, key, value);
+		if (memo != null && memo.recordingFunction)
+			note(key, value);
 		return value;
 	}
 
 	public function exists(key:String):Bool {
-		if (memo != null)
-			memo.note(name, key, inner.get(key));
-		return inner.exists(key);
+		var value = inner.get(key);
+		if (memo != null && memo.recordingFunction)
+			note(key, value);
+		return value != null || inner.exists(key);
 	}
+
+	function note(key:String, value:Dynamic):Void
+		if (reads.get(key) == null)
+			reads.set(key, new IrVerifyRead(name, key, value));
 }
