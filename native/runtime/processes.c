@@ -48,13 +48,36 @@ static vstring *realtime_process_read(void *process, bool stdout_stream) {
 	return result;
 }
 
+#ifdef HL_WIN
+static size_t realtime_child_quote_size(const wchar_t *value);
+static wchar_t *realtime_child_quote(wchar_t *out, const wchar_t *value);
+#endif
+
 HL_PRIM void *HL_NAME(__process_run)(vstring *command, varray *arguments) {
 	if (command == NULL || command->length == 0)
 		hl_error("Process command cannot be empty");
 #ifdef HL_WIN
-	if (arguments != NULL && arguments->size != 0)
-		hl_error("Process arguments are not yet supported on Windows");
-	void *process = hl_process_run((vbyte *)command->bytes, NULL, false);
+	// CreateProcess takes one command line: quote the command and each argument the way
+	// CommandLineToArgvW splits them back, as the streaming spawn does.
+	int count = arguments == NULL ? 0 : arguments->size;
+	const wchar_t *program = (const wchar_t *)command->bytes;
+	size_t size = realtime_child_quote_size(program) + 1;
+	for (int index = 0; index < count; index++) {
+		vstring *argument = hl_aptr(arguments, vstring *)[index];
+		size += realtime_child_quote_size(argument == NULL ? L"" : (const wchar_t *)argument->bytes) + 1;
+	}
+	wchar_t *command_line = (wchar_t *)malloc(size * sizeof(wchar_t));
+	if (command_line == NULL)
+		hl_error("Could not allocate the process command line");
+	wchar_t *cursor = realtime_child_quote(command_line, program);
+	for (int index = 0; index < count; index++) {
+		vstring *argument = hl_aptr(arguments, vstring *)[index];
+		*cursor++ = L' ';
+		cursor = realtime_child_quote(cursor, argument == NULL ? L"" : (const wchar_t *)argument->bytes);
+	}
+	*cursor = 0;
+	void *process = hl_process_run((vbyte *)command_line, NULL, false);
+	free(command_line);
 #else
 	char *command_utf8 = realtime_utf8_copy(command);
 	varray *native_arguments = hl_alloc_array(&hlt_bytes, arguments == NULL ? 0 : arguments->size);
