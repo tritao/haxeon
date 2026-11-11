@@ -5432,3 +5432,25 @@ inspects the scalar IR and executes on HashLink, Wasm32 and Wasm GC with inlinin
 off/on. Tier 1: **858 passed, 0 failed**; self-hosting reaches identical stage-1
 and stage-2 modules. Module-size checkpoints below track the cumulative fixes;
 the release-growth target remains at most 0.5% for each module.
+
+
+| Release checkpoint | web32 bytes | webgc bytes | editor bytes |
+|---|---:|---:|---:|
+| Pre-enum `9180b6d8` | 6,728,120 | 3,922,261 | 28,562,565 |
+| Initial enum candidate `1d286898` | 6,947,390 | 4,008,481 | 28,899,137 |
+| Constant-size tag equality (`127db7b2`, rebased as `bd18d35a`) | 6,932,990 | 3,994,431 | 28,897,242 |
+
+After rebasing onto `9baf8a31`, equality recognition uses the declared `Equality`
+function role, including in the IR fixture. It does not infer the role from a
+helper's name.
+
+The next correction replaces the Wasm32 dynamic stringifier in its registered
+slot. Previously finalization appended a complete replacement, installed that
+body in the original slot, and left the appended function in the module. It also
+created the integer formatters again. The control reproduces the regression-test
+error, “String finalization appended a duplicate function or moved its slot”.
+Registration now creates each numeric formatter once, and finalization only
+replaces the existing stringifier body. The slot test finalizes twice and checks
+that the function count and indices stay fixed. Executed fixtures cover numbers,
+enums, class `toString`, booleans and null on all three targets, with inlining off
+and on. This preserves early numeric-helper registration for Wasm32 GC wrapping.

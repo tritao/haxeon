@@ -216,6 +216,7 @@ class TestCatalog {
 		"HxiInterfaceOrderMain",
 		"UnreachableDeclarationMain",
 		"WasmBackendMain",
+		"WasmStringFinalizationMain",
 		"WasmDeepStructureMain",
 		"CHeaderImporterMain",
 		"CxxHeaderImporterMain",

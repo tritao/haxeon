@@ -45,7 +45,7 @@ class IrEnumTagLowering {
 		// scalar comparisons even with source inlining disabled.
 		var tagEqualities:Map<String, Bool> = [];
 		for (fn in program.functions)
-			if (compiler.types.typing.EnumEqualityGenerator.isEqualityName(fn.name) && fn.arguments.length == 2)
+			if ((switch fn.kind { case Equality: true; default: false; }) && fn.arguments.length == 2)
 				switch mapped(fn.arguments[0].type) {
 					case EnumTag(name):
 						if (IrVerifier.sameType(mapped(fn.arguments[1].type), EnumTag(name)))

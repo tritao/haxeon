@@ -26,12 +26,17 @@ class EnumTagEqualityMain {
 			+ 'function main():Int { var first:Null<Wide>=null, second:Null<Wide>=C31; '
 			+ 'if (first==second || second!=C31 || !Compare.same(C31,C31) || Compare.same(C0,C31)) return 1; '
 			+ 'return new Pair(C31)==new Pair(C31) && new Pair(C0)!=new Pair(C31) ? 42 : 2; }');
-		var program = session.compile("Main").ir, scalarComparisons = 0;
+		var program = session.compile("Main").ir,
+			scalarComparisons = 0,
+			kinds = [for (fn in program.functions) fn.name => fn.kind];
 		for (fn in program.functions)
 			for (block in fn.blocks)
 				for (located in block.instructions)
 					switch located.value {
-						case Call(_, name, arguments) if (compiler.types.typing.EnumEqualityGenerator.isEqualityName(name)):
+						case Call(_, name, arguments) if ((switch kinds.get(name) {
+							case Equality: true;
+							default: false;
+						})):
 							if (arguments.length == 2 && compiler.ir.IrVerifier.sameType(arguments[0].type, EnumTag("Wide")))
 								throw "Typed tag equality retained a helper call";
 						case Equal(_, left, right) if (fn.name == "Compare.same"):

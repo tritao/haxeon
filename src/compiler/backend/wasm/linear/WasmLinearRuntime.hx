@@ -166,7 +166,11 @@ class WasmLinearRuntime {
 						case "__reflect_is_object":
 							functions.set(native.name, addDynamicIsObject(module, native.name, program));
 						case "__std_string":
-							functions.set(native.name, addDynamicString(module, native.name, allocator, strings, program));
+							var integerString = addIntToString(module, "__haxeon_i32_to_string", allocator),
+								int64String = addInt64ToString(module, "__haxeon_i64_to_string", allocator);
+							functions.set("__haxeon_i32_to_string", integerString);
+							functions.set("__haxeon_i64_to_string", int64String);
+							functions.set(native.name, module.addFunction(dynamicString(module, native.name, strings, program, integerString, int64String)));
 						case "__dynamic_equal":
 							// Emitted after the native scan so the string helper has an index.
 						case "__dynamic_object_type_id":
@@ -3889,11 +3893,9 @@ class WasmLinearRuntime {
 		return module.addFunction(builder.finish());
 	}
 
-	static function addDynamicString(module:WasmModule, name:String, allocator:Int, strings:Map<String, Int>, program:IrProgram, ?floatString:Int,
-			?functions:Map<String, Int>):Int {
-		var integerString = addIntToString(module, "__haxeon_i32_to_string", allocator),
-			int64String = addInt64ToString(module, "__haxeon_i64_to_string", allocator),
-			nullString = requiredStringOffset(strings, "null"),
+	static function dynamicString(module:WasmModule, name:String, strings:Map<String, Int>, program:IrProgram, integerString:Int, int64String:Int,
+			?floatString:Int, ?functions:Map<String, Int>):WasmFunction {
+		var nullString = requiredStringOffset(strings, "null"),
 			objectString = requiredStringOffset(strings, "Object"),
 			trueString = requiredStringOffset(strings, "true"),
 			falseString = requiredStringOffset(strings, "false"),
@@ -3989,7 +3991,7 @@ class WasmLinearRuntime {
 		// concrete object table; they still follow the standard "Object" fallback.
 		builder.i32Const(objectString);
 		builder.return_();
-		return module.addFunction(builder.finish());
+		return builder.finish();
 	}
 
 	/**
@@ -4011,9 +4013,12 @@ class WasmLinearRuntime {
 			floatString = context.functions.get("runtime.Ryu.format");
 		if (dynamicString == null)
 			return;
-		var replacement = addDynamicString(context.module, "__std_string.final", context.allocatorFunction, context.strings, context.program, floatString,
-			context.functions);
-		context.module.setFunction(dynamicString, context.module.functionAt(replacement));
+		var integerString = context.functions.get("__haxeon_i32_to_string"),
+			int64String = context.functions.get("__haxeon_i64_to_string");
+		if (integerString == null || int64String == null)
+			throw "Dynamic string numeric formatters were not registered";
+		context.module.setFunction(dynamicString, WasmLinearRuntime.dynamicString(context.module, "__std_string", context.strings, context.program,
+			integerString, int64String, floatString, context.functions));
 	}
 
 	public static function addStringEqual(module:WasmModule, name:String):Int {
