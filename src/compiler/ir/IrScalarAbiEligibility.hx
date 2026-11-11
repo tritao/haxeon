@@ -16,7 +16,7 @@ class IrScalarAbiEligibility {
 					case ProviderOperation.Equals, ProviderOperation.ReflectEquals, ProviderOperation.Hash, ProviderOperation.InlineEnumHelper,
 						ProviderOperation.TypedInterfaceEntry, ProviderOperation.InterfaceUnbox, ProviderOperation.GenericMethodReference,
 						ProviderOperation.KeyPath, ProviderOperation.OptionalBox, ProviderOperation.OptionalUnbox, ProviderOperation.ValueArrayElement,
-						ProviderOperation.DynamicDispatch: true;
+						ProviderOperation.DynamicDispatch, ProviderOperation.OptionalCopy: true;
 					default: false;
 				}
 			case EnumEquality(_): true;

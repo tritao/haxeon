@@ -46,10 +46,10 @@ class IrStateEqualityMain {
 		compare(adapter, castFunction);
 		compare(adapter, otherAdapter);
 		compare(body, adapter);
-		for (kind in [GenericSpecialization, SourceLambda, Equality, Hash, KeyPath, IterationAdapter,
-			GeneratedHelper, ScalarArguments, InlineEnumAccess, TypedInterface, ValueUnbox, GenericMethodReference,
-			OptionalScalar(null), OptionalScalar("owner.method"), OptionalValueBoundary, NullableScalarArguments,
-			ValueArrayElement, WasmClosureRestore, EnumEquality(true), EnumEquality(false), EnumDynamicUnbox(Enum("Example")),
+		for (kind in [GenericSpecialization, SourceLambda, Provider(compiler.ir.TypeKey.of(I32), compiler.Provides.ProviderOperation.Equals), Provider(compiler.ir.TypeKey.of(I32), compiler.Provides.ProviderOperation.Hash), Provider(compiler.ir.TypeKey.of(I32), compiler.Provides.ProviderOperation.KeyPath), IterationAdapter,
+			GeneratedHelper, ScalarArguments, Provider(compiler.ir.TypeKey.of(I32), compiler.Provides.ProviderOperation.InlineEnumHelper), Provider(compiler.ir.TypeKey.of(I32), compiler.Provides.ProviderOperation.TypedInterfaceEntry), Provider(compiler.ir.TypeKey.of(I32), compiler.Provides.ProviderOperation.InterfaceUnbox), Provider(compiler.ir.TypeKey.of(I32), compiler.Provides.ProviderOperation.GenericMethodReference),
+			OptionalScalar(null), OptionalScalar("owner.method"), Provider(compiler.ir.TypeKey.of(I32), compiler.Provides.ProviderOperation.OptionalBox), NullableScalarArguments,
+			Provider(compiler.ir.TypeKey.of(I32), compiler.Provides.ProviderOperation.ValueArrayElement), WasmClosureRestore, EnumEquality(true), EnumEquality(false), EnumDynamicUnbox(Enum("Example")),
 			EnumTagAdapter(EnumTag("Example"), true), EnumTagAdapter(EnumTag("Example"), false)]) {
 			var functionWithKind = new IrFunction(body.name, body.arguments, body.result, body.blocks, kind, body.debugBindings);
 			if (!IrFunctionStateEquality.same(functionWithKind, IrFunctionStateCodec.decode(IrFunctionStateCodec.encode(functionWithKind))))

@@ -72,7 +72,7 @@ class IrValueArrayPlaceMethods {
 			var entry = requests[index++], originalName = resolveMethod(entry.receiverType, entry.method, originals),
 				original = originals.get(originalName);
 			if (original == null) throw 'Missing array place method "$originalName"';
-			result.push(specialize(GeneratedHelper, entry.name, original, entry.path));
+			result.push(specialize(Provider(TypeKey.of(element), ProviderOperation.detailed(ProviderOperation.ValueArrayMethod, entry.name)), entry.name, original, entry.path));
 		}
 		var writes = [for (name in valueWrites.keys()) name]; writes.sort(Reflect.compare);
 		var bridge = new IrValueArrayBridge(element, element, objects, helpers);
@@ -461,7 +461,7 @@ class IrValueArrayPlaceMethods {
 		}
 		var debug = [for (binding in fn.debugBindings) if (!aliases.exists(binding.value.id) && !optionalScalars.exists(binding.value.id)
 			&& !virtualFresh.exists(binding.value.id) && !optionalFresh.exists(binding.value.id)) binding];
-		return new IrFunction(name, [array, index].concat(fn.arguments.slice(1)), fn.result, blocks, Provider(TypeKey.of(element), ProviderOperation.detailed(ProviderOperation.ValueArrayMethod, name)), debug, fn.inlineHint, fn.retention);
+		return new IrFunction(name, [array, index].concat(fn.arguments.slice(1)), fn.result, blocks, kind, debug, fn.inlineHint, fn.retention);
 	}
 
 	function request(receiverType:IrType, method:String, path:Array<String>):String {
