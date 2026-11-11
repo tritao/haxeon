@@ -31,6 +31,18 @@ class RetainedReorderMain {
     ordinary.reconcile(replacement, ordinaryBuilt);
     if (ordinary.children.length != 3 || ordinary.children[0] != p || ordinary.children[1] != q
         || ordinary.children[2] != caller) return 4;
+    var stable = node(20), keep = node(21), replaced = node(22), newChild = node(23);
+    stable.add(keep); stable.add(replaced);
+    var stableBuilt = stable.snapshotBuilt();
+    var stableCaller = node(24);
+    stable.add(stableCaller);
+    var stableNext = node(20);
+    keep.detach(); stableNext.add(keep); stableNext.add(newChild);
+    stable.reconcile(stableNext, stableBuilt);
+    if (stable.children.length != 3 || stable.children[0] != keep || stable.children[1] != newChild
+        || stable.children[2] != stableCaller || stable.layout.children.length != 3
+        || stable.layout.children[0] != keep.layout || stable.layout.children[1] != newChild.layout
+        || stable.layout.children[2] != stableCaller.layout || replaced.parent != null) return 5;
     return 42;
   }
 }

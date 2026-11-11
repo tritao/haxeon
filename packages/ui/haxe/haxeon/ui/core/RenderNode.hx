@@ -462,9 +462,9 @@ class RenderNode {
 				if (old.parent == this) {
 					old.replaceWith(child);
 					position = children.indexOf(child);
-				} else if (topology != null) {
+				} else {
 					// A retained child can already be in the fresh build; its committed slot still belongs to the builder.
-					var slot = topology.childPosition(id.value, old.id.value);
+					var slot = topology == null ? index : topology.childPosition(id.value, old.id.value);
 					if (slot < 0) continue;
 					if (children == NoChildren) children = [];
 					position = Std.int(Math.min(slot, children.length));
