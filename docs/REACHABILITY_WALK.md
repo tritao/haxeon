@@ -117,4 +117,32 @@ test failure. Cost: one set lookup per call edge, check mode only.
 
 ## Results of step 1
 
-(To be filled in by the diagnostic: conservative vs. type-aware, functions / objects / providers, for the self-hosting project and the app.)
+Measured 2026-11-11 with `HAXEON_REACHABILITY_REPORT=<file>` (`IrReachabilityReport`; off unless set, changes nothing) on warm-rebuild-reuse
+at a7bf4778a plus the report. Two positions: **after `IrEnumDynamicDispatch.rewrite`** (the 3a prune point, before every later pass) and
+the **final program** (what the backends receive). *All* is every function present; *today* is `IrReachability.withGeneratedRuntimeRoots`
+(what the plain HashLink prune keeps); *type-aware* is `IrTypeAwareWalk` keeping every method of a created class (the safe variant);
+*called only* is the same walk reaching only called methods (not safe while `Reflect.field` can reach a method by name).
+
+| program | position | functions: all | today | type-aware | called only |
+|---|---|---|---|---|---|
+| 40 largest `tests/programs`, summed | after dispatch | 3856 | 2443 | 2434 | 2152 |
+| | final | 6034 | 2669 | 2669 | 2104 |
+| self-hosting project | after dispatch | 5297 | 4922 | 4922 | 4704 |
+| | final | 5396 | 4620 | 4620 | 4159 |
+| Materia app (outer main + classpath patch) | after dispatch | 32520 | 26375 | 26180 | 22528 |
+| | final | 35281 | 23873 | 23744 | 19430 |
+
+**Decision gate: passed.** At the prune point the passes see every function; a prune there keeps 63% (corpus), 93% (self-hosting) and 81%
+(app) of them, and 20% fewer functions would be run through the passes in the app. The 5% bar is met by the app and the corpus; self-hosting
+is 7.1%. The final-program column is the output-size effect and is today's prune already.
+
+What the numbers say about the walk itself:
+
+- The gain at the prune point comes from pruning before the passes at all. The type-aware walk with whole-class method keeping keeps the same
+  functions as today's (the app: 195 fewer, 0.7%); its extra reach is in providers (the app, final program: 1230 against 1210, since it
+  also keeps providers a dynamic site reaches over created types).
+- The real extra saving is the *called only* column: at the prune point a further 11 percentage points of all functions in the app (30.7% off against 19.5%), 4 in self-hosting and 7 in the corpus.
+  It needs reflective field access to be a typed dynamic site first (see the prerequisite above), because it drops methods that are reachable only by name.
+- Objects with a reached method: the app 8850 -> 1593 (today) -> 1571; self-hosting 1399 -> 148; the corpus 933 -> 221 -> 217.
+- No `$` function without a kind in any of the three (kindless helpers: 0), so the prerequisite "no target-only helper without a kind" holds on these.
+- Not measured: the effect of the prune on pass time, which is step 3's evidence (`measure-cold.sh` before and after).
