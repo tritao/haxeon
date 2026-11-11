@@ -109,22 +109,22 @@ class TestRunner {
 	}
 
 	/**
-	 * A program runs in a directory of its own: a fresh one under out/cases, holding a link to every entry of the repository root
+	 * A program, test main or executable case runs in a directory of its own: a fresh one under out/cases, holding a link to every entry of the repository root
 	 * except `out`, which is a new empty directory, and removed afterwards. Relative paths such as `out/x` and `tests/fixtures/...`
 	 * resolve there, so what a program writes can never collide with another run of it (the live, plain and warm builds run together)
 	 * or with another program, and leaves nothing in the tree. The tree itself is reached only through the links.
 	 */
-	function startProgram(compiled:String):Process {
+	function startProgram(compiled:String, ?arguments:Array<String>):Process {
+		var all = [compiled].concat(arguments == null ? [] : arguments);
 		if (Sys.systemName() == "Windows")
-			return new Process(hl, [compiled]);
+			return new Process(hl, all);
 		return new Process("sh", [
 			"-c",
-			"mkdir -p \"$1/out/cases\" && d=$(mktemp -d \"$1/out/cases/run.XXXXXX\") || exit 125; for e in \"$1\"/*; do [ \"${e##*/}\" = out ] || ln -s \"$e\" \"$d/\"; done; mkdir \"$d/out\"; (cd \"$d\" && \"$2\" \"$3\"); s=$?; rm -rf \"$d\"; exit $s",
+			"r=$1; shift; mkdir -p \"$r/out/cases\" && d=$(mktemp -d \"$r/out/cases/run.XXXXXX\") || exit 125; for e in \"$r\"/*; do [ \"${e##*/}\" = out ] || ln -s \"$e\" \"$d/\"; done; mkdir \"$d/out\"; (cd \"$d\" && \"$@\"); s=$?; rm -rf \"$d\"; exit $s",
 			"sh",
 			root,
-			hl,
-			compiled
-		]);
+			hl
+		].concat(all));
 	}
 
 	/** Programs must not name the shared tree: relative paths resolve in the run's own directory, absolute ones would escape it. */
@@ -149,7 +149,7 @@ class TestRunner {
 					steps: [
 						compileMainStep(test.name, compiled),
 						{
-							start: () -> new Process(hl, [compiled]),
+							start: () -> startProgram(compiled),
 							failure: status -> status == 0 ? null : 'FAIL: ${test.name} exited with $status'
 						}
 					],
@@ -178,7 +178,7 @@ class TestRunner {
 			expected = test.expectedExit,
 			exitDescription = (status:Int) -> expected == null ? 'non-zero exit $status' : 'exit $expected';
 		steps.push({
-			start: () -> new Process(hl, [output].concat(resolveArguments(output, test.runtimeArguments))),
+			start: () -> startProgram(output, resolveArguments(output, test.runtimeArguments)),
 			failure: status ->
 				(expected == null ? status != 0 : status == expected) ? null : 'FAIL: ${test.name} expected ${exitDescription(status)}, got $status'
 		});

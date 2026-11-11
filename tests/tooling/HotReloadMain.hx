@@ -24,6 +24,7 @@ import runtime.RuntimeError;
 import runtime.RuntimeStatus;
 import runtime.PatchSet;
 import runtime.ModuleRetirementStatus.ModuleRetirementFlag;
+import sys.FileSystem;
 import sys.io.File;
 
 class HotReloadMain {
@@ -451,7 +452,9 @@ class HotReloadMain {
 		var survivor = new Compiler();
 		survivor.update("Main.hx", "function main():Int { return 42; }");
 		var survivorResult = survivor.compile("Main");
-		var prefix = Sys.getCwd() + "/jit-support-lifetime";
+		var tmp = Sys.getEnv("TMPDIR"), directory = (tmp == null || tmp == "" ? "/tmp" : tmp) + "/haxeon-jit-support-lifetime-" + Std.int(Sys.time() * 1000) + "-" + Std.random(1000000);
+		FileSystem.createDirectory(directory);
+		var prefix = directory + "/jit-support-lifetime";
 		File.saveBytes(prefix + "-owner.hl", HlWriter.encode(ownerResult.module).flatten());
 		File.saveBytes(prefix + "-owner.hli", ownerResult.runtimeIdentity);
 		File.saveContent(prefix + "-owner.id", Std.string(ownerResult.functionIds.get("main")));
@@ -463,6 +466,9 @@ class HotReloadMain {
 		test += ".exe";
 		#end
 		var status = Sys.command(test, [prefix + "-owner", prefix + "-survivor"]);
+		for (name in FileSystem.readDirectory(directory))
+			FileSystem.deleteFile(directory + "/" + name);
+		FileSystem.deleteDirectory(directory);
 		if (status != 0)
 			throw 'JIT support trampoline did not survive owner-module retirement (exit $status)';
 	}
