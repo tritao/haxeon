@@ -45,14 +45,14 @@ class FieldStorageSelectionMain {
 				b.fieldSet(owner, "narrow", n);
 				b.fieldGet(owner, "maybe", Nullable(Obj("Value")));
 				b.returnValue(b.constInt(42));
-				p.functions.push(new IrFunction("main", b.arguments, I32, b.blocks, None));
+				p.functions.push(new IrFunction("main", b.arguments, I32, b.blocks, None, []));
 				for (i in 0...count) {
 					b = new IrBuilder();
 					var v = b.argument("n", I32);
 					for (j in 0...100)
 						v = b.add(v, b.constInt(j));
 					b.returnValue(v);
-					p.functions.push(new IrFunction("f" + i, b.arguments, I32, b.blocks, None));
+					p.functions.push(new IrFunction("f" + i, b.arguments, I32, b.blocks, None, []));
 				}
 				var original = p.functions.copy(),
 					before = AllocationMeter.sample();
@@ -94,7 +94,7 @@ class FieldStorageSelectionMain {
 		var b = new IrBuilder(), owner = b.argument("owner", Obj("Holder"));
 		b.call(IrOptionalFieldStorage.copyName("Holder", "missing", "Holder", "maybe"), [owner, owner], Void);
 		b.returnValue(b.constInt(42));
-		var fn = new IrFunction("badCopy", b.arguments, I32, b.blocks, None), caught = false;
+		var fn = new IrFunction("badCopy", b.arguments, I32, b.blocks, None, []), caught = false;
 		try {
 			new IrOptionalFieldStorage(declarations).rewrite([fn]);
 		} catch (error:Dynamic) {
@@ -112,7 +112,7 @@ class FieldStorageSelectionMain {
 		b.returnValue(b.constInt(42));
 		caught = false;
 		try {
-			new IrNullableScalarFields(declarations).rewrite([new IrFunction("badWidth", b.arguments, I32, b.blocks, None)]);
+			new IrNullableScalarFields(declarations).rewrite([new IrFunction("badWidth", b.arguments, I32, b.blocks, None, [])]);
 		} catch (error:Dynamic) {
 			if (Std.string(error).indexOf("Invalid nullable scalar width") < 0)
 				throw error;

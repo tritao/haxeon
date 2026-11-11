@@ -19,7 +19,7 @@ class ValueArrayLoweringSelectionMain {
 	static function measure(shapes:Int, functions:Int):Float {
 		var program = new IrProgram("main"), entry = new IrBuilder();
 		entry.returnValue(entry.constInt(42));
-		program.functions.push(new IrFunction("main", entry.arguments, I32, entry.blocks, None));
+		program.functions.push(new IrFunction("main", entry.arguments, I32, entry.blocks, None, []));
 		for (i in 0...shapes) {
 			var name = "Record" + i;
 			program.objects.push({
@@ -37,7 +37,7 @@ class ValueArrayLoweringSelectionMain {
 			for (j in 0...20)
 				result = b.add(result, b.constInt(j));
 			b.returnValue(result);
-			program.functions.push(new IrFunction("unrelated" + i, b.arguments, I32, b.blocks, None));
+			program.functions.push(new IrFunction("unrelated" + i, b.arguments, I32, b.blocks, None, []));
 		}
 		var before = AllocationMeter.sample();
 		IrValueArrayProgramRewrite.rewriteAll(program, 64, HashLink);

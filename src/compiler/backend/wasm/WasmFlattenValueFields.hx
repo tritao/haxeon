@@ -54,7 +54,7 @@ class WasmFlattenValueFields {
 			if (original == null || original.arguments.length == 0) throw 'Missing Wasm GC place method "${method.original}"';
 			var next = nextId(original), owner = new IrValue(next, "$wasm-gc-place-owner", Obj(method.owner)),
 				args = [owner].concat(original.arguments.slice(1)),
-				clone = new IrFunction(method.name, args, original.result, original.blocks, None, [], original.inlineHint),
+				clone = new IrFunction(method.name, args, original.result, original.blocks, None, [], [], original.inlineHint),
 				place:FlattenedPlace = {owner: owner, path: method.path, typeName: method.typeName};
 			var rewritten = rewriteFunction(clone, {id: original.arguments[0].id, place: place});
 			functions.push(rewritten);

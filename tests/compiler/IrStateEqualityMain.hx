@@ -14,7 +14,7 @@ class IrStateEqualityMain {
 			where = SourceProvenance.user(new compiler.Source.SourceFile("test.hx", "x").span(0, 1));
 		b.instructions.push(new Located(instruction, where));
 		b.terminator = new Located(Return(v), where);
-		return new IrFunction("probe", [v, w], I32, [b], None, [
+		return new IrFunction("probe", [v, w], I32, [b], None, [], [
 			{
 				identity: "local",
 				name: "v",
@@ -437,12 +437,12 @@ class IrStateEqualityMain {
 			}
 		];
 		for (changed in [
-			new IrFunction("renamed", original.arguments, original.result, original.blocks, None, original.debugBindings),
-			new IrFunction(original.name, [w, v], original.result, original.blocks, None, original.debugBindings),
-			new IrFunction(original.name, original.arguments, I64, original.blocks, None, original.debugBindings),
-			new IrFunction(original.name, original.arguments, original.result, original.blocks, None, changedBindings),
-			new IrFunction(original.name, original.arguments, original.result, original.blocks, None, original.debugBindings, true),
-			new IrFunction(original.name, original.arguments, original.result, original.blocks, None, original.debugBindings, false,
+			new IrFunction("renamed", original.arguments, original.result, original.blocks, None, [], original.debugBindings),
+			new IrFunction(original.name, [w, v], original.result, original.blocks, None, [], original.debugBindings),
+			new IrFunction(original.name, original.arguments, I64, original.blocks, None, [], original.debugBindings),
+			new IrFunction(original.name, original.arguments, original.result, original.blocks, None, [], changedBindings),
+			new IrFunction(original.name, original.arguments, original.result, original.blocks, None, [], original.debugBindings, true),
+			new IrFunction(original.name, original.arguments, original.result, original.blocks, None, [], original.debugBindings, false,
 				compiler.ir.IrFunction.IrRetention.Keep),
 			fn(ConstInt(v, 42), SourceProvenance.generated("first")),
 			fn(ConstInt(v, 42), SourceProvenance.generated("second"))

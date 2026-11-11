@@ -25,7 +25,7 @@ class SourceInlineEnumMain {
 		invalid.natives = program.natives;
 		invalid.cNatives = program.cNatives;
 		invalid.functions = program.functions.concat([
-			new compiler.ir.IrFunction("invalidInlineNull", b.arguments, Obj("$inline-enum:Packet"), b.blocks, compiler.Provides.None)
+			new compiler.ir.IrFunction("invalidInlineNull", b.arguments, Obj("$inline-enum:Packet"), b.blocks, compiler.Provides.None, [])
 		]);
 		var error = "";
 		try

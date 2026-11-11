@@ -8,6 +8,17 @@ import compiler.ir.SourceProvenance.SourceOrigin;
 
 /** Conservative, allocation-light equality of all state encoded by IrFunctionStateCodec. */
 class IrFunctionStateEquality {
+	static function sameRequests(left:IrFunction, right:IrFunction):Bool {
+		if (left.requests.length != right.requests.length)
+			return false;
+		for (index in 0...left.requests.length) {
+			var a = left.requests[index], b = right.requests[index];
+			if (a.name != b.name || a.operation != b.operation || !IrVerifier.sameType(a.type, b.type))
+				return false;
+		}
+		return true;
+	}
+
 	public static function same(left:IrFunction, right:IrFunction):Bool {
 		if (left == right)
 			return true;
@@ -15,6 +26,7 @@ class IrFunctionStateEquality {
 			|| left.inlineHint != right.inlineHint
 			|| left.retention != right.retention
 			|| !Type.enumEq(left.provides, right.provides)
+			|| !sameRequests(left, right)
 			|| !IrVerifier.sameType(left.result, right.result)
 			|| left.arguments.length != right.arguments.length
 			|| left.blocks.length != right.blocks.length

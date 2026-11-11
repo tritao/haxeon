@@ -72,9 +72,9 @@ class IrValueArrayBridge {
 			accepts.select(present);
 		}
 		accepts.returnValue(matches);
-		return [new IrFunction(readName(), read.arguments, Dyn, read.blocks, Serves(TypeKey.of(element), ProviderOperation.detailed(ProviderOperation.ValueArrayAccess, readName()))),
-			new IrFunction(writeName(), write.arguments, Void, write.blocks, Serves(TypeKey.of(element), ProviderOperation.detailed(ProviderOperation.ValueArrayAccess, writeName()))),
-			new IrFunction(acceptsName(), accepts.arguments, Bool, accepts.blocks, Serves(TypeKey.of(element), ProviderOperation.detailed(ProviderOperation.ValueArrayAccess, acceptsName())))];
+		return [new IrFunction(readName(), read.arguments, Dyn, read.blocks, Serves(TypeKey.of(element), ProviderOperation.detailed(ProviderOperation.ValueArrayAccess, readName())), []),
+			new IrFunction(writeName(), write.arguments, Void, write.blocks, Serves(TypeKey.of(element), ProviderOperation.detailed(ProviderOperation.ValueArrayAccess, writeName())), []),
+			new IrFunction(acceptsName(), accepts.arguments, Bool, accepts.blocks, Serves(TypeKey.of(element), ProviderOperation.detailed(ProviderOperation.ValueArrayAccess, acceptsName())), [])];
 	}
 
 	/** Snapshot every leaf before capacity allocation or an insertion can change any array place. */

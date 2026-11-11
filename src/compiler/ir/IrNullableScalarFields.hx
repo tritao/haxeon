@@ -100,7 +100,7 @@ class IrNullableScalarFields {
 		builder.returnValue(value);
 		builder.select(changed);
 		builder.returnValue(builder.toDyn(normalized, type));
-		helpers.set(name, new IrFunction(name, builder.arguments, type, builder.blocks, Serves(TypeKey.of(type), ProviderOperation.detailed(ProviderOperation.NullableScalarHelper, name))));
+		helpers.set(name, new IrFunction(name, builder.arguments, type, builder.blocks, Serves(TypeKey.of(type), ProviderOperation.detailed(ProviderOperation.NullableScalarHelper, name)), []));
 		return name;
 	}
 

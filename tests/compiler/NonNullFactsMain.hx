@@ -23,7 +23,7 @@ class NonNullFactsMain {
 			fresh = b.newObject("Box"),
 			allocated = check(b, fresh);
 		b.returnValue(b.constInt(42));
-		var facts = new IrNonNullFacts(new IrFunction("fresh", b.arguments, I32, b.blocks, None));
+		var facts = new IrNonNullFacts(new IrFunction("fresh", b.arguments, I32, b.blocks, None, []));
 		expect(!facts.has(unknown.block, unknown.index)
 			&& facts.has(repeated.block, repeated.index)
 			&& facts.has(allocated.block, allocated.index),
@@ -43,7 +43,7 @@ class NonNullFactsMain {
 		b.select(join);
 		var merged = check(b, receiver);
 		b.returnValue(b.constInt(42));
-		facts = new IrNonNullFacts(new IrFunction("branch", b.arguments, I32, b.blocks, None));
+		facts = new IrNonNullFacts(new IrFunction("branch", b.arguments, I32, b.blocks, None, []));
 		expect(facts.has(nonnull.block, nonnull.index)
 			&& !facts.has(merged.block, merged.index), "only the non-null branch establishes a fact");
 
@@ -65,7 +65,7 @@ class NonNullFactsMain {
 			b.select(exit);
 			var after = check(b, receiver);
 			b.returnValue(b.constInt(42));
-			facts = new IrNonNullFacts(new IrFunction("loop", b.arguments, I32, b.blocks, None));
+			facts = new IrNonNullFacts(new IrFunction("loop", b.arguments, I32, b.blocks, None, []));
 			expect(facts.has(inside.block, inside.index) == pre && facts.has(after.block, after.index) == pre,
 				"loop facts must hold before the first iteration");
 		}
@@ -88,7 +88,7 @@ class NonNullFactsMain {
 			var value = b.phi(Obj("Box"), [{block: yes.id, value: left}, {block: no.id, value: right}]);
 			var phiCheck = check(b, value);
 			b.returnValue(b.constInt(42));
-			facts = new IrNonNullFacts(new IrFunction("phi", b.arguments, I32, b.blocks, None));
+			facts = new IrNonNullFacts(new IrFunction("phi", b.arguments, I32, b.blocks, None, []));
 			expect(facts.has(phiCheck.block, phiCheck.index) == bothFresh, "phi requires a non-null value on every incoming edge");
 		}
 
@@ -97,7 +97,7 @@ class NonNullFactsMain {
 		b.fieldGet(receiver, "value", I32);
 		var afterField = check(b, receiver);
 		b.returnValue(b.constInt(42));
-		var fn = new IrFunction("field", b.arguments, I32, b.blocks, None);
+		var fn = new IrFunction("field", b.arguments, I32, b.blocks, None, []);
 		expect(!new IrNonNullFacts(fn).has(afterField.block, afterField.index)
 			&& new IrNonNullFacts(fn, true).has(afterField.block, afterField.index),
 			"only targets that check dereferences can use that fact");
@@ -111,7 +111,7 @@ class NonNullFactsMain {
 		b.select(next);
 		var handler = check(b, receiver);
 		b.returnValue(b.constInt(42));
-		facts = new IrNonNullFacts(new IrFunction("handler", b.arguments, I32, b.blocks, None));
+		facts = new IrNonNullFacts(new IrFunction("handler", b.arguments, I32, b.blocks, None, []));
 		expect(!facts.has(handler.block, handler.index), "exception regions prevent cross-block propagation");
 
 		b = new IrBuilder();
@@ -121,7 +121,7 @@ class NonNullFactsMain {
 		b.select(later);
 		var freshInHandler = check(b, allocatedValue);
 		b.returnValue(b.constInt(42));
-		facts = new IrNonNullFacts(new IrFunction("freshHandler", b.arguments, I32, b.blocks, None));
+		facts = new IrNonNullFacts(new IrFunction("freshHandler", b.arguments, I32, b.blocks, None, []));
 		expect(facts.has(freshInHandler.block, freshInHandler.index), "fresh SSA values remain non-null across exception regions");
 
 		b = new IrBuilder();
@@ -130,7 +130,7 @@ class NonNullFactsMain {
 			second = b.fieldGet(receiver, "b", I32);
 		b.returnValue(b.add(first, second));
 		var program = new IrProgram("main");
-		program.functions = [new IrFunction("main", b.arguments, I32, b.blocks, None)];
+		program.functions = [new IrFunction("main", b.arguments, I32, b.blocks, None, [])];
 		program.objects = [
 			{
 				name: "Box",
@@ -169,7 +169,7 @@ class NonNullFactsMain {
 		])
 			block.instructions.push(instruction);
 		block.terminator = new Located(Return(second), provenance);
-		var fn = new IrFunction("sparse", [receiver], I32, [block], None);
+		var fn = new IrFunction("sparse", [receiver], I32, [block], None, []);
 		for (checked in [false, true]) {
 			var facts = new IrNonNullFacts(fn, checked);
 			expect(facts.has(block.id, 1), "sparse fresh identity stays non-null");
@@ -202,7 +202,7 @@ class NonNullFactsMain {
 					b.constInt(j);
 			}
 			b.returnValue(b.constInt(42));
-			var fn = new IrFunction("wide", b.arguments, I32, b.blocks, None),
+			var fn = new IrFunction("wide", b.arguments, I32, b.blocks, None, []),
 				before = compiler.compilation.AllocationMeter.sample();
 			var facts = new IrNonNullFacts(fn, checked),
 				bytes = compiler.compilation.AllocationMeter.sample().bytes - before.bytes;

@@ -143,7 +143,7 @@ class IrInlineEnumLowering {
 					value = access.field(b, input, constructor, field);
 			}
 			b.returnValue(value);
-			helpers.set(name, new IrFunction(name, b.arguments, value.type, b.blocks, Serves(TypeKey.of(Enum(enumName)), ProviderOperation.detailed(ProviderOperation.InlineEnumHelper, name))));
+			helpers.set(name, new IrFunction(name, b.arguments, value.type, b.blocks, Serves(TypeKey.of(Enum(enumName)), ProviderOperation.detailed(ProviderOperation.InlineEnumHelper, name)), []));
 			return name;
 		}
 		// Every rewrite below starts from a value whose type is, or contains, an inline enum; so does every check that throws.
@@ -339,7 +339,7 @@ class IrInlineEnumLowering {
 					}, block.terminator.provenance);
 				blocks.push(copy);
 			}
-			result.functions.push(new IrFunction(fn.name, arguments, mapped(fn.result), blocks, fn.provides, [
+			result.functions.push(new IrFunction(fn.name, arguments, mapped(fn.result), blocks, fn.provides, fn.requests, [
 				for (binding in fn.debugBindings)
 					{
 						identity: binding.identity,

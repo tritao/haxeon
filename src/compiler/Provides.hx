@@ -53,6 +53,19 @@ enum abstract ProviderOperation(String) to String {
 }
 
 /**
+ * A call to a helper that does not exist yet: the pass that answers requests makes it. The request is data the pass reads, so it no
+ * longer finds the helpers it must make by the shape of the name of a call. `K` names the subject as in `Provides`: the source type on a
+ * typed expression, the IR type on a function.
+ */
+typedef HelperRequest<K> = {
+	/** The callee the call goes to; a symbol, not parsed by anyone. */
+	final name:String;
+
+	final type:K;
+	final operation:ProviderOperation;
+}
+
+/**
  * Whether a function is a helper that serves an operation on a type, and which. Every `$`-named function in the final IR is one of
  * these, a clone or lambda or adapter of another function (`None`, checked against `IrProviders.isDerivedName`), or the check fails:
  * see `IrProviders.check`.

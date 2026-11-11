@@ -45,7 +45,7 @@ class InlineEnumDynamicReachMain {
 			var entry = new IrBuilder();
 			entry.call("exit", [entry.call("main", [], I32)], Void);
 			entry.returnValue(entry.constVoid());
-			program.functions.push(new IrFunction("entry", entry.arguments, Void, entry.blocks, None));
+			program.functions.push(new IrFunction("entry", entry.arguments, Void, entry.blocks, None, []));
 			program.entryPoint = "entry";
 			sys.io.File.saveBytes(module, new HlBackend().compile(program, {target: HashLink, debugNames: true}).bytes);
 			var vm = Sys.getEnv("HAXEON_HASHLINK_DIR"), process = new sys.io.Process(vm == null ? "scripts/hl" : vm + "/hl", [module]),

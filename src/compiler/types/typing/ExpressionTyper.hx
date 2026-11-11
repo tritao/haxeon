@@ -2327,6 +2327,7 @@ class ExpressionTyper {
 	function isPureCallExpression(call:TypedExpression):Bool
 		return switch call.expression {
 			case TCall(name, _), TCNativeCall(name, _), TMethodCall(_, name, _): session.isPureCall(name);
+			case TRequestCall(_, request): session.isPureCall(request.name);
 			case TCast(inner), TAbiCast(inner), TNoReturn(inner): isPureCallExpression(inner);
 			default: false;
 		};

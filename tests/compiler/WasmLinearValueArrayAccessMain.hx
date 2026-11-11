@@ -116,7 +116,7 @@ class WasmLinearValueArrayAccessMain {
 		main.select(failure); main.returnValue(main.constInt(0));
 		var program = new IrProgram("main");
 		program.objects = [{name:"LinearValueArrayOwner", isValue:false, base:null, interfaces:[], methods:[], fields:[{name:"value", type:I32}]}];
-		program.functions = [new IrFunction("main", [], I32, main.blocks, None), new IrFunction("init", init.arguments, Void, init.blocks, None)];
+		program.functions = [new IrFunction("main", [], I32, main.blocks, None, []), new IrFunction("init", init.arguments, Void, init.blocks, None, [])];
 		program.natives = [
 			{name:"$test:linear-allocate", library:"haxeon_runtime", symbol:"__value_array_alloc", arguments:[I32,TypeRef,I32,I32,I32,Bool], result:array},
 			{name:"__array_alloc_ref", library:"haxeon_runtime", symbol:"__array_alloc_ref", arguments:[I32], result:array},

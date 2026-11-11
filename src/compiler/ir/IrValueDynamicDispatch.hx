@@ -84,6 +84,6 @@ class IrValueDynamicDispatch {
 		}, fallback);
 		builder.select(fallback);
 		builder.returnValue(builder.call("__dynamic_equal", [left, right], Bool));
-		return new IrFunction(EQUAL, builder.arguments, Bool, builder.blocks, None);
+		return new IrFunction(EQUAL, builder.arguments, Bool, builder.blocks, None, []);
 	}
 }

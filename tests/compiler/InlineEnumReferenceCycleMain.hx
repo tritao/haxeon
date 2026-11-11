@@ -76,9 +76,9 @@ function main():Int return 42;
 		churn.returnValue(churn.constVoid());
 		probe.returnValue(probe.constInt(42));
 		probe.select(bad); probe.returnValue(probe.constInt(1));
-		program.functions.push(new IrFunction("prepareRoots", prepare.arguments, Void, prepare.blocks, None, null, false, Expose));
-		program.functions.push(new IrFunction("churnRoots", churn.arguments, Void, churn.blocks, None, null, false, Expose));
-		program.functions.push(new IrFunction("probeRoots", probe.arguments, I32, probe.blocks, None));
+		program.functions.push(new IrFunction("prepareRoots", prepare.arguments, Void, prepare.blocks, None, [], null, false, Expose));
+		program.functions.push(new IrFunction("churnRoots", churn.arguments, Void, churn.blocks, None, [], null, false, Expose));
+		program.functions.push(new IrFunction("probeRoots", probe.arguments, I32, probe.blocks, None, []));
 		var table = IrObjectTable.of([for (object in program.objects) object.name => object]);
 		program.functions = [for (fn in program.functions) compiler.ir.IrScalarReplacement.rewrite(fn, table, false, target == HashLink)];
 		compiler.ir.IrInliner.run(program, new compiler.ir.IrInliner.IrInlineCache(), compiler.ir.TargetProfile.wasm, inlineEnabled);
@@ -107,7 +107,7 @@ function main():Int return 42;
 				entry.call("stop", [], Void); entry.call("dump", [entry.constString(path)], Void);
 			}
 			entry.call("exit", [result], Void); entry.returnValue(entry.constVoid());
-			program.functions.push(new IrFunction("entry", entry.arguments, Void, entry.blocks, None));
+			program.functions.push(new IrFunction("entry", entry.arguments, Void, entry.blocks, None, []));
 		}
 		program.entryPoint = target == HashLink ? "entry" : "probeRoots";
 		IrVerifier.verify(program);

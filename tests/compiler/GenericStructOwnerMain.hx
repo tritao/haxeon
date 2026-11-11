@@ -146,7 +146,7 @@ class GenericStructOwnerMain {
 		builder.select(badType); builder.returnValue(builder.constInt(3));
 		var program = new IrProgram("main");
 		program.natives.push({name: "__std_is_of_type", library: "haxeon_runtime", symbol: "__std_is_of_type", arguments: [Dyn, TypeRef], result: Bool});
-		program.functions.push(new compiler.ir.IrFunction("main", builder.arguments, I32, builder.blocks, compiler.Provides.None));
+		program.functions.push(new compiler.ir.IrFunction("main", builder.arguments, I32, builder.blocks, compiler.Provides.None, []));
 		for (isNull in [false, true]) {
 			var invalid = new compiler.ir.IrBuilder(), wrong = isNull ? invalid.constNull(Dyn) : invalid.toDyn(invalid.constInt(12)),
 				tryBody = invalid.createBlock(), handler = invalid.createBlock(), after = invalid.createBlock(),
@@ -167,7 +167,7 @@ class GenericStructOwnerMain {
 				invalid.select(matchedNull); invalid.returnValue(invalid.constInt(42));
 				invalid.select(mismatchedNull); invalid.returnValue(invalid.constInt(1));
 			} else invalid.returnValue(invalid.constInt(1));
-			program.functions.push(new compiler.ir.IrFunction(isNull ? "nullHandle" : "invalidHandle", [], I32, invalid.blocks, None));
+			program.functions.push(new compiler.ir.IrFunction(isNull ? "nullHandle" : "invalidHandle", [], I32, invalid.blocks, None, []));
 		}
 		if (new compiler.ir.IrInterpreter(program).run() != 42) throw "interpreter lost a Dynamic type handle";
 		if (new compiler.ir.IrInterpreter(program).run("invalidHandle") != 42) throw "interpreter accepted an invalid type handle";
@@ -182,7 +182,7 @@ class GenericStructOwnerMain {
 		entry.branch(validInvalid, nullBlock, invalidBlock);
 		entry.select(nullBlock); entry.call("__exit", [entry.call("nullHandle", [], I32)], Void); entry.returnValue(entry.constVoid());
 		entry.select(invalidBlock); entry.call("__exit", [entry.constInt(1)], Void); entry.returnValue(entry.constVoid());
-		hlProgram.functions = program.functions.concat([new compiler.ir.IrFunction("__entry", [], Void, entry.blocks, None)]);
+		hlProgram.functions = program.functions.concat([new compiler.ir.IrFunction("__entry", [], Void, entry.blocks, None, [])]);
 		var hashlink = new compiler.backend.hl.HlBackend().compile(hlProgram, {target: HashLink, debugNames: true});
 		var hlDirectory = Sys.getEnv("TMPDIR");
 		if (hlDirectory == null || hlDirectory == "") hlDirectory = Sys.getCwd() + "/out/test-tools";

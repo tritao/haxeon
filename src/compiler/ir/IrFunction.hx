@@ -1,6 +1,7 @@
 package compiler.ir;
 
 import compiler.Provides;
+import compiler.Provides.HelperRequest;
 import compiler.ir.Ir;
 
 /** Source binding identity, lexical range, and SSA value after mutable stores vanish. */
@@ -41,13 +42,17 @@ class IrFunction {
 	/** The operation this function serves for a type when a generator made it as a helper, else `None`. */
 	public final provides:Provides<TypeKey>;
 
+	/** The helpers this function calls that no pass has made yet; the pass that makes them reads these, not the names of its calls. */
+	public final requests:Array<HelperRequest<IrType>>;
+
 	/** `provides` is required: a function made without saying what it serves does not compile. */
-	public function new(name, arguments, result, blocks, provides:Provides<TypeKey>, ?debugBindings, inlineHint = false, retention:IrRetention = Reachable) {
+	public function new(name, arguments, result, blocks, provides:Provides<TypeKey>, requests:Array<HelperRequest<IrType>>, ?debugBindings, inlineHint = false, retention:IrRetention = Reachable) {
 		this.name = name;
 		this.arguments = arguments;
 		this.result = result;
 		this.blocks = blocks;
 		this.provides = provides;
+		this.requests = requests;
 		this.debugBindings = debugBindings == null ? [] : debugBindings;
 		this.inlineHint = inlineHint;
 		this.retention = retention;
@@ -59,5 +64,5 @@ class IrFunction {
 	 */
 	public function derive(blocks:Array<IrBlock>, ?arguments:Array<IrValue>, ?result:IrType, ?debugBindings:Array<IrDebugBinding>, ?name:String):IrFunction
 		return new IrFunction(name == null ? this.name : name, arguments == null ? this.arguments : arguments, result == null ? this.result : result,
-			blocks, name == null || name == this.name ? provides : None, debugBindings == null ? this.debugBindings : debugBindings, inlineHint, retention);
+			blocks, name == null || name == this.name ? provides : None, requests, debugBindings == null ? this.debugBindings : debugBindings, inlineHint, retention);
 }

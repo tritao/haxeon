@@ -56,6 +56,9 @@ private class FunctionScratch {
 	public var loweringScopedDisposal = false;
 	public var localOptionalPlaces:Map<String, OptionalFieldPlace> = [];
 	public var arrayValuePlaceSerial = 0;
+
+	/** The helpers this function asks for that do not exist yet (`TRequestCall`), in the order it asks. */
+	public final requests:Array<compiler.Provides.HelperRequest<IrType>> = [];
 	public var observableAccessSerial = 0;
 	public var observableConstructorInitialization:Bool;
 
@@ -238,7 +241,7 @@ class IrGenerator {
 
 	public function generateFunction(fn:TypedFunction):IrFunction {
 		try {
-			var cfg = CfgIteratorReplacement.run(generateCfg(fn)),
+			var cfg = CfgIteratorReplacement.run(generateCfg(fn)), requests = lastRequests,
 				built = SsaBuilder.build(cfg);
 			var retention:compiler.ir.IrFunction.IrRetention = fn.isExposed == true ? Expose : fn.isKept == true ? Keep : Reachable;
 			var provides:compiler.Provides<TypeKey> = switch fn.provides {
@@ -248,7 +251,8 @@ class IrGenerator {
 			};
 			return fn.isInline == true
 				|| retention != Reachable
-				|| provides != None ? new IrFunction(built.name, built.arguments, built.result, built.blocks, provides, built.debugBindings, fn.isInline == true,
+				|| provides != None
+				|| requests.length > 0 ? new IrFunction(built.name, built.arguments, built.result, built.blocks, provides, requests, built.debugBindings, fn.isInline == true,
 					retention) : built;
 		} catch (error:String) {
 			throw 'CFG generation failed for ${fn.name}: $error';
@@ -259,11 +263,15 @@ class IrGenerator {
 	 * Every function is generated with scratch state of its own (`FunctionScratch`): its IR must not depend on how many functions were
 	 * generated before it, or a function generated again would never equal its earlier IR.
 	 */
+	/** The requests of the function `generateCfg` finished last. */
+	public var lastRequests:Array<compiler.Provides.HelperRequest<IrType>> = [];
+
 	public function generateCfg(fn:TypedFunction):CfgFunction {
 		var outer = scratch;
 		scratch = new FunctionScratch(fn.isConstructor);
 		try {
 			var cfg = generateFunctionCfg(fn);
+			lastRequests = scratch.requests;
 			scratch = outer;
 			return cfg;
 		} catch (error:Dynamic) {
@@ -2054,6 +2062,10 @@ class IrGenerator {
 			case TCall(name, args):
 				var directBase = args.length > 0 && isCurrentObject(args[0]) && directBaseMethod(name, localTypes);
 				builder.call(name, lowerOperands(args, builder, localTypes, directBase), lowerType(expression.type));
+			case TRequestCall(args, request):
+				// The IR keeps the request with the function, for the pass that answers it (see IrFunction.requests).
+				scratch.requests.push({name: request.name, type: lowerType(request.type), operation: request.operation});
+				builder.call(request.name, lowerOperands(args, builder, localTypes), lowerType(expression.type));
 			case TCNativeCall(name, args): builder.cNativeCall(name, lowerOperands(args, builder, localTypes), lowerType(expression.type));
 			case TCollectionCall(receiver, operation, args):
 				var customMap = switch receiver.type {

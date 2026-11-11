@@ -150,11 +150,15 @@ class IrProviders {
 		return operation + "\n" + type.toString();
 
 	/**
-	 * HAXEON_CHECK_REUSE=1: every function whose name starts with `$` is a provider or a derived function, and no two functions
-	 * serve the same operation on the same type. Returns the first problem found, or null.
+	 * HAXEON_CHECK_REUSE=1: every function whose name starts with `$` is a provider or a derived function, no two functions
+	 * serve the same operation on the same type, and every request a function carries has a provider. Returns the first problem found, or null.
 	 */
 	public static function check(functions:Array<IrFunction>):Null<String> {
-		var seen:Map<String, String> = [];
+		var seen:Map<String, String> = [], provided = rows(functions);
+		for (fn in functions)
+			for (request in fn.requests)
+				if (!provided.exists(row(TypeKey.of(request.type), request.operation)))
+					return 'function "${fn.name}" asks for "${request.operation}" of "${TypeKey.of(request.type)}" (call "${request.name}"), which no pass made';
 		for (fn in functions)
 			switch fn.provides {
 				case Serves(type, operation):

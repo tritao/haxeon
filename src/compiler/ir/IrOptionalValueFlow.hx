@@ -36,7 +36,7 @@ class IrOptionalValueFlow {
 		for (name in names) {
 			var builder = new IrBuilder(), type:IrType = Nullable(Obj(name)), value = builder.argument("value", type);
 			builder.returnValue(copyOptional(builder, value, name, declarations));
-			result.push(new IrFunction(copyName(name), builder.arguments, type, builder.blocks, Serves(TypeKey.of(Obj(name)), ProviderOperation.OptionalCopy)));
+			result.push(new IrFunction(copyName(name), builder.arguments, type, builder.blocks, Serves(TypeKey.of(Obj(name)), ProviderOperation.OptionalCopy), []));
 		}
 		var shapes = new IrInlineValueLayout(IrObjectTable.of(declarations));
 		var allBoxes = [for (name in boxes.keys()) name]; allBoxes.sort(Reflect.compare);
@@ -86,7 +86,7 @@ class IrOptionalValueFlow {
 		var boxed = builder.toDyn(value, type), presentBlock = builder.currentBlock(); builder.jump(done);
 		builder.select(done);
 		builder.returnValue(builder.phi(type, [{block: absentBlock.id, value: nil}, {block: presentBlock.id, value: boxed}]));
-		return new IrFunction(boxName(name), builder.arguments, type, builder.blocks, Serves(TypeKey.of(Obj(name)), ProviderOperation.OptionalBox));
+		return new IrFunction(boxName(name), builder.arguments, type, builder.blocks, Serves(TypeKey.of(Obj(name)), ProviderOperation.OptionalBox), []);
 	}
 
 	static function unboxHelper(name:String, objects:Map<String, IrObject>, shapes:IrInlineValueLayout):IrFunction {
@@ -109,7 +109,7 @@ class IrOptionalValueFlow {
 			}
 		}
 		builder.jump(done); builder.select(done); builder.returnValue(wrapper);
-		return new IrFunction(unboxName(name), builder.arguments, Obj(IrOptionalScalarFlow.wrapperName(name)), builder.blocks, Serves(TypeKey.of(Obj(name)), ProviderOperation.OptionalUnbox));
+		return new IrFunction(unboxName(name), builder.arguments, Obj(IrOptionalScalarFlow.wrapperName(name)), builder.blocks, Serves(TypeKey.of(Obj(name)), ProviderOperation.OptionalUnbox), []);
 	}
 
 	static function isOptionalValue(type:IrType, objects:Map<String, IrObject>):Bool return switch type {

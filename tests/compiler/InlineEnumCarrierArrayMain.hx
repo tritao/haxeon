@@ -29,7 +29,7 @@ class InlineEnumCarrierArrayMain {
   b.branch(b.equal(restored,reference),yes,no);b.select(yes);b.returnValue(b.constInt(42));b.select(no);b.returnValue(b.constInt(1));
   var p=new IrProgram("main");p.objects=[owner,packet];
   p.staticFields=[{name:"array",type:arrayType},{name:"owner",type:Obj("Owner")}];
-  p.functions=[new IrFunction("prepare",prepare.arguments,Void,prepare.blocks, None,null,false,compiler.ir.IrFunction.IrRetention.Expose),new IrFunction("main",b.arguments,I32,b.blocks, None)].concat(helpers.functions());
+  p.functions=[new IrFunction("prepare",prepare.arguments,Void,prepare.blocks, None, [],null,false,compiler.ir.IrFunction.IrRetention.Expose),new IrFunction("main",b.arguments,I32,b.blocks, None, [])].concat(helpers.functions());
   p.natives=factory.natives().concat(helpers.natives());
   compiler.ir.IrInliner.run(p,new compiler.ir.IrInliner.IrInlineCache(), compiler.ir.TargetProfile.wasm,inlineEnabled);
   compiler.ir.IrVerifier.verify(p);
@@ -43,7 +43,7 @@ class InlineEnumCarrierArrayMain {
    }
   }
   p.natives.push({name:"__exit",library:"std",symbol:"sys_exit",arguments:[I32],result:Void});entry.call("__exit",[result],Void);entry.returnValue(entry.constVoid());
-  p.functions.push(new IrFunction("entry",entry.arguments,Void,entry.blocks, None));p.entryPoint=target==HashLink?"entry":"main";
+  p.functions.push(new IrFunction("entry",entry.arguments,Void,entry.blocks, None, []));p.entryPoint=target==HashLink?"entry":"main";
   var targetBackend:compiler.backend.Backend.BackendTarget=target==HashLink?HashLink:target==Wasm32?Wasm32:WasmGc;
   var bytes=target==HashLink?new compiler.backend.hl.HlBackend().compile(p,{target:targetBackend,debugNames:true}).bytes:new compiler.backend.wasm.WasmBackend().compile(p,{target:targetBackend,debugNames:true,wasmGcAllocationCount:target==WasmGc,wasmMemoryStats:target==Wasm32}).bytes;
   var path=tempRoot()+"/"+uniqueStem+"carrier-array-"+Std.string(target)+(target==HashLink?".hl":".wasm");sys.io.File.saveBytes(path,bytes);

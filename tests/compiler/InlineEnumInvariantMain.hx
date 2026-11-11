@@ -45,21 +45,21 @@ class InlineEnumInvariantMain {
 				adapterBody.returnValue(adapterBody.equal(callbackResult, adapterBody.constInt(42)));
 				var castBody = new IrBuilder(), castInput = castBody.argument("closure", Dyn);
 				castBody.returnValue(castInput);
-				adapter.functions.push(new IrFunction("__haxeon_closure_cast_" + closureKey(sourceClosure), castBody.arguments, Dyn, castBody.blocks, None));
+				adapter.functions.push(new IrFunction("__haxeon_closure_cast_" + closureKey(sourceClosure), castBody.arguments, Dyn, castBody.blocks, None, []));
 				adapter.functions.push(new IrFunction("__haxeon_closure_adapter_" + closureKey(sourceClosure) + "_" + closureKey(targetClosure),
-					adapterBody.arguments, Bool, adapterBody.blocks, None));
+					adapterBody.arguments, Bool, adapterBody.blocks, None, []));
 				var varargsName = "__haxeon_varargs_adapter_" + Std.string(targetClosure), varargsBody = new IrBuilder();
 				varargsBody.argument("closure", Dyn); varargsBody.argument("value", inlineEnum); varargsBody.returnValue(varargsBody.constBool(true));
-				adapter.functions.push(new IrFunction(varargsName, varargsBody.arguments, Bool, varargsBody.blocks, None));
+				adapter.functions.push(new IrFunction(varargsName, varargsBody.arguments, Bool, varargsBody.blocks, None, []));
 				var castWrapper = new IrBuilder(), castReceiver = castWrapper.argument("closure", Dyn),
 					varargsClosure = castWrapper.instanceClosure(varargsName, castReceiver, targetClosure);
 				castWrapper.returnValue(castWrapper.toDyn(varargsClosure));
-				adapter.functions.push(new IrFunction("__haxeon_closure_cast_" + closureKey(targetClosure), castWrapper.arguments, Dyn, castWrapper.blocks, None));
+				adapter.functions.push(new IrFunction("__haxeon_closure_cast_" + closureKey(targetClosure), castWrapper.arguments, Dyn, castWrapper.blocks, None, []));
 				IrVerifier.verify(adapter);
 				var unadapted = copy(base), badCast = new IrBuilder(), badClosure = badCast.argument("closure", Dyn);
 				badCast.safeCast(badClosure, sourceClosure);
 				badCast.returnValue(badCast.constInt(42));
-				unadapted.functions.push(new IrFunction("unadaptedClosureCast", badCast.arguments, I32, badCast.blocks, None));
+				unadapted.functions.push(new IrFunction("unadaptedClosureCast", badCast.arguments, I32, badCast.blocks, None, []));
 				var badCastError = "";
 				try IrVerifier.verify(unadapted) catch (failure:Dynamic) badCastError = Std.string(failure);
 				if (badCastError.indexOf("Inline value storage requires a logical cast adapter") < 0)
@@ -68,7 +68,7 @@ class InlineEnumInvariantMain {
 				valid.argument("array", Nullable(Array(Enum("E"))));
 				valid.argument("iterator", Iterator(Enum("E")));
 				valid.returnValue(valid.constInt(42));
-				containers.functions.push(new IrFunction("logicalHandles", valid.arguments, I32, valid.blocks, None));
+				containers.functions.push(new IrFunction("logicalHandles", valid.arguments, I32, valid.blocks, None, []));
 				containers.objects.push({
 					name: "LogicalHandles",
 					isValue: false,
@@ -142,7 +142,7 @@ class InlineEnumInvariantMain {
 					}
 					if (kind != 10)
 						b.returnValue(b.constInt(42));
-					bad.functions.push(new IrFunction(name, b.arguments, result, b.blocks, None));
+					bad.functions.push(new IrFunction(name, b.arguments, result, b.blocks, None, []));
 					var error = "";
 					try
 						IrVerifier.verifyFunctions(bad, ["main" => true])

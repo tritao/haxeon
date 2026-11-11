@@ -918,6 +918,10 @@ class SemanticIndex {
 				addCall(bindNamed(resolve, specializationOrigin(name), expression.span), expression.span, name);
 				for (argument in arguments)
 					indexExpression(fn, argument, resolve, resolveEnumCase);
+			case TRequestCall(arguments, request):
+				addCall(bindNamed(resolve, specializationOrigin(request.name), expression.span), expression.span, request.name);
+				for (argument in arguments)
+					indexExpression(fn, argument, resolve, resolveEnumCase);
 			case TFunctionRef(name):
 				bindNamed(resolve, name, expression.span);
 			case TMethodRef(object, name):

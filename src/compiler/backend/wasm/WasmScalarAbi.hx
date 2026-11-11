@@ -527,10 +527,10 @@ class WasmScalarAbi {
 		result.functions = [for (fn in program.functions) rewriteFunction(fn)];
 		for (fn in program.functions) {
 			var direct = directClones.get(fn.name);
-			if (direct != null) result.functions.push(rewriteFunction(new IrFunction(direct, fn.arguments, fn.result, fn.blocks, None,
+			if (direct != null) result.functions.push(rewriteFunction(new IrFunction(direct, fn.arguments, fn.result, fn.blocks, None, [],
 				fn.debugBindings, fn.inlineHint)));
 			var clone = methodClones.get(fn.name);
-			if (clone != null) result.functions.push(rewriteFunction(new IrFunction(clone, fn.arguments, fn.result, fn.blocks, None,
+			if (clone != null) result.functions.push(rewriteFunction(new IrFunction(clone, fn.arguments, fn.result, fn.blocks, None, [],
 				fn.debugBindings, fn.inlineHint)));
 		}
 		result.objects = program.objects; result.interfaces = program.interfaces; result.enums = program.enums;

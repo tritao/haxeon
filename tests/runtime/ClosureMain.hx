@@ -28,13 +28,13 @@ class ClosureMain {
 			arguments: [IrType.I32],
 			result: IrType.Void
 		});
-		program.functions.push(new IrFunction("twice", twiceBuilder.arguments, IrType.I32, twiceBuilder.blocks, None));
-		program.functions.push(new IrFunction("main", [], IrType.I32, mainBuilder.blocks, None));
+		program.functions.push(new IrFunction("twice", twiceBuilder.arguments, IrType.I32, twiceBuilder.blocks, None, []));
+		program.functions.push(new IrFunction("main", [], IrType.I32, mainBuilder.blocks, None, []));
 		var entryBuilder = new IrBuilder(),
 			mainResult = entryBuilder.call("main", [], IrType.I32),
 			exited = entryBuilder.call("__exit", [mainResult], IrType.Void);
 		entryBuilder.returnValue(exited);
-		program.functions.push(new IrFunction("__entry", [], IrType.Void, entryBuilder.blocks, None));
+		program.functions.push(new IrFunction("__entry", [], IrType.Void, entryBuilder.blocks, None, []));
 		File.saveBytes(Sys.args()[0], HlWriter.encode(HlLower.lower(program)).flatten());
 	}
 }

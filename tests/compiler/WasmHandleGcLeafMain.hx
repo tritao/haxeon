@@ -20,19 +20,19 @@ class WasmHandleGcLeafMain {
 		var make = new IrBuilder(), victim = make.newObject("Victim");
 		make.currentBlock().instructions.push(new Located(GlobalSet("victim", victim), provenance));
 		make.returnValue(victim);
-		program.functions = [new IrFunction("main", [], I32, main.blocks, None), new IrFunction("make", [], Obj("Victim"), make.blocks, None)];
+		program.functions = [new IrFunction("main", [], I32, main.blocks, None, []), new IrFunction("make", [], Obj("Victim"), make.blocks, None, [])];
 		for (entry in [{name: "holdType", type: TypeRef}, {name: "holdCallback", type: Abstract("native_callback")}]) {
 			var hold = new IrBuilder(), handle = hold.argument("handle", entry.type), boxed = hold.toDyn(handle);
 			hold.currentBlock().instructions.push(new Located(GlobalSet("handle", boxed), provenance));
 			var none = hold.constNull(Obj("Victim"));
 			hold.currentBlock().instructions.push(new Located(GlobalSet("victim", none), provenance));
 			hold.returnValue(hold.constVoid());
-			program.functions.push(new IrFunction(entry.name, hold.arguments, Void, hold.blocks, None));
+			program.functions.push(new IrFunction(entry.name, hold.arguments, Void, hold.blocks, None, []));
 		}
 		var collect = new IrBuilder(), garbage = collect.newObject("Garbage");
 		collect.currentBlock().instructions.push(new Located(GlobalSet("garbage", garbage), provenance));
 		collect.returnValue(collect.constVoid());
-		program.functions.push(new IrFunction("collect", [], Void, collect.blocks, None));
+		program.functions.push(new IrFunction("collect", [], Void, collect.blocks, None, []));
 		var wasm = new WasmBackend().compile(program, {target: Wasm32, debugNames: true, wasmGcStress: true,
 			exports: ["make", "holdType", "holdCallback", "collect"]}).bytes,
 			directory = Sys.getEnv("TMPDIR");

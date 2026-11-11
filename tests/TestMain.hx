@@ -491,7 +491,7 @@ class TestMain {
 		builder.constInt(7);
 		var repeated = builder.constInt(7);
 		builder.returnValue(repeated);
-		ir.functions.push(new IrFunction("main", [], IrType.I32, builder.blocks, None));
+		ir.functions.push(new IrFunction("main", [], IrType.I32, builder.blocks, None, []));
 		var lowered = HlLower.lower(ir);
 		if (lowered.ints.length != 1 || lowered.ints[0] != 7)
 			throw "IR lowering did not deduplicate integer constants";
@@ -766,7 +766,7 @@ class TestMain {
 			else
 				postdomBuilder.jump(postdomBlocks[index + 1]);
 		}
-		var postdom = new WasmCfgAnalysis(new IrFunction("postdom-chain", [], IrType.I32, postdomBuilder.blocks, None));
+		var postdom = new WasmCfgAnalysis(new IrFunction("postdom-chain", [], IrType.I32, postdomBuilder.blocks, None, []));
 		for (index in 0...postdomBlocks.length - 1)
 			if (postdom.postImmediate.get(index) != index + 1)
 				throw 'Post-dominator chain failed across bitset word boundary at block $index';
@@ -799,7 +799,7 @@ class TestMain {
 		mismatchedIteratorBlock.instructions.push(located(compiler.ir.Ir.IrInstruction.IteratorNext(wrongIteratorElement, mismatchedIterator)));
 		mismatchedIteratorBlock.terminator = located(compiler.ir.Ir.IrTerminator.Return(wrongIteratorElement));
 		var mismatchedIteratorProgram = new IrProgram("main");
-		mismatchedIteratorProgram.functions.push(new IrFunction("main", [mismatchedIterator], Bytes, [mismatchedIteratorBlock], None));
+		mismatchedIteratorProgram.functions.push(new IrFunction("main", [mismatchedIterator], Bytes, [mismatchedIteratorBlock], None, []));
 		expectIrError(mismatchedIteratorProgram, "IR verification failed for main: IR value 1 has the wrong type");
 		Sys.println("PASS: IR verifier rejects iterator element type mismatches");
 		var persistedType = Function([

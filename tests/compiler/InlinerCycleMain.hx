@@ -15,14 +15,14 @@ class InlinerCycleMain {
 		value = b.add(value, b.constInt(1));
 		value = b.call(other, [value], I32);
 		b.returnValue(value);
-		return new IrFunction(name, b.arguments, I32, b.blocks, None);
+		return new IrFunction(name, b.arguments, I32, b.blocks, None, []);
 	}
 
 	static function leaf():IrFunction {
 		var b = new IrBuilder(), value = b.argument("value", I32);
 		value = b.add(value, b.constInt(1));
 		b.returnValue(value);
-		return new IrFunction("leaf", b.arguments, I32, b.blocks, None);
+		return new IrFunction("leaf", b.arguments, I32, b.blocks, None, []);
 	}
 
 	static function program():IrProgram {
@@ -34,7 +34,7 @@ class InlinerCycleMain {
 		value = b.call("leaf", [value], I32);
 		value = b.call("pong", [value], I32);
 		b.returnValue(value);
-		p.functions.push(new IrFunction("outer", b.arguments, I32, b.blocks, None));
+		p.functions.push(new IrFunction("outer", b.arguments, I32, b.blocks, None, []));
 		return p;
 	}
 

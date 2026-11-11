@@ -291,7 +291,7 @@ function main():Int return stay(1);
 		expect(warmCache.positionalFingerprint(first, "") == firstPrint, "the compile's copy of the cache remembers the fingerprint");
 		expect(warmCache.positionalFingerprint(first, "native") != firstPrint, "a different set of C natives takes the fingerprint again");
 		block.instructions.reverse();
-		var renamed = new IrFunction(first.name, second.arguments, second.result, second.blocks, None, second.debugBindings);
+		var renamed = new IrFunction(first.name, second.arguments, second.result, second.blocks, None, [], second.debugBindings);
 		expect(warmCache.positionalFingerprint(renamed, "native") == IrFunctionStateCodec.codeFingerprint(second),
 			"a new function under the same name gets its own fingerprint");
 		// A virtual call resolves when the receiver's class and all its subclasses share one implementation.

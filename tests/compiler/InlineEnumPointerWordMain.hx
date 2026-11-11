@@ -31,14 +31,14 @@ class InlineEnumPointerWordMain {
   }
   var bad=b.createBlock();for(value in checks){var next=b.createBlock();b.branch(value,next,bad);b.select(next);}b.returnValue(b.constInt(42));b.select(bad);b.returnValue(b.constInt(1));
   var p=new IrProgram("main");p.objects=[{name:"Owner",isValue:false,base:null,interfaces:[],methods:[],fields:[]},{name:"Words",isValue:true,base:null,interfaces:[],methods:[],fields:[for(i in 0...4){name:"scalar"+i,type:word}]}];
-  p.functions=[new IrFunction("main",b.arguments,I32,b.blocks, None)];p.natives=IrInlineEnumWordAccess.natives();
+  p.functions=[new IrFunction("main",b.arguments,I32,b.blocks, None, [])];p.natives=IrInlineEnumWordAccess.natives();
   var table=compiler.ir.IrObjectTable.of([for(o in p.objects)o.name=>o]);p.functions=[for(fn in p.functions)compiler.ir.IrScalarReplacement.rewrite(fn,table,false)];
   var entry=new IrBuilder(),warm=entry.call("main",[],I32),captures:Array<String>=[];
   if(target==HashLink) {
    p.natives=p.natives.concat([{name:"start",library:"std",symbol:"gc_census_start",arguments:[I32],result:Void},{name:"stop",library:"std",symbol:"gc_census_stop",arguments:[],result:Void},{name:"reset",library:"std",symbol:"gc_census_reset",arguments:[],result:Void},{name:"dump",library:"haxeon_runtime",symbol:"__gc_census_dump",arguments:[Bytes],result:Void}]);
    for(n in [8,1024]){var path=tempRoot()+"/"+uniqueStem+"pointer-words-"+n+".json";captures.push(path);entry.call("reset",[],Void);entry.call("start",[entry.constInt(0)],Void);for(_ in 0...n)entry.call("main",[],I32);entry.call("stop",[],Void);entry.call("dump",[entry.constString(path)],Void);}
   }
-  p.natives.push({name:"__exit",library:"std",symbol:"sys_exit",arguments:[I32],result:Void});entry.call("__exit",[warm],Void);entry.returnValue(entry.constVoid());p.functions.push(new IrFunction("entry",entry.arguments,Void,entry.blocks, None));p.entryPoint=target==HashLink?"entry":"main";
+  p.natives.push({name:"__exit",library:"std",symbol:"sys_exit",arguments:[I32],result:Void});entry.call("__exit",[warm],Void);entry.returnValue(entry.constVoid());p.functions.push(new IrFunction("entry",entry.arguments,Void,entry.blocks, None, []));p.entryPoint=target==HashLink?"entry":"main";
   compiler.ir.IrVerifier.verify(p);
   var bytes=target==HashLink?new compiler.backend.hl.HlBackend().compile(p,{target:target,debugNames:true}).bytes:new compiler.backend.wasm.WasmBackend().compile(p,{target:target,debugNames:true,wasmGcAllocationCount:target==WasmGc,wasmMemoryStats:target==Wasm32}).bytes;
   var path=tempRoot()+"/"+uniqueStem+"pointer-words-"+Std.string(target)+(target==HashLink?".hl":".wasm");sys.io.File.saveBytes(path,bytes);

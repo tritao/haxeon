@@ -90,7 +90,7 @@ class IrScalarReplacement {
 						hasHandlers = true;
 					default:
 				}
-		var graph = new IrGraph(new IrFunction("scalar-replacement", [], Void, blocks, None));
+		var graph = new IrGraph(new IrFunction("scalar-replacement", [], Void, blocks, None, []));
 		var frontier = dominanceFrontiers(graph),
 			children = dominatorChildren(graph);
 		for (found in candidates) {

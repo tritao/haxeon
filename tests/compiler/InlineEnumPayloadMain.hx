@@ -52,13 +52,13 @@ class InlineEnumPayloadMain {
    for(index in 0...mixed.references)checks.push(b.equal(compiler.ir.IrInlineEnumReferenceAccess.read(b,wide,index,Obj("Source")),b.constNull(Obj("Source"))));
   }
   var bad=b.createBlock();for(check in checks){var next=b.createBlock();b.branch(check,next,bad);b.select(next);}b.returnValue(b.constInt(42));b.select(bad);b.returnValue(b.constInt(1));
-  var p=new IrProgram("main");p.objects=objects;p.functions=[new IrFunction("main",b.arguments,I32,b.blocks, None)];p.natives=compiler.ir.IrInlineEnumWordAccess.natives();
+  var p=new IrProgram("main");p.objects=objects;p.functions=[new IrFunction("main",b.arguments,I32,b.blocks, None, [])];p.natives=compiler.ir.IrInlineEnumWordAccess.natives();
   var relay=new IrBuilder(),input=relay.argument("value",Obj(mixed.valueObject.name)),output=relay.newObject(mixed.valueObject.name);
   for(field in mixed.valueObject.fields)relay.fieldSet(output,field.name,relay.fieldGet(input,field.name,field.type));
-  relay.returnValue(output);p.functions.push(new IrFunction(compiler.ir.IrInlineEnumCaseAccess.HELPER_PREFIX+"relay",relay.arguments,Obj(mixed.valueObject.name),relay.blocks, compiler.Provides.Serves(compiler.ir.TypeKey.of(Obj(mixed.valueObject.name)), compiler.Provides.ProviderOperation.detailed(compiler.Provides.ProviderOperation.InlineEnumHelper, "relay"))));
+  relay.returnValue(output);p.functions.push(new IrFunction(compiler.ir.IrInlineEnumCaseAccess.HELPER_PREFIX+"relay",relay.arguments,Obj(mixed.valueObject.name),relay.blocks, compiler.Provides.Serves(compiler.ir.TypeKey.of(Obj(mixed.valueObject.name)), compiler.Provides.ProviderOperation.detailed(compiler.Provides.ProviderOperation.InlineEnumHelper, "relay")), []));
   var forward=new IrBuilder(),input=forward.argument("value",Obj(mixed.valueObject.name));
   forward.returnValue(forward.call(compiler.ir.IrInlineEnumCaseAccess.HELPER_PREFIX+"relay",[input],Obj(mixed.valueObject.name)));
-  p.functions.push(new IrFunction(compiler.ir.IrInlineEnumCaseAccess.HELPER_PREFIX+"forward",forward.arguments,Obj(mixed.valueObject.name),forward.blocks, compiler.Provides.Serves(compiler.ir.TypeKey.of(Obj(mixed.valueObject.name)), compiler.Provides.ProviderOperation.detailed(compiler.Provides.ProviderOperation.InlineEnumHelper, "forward"))));
+  p.functions.push(new IrFunction(compiler.ir.IrInlineEnumCaseAccess.HELPER_PREFIX+"forward",forward.arguments,Obj(mixed.valueObject.name),forward.blocks, compiler.Provides.Serves(compiler.ir.TypeKey.of(Obj(mixed.valueObject.name)), compiler.Provides.ProviderOperation.detailed(compiler.Provides.ProviderOperation.InlineEnumHelper, "forward")), []));
   compiler.ir.IrVerifier.verify(p);
   // Raw host pointers are intentionally not interpreted in target-independent IR.
   p.functions=new compiler.ir.IrOptionalScalarFlow(p.objects).rewrite(p.objects,p.functions);
@@ -84,7 +84,7 @@ class InlineEnumPayloadMain {
     entry.call("censusStop",[],Void);entry.call("censusDump",[entry.constString(path)],Void);
    }
   }
-  entry.call("__exit",[result],Void);entry.returnValue(entry.constVoid());p.functions.push(new IrFunction("entry",entry.arguments,Void,entry.blocks, None));
+  entry.call("__exit",[result],Void);entry.returnValue(entry.constVoid());p.functions.push(new IrFunction("entry",entry.arguments,Void,entry.blocks, None, []));
   p.natives.push({name:"__exit",library:"std",symbol:"sys_exit",arguments:[I32],result:Void});
   p.entryPoint=target==HashLink?"entry":"main";
   var backendTarget:compiler.backend.Backend.BackendTarget=target==HashLink?HashLink:target==Wasm32?Wasm32:WasmGc;

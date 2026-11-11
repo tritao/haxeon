@@ -98,6 +98,9 @@ enum TypedExpressionKind {
 		value:TypedExpression);
 	TRange(start:TypedExpression, end:TypedExpression);
 	TCall(name:String, arguments:Array<TypedExpression>);
+
+	/** A call to a helper the IR does not have yet: a pass makes it from the request, which names the helper's subject and operation. */
+	TRequestCall(arguments:Array<TypedExpression>, request:compiler.Provides.HelperRequest<CompilerType>);
 	TCNativeCall(name:String, arguments:Array<TypedExpression>);
 	TCollectionCall(receiver:TypedExpression, operation:String, arguments:Array<TypedExpression>);
 	TClosureCall(callee:TypedExpression, arguments:Array<TypedExpression>);

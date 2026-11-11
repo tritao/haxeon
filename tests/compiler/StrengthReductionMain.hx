@@ -17,7 +17,7 @@ class StrengthReductionMain {
 			constant = builder.constFloat(divisor);
 		var result = leftConstant ? builder.div(constant, x) : builder.div(x, constant);
 		builder.returnValue(result);
-		return new IrFunction("test", builder.arguments, F64, builder.blocks, None);
+		return new IrFunction("test", builder.arguments, F64, builder.blocks, None, []);
 	}
 
 	static function operations(fn:IrFunction):{divides:Int, multiplies:Int, reciprocal:Null<Float>} {

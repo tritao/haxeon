@@ -31,7 +31,7 @@ class ValueCopy {
 	/** Results of these are new, unshared instances. */
 	static function isFresh(value:TypedExpression):Bool
 		return switch value.expression {
-			case TNew(_, _, _), TCall(_, _), TCNativeCall(_, _), TMethodCall(_, _, _), TClosureCall(_, _), TSuperCall(_, _), TObjectLiteral(_, _, _),
+			case TNew(_, _, _), TCall(_, _), TRequestCall(_, _), TCNativeCall(_, _), TMethodCall(_, _, _), TClosureCall(_, _), TSuperCall(_, _), TObjectLiteral(_, _, _),
 				TArrayPop(_), TCopy(_, _): true;
 			default: false;
 		};

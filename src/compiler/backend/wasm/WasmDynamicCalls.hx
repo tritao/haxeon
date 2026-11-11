@@ -124,7 +124,7 @@ class WasmDynamicCalls {
 				capture = b.argument("capture", Obj(CAPTURE)),
 				args = b.argument("arguments", Array(Dyn));
 			b.returnValue(b.callClosure(b.fieldGet(capture, "callback", callbackType()), [args], Dyn));
-			result.functions.push(new IrFunction(VARARGS_TARGET, b.arguments, Dyn, b.blocks, None));
+			result.functions.push(new IrFunction(VARARGS_TARGET, b.arguments, Dyn, b.blocks, None, []));
 			if (!Lambda.exists(result.natives, n -> n.name == "__array_alloc_ref"))
 				result.natives.push({
 					name: "__array_alloc_ref",
@@ -206,7 +206,7 @@ class WasmDynamicCalls {
 		}
 		var called = b.call(VARARGS_CALL, [original, array], Dyn);
 		b.returnValue((switch (result) { case Void: true; default: false; }) ? b.constVoid() : (switch (result) { case Dyn: true; default: false; }) ? called : fromDynamic(called, result));
-		return new IrFunction(name, b.arguments, result, b.blocks, None, null, false, Keep);
+		return new IrFunction(name, b.arguments, result, b.blocks, None, [], null, false, Keep);
 	}
 
 	static function callHelper(name:String, type:IrType, dynamicCall:Bool, isFunction:String):IrFunction {
@@ -235,6 +235,6 @@ class WasmDynamicCalls {
 			b.select(callable);
 		}
 		b.returnValue(b.callClosure(dynamicCall ? b.safeCast(closure, type) : closure, args, result));
-		return new IrFunction(name, b.arguments, result, b.blocks, None);
+		return new IrFunction(name, b.arguments, result, b.blocks, None, []);
 	}
 }

@@ -413,7 +413,7 @@ class IrScalarArguments {
 			}
 			blocks.push(copy);
 		}
-		return new IrFunction(PREFIX + (preserveReceiver ? "$receiver:" : "") + fn.name, args, returnSlots.length > 0 ? Void : fn.result, blocks, None, fn.debugBindings, fn.inlineHint);
+		return new IrFunction(PREFIX + (preserveReceiver ? "$receiver:" : "") + fn.name, args, returnSlots.length > 0 ? Void : fn.result, blocks, None, [], fn.debugBindings, fn.inlineHint);
 	}
 
 	static function rewriteCalls(fn:IrFunction, byName:Map<String, IrFunction>, candidates:Map<String, IrFunction>, pinnedCandidates:Map<String, IrFunction>, objects:Map<String, IrObject>,

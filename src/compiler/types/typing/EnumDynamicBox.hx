@@ -60,13 +60,13 @@ class EnumDynamicBox {
 		if (DeclaredConformance.has(session, type, "Equatable"))
 			EnumEqualityGenerator.request(session, type, session.currentContext.name, span);
 		var runtimeName = EnumRuntimeType.name(type), encoded = haxe.crypto.Base64.encode(haxe.io.Bytes.ofString(runtimeName));
-		return new TypedExpression(TCall(VIEW_PREFIX + suffix(type) + ":" + encoded, [array]), array.type, span);
+		return new TypedExpression(TRequestCall([array], {name: VIEW_PREFIX + suffix(type) + ":" + encoded, type: type, operation: compiler.Provides.ProviderOperation.ViewDynamic}), array.type, span);
 	}
 
 	public static function box(session:TypingSession, value:TypedExpression, type:CompilerType, span:SourceSpan):TypedExpression {
 		EnumEqualityGenerator.requestReflective(session, type, session.currentContext.name, span);
 		if (DeclaredConformance.has(session, type, "Equatable"))
 			EnumEqualityGenerator.request(session, type, session.currentContext.name, span);
-		return new TypedExpression(TCall(boxName(type), [value]), TDynamic, span);
+		return new TypedExpression(TRequestCall([value], {name: boxName(type), type: type, operation: compiler.Provides.ProviderOperation.BoxDynamic}), TDynamic, span);
 	}
 }
