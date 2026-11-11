@@ -442,6 +442,21 @@ class IrInlineEnumEligibility {
 		var unsupported:Map<String, Bool> = [], visited:Map<String, Bool> = [], mapContents:Map<String, Array<IrType>> = [],
 			closureEnvironments:Map<String, Array<IrType>> = [], interfaceImplementers:Map<String, Array<IrObject>> = [],
 			interfaceClosures:Map<String, Map<String, Bool>> = [], objectClosures:Map<String, Map<String, Bool>> = [], implementersBuilt = false;
+		// The static fields whose name begins with "<owner>.", for every owner, in program order: one pass here instead of a prefix test of
+		// every static field (and the string it builds) for every object walked.
+		var staticFieldsOf:Map<String, Array<IrStaticField>> = [];
+		for (field in staticFields) {
+			var dot = field.name.indexOf(".");
+			while (dot >= 0) {
+				var owner = field.name.substr(0, dot), owned = staticFieldsOf.get(owner);
+				if (owned == null) {
+					owned = [];
+					staticFieldsOf.set(owner, owned);
+				}
+				owned.push(field);
+				dot = field.name.indexOf(".", dot + 1);
+			}
+		}
 		function interfaceClosure(name:String, path:Array<String>):Map<String, Bool> {
 			var existing = interfaceClosures.get(name);
 			if (existing != null) return existing;
@@ -546,10 +561,12 @@ class IrInlineEnumEligibility {
 				inspect(field.type, true);
 				walkReferences(field.type);
 			}
-			for (field in staticFields) if (StringTools.startsWith(field.name, current.name + ".")) {
-				inspect(field.type, true);
-				walkReferences(field.type);
-			}
+			var owned = staticFieldsOf.get(current.name);
+			if (owned != null)
+				for (field in owned) {
+					inspect(field.type, true);
+					walkReferences(field.type);
+				}
 			for (method in current.methods) {
 				var fn = functions.get(method.functionName);
 				if (fn != null) inspect(Function([for (argument in fn.arguments) argument.type], fn.result), false);
