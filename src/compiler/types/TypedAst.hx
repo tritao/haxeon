@@ -101,6 +101,7 @@ enum TypedExpressionKind {
 
 	/** A call to a helper the IR does not have yet: a pass makes it from the request, which names the helper's subject and operation. */
 	TCNativeCall(name:String, arguments:Array<TypedExpression>);
+
 	TCollectionCall(receiver:TypedExpression, operation:String, arguments:Array<TypedExpression>);
 	TClosureCall(callee:TypedExpression, arguments:Array<TypedExpression>);
 	TToInterface(value:TypedExpression, name:String);
@@ -345,7 +346,6 @@ typedef TypedFunction = {
 
 	/** Declared `@:expose`: kept and exported to the host where the target has one. */
 	final ?isExposed:Bool;
-
 
 	final arguments:Array<{name:String, type:CompilerType}>;
 	final result:CompilerType;

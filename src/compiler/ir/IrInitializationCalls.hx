@@ -11,6 +11,7 @@ class IrInitializationCalls {
 
 	/** The same objects as a list, for the walk over all of them. */
 	final objectList:Array<IrObject>;
+
 	final resolvedMethods:Map<String, Array<String>> = [];
 	final globals:Map<String, Array<String>> = [];
 	final returns:Map<String, Array<String>> = [];

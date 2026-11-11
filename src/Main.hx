@@ -14,7 +14,9 @@ class Main {
 		// `--warm-edit` builds the program, edits it twice in the same session and rebuilds, and checks each rebuild against a fresh
 		// compiler's build of the edited source; the output is the last rebuild. It implies a plain build, the only kind that reuses.
 		var warmEdit = arguments.indexOf("--warm-edit") >= 0;
-		arguments = [for (argument in arguments) if (argument != "--plain" && argument != "--warm-edit") argument];
+		arguments = [
+			for (argument in arguments) if (argument != "--plain" && argument != "--warm-edit") argument
+		];
 		var sourcePath = arguments.length > 0 ? arguments[0] : "tests/programs/add.hx";
 		var outputPath = arguments.length > 1 ? arguments[1] : "out/program.hl";
 		var directory = Path.directory(sourcePath);
@@ -46,14 +48,16 @@ class Main {
 	 * with HAXEON_CHECK_REUSE=1 the compiler also compares what it reused with what it would have built, and throws on a difference.
 	 */
 	static function warmEditBuild(sourcePath:String, outputPath:String, directory:String, module:String):Void {
-		var original = File.getContent(sourcePath), compiler = newCompiler(true, directory);
+		var original = File.getContent(sourcePath),
+			compiler = newCompiler(true, directory);
 		compiler.update(sourcePath, original, module);
 		compiler.compile(module);
 		var unused = "\nfunction __warmEditUnused():Int return 1;\n";
 		var last:Null<haxe.io.Bytes> = null;
 		// The third edit lands inside the file, after the last top-level closing brace before the middle of the file, so the declarations before it keep their ranges and the ones
 		// after it move: both kinds of function must come out as a fresh build has them.
-		var kept = "@:keep function __warmEditKept():Int return 424242;\n", cut = original.lastIndexOf("\n}\n", Std.int(original.length / 2));
+		var kept = "@:keep function __warmEditKept():Int return 424242;\n",
+			cut = original.lastIndexOf("\n}\n", Std.int(original.length / 2));
 		var inside = cut < 0 ? original + unused + kept : original.substr(0, cut + 3) + unused + kept + original.substr(cut + 3);
 		var edits = [original + unused, original + unused + kept, inside];
 		for (editIndex in 0...edits.length) {

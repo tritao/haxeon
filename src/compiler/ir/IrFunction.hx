@@ -70,12 +70,14 @@ enum IrFunctionKind {
 
 	/** A copy of a function for the scalar call ABI, an optional-scalar copy (of the named function), or a nullable-scalar one. */
 	ScalarArguments;
+
 	OptionalScalar(original:Null<String>);
 	NullableScalarArguments;
 	WasmClosureRestore;
 
 	/** Compiler-declared semantic signatures of closure boundary functions. */
 	ClosureAdapter(source:IrType, target:IrType);
+
 	ClosureCast(target:IrType);
 	ClosureVarargs(target:IrType);
 }
@@ -96,8 +98,7 @@ class IrFunction {
 	/** What this function is; required, so a function made without saying what it is does not compile. */
 	public final kind:IrFunctionKind;
 
-	public function new(name, arguments, result, blocks, kind:IrFunctionKind, ?debugBindings, inlineHint = false,
-			retention:IrRetention = Reachable) {
+	public function new(name, arguments, result, blocks, kind:IrFunctionKind, ?debugBindings, inlineHint = false, retention:IrRetention = Reachable) {
 		this.name = name;
 		this.arguments = arguments;
 		this.result = result;
@@ -116,7 +117,8 @@ class IrFunction {
 			case Provider(subject, operation): Serves(subject, operation);
 			case ValueArraySlot(_, element, _): Serves(TypeKey.of(element), ProviderOperations.detailed(ProviderOperation.ValueArraySlot, name));
 			// Two source enums can lower to one IR type, each with its own helper, so the helper's name (a function of the source type) is the detail.
-			case EnumEquality(reflective): arguments.length == 2 ? Serves(TypeKey.of(arguments[0].type), ProviderOperations.detailed(reflective ? ProviderOperation.ReflectEquals : ProviderOperation.Equals, name)) : None;
+			case EnumEquality(reflective): arguments.length == 2 ? Serves(TypeKey.of(arguments[0].type),
+					ProviderOperations.detailed(reflective ? ProviderOperation.ReflectEquals : ProviderOperation.Equals, name)) : None;
 			case EnumDynamicUnbox(type): Serves(TypeKey.of(type), ProviderOperation.DynamicUnbox);
 			case EnumTagAdapter(type, box): Serves(TypeKey.of(type), box ? ProviderOperation.EnumTagBox : ProviderOperation.EnumTagUnbox);
 			default: None;
@@ -129,8 +131,9 @@ class IrFunction {
 	 */
 	public function withBlocks(blocks:Array<IrBlock>, ?bindings:Array<IrDebugBinding>, ?arguments:Array<IrValue>, ?result:IrType, ?name:String,
 			?kind:IrFunctionKind):IrFunction {
-		if (blocks.length == 0 && this.blocks.length > 0) throw 'DEBUG empty withBlocks on ';
-		return new IrFunction(name == null ? this.name : name, arguments == null ? this.arguments : arguments, result == null ? this.result : result,
-			blocks, kind == null ? this.kind : kind, bindings == null ? debugBindings : bindings, inlineHint, retention);
+		if (blocks.length == 0 && this.blocks.length > 0)
+			throw 'DEBUG empty withBlocks on ';
+		return new IrFunction(name == null ? this.name : name, arguments == null ? this.arguments : arguments, result == null ? this.result : result, blocks,
+			kind == null ? this.kind : kind, bindings == null ? debugBindings : bindings, inlineHint, retention);
 	}
 }

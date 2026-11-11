@@ -939,7 +939,9 @@ class SemanticAssembly {
 			add("", sourceName, declarationName);
 			var dot = sourceName.indexOf(".");
 			while (dot >= 0) {
-				if (declarationName.length > dot && declarationName.charCodeAt(dot) == ".".code && StringTools.startsWith(declarationName, sourceName.substr(0, dot)))
+				if (declarationName.length > dot
+					&& declarationName.charCodeAt(dot) == ".".code
+					&& StringTools.startsWith(declarationName, sourceName.substr(0, dot)))
 					add(sourceName.substr(0, dot), sourceName, declarationName);
 				dot = sourceName.indexOf(".", dot + 1);
 			}

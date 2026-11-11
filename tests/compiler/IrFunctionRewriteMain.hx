@@ -21,7 +21,9 @@ class IrFunctionRewriteMain {
 
 	static function main():Void {
 		var b = new IrBuilder(), first = b.currentBlock();
-		var one = b.constInt(1), second = b.createBlock(), third = b.createBlock();
+		var one = b.constInt(1),
+			second = b.createBlock(),
+			third = b.createBlock();
 		b.jump(second);
 		b.select(second);
 		var two = b.constInt(2);
@@ -45,8 +47,14 @@ class IrFunctionRewriteMain {
 		expect(changed.blocks.length == fn.blocks.length, "the blocks keep their number");
 		expect(changed.blocks[0] == fn.blocks[0] && changed.blocks[2] == fn.blocks[2], "blocks without a change are shared");
 		expect(changed.blocks[1] != fn.blocks[1], "the changed block is copied");
-		expect(switch changed.blocks[1].instructions[0].value { case ConstInt(_, 3): true; default: false; }, "the instruction is replaced");
-		expect(switch fn.blocks[1].instructions[0].value { case ConstInt(_, 2): true; default: false; }, "the original function is untouched");
+		expect(switch changed.blocks[1].instructions[0].value {
+			case ConstInt(_, 3): true;
+			default: false;
+		}, "the instruction is replaced");
+		expect(switch fn.blocks[1].instructions[0].value {
+			case ConstInt(_, 2): true;
+			default: false;
+		}, "the original function is untouched");
 		expect(changed.blocks[1].terminator == fn.blocks[1].terminator, "the copied block keeps its terminator");
 		Sys.println("PASS: copy-on-write instruction rewriting");
 	}

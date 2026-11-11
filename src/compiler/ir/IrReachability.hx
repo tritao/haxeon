@@ -29,7 +29,8 @@ class IrReachability {
 	 * the core runtime ABI; keep the expansion centralized so the linear and GC backends cannot drift apart. The walk continues
 	 * from what it has reached whenever a new root appears, so it visits every function once.
 	 */
-	public static function withGeneratedRuntimeRoots(program:IrProgram, entry:String, ?additionalRoots:Array<String>, keepLiveClasses = false):Map<String, Bool> {
+	public static function withGeneratedRuntimeRoots(program:IrProgram, entry:String, ?additionalRoots:Array<String>,
+			keepLiveClasses = false):Map<String, Bool> {
 		var walk = new IrReachabilityWalk(program, keepLiveClasses);
 		walk.visit(entry);
 		if (additionalRoots != null)
@@ -154,7 +155,10 @@ class IrReachabilityWalk {
 						case InstanceClosure(_, target, _):
 							pending.push(target);
 						// Dynamic iterators read through the Array<Dynamic> element reader.
-						case IteratorNext(output, _) if ((switch (output.type) { case Dyn: true; default: false; })):
+						case IteratorNext(output, _) if ((switch (output.type) {
+							case Dyn: true;
+							default: false;
+						})):
 							used.set("__array_get_any", true);
 						// With live classes a method call needs no edge: whatever it can reach belongs to a class with an instance, and that class
 						// is mentioned by the function that makes the instance, so it keeps all its methods.
@@ -216,7 +220,10 @@ class IrReachabilityWalk {
 					case StaticClosure(_, name):
 						into.set(name, true);
 					// Dynamic iterators read through the Array<Dynamic> element reader.
-					case IteratorNext(output, _) if ((switch (output.type) { case Dyn: true; default: false; })):
+					case IteratorNext(output, _) if ((switch (output.type) {
+						case Dyn: true;
+						default: false;
+					})):
 						into.set("__array_get_any", true);
 					default:
 				}

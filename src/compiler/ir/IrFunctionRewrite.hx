@@ -18,7 +18,9 @@ class IrFunctionRewrite {
 	public static function instructions(fn:IrFunction, replace:Located<IrInstruction>->Null<Array<Located<IrInstruction>>>):IrFunction {
 		var blocks:Null<Array<IrBlock>> = null;
 		for (blockIndex in 0...fn.blocks.length) {
-			var block = fn.blocks[blockIndex], list = block.instructions, rewritten:Null<Array<Located<IrInstruction>>> = null;
+			var block = fn.blocks[blockIndex],
+				list = block.instructions,
+				rewritten:Null<Array<Located<IrInstruction>>> = null;
 			for (index in 0...list.length) {
 				var located = list[index], replacement = replace(located);
 				if (replacement != null) {

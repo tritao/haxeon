@@ -43,7 +43,8 @@ class ModuleCanonicalizerMain {
 		expect(assigned("Cache.hits", locals, imports) == "lib.Cache.hits", "an imported class in an assignment target should be qualified");
 		expect(assigned("hits", locals, imports) == "hits", "a bare assignment target is never an import");
 		expect(assigned("owner.hits", locals, imports) == "owner.hits", "a receiver that is not an import is left alone");
-		expect(assigned("Cache.hits", LocalScope.ofNames(["Cache" => true]), imports) == "Cache.hits", "a name declared in the module shadows an import in an assignment target");
+		expect(assigned("Cache.hits", LocalScope.ofNames(["Cache" => true]), imports) == "Cache.hits",
+			"a name declared in the module shadows an import in an assignment target");
 		expect(assigned("Cache.hits", locals, null) == "Cache.hits", "without imports an assignment target is unchanged");
 
 		// A table layers shared maps under the names it sets itself, in the order they were attached, without changing them.

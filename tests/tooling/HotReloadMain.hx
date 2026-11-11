@@ -452,7 +452,12 @@ class HotReloadMain {
 		var survivor = new Compiler();
 		survivor.update("Main.hx", "function main():Int { return 42; }");
 		var survivorResult = survivor.compile("Main");
-		var tmp = Sys.getEnv("TMPDIR"), directory = (tmp == null || tmp == "" ? "/tmp" : tmp) + "/haxeon-jit-support-lifetime-" + Std.int(Sys.time() * 1000) + "-" + Std.random(1000000);
+		var tmp = Sys.getEnv("TMPDIR"),
+			directory = (tmp == null || tmp == "" ? "/tmp" : tmp)
+				+ "/haxeon-jit-support-lifetime-"
+				+ Std.int(Sys.time() * 1000)
+				+ "-"
+				+ Std.random(1000000);
 		FileSystem.createDirectory(directory);
 		var prefix = directory + "/jit-support-lifetime";
 		File.saveBytes(prefix + "-owner.hl", HlWriter.encode(ownerResult.module).flatten());
@@ -555,7 +560,7 @@ class HotReloadMain {
 		var unused = "class Spare { public function new() {} public function read():Int { return 40; } public function more():Int { return 2; } } "
 			+ "function main():Int { return 42; }",
 			used = "class Spare { public function new() {} public function read():Int { return 40; } public function more():Int { return 2; } } "
-			+ "function main():Int { var s = new Spare(); return s.read() + s.more(); }";
+				+ "function main():Int { var s = new Spare(); return s.read() + s.more(); }";
 		var compiler = new Compiler();
 		compiler.update("Main.hx", unused);
 		var first = compiler.compile("Main");

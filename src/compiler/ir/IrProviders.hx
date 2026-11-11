@@ -79,7 +79,10 @@ class IrProviders {
 						return 'functions "$earlier" and "${fn.name}" both serve "$operation" for "$type"';
 					seen.set(key, fn.name);
 				case None:
-					if (StringTools.startsWith(fn.name, "$") && (switch fn.kind { case Ordinary: true; default: false; }))
+					if (StringTools.startsWith(fn.name, "$") && (switch fn.kind {
+						case Ordinary: true;
+						default: false;
+					}))
 						return 'function "${fn.name}" is named like a generated helper but does not say what it is';
 			}
 		return null;

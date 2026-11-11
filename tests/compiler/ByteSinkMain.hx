@@ -8,7 +8,9 @@ class ByteSinkMain {
 	static function main():Void {
 		var sink = new ByteSink(), plain = new BytesOutput();
 		plain.bigEndian = false;
-		var large = Bytes.alloc(100000), medium = Bytes.alloc(5000), small = Bytes.alloc(100);
+		var large = Bytes.alloc(100000),
+			medium = Bytes.alloc(5000),
+			small = Bytes.alloc(100);
 		for (index in 0...large.length)
 			large.set(index, index * 7 & 0xFF);
 		for (index in 0...medium.length)

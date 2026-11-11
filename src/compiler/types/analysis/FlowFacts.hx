@@ -14,12 +14,16 @@ class FlowFacts {
 	final invalidatedPrefixes:Array<String> = [];
 	final invalidatedNamespaces:Array<String> = [];
 	final erasedNamespaces:Array<String> = [];
+
 	/** The namespace of facts about expression paths. */
 	static inline final EXPRESSION_PREFIX = "$expression:";
 
 	/** Whether `bindingId` is `prefix` or a path below it (`prefix.`...), without making `prefix + "."`. */
 	static function isUnder(bindingId:String, prefix:String):Bool
-		return bindingId == prefix || (bindingId.length > prefix.length && bindingId.charCodeAt(prefix.length) == 46 && StringTools.startsWith(bindingId, prefix));
+		return bindingId == prefix
+			|| (bindingId.length > prefix.length
+				&& bindingId.charCodeAt(prefix.length) == 46
+				&& StringTools.startsWith(bindingId, prefix));
 
 	final erasedMentions:Array<String> = [];
 	final invalidatedFields:Array<String> = [];

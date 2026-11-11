@@ -164,9 +164,7 @@ class DebugMetadataMain {
 			for (section in result.module.debugSections)
 				if (section.kind == HlWriter.SOURCE_SNAPSHOTS) section
 		];
-		if (sections.length != 1
-			|| sections[0].version != 1
-			|| !sections[0].payload.equals(HlWriter.encodeSourceSnapshots(snapshots)))
+		if (sections.length != 1 || sections[0].version != 1 || !sections[0].payload.equals(HlWriter.encodeSourceSnapshots(snapshots)))
 			throw "Compiler did not emit the canonical source snapshot section";
 		if (HlWriter.encode(result.module).flatten().compare(HlWriter.encode(result.module).flatten()) != 0)
 			throw "HLB source snapshot encoding is not deterministic";

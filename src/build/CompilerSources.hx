@@ -11,7 +11,8 @@ import sys.FileSystem;
 class CompilerSources {
 	/** `source` (a `src` directory) followed by the portable package next to it, when there is one. */
 	public static function roots(source:String):Array<String> {
-		var result = [source], library = Path.join([Path.directory(Path.removeTrailingSlashes(source)), "lib", "haxeon-io"]);
+		var result = [source],
+			library = Path.join([Path.directory(Path.removeTrailingSlashes(source)), "lib", "haxeon-io"]);
 		if (FileSystem.exists(library))
 			result.push(library);
 		return result;

@@ -32,15 +32,15 @@ class HlScalarValueLocals {
 				for (inputIndex in 0...IrOperands.count(located.value)) {
 					var input = IrOperands.at(located.value, inputIndex);
 					if (roots.exists(input.id)) {
-							var allowed = switch located.value {
-								case FieldGet(_, owner, field) if (owner.id == input.id): hasField(objects.object(roots.get(input.id)), field);
-								case FieldSet(owner, field,
-									value) if (owner.id == input.id && value.id != input.id): hasField(objects.object(roots.get(input.id)), field);
-								default: false;
-							};
-							if (!allowed)
-								valid.set(input.id, false);
-						}
+						var allowed = switch located.value {
+							case FieldGet(_, owner, field) if (owner.id == input.id): hasField(objects.object(roots.get(input.id)), field);
+							case FieldSet(owner, field,
+								value) if (owner.id == input.id && value.id != input.id): hasField(objects.object(roots.get(input.id)), field);
+							default: false;
+						};
+						if (!allowed)
+							valid.set(input.id, false);
+					}
 				}
 			}
 			if (block.terminator != null)

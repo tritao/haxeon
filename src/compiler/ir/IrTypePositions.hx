@@ -24,7 +24,7 @@ class IrTypePositions {
 				for (inputIndex in 0...IrOperands.count(located.value)) {
 					var input = IrOperands.at(located.value, inputIndex);
 					if (rewritten(input.type))
-							return true;
+						return true;
 				}
 				switch located.value {
 					case TypeValue(_, type) if (rewritten(type)):

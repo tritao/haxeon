@@ -98,7 +98,8 @@ class TestRunner {
 		if (compilation.status == 0)
 			return {
 				passed: false,
-				output: compilation.output + 'FAIL: ${runName(run)} is marked as a known failure ($note) but its warm rebuild now equals a fresh build: remove the marker\n'
+				output: compilation.output +
+				'FAIL: ${runName(run)} is marked as a known failure ($note) but its warm rebuild now equals a fresh build: remove the marker\n'
 			};
 		if (compilation.output.indexOf("differs from a fresh build") < 0)
 			return {
@@ -135,7 +136,11 @@ class TestRunner {
 		return run.test.name + (run.warm ? " (warm edit rebuilds)" : run.plain ? " (plain build)" : "");
 
 	static function runOutput(root:String, run:ProgramRun):String
-		return Path.join([root, "out", run.test.name + (run.warm ? ".warm" : run.plain ? ".plain" : "") + ".hl"]);
+		return Path.join([
+			root,
+			"out",
+			run.test.name + (run.warm ? ".warm" : run.plain ? ".plain" : "") + ".hl"
+		]);
 
 	/**
 	 * Test mains are compiled to HashLink and run there: faster than re-interpreting the compiler
@@ -258,9 +263,13 @@ class TestRunner {
 	public function runPrograms(tests:Array<ProgramCase>, jobs:Int):Int {
 		if (tests.length == 0)
 			return 0;
-		var named = [for (test in tests) if (sharedTreeReference(Path.join([root, "tests", "programs", test.name + ".hx"]))) test.name];
+		var named = [
+			for (test in tests) if (sharedTreeReference(Path.join([root, "tests", "programs", test.name + ".hx"]))) test.name
+		];
 		if (named.length > 0) {
-			Sys.print([for (name in named) 'FAIL: $name names the shared tree ($root); a program reaches files by relative path, which resolves in its own directory\n'].join(""));
+			Sys.print([
+				for (name in named) 'FAIL: $name names the shared tree ($root); a program reaches files by relative path, which resolves in its own directory\n'
+			].join(""));
 			return named.length;
 		}
 		var runs:Array<ProgramRun> = [for (test in tests) for (run in runsOf(test)) run];

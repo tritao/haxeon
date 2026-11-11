@@ -191,7 +191,7 @@ class IrScalarReplacement {
 				for (inputIndex in 0...IrOperands.count(instruction)) {
 					var input = IrOperands.at(instruction, inputIndex);
 					if (input.id == object.id)
-							uses++;
+						uses++;
 				}
 				if (uses == 0)
 					continue;
@@ -363,7 +363,7 @@ class IrScalarReplacement {
 				for (inputIndex in 0...IrOperands.count(instruction)) {
 					var input = IrOperands.at(instruction, inputIndex);
 					if (input.id == object.id)
-							uses++;
+						uses++;
 				}
 				if (uses == 0)
 					continue;

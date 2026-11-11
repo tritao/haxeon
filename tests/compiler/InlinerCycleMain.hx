@@ -45,7 +45,8 @@ class InlinerCycleMain {
 				for (block in fn.blocks)
 					for (located in block.instructions)
 						switch located.value {
-							case Call(_, callee, _): result.push(callee);
+							case Call(_, callee, _):
+								result.push(callee);
 							default:
 						}
 		return result;

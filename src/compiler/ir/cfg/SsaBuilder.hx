@@ -22,13 +22,19 @@ class SsaBuilder {
 	var frontiers:Array<Map<Int, Bool>> = [];
 	var frontierKeys:Array<Array<Int>> = [];
 	var liveIn:Array<Array<Int>> = [];
+
 	/** Every local gets a dense number once; everything after that is indexed by it, so a name is hashed once per use. */
 	var slots:Map<String, Int> = [];
+
 	var slotNames:Array<String> = [];
+
 	/** The slot of each LoadLocal and StoreLocal of a block, in the order they appear. */
 	var blockSlots:Array<Array<Int>> = [];
+
 	var debugLocalBySlot:Array<Null<compiler.ir.cfg.Cfg.CfgDebugLocal>> = [];
+
 	static final emptyWords:Array<Int> = [];
+
 	var phis:Array<Map<Int, SsaPhi>> = [];
 	var phiSlots:Array<Array<Int>> = [];
 	var roots:Array<Int> = [];
@@ -299,7 +305,10 @@ class SsaBuilder {
 		while (work.length > 0) {
 			var id = work.pop();
 			queued[id] = false;
-			var input = liveIn[id], use = uses[id], def = defs[id], changed = false;
+			var input = liveIn[id],
+				use = uses[id],
+				def = defs[id],
+				changed = false;
 			for (word in 0...words) {
 				var out = 0;
 				for (successor in successors[id]) {
@@ -327,7 +336,8 @@ class SsaBuilder {
 		return liveIn[block].length > (slot >> 5) && liveIn[block][slot >> 5] & (1 << (slot & 31)) != 0;
 
 	function insertPhis():Void {
-		var definitionBlocks:Array<Null<Array<Int>>> = [for (_ in slotNames) null], definitionSlots:Array<Int> = [];
+		var definitionBlocks:Array<Null<Array<Int>>> = [for (_ in slotNames) null],
+			definitionSlots:Array<Int> = [];
 		// Blocks are visited in increasing order, so a block already added for a slot is the last one in its list.
 		function addDefinition(slot:Int, id:Int):Void {
 			var list = definitionBlocks[slot];
@@ -354,7 +364,8 @@ class SsaBuilder {
 					}
 			}
 		// Stamps replace a set per slot: a block is in the slot's set when its stamp is the slot's.
-		var defined:Array<Int> = [for (_ in cfg.blocks) -1], placed:Array<Int> = [for (_ in cfg.blocks) -1];
+		var defined:Array<Int> = [for (_ in cfg.blocks) -1],
+			placed:Array<Int> = [for (_ in cfg.blocks) -1];
 		for (slot in definitionSlots) {
 			var blocks = definitionBlocks[slot];
 			if (blocks == null)
@@ -422,10 +433,7 @@ class SsaBuilder {
 	}
 
 	function renameBlock(id:Int):Array<Int> {
-		var block = cfg.blocks[id],
-			target = output[id],
-			mine = blockSlots[id], cursor = 0,
-			pushed:Array<Int> = [];
+		var block = cfg.blocks[id], target = output[id], mine = blockSlots[id], cursor = 0, pushed:Array<Int> = [];
 		if (phiSlots[id].length > 0) {
 			var blockPhis = phis[id];
 			for (slot in phiSlots[id]) {

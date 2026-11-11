@@ -31,8 +31,9 @@ class IrSourceRehash {
 			if (current == null || current == location.sourceHash)
 				return provenance;
 			changed = true;
-			return new SourceProvenance(new SourceLocation(location.path, location.start, location.end, location.line, location.column,
-				location.endLine, location.endColumn, current), provenance.origin);
+			return new SourceProvenance(new SourceLocation(location.path, location.start, location.end, location.line, location.column, location.endLine,
+				location.endColumn, current),
+				provenance.origin);
 		}
 		var blocks:Array<IrBlock> = [];
 		for (block in fn.blocks) {

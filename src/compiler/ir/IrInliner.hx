@@ -204,6 +204,7 @@ class IrInliner {
 	final profile:TargetProfile;
 
 	final byName:Map<String, IrFunction> = [];
+
 	/**
 	 * Every function has a number, assigned once in name order, and the per-function state below is indexed by it: a callee name is
 	 * hashed once per call instruction, and nothing after that hashes a string. Sorting numbers is sorting names.
@@ -335,7 +336,8 @@ class IrInliner {
 							if (target != null)
 								targets.push(target);
 						case MethodCall(_, receiver, method, _, _):
-							var callee = resolveMethod(receiver, method), target = callee == null ? null : ids.get(callee);
+							var callee = resolveMethod(receiver, method),
+								target = callee == null ? null : ids.get(callee);
 							if (target != null)
 								targets.push(target);
 						default:
@@ -354,7 +356,9 @@ class IrInliner {
 			stack.push(root);
 			onStack[root] = true;
 			while (path.length > 0) {
-				var node = path[path.length - 1], cursor = cursors[cursors.length - 1], targets = edges[node];
+				var node = path[path.length - 1],
+					cursor = cursors[cursors.length - 1],
+					targets = edges[node];
 				if (cursor < targets.length) {
 					cursors[cursors.length - 1] = cursor + 1;
 					var next = targets[cursor];
@@ -533,11 +537,12 @@ class IrInliner {
 			return known;
 		}
 		var original = functions[id], name = original.name;
-		var memo = cache.memo.get(name), usable = memo != null
-			&& memo.source == original
-			&& memo.fingerprint == fingerprint
-			&& dependenciesCurrent(memo.dependencies)
-			&& objectsCurrent(memo.objects);
+		var memo = cache.memo.get(name),
+			usable = memo != null
+				&& memo.source == original
+				&& memo.fingerprint == fingerprint
+				&& dependenciesCurrent(memo.dependencies)
+				&& objectsCurrent(memo.objects);
 		if (usable && !checkingMemo && memo != null) {
 			done[id] = memo.result;
 			dependenciesOf[id] = memo.dependencies;
@@ -597,7 +602,9 @@ class IrInliner {
 		if (isImpure)
 			impure[id] = true;
 		else
-			nextMemo.set(name, usable && checkingMemo && memo != null ? memo : new InlineMemo(original, fingerprint, dependencies, objectPrintsOf, result));
+			nextMemo.set(name, usable
+				&& checkingMemo
+				&& memo != null ? memo : new InlineMemo(original, fingerprint, dependencies, objectPrintsOf, result));
 		consultResult(id);
 		return result;
 	}

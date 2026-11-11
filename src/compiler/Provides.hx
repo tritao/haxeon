@@ -50,8 +50,16 @@ class ProviderOperations {
 	 * that is no longer reachable still holds helpers that reachable code calls (`FrontendCompilation.generatedHelpersStillCalled`).
 	 */
 	public static function sharedAcrossModules(operation:String):Bool {
-		var colon = operation.indexOf(":"), base = colon < 0 ? operation : operation.substr(0, colon);
-		return base == ProviderOperation.Equals || base == ProviderOperation.ReflectEquals || base == ProviderOperation.CustomMethod || base == ProviderOperation.Hash || base == ProviderOperation.Wire || base == ProviderOperation.Json || base == ProviderOperation.RawRepresentable || base == ProviderOperation.Flags;
+		var colon = operation.indexOf(":"),
+			base = colon < 0 ? operation : operation.substr(0, colon);
+		return base == ProviderOperation.Equals
+			|| base == ProviderOperation.ReflectEquals
+			|| base == ProviderOperation.CustomMethod
+			|| base == ProviderOperation.Hash
+			|| base == ProviderOperation.Wire
+			|| base == ProviderOperation.Json
+			|| base == ProviderOperation.RawRepresentable
+			|| base == ProviderOperation.Flags;
 	}
 
 	/** An operation with a further word that tells apart the helpers of one family for a type: `custom-method:hash`, `wire:value-encode`. */

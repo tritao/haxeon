@@ -21,7 +21,8 @@ class HlWriterCacheMain {
 		Sys.println("PASS: writer cache validation marks survive a new debug file list");
 
 		// The snapshot section is compared with its model only under HAXEON_CHECK_REUSE=1 (both come from the same model otherwise).
-		var content = haxe.io.Bytes.ofString("class A {}"), hash:Int = cast 0x811C9DC5;
+		var content = haxe.io.Bytes.ofString("class A {}"),
+			hash:Int = cast 0x811C9DC5;
 		for (index in 0...content.length)
 			hash = (hash ^ content.get(index)) * 16777619;
 		var tampered = HlLower.lower(Frontend.compile("function main():Int return 1;"));
