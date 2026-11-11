@@ -124,6 +124,13 @@ The output path must be separate from any ordinary app build output.
   --output build/host/live.hl -- --verbose
 ```
 
+Besides the console, `run --watch` appends what it does with each edit to `<output>.watch-events.jsonl`, one JSON
+object per line, and passes that path to the app in `HAXEON_WATCH_EVENTS`: `rebuild-started` (with `changedFiles`),
+one `output-line` per line the build printed, `build-failed` or `build-ok`, and in live mode `patch-published`
+(`revision`, `reloadReasons`). The live host adds `patch-applied`, `patch-rejected` (a refused patch or a failed
+reload, with `message`) and `reload`. The file starts empty with each watch and moves to `<file>.1` past 4 MiB.
+`src/tools/WatchEvents.hx` lists the fields.
+
 > **Warning: a watch session keeps the compiler it started with.** `run --watch` picks its compiler worker
 > once, at the first build, and logs it as `haxeon: compiler worker version <hash> (kept for this watch
 > session)`. Later rebuilds reuse that worker even if Haxeon's own compiler sources (`src/`, `stdlib/`)
