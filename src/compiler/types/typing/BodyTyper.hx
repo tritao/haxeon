@@ -1450,7 +1450,7 @@ class BodyTyper {
 	}
 
 	function isEnumAbstractValueName(name:String):Bool {
-		for (candidate in session.enumAbstractDecls)
+		for (candidate in session.declarations.enumAbstractList)
 			for (value in candidate.values)
 				if (value.name == name)
 					return true;
@@ -2466,7 +2466,8 @@ class BodyTyper {
 			samePackage:Array<compiler.syntax.Ast.AstEnumAbstract> = [],
 			declaredBy:Array<String> = [];
 		var ownerPackage = context.lexicalOwner == null ? null : pathBeforeLast(context.lexicalOwner);
-		for (candidateName => candidate in session.enumAbstractDecls) {
+		for (candidate in session.declarations.enumAbstractList) {
+			var candidateName = candidate.name;
 			if (underlying != null && !sameType(lowerType(candidate.underlying), underlying))
 				continue;
 			for (value in candidate.values)

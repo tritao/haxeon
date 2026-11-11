@@ -61,6 +61,11 @@ class DeclarationIndex {
 	public final aliases:Map<String, AstTypeAlias> = [];
 	public final enums:Map<String, AstEnum> = [];
 	public final enumAbstracts:Map<String, compiler.syntax.Ast.AstEnumAbstract> = [];
+
+	/** The same enum abstracts and aliases in declaration order, for the lookups that go through all of them (a map is walked through an iterator whose calls are dynamic). */
+	public final enumAbstractList:Array<compiler.syntax.Ast.AstEnumAbstract> = [];
+
+	public final aliasList:Array<compiler.syntax.Ast.AstTypeAlias> = [];
 	public final abstracts:Map<String, compiler.syntax.Ast.AstAbstract> = [];
 	public final interfaces:Map<String, AstInterface> = [];
 	public final classes:Map<String, AstClass> = [];
@@ -96,6 +101,7 @@ class DeclarationIndex {
 		for (alias in program.aliases) {
 			declareType(alias.name, DeclarationKind.Alias, alias.span);
 			aliases.set(alias.name, alias);
+			aliasList.push(alias);
 			aliasSpans.set(alias.name, alias.span);
 		}
 		for (decl in program.enums) {
@@ -107,6 +113,7 @@ class DeclarationIndex {
 		for (decl in program.enumAbstracts) {
 			declareType(decl.name, DeclarationKind.Abstract, decl.span);
 			enumAbstracts.set(decl.name, decl);
+			enumAbstractList.push(decl);
 			for (value in decl.values)
 				declare(DeclarationKind.Member, decl.name + "." + value.name, value.span);
 		}
