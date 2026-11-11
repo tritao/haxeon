@@ -41,14 +41,17 @@ enum abstract ProviderOperation(String) to String {
 	var ReceiverCheck = "receiver-check";
 	var RawRepresentable = "raw-representable";
 	var Flags = "flags";
+}
 
+/** Operations on the names of provider operations (kept out of the enum abstract: the compiler's own front end reads these sources). */
+class ProviderOperations {
 	/**
 	 * Whether the helpers of this operation are generated on demand from a request in one module and called from others, so a module
 	 * that is no longer reachable still holds helpers that reachable code calls (`FrontendCompilation.generatedHelpersStillCalled`).
 	 */
 	public static function sharedAcrossModules(operation:String):Bool {
 		var colon = operation.indexOf(":"), base = colon < 0 ? operation : operation.substr(0, colon);
-		return base == Equals || base == ReflectEquals || base == CustomMethod || base == Hash || base == Wire || base == Json || base == RawRepresentable || base == Flags;
+		return base == ProviderOperation.Equals || base == ProviderOperation.ReflectEquals || base == ProviderOperation.CustomMethod || base == ProviderOperation.Hash || base == ProviderOperation.Wire || base == ProviderOperation.Json || base == ProviderOperation.RawRepresentable || base == ProviderOperation.Flags;
 	}
 
 	/** An operation with a further word that tells apart the helpers of one family for a type: `custom-method:hash`, `wire:value-encode`. */

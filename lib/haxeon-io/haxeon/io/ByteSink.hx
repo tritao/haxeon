@@ -8,19 +8,19 @@ import haxe.io.Bytes;
  * data the caller guarantees is never changed afterwards (an encoding a cache keeps, a source file's contents); the result is a
  * `SegmentedBytes` that refers to such data without a copy. Integers and floats are little endian.
  */
-final class ByteSink {
+class ByteSink {
 	static inline final FIRST_CHUNK = 256;
 	static inline final MAX_CHUNK = 262144;
 	static inline final SHARED_MINIMUM = 4096;
-	static final NONE = Bytes.alloc(0);
-	static final scratch = Bytes.alloc(8);
+	static final NONE:Bytes = Bytes.alloc(0);
+	static final scratch:Bytes = Bytes.alloc(8);
 
 	var segments:Array<Bytes> = [];
 	var lengths:Array<Int> = [];
 	var total = 0;
 	var chunk:Bytes = NONE;
 	var used = 0;
-	var nextChunk = FIRST_CHUNK;
+	var nextChunk:Int = FIRST_CHUNK;
 
 	public function new() {}
 

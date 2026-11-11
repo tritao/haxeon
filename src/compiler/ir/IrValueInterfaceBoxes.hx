@@ -1,6 +1,7 @@
 package compiler.ir;
 
 import compiler.Provides.ProviderOperation;
+import compiler.Provides.ProviderOperations;
 import compiler.ir.Ir;
 import compiler.ir.SourceProvenance.Located;
 
@@ -57,7 +58,7 @@ class IrValueInterfaceBoxes {
 				var result = builder.call(implementation.name, [payload].concat(adapted), implementation.result);
 				builder.returnValue((switch (contract.result) { case Void: true; default: false; }) ? result : GenericOwnerErasure.convert(builder, result, contract.result, objectMap));
 				methods.push({name: methodName, functionName: wrapper});
-				generated.push(new IrFunction(wrapper, builder.arguments, contract.result, builder.blocks, Provider(TypeKey.of(Obj(valueName)), ProviderOperation.detailed(ProviderOperation.InterfaceBox, methodName))));
+				generated.push(new IrFunction(wrapper, builder.arguments, contract.result, builder.blocks, Provider(TypeKey.of(Obj(valueName)), ProviderOperations.detailed(ProviderOperation.InterfaceBox, methodName))));
 			}
 			methods.sort((a, b) -> Reflect.compare(a.name, b.name));
 			var box:IrObject = {name: boxName, isValue: false, base: null, interfaces: value.interfaces.copy(),
@@ -94,7 +95,7 @@ class IrValueInterfaceBoxes {
 			builder.returnValue(builder.constBool(true));
 			builder.select(boxed);
 			builder.returnValue(builder.call(intrinsic, [input, builder.typeValue(Obj(boxName))], Bool));
-			generated.push(new IrFunction(name, builder.arguments, Bool, builder.blocks, Provider(TypeKey.of(Obj(valueName)), ProviderOperation.detailed(ProviderOperation.InterfaceTypeTest, exact ? "exact" : "instance"))));
+			generated.push(new IrFunction(name, builder.arguments, Bool, builder.blocks, Provider(TypeKey.of(Obj(valueName)), ProviderOperations.detailed(ProviderOperation.InterfaceTypeTest, exact ? "exact" : "instance"))));
 			return name;
 		}
 		function interfaceCastFor(interfaceName:String):String {
@@ -138,7 +139,7 @@ class IrValueInterfaceBoxes {
 		}
 		var rewritten:Array<IrFunction> = [], needsTypeId = false;
 		// The function being rewritten: its type values and next free value id are only worked out when an instruction needs them.
-		var current:Null<IrFunction> = null, typesOfCurrent:Null<Map<Int, IrType>> = null, next = -1;
+		var current:IrFunction = new IrFunction("", [], Void, [], Ordinary), typesOfCurrent:Null<Map<Int, IrType>> = null, next = -1;
 		function types():Map<Int, IrType> {
 			if (typesOfCurrent == null) {
 				typesOfCurrent = [];

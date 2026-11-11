@@ -172,7 +172,7 @@ class FlagsGenerator {
 				throw "Missing Flags helper result";
 			statements.push(TReturn(result, span));
 			var fn:TypedFunction = {
-				name: name, role: ProviderFunction(TAbstract(request.owner, [], TInt), compiler.Provides.ProviderOperation.detailed(compiler.Provides.ProviderOperation.Flags, method)),
+				name: name, role: ProviderFunction(TAbstract(request.owner, [], TInt), compiler.Provides.ProviderOperations.detailed(compiler.Provides.ProviderOperation.Flags, method)),
 				origin: request.origin,
 				originKind: Helper,
 				owner: null,

@@ -41,7 +41,10 @@ class ModuleSourceLoader {
 	 * compile. It is part of the standard library for every purpose, and absent in a checkout that has not got it.
 	 */
 	public function addPortableLibraryRoot(standardLibraryPath:String):Void {
-		var portable = haxe.io.Path.join([haxe.io.Path.directory(haxe.io.Path.removeTrailingSlashes(standardLibraryPath)), "lib", "haxeon-io"]);
+		var trimmed = standardLibraryPath;
+		while (trimmed.length > 1 && (StringTools.endsWith(trimmed, "/") || StringTools.endsWith(trimmed, "\\")))
+			trimmed = trimmed.substr(0, trimmed.length - 1);
+		var portable = haxe.io.Path.join([haxe.io.Path.directory(trimmed), "lib", "haxeon-io"]);
 		if (FileSystem.exists(portable) && FileSystem.isDirectory(portable))
 			addStandardLibraryRoot(portable);
 	}

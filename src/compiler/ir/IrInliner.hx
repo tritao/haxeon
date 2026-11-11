@@ -265,7 +265,7 @@ class IrInliner {
 	final components:Array<Int> = [];
 
 	/** HAXEON_CHECK_REUSE=1: a function with a usable memo is inlined again and the two results must be equal. */
-	static final checkingMemo = Sys.getEnv("HAXEON_CHECK_REUSE") == "1";
+	static final checkingMemo:Bool = Sys.getEnv("HAXEON_CHECK_REUSE") == "1";
 
 	function new(program:IrProgram, cache:IrInlineCache, profile:TargetProfile, allowInline:Bool) {
 		this.allowInline = allowInline;
@@ -538,10 +538,17 @@ class IrInliner {
 			&& memo.fingerprint == fingerprint
 			&& dependenciesCurrent(memo.dependencies)
 			&& objectsCurrent(memo.objects);
-		if (usable && !checkingMemo) {
+		if (usable && !checkingMemo && memo != null) {
 			done[id] = memo.result;
 			dependenciesOf[id] = memo.dependencies;
-			dependencyIdsOf[id] = [for (dependency in memo.dependencies) ids.get(dependency.name)];
+			var memoDependencyIds:Array<Int> = [];
+			for (dependency in memo.dependencies) {
+				var dependencyId = ids.get(dependency.name);
+				if (dependencyId == null)
+					throw 'Inline memo of "$name" depends on unknown function "${dependency.name}"';
+				memoDependencyIds.push(dependencyId);
+			}
+			dependencyIdsOf[id] = memoDependencyIds;
 			objectsOf[id] = memo.objects;
 			nextMemo.set(name, memo);
 			consultResult(id);
@@ -578,7 +585,7 @@ class IrInliner {
 				dependencyIds.push(consultedId);
 			}
 		var objectPrintsOf:Map<String, Int> = [for (objectName in consultedObjects.keys()) objectName => printOf(objectName)];
-		if (usable && checkingMemo) {
+		if (usable && checkingMemo && memo != null) {
 			if (!compiler.ir.codec.IrFunctionStateEquality.same(memo.result, result))
 				throw 'HAXEON_CHECK_REUSE: the inlined form of $name differs from the one its memo holds';
 			result = memo.result;
@@ -590,7 +597,7 @@ class IrInliner {
 		if (isImpure)
 			impure[id] = true;
 		else
-			nextMemo.set(name, usable && checkingMemo ? memo : new InlineMemo(original, fingerprint, dependencies, objectPrintsOf, result));
+			nextMemo.set(name, usable && checkingMemo && memo != null ? memo : new InlineMemo(original, fingerprint, dependencies, objectPrintsOf, result));
 		consultResult(id);
 		return result;
 	}

@@ -15,7 +15,7 @@ def main():
     tool = Path(os.environ.get('HLDUMP', ROOT / 'out/cmake' / preset / 'hashlink/bin/hldump'))
     with tempfile.TemporaryDirectory(prefix='haxeon-debug-lines-') as directory:
         artifact = Path(directory) / 'lines.hl'
-        fixture = subprocess.run([str(ROOT / '.tools/haxe/haxe'), '-cp', 'src', '-cp', 'tests/tooling',
+        fixture = subprocess.run([str(ROOT / '.tools/haxe/haxe'), '-cp', 'src', '-cp', 'lib/haxeon-io', '-cp', 'tests/tooling',
                                   '--run', 'DebugLineEncodingFixture', str(artifact)], cwd=ROOT, check=True,
                                  env={**os.environ, 'HAXEON_IR_CENSUS': '1'}, capture_output=True, text=True)
         census = next(json.loads(line[len('SIZE_CENSUS '):]) for line in fixture.stderr.splitlines()

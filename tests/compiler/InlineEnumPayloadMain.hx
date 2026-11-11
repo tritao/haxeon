@@ -55,10 +55,10 @@ class InlineEnumPayloadMain {
   var p=new IrProgram("main");p.objects=objects;p.functions=[new IrFunction("main",b.arguments,I32,b.blocks, Ordinary)];p.natives=compiler.ir.IrInlineEnumWordAccess.natives();
   var relay=new IrBuilder(),input=relay.argument("value",Obj(mixed.valueObject.name)),output=relay.newObject(mixed.valueObject.name);
   for(field in mixed.valueObject.fields)relay.fieldSet(output,field.name,relay.fieldGet(input,field.name,field.type));
-  relay.returnValue(output);p.functions.push(new IrFunction(compiler.ir.IrInlineEnumCaseAccess.HELPER_PREFIX+"relay",relay.arguments,Obj(mixed.valueObject.name),relay.blocks, Provider(compiler.ir.TypeKey.of(Obj(mixed.valueObject.name)), compiler.Provides.ProviderOperation.detailed(compiler.Provides.ProviderOperation.InlineEnumHelper, "relay"))));
+  relay.returnValue(output);p.functions.push(new IrFunction(compiler.ir.IrInlineEnumCaseAccess.HELPER_PREFIX+"relay",relay.arguments,Obj(mixed.valueObject.name),relay.blocks, Provider(compiler.ir.TypeKey.of(Obj(mixed.valueObject.name)), compiler.Provides.ProviderOperations.detailed(compiler.Provides.ProviderOperation.InlineEnumHelper, "relay"))));
   var forward=new IrBuilder(),input=forward.argument("value",Obj(mixed.valueObject.name));
   forward.returnValue(forward.call(compiler.ir.IrInlineEnumCaseAccess.HELPER_PREFIX+"relay",[input],Obj(mixed.valueObject.name)));
-  p.functions.push(new IrFunction(compiler.ir.IrInlineEnumCaseAccess.HELPER_PREFIX+"forward",forward.arguments,Obj(mixed.valueObject.name),forward.blocks, Provider(compiler.ir.TypeKey.of(Obj(mixed.valueObject.name)), compiler.Provides.ProviderOperation.detailed(compiler.Provides.ProviderOperation.InlineEnumHelper, "forward"))));
+  p.functions.push(new IrFunction(compiler.ir.IrInlineEnumCaseAccess.HELPER_PREFIX+"forward",forward.arguments,Obj(mixed.valueObject.name),forward.blocks, Provider(compiler.ir.TypeKey.of(Obj(mixed.valueObject.name)), compiler.Provides.ProviderOperations.detailed(compiler.Provides.ProviderOperation.InlineEnumHelper, "forward"))));
   compiler.ir.IrVerifier.verify(p);
   // Raw host pointers are intentionally not interpreted in target-independent IR.
   p.functions=new compiler.ir.IrOptionalScalarFlow(p.objects).rewrite(p.objects,p.functions);

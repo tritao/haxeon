@@ -120,7 +120,7 @@ class RawRepresentableGenerator {
 			}
 
 			var fn:TypedFunction = {
-				name: helper, role: ProviderFunction(nominal, compiler.Provides.ProviderOperation.detailed(compiler.Provides.ProviderOperation.RawRepresentable, request.method)),
+				name: helper, role: ProviderFunction(nominal, compiler.Provides.ProviderOperations.detailed(compiler.Provides.ProviderOperation.RawRepresentable, request.method)),
 				origin: request.origin,
 				originKind: Helper,
 				owner: null,

@@ -630,7 +630,7 @@ class FrontendCompilation {
 					if (replacement != fn)
 						rehashed.set(functionName, replacement);
 				}
-				if (Lambda.empty(rehashed) && !state.editedSinceIrScan)
+				if (!rehashed.keys().hasNext() && !state.editedSinceIrScan)
 					continue;
 				var writable = context.writableState(moduleName, rollbackModules);
 				for (functionName => replacement in rehashed)
@@ -650,10 +650,14 @@ class FrontendCompilation {
 			cached.push(functions.get(functionName));
 		}
 		if (Sys.getEnv("HAXEON_CHECK_REUSE") == "1")
-			for (functionName in cachedNames)
-				if (compiler.ir.IrSourceRehash.of(modules.get(owners.get(functionName)).irFunctions.get(functionName), currentHashes)
-					!= modules.get(owners.get(functionName)).irFunctions.get(functionName))
+			for (functionName in cachedNames) {
+				var holder = modules.get(owners.get(functionName));
+				if (holder == null)
+					throw 'HAXEON_CHECK_REUSE: cached function "$functionName" has no owning module';
+				var held = holder.irFunctions.get(functionName);
+				if (compiler.ir.IrSourceRehash.of(held, currentHashes) != held)
 					throw 'HAXEON_CHECK_REUSE: cached function "$functionName" of module "${owners.get(functionName)}" names a file hash that is not the file\'s current one';
+			}
 		dropUnusedKeyPathFields(typedNew, cached);
 		if (token != null)
 			token.check();
@@ -1150,7 +1154,7 @@ class FrontendCompilation {
 		for (name => state in modules) {
 			for (cached => fn in state.typedFunctions) {
 				var shared = switch fn.role {
-					case ProviderFunction(_, operation): compiler.Provides.ProviderOperation.sharedAcrossModules(operation);
+					case ProviderFunction(_, operation): compiler.Provides.ProviderOperations.sharedAcrossModules(operation);
 					default: false;
 				};
 				if (!shared)

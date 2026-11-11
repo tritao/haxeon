@@ -12,6 +12,7 @@ import compiler.types.TypedAst.TypedExpression;
 import compiler.types.TypedAst.TypedExpressionKind;
 import compiler.types.TypedAst.TypedField;
 import compiler.Provides.ProviderOperation;
+import compiler.Provides.ProviderOperations;
 import compiler.Provides;
 import compiler.types.TypedAst.TypedFunction;
 import compiler.types.TypedAst.TypedStatement;
@@ -1239,7 +1240,7 @@ class WireCodecGenerator {
 	static function generatedFunction(name:String, arguments:Array<{name:String, type:CompilerType}>, result:CompilerType, statements:Array<TypedStatement>,
 			request:WireCodecRequest, kind:String, type:CompilerType):TypedFunction
 		return {
-			name: name, role: ProviderFunction(type, ProviderOperation.detailed(jsonMode ? ProviderOperation.Json : ProviderOperation.Wire, kind)),
+			name: name, role: ProviderFunction(type, ProviderOperations.detailed(jsonMode ? ProviderOperation.Json : ProviderOperation.Wire, kind)),
 			origin: request.origin,
 			originKind: compiler.types.TypedAst.FunctionOriginKind.Helper,
 			typeArguments: null,

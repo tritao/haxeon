@@ -1,6 +1,7 @@
 package compiler.ir;
 
 import compiler.Provides.ProviderOperation;
+import compiler.Provides.ProviderOperations;
 import compiler.ir.Ir;
 import compiler.ir.SourceProvenance.Located;
 
@@ -61,7 +62,7 @@ class IrNullableScalarFlow {
 				builder.returnValue(builder.constBool(true));
 				builder.select(compare);
 				builder.returnValue(builder.equal(payload, otherPayload));
-				program.functions.push(new IrFunction(name, builder.arguments, Bool, builder.blocks, Provider(TypeKey.of(type), ProviderOperation.detailed(ProviderOperation.NullableScalarHelper, "equal"))));
+				program.functions.push(new IrFunction(name, builder.arguments, Bool, builder.blocks, Provider(TypeKey.of(type), ProviderOperations.detailed(ProviderOperation.NullableScalarHelper, "equal"))));
 			} else {
 				var yes = builder.createBlock(), no = builder.createBlock();
 				builder.branch(present, yes, no);
@@ -69,7 +70,7 @@ class IrNullableScalarFlow {
 				builder.returnValue(payload);
 				builder.select(no);
 				builder.terminate(Throw(builder.toDyn(builder.constString("Null access"))));
-				program.functions.push(new IrFunction(name, builder.arguments, type, builder.blocks, Provider(TypeKey.of(type), ProviderOperation.detailed(ProviderOperation.NullableScalarHelper, "require"))));
+				program.functions.push(new IrFunction(name, builder.arguments, type, builder.blocks, Provider(TypeKey.of(type), ProviderOperations.detailed(ProviderOperation.NullableScalarHelper, "require"))));
 			}
 		}
 	}

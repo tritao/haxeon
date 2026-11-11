@@ -1,6 +1,7 @@
 package compiler.ir;
 
 import compiler.Provides.ProviderOperation;
+import compiler.Provides.ProviderOperations;
 import compiler.ir.Ir;
 import compiler.ir.SourceProvenance.Located;
 
@@ -173,7 +174,7 @@ class IrTypedInterfaceDispatch {
 					entry.returnValue((switch signature.result { case Void: true; default: false; }) ? result :
 						GenericOwnerErasure.convert(entry, result, signature.result, byName));
 				}
-				var entryFunction = new IrFunction(entryName, entry.arguments, signature.result, entry.blocks, Provider(TypeKey.of(Obj(candidate.name)), ProviderOperation.detailed(ProviderOperation.TypedInterfaceEntry, entryName))),
+				var entryFunction = new IrFunction(entryName, entry.arguments, signature.result, entry.blocks, Provider(TypeKey.of(Obj(candidate.name)), ProviderOperations.detailed(ProviderOperation.TypedInterfaceEntry, entryName))),
 					entryIndex = functionIndices.get(entryName);
 				if (entryIndex == null) {
 					functionIndices.set(entryName, functions.length);
@@ -186,7 +187,7 @@ class IrTypedInterfaceDispatch {
 				builder.select(next);
 			}
 			builder.throwValue(builder.toDyn(builder.constString('Invalid receiver for $interfaceName.$method')));
-			var generated = new IrFunction(name, builder.arguments, signature.result, builder.blocks, Provider(TypeKey.of(Virtual(interfaceName)), ProviderOperation.detailed(ProviderOperation.DynamicDispatch, name)));
+			var generated = new IrFunction(name, builder.arguments, signature.result, builder.blocks, Provider(TypeKey.of(Virtual(interfaceName)), ProviderOperations.detailed(ProviderOperation.DynamicDispatch, name)));
 			if (existing == null) functions.push(generated);
 			else {
 				var index = functionIndices.get(name);

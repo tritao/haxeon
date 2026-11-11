@@ -47,9 +47,11 @@ class HlWriter {
 		return writer.output.finish();
 	}
 
+	#if !haxeon
 	/** Write a module to an output. */
 	public static function writeTo(code:HlCode, destination:haxe.io.Output, ?cache:HlWriterCache):Void
 		encode(code, cache).writeTo(destination);
+	#end
 
 	/** Validate before opening the destination, preserving an older file on validation failure. */
 	public static function writeFile(code:HlCode, path:String, ?cache:HlWriterCache):Void

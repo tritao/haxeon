@@ -1,6 +1,7 @@
 package compiler.ir;
 
 import compiler.Provides.ProviderOperation;
+import compiler.Provides.ProviderOperations;
 import compiler.ir.Ir;
 import compiler.ir.codec.IrTypeCodec;
 
@@ -81,9 +82,9 @@ class IrValueArrayBridge {
 			accepts.select(present);
 		}
 		accepts.returnValue(matches);
-		return [new IrFunction(readName(), read.arguments, Dyn, read.blocks, Provider(TypeKey.of(element), ProviderOperation.detailed(ProviderOperation.ValueArrayAccess, readName()))),
-			new IrFunction(writeName(), write.arguments, Void, write.blocks, Provider(TypeKey.of(element), ProviderOperation.detailed(ProviderOperation.ValueArrayAccess, writeName()))),
-			new IrFunction(acceptsName(), accepts.arguments, Bool, accepts.blocks, Provider(TypeKey.of(element), ProviderOperation.detailed(ProviderOperation.ValueArrayAccess, acceptsName())))];
+		return [new IrFunction(readName(), read.arguments, Dyn, read.blocks, Provider(TypeKey.of(element), ProviderOperations.detailed(ProviderOperation.ValueArrayAccess, readName()))),
+			new IrFunction(writeName(), write.arguments, Void, write.blocks, Provider(TypeKey.of(element), ProviderOperations.detailed(ProviderOperation.ValueArrayAccess, writeName()))),
+			new IrFunction(acceptsName(), accepts.arguments, Bool, accepts.blocks, Provider(TypeKey.of(element), ProviderOperations.detailed(ProviderOperation.ValueArrayAccess, acceptsName())))];
 	}
 
 	/** Snapshot every leaf before capacity allocation or an insertion can change any array place. */

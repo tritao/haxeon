@@ -228,11 +228,6 @@ class IrValueArrayProgramRewrite {
 				rewritten.push(current);
 			}
 		}
-		// The originals are the functions as they were before this shape's rewrite; the lookup is built only when a method has to be specialized.
-		var originals:Map<String, IrFunction> = [];
-		if (methods.requests.length > 0)
-			for (fn in program.functions)
-				originals.set(fn.name, fn);
 		var generatedMethods = methods.generate(originals),
 			generatedFactories = factory.functions(),
 			generatedElements = elements.functions(),
@@ -374,11 +369,9 @@ class IrValueArrayProgramRewrite {
 				var output = IrOperands.output(located.value);
 				if (output != null && output.id >= next)
 					next = output.id + 1;
-				for (inputIndex in 0...IrOperands.count(located.value)) {
-					var input = IrOperands.at(located.value, inputIndex);
+				for (input in IrOperands.inputs(located.value))
 					if (input.id >= next)
-							next = input.id + 1;
-				}
+						next = input.id + 1;
 			}
 		for (block in fn.blocks) {
 			var target = new IrBlock(block.id);

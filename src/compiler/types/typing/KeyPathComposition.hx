@@ -29,7 +29,7 @@ class KeyPathComposition {
 		function add(suffix:String, arguments:Array<{name:String, type:CompilerType}>, result:CompilerType, body:Array<TypedStatement>):Void {
 			if (session.keyPathCompositions.exists(name + suffix)) return;
 			session.keyPathCompositions.set(name + suffix, true);
-			session.closureConversion.addFunction({name: name + suffix, role: ProviderFunction(root, compiler.Provides.ProviderOperation.detailed(compiler.Provides.ProviderOperation.KeyPath, name + suffix)), origin: session.currentContext.functionName, originKind: Helper,
+			session.closureConversion.addFunction({name: name + suffix, role: ProviderFunction(root, compiler.Provides.ProviderOperations.detailed(compiler.Provides.ProviderOperation.KeyPath, name + suffix)), origin: session.currentContext.functionName, originKind: Helper,
 				owner: environment, isStatic: false, isConstructor: false, arguments: arguments, result: result, statements: body,
 				cells: [], cellCaptures: [], span: span});
 		}

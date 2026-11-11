@@ -41,7 +41,7 @@ function main():Int {
     var build = compiler.compile("Probe");
     var id = build.functionIds.get("main");
     if (id == null) throw "compiled entry has no stable function ID";
-    var module = Runtime.load(HlWriter.encode(build.module), build.runtimeIdentity);
+    var module = Runtime.load(HlWriter.encode(build.module).flatten(), build.runtimeIdentity);
     var answer = Runtime.callInt(module, id);
     Runtime.dispose(module);
     compiler.acknowledgePublication(build.revision);
@@ -74,7 +74,7 @@ function main():Int {
     if (next == null) throw "incremental thread produced no compile result";
     var nextId = next.functionIds.get("main");
     if (nextId == null) throw "incremental entry lost its function ID";
-    var replacement = Runtime.load(HlWriter.encode(next.module), next.runtimeIdentity);
+    var replacement = Runtime.load(HlWriter.encode(next.module).flatten(), next.runtimeIdentity);
     var updated = Runtime.callInt(replacement, nextId);
     Runtime.dispose(replacement);
     if (updated != 43) throw "incremental guest code did not update";

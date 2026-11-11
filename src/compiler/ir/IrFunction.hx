@@ -2,6 +2,7 @@ package compiler.ir;
 
 import compiler.Provides;
 import compiler.Provides.ProviderOperation;
+import compiler.Provides.ProviderOperations;
 import compiler.ir.Ir;
 
 /** Source binding identity, lexical range, and SSA value after mutable stores vanish. */
@@ -113,9 +114,9 @@ class IrFunction {
 	function get_provides():Provides<TypeKey>
 		return switch kind {
 			case Provider(subject, operation): Serves(subject, operation);
-			case ValueArraySlot(_, element, _): Serves(TypeKey.of(element), ProviderOperation.detailed(ProviderOperation.ValueArraySlot, name));
+			case ValueArraySlot(_, element, _): Serves(TypeKey.of(element), ProviderOperations.detailed(ProviderOperation.ValueArraySlot, name));
 			// Two source enums can lower to one IR type, each with its own helper, so the helper's name (a function of the source type) is the detail.
-			case EnumEquality(reflective): arguments.length == 2 ? Serves(TypeKey.of(arguments[0].type), ProviderOperation.detailed(reflective ? ProviderOperation.ReflectEquals : ProviderOperation.Equals, name)) : None;
+			case EnumEquality(reflective): arguments.length == 2 ? Serves(TypeKey.of(arguments[0].type), ProviderOperations.detailed(reflective ? ProviderOperation.ReflectEquals : ProviderOperation.Equals, name)) : None;
 			case EnumDynamicUnbox(type): Serves(TypeKey.of(type), ProviderOperation.DynamicUnbox);
 			case EnumTagAdapter(type, box): Serves(TypeKey.of(type), box ? ProviderOperation.EnumTagBox : ProviderOperation.EnumTagUnbox);
 			default: None;

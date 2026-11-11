@@ -1,6 +1,7 @@
 package compiler.ir;
 
 import compiler.Provides.ProviderOperation;
+import compiler.Provides.ProviderOperations;
 import compiler.ir.Ir;
 import compiler.ir.SourceProvenance.Located;
 
@@ -135,7 +136,7 @@ class IrStaticNullChecks {
 									builder.terminate(Throw(builder.toDyn(builder.constString('Cannot dereference null static "$name"'))));
 									builder.select(present);
 									builder.returnValue(builder.constVoid());
-									var created = new IrFunction(helperName, builder.arguments, Void, builder.blocks, Provider(TypeKey.of(valueType == null ? Dyn : valueType), ProviderOperation.detailed(ProviderOperation.ReceiverCheck, helperName)));
+									var created = new IrFunction(helperName, builder.arguments, Void, builder.blocks, Provider(TypeKey.of(valueType == null ? Dyn : valueType), ProviderOperations.detailed(ProviderOperation.ReceiverCheck, helperName)));
 									helpers.set(helperName, created);
 									store.helpers.set(helperName, created);
 								}

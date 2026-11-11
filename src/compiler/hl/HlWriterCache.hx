@@ -57,7 +57,8 @@ class HlWriterCache {
 				previous = location.path;
 				if (paths.indexOf(previous) < 0) {
 					paths.push(previous);
-					indices.push(fileIndices.get(previous));
+					var index = fileIndices.get(previous);
+					indices.push(index == null ? 0 : index);
 				}
 			}
 		spanGroups.set(locations, new SpanGroupBytes(stableId, bytes, paths, indices));

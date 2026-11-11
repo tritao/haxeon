@@ -1,7 +1,6 @@
 package haxeon.io;
 
 import haxe.io.Bytes;
-import haxe.io.Output;
 
 /**
  * An immutable byte string kept as a list of segments. A module of a hundred megabytes is mostly the encodings of its functions, which
@@ -9,7 +8,7 @@ import haxe.io.Output;
  * `flatten` makes the single buffer for the rare consumer that needs one. A segment's bytes must never be changed after they are
  * handed to a `ByteSink` as shared, because several byte strings may refer to them.
  */
-final class SegmentedBytes {
+class SegmentedBytes {
 	public static final EMPTY = new SegmentedBytes([], [], 0);
 
 	/** Total length in bytes. */
@@ -40,11 +39,13 @@ final class SegmentedBytes {
 	public function segmentLength(index:Int):Int
 		return lengths[index];
 
-	/** Writes every segment to `output`, in order. */
-	public function writeTo(output:Output):Void {
+	#if !haxeon
+	/** Writes every segment to `output`, in order. (The self-hosted standard library has no streaming output yet.) */
+	public function writeTo(output:haxe.io.Output):Void {
 		for (index in 0...segments.length)
 			output.writeBytes(segments[index], 0, lengths[index]);
 	}
+	#end
 
 	/** The bytes as one buffer: the segment itself when there is exactly one that is whole, else a new exactly sized buffer. */
 	public function flatten():Bytes {

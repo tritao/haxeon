@@ -75,7 +75,7 @@ class SsaBuilder {
 		for (argument in cfg.arguments) {
 			var value = allocate(argument.name, argument.type);
 			arguments.push(value);
-			var slot = slots.get(argument.name);
+			var slot = slotFor(argument.name);
 			push(slot, value);
 			addDebugBinding(debugLocalBySlot[slot], value);
 		}
@@ -340,7 +340,7 @@ class SsaBuilder {
 				list.push(id);
 		}
 		for (argument in cfg.arguments)
-			addDefinition(slots.get(argument.name), 0);
+			addDefinition(slotFor(argument.name), 0);
 		for (block in cfg.blocks)
 			if (reachable[block.id]) {
 				var mine = blockSlots[block.id], cursor = 0;

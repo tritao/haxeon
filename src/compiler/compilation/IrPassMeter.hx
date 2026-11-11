@@ -36,6 +36,12 @@ class IrPassMeter {
 	}
 
 	/** One entry per pass: name, bytes, objects. */
-	public static function entries():Array<{name:String, bytes:Float, count:Float}>
-		return [for (name in order) {name: name, bytes: bytes.get(name), count: counts.get(name)}];
+	public static function entries():Array<{name:String, bytes:Float, count:Float}> {
+		var result:Array<{name:String, bytes:Float, count:Float}> = [];
+		for (name in order) {
+			var passBytes = bytes.get(name), passCount = counts.get(name);
+			result.push({name: name, bytes: passBytes == null ? 0.0 : passBytes, count: passCount == null ? 0.0 : passCount});
+		}
+		return result;
+	}
 }

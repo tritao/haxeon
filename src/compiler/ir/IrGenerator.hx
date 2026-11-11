@@ -1,6 +1,7 @@
 package compiler.ir;
 
 import compiler.Provides.ProviderOperation;
+import compiler.Provides.ProviderOperations;
 import compiler.ir.IrStaticNullChecks.IrStaticCheckCache;
 import compiler.types.Type.CompilerType;
 import compiler.types.Type.NominalKind;
@@ -253,7 +254,7 @@ class IrGenerator {
 					switch lowerType(type) {
 						// The enum equality helpers keep the structured role the tag-storage passes read.
 						case Enum(_) if (operation == ProviderOperation.Equals || operation == ProviderOperation.ReflectEquals): EnumEquality(operation == ProviderOperation.ReflectEquals);
-						case lowered: Provider(TypeKey.of(lowered), ProviderOperation.detailed(operation, compiler.semantic.SemanticSignature.type(type)));
+						case lowered: Provider(TypeKey.of(lowered), ProviderOperations.detailed(operation, compiler.semantic.SemanticSignature.type(type)));
 					}
 			};
 			return new IrFunction(built.name, built.arguments, built.result, built.blocks, kind, built.debugBindings, fn.isInline == true, retention);

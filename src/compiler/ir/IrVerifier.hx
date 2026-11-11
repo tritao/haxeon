@@ -227,7 +227,7 @@ class IrVerifier {
 		// Private enum records and values containing opaque references need logical escape adapters.
 		for (object in program.objects)
 			if (object.isValue && StringTools.startsWith(object.name, IrInlineEnumLayout.VALUE_PREFIX)) physicalValues.set(object.name, true);
-		var physicalTable = new IrVerifyTable("physicalValues", physicalValues);
+		var physicalTable = new IrVerifyTable<Bool>("physicalValues", (key:String) -> physicalValues.get(key), (key:String) -> physicalValues.exists(key));
 		var changed = true;
 		while (changed) {
 			changed = false;
@@ -306,15 +306,15 @@ class IrVerifier {
 			memo.forget([for (fn in program.functions) fn.name => true]);
 		}
 		var tables = {
-			closureCasts: new IrVerifyTable("closureCasts", closureCasts, memo),
-			signatures: new IrVerifyTable("signatures", signatures, memo),
-			objects: new IrVerifyTable("objects", objects, memo),
-			interfaces: new IrVerifyTable("interfaces", interfaces, memo),
-			enums: new IrVerifyTable("enums", enums, memo),
-			globals: new IrVerifyTable("globals", globals, memo),
-			scalarFunctions: new IrVerifyTable("scalarFunctions", scalarFunctions, memo),
-			carrierSlots: new IrVerifyTable("carrierSlots", carrierSlots, memo),
-			physicalValues: new IrVerifyTable("physicalValues", physicalValues, memo)
+			closureCasts: new IrVerifyTable<String>("closureCasts", (key:String) -> closureCasts.get(key), (key:String) -> closureCasts.exists(key), memo),
+			signatures: new IrVerifyTable<{arguments:Array<IrType>, result:IrType, kind:IrFunctionKind}>("signatures", (key:String) -> signatures.get(key), (key:String) -> signatures.exists(key), memo),
+			objects: new IrVerifyTable<IrObject>("objects", (key:String) -> objects.get(key), (key:String) -> objects.exists(key), memo),
+			interfaces: new IrVerifyTable<IrInterface>("interfaces", (key:String) -> interfaces.get(key), (key:String) -> interfaces.exists(key), memo),
+			enums: new IrVerifyTable<IrEnum>("enums", (key:String) -> enums.get(key), (key:String) -> enums.exists(key), memo),
+			globals: new IrVerifyTable<IrType>("globals", (key:String) -> globals.get(key), (key:String) -> globals.exists(key), memo),
+			scalarFunctions: new IrVerifyTable<Bool>("scalarFunctions", (key:String) -> scalarFunctions.get(key), (key:String) -> scalarFunctions.exists(key), memo),
+			carrierSlots: new IrVerifyTable<Bool>("carrierSlots", (key:String) -> carrierSlots.get(key), (key:String) -> carrierSlots.exists(key), memo),
+			physicalValues: new IrVerifyTable<Bool>("physicalValues", (key:String) -> physicalValues.get(key), (key:String) -> physicalValues.exists(key), memo)
 		};
 		for (fn in program.functions)
 			if (selected == null || selected.exists(fn.name)) {
@@ -1247,7 +1247,7 @@ class IrVerifier {
 			&& abiCompatible(actual, expected);
 
 	public static function compatibleType(actual:IrType, expected:IrType, objects:Map<String, IrObject>, interfaces:Map<String, IrInterface>):Bool
-		return compatible(actual, expected, new IrVerifyTable("objects", objects), new IrVerifyTable("interfaces", interfaces));
+		return compatible(actual, expected, new IrVerifyTable<IrObject>("objects", (key:String) -> objects.get(key), (key:String) -> objects.exists(key)), new IrVerifyTable<IrInterface>("interfaces", (key:String) -> interfaces.get(key), (key:String) -> interfaces.exists(key)));
 
 	static function compatible(actual:IrType, expected:IrType, objects:IrVerifyTable<IrObject>, interfaces:IrVerifyTable<IrInterface>):Bool {
 		if (sameType(actual, expected))
@@ -1301,7 +1301,7 @@ class IrVerifier {
  * The type and definition site (block id and position) of each value of one function, by value id, in arrays that every function
  * reuses: a verification allocates no table and no record per value. `reset` clears only the ids the last function defined.
  */
-final class IrVerifyValues {
+class IrVerifyValues {
 	var types:Array<Null<IrType>> = [];
 	var blocks:Array<Int> = [];
 	var positions:Array<Int> = [];

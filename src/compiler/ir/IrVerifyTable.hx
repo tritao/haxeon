@@ -7,31 +7,33 @@ import compiler.ir.IrVerifyMemo.IrVerifyRead;
  * holds the map its reads go to, so a read costs the lookup in the program table and, for the first read of a key in a function, one
  * more in the reads; it never looks its own name up.
  */
-final class IrVerifyTable<V> {
-	final inner:Map<String, V>;
+class IrVerifyTable<V> {
+	final read:String->Null<V>;
+	final has:String->Bool;
 	final name:String;
 	final memo:Null<IrVerifyMemo>;
 	final reads:Null<Map<String, IrVerifyRead>>;
 
-	public function new(name:String, inner:Map<String, V>, ?memo:IrVerifyMemo) {
+	public function new(name:String, read:String->Null<V>, has:String->Bool, ?memo:IrVerifyMemo) {
 		this.name = name;
-		this.inner = inner;
+		this.read = read;
+		this.has = has;
 		this.memo = memo;
 		reads = memo == null ? null : memo.readsOf(name);
 	}
 
 	public function get(key:String):Null<V> {
-		var value = inner.get(key);
+		var value = read(key);
 		if (memo != null && memo.recordingFunction)
 			note(key, value);
 		return value;
 	}
 
 	public function exists(key:String):Bool {
-		var value = inner.get(key);
+		var value = read(key);
 		if (memo != null && memo.recordingFunction)
 			note(key, value);
-		return value != null || inner.exists(key);
+		return value != null || has(key);
 	}
 
 	function note(key:String, value:Dynamic):Void

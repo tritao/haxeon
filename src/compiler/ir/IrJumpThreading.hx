@@ -34,9 +34,11 @@ class IrJumpThreading {
 			}
 		}
 		for (bridge in fn.blocks) {
-			if (bridge.id == fn.blocks[0].id || bridge.instructions.length != 0 || bridge.terminator == null
-				|| !graph.immediate.exists(bridge.id) || external.exists(bridge.id)) continue;
-			var target = switch bridge.terminator.value { case Jump(id): id; default: -1; };
+			// Read once: `graph.immediate` is a property, and a call would end what a test of `bridge.terminator` proved.
+			var bridgeTerminator = bridge.terminator, dominators = graph.immediate;
+			if (bridge.id == fn.blocks[0].id || bridge.instructions.length != 0 || bridgeTerminator == null
+				|| !dominators.exists(bridge.id) || external.exists(bridge.id)) continue;
+			var target = switch bridgeTerminator.value { case Jump(id): id; default: -1; };
 			if (target < 0 || target == bridge.id || !graph.blocks.exists(target)) continue;
 			var predecessors = graph.predecessors.get(bridge.id);
 			if (predecessors == null || predecessors.length != 1 || predecessors[0] == bridge.id || predecessors[0] == target) continue;

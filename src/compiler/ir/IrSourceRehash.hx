@@ -22,7 +22,7 @@ class IrSourceRehash {
 		// as much as the function.
 		if (!isStale(fn, hashes))
 			return fn;
-		var rehomed:Map<SourceProvenance, SourceProvenance> = [], changed = false;
+		var changed = false;
 		function fix(provenance:SourceProvenance):SourceProvenance {
 			var location = provenance.location;
 			if (location == null || location.sourceHash == 0)
@@ -30,14 +30,9 @@ class IrSourceRehash {
 			var current = hashes.get(location.path);
 			if (current == null || current == location.sourceHash)
 				return provenance;
-			var replacement = rehomed.get(provenance);
-			if (replacement == null) {
-				replacement = new SourceProvenance(new SourceLocation(location.path, location.start, location.end, location.line, location.column,
-					location.endLine, location.endColumn, current), provenance.origin);
-				rehomed.set(provenance, replacement);
-			}
 			changed = true;
-			return replacement;
+			return new SourceProvenance(new SourceLocation(location.path, location.start, location.end, location.line, location.column,
+				location.endLine, location.endColumn, current), provenance.origin);
 		}
 		var blocks:Array<IrBlock> = [];
 		for (block in fn.blocks) {

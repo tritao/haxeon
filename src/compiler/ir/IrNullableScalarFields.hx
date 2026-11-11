@@ -1,6 +1,7 @@
 package compiler.ir;
 
 import compiler.Provides.ProviderOperation;
+import compiler.Provides.ProviderOperations;
 import compiler.ir.Ir;
 import compiler.ir.SourceProvenance.Located;
 
@@ -100,7 +101,7 @@ class IrNullableScalarFields {
 		builder.returnValue(value);
 		builder.select(changed);
 		builder.returnValue(builder.toDyn(normalized, type));
-		helpers.set(name, new IrFunction(name, builder.arguments, type, builder.blocks, Provider(TypeKey.of(type), ProviderOperation.detailed(ProviderOperation.NullableScalarHelper, name))));
+		helpers.set(name, new IrFunction(name, builder.arguments, type, builder.blocks, Provider(TypeKey.of(type), ProviderOperations.detailed(ProviderOperation.NullableScalarHelper, name))));
 		return name;
 	}
 

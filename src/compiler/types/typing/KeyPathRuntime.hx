@@ -103,7 +103,7 @@ class KeyPathRuntime {
 
 	static function fn(name:String, definition:KeyPathDefinition, arguments:Array<{name:String, type:CompilerType}>, result:CompilerType,
 			statements:Array<TypedStatement>):TypedFunction
-		return {name: name, role: ProviderFunction(definition.root, compiler.Provides.ProviderOperation.detailed(compiler.Provides.ProviderOperation.KeyPath, name)),
+		return {name: name, role: ProviderFunction(definition.root, compiler.Provides.ProviderOperations.detailed(compiler.Provides.ProviderOperation.KeyPath, name)),
 			origin: definition.origin, originKind: Helper, owner: null, isStatic: true, isConstructor: false,
 			arguments: arguments, result: result, statements: statements, cells: [], cellCaptures: [], span: definition.span};
 }

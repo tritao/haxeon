@@ -45,7 +45,7 @@ class InlineEnumEqualityAbiMain {
 			b.returnValue(result);
 			program.functions.push(new IrFunction(field == "tag" ? tagName : field == "number" ? numberName : ownerName,
 				b.arguments, result.type, b.blocks, compiler.ir.IrFunction.IrFunctionKind.Provider(compiler.ir.TypeKey.of(Obj(shape.valueObject.name)),
-					compiler.Provides.ProviderOperation.detailed(compiler.Provides.ProviderOperation.InlineEnumHelper, field))));
+					compiler.Provides.ProviderOperations.detailed(compiler.Provides.ProviderOperation.InlineEnumHelper, field))));
 		}
 		for (name in [equality, reflective]) {
 			var b = new IrBuilder(), a = b.argument("first", storage), z = b.argument("second", storage),
