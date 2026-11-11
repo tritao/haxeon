@@ -67,6 +67,24 @@ class ConversionResolver {
 				return new TypedExpression(TNullableWrap(converted), expected, value.span);
 			default:
 		}
+		// Preserve null while converting a present nullable element through the abstract's @:from.
+		switch [value.type, expected] {
+			case [TNullable(element), TNullable(target = TAbstract(_, _, _))] if ((switch (session.relations.conversion(element, target)) {
+				case AbstractCast: true;
+				default: false;
+			})):
+				var span = value.span,
+					id = '$' + 'nullable-abstract-value:${session.currentContext.nullableAbstractTemporary++}',
+					local = new TypedExpression(TLocal(id), value.type, span),
+					nilValue = new TypedExpression(TNullableWrap(new TypedExpression(TNullLiteral, TNull, span)), value.type, span),
+					isNull = new TypedExpression(TEqual(local, nilValue), TBool, span),
+					present = coerce(new TypedExpression(TCast(local), element, span), target, context, code),
+					nilResult = new TypedExpression(TNullableWrap(new TypedExpression(TNullLiteral, TNull, span)), expected, span),
+					result = new TypedExpression(TNullableWrap(present), expected, span);
+				return new TypedExpression(TBlockExpression([TVar(id, value, span)],
+					new TypedExpression(TConditional(isNull, nilResult, result), expected, span)), expected, span);
+			default:
+		}
 		// A nullable converts through the abstract's @:from function for its element, so unwrap it first, as Haxe does.
 		switch [value.type, expected] {
 			case [TNullable(element), TAbstract(_, _, _)] if ((switch (session.relations.conversion(element, expected)) { case AbstractCast: true; default: false; })):
