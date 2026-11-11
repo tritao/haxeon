@@ -18,6 +18,15 @@ class LayoutTransaction {
 	var treeIndex:IntIndex = new IntIndex();
 	var submittedIds:Array<Int> = [];
 	var treeIds:Array<Int> = [];
+	var submittedPaintSlots:Array<Int> = [];
+	var treePaintSlots:Array<Int> = [];
+	var submittedBindings:Array<PaintBinding> = [];
+	var treeBindings:Array<PaintBinding> = [];
+	final pendingBindings:Array<PaintBinding> = [];
+	final pendingPreviousBindings:Array<Null<PaintBinding>> = [];
+	final pendingPreviousPositions:Array<Int> = [];
+	final pendingPaintSlots:Array<Int> = [];
+	final paint:PaintStore;
 	var submittedStrings:Array<String> = [];
 	var submittedStringBytes:Array<Bytes> = [];
 	var treeStrings:Array<String> = [];
@@ -41,8 +50,21 @@ class LayoutTransaction {
 
 	/** Acknowledge only a successful native submit; encoding or a failed submit does not advance the base. */
 	public function commit():Void {
+		for (index in 0...submittedIds.length)
+			if (treeIndex.get(submittedIds[index]) < 0) {
+				var slot = submittedPaintSlots[index];
+				PaintBindings.detach(submittedBindings[index]);
+				paint.release(slot, paint.generation(slot));
+			}
+		for (slot in treePaintSlots) paint.acknowledge(slot, paint.generation(slot));
+		pendingPaintSlots.resize(0);
+		pendingBindings.resize(0);
+		pendingPreviousBindings.resize(0);
+		pendingPreviousPositions.resize(0);
 		var previousIndex = submittedIndex; submittedIndex = treeIndex; treeIndex = previousIndex;
 		var previousIds = submittedIds; submittedIds = treeIds; treeIds = previousIds;
+		var previousPaintSlots = submittedPaintSlots; submittedPaintSlots = treePaintSlots; treePaintSlots = previousPaintSlots;
+		var previousBindings = submittedBindings; submittedBindings = treeBindings; treeBindings = previousBindings;
 		var previousStrings = submittedStrings; submittedStrings = treeStrings; treeStrings = previousStrings;
 		var previousBytes = submittedStringBytes; submittedStringBytes = treeStringBytes; treeStringBytes = previousBytes;
 		submittedRoot = tree[0].id;
@@ -50,19 +72,17 @@ class LayoutTransaction {
 	var output:Null<Bytes>;
 	var outputLength:Int = 0;
 
-	public function new() {}
+	public function new(paint:PaintStore) this.paint = paint;
 
 	/** The nodes of the last encoded tree that carry intrinsic content, in tree order. */
 	public function nodesWithIntrinsicContent():Array<LayoutNode>
 		return intrinsicNodes;
 
-	public static function encode(root:LayoutNode):Bytes
-		return new LayoutTransaction().encodeInto(root);
-
 	/** Encodes into reusable storage and returns the backing byte buffer. */
 	public function encodeInto(root:LayoutNode, ?changes:LayoutChanges, captureContentVersions:Bool = true):Bytes {
 		if (root == null)
 			throw "Layout transaction requires a root node";
+		rollback();
 
 		nodeCount = 0;
 		treeCount = 0;
@@ -78,6 +98,8 @@ class LayoutTransaction {
 		appendNode(root, -1);
 		tree.resize(treeCount);
 		treeIds.resize(treeCount);
+		treePaintSlots.resize(treeCount);
+		treeBindings.resize(treeCount);
 		treeStrings.resize(treeCount);
 		treeStringBytes.resize(treeCount);
 		nodes.resize(nodeCount);
@@ -181,17 +203,14 @@ class LayoutTransaction {
 			writeFloat(output, record, NativeKitUIConstants.NKUI_LAYOUT_NODE_PADDING_TOP_OFFSET, style.padding.top);
 			writeFloat(output, record, NativeKitUIConstants.NKUI_LAYOUT_NODE_PADDING_BOTTOM_OFFSET, style.padding.bottom);
 			writeFloat(output, record, NativeKitUIConstants.NKUI_LAYOUT_NODE_CHILD_GAP_OFFSET, style.childGap);
-			writeColor(output, record, NativeKitUIConstants.NKUI_LAYOUT_NODE_BACKGROUND_OFFSET, style.background);
-			writeFloat(output, record, NativeKitUIConstants.NKUI_LAYOUT_NODE_RADIUS_TOP_LEFT_OFFSET, style.radiusTopLeft);
-			writeFloat(output, record, NativeKitUIConstants.NKUI_LAYOUT_NODE_RADIUS_TOP_RIGHT_OFFSET, style.radiusTopRight);
-			writeFloat(output, record, NativeKitUIConstants.NKUI_LAYOUT_NODE_RADIUS_BOTTOM_LEFT_OFFSET, style.radiusBottomLeft);
-			writeFloat(output, record, NativeKitUIConstants.NKUI_LAYOUT_NODE_RADIUS_BOTTOM_RIGHT_OFFSET, style.radiusBottomRight);
+			var paintSlot = treePaintSlots[treeIndex.get(node.id)];
+			writeInt(output, record, NativeKitUIConstants.NKUI_LAYOUT_NODE_PAINT_INDEX_OFFSET, paintSlot);
+			writeInt(output, record, NativeKitUIConstants.NKUI_LAYOUT_NODE_PAINT_GENERATION_OFFSET, paint.generation(paintSlot));
 			var clip = (style.clipHorizontal ? NkuiLayoutClipFlags.Horizontal : NkuiLayoutClipFlags.empty()) |
 				(style.clipVertical ? NkuiLayoutClipFlags.Vertical : NkuiLayoutClipFlags.empty());
 			writeInt(output, record, NativeKitUIConstants.NKUI_LAYOUT_NODE_CLIP_FLAGS_OFFSET, clip.rawValue());
 			writeInt(output, record, NativeKitUIConstants.NKUI_LAYOUT_NODE_TEXT_OFFSET_OFFSET, textOffset);
 			writeInt(output, record, NativeKitUIConstants.NKUI_LAYOUT_NODE_TEXT_LENGTH_OFFSET, this.stringBytes[index].length);
-			writeColor(output, record, NativeKitUIConstants.NKUI_LAYOUT_NODE_TEXT_COLOR_OFFSET, node.textColor);
 			writeInt(output, record, NativeKitUIConstants.NKUI_LAYOUT_NODE_FONT_FAMILY_OFFSET, NativeEnums.fontFamily(nodeTextStyle.font).rawValue());
 			writeFloat(output, record, NativeKitUIConstants.NKUI_LAYOUT_NODE_FONT_SIZE_OFFSET, nodeTextStyle.fontSize);
 			writeFloat(output, record, NativeKitUIConstants.NKUI_LAYOUT_NODE_LETTER_SPACING_OFFSET, nodeTextStyle.letterSpacing);
@@ -306,6 +325,20 @@ class LayoutTransaction {
 		if (treePosition == treeIds.length) treeIds.push(node.id); else treeIds[treePosition] = node.id;
 		var previous = submittedIndex.get(node.id);
 		var added = previous < 0;
+		var paintSlot = added ? paint.acquire() : submittedPaintSlots[previous];
+		if (added) pendingPaintSlots.push(paintSlot);
+		if (treePosition == treePaintSlots.length) treePaintSlots.push(paintSlot); else treePaintSlots[treePosition] = paintSlot;
+		var oldBinding:Null<PaintBinding> = added ? null : submittedBindings[previous];
+		var binding:PaintBinding;
+		if (oldBinding != null && oldBinding.node == node) binding = oldBinding;
+		else {
+			if (oldBinding != null) PaintBindings.detach(oldBinding);
+			binding = PaintBindings.attach(node, paint, paintSlot);
+			pendingBindings.push(binding);
+			pendingPreviousBindings.push(oldBinding);
+			pendingPreviousPositions.push(previous);
+		}
+		if (treePosition == treeBindings.length) treeBindings.push(binding); else treeBindings[treePosition] = binding;
 		var value = node.text == null ? "" : node.text;
 		var text = value.length == 0 ? EmptyText : previous >= 0 && submittedStrings[previous] == value
 			? submittedStringBytes[previous] : Bytes.ofString(value);
@@ -315,6 +348,29 @@ class LayoutTransaction {
 		if (patch && delta != null && (added ? node.children.length > 0 : delta.children.get(node.id) >= 0)) changedParents.push(node);
 		if (!patch || added || (delta != null && delta.inputs.get(node.id) >= 0)) appendRecord(node, parent, text);
 		for (child in node.children) appendNode(child, treePosition);
+	}
+
+	/** Discard slots allocated by an encode that did not successfully submit. */
+	public function rollback():Void {
+		var index = pendingBindings.length;
+		while (index > 0) {
+			index--;
+			PaintBindings.detach(pendingBindings[index]);
+			var old = pendingPreviousBindings[index];
+			if (old != null)
+				submittedBindings[pendingPreviousPositions[index]] = PaintBindings.attach(old.node, paint, old.index);
+		}
+		pendingBindings.resize(0);
+		pendingPreviousBindings.resize(0);
+		pendingPreviousPositions.resize(0);
+		for (slot in pendingPaintSlots) paint.release(slot, paint.generation(slot));
+		pendingPaintSlots.resize(0);
+	}
+
+	public function dispose():Void {
+		rollback();
+		for (binding in submittedBindings) PaintBindings.detach(binding);
+		submittedBindings.resize(0);
 	}
 
 	function appendRecord(node:LayoutNode, parent:Int, text:Bytes):Void {
@@ -357,13 +413,6 @@ class LayoutTransaction {
 		if (axis.sizing != LayoutSizing.Grow && axis.growWeight != 1.0)
 			return false;
 		return axis.max == 0.0 || axis.max >= axis.min;
-	}
-
-	static function writeColor(output:Bytes, record:Int, offset:Int, color:Color):Void {
-		writeFloat(output, record, offset, color.red);
-		writeFloat(output, record, offset + 4, color.green);
-		writeFloat(output, record, offset + 8, color.blue);
-		writeFloat(output, record, offset + 12, color.alpha);
 	}
 
 	static function writeInt(output:Bytes, record:Int, offset:Int, value:Int):Void {

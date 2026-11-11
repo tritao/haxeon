@@ -1,4 +1,5 @@
 #include "layout/layout_engine.h"
+#include "layout_test_paint.h"
 #include "prepare/text_engine.h"
 
 #include <algorithm>
@@ -11,9 +12,12 @@ using namespace nkui;
 
 namespace {
 
+LayoutTestPaint paints;
+
 LayoutNode box(uint32_t id, int32_t parent) {
     LayoutNode node;
     node.id = id;
+    paints.bind(node);
     node.parent = parent;
     node.visual_kind = LayoutVisualKind::Box;
     node.style.width = {LayoutSizing::Grow, 0.0f};
@@ -26,7 +30,7 @@ LayoutNode text(uint32_t id, int32_t parent, const char *value) {
     node.visual_kind = LayoutVisualKind::Text;
     node.text = value;
     node.text_style.font_size = 18.0f;
-    node.text_color = {0.1f, 0.1f, 0.1f, 1.0f};
+    paints.text(node, {0.1f, 0.1f, 0.1f, 1.0f});
     return node;
 }
 
@@ -109,7 +113,7 @@ int main(int argc, char **argv) {
     root.style.padding_left = root.style.padding_right = 20;
     root.style.padding_top = root.style.padding_bottom = 16;
     root.style.child_gap = 12;
-    root.style.background = {0.92f, 0.94f, 0.98f, 1.0f};
+    paints.background(root, {0.92f, 0.94f, 0.98f, 1.0f});
     nodes.push_back(root);
 
     nodes.push_back(text(2, 0,
@@ -121,7 +125,7 @@ int main(int argc, char **argv) {
     panel.style.height = {LayoutSizing::Fit, 0.0f};
     panel.style.padding_left = panel.style.padding_right = 14;
     panel.style.padding_top = panel.style.padding_bottom = 9;
-    panel.style.background = {0.2f, 0.55f, 0.9f, 1.0f};
+    paints.background(panel, {0.2f, 0.55f, 0.9f, 1.0f});
     nodes.push_back(panel);
     nodes.push_back(text(4, 2, "Press me"));
 
@@ -182,7 +186,7 @@ int main(int argc, char **argv) {
     LayoutNode hidden_child = box(302, 1);
     hidden_child.style.width = {LayoutSizing::Fixed, 8.0f};
     hidden_child.style.height = {LayoutSizing::Fixed, 8.0f};
-    hidden_child.style.background = {1.0f, 0.0f, 0.0f, 1.0f};
+    paints.background(hidden_child, {1.0f, 0.0f, 0.0f, 1.0f});
     hidden_child.style.visible = false;
     std::vector<LayoutNode> geometry_nodes{geometry_root, geometry_child, hidden_child};
     if (!engine.layout(geometry_nodes, 100.0f, 80.0f, 1.0f / 60.0f, snapshot, &error))
@@ -229,7 +233,7 @@ int main(int argc, char **argv) {
     LayoutNode scroll_row = box(323, 1);
     scroll_row.style.width = {LayoutSizing::Grow, 0.0f};
     scroll_row.style.height = {LayoutSizing::Fixed, 32.0f};
-    scroll_row.style.background = {0.2f, 0.55f, 0.9f, 1.0f};
+    paints.background(scroll_row, {0.2f, 0.55f, 0.9f, 1.0f});
     std::vector<LayoutNode> scroll_nodes{scroll_root, scroll_content, scroll_spacer, scroll_row};
     if (!engine.layout(scroll_nodes, 100.0f, 80.0f, 1.0f / 60.0f, snapshot, &error))
         return 49;
@@ -305,13 +309,13 @@ int main(int argc, char **argv) {
     lower_layer.style.width = {LayoutSizing::Fixed, 40.0f};
     lower_layer.style.height = {LayoutSizing::Fixed, 30.0f};
     lower_layer.style.z_index = 1;
-    lower_layer.style.background = {1.0f, 0.0f, 0.0f, 1.0f};
+    paints.background(lower_layer, {1.0f, 0.0f, 0.0f, 1.0f});
     LayoutNode upper_layer = lower_layer;
     upper_layer.id = 402;
     upper_layer.style.position_x = 18.0f;
     upper_layer.style.position_y = 16.0f;
     upper_layer.style.z_index = 5;
-    upper_layer.style.background = {0.0f, 0.0f, 1.0f, 1.0f};
+    paints.background(upper_layer, {0.0f, 0.0f, 1.0f, 1.0f});
     std::vector<LayoutNode> stack_nodes{stack_root, lower_layer, upper_layer};
     if (!engine.layout(stack_nodes, 100.0f, 80.0f, 1.0f / 60.0f, snapshot, &error))
         return 23;
@@ -341,11 +345,11 @@ int main(int argc, char **argv) {
     LayoutNode equal_first = lower_layer;
     equal_first.id = 404;
     equal_first.style.z_index = 7;
-    equal_first.style.background = {1.0f, 1.0f, 0.0f, 1.0f};
+    paints.background(equal_first, {1.0f, 1.0f, 0.0f, 1.0f});
     LayoutNode equal_second = lower_layer;
     equal_second.id = 405;
     equal_second.style.z_index = 7;
-    equal_second.style.background = {0.0f, 1.0f, 1.0f, 1.0f};
+    paints.background(equal_second, {0.0f, 1.0f, 1.0f, 1.0f});
     std::vector<LayoutNode> equal_stack_nodes{equal_stack_root, equal_first, equal_second};
     if (!engine.layout(equal_stack_nodes, 100.0f, 80.0f, 1.0f / 60.0f, snapshot, &error))
         return 29;
@@ -378,13 +382,13 @@ int main(int argc, char **argv) {
     backdrop.style.z_index = 1000;
     backdrop.style.width = {LayoutSizing::Fixed, 100.0f};
     backdrop.style.height = {LayoutSizing::Fixed, 80.0f};
-    backdrop.style.background = {0.0f, 0.0f, 0.0f, 1.0f};
+    paints.background(backdrop, {0.0f, 0.0f, 0.0f, 1.0f});
     LayoutNode modal_panel = box(409, 1);
     modal_panel.style.positioning = LayoutPositioning::Absolute;
     modal_panel.style.z_index = 1001;
     modal_panel.style.width = {LayoutSizing::Fixed, 80.0f};
     modal_panel.style.height = {LayoutSizing::Fixed, 60.0f};
-    modal_panel.style.background = {1.0f, 1.0f, 1.0f, 1.0f};
+    paints.background(modal_panel, {1.0f, 1.0f, 1.0f, 1.0f});
     LayoutNode field = box(413, 3);
     field.style.width = {LayoutSizing::Fixed, 60.0f};
     field.style.height = {LayoutSizing::Fixed, 20.0f};
@@ -393,7 +397,7 @@ int main(int argc, char **argv) {
     caret.style.z_index = 2;
     caret.style.width = {LayoutSizing::Fixed, 2.0f};
     caret.style.height = {LayoutSizing::Fixed, 16.0f};
-    caret.style.background = {1.0f, 0.0f, 0.0f, 1.0f};
+    paints.background(caret, {1.0f, 0.0f, 0.0f, 1.0f});
     std::vector<LayoutNode> overlay_nodes{overlay_root, overlay, backdrop, modal_panel, field, caret};
     if (!engine.layout(overlay_nodes, 100.0f, 80.0f, 1.0f / 60.0f, snapshot, &error))
         return 58;
@@ -431,14 +435,14 @@ int main(int argc, char **argv) {
     dropdown.style.height = {LayoutSizing::Fixed, 30.0f};
     dropdown.style.clip_to_parent = false;
     dropdown.style.z_index = 10;
-    dropdown.style.background = {1.0f, 0.0f, 0.0f, 1.0f};
+    paints.background(dropdown, {1.0f, 0.0f, 0.0f, 1.0f});
     LayoutNode console = box(503, 0);
     console.style.positioning = LayoutPositioning::Absolute;
     console.style.position_y = 40.0f;
     console.style.width = {LayoutSizing::Fixed, 100.0f};
     console.style.height = {LayoutSizing::Fixed, 30.0f};
     console.style.z_index = 1000;
-    console.style.background = {0.0f, 0.0f, 1.0f, 1.0f};
+    paints.background(console, {0.0f, 0.0f, 1.0f, 1.0f});
     std::vector<LayoutNode> dock_nodes{dock_root, dock, dropdown, console};
     if (!engine.layout(dock_nodes, 100.0f, 100.0f, 1.0f / 60.0f, snapshot, &error) ||
         snapshot.find(502)->paint_order >= snapshot.find(503)->paint_order)
@@ -471,7 +475,7 @@ int main(int argc, char **argv) {
     later_popup.style.z_index = 1002;
     later_popup.style.width = {LayoutSizing::Fixed, 60.0f};
     later_popup.style.height = {LayoutSizing::Fixed, 40.0f};
-    later_popup.style.background = {0.0f, 0.0f, 1.0f, 1.0f};
+    paints.background(later_popup, {0.0f, 0.0f, 1.0f, 1.0f});
     overlay_nodes[5].style.z_index = 32000;
     overlay_nodes.push_back(later_popup);
     if (!engine.layout(overlay_nodes, 100.0f, 80.0f, 1.0f / 60.0f, snapshot, &error))

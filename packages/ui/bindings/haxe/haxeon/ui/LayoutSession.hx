@@ -14,12 +14,13 @@ class LayoutSession {
 	static final EmptyBytes:Bytes = Bytes.alloc(0);
 	var value:nkui_layout_session;
 	var disposed:Bool;
+	final paint:PaintStore;
 	final transaction:LayoutTransaction;
 	var resolved:Array<ResolvedLayoutItem>;
 	var nextResolved:Array<ResolvedLayoutItem> = [];
 	final updatesIndex:IntIndex = new IntIndex();
 	final updatedItems:Array<ResolvedLayoutItem> = [];
-	final referenceTransaction:LayoutTransaction = new LayoutTransaction();
+	final referenceTransaction:LayoutTransaction;
 	/** Compare the retained native tree with a full encode after every submit while retention verification is enabled. */
 	public var verifyTransactions:Bool = false;
 	var hitPathBytes:Bytes;
@@ -34,7 +35,9 @@ class LayoutSession {
 	private function new(value:nkui_layout_session) {
 		this.value = value;
 		disposed = false;
-		transaction = new LayoutTransaction();
+		paint = new PaintStore();
+		transaction = new LayoutTransaction(paint);
+		referenceTransaction = new LayoutTransaction(paint);
 		resolved = [];
 		hitPathBytes = Bytes.alloc(64 * 4);
 		resolvedUpdateBytes = Bytes.alloc(1024);
@@ -77,14 +80,21 @@ class LayoutSession {
 		if (frame == null)
 			throw "Layout session frame cannot be null";
 		var encodeStarted = measureCost ? Sys.time() : 0.0;
-		var transactionBytes:Bytes = transaction.encodeInto(root, forceFull ? null : changes);
+		var transactionBytes:Bytes;
+		try transactionBytes = transaction.encodeInto(root, forceFull ? null : changes)
+		catch (error:Dynamic) { transaction.rollback(); throw error; }
 		var encodeFinished = measureCost ? Sys.time() : 0.0;
 		collectMeasureContents(root);
 		refreshMeasureCallback();
 		var nativeFrame = frame.nativeValue();
-		UiResult.check(NativeKitUI.nkui_layout_session_submit_slice(value, transactionBytes, 0,
-			transaction.byteLength(), nativeFrame),
-			"layoutSession.submit");
+		try {
+			UiResult.check(NativeKitUI.nkui_layout_session_submit_paint_records_span(value,
+				Bytes.view(transactionBytes, 0, transaction.byteLength()), paint.span(), nativeFrame),
+				"layoutSession.submit");
+		} catch (error:Dynamic) {
+			transaction.rollback();
+			throw error;
+		}
 		if (verifyTransactions) verifyTree(root);
 		var decodeStarted = measureCost ? Sys.time() : 0.0;
 		var result = NativeKitUI.nkui_layout_session_get_resolved_updates_into(value, resolvedUpdateBytes);
@@ -142,9 +152,15 @@ class LayoutSession {
 	/** Compare a retained native tree against its complete Haxe input, without replacing the native tree. */
 	public function verifyTree(root:LayoutNode):Void {
 		ensureLive();
-		var reference = referenceTransaction.encodeInto(root, null, false);
-		UiResult.check(NativeKitUI.nkui_layout_session_verify_tree_slice(value, reference, 0,
-			referenceTransaction.byteLength()), "layoutSession.verifyIncrementalTree");
+		try {
+			var reference = referenceTransaction.encodeInto(root, null, false);
+			UiResult.check(NativeKitUI.nkui_layout_session_verify_tree_paint_records_span(value,
+				Bytes.view(reference, 0, referenceTransaction.byteLength()), paint.span()), "layoutSession.verifyIncrementalTree");
+			referenceTransaction.rollback();
+		} catch (error:Dynamic) {
+			referenceTransaction.rollback();
+			throw error;
+		}
 	}
 
 	/** Returns the native root-to-target geometric hit path for viewport coordinates. */
@@ -302,6 +318,9 @@ class LayoutSession {
 		detachMeasureCallback();
 		var status = NativeKitUI.nkui_layout_session_destroy(value);
 		disposed = true;
+		referenceTransaction.dispose();
+		transaction.dispose();
+		paint.dispose();
 		resolvedUpdateBytes = EmptyBytes;
 		UiResult.check(status, "layoutSession.dispose");
 	}

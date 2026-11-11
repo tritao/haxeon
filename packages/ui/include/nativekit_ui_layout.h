@@ -2,6 +2,7 @@
 #define NATIVEKIT_UI_LAYOUT_H
 
 #include "nativekit_ui.h"
+#include "nativekit_ui_paint_record.h"
 
 #include <stdint.h>
 
@@ -17,12 +18,12 @@ extern "C" {
 
 /** Layout bridge and wire-format versions and fixed sizes. */
 enum {
-    NKUI_LAYOUT_API_VERSION = 24,
-    NKUI_LAYOUT_TRANSACTION_VERSION = 17,
-    NKUI_LAYOUT_PATCH_VERSION = 18,
+    NKUI_LAYOUT_API_VERSION = 25,
+    NKUI_LAYOUT_TRANSACTION_VERSION = 19,
+    NKUI_LAYOUT_PATCH_VERSION = 20,
     NKUI_LAYOUT_PATCH_HEADER_BYTES = 32,
     NKUI_LAYOUT_TRANSACTION_HEADER_BYTES = 16,
-    NKUI_LAYOUT_NODE_RECORD_BYTES = 264,
+    NKUI_LAYOUT_NODE_RECORD_BYTES = 224,
     NKUI_LAYOUT_MAX_TRANSACTION_BYTES = 16 * 1024 * 1024,
     NKUI_LAYOUT_RESOLVED_ITEM_BYTES = 96
 };
@@ -138,76 +139,72 @@ enum {
     NKUI_LAYOUT_NODE_PADDING_TOP_OFFSET = 40,
     NKUI_LAYOUT_NODE_PADDING_BOTTOM_OFFSET = 44,
     NKUI_LAYOUT_NODE_CHILD_GAP_OFFSET = 48,
-    NKUI_LAYOUT_NODE_BACKGROUND_OFFSET = 52,
-    NKUI_LAYOUT_NODE_RADIUS_TOP_LEFT_OFFSET = 68,
-    NKUI_LAYOUT_NODE_RADIUS_TOP_RIGHT_OFFSET = 72,
-    NKUI_LAYOUT_NODE_RADIUS_BOTTOM_LEFT_OFFSET = 76,
-    NKUI_LAYOUT_NODE_RADIUS_BOTTOM_RIGHT_OFFSET = 80,
-    NKUI_LAYOUT_NODE_CLIP_FLAGS_OFFSET = 84,
-    NKUI_LAYOUT_NODE_TEXT_OFFSET_OFFSET = 88,
-    NKUI_LAYOUT_NODE_TEXT_LENGTH_OFFSET = 92,
-    NKUI_LAYOUT_NODE_TEXT_COLOR_OFFSET = 96,
-    NKUI_LAYOUT_NODE_FONT_FAMILY_OFFSET = 112,
-    NKUI_LAYOUT_NODE_FONT_SIZE_OFFSET = 116,
-    NKUI_LAYOUT_NODE_LETTER_SPACING_OFFSET = 120,
-    NKUI_LAYOUT_NODE_LINE_HEIGHT_OFFSET = 124,
-    NKUI_LAYOUT_NODE_TEXT_WRAP_OFFSET = 128,
-    NKUI_LAYOUT_NODE_TEXT_ALIGNMENT_OFFSET = 132,
-    NKUI_LAYOUT_NODE_TEXT_DIRECTION_OFFSET = 136,
-    NKUI_LAYOUT_NODE_TEXT_FLAGS_OFFSET = 140,
-    NKUI_LAYOUT_NODE_TRANSFORM_A_OFFSET = 144,
-    NKUI_LAYOUT_NODE_TRANSFORM_B_OFFSET = 148,
-    NKUI_LAYOUT_NODE_TRANSFORM_C_OFFSET = 152,
-    NKUI_LAYOUT_NODE_TRANSFORM_D_OFFSET = 156,
-    NKUI_LAYOUT_NODE_TRANSFORM_TX_OFFSET = 160,
-    NKUI_LAYOUT_NODE_TRANSFORM_TY_OFFSET = 164,
-    NKUI_LAYOUT_NODE_FLAGS_OFFSET = 168,
+    NKUI_LAYOUT_NODE_PAINT_INDEX_OFFSET = 52,
+    NKUI_LAYOUT_NODE_PAINT_GENERATION_OFFSET = 56,
+    NKUI_LAYOUT_NODE_CLIP_FLAGS_OFFSET = 60,
+    NKUI_LAYOUT_NODE_TEXT_OFFSET_OFFSET = 64,
+    NKUI_LAYOUT_NODE_TEXT_LENGTH_OFFSET = 68,
+    NKUI_LAYOUT_NODE_FONT_FAMILY_OFFSET = 72,
+    NKUI_LAYOUT_NODE_FONT_SIZE_OFFSET = 76,
+    NKUI_LAYOUT_NODE_LETTER_SPACING_OFFSET = 80,
+    NKUI_LAYOUT_NODE_LINE_HEIGHT_OFFSET = 84,
+    NKUI_LAYOUT_NODE_TEXT_WRAP_OFFSET = 88,
+    NKUI_LAYOUT_NODE_TEXT_ALIGNMENT_OFFSET = 92,
+    NKUI_LAYOUT_NODE_TEXT_DIRECTION_OFFSET = 96,
+    NKUI_LAYOUT_NODE_TEXT_FLAGS_OFFSET = 100,
+    NKUI_LAYOUT_NODE_TRANSFORM_A_OFFSET = 104,
+    NKUI_LAYOUT_NODE_TRANSFORM_B_OFFSET = 108,
+    NKUI_LAYOUT_NODE_TRANSFORM_C_OFFSET = 112,
+    NKUI_LAYOUT_NODE_TRANSFORM_D_OFFSET = 116,
+    NKUI_LAYOUT_NODE_TRANSFORM_TX_OFFSET = 120,
+    NKUI_LAYOUT_NODE_TRANSFORM_TY_OFFSET = 124,
+    NKUI_LAYOUT_NODE_FLAGS_OFFSET = 128,
     /** Packed child alignment: x in bits 0..7, y in bits 8..15. */
-    NKUI_LAYOUT_NODE_CHILD_ALIGNMENT_OFFSET = 172,
+    NKUI_LAYOUT_NODE_CHILD_ALIGNMENT_OFFSET = 132,
     /** Parent-relative x offset for absolute-positioned nodes. */
-    NKUI_LAYOUT_NODE_POSITION_X_OFFSET = 176,
+    NKUI_LAYOUT_NODE_POSITION_X_OFFSET = 136,
     /** Parent-relative y offset for absolute-positioned nodes. */
-    NKUI_LAYOUT_NODE_POSITION_Y_OFFSET = 180,
+    NKUI_LAYOUT_NODE_POSITION_Y_OFFSET = 140,
     /** Stacking order for absolute-positioned nodes, encoded as signed int32. */
-    NKUI_LAYOUT_NODE_Z_INDEX_OFFSET = 184,
+    NKUI_LAYOUT_NODE_Z_INDEX_OFFSET = 144,
     /** Minimum width for FIT/GROW sizing; zero means no minimum. */
-    NKUI_LAYOUT_NODE_WIDTH_MIN_OFFSET = 188,
+    NKUI_LAYOUT_NODE_WIDTH_MIN_OFFSET = 148,
     /** Maximum width for FIT/GROW sizing; zero means unbounded. */
-    NKUI_LAYOUT_NODE_WIDTH_MAX_OFFSET = 192,
+    NKUI_LAYOUT_NODE_WIDTH_MAX_OFFSET = 152,
     /** Minimum height for FIT/GROW sizing; zero means no minimum. */
-    NKUI_LAYOUT_NODE_HEIGHT_MIN_OFFSET = 196,
+    NKUI_LAYOUT_NODE_HEIGHT_MIN_OFFSET = 156,
     /** Maximum height for FIT/GROW sizing; zero means unbounded. */
-    NKUI_LAYOUT_NODE_HEIGHT_MAX_OFFSET = 200,
+    NKUI_LAYOUT_NODE_HEIGHT_MAX_OFFSET = 160,
     /** Width divided by height; zero disables aspect-ratio sizing. */
-    NKUI_LAYOUT_NODE_ASPECT_RATIO_OFFSET = 204,
+    NKUI_LAYOUT_NODE_ASPECT_RATIO_OFFSET = 164,
     /** Relative share of extra width for GROW sizing; must be positive and finite. */
-    NKUI_LAYOUT_NODE_WIDTH_GROW_WEIGHT_OFFSET = 208,
+    NKUI_LAYOUT_NODE_WIDTH_GROW_WEIGHT_OFFSET = 168,
     /** Relative share of extra height for GROW sizing; must be positive and finite. */
-    NKUI_LAYOUT_NODE_HEIGHT_GROW_WEIGHT_OFFSET = 212,
+    NKUI_LAYOUT_NODE_HEIGHT_GROW_WEIGHT_OFFSET = 172,
     /** Main-axis free-space distribution policy. */
-    NKUI_LAYOUT_NODE_CHILD_DISTRIBUTION_OFFSET = 216,
+    NKUI_LAYOUT_NODE_CHILD_DISTRIBUTION_OFFSET = 176,
     /** Vertical gap between wrapped rows. */
-    NKUI_LAYOUT_NODE_ROW_GAP_OFFSET = 220,
+    NKUI_LAYOUT_NODE_ROW_GAP_OFFSET = 180,
     /** Horizontal gap between wrapped columns. */
-    NKUI_LAYOUT_NODE_COLUMN_GAP_OFFSET = 224,
+    NKUI_LAYOUT_NODE_COLUMN_GAP_OFFSET = 184,
     /** Wrap policy: zero keeps one row/column, one enables wrapping. */
-    NKUI_LAYOUT_NODE_WRAP_MODE_OFFSET = 228,
+    NKUI_LAYOUT_NODE_WRAP_MODE_OFFSET = 188,
     /** Per-child cross-axis alignment override; zero inherits the parent. */
-    NKUI_LAYOUT_NODE_ALIGN_SELF_OFFSET = 232,
+    NKUI_LAYOUT_NODE_ALIGN_SELF_OFFSET = 192,
     /** Application-defined intrinsic-content version used by measurement caching. */
-    NKUI_LAYOUT_NODE_MEASURE_VERSION_OFFSET = 236,
+    NKUI_LAYOUT_NODE_MEASURE_VERSION_OFFSET = 196,
     /** Normalized horizontal transform origin, in the range 0..1. */
-    NKUI_LAYOUT_NODE_TRANSFORM_ORIGIN_X_OFFSET = 240,
+    NKUI_LAYOUT_NODE_TRANSFORM_ORIGIN_X_OFFSET = 200,
     /** Normalized vertical transform origin, in the range 0..1. */
-    NKUI_LAYOUT_NODE_TRANSFORM_ORIGIN_Y_OFFSET = 244,
+    NKUI_LAYOUT_NODE_TRANSFORM_ORIGIN_Y_OFFSET = 204,
     /** Haxe-owned paint/content revision used by native raster caches. */
-    NKUI_LAYOUT_NODE_CONTENT_REVISION_OFFSET = 248,
+    NKUI_LAYOUT_NODE_CONTENT_REVISION_OFFSET = 208,
     /** Haxe-owned resolved geometry revision for shared scene metadata. */
-    NKUI_LAYOUT_NODE_GEOMETRY_REVISION_OFFSET = 252,
+    NKUI_LAYOUT_NODE_GEOMETRY_REVISION_OFFSET = 212,
     /** Haxe-owned compositing revision for shared scene metadata. */
-    NKUI_LAYOUT_NODE_COMPOSITE_REVISION_OFFSET = 256,
+    NKUI_LAYOUT_NODE_COMPOSITE_REVISION_OFFSET = 216,
     /** Tab-stop interval in space advances; zero preserves default shaping. */
-    NKUI_LAYOUT_NODE_TAB_WIDTH_OFFSET = 260
+    NKUI_LAYOUT_NODE_TAB_WIDTH_OFFSET = 220
 };
 
 /** Opaque retained layout session used by a Haxe-owned component tree. */
@@ -395,8 +392,8 @@ NKUI_API nkui_result NK_CALL nkui_layout_session_set_cache_policy(nkui_layout_se
  * The transaction is little-endian and consists of a fixed header, node
  * records of NKUI_LAYOUT_NODE_RECORD_BYTES bytes, and a UTF-8 string table.
  * Node text offsets are absolute byte offsets from the beginning of the
- * transaction. The native side copies all values before returning, so the
- * input buffer may be reused. The transaction is bounded by
+ * transaction. Paint records are borrowed for this call from the separate
+ * native-memory span. The transaction is bounded by
  * NKUI_LAYOUT_MAX_TRANSACTION_BYTES; node capacity grows with submitted data.
  * A PATCH_VERSION packet has a 32-byte header: version, updated-node count,
  * record size, string offset, removed-ID count, child-list word count, final
@@ -411,7 +408,8 @@ NKUI_API nkui_result NK_CALL nkui_layout_session_set_cache_policy(nkui_layout_se
  */
 NKUI_API nkui_result NK_CALL nkui_layout_session_submit(
     nkui_layout_session session, const uint8_t *transaction NKUI_IN_ARRAY(transaction_bytes),
-    uint32_t transaction_bytes, const nkui_layout_frame_input *frame);
+    uint32_t transaction_bytes, const uint8_t *paint_records NKUI_IN_ARRAY(paint_bytes),
+    uint32_t paint_bytes, const nkui_layout_frame_input *frame);
 
 /** Copies resolved geometry in retained tree order. Full submits preserve submission order; patches use child-list preorder.
  *
@@ -444,7 +442,8 @@ NKUI_API nkui_result NK_CALL nkui_layout_session_get_resolved_updates_into(
 /** Checks every retained native node and its order against a full transaction without changing the session. */
 NKUI_API nkui_result NK_CALL nkui_layout_session_verify_tree(
     nkui_layout_session session, const uint8_t *transaction NKUI_IN_ARRAY(transaction_bytes),
-    uint32_t transaction_bytes);
+    uint32_t transaction_bytes, const uint8_t *paint_records NKUI_IN_ARRAY(paint_bytes),
+    uint32_t paint_bytes);
 
 /** Returns the root-to-target geometric hit path for a viewport point.
  *

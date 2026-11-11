@@ -3,6 +3,7 @@
 #include "nativekit_gpu.h"
 #include "nativekit_ui.h"
 #include "nativekit_ui_layout.h"
+#include "layout_wire_paint.h"
 #include "nativekit_window.h"
 #include "surface_frame.h"
 
@@ -39,6 +40,8 @@
 
 namespace {
 
+LayoutWirePaint paints;
+
 void write_u32(std::vector<uint8_t> &bytes, std::size_t offset, uint32_t value) {
     std::memcpy(bytes.data() + offset, &value, sizeof(value));
 }
@@ -49,14 +52,6 @@ void write_i32(std::vector<uint8_t> &bytes, std::size_t offset, int32_t value) {
 
 void write_float(std::vector<uint8_t> &bytes, std::size_t offset, float value) {
     std::memcpy(bytes.data() + offset, &value, sizeof(value));
-}
-
-void write_color(std::vector<uint8_t> &bytes, std::size_t offset, float red, float green,
-                 float blue, float alpha) {
-    write_float(bytes, offset, red);
-    write_float(bytes, offset + 4, green);
-    write_float(bytes, offset + 8, blue);
-    write_float(bytes, offset + 12, alpha);
 }
 
 template <class T> void append_bytes(std::vector<uint8_t> &bytes, const T &value) {
@@ -83,6 +78,8 @@ std::vector<uint8_t> transaction(float width, float height) {
         write_u32(bytes, revision_offset + NKUI_LAYOUT_NODE_COMPOSITE_REVISION_OFFSET, 1);
         const std::size_t offset = NKUI_LAYOUT_TRANSACTION_HEADER_BYTES +
                                    static_cast<std::size_t>(index) * NKUI_LAYOUT_NODE_RECORD_BYTES;
+        write_u32(bytes, offset + NKUI_LAYOUT_NODE_PAINT_INDEX_OFFSET, index);
+        write_u32(bytes, offset + NKUI_LAYOUT_NODE_PAINT_GENERATION_OFFSET, 1);
         write_float(bytes, offset + NKUI_LAYOUT_NODE_TRANSFORM_A_OFFSET, 1.0f);
         write_float(bytes, offset + NKUI_LAYOUT_NODE_TRANSFORM_D_OFFSET, 1.0f);
         write_float(bytes, offset + NKUI_LAYOUT_NODE_WIDTH_GROW_WEIGHT_OFFSET, 1.0f);
@@ -105,7 +102,7 @@ std::vector<uint8_t> transaction(float width, float height) {
     write_float(bytes, record(0) + NKUI_LAYOUT_NODE_HEIGHT_VALUE_OFFSET, height);
     write_u32(bytes, record(0) + NKUI_LAYOUT_NODE_DIRECTION_OFFSET,
               NKUI_LAYOUT_DIRECTION_TOP_TO_BOTTOM);
-    write_color(bytes, record(0) + NKUI_LAYOUT_NODE_BACKGROUND_OFFSET, 0.1f, 0.1f, 0.1f, 1.0f);
+    paints.background(0, 0.1f, 0.1f, 0.1f, 1.0f);
     write_float(bytes, record(0) + NKUI_LAYOUT_NODE_FONT_SIZE_OFFSET, 16.0f);
     write_u32(bytes, record(0) + NKUI_LAYOUT_NODE_TEXT_OFFSET_OFFSET,
               static_cast<uint32_t>(string_offset));
@@ -122,7 +119,7 @@ std::vector<uint8_t> transaction(float width, float height) {
               NKUI_LAYOUT_DIRECTION_TOP_TO_BOTTOM);
     write_float(bytes, record(1) + NKUI_LAYOUT_NODE_TRANSFORM_TX_OFFSET, 12.0f);
     write_float(bytes, record(1) + NKUI_LAYOUT_NODE_TRANSFORM_TY_OFFSET, 20.0f);
-    write_color(bytes, record(1) + NKUI_LAYOUT_NODE_BACKGROUND_OFFSET, 0.2f, 0.5f, 0.9f, 1.0f);
+    paints.background(1, 0.2f, 0.5f, 0.9f, 1.0f);
     write_float(bytes, record(1) + NKUI_LAYOUT_NODE_FONT_SIZE_OFFSET, 16.0f);
     write_u32(bytes, record(1) + NKUI_LAYOUT_NODE_TEXT_OFFSET_OFFSET,
               static_cast<uint32_t>(string_offset));
@@ -138,7 +135,6 @@ std::vector<uint8_t> transaction(float width, float height) {
     write_u32(bytes, record(2) + NKUI_LAYOUT_NODE_TEXT_OFFSET_OFFSET,
               static_cast<uint32_t>(string_offset));
     write_u32(bytes, record(2) + NKUI_LAYOUT_NODE_TEXT_LENGTH_OFFSET, sizeof(text) - 1);
-    write_color(bytes, record(2) + NKUI_LAYOUT_NODE_TEXT_COLOR_OFFSET, 1.0f, 1.0f, 1.0f, 1.0f);
     write_float(bytes, record(2) + NKUI_LAYOUT_NODE_FONT_SIZE_OFFSET, 18.0f);
 
     std::memcpy(bytes.data() + string_offset, text, sizeof(text) - 1);
@@ -197,7 +193,7 @@ static int run_session_tests(nk_surface surface, int framebuffer_width, int fram
         transaction(framebuffer_width / pixel_scale, framebuffer_height / pixel_scale);
     nkui_layout_frame_input frame{sizeof(frame), framebuffer_width / pixel_scale,
                                   framebuffer_height / pixel_scale, 1.0f / 60.0f};
-    const nkui_result submit_result = nkui_layout_session_submit(
+    const nkui_result submit_result = paints.submit(
         session, bytes.data(), static_cast<uint32_t>(bytes.size()), &frame);
     if (submit_result != NKUI_OK) {
         std::fprintf(stderr, "session submit returned %d\n", static_cast<int>(submit_result));
@@ -262,7 +258,7 @@ static int run_session_tests(nk_surface surface, int framebuffer_width, int fram
         const std::size_t root_record = NKUI_LAYOUT_TRANSACTION_HEADER_BYTES;
         write_float(moved, root_record + NKUI_LAYOUT_NODE_TRANSFORM_TX_OFFSET, 32.0f);
         write_float(moved, root_record + NKUI_LAYOUT_NODE_TRANSFORM_TY_OFFSET, 16.0f);
-        if (nkui_layout_session_submit(session, moved.data(), static_cast<uint32_t>(moved.size()),
+        if (paints.submit(session, moved.data(), static_cast<uint32_t>(moved.size()),
                                        &frame) != NKUI_OK ||
             nkui_layout_session_render_frame(renderer, session, surface, &frame_info, 0) !=
                 NKUI_OK ||
@@ -275,7 +271,7 @@ static int run_session_tests(nk_surface surface, int framebuffer_width, int fram
     }
 
     if (!result &&
-        nkui_layout_session_submit(session, bytes.data(), static_cast<uint32_t>(bytes.size()),
+        paints.submit(session, bytes.data(), static_cast<uint32_t>(bytes.size()),
                                    &frame) != NKUI_OK)
         result = 19;
 
@@ -373,7 +369,7 @@ static int run_session_tests(nk_surface surface, int framebuffer_width, int fram
             if (nkui_display_list_submit(custom_list, custom_commands.data(),
                                          static_cast<uint32_t>(custom_commands.size())) !=
                     NKUI_OK ||
-                nkui_layout_session_submit(session, custom_tree.data(),
+                paints.submit(session, custom_tree.data(),
                                            static_cast<uint32_t>(custom_tree.size()),
                                            &frame) != NKUI_OK ||
                 nkui_layout_session_set_custom_paint(session, 2, custom_list) != NKUI_OK ||
@@ -540,7 +536,7 @@ static int run_session_tests(nk_surface surface, int framebuffer_width, int fram
         }
         if (!result) {
             // custom_tree's node index 2 is the "Press" label rendered white
-            // (transaction()'s own NKUI_LAYOUT_NODE_TEXT_COLOR_OFFSET). It is
+            // (the transaction's text paint record). It is
             // still a normal child of the reused custom node and would
             // overlap the sampled region, so hide it for this sub-test.
             auto text_tree = custom_tree;
@@ -558,7 +554,7 @@ static int run_session_tests(nk_surface surface, int framebuffer_width, int fram
                                                text_layout, 0.0f, 0.0f, 0.0f, 0.0f});
             if (nkui_display_list_submit(text_list, text_commands.data(),
                                          static_cast<uint32_t>(text_commands.size())) != NKUI_OK ||
-                nkui_layout_session_submit(session, text_tree.data(),
+                paints.submit(session, text_tree.data(),
                                            static_cast<uint32_t>(text_tree.size()),
                                            &frame) != NKUI_OK ||
                 nkui_layout_session_set_custom_paint(session, 2, text_list) != NKUI_OK ||
@@ -983,7 +979,7 @@ static int run_session_tests(nk_surface surface, int framebuffer_width, int fram
                                                 framebuffer_height / zoom, 0};
             const nkui_frame_info info{sizeof(info), framebuffer_width / zoom, framebuffer_height / zoom,
                                        framebuffer_width, framebuffer_height, zoom};
-            const auto submitted = nkui_layout_session_submit(session, tree.data(), tree.size(), &input);
+            const auto submitted = paints.submit(session, tree.data(), tree.size(), &input);
             const auto painted = nkui_layout_session_set_custom_paint(session, 2, border_list);
             const auto composited = nkui_layout_session_set_custom_paint_composite(session, 2, composite_list);
             const auto rendered = nkui_layout_session_render_frame(renderer, session, surface, &info, 0);

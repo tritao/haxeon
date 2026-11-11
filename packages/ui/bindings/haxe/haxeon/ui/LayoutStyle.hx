@@ -31,11 +31,11 @@ class LayoutStyle implements Diffable {
 	public var overlay:Bool;
 	public var padding:Insets;
 	public var childGap:Float;
-	public var background:Color;
-	public var radiusTopLeft:Float;
-	public var radiusTopRight:Float;
-	public var radiusBottomLeft:Float;
-	public var radiusBottomRight:Float;
+	@:isVar public var background(get, set):Color;
+	@:isVar public var radiusTopLeft(get, set):Float;
+	@:isVar public var radiusTopRight(get, set):Float;
+	@:isVar public var radiusBottomLeft(get, set):Float;
+	@:isVar public var radiusBottomRight(get, set):Float;
 	public var clipHorizontal:Bool;
 	public var clipVertical:Bool;
 	public var visible:Bool;
@@ -83,6 +83,70 @@ class LayoutStyle implements Diffable {
 		transform = DefaultTransform;
 		transformOriginX = 0.5;
 		transformOriginY = 0.5;
+	}
+
+	function get_background():Color {
+		var binding = PaintBindings.style(this);
+		if (binding == null) return background;
+		var slot = binding.store.at(binding.index, binding.generation);
+		return new Color(slot.ref.backgroundRed, slot.ref.backgroundGreen, slot.ref.backgroundBlue, slot.ref.backgroundAlpha);
+	}
+
+	function set_background(value:Color):Color {
+		var binding = PaintBindings.style(this);
+		if (binding == null) return background = value;
+		while (binding != null) {
+			binding.store.setBackground(binding.index, binding.generation, value.red, value.green, value.blue, value.alpha);
+			binding = binding.nextStyle;
+		}
+		return value;
+	}
+
+	function get_radiusTopLeft():Float {
+		var binding = PaintBindings.style(this);
+		return binding == null ? radiusTopLeft : binding.store.at(binding.index, binding.generation).ref.radiusTopLeft;
+	}
+	function get_radiusTopRight():Float {
+		var binding = PaintBindings.style(this);
+		return binding == null ? radiusTopRight : binding.store.at(binding.index, binding.generation).ref.radiusTopRight;
+	}
+	function get_radiusBottomLeft():Float {
+		var binding = PaintBindings.style(this);
+		return binding == null ? radiusBottomLeft : binding.store.at(binding.index, binding.generation).ref.radiusBottomLeft;
+	}
+	function get_radiusBottomRight():Float {
+		var binding = PaintBindings.style(this);
+		return binding == null ? radiusBottomRight : binding.store.at(binding.index, binding.generation).ref.radiusBottomRight;
+	}
+	function set_radiusTopLeft(value:Float):Float {
+		if (PaintBindings.style(this) == null) return radiusTopLeft = value;
+		setRadius(0, value); return value;
+	}
+	function set_radiusTopRight(value:Float):Float {
+		if (PaintBindings.style(this) == null) return radiusTopRight = value;
+		setRadius(1, value); return value;
+	}
+	function set_radiusBottomLeft(value:Float):Float {
+		if (PaintBindings.style(this) == null) return radiusBottomLeft = value;
+		setRadius(2, value); return value;
+	}
+	function set_radiusBottomRight(value:Float):Float {
+		if (PaintBindings.style(this) == null) return radiusBottomRight = value;
+		setRadius(3, value); return value;
+	}
+	function setRadius(corner:Int, value:Float):Void {
+		var binding = PaintBindings.style(this);
+		while (binding != null) {
+			var slot = binding.store.at(binding.index, binding.generation);
+			switch corner {
+				case 0: if (!PaintStore.sameFloat(slot.ref.radiusTopLeft, value)) { slot.ref.radiusTopLeft = value; slot.ref.flags |= 2; }
+				case 1: if (!PaintStore.sameFloat(slot.ref.radiusTopRight, value)) { slot.ref.radiusTopRight = value; slot.ref.flags |= 2; }
+				case 2: if (!PaintStore.sameFloat(slot.ref.radiusBottomLeft, value)) { slot.ref.radiusBottomLeft = value; slot.ref.flags |= 2; }
+				case 3: if (!PaintStore.sameFloat(slot.ref.radiusBottomRight, value)) { slot.ref.radiusBottomRight = value; slot.ref.flags |= 2; }
+				default: throw "Invalid paint corner";
+			}
+			binding = binding.nextStyle;
+		}
 	}
 
 	/** Returns an independent style value for compositional widget builders: every field, generated from the declaration. */

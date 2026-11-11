@@ -10,6 +10,7 @@ import haxeon.ui.LayoutAxis;
 import haxeon.ui.LayoutNode;
 import haxeon.ui.LayoutStyle;
 import haxeon.ui.LayoutTransaction;
+import haxeon.ui.PaintStore;
 import haxeon.ui.style.StyleValue;
 import haxeon.ui.style.StyleProperty;
 import haxeon.ui.style.ComputedStyle;
@@ -57,13 +58,15 @@ function main():Int {
     if (checked != LayoutDirection.LeftToRight) return 3;
     var directions = [LayoutDirection.LeftToRight, LayoutDirection.TopToBottom];
     if (Type.enumIndex(directions[1]) != 1) return 4;
-    var bytes = LayoutTransaction.encode(new LayoutNode(1, LayoutVisualKind.Box, style));
+    scoped var paint = new PaintStore();
+    var transaction = new LayoutTransaction(paint);
+    var bytes = transaction.encodeInto(new LayoutNode(1, LayoutVisualKind.Box, style));
     var record = NativeKitUIConstants.NKUI_LAYOUT_TRANSACTION_HEADER_BYTES;
     if (bytes.getInt32(record + NativeKitUIConstants.NKUI_LAYOUT_NODE_DIRECTION_OFFSET) != 0
         || bytes.getInt32(record + NativeKitUIConstants.NKUI_LAYOUT_NODE_CHILD_ALIGNMENT_OFFSET) != 769
         || (bytes.getInt32(record + NativeKitUIConstants.NKUI_LAYOUT_NODE_FLAGS_OFFSET) & 2) == 0) return 5;
     var invalid = new LayoutStyle(); invalid.width = LayoutAxis.fixed(-1);
     var rejected = false;
-    try LayoutTransaction.encode(new LayoutNode(2, LayoutVisualKind.Box, invalid)) catch (_:Dynamic) rejected = true;
+    try transaction.encodeInto(new LayoutNode(2, LayoutVisualKind.Box, invalid)) catch (_:Dynamic) rejected = true;
     return rejected ? 42 : 6;
 }

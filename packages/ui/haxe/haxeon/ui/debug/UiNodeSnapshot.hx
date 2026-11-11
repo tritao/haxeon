@@ -1,6 +1,7 @@
 package haxeon.ui.debug;
 
 import haxeon.ui.Rect;
+import haxeon.ui.Color;
 import haxeon.ui.semantics.AccessibilityState;
 import haxeon.ui.semantics.AccessibilityAction;
 import haxeon.ui.style.StyleState;
@@ -80,11 +81,19 @@ class UiNodeSnapshot {
 	public final label:Null<String>;
 	public final value:Null<String>;
 	public final actions:AccessibilityAction;
+	/** Native paint values captured through the node's live record. */
+	public final background:Color;
+	public final textColor:Color;
+	public final radiusTopLeft:Float;
+	public final radiusTopRight:Float;
+	public final radiusBottomLeft:Float;
+	public final radiusBottomRight:Float;
 
 	public function new(id:Int, parentId:Int, depth:Int, visualKind:Int, bounds:Rect,
 			clipBounds:Rect, contentBounds:Rect, visible:Bool, enabled:Bool,
 			focusable:Bool, focused:Bool, hovered:Bool, pressed:Bool, zIndex:Int, role:Int,
 			semanticStates:AccessibilityState, label:Null<String>, value:Null<String>, actions:AccessibilityAction,
+			background:Color, textColor:Color, radiusTopLeft:Float, radiusTopRight:Float, radiusBottomLeft:Float, radiusBottomRight:Float,
 			interactionStates:StyleState = StyleState.empty(), styleType:Null<String> = null,
 			computedStyle:Null<ComputedStyle> = null,
 			?styleEntries:Array<StyleInspectionEntry>, ?matchingStyleRules:Array<StyleSource>,
@@ -126,5 +135,11 @@ class UiNodeSnapshot {
 		this.label = label;
 		this.value = value;
 		this.actions = actions;
+		this.background = background;
+		this.textColor = textColor;
+		this.radiusTopLeft = radiusTopLeft;
+		this.radiusTopRight = radiusTopRight;
+		this.radiusBottomLeft = radiusBottomLeft;
+		this.radiusBottomRight = radiusBottomRight;
 	}
 }

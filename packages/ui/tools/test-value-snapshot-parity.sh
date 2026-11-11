@@ -17,7 +17,7 @@ JSON
 export LD_LIBRARY_PATH="$root/out:$("$root/scripts/hashlink-path.sh"):$root/out/packages/ui/native${LD_LIBRARY_PATH:+:$LD_LIBRARY_PATH}"
 common=(--root="$ui/tests/value-types" --root="$ui/haxe"
     --root="$ui/bindings/haxe" --root="$root/packages/editor/src" --root="$root/packages/platform/src")
-entries=(local-snapshot host-lifecycle style-kinds cursor-shape layout-codes layout-policies text-codes widget-kinds presentation-kinds native-boundary-kinds)
+entries=(local-snapshot host-lifecycle style-kinds cursor-shape layout-codes layout-policies text-codes widget-kinds presentation-kinds native-boundary-kinds paint-store paint-binding paint-transaction paint-inspector)
 negative_entries=(
     host-lifecycle-raw-int
     host-lifecycle-to-int
@@ -185,11 +185,23 @@ const fs = require("fs");
   const [file, target, inline] = process.argv.slice(2);
   const module = new WebAssembly.Module(fs.readFileSync(file));
   const imports = {env: {memory: new WebAssembly.Memory({initial: 4096, maximum: 4096})}};
+  const live = new Set();
+  let cursor = 65536;
   for (const entry of WebAssembly.Module.imports(module)) {
     if (entry.kind !== "function") continue;
     const group = imports[entry.module] ??= {};
     const mathName = entry.name.replace(/^__math_/, "");
-    if (entry.module === "haxeon_runtime" && entry.name.startsWith("__math_") &&
+    if (entry.module === "haxeon_runtime" && entry.name === "native_alloc") {
+      group[entry.name] = size => {
+        const address = cursor;
+        cursor += Math.ceil(size / 16) * 16;
+        if (cursor >= 134217728) throw new Error("Native fixture arena exhausted");
+        live.add(address);
+        return address;
+      };
+    } else if (entry.module === "haxeon_runtime" && entry.name === "native_free") {
+      group[entry.name] = address => { if (!live.delete(address)) throw new Error("Invalid native fixture free"); };
+    } else if (entry.module === "haxeon_runtime" && entry.name.startsWith("__math_") &&
         (mathName === "is_finite" || typeof Math[mathName] === "function")) {
       group[entry.name] = mathName === "is_finite" ? Number.isFinite : Math[mathName];
     } else {
@@ -199,6 +211,7 @@ const fs = require("fs");
   const instance = await WebAssembly.instantiate(module, imports);
   const result = instance.exports.main();
   if (result !== 42) throw new Error(`${target} inline=${inline} returned ${result}`);
+  if (live.size !== 0) throw new Error(`${target} inline=${inline} leaked ${live.size} native blocks`);
 })().catch(error => { console.error(error); process.exitCode = 1; });
 JS
             fi

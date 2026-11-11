@@ -1,4 +1,5 @@
 #include "layout/layout_engine.h"
+#include "layout_test_paint.h"
 
 #include <algorithm>
 #include <cmath>
@@ -10,6 +11,8 @@
 using namespace nkui;
 
 namespace {
+
+LayoutTestPaint paints;
 
 struct Rng {
     uint32_t state;
@@ -78,11 +81,13 @@ LayoutAxis random_axis(Rng &rng) {
 }
 
 std::vector<LayoutNode> random_tree(Rng &rng) {
+	paints.clear();
     const std::size_t node_count = 2u + rng.next() % 18u;
     std::vector<LayoutNode> nodes;
     nodes.reserve(node_count);
 
     LayoutNode root;
+    paints.bind(root);
     root.id = 1;
     root.parent = -1;
     root.style.width = {LayoutSizing::Fixed, 320.0f};
@@ -106,6 +111,7 @@ std::vector<LayoutNode> random_tree(Rng &rng) {
     std::vector<std::size_t> containers{0};
     for (std::size_t index = 1; index < node_count; ++index) {
         LayoutNode node;
+        paints.bind(node);
         node.id = static_cast<uint32_t>(index + 1);
         node.parent = static_cast<int32_t>(containers[rng.next() % containers.size()]);
         node.visual_kind = rng.next() % 5u == 0 ? LayoutVisualKind::Text : LayoutVisualKind::Box;
@@ -360,7 +366,9 @@ uint32_t requested_cases() {
 }
 
 bool resolved_scene_metadata_case(LayoutEngine &engine) {
+    paints.clear();
     std::vector<LayoutNode> nodes(4);
+    for (auto &node : nodes) paints.bind(node);
     nodes[0].id = 100;
     nodes[0].parent = -1;
     nodes[0].style.width = {LayoutSizing::Fixed, 320.0f};
@@ -371,7 +379,7 @@ bool resolved_scene_metadata_case(LayoutEngine &engine) {
     nodes[1].parent = 0;
     nodes[1].style.width = {LayoutSizing::Fixed, 120.0f};
     nodes[1].style.height = {LayoutSizing::Fixed, 60.0f};
-    nodes[1].style.background.alpha = 1.0f;
+    paints.record(nodes[1]).background_alpha = 1.0f;
 
     nodes[2].id = 102;
     nodes[2].parent = 0;
@@ -383,7 +391,7 @@ bool resolved_scene_metadata_case(LayoutEngine &engine) {
     nodes[2].style.z_index = -1;
     nodes[2].style.transform.tx = 24.0f;
     nodes[2].style.transform.ty = 18.0f;
-    nodes[2].style.background.alpha = 1.0f;
+    paints.record(nodes[2]).background_alpha = 1.0f;
 
     nodes[3].id = 103;
     nodes[3].parent = 0;
