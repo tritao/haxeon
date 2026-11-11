@@ -69,11 +69,14 @@ class IrEnumRuntimeTypes {
 			visit(entry.result);
 		}
 		for (fn in program.functions) {
-            switch fn.kind {
-                case ClosureAdapter(source, target): descriptor(source); descriptor(target);
-                case ClosureCast(target), ClosureVarargs(target): descriptor(target);
-                default:
-            }
+			switch fn.kind {
+				case ClosureAdapter(source, target):
+					descriptor(source);
+					descriptor(target);
+				case ClosureCast(target), ClosureVarargs(target):
+					descriptor(target);
+				default:
+			}
 			for (argument in fn.arguments)
 				visit(argument.type);
 			visit(fn.result);

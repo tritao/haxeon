@@ -561,7 +561,7 @@ No other payload enum allocates in these windows. In particular, backspace uses 
 windows. Their planned ports remain required, but are not evidence for prioritizing an unrelated blocker ahead of the
 measured typing path.
 
-The latest candidate still allocates one 24-byte `TextEditIntent` for `type-char`: three paired control/candidate runs
+The preliminary widening candidate still allocated one 24-byte `TextEditIntent` for `type-char`: three paired control/candidate runs
 had 835 objects each and median totals of 60,064 / 60,056 bytes. It does not regress, but does not unlock the enum.
 Its remaining trace includes checked casts and runtime descriptors for virtual contracts, for example
 `$checked-dynamic-cast:Virtual(haxeon.ui.core.View)`. These uses also appear in generic-erased interface code; resolving
@@ -589,6 +589,16 @@ possible program. Keep the documented boxed classification for their unsupported
 | E6 beyond the typing path | General direct enum Dynamic/reflection/throw/native escape adapters | Only the callable/reflection paths needed by `TextEditIntent` are in this session; no other finite payload enum allocates in these windows |
 | E7 beyond the typing path | Remaining callable payload/container/descriptor associations | Implement what admits `TextEditIntent`; broader descriptor/container widening has no additional measured enum cost in these windows |
 | E1/E2 general widening | Reachable-use classification, canonical native Flat enum layouts and representation-changing reload coverage | No measured finite enum besides the typing path is waiting for these; UI native-boundary mappings remain part of the required ports |
+
+The final shared-reach/closed-tag closeout supersedes that preliminary typing
+result. A calibrated isolated action census on `0e2acb1e` measures `type-char`
+at **417 objects / 16,360 bytes**, versus the published `bb4072f8` checkpoint's
+418 / 16,384. The missing site is exactly the 24-byte `TextEditIntent` from the
+input callback. Its 32-byte closure retains its allocation and changes only its
+signature. All other 14 action totals are identical. This does not activate the
+general E3/E4/E8 families: their broader ABI follow-ups stay deferred. The frozen
+census tables and the final delta are distinguished in `ALLOCATION_CENSUS.md`
+and `packages/ui/docs/VALUE_TYPES.md`.
 
 #### UI sizing conversion: measured stop
 

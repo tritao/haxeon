@@ -104,13 +104,22 @@ class WasmLinearRuntime {
 		functions.set("__haxeon_bytes_data_pointer", bytesDataPointer);
 		var outputReserve = addBytesOutputReserve(module, allocator, bytesDataPointer);
 		functions.set("__haxeon_bytes_output_reserve", outputReserve);
+		// Semantic closure signatures stay distinct; this native has one fixed I32 ABI.
+		var receiverQuery:Null<Int> = null;
 		for (native in program.natives) {
 			var reflection = WasmLinearReflection.define(context, native);
 			if (reflection != null) {
 				functions.set(native.name, reflection);
 				continue;
 			}
-			var runtimeFunction = addRuntimeNativeFunction(module, native, allocator, bytesDataPointer, outputReserve, program);
+			var runtimeFunction = switch native.symbol {
+				case "__closure_receiver_if_match":
+					if (receiverQuery == null)
+						receiverQuery = addRuntimeNativeFunction(module, native, allocator, bytesDataPointer, outputReserve, program);
+					receiverQuery;
+				default:
+					addRuntimeNativeFunction(module, native, allocator, bytesDataPointer, outputReserve, program);
+			};
 			if (runtimeFunction != null)
 				functions.set(native.name, runtimeFunction);
 			else {

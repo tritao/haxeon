@@ -217,6 +217,7 @@ class TestCatalog {
 		"UnreachableDeclarationMain",
 		"WasmBackendMain",
 		"WasmStringFinalizationMain",
+		"WasmClosureReceiverRuntimeMain",
 		"ReflectionTagProjectionMain",
 		"EnumTagReleaseSizeMain",
 		"EnumEscapeReachMain",

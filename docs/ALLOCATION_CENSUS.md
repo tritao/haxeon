@@ -1463,3 +1463,20 @@ The published code batch passed 857 compiler tests, self-hosting, all ten UI scr
 (14 documented skips), 60 positive/702 negative UI checks, the app suite, retention, budgets and memory gates.
 The documentation-only census commit passes Tier 1: 857 compiler tests, zero failures, with eight workers.
 It changes no compiler or runtime source.
+
+
+## Flat-structs closeout after the frozen census
+
+The tables above remain frozen at `bb4072f8`; they have not been regenerated
+under a different compiler while retaining the old source label. The final
+shared-reach/closed-tag checkpoint `0e2acb1e`, measured with the same calibrated
+isolated windows and app inputs, totals **16,251 objects / 1,048,304 bytes**
+for one occurrence of each action. Relative to the frozen table, only
+`type-char` changes: **418 / 16,384 -> 417 / 16,360**. The removed allocation is
+exactly `TextEditIntent` at the input callback; its 32-byte closure changes
+signature but still allocates 32 bytes. Every other action is identical,
+including selection's 8,593 objects / 579,512 bytes. No action regresses.
+This supersedes the frozen follow-up's claim that the typing intent still
+allocates, without changing its original evidence or broadening E3/E4/E8.
+See `packages/ui/docs/VALUE_TYPES.md` for the final release-size partition and
+validation receipt. Capture files were deleted after their numbers were read.

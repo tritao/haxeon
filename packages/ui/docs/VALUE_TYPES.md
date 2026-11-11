@@ -5546,3 +5546,176 @@ Attribution found a redundant Wasm32 native closure-receiver probe: its identica
 versus 42 copies in the control. The semantic signatures must remain distinct
 for checked Dynamic closure restoration; their physical native implementation
 can be shared. That correction and the complete release ledger precede publication.
+
+
+### Final release attribution and physical closure probes
+
+The final receiver-probe correction shares one physical Wasm32 implementation
+for the exact `__closure_receiver_if_match` native operation. Semantic function
+signatures and checked Dynamic restoration remain distinct. The 32-signature IR
+fixture fails on the preceding source and passes after the correction; executed
+fixtures reject the wrong nominal signature on HashLink, Wasm32 and Wasm GC,
+with inlining off/on. No generated function name or signature-prefix heuristic
+selects the operation.
+
+Final release inputs are frozen at pre-enum compiler `9180b6d8` and the same
+outer application/Showcase sources used throughout the size comparison. Release
+mode disables development metadata and allocation counters. The small paired
+fixture includes fields, arrays, calls and closures plus an unrelated Dynamic
+comparison; the two Wasm targets have exactly equal byte counts and HashLink
+is 24–26 bytes smaller for the plain enum. This is the test of representation
+overhead; actual printed/reflected/native enum behavior is itemized separately.
+
+The final exact 15-action census uses the same calibrated isolated action
+windows as ALLOCATION_CENSUS.md. Its frozen table remains the published
+`bb4072f8` checkpoint, rather than silently rewriting its source version. The
+closeout has 16,251 objects / 1,048,304 bytes across one instance of every action,
+versus 16,252 / 1,048,328 at that checkpoint. `type-char` is 417 / 16,360 versus
+418 / 16,384: the 24-byte TextEditIntent object disappears, and its 32-byte
+closure changes signature but not size. Every other action is identical.
+
+
+| Release module | Pre-enum `9180b6d8` bytes | Final bytes | Delta |
+|---|---:|---:|---:|
+| Showcase Wasm32 | 6,728,120 | 6,595,956 | -132,164 |
+| Showcase Wasm GC | 3,922,261 | 3,982,976 | +60,715 |
+| HashLink editor | 28,562,565 | 27,402,978 | -1,159,587 |
+
+The function-body ledger below is a disjoint partition of the emitted-function
+census, including duplicate physical bodies in the control. The names denote
+actual retained behavior, not all declared enums. Checked tag carriers and
+Dynamic varargs/type dispatch survive only for reachable Dynamic/reflection
+signatures and registered field layouts. In particular, discrete style values
+have a public `inspect():Dynamic` API, and the native/inspector enum names are
+actually printed or reflected. Their nominal cases are not unobserved tags.
+
+| Function-body family, delta bytes | Wasm32 | Wasm GC | HashLink editor |
+|---|---:|---:|---:|
+| Ordinary source methods and existing runtime bodies (net) | -1,886 | -4,308 | -829,626 |
+| Case stringification | -22,361 | +9,546 | +0 |
+| Checked Dynamic tag box/unbox | +8,544 | +6,436 | +11,800 |
+| Checked native reads and decoders | +2,629 | +2,934 | +11,257 |
+| Dynamic varargs adapters | +11,235 | +10,376 | +0 |
+| Dynamic/reflected type and equality dispatch | +13,574 | +16,097 | +4,498 |
+| Exhaustive UI/native mappings (including moved functions) | +6,591 | +6,751 | +4,631 |
+| Initializers | -7,949 | -5,054 | -2,112 |
+| Reflective discrete style inspection | +5,355 | +3,059 | +2,310 |
+| Retained enum equality bodies | -3,312 | -3,312 | -26,062 |
+| Typed closure adapters and casts | +0 | +0 | +0 |
+
+The positive families are deliberate checked native reads/decoders, exhaustive
+UI/native mappings, and the actual printed/reflected inspection API. The
+inspector exposes the seven typed discrete style values; retaining their
+nominal checked casts and case stringification is required behavior. The
+Wasm32 ordinary/runtime row includes +17,216 bytes in boxed/reflected
+`__dynamic_equal`, array type tests/names, enum/object classification and GC
+tracing, +1,302 in casts for inspected style classes, +1,300 in Hashable case
+implementations used by the new enum fingerprints, +1,263 in typed style-property
+construction and +282 in scalar/native bridges. Those Hashable implementations
+belong to the eight layout enums that are also exposed through reflection and
+inspection; they are not helpers for closed, unobserved tags. Offsetting entries
+are -8,897 for the physical receiver probe versus the control's 42 copies,
+-7,593 in source closure adapters, -1,838 in closure bodies, -626 in invoke
+helpers, -393 in the shared numeric formatters, and -3,902 in the other source
+methods. These entries sum to -1,886. No unmatched positive code-growth bucket
+is accepted as tag representation cost.
+
+The typed closure-adapter/cast families are exactly unchanged on both Wasm
+targets (Wasm32 1,061,378 bytes; Wasm GC 25,303). They do not multiply for tags.
+The receiver query is a separate native operation and now has one 217-byte
+body, rather than 122. The Wasm32 stringifier count falls from two physical
+bodies to one, 80,789 -> 58,428 combined bytes; GC's one body grows by 9,546
+for reachable printed/reflected cases. Numeric formatters are registered once.
+None of these counts treats a second copy as required stringification.
+
+The section ledger accounts for every byte of each complete module, including
+function-body framing, signatures, table elements and LEB/name widths. Zero
+entries are omitted. It is not valid to compare code alone and ignore these
+bytes, or to present name-table savings as evidence that tag transport is free;
+that property is established separately by the paired fixture above.
+
+| Complete module section delta bytes | Wasm32 | Wasm GC | HashLink editor |
+|---|---:|---:|---:|
+| code | +12,498 | +42,657 | +0 |
+| constants | +0 | +0 | -8,589 |
+| custom: name | -172,842 | +4,058 | +0 |
+| data | +27,882 | +7,853 | +0 |
+| debugFiles | +0 | +0 | -2,693 |
+| debugSections | +0 | +0 | -314,866 |
+| function signatures | +54 | +154 | +0 |
+| functionDebug | +0 | +0 | -10,573 |
+| functions | +0 | +0 | -823,304 |
+| globals | +140 | +2,080 | -659 |
+| natives | +0 | +0 | +56 |
+| reflectionMembers | +0 | +0 | +961 |
+| scalarConstants | +0 | +0 | +52 |
+| strings | +0 | +0 | +9,333 |
+| table elements | +118 | +154 | +0 |
+| types | -14 | +3,759 | -9,305 |
+
+Wasm code framing contributes +78 / +132 bytes beyond the function-body
+ledger. GC data growth is +7,397 bytes of strings (printed/reflected case/type
+names and native decode/validation errors) and +456 of reflection records;
+ordinary static data is unchanged. Wasm32 data has +27,426 string bytes and
++456 reflection bytes, with **zero** growth in its 2,125-byte semantic closure
+descriptor segment. The GC type/global/table/signature/name changes describe
+these reachable nominal boxes, cached case objects and checked inspection/native
+entry points. Closed tag-only fields and arrays do not receive those roots,
+descriptors, adapters or case objects, as the paired release fixture checks.
+HashLink's positive string/member/scalar/native entries carry the same real
+case names, field inspection and checked boundary behavior; its other sections
+shrink. Every section sum equals the complete module delta above.
+
+Tier 1 for physical receiver sharing: **865 passed, 0 failed**, eight workers;
+self-hosting stages are identical at **36,697,154 bytes**, SHA-256
+`b97c81b8f5b201b734a613a94f7c98aabb40630b22c7074dde76a10fb62e0a84`.
+The all-target fixtures preserve nominal closure checks with inlining off/on.
+No paired timing series was added for the size closeout.
+
+Development-mode checkpoint sizes use the committed counter settings (Wasm32
+memory statistics on, Wasm GC allocation counter on) from the normal Web gates.
+The pre-enum column is the recorded `9180b6d8` development receipt; it is not a
+release module relabeled as development. The final values are the freshly built
+Tier 2 modules. These totals include integrated a1 naming/metadata work, so the
+whole reduction is not attributed to the enum fix alone. The isolated paired
+fixture above establishes the enum representation result independently.
+
+| Development module | Pre-enum bytes | Initial enum checkpoint bytes | Final bytes | Final vs pre-enum |
+|---|---:|---:|---:|---:|
+| Showcase Wasm32 | 12,041,570 | 12,525,154 | 11,581,890 | -459,680 |
+| Showcase Wasm GC | 5,903,055 | 6,071,457 | 6,038,119 | +135,064 |
+| HashLink editor | 105,148,935 | 106,223,320 | 101,643,349 | -3,505,586 |
+
+The remaining GC development difference also carries debugger-visible nominal
+enum declarations, cases and types. Release selection can omit unobserved enum
+descriptors; development keeps the logical types for inspection. The release
+section/body ledger, not this development total, is the attribution of runtime
+representation cost. Physical receiver sharing saves 43,741 bytes in the
+counter-enabled development Wasm32 guest versus the immediately preceding
+shared-reach checkpoint; GC's guest is byte-identical and HL module lengths
+are unchanged. HL hashes differ, so the closeout repeated the normal budget,
+memory and retention gates plus every exact action window rather than claiming
+Tier 3's byte-identical shortcut. No extra paired timing series was run.
+
+
+Final closeout validation (2026-11-11): **865 compiler tests, zero failures**, eight
+workers; self-hosting stage 1 and 2 are identical at 36,697,154 bytes,
+SHA-256 `b97c81b8f5b201b734a613a94f7c98aabb40630b22c7074dde76a10fb62e0a84`.
+The receiver-sharing fixture passes HL/Wasm32/Wasm GC with inlining off/on.
+All ten UI scripts pass; full parity passes 527 runtime fixtures (14 documented
+skips), plus 60 positive/702 negative UI checks including the snapshots. The
+app suite exits zero, all nine retention scenarios pass, and budget and headless
+memory gates pass. No ceiling changed. The normal final memory run records
+10.31 MiB after warmup and RSS growth windows [29.69, 4.06, 0.78, 5.47] MiB;
+these are a single gate run, not a new paired timing claim.
+
+The 15 exact action censuses repeat the structural checkpoint exactly:
+16,251 objects / 1,048,304 bytes. The changed Wasm32 guest repeats 3,840
+allocation calls / 132,480 bytes per 120 frames, zero collections and zero
+measured heap growth. GC's final guest is byte-identical to the successfully
+measured structural checkpoint (4,320 full/static/text-heavy; 8,604 editing).
+The wrapper's identity-only shortcut correctly declined the changed HL hashes;
+the complete independent budget/memory/retention/census runs above cover that
+change instead. An earlier browser launch failed before guest load because its
+Unix socket path under the long TMPDIR was too long; using a short DATA1 TMPDIR
+fixed that harness cause before the accepted browser measurements.
