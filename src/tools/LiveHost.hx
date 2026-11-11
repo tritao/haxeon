@@ -113,16 +113,19 @@ class LiveHost {
 						if (failure == null) {
 							report('haxeon: patch timing ms: description=${Math.round((describedAt - seenAt) * 1000)} read=${Math.round((readAt - describedAt) * 1000)} apply=${Math.round((Sys.time() - readAt) * 1000)}');
 							report('haxeon: patched live module to revision $revision');
-						} else if (applied && strict)
+							event("patch-applied", revision, 'patched the running app to revision $revision');
+						} else if (applied && strict) {
 							// The revision runs and cannot be taken back; the objects that missed their initializers stay as they are.
 							banner('LIVE PATCH INCOMPLETE (--strict-live): revision $revision runs, but objects made before it lack field values', [
 								failure,
 								'those fields hold zero values (null, 0, false); restart the app to run revision $revision from a fresh state'
 							]);
-						else if (strict)
+							event("patch-applied", revision, 'revision $revision runs, but objects made before it lack field values: $failure');
+						} else if (strict)
 							rejectedPublication = refuse(path, description, revision, candidate, held ? failure : 'the runtime rejected its patch: $failure', true);
 						else {
 							report(applied ? 'haxeon: patch incomplete; reloading module: $failure' : 'haxeon: patch rejected; reloading module: $failure');
+							event("reload", candidate.revision, (applied ? 'patch incomplete; reloading the module: ' : 'patch rejected; reloading the module: ') + failure);
 							var full = completeDescription(path, candidate);
 							if (full == null)
 								rejectedPublication = publicationKey(candidate);
@@ -135,6 +138,7 @@ class LiveHost {
 						rejectedPublication = refuse(path, description, revision, candidate, reloadCause(description, candidate), true);
 					else {
 						report('haxeon: revision ${candidate.revision} cannot patch revision $revision (${reloadCause(description, candidate)}); reloading module');
+						event("reload", candidate.revision, 'revision ${candidate.revision} cannot patch revision $revision (${reloadCause(description, candidate)}); reloading the module');
 						var full = completeDescription(path, candidate);
 						if (full == null)
 							rejectedPublication = publicationKey(candidate);
@@ -152,13 +156,15 @@ class LiveHost {
 					if (bytes != null) {
 						pendingReload = null;
 						var replacement = reload(module, description, pending, bytes, entry, arguments);
-						if (replacement == null)
+						if (replacement == null) {
 							rejectedPublication = publicationKey(pending);
-						else {
+							event("patch-rejected", pending.revision, 'reloading to revision ${pending.revision} failed; still running revision $revision (see the app log)');
+						} else {
 							module = replacement;
 							description = pending;
 							revision = pending.revision;
 							rejectedPublication = "";
+							event("reload", revision, 'reloaded the module at revision $revision');
 						}
 					}
 				}
@@ -258,6 +264,7 @@ class LiveHost {
 				report('haxeon: could not tell the compiler about the refusal: ${Std.string(error)}');
 		banner('LIVE PATCH REFUSED (--strict-live): revision ${candidate.revision} was not applied; still running revision $revision',
 			recordForCompiler ? [cause, 'the next build patches revision $revision with the refused edits in it'] : [cause]);
+		event("patch-rejected", candidate.revision, 'revision ${candidate.revision} refused, still running revision $revision: $cause');
 		return publicationKey(candidate);
 	}
 
@@ -282,6 +289,13 @@ class LiveHost {
 			changedFunctions: candidate.changedFunctions,
 			identities: current.identities
 		};
+
+	/** The watch's events file (`WatchEvents`), when a watcher started this host. */
+	static final events:Null<String> = WatchEvents.current();
+
+	/** Tells the watched app and tools what the host did with a publication: `revision` is the one the event is about. */
+	static function event(kind:String, revision:Int, message:String):Void
+		WatchEvents.emit(events, kind, null, revision, null, null, null, message);
 
 	/** Flushes each message because the watcher redirects this process's output to a log file. */
 	static function report(message:String):Void {
