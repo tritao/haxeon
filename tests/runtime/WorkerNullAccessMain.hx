@@ -16,7 +16,7 @@ class WorkerNullAccessMain {
 				compiler.update("WorkerNullAccess.hx", revision == 0 ? input : StringTools.replace(input, "return 42;", "return 43;"));
 				var result = compiler.compile("WorkerNullAccess");
 				var path = "out/worker-null-access.hl";
-				File.saveBytes(path, HlWriter.encode(result.module));
+				File.saveBytes(path, HlWriter.encode(result.module).flatten());
 				var child = new sys.io.Process(Sys.getEnv("HAXEON_HASHLINK_DIR") + "/hl", [path]);
 				var output = child.stdout.readAll().toString() + child.stderr.readAll().toString();
 				var status = child.exitCode();

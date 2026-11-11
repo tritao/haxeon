@@ -68,10 +68,10 @@ class Icon implements View {
 	}
 
 	static function namePrefix(name:IconName):String {
-		var id:Int = cast name;
+		var id = Type.enumIndex(name);
 		var known = namePrefixes.get(id);
 		if (known == null) {
-			known = "icon:" + Std.string(name) + ":";
+			known = "icon:" + Std.string(id) + ":";
 			namePrefixes.set(id, known);
 		}
 		return known;

@@ -15,6 +15,14 @@ class IrValueArrayLayout {
 
 	public function new(objects:IrObjectTable, element:IrType, pointerBits:Int, target:IrValueLaneTarget, ?enums:Array<IrEnum>) {
 		this.element = element;
+		switch element {
+			case EnumTag(_):
+				hasValidity = false;
+				storage = element;
+				lanes = new IrValueLaneLayout(objects, pointerBits, target).shape(element);
+				return;
+			default:
+		}
 		var name = switch element {
 			case Obj(value): hasValidity = true; storage = element; value;
 			case Nullable(Obj(value)): hasValidity = false; storage = element; value;

@@ -49,7 +49,7 @@ class ContextualTypedLambdaMain {
 		// A formerly valid dependency changing its parameter type must reject.
 		rejected(compiler, source.split("consume(40,").join("consume(\"forty\","));
 		compiler.update("Main.hx", source);
-		File.saveBytes(Sys.args()[0], HlWriter.encode(compiler.compile("Main").module));
+		File.saveBytes(Sys.args()[0], HlWriter.encode(compiler.compile("Main").module).flatten());
 		Sys.println("PASS: annotated callback context, generic results, optional parameters and incremental rejection");
 	}
 }

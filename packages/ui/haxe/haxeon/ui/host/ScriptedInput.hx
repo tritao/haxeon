@@ -75,12 +75,13 @@ class ScriptedInput {
     var source = new Handle(window.rawValue());
     var values:Array<PlatformEvent> = switch (Std.string(event.kind)) {
       case "move": [PointerMove(source, event.x, event.y)];
-      case "down", "up": [PointerButton(source, cast 0,
-        event.kind == "down" ? InputAction.Press : InputAction.Release, cast 0, event.x, event.y)];
+      case "down", "up": [PointerButton(source, NativeKitTypes.PointerButton.Left,
+        event.kind == "down" ? InputAction.Press : InputAction.Release, NativeKitTypes.Modifiers.empty(), event.x, event.y)];
       case "scroll": [PointerScroll(source, event.dx, event.dy)];
       case "key":
         var key:Int = event.key, modifiers:Int = event.modifiers == null ? 0 : event.modifiers;
-        [Key(source, cast key, 0, InputAction.Press, cast modifiers), Key(source, cast key, 0, InputAction.Release, cast modifiers)];
+        var nativeKey = NativeKitTypes.NativeKitTypesEnumDecoders.decodeKey(key);
+        [Key(source, nativeKey, 0, InputAction.Press, NativeKitTypes.Modifiers.fromRaw(modifiers)), Key(source, nativeKey, 0, InputAction.Release, NativeKitTypes.Modifiers.fromRaw(modifiers))];
       case "text": [for (codepoint in codepoints(event.text)) TextInput(source, codepoint)];
       case _: throw "Invalid scripted event";
     };

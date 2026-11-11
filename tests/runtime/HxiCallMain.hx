@@ -176,19 +176,19 @@ class HxiCallMain {
 		}
 		compiler.update("Main.hx", mainSource);
 		compiler.compile("Main");
-		File.saveBytes(output, HlWriter.encode(compiler.compile("Main").module));
+		File.saveBytes(output, HlWriter.encode(compiler.compile("Main").module).flatten());
 		compiler.update("Main.hx", "import Fixture; function main():Int return Fixture.invalidNonNull() == null ? 1 : 0;");
-		File.saveBytes(output + ".invalid-null", HlWriter.encode(compiler.compile("Main").module));
+		File.saveBytes(output + ".invalid-null", HlWriter.encode(compiler.compile("Main").module).flatten());
 		compiler.update("Main.hx", "import Fixture; function main():Int return Fixture.invalidData() == null ? 1 : 0;");
-		File.saveBytes(output + ".invalid-length", HlWriter.encode(compiler.compile("Main").module));
+		File.saveBytes(output + ".invalid-length", HlWriter.encode(compiler.compile("Main").module).flatten());
 		compiler.update("Main.hx", "import Fixture; function main():Int return Fixture.invalidUtf8() == null ? 1 : 0;");
-		File.saveBytes(output + ".invalid-utf8", HlWriter.encode(compiler.compile("Main").module));
+		File.saveBytes(output + ".invalid-utf8", HlWriter.encode(compiler.compile("Main").module).flatten());
 		compiler.update("Main.hx", "import Fixture; function main():Int { var arrays = new fixture_arrays(); return arrays.get_values(3); }");
-		File.saveBytes(output + ".invalid-index", HlWriter.encode(compiler.compile("Main").module));
+		File.saveBytes(output + ".invalid-index", HlWriter.encode(compiler.compile("Main").module).flatten());
 		compiler.update("Main.hx", "import Fixture; function main():Int { Fixture.fillValues(haxe.Int64.ofInt(67108865)); return 0; }");
-		File.saveBytes(output + ".typed-array-overflow", HlWriter.encode(compiler.compile("Main").module));
+		File.saveBytes(output + ".typed-array-overflow", HlWriter.encode(compiler.compile("Main").module).flatten());
 		compiler.update("Main.hx",
 			"import Fixture; function main():Int { var callback = new FixtureBinaryCallback(function(left:Int, right:Int) return left + right); callback.close(); Fixture.setNullableCallback(callback); return 0; }");
-		File.saveBytes(output + ".closed-callback", HlWriter.encode(compiler.compile("Main").module));
+		File.saveBytes(output + ".closed-callback", HlWriter.encode(compiler.compile("Main").module).flatten());
 	}
 }

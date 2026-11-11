@@ -1,3 +1,3 @@
--cp src
+common.hxml
 -main Main
 --interp

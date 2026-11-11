@@ -9,7 +9,7 @@ class IrEnumRuntimeSpecializations {
 			staticFields:Array<IrStaticField>, natives:Array<IrNative>, interfaces:Array<IrInterface>, cNatives:Array<IrCNative>):Array<IrEnum> {
 		var declarations:Map<String, IrEnum> = [for (item in enums) item.name => item], required:Map<String, Bool> = [], pending:Array<String> = [];
 		function visit(type:IrType):Void switch type {
-			case Enum(name):
+			case Enum(name), EnumTag(name):
 				var base = EnumRuntimeType.declaration(name);
 				if (base != name && !required.exists(name)) { required.set(name, true); pending.push(name); }
 			case Array(element), Iterator(element), Nullable(element): visit(element);
@@ -22,7 +22,10 @@ class IrEnumRuntimeSpecializations {
 			for (block in fn.blocks) for (located in block.instructions) {
 				var instruction = located.value, output = IrOperands.output(instruction);
 				if (output != null) visit(output.type);
-				for (input in IrOperands.inputs(instruction)) visit(input.type);
+				for (inputIndex in 0...IrOperands.count(instruction)) {
+					var input = IrOperands.at(instruction, inputIndex);
+					visit(input.type);
+				}
 				switch instruction { case TypeValue(_, type): visit(type); default: }
 			}
 		}

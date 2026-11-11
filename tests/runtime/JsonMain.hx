@@ -32,6 +32,6 @@ class JsonMain {
 			+ "  var again = Json.stringify({ x: shared, y: shared });\n"
 			+ "  return again.length == 25 ? 42 : 8;\n"
 			+ "}");
-		File.saveBytes(Sys.args()[0], HlWriter.encode(compiler.compile("Main").module));
+		File.saveBytes(Sys.args()[0], HlWriter.encode(compiler.compile("Main").module).flatten());
 	}
 }

@@ -33,6 +33,12 @@ class HxiParserMain {
 		+ '\textern fn nk_version() -> u32 @leaf;\n'
 		+ '}\n';
 
+	static function newCompiler():Compiler {
+		var compiler = new Compiler();
+		compiler.addStandardLibrarySourceRoot("stdlib");
+		return compiler;
+	}
+
 	static function main():Void {
 		var rawSource = 'interface raw @target("x86_64-linux-gnu") { extern fn invalid(value: i32 @out) -> void; }',
 			raw = HxiParser.parse("raw.hxi", rawSource);
@@ -44,8 +50,7 @@ class HxiParserMain {
 		}
 		expectError(rawSource, "Output parameter");
 		var parsed = parseValidated("nativekit.hxi", valid);
-		var minimumIntCompiler = new Compiler();
-		minimumIntCompiler.addStandardLibrarySourceRoot("stdlib");
+		var minimumIntCompiler = newCompiler();
 		minimumIntCompiler.update("MinimumInt.hx",
 			"function main():Int return -2147483648; function hexadecimal():Int return -0x80000000; function hexadecimalPositive():Int return 0x80000000; function hexadecimalAllBits():Int return 0xFFFFFFFF;");
 		var minimumIntProgram = new Parser(new Lexer(new SourceFile("MinimumInt.hx", "function main():Int return 0x80000000;")).tokenize()).parseProgram();
@@ -97,11 +102,16 @@ class HxiParserMain {
 				throw "expected parsed flags";
 		}
 		var enumSource = HxiProjection.source(enumerations);
-		expect(enumSource.indexOf("enum abstract Result(Int) from Int to Int") >= 0
+		expect(enumSource.indexOf("enum abstract Result(Int) implements RawRepresentable") >= 0
+			&& enumSource.indexOf("from Int") < 0
+			&& enumSource.indexOf("to Int") < 0
+			&& enumSource.indexOf("public static function decodeResult(value:Int):Result") >= 0
 			&& enumSource.indexOf("var Ok = 0") >= 0
 			&& enumSource.indexOf("var Both = 3") >= 0
-			&& enumSource.indexOf("extern function check(arg0:Result, arg1:Options):Result") >= 0,
+			&& enumSource.indexOf("extern function __hxi_raw_check(arg0:Result, arg1:Options):Result") >= 0,
 			"enums should retain concise nominal types and integer ABI calls");
+		expect(enumSource.indexOf("value >= -1 && value <= 0") >= 0,
+			"consecutive native codes should use one exact range guard");
 		var flagWidthsSource = 'interface flag_widths @target("x86_64-linux-gnu") @library("flag_widths") { '
 			+ 'flags ByteFlags : u8 { NONE = 0; FIRST = 1; SECOND = 2; BOTH = 3; } '
 			+ 'flags ShortFlags : u16 { NONE = 0; FIRST = 1; SECOND = 2; BOTH = 3; } '
@@ -117,10 +127,9 @@ class HxiParserMain {
 			&& flagWidthsProjection.indexOf("function contains(flag:WideFlags):Bool") >= 0
 			&& flagWidthsNatives.length == 1,
 			"flags should project as bitwise-friendly nominal types for 8/16/32/64-bit ABI storage");
-		var flagsCompiler = new Compiler();
-		flagsCompiler.addStandardLibrarySourceRoot("stdlib");
+		var flagsCompiler = newCompiler();
 		flagsCompiler.addFfiInterface("flag-widths.hxi", flagWidthsSource);
-		var flagsMainSource = 'import flag_widths.*; function main():Int { var combined:WordFlags = WordFlags.First | WordFlags.Second; var unknown:WordFlags = cast 8; var preserved:WordFlags = combined | unknown; var wide:WideFlags = WideFlags.first().with(WideFlags.high()); return wide.contains(WideFlags.high()) && preserved == 11 ? 42 : 0; }';
+		var flagsMainSource = 'import flag_widths.*; function main():Int { var combined:WordFlags = WordFlags.First | WordFlags.Second; var preserved:WordFlags = combined; var rejected = false; try { WordFlags.fromRaw(8); } catch (error:Dynamic) { rejected = true; } var wide:WideFlags = WideFlags.first().with(WideFlags.high()); return wide.contains(WideFlags.high()) && rejected && preserved.rawValue() == 3 ? 42 : 0; }';
 		flagsCompiler.update("FlagsMain.hx", flagsMainSource);
 		flagsCompiler.analyze("FlagsMain");
 		expectError('interface bad @target("x86_64-linux-gnu") { flags value : i32 { A = 1; } }', "require an unsigned 8/16/32/64-bit integer representation");
@@ -132,14 +141,14 @@ class HxiParserMain {
 			'interface mixed @target("x86_64-linux-gnu") @library("mixed") { enum FixtureResult : i32 { FIXTURE_OK = 0; } extern fn check(value: FixtureResult) -> FixtureResult; }');
 		var mixedCaseSource = HxiProjection.source(mixedCaseEnum);
 		expect(mixedCaseSource.indexOf("enum abstract FixtureResult(Int)") >= 0
-			&& mixedCaseSource.indexOf("extern function check(arg0:FixtureResult):FixtureResult") >= 0,
+			&& mixedCaseSource.indexOf("extern function __hxi_raw_check(arg0:FixtureResult):FixtureResult") >= 0,
 			"already mixed-case enum names should retain their spelling in the Haxe projection");
 		var nativeNames = parseValidated("native-names.hxi",
 			'interface native_names @target("x86_64-linux-gnu") @library("native_names") { enum nk_result : i32 { NK_OK = 0; NK_ERROR_INVALID_ARGUMENT = -2; } extern fn check(value: nk_result) -> nk_result; }');
 		var nativeProfile = HxiProjectionProfile.parse("native-names.hxmap", '{"interface":"native_names","typePrefix":"nk_","enumValuePrefixes":["NK_"]}');
 		var nativeNameSource = HxiProjection.source(nativeNames, null, null, null, nativeProfile);
 		expect(nativeNameSource.indexOf("enum abstract Result(Int)") >= 0
-			&& nativeNameSource.indexOf("extern function check(arg0:Result):Result") >= 0,
+			&& nativeNameSource.indexOf("extern function __hxi_raw_check(arg0:Result):Result") >= 0,
 			"snake-case enum names should project to concise PascalCase");
 		var builtinValueEnums = parseValidated("builtin-enum-values.hxi",
 			'interface builtin_enum_values @target("x86_64-linux-gnu") @library("builtin_enum_values") { ' +
@@ -174,7 +183,7 @@ class HxiParserMain {
 				'{"interface":"result_policy","typePrefix":"nk_","enumValuePrefixes":["NK_"],"resultPolicies":{"nk_result":{"successValue":"NK_OK","diagnosticFunction":"nk_last_error","errorType":"ProjectionError"}}}'),
 			resultPolicySource = HxiProjection.source(resultPolicyModel, null, null, null, resultPolicyProfile);
 		HxiProjection.validateProfile("result-policy.hxmap", resultPolicyModel, null, null, resultPolicyProfile);
-		expect(resultPolicySource.indexOf("extern function nk_run(arg0:Int):Result") >= 0
+		expect(resultPolicySource.indexOf("extern function __hxi_raw_nk_run(arg0:Int):Result") >= 0
 			&& resultPolicySource.indexOf("function nk_run_checked(seed:Int):Void") >= 0
 			&& resultPolicySource.indexOf("throw new ProjectionError(__result, \"nk_run\", __diagnostic)") >= 0
 			&& resultPolicySource.indexOf("function nk_create_checked(seed:Int):Int") >= 0
@@ -187,12 +196,11 @@ class HxiParserMain {
 		expectProfileError(function() HxiProjection.validateProfile("omitted-diagnostic.hxmap", resultPolicyModel, ["nk_last_error" => true], null,
 			resultPolicyProfile),
 			"cannot use omitted diagnostic function");
-		var resultPolicyCompiler = new Compiler();
+		var resultPolicyCompiler = newCompiler();
 		resultPolicyCompiler.addFfiProjection("result-policy.hxmap",
 			'{"interface":"result_policy","typePrefix":"nk_","enumValuePrefixes":["NK_"],"resultPolicies":{"nk_result":{"successValue":"NK_OK","diagnosticFunction":"nk_last_error","errorType":"ProjectionError"}}}');
 		resultPolicyCompiler.addFfiInterface("result-policy.hxi",
 			'interface result_policy @target("x86_64-linux-gnu") @library("result_policy") { enum nk_result : i32 { NK_OK = 0; NK_ERROR = -1; } extern fn nk_last_error() -> utf8 @borrowed; extern fn nk_run(seed: u32) -> nk_result; extern fn nk_create(seed: u32, output: ptr<u32> @out) -> nk_result; }');
-		resultPolicyCompiler.addStandardLibrarySourceRoot("stdlib");
 		resultPolicyCompiler.update("ProjectionError.hx",
 			'class ProjectionError { public final result:result_policy.Result; public final operation:String; public final diagnostic:Null<String>; public function new(result:result_policy.Result, operation:String, diagnostic:Null<String>) { this.result = result; this.operation = operation; this.diagnostic = diagnostic; } }');
 		var resultPolicyMain = 'import result_policy; function main():Int { result_policy.nk_run_checked(1); return result_policy.nk_create_checked(1); }';
@@ -249,16 +257,15 @@ class HxiParserMain {
 			&& layoutConstants.source.indexOf("class StyleConstants") >= 0
 			&& layoutNatives[0].name == "nativekit.ffi.style.lib_check_value",
 			"projection profiles should place generated declarations into configured package modules");
-		var layoutCompiler = new Compiler();
-		layoutCompiler.addStandardLibrarySourceRoot("stdlib");
+		var layoutCompiler = newCompiler();
 		layoutCompiler.addFfiProjection("layout.hxmap",
 			'{"interface":"style","package":"nativekit.ffi","typePrefix":"lib_","fieldCase":"camel","modules":{"types":"Types","constants":"Constants"}}');
 		layoutCompiler.addFfiInterface("style.hxi", HxiWriter.write(styleModel));
 		layoutCompiler.update("LayoutMain.hx",
-			"import nativekit.ffi.*; function main():Int { var point:Point = new Point(); var kind:Types.Kind = cast 0; point.set_textValue(42); point.set_kind(kind); return point.get_textValue(); }");
+			"import nativekit.ffi.*; function main():Int { var point:Point = new Point(); var kind:Types.Kind = Types.Kind.LibKindPrimary; point.set_textValue(42); point.set_kind(kind); return point.get_textValue(); }");
 		layoutCompiler.analyze("LayoutMain");
 		layoutCompiler.update("QualifiedLayoutMain.hx",
-			"import nativekit.ffi.Types as FfiTypes; function main():Int { var kind:FfiTypes.Kind = FfiTypes.Kind.LibKindPrimary; return kind; }");
+			"import nativekit.ffi.Types as FfiTypes; function main():Int { var kind:FfiTypes.Kind = FfiTypes.Kind.LibKindPrimary; return kind.rawValue(); }");
 		layoutCompiler.analyze("QualifiedLayoutMain");
 		layoutCompiler.update("menu/Kind.hx", "package menu; class Kind { public function new(first:Int, second:Int, third:Int) {} }");
 		layoutCompiler.update("ImportPrecedenceMain.hx", "import nativekit.ffi.Types; import menu.Kind; function main():Int { new Kind(1, 2, 3); return 0; }");
@@ -266,7 +273,7 @@ class HxiParserMain {
 		layoutCompiler.update("ReverseImportPrecedenceMain.hx",
 			"import menu.Kind; import nativekit.ffi.Types; function main():Int { new Kind(1, 2, 3); return 0; }");
 		layoutCompiler.analyze("ReverseImportPrecedenceMain");
-		var mappedDependencyCompiler = new Compiler();
+		var mappedDependencyCompiler = newCompiler();
 		mappedDependencyCompiler.addFfiInterface("base.hxi", 'interface base @target("x86_64-linux-gnu") @library("base") { handle nk_handle : u32; }');
 		mappedDependencyCompiler.addFfiInterface("derived.hxi",
 			'interface derived @target("x86_64-linux-gnu") @library("derived") @depends("base") { extern fn use_handle(value: nk_handle) -> void; }');
@@ -277,81 +284,80 @@ class HxiParserMain {
 			&& mappedDependencyCompiler.modules.get("derived").source.text.indexOf("Base.Handle") >= 0,
 			"dependency type mappings should accept qualified Haxe type paths");
 		expectProfileError(function() {
-			var compiler = new Compiler();
+			var compiler = newCompiler();
 			compiler.addFfiProjection("unknown-before.hxmap", '{"interface":"unknown_before","functionNames":{"z_missing":"valid","a_missing":"valid"}}');
 			compiler.addFfiInterface("unknown-before.hxi",
 				'interface unknown_before @target("x86_64-linux-gnu") @library("unknown_before") { extern fn check() -> i32; }');
 		}, "functionNames.a_missing");
-		var unknownAfterCompiler = new Compiler();
+		var unknownAfterCompiler = newCompiler();
 		unknownAfterCompiler.addFfiInterface("unknown-after.hxi",
 			'interface unknown_after @target("x86_64-linux-gnu") @library("unknown_after") { extern fn check() -> i32; }');
 		expectProfileError(function() unknownAfterCompiler.addFfiProjection("unknown-after.hxmap",
 			'{"interface":"unknown_after","functionNames":{"missing":"valid"}}'),
 			"functionNames.missing");
-		var invalidIdentifierCompiler = new Compiler();
+		var invalidIdentifierCompiler = newCompiler();
 		invalidIdentifierCompiler.addFfiInterface("invalid-identifier.hxi",
 			'interface invalid_identifier @target("x86_64-linux-gnu") @library("invalid_identifier") { extern fn check() -> i32; }');
 		expectProfileError(function() invalidIdentifierCompiler.addFfiProjection("invalid-identifier.hxmap",
 			'{"interface":"invalid_identifier","functionNames":{"check":"not-valid"}}'),
 			"invalid Haxe identifier");
-		var keywordCompiler = new Compiler();
+		var keywordCompiler = newCompiler();
 		keywordCompiler.addFfiInterface("keyword.hxi", 'interface keyword @target("x86_64-linux-gnu") @library("keyword") { extern fn lib_class() -> i32; }');
 		expectProfileError(function() keywordCompiler.addFfiProjection("keyword.hxmap",
 			'{"interface":"keyword","functionPrefix":"lib_","functionCase":"camel"}'),
 			"invalid Haxe identifier \"class\"");
-		var functionCollisionCompiler = new Compiler();
+		var functionCollisionCompiler = newCompiler();
 		functionCollisionCompiler.addFfiInterface("function-collision.hxi",
 			'interface function_collision @target("x86_64-linux-gnu") @library("function_collision") { extern fn lib_open_file() -> i32; extern fn lib_open__file() -> i32; }');
 		expectProfileError(function() functionCollisionCompiler.addFfiProjection("function-collision.hxmap",
 			'{"interface":"function_collision","functionPrefix":"lib_","functionCase":"camel"}'),
 			"both project to \"openFile\"");
-		var typeCollisionCompiler = new Compiler();
+		var typeCollisionCompiler = newCompiler();
 		typeCollisionCompiler.addFfiInterface("type-collision.hxi",
 			'interface type_collision @target("x86_64-linux-gnu") @library("type_collision") { handle lib_point : u32; handle lib__point : u32; }');
 		expectProfileError(function() typeCollisionCompiler.addFfiProjection("type-collision.hxmap", '{"interface":"type_collision","typePrefix":"lib_"}'),
 			"both project to \"Point\"");
-		var fieldCollisionCompiler = new Compiler();
+		var fieldCollisionCompiler = newCompiler();
 		fieldCollisionCompiler.addFfiInterface("field-collision.hxi",
 			'interface field_collision @target("x86_64-linux-gnu") @library("field_collision") { struct point @layout(8, 4) { text_value: i32 @offset(0); text__value: i32 @offset(4); } }');
 		expectProfileError(function() fieldCollisionCompiler.addFfiProjection("field-collision.hxmap", '{"interface":"field_collision","fieldCase":"camel"}'),
 			"both project to \"textValue\"");
-		var unknownFieldCompiler = new Compiler();
+		var unknownFieldCompiler = newCompiler();
 		unknownFieldCompiler.addFfiInterface("unknown-field.hxi",
 			'interface unknown_field @target("x86_64-linux-gnu") @library("unknown_field") { struct point @layout(4, 4) { x: i32 @offset(0); } }');
 		expectProfileError(function() unknownFieldCompiler.addFfiProjection("unknown-field.hxmap",
 			'{"interface":"unknown_field","fieldNames":{"point":{"missing":"value"}}}'),
 			"fieldNames.point.missing");
-		var enumCollisionCompiler = new Compiler();
+		var enumCollisionCompiler = newCompiler();
 		enumCollisionCompiler.addFfiInterface("enum-collision.hxi",
 			'interface enum_collision @target("x86_64-linux-gnu") @library("enum_collision") { enum mode : i32 { MODE_FAST = 1; MODE__FAST = 2; } }');
 		expectProfileError(function() enumCollisionCompiler.addFfiProjection("enum-collision.hxmap", '{"interface":"enum_collision"}'),
 			"both project to \"Fast\"");
-		var constantCollisionCompiler = new Compiler();
+		var constantCollisionCompiler = newCompiler();
 		constantCollisionCompiler.addFfiInterface("constant-collision.hxi",
 			'interface constant_collision @target("x86_64-linux-gnu") @library("constant_collision") { const LIB_VERSION = 1; const VERSION = 2; }');
 		expectProfileError(function() constantCollisionCompiler.addFfiProjection("constant-collision.hxmap",
 			'{"interface":"constant_collision","constantPrefix":"LIB_","constantCase":"camel"}'),
 			"both project to \"version\"");
-		var outputTypeCollisionCompiler = new Compiler();
+		var outputTypeCollisionCompiler = newCompiler();
 		outputTypeCollisionCompiler.addFfiInterface("output-type-collision.hxi",
 			'interface output_type_collision @target("x86_64-linux-gnu") @library("output_type_collision") { handle lib_read_out_result : u32; extern fn read(value: ptr<i32> @out) -> i32; }');
 		expectProfileError(function() outputTypeCollisionCompiler.addFfiProjection("output-type-collision.hxmap",
 			'{"interface":"output_type_collision","typePrefix":"lib_"}'),
 			'both project to "ReadOutResult"');
-		var unknownInterfaceCompiler = new Compiler();
+		var unknownInterfaceCompiler = newCompiler();
 		unknownInterfaceCompiler.addFfiProjection("unknown-interface.hxmap", '{"interface":"unknown_interface"}');
 		expectProfileError(function() unknownInterfaceCompiler.irCNatives(), "names unknown interface \"unknown_interface\"");
-		var aliasCompiler = new Compiler();
+		var aliasCompiler = newCompiler();
 		aliasCompiler.addFfiProjection("native-names.hxmap", '{"interface":"native_names","typePrefix":"nk_","enumValuePrefixes":["NK_"]}');
 		aliasCompiler.addFfiInterface("native-names.hxi",
 			'interface native_names @target("x86_64-linux-gnu") @library("native_names") { enum nk_result : i32 { NK_OK = 0; } extern fn check(value: nk_result) -> nk_result; }');
-		aliasCompiler.update("AliasMain.hx", "import native_names.Result; function main():Int { var value:Result = Result.Ok; return value; }");
+		aliasCompiler.update("AliasMain.hx", "import native_names.Result; function main():Int { var value:Result = Result.Ok; return value.rawValue(); }");
 		aliasCompiler.analyze("AliasMain");
-		var forkedProjectionCompiler = new Compiler();
+		var forkedProjectionCompiler = newCompiler();
 		forkedProjectionCompiler.addFfiProjection("renamed.hxmap", '{"interface":"renamed","functionNames":{"check":"validate"}}');
 		forkedProjectionCompiler.addFfiInterface("renamed.hxi",
 			'interface renamed @target("x86_64-linux-gnu") @library("renamed") { extern fn check() -> i32; }');
-		forkedProjectionCompiler.addStandardLibrarySourceRoot("stdlib");
 		var forkedProjectionMain = "import renamed; function main():Int return renamed.validate();";
 		forkedProjectionCompiler.update("ProfileForkMain.hx", forkedProjectionMain);
 		forkedProjectionCompiler.analyze("ProfileForkMain");
@@ -367,7 +373,7 @@ class HxiParserMain {
 		var enumFieldSource = HxiProjection.source(enumField);
 		expect(enumFieldSource.indexOf("enum abstract Result(Int)") >= 0 && enumFieldSource.indexOf("function get_result():Result") >= 0,
 			"named enums should retain their nominal type in fixed-layout structure fields");
-		var enumCompiler = new Compiler();
+		var enumCompiler = newCompiler();
 		enumCompiler.addFfiInterface("enums.hxi",
 			'interface enums @target("x86_64-linux-gnu") @library("enums") { enum Result : i32 { OK = 0; ERROR = -1; } extern fn check(value: Result) -> Result; }');
 		enumCompiler.update("EnumMain.hx", "import enums; function main():Result return enums.check(Result.Ok);");
@@ -624,7 +630,7 @@ class HxiParserMain {
 			&& returnedCallbackSource.indexOf("function call(value:Int):Int") >= 0
 			&& returnedCallbackSource.indexOf("function get():Null<BinaryCallback>") >= 0,
 			"callback results should project typed callable wrappers over returned native code pointers");
-		var callbackCompiler = new Compiler();
+		var callbackCompiler = newCompiler();
 		callbackCompiler.addFfiInterface("callbacks.hxi",
 			'interface callbacks @target("x86_64-linux-gnu") @library("callbacks") { callback Binary = fn(left: i32, right: i32) -> i32; extern fn apply(callback: Binary) -> i32; }');
 		callbackCompiler.update("CallbackMain.hx",
@@ -641,7 +647,7 @@ class HxiParserMain {
 		expect(handleSource.indexOf("abstract resource(Int) {") >= 0 && handleSource.indexOf("abstract resource(Int) from Int to Int") < 0,
 			"generated resource handles should not implicitly convert through their shared integer representation");
 		expectError('interface bad @target("x86_64-linux-gnu") { handle resource : u64; }', "requires an unsigned 32-bit representation");
-		var handleCompiler = new Compiler();
+		var handleCompiler = newCompiler();
 		handleCompiler.addFfiInterface("handles.hxi",
 			'interface handles @target("x86_64-linux-gnu") @library("handles") { handle resource : u32; extern fn create() -> resource; }');
 		handleCompiler.update("HandleMain.hx",
@@ -663,14 +669,13 @@ class HxiParserMain {
 			&& createResourceNative.pointerOwnership == "unspecified"
 			&& createResourceNative.signature == ">6",
 			"value-handle ownership should not alter the raw 32-bit C ABI result");
-		var ownedHandleCompiler = new Compiler();
-		ownedHandleCompiler.addStandardLibrarySourceRoot("stdlib");
+		var ownedHandleCompiler = newCompiler();
 		ownedHandleCompiler.addFfiInterface("owned_values.hxi",
 			'interface owned_values @target("x86_64-linux-gnu") @library("owned_values") { handle resource : u32 @destroy("resource_destroy"); extern fn create_resource() -> resource @owned; extern fn lookup_resource() -> resource; extern fn create_resource_out(value: ptr<resource> @out @owned) -> i32; extern fn destroy_resource(value: resource) -> void @symbol("resource_destroy"); extern fn use_resource(value: resource) -> i32; }');
 		ownedHandleCompiler.update("OwnedValueHandleMain.hx",
 			"import owned_values; function main():Int { var borrowed:resource = owned_values.lookup_resource(); var owner:Ownedresource = owned_values.create_resource(); var view:resource = owner.borrow(); var raw:Int = owner.rawValue(); var out = owned_values.create_resource_out(); var outOwner:Ownedresource = out.value; owned_values.use_resource(view); owner.close(); owner.close(); outOwner.close(); return borrowed.isValid() && raw >= 0 && owner.isClosed() ? 0 : 1; }");
 		ownedHandleCompiler.compile("OwnedValueHandleMain");
-		var borrowedValueCloseCompiler = new Compiler();
+		var borrowedValueCloseCompiler = newCompiler();
 		borrowedValueCloseCompiler.addFfiInterface("owned_values.hxi",
 			'interface owned_values @target("x86_64-linux-gnu") @library("owned_values") { handle resource : u32 @destroy("resource_destroy"); extern fn lookup_resource() -> resource; extern fn destroy_resource(value: resource) -> void @symbol("resource_destroy"); }');
 		borrowedValueCloseCompiler.update("OwnedValueHandleMain.hx",
@@ -681,7 +686,7 @@ class HxiParserMain {
 		} catch (_:CompileError)
 			borrowedValueCloseRejected = true;
 		expect(borrowedValueCloseRejected, "borrowed value handles must not expose close()");
-		var implicitValueOwnerCompiler = new Compiler();
+		var implicitValueOwnerCompiler = newCompiler();
 		implicitValueOwnerCompiler.addFfiInterface("owned_values.hxi",
 			'interface owned_values @target("x86_64-linux-gnu") @library("owned_values") { handle resource : u32 @destroy("resource_destroy"); extern fn lookup_resource() -> resource; extern fn destroy_resource(value: resource) -> void @symbol("resource_destroy"); }');
 		implicitValueOwnerCompiler.update("OwnedValueHandleMain.hx",
@@ -698,7 +703,7 @@ class HxiParserMain {
 		expect(statusOwnedSource.indexOf("public function close():Null<Result>") >= 0
 			&& statusOwnedSource.indexOf("return status_owned.window_destroy(__value)") >= 0,
 			"status-returning destroy functions should preserve their ABI result in an idempotent owner close");
-		var statusOwnerCompiler = new Compiler();
+		var statusOwnerCompiler = newCompiler();
 		statusOwnerCompiler.addFfiInterface("status_owned.hxi",
 			'interface status_owned @target("x86_64-linux-gnu") @library("status_owned") { handle window : u32 @destroy("window_destroy"); enum Result : i32 { OK = 0; FAILED = -1; } extern fn create_window() -> window @owned; extern fn window_destroy(value: window) -> Result @symbol("window_destroy"); }');
 		statusOwnerCompiler.update("StatusOwnerMain.hx",
@@ -706,7 +711,7 @@ class HxiParserMain {
 		statusOwnerCompiler.compile("StatusOwnerMain");
 		expectError('interface bad @target("x86_64-linux-gnu") @library("bad") { handle resource : u32; extern fn create() -> resource @owned; }',
 			'requires handle "resource" to declare @destroy');
-		var handleMismatchCompiler = new Compiler();
+		var handleMismatchCompiler = newCompiler();
 		handleMismatchCompiler.addFfiInterface("typed_handles.hxi",
 			'interface typed_handles @target("x86_64-linux-gnu") @library("typed_handles") { handle window : u32; handle monitor : u32; extern fn use_window(value: window) -> i32; }');
 		handleMismatchCompiler.update("HandleMismatchMain.hx",
@@ -725,21 +730,19 @@ class HxiParserMain {
 			&& abiBooleanSource.indexOf("value ? 1 : 0") >= 0
 			&& abiBooleanSource.indexOf("getI32(this, 4) != 0") >= 0,
 			"32-bit ABI booleans should project as Bool and versioned struct_size fields should initialize from their HXI layout");
-		var abiBooleanCompiler = new Compiler();
-		abiBooleanCompiler.addStandardLibrarySourceRoot("stdlib");
+		var abiBooleanCompiler = newCompiler();
 		abiBooleanCompiler.addFfiInterface("abi_bool.hxi",
 			'interface abi_bool @target("x86_64-linux-gnu") @library("abi_bool") { type nk_bool = bool32; struct options @layout(8, 4) { struct_size: u32 @offset(0) @struct_size; enabled: nk_bool @offset(4); } extern fn get_enabled() -> nk_bool; extern fn set_enabled(value: nk_bool) -> i32; }');
 		abiBooleanCompiler.update("AbiBoolMain.hx",
 			"import abi_bool; function main():Int { var value:options = cast haxe.io.Bytes.alloc(8); value.set_enabled(true); return value.get_enabled() ? 1 : 0; }");
 		abiBooleanCompiler.compile("AbiBoolMain");
-		var opaqueCompiler = new Compiler();
-		opaqueCompiler.addStandardLibrarySourceRoot("stdlib");
+		var opaqueCompiler = newCompiler();
 		opaqueCompiler.addFfiInterface("opaque_handles.hxi",
 			'interface opaque_handles @target("x86_64-linux-gnu") @library("opaque_handles") { opaque Context; opaque Window; type ContextAlias = Context; extern fn create_context() -> ptr<Context> @borrowed; extern fn maybe_context(value: i32) -> nullable<ptr<Context>> @borrowed; extern fn create_owned_context() -> ptr<Context> @owned("destroy_context"); extern fn maybe_create_owned_context() -> nullable<ptr<Context>> @owned("destroy_context"); extern fn create_owned_out(result: ptr<nullable<ptr<Context>>> @out @owned("destroy_context")) -> void; extern fn create_borrowed_out(result: ptr<nullable<ptr<Context>>> @out @borrowed) -> void; extern fn create_owned_status(result: ptr<nullable<ptr<Context>>> @out @owned("destroy_context")) -> i32; extern fn destroy_context(value: ptr<void>) -> void @symbol("destroy_context"); extern fn use_context(value: ptr<ContextAlias>) -> void; extern fn use_window(value: ptr<Window>) -> void; extern fn create_window() -> ptr<Window> @borrowed; }');
 		opaqueCompiler.update("OpaqueMain.hx",
 			"import opaque_handles; function main():Int { var context:Context = opaque_handles.create_context(); opaque_handles.use_context(context); var maybe:Null<Context> = opaque_handles.maybe_context(1); if (maybe != null) opaque_handles.use_context(maybe); context.isClosed(); var owner:OwnedContext = opaque_handles.create_owned_context(); opaque_handles.use_context(owner.borrow()); owner.isClosed(); owner.close(); var maybeOwner:Null<OwnedContext> = opaque_handles.maybe_create_owned_context(); if (maybeOwner != null) maybeOwner.close(); var outOwner:Null<OwnedContext> = opaque_handles.create_owned_out(); var outBorrowed:Null<Context> = opaque_handles.create_borrowed_out(); if (outOwner != null) outOwner.close(); if (outBorrowed != null) opaque_handles.use_context(outBorrowed); var statusOutput = opaque_handles.create_owned_status(); if (statusOutput.result != null) statusOutput.result.close(); if (statusOutput.status == 0) return 1; var window:Window = opaque_handles.create_window(); opaque_handles.use_window(window); return 0; }");
 		opaqueCompiler.compile("OpaqueMain");
-		var borrowedCloseCompiler = new Compiler();
+		var borrowedCloseCompiler = newCompiler();
 		borrowedCloseCompiler.addFfiInterface("opaque_handles.hxi",
 			'interface opaque_handles @target("x86_64-linux-gnu") @library("opaque_handles") { opaque Context; extern fn create_context() -> ptr<Context> @borrowed; }');
 		borrowedCloseCompiler.update("OpaqueMain.hx", "import opaque_handles; function main():Int { opaque_handles.create_context().close(); return 0; }");
@@ -749,7 +752,7 @@ class HxiParserMain {
 		} catch (_:CompileError)
 			borrowedCloseRejected = true;
 		expect(borrowedCloseRejected, "borrowed opaque handles should not expose close()");
-		var implicitBorrowCompiler = new Compiler();
+		var implicitBorrowCompiler = newCompiler();
 		implicitBorrowCompiler.addFfiInterface("opaque_handles.hxi",
 			'interface opaque_handles @target("x86_64-linux-gnu") @library("opaque_handles") { opaque Context; extern fn create_owned_context() -> ptr<Context> @owned("destroy_context"); extern fn destroy_context(value: ptr<void>) -> void @symbol("destroy_context"); extern fn use_context(value: ptr<Context>) -> void; }');
 		implicitBorrowCompiler.update("OpaqueMain.hx",
@@ -760,13 +763,13 @@ class HxiParserMain {
 		} catch (_:CompileError)
 			implicitBorrowRejected = true;
 		expect(implicitBorrowRejected, "owned opaque handles should require an explicit borrow() view");
-		var opaqueCallbackCompiler = new Compiler();
+		var opaqueCallbackCompiler = newCompiler();
 		opaqueCallbackCompiler.addFfiInterface("opaque_callbacks.hxi",
 			'interface opaque_callbacks @target("x86_64-linux-gnu") @library("opaque_callbacks") { opaque Context; callback Visit = fn(context: nullable<ptr<Context>>) -> void; extern fn visit(callback: Visit) -> void; }');
 		opaqueCallbackCompiler.update("OpaqueCallbackMain.hx",
 			"import opaque_callbacks; function main():Int { var callback = new VisitCallback(function(value:Null<Context>) {}); opaque_callbacks.visit(callback); callback.errorKind(); callback.takeError(); callback.close(); return 0; }");
 		opaqueCallbackCompiler.analyze("OpaqueCallbackMain");
-		var distinctOpaqueCompiler = new Compiler();
+		var distinctOpaqueCompiler = newCompiler();
 		distinctOpaqueCompiler.addFfiInterface("opaque_handles.hxi",
 			'interface opaque_handles @target("x86_64-linux-gnu") @library("opaque_handles") { opaque Context; opaque Window; extern fn create_context() -> ptr<Context> @borrowed; extern fn use_window(value: ptr<Window>) -> void; }');
 		distinctOpaqueCompiler.update("OpaqueMain.hx",
@@ -777,7 +780,7 @@ class HxiParserMain {
 		} catch (_:CompileError)
 			distinctOpaqueRejected = true;
 		expect(distinctOpaqueRejected, "distinct opaque native pointer handles should not be interchangeable");
-		var genericOpaqueCompiler = new Compiler();
+		var genericOpaqueCompiler = newCompiler();
 		genericOpaqueCompiler.addFfiInterface("opaque_handles.hxi",
 			'interface opaque_handles @target("x86_64-linux-gnu") @library("opaque_handles") { opaque Context; extern fn create_context() -> ptr<Context> @borrowed; }');
 		genericOpaqueCompiler.update("OpaqueMain.hx",
@@ -869,11 +872,11 @@ class HxiParserMain {
 			'interface spans @target("x86_64-linux-gnu") @library("spans") { extern fn values(value: i32) -> ptr<const<f64>> @span("count"); $spanCount }');
 		expect(HxiWriter.write(spans).indexOf('extern fn values(value: i32) -> ptr<const<f64>> @span("count");') >= 0,
 			"span results should round-trip through the HXI writer");
-		var compiler = new Compiler();
+		var compiler = newCompiler();
 		compiler.addFfiInterface("nativekit.hxi", valid);
 		expect(compiler.ffiInterfaces().length == 1
 			&& compiler.ffiInterfaces()[0].library == "nativekit", "compiler should retain validated FFI models");
-		var composed = new Compiler();
+		var composed = newCompiler();
 		composed.addFfiInterface("base.hxi",
 			'interface base @target("x86_64-linux-gnu") @library("base") { struct point @layout(8, 4) { x: i32 @offset(0); y: i32 @offset(4); } extern fn open(value: point) -> point; }');
 		composed.addFfiInterface("dependent.hxi",
@@ -892,7 +895,7 @@ class HxiParserMain {
 			"dependent HXI interfaces should contribute only their owned native functions");
 		var unknownDependencyRejected = false;
 		try {
-			new Compiler().addFfiInterface("missing.hxi", 'interface missing @target("x86_64-linux-gnu") @depends("does_not_exist") { }');
+			newCompiler().addFfiInterface("missing.hxi", 'interface missing @target("x86_64-linux-gnu") @depends("does_not_exist") { }');
 		} catch (_:Dynamic)
 			unknownDependencyRejected = true;
 		expect(unknownDependencyRejected, "unknown HXI dependencies should be rejected before projection");
@@ -974,7 +977,7 @@ class HxiParserMain {
 		compiler.analyze("Main");
 		expect(compiler.irCNatives().length == 2 && compiler.irCNatives()[1].name == "nativekit.nk_version",
 			"compiler should retain executable C descriptors for projected functions");
-		var constantCompiler = new Compiler();
+		var constantCompiler = newCompiler();
 		constantCompiler.addFfiInterface("fixture.hxi", 'interface fixture @target("x86_64-linux-gnu") @library("fixture") { const VALUE = 16; }');
 		constantCompiler.update("Main.hx",
 			"import fixture; import fixture.FixtureConstants; class LayoutConstants { public static inline var HEADER:Int = FixtureConstants.VALUE; public static inline final TOTAL:Int = LayoutConstants.HEADER + 4; } function main():Int return LayoutConstants.TOTAL;");

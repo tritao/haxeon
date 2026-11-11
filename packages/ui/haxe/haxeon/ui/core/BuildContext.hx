@@ -223,7 +223,7 @@ class BuildContext {
 		}
 		if (!hoverAnyType && !hoverTypes.exists(node.styleType)) return false;
 		var target = new StyleTarget(node.styleType, node.styleKey, node.styleId,
-			node.styleClasses, node.styleTags, -1);
+			node.styleClasses, node.styleTags);
 		return sheetHasHoverRule(theme.styles, target) || sheetHasHoverRule(styleSheet, target);
 	}
 
@@ -234,7 +234,7 @@ class BuildContext {
 
 	function collectHoverTypes(sheet:haxeon.ui.style.StyleSheet):Void {
 		for (rule in sheet.rules)
-			if ((rule.selector.stateMask & haxeon.ui.style.StyleState.Hovered) != 0) {
+			if (rule.selector.stateMask.contains(haxeon.ui.style.StyleState.Hovered)) {
 				var type = rule.selector.widgetType;
 				if (type == null) hoverAnyType = true;
 				else hoverTypes.set(type, true);
@@ -243,7 +243,7 @@ class BuildContext {
 
 	static function sheetHasHoverRule(sheet:haxeon.ui.style.StyleSheet, target:StyleTarget):Bool {
 		for (rule in sheet.rules)
-			if ((rule.selector.stateMask & haxeon.ui.style.StyleState.Hovered) != 0 && rule.selector.matches(target)) return true;
+			if (rule.selector.stateMask.contains(haxeon.ui.style.StyleState.Hovered) && rule.selector.matchesWithoutStates(target)) return true;
 		return false;
 	}
 
@@ -498,6 +498,21 @@ class BuildContext {
 
 	/** Bumped by requestPatch; a different value from the submitted one means a frame is due. */
 	public var patchRequestRevision(default, null):Int = 0;
+
+	/** Pending run-once binding work asks the host for a frame without rebuilding its owner. */
+	public var bindingRequestRevision(default, null):Int = 0;
+	public var onBindingFrameRequested:Null<Void->Void>;
+	var bindingFrameRequested:Bool = false;
+	public function requestBindingFrame():Void {
+		if (bindingFrameRequested) return;
+		bindingFrameRequested = true;
+		bindingRequestRevision++;
+		if (onBindingFrameRequested != null) onBindingFrameRequested();
+	}
+	public function consumeBindingFrameRequest():Int {
+		bindingFrameRequested = false;
+		return bindingRequestRevision;
+	}
 
 	public var hasPendingPatches(get, never):Bool;
 	inline function get_hasPendingPatches():Bool

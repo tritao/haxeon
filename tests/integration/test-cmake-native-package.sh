@@ -20,7 +20,7 @@ printf '%s\n' '{"version":1,"package":{"name":"app"},"entry":"Main","sourceRoots
 printf '%s\n' 'package app;' '' 'function main():Int' '    return 0;' > "$project_dir/app/src/Main.hx"
 
 run_cli() {
-	HAXEON_HOME="$home" HAXEON_COMPILER_SOURCE="$repo_dir/src" "$haxe" --cwd "$repo_dir" -cp "$repo_dir/src" --run tools.HaxeonCli "$@"
+	HAXEON_HOME="$home" HAXEON_COMPILER_SOURCE="$repo_dir/src" "$haxe" --cwd "$repo_dir" -cp "$repo_dir/src" -cp "$repo_dir/lib/haxeon-io" --run tools.HaxeonCli "$@"
 }
 
 plan_output=$(run_cli build --project "$project_dir/app/haxeon.json" --plan)

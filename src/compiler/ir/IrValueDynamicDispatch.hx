@@ -1,5 +1,7 @@
 package compiler.ir;
 
+import compiler.Provides.ProviderOperation;
+import compiler.Provides.ProviderOperation;
 import compiler.ir.Ir;
 import compiler.ir.SourceProvenance.Located;
 
@@ -7,6 +9,12 @@ import compiler.ir.SourceProvenance.Located;
 class IrValueDynamicDispatch {
 	static inline final EQUAL = "$value-dynamic-equal";
 	static inline final EQUALITY_PREFIX = "$value$equality:";
+
+	static function isValueEquality(fn:IrFunction):Bool
+		return switch fn.provides {
+			case Serves(type, operation): !type.isEnum() && IrProviders.base(operation) == ProviderOperation.Equals;
+			case None: false;
+		};
 
 	public static function rewrite(functions:Array<IrFunction>, objects:Array<IrObject>):Array<IrFunction> {
 		var values:Map<String, Bool> = [for (object in objects) if (object.isValue) object.name => true];
@@ -27,7 +35,7 @@ class IrValueDynamicDispatch {
 		}
 		// Reflection can box a field without a source-level conversion. Its requested
 		// equality function still carries the concrete value type in its signature.
-		for (fn in functions) if (StringTools.startsWith(fn.name, EQUALITY_PREFIX) && fn.arguments.length == 2
+		for (fn in functions) if (isValueEquality(fn) && fn.arguments.length == 2
 				&& (switch fn.arguments[0].type { case Obj(name): values.exists(name); default: false; }))
 			register(fn.name.substr(EQUALITY_PREFIX.length), fn.arguments[0].type);
 		for (fn in functions) for (block in fn.blocks) for (located in block.instructions) switch located.value {
@@ -39,20 +47,12 @@ class IrValueDynamicDispatch {
 		for (object in objects) if (object.isValue && !registeredValues.exists(object.name))
 			register("$reflected:" + object.name, Obj(object.name));
 		var suffixes = [for (suffix in requests.keys()) suffix]; suffixes.sort(Reflect.compare);
-		var rewritten:Array<IrFunction> = [];
-		for (fn in functions) {
-			var blocks:Array<IrBlock> = [], changed = false;
-			for (block in fn.blocks) {
-				var target = new IrBlock(block.id);
-				for (located in block.instructions) switch located.value {
-					case Call(output, "__dynamic_equal", arguments) if (suffixes.length > 0):
-						target.instructions.push(new Located(Call(output, EQUAL, arguments), located.provenance)); changed = true;
-					default: target.instructions.push(located);
-				}
-				target.terminator = block.terminator; blocks.push(target);
-			}
-			rewritten.push(changed ? new IrFunction(fn.name, fn.arguments, fn.result, blocks, fn.debugBindings, fn.inlineHint, fn.retention) : fn);
-		}
+		function replacement(located:Located<IrInstruction>):Null<Array<Located<IrInstruction>>>
+			return switch located.value {
+				case Call(output, "__dynamic_equal", arguments) if (suffixes.length > 0): [new Located(Call(output, EQUAL, arguments), located.provenance)];
+				default: null;
+			};
+		var rewritten:Array<IrFunction> = [for (fn in functions) IrFunctionRewrite.instructions(fn, replacement)];
 		if (needsEqual && suffixes.length > 0) rewritten.push(dispatcher(suffixes, requests, names));
 		return rewritten;
 	}
@@ -84,6 +84,6 @@ class IrValueDynamicDispatch {
 		}, fallback);
 		builder.select(fallback);
 		builder.returnValue(builder.call("__dynamic_equal", [left, right], Bool));
-		return new IrFunction(EQUAL, builder.arguments, Bool, builder.blocks);
+		return new IrFunction(EQUAL, builder.arguments, Bool, builder.blocks, GeneratedHelper);
 	}
 }

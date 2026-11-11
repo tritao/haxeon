@@ -121,7 +121,8 @@ class ModuleChangeAnalyzer {
 					].join(",") + " to " + [for (type in abstractDecl.toTypes) SemanticSignature.parsed(type, ast.aliases)].join(",") + " {" + [
 						for (value in abstractDecl.values)
 							value.name + "=" + state.source.slice(value.span.start, value.span.end)
-					].join(";") + "}";
+					].join(";") + "} implements " + (abstractDecl.conformances == null ? "" :
+					[for (type in abstractDecl.conformances) SemanticSignature.parsed(type, ast.aliases)].join(","));
 			abstracts.set(abstractName, signature);
 			if (state.abstractFingerprints.get(abstractName) != signature)
 				structuralChanged.set('abstract:$abstractName', true);

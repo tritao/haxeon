@@ -31,12 +31,7 @@ class TypingContext {
 	public var enumInterfaceTemporary:Int = 0;
 	public var nullableAbstractTemporary:Int = 0;
 	public var keyPathTemporary:Int = 0;
-
-	/** Binding ID to the enum abstract a parameter or local was declared as (the type itself lowers to the underlying one). */
-	public final declaredAbstracts:Map<String, String> = [];
-
-	/** The enum abstract the function declares as its result, if any. */
-	public var declaredResultAbstract:Null<String>;
+	public var diffTemporary:Int = 0;
 
 	public var loopDepth:Int = 0;
 	public var expectedReturnType:CompilerType = TVoid;

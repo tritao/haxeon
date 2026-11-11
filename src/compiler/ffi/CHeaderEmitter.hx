@@ -96,6 +96,7 @@ class CHeaderEmitter {
 		return switch type {
 			case Void: "Void";
 			case I32: "Int";
+			case EnumTag(name): 'EnumTag<$name>';
 			case I64: "haxe.Int64";
 			case Bool: "Bool";
 			case F32: "Float32";

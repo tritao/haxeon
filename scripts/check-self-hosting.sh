@@ -34,7 +34,7 @@ sources="$work/compiler-sources.txt"
 arguments=(--entry=compiler.tools.HaxeonCompiler --root=src --root=stdlib "--sources-file=$sources")
 
 echo "seed: building the compiler with the Haxe interpreter"
-"$haxe" --cwd "$root_dir" -cp src --run compiler.tools.HaxeonCompiler "--output=$work/seed.hl" "${arguments[@]}" >"$work/seed.log" 2>&1 || {
+"$haxe" --cwd "$root_dir" common.hxml --run compiler.tools.HaxeonCompiler "--output=$work/seed.hl" "${arguments[@]}" >"$work/seed.log" 2>&1 || {
 	tail -n 20 "$work/seed.log" >&2
 	echo "FAIL: the compiler sources do not build under the Haxe interpreter" >&2
 	exit 1

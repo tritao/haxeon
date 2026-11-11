@@ -25,7 +25,7 @@ class WasmScalarClosureEscapes {
 		result.functions = [for (fn in program.functions) {
 			var rewritten = pass.rewriteFunction(fn);
 			if (exports.indexOf(fn.name) >= 0 && pass.exportAdapter(fn, exportAdapters))
-				rewritten = new IrFunction(rewritten.name, rewritten.arguments, rewritten.result, rewritten.blocks, rewritten.debugBindings,
+				rewritten = new IrFunction(rewritten.name, rewritten.arguments, rewritten.result, rewritten.blocks, rewritten.kind, rewritten.debugBindings,
 					rewritten.inlineHint, Reachable);
 			rewritten;
 		}];
@@ -59,6 +59,7 @@ class WasmScalarClosureEscapes {
 		result.interfaces = program.interfaces; result.enums = program.enums; result.staticFields = program.staticFields;
 		result.positionalFingerprints = program.positionalFingerprints; result.parameterDefaults = program.parameterDefaults;
 		result.positionalPlaces = program.positionalPlaces; result.positionalSources = program.positionalSources;
+		compiler.ir.IrEnumTagLowering.escapes(result);
 		return result;
 	}
 
@@ -80,7 +81,7 @@ class WasmScalarClosureEscapes {
 			resultType = Dyn;
 		}
 		b.returnValue(result);
-		generatedFunctions.push(new IrFunction(name, b.arguments, resultType, b.blocks));
+		generatedFunctions.push(new IrFunction(name, b.arguments, resultType, b.blocks, GeneratedHelper));
 		mappings.set(fn.name, name);
 		return true;
 	}
@@ -112,15 +113,18 @@ class WasmScalarClosureEscapes {
 
 	function isInlineEnumStorage(type:IrType):Bool return switch type {
 		case Obj(name): inlineEnums.exists(name);
+		case EnumTag(_): true;
 		default: false;
 	};
 
 	function toDynamic(builder:IrBuilder, value:IrValue, type:IrType):IrValue {
+		switch type { case EnumTag(name): return builder.intrinsic(EnumTagBox(EnumTag(name)), [value], Dyn); default: }
 		var enumName = switch type { case Obj(name): inlineEnums.get(name); default: null; };
 		return enumName == null ? builder.toDyn(value) : builder.call(compiler.ir.IrInlineEnumEscapes.boxName(enumName), [value], Dyn);
 	}
 
 	function fromDynamic(builder:IrBuilder, value:IrValue, type:IrType):IrValue {
+		switch type { case EnumTag(name): return builder.intrinsic(EnumTagUnbox(EnumTag(name)), [value], type); default: }
 		var enumName = switch type { case Obj(name): inlineEnums.get(name); default: null; };
 		return enumName == null ? builder.safeCast(value, type) : builder.call(compiler.ir.IrInlineEnumEscapes.unboxName(enumName), [value], type);
 	}
@@ -152,7 +156,7 @@ class WasmScalarClosureEscapes {
 			rewritten.terminator = block.terminator;
 			blocks.push(rewritten);
 		}
-		return changed ? new IrFunction(fn.name, fn.arguments, fn.result, blocks, fn.debugBindings, fn.inlineHint, fn.retention) : fn;
+		return changed ? fn.withBlocks(blocks) : fn;
 	}
 
 	/** The escape adapter's target identifies its original scalar closure signature. */
@@ -171,7 +175,7 @@ class WasmScalarClosureEscapes {
 			probe = b.staticClosure(invoke, probeType),
 			found = b.call(receiverQuery("$wasm:closure-receiver:signature:" + suffix, Dyn, probeType), [closure, probe], Dyn);
 		b.returnValue(b.equal(b.equal(found, b.constNull(Dyn)), b.constBool(false)));
-		generatedFunctions.push(new IrFunction(name, b.arguments, Bool, b.blocks));
+		generatedFunctions.push(new IrFunction(name, b.arguments, Bool, b.blocks, GeneratedHelper));
 		return name;
 	}
 
@@ -193,7 +197,7 @@ class WasmScalarClosureEscapes {
 				b.branch(b.equal(closure, b.constNull(type)), missing, present);
 				b.select(missing); b.returnValue(b.constNull(Dyn));
 				b.select(present); b.returnValue(b.call(innerAdapter, [b.safeCast(closure, inner)], Dyn));
-				generatedFunctions.push(new IrFunction(maker, b.arguments, Dyn, b.blocks));
+				generatedFunctions.push(new IrFunction(maker, b.arguments, Dyn, b.blocks, GeneratedHelper));
 				restoration(type);
 				return maker;
 			case Function(_, _):
@@ -213,7 +217,7 @@ class WasmScalarClosureEscapes {
 			adapted.push((switch (signature.arguments[index]) { case Dyn: true; default: false; }) ? arguments[index] : fromDynamic(call, arguments[index], signature.arguments[index]));
 		var value = call.callClosure(closure, adapted, signature.result);
 		call.returnValue((switch (signature.result) { case Void: true; default: false; }) ? call.constNull(Dyn) : (switch (signature.result) { case Dyn: true; default: false; }) ? value : toDynamic(call, value, signature.result));
-		generatedFunctions.push(new IrFunction(invoke, call.arguments, Dyn, call.blocks));
+		generatedFunctions.push(new IrFunction(invoke, call.arguments, Dyn, call.blocks, GeneratedHelper));
 		var make = new IrBuilder(), original = make.argument("closure", type), missing = make.createBlock(), present = make.createBlock();
 		make.branch(make.equal(original, make.constNull(type)), missing, present);
 		make.select(missing);
@@ -231,7 +235,7 @@ class WasmScalarClosureEscapes {
 		var captured = make.newObject(environment);
 		make.fieldSet(captured, "closure", original);
 		make.returnValue(make.toDyn(make.instanceClosure(invoke, captured, erasedType)));
-		generatedFunctions.push(new IrFunction(maker, make.arguments, Dyn, make.blocks));
+		generatedFunctions.push(new IrFunction(maker, make.arguments, Dyn, make.blocks, GeneratedHelper));
 		return maker;
 	}
 
@@ -248,7 +252,7 @@ class WasmScalarClosureEscapes {
 				b.branch(b.equal(closure, b.constNull(Dyn)), missing, present);
 				b.select(missing); b.returnValue(b.constNull(type));
 				b.select(present); b.returnValue(b.safeCast(b.call(innerRestoration, [closure], inner), type));
-				generatedFunctions.push(new IrFunction(maker, b.arguments, type, b.blocks));
+				generatedFunctions.push(new IrFunction(maker, b.arguments, type, b.blocks, GeneratedHelper));
 				return maker;
 			case Function(_, _):
 			default: throw "A restored scalar closure must have a function type";
@@ -268,7 +272,7 @@ class WasmScalarClosureEscapes {
 			value = call.callClosure(closure, boxed, Dyn);
 		if ((switch (signature.result) { case Void: true; default: false; })) call.returnValue(call.constVoid());
 		else call.returnValue((switch (signature.result) { case Dyn: true; default: false; }) ? value : fromDynamic(call, value, signature.result));
-		generatedFunctions.push(new IrFunction(invoke, call.arguments, signature.result, call.blocks));
+		generatedFunctions.push(new IrFunction(invoke, call.arguments, signature.result, call.blocks, WasmClosureRestore));
 		var make = new IrBuilder(), original = make.argument("closure", Dyn), missing = make.createBlock(), present = make.createBlock();
 		make.branch(make.equal(original, make.constNull(Dyn)), missing, present);
 		make.select(missing);
@@ -286,7 +290,7 @@ class WasmScalarClosureEscapes {
 		var decoded = make.safeCast(original, dynamicType), captured = make.newObject(environment);
 		make.fieldSet(captured, "closure", decoded);
 		make.returnValue(make.instanceClosure(invoke, captured, type));
-		generatedFunctions.push(new IrFunction(maker, make.arguments, type, make.blocks));
+		generatedFunctions.push(new IrFunction(maker, make.arguments, type, make.blocks, GeneratedHelper));
 		return maker;
 	}
 }

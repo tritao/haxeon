@@ -13,7 +13,7 @@ class NullableEnumPatternMain {
 			var result = compiler.compile("Main"),
 				build = incremental ? "incremental" : "clean";
 			var path = 'out/nullable-enum-pattern-$build.hl';
-			File.saveBytes(path, HlWriter.encode(result.module));
+			File.saveBytes(path, HlWriter.encode(result.module).flatten());
 			var child = new sys.io.Process(Sys.getEnv("HAXEON_HASHLINK_DIR") + "/hl", [path]);
 			var output = child.stdout.readAll().toString() + child.stderr.readAll().toString(),
 				code = child.exitCode();

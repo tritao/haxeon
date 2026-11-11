@@ -87,6 +87,6 @@ function main():Int {
 	return 42;
 }
 ');
-		File.saveBytes(output, HlWriter.encode(compiler.compile("Main").module));
+		File.saveBytes(output, HlWriter.encode(compiler.compile("Main").module).flatten());
 	}
 }

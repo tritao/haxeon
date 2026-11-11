@@ -49,6 +49,6 @@ function main():Int {
   if (Hashing.hash(new Point(0.0, 2.0)) != Hashing.hash(new Point(-0.0, 2.0))) return 11;
   return 42;
 }');
-		File.saveBytes(Sys.args()[0], HlWriter.encode(compiler.compile("Main").module));
+		File.saveBytes(Sys.args()[0], HlWriter.encode(compiler.compile("Main").module).flatten());
 	}
 }

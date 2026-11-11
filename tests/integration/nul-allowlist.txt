@@ -1,0 +1,3 @@
+# Source files (relative to the repository root) that may contain a NUL character literal on purpose, one per line, each with the reason.
+# Keep this empty unless a file really writes binary data: a NUL in a String used as a Map key ends the key under HashLink (keys are
+# compared as C strings), so two different keys can look equal. Use another separator, such as a newline.

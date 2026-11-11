@@ -27,7 +27,7 @@ class LayoutMeasureResult {
 		result.set_width(width);
 		result.set_height(height);
 		result.set_baseline(baseline);
-		result.set_flags(hasBaseline ? 1 : 0);
+		result.set_flags(NativeKitUI.NkuiLayoutMeasureFlags.fromRaw(hasBaseline ? 1 : 0));
 		return result;
 	}
 }

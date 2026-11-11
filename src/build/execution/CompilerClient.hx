@@ -30,7 +30,8 @@ class CompilerClient {
 			?session:build.BuildSession):String {
 		var identity = new ExecutionAction(new ActionId("compiler-session-v8:inline=" + inlineOption() + (profilePort == null ? "" : ":profile:" +
 			profilePort)), [],
-			[compilerSource, Path.join([home, "stdlib"])], [], "", ExecutionAction.ActionKind.Process(command, [compilerSource], home, new Map()));
+			build.CompilerSources.roots(compilerSource).concat([Path.join([home, "stdlib"])]), [], "",
+			ExecutionAction.ActionKind.Process(command, build.CompilerSources.roots(compilerSource), home, new Map()));
 		if (session == null)
 			return ActionFingerprint.compute(identity, buildRoot, Sys.systemName(), []);
 		var memoKey = [identity.id.key(), command, compilerSource, home, buildRoot, Sys.systemName()].join("\n");
@@ -241,7 +242,8 @@ class CompilerClient {
 			} else {
 				// Build beside the target and rename, so another Haxeon process never sees a partial file.
 				var temporary = artifact + ".tmp." + Std.string(Std.random(1000000)),
-					compileStatus = ProcessRunner.run(command, ["-cp", compilerSource, "-hl", temporary, "-main", mainClass], home, new Map());
+					compileStatus = ProcessRunner.run(command, build.CompilerSources.classPath(compilerSource).concat(["-hl", temporary, "-main", mainClass]), home,
+						new Map());
 				if (compileStatus != 0)
 					throw "Could not compile " + mainClass;
 				FileSystem.rename(temporary, artifact);
@@ -271,8 +273,9 @@ class CompilerClient {
 			if (!FileSystem.exists(hashlink))
 				throw "missing " + hashlink;
 			var directory = preparedSessionDirectory(),
-				identity = new ExecutionAction(new ActionId("compiler-one-shot-v1"), [], [compilerSource, Path.join([home, "stdlib"])], [], "",
-					ExecutionAction.ActionKind.Process(command, [compilerSource], home, new Map()));
+				identity = new ExecutionAction(new ActionId("compiler-one-shot-v1"), [],
+					build.CompilerSources.roots(compilerSource).concat([Path.join([home, "stdlib"])]), [], "",
+					ExecutionAction.ActionKind.Process(command, build.CompilerSources.roots(compilerSource), home, new Map()));
 			artifact = Path.join([
 				directory,
 				ActionFingerprint.compute(identity, buildRoot, Sys.systemName(), []) + ".hl"

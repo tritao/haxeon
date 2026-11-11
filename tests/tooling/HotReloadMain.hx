@@ -24,6 +24,7 @@ import runtime.RuntimeError;
 import runtime.RuntimeStatus;
 import runtime.PatchSet;
 import runtime.ModuleRetirementStatus.ModuleRetirementFlag;
+import sys.FileSystem;
 import sys.io.File;
 
 class HotReloadMain {
@@ -41,6 +42,7 @@ class HotReloadMain {
 		testBackendStateLifetime();
 		testJitSupportModuleRetirement();
 		testLiveAbiPatchMatrix();
+		testLiveReachability();
 		testRetainedPatchedClosure();
 		if (Runtime.retryRetirements() != 0)
 			throw "released closure kept module retirement blocked after its frame unwound";
@@ -67,7 +69,7 @@ class HotReloadMain {
 			readIndex = requireFunctionId(initial, "Probe.read"),
 			exceptionIndex = requireFunctionId(initial, "ExceptionProbe.probe"),
 			workIndex = requireFunctionId(initial, "Worker.run");
-		var loaded = Runtime.load(HlWriter.encode(initial.module), initial.runtimeIdentity);
+		var loaded = Runtime.load(HlWriter.encode(initial.module).flatten(), initial.runtimeIdentity);
 		if (Runtime.callInt(loaded, valueIndex) != 42)
 			throw "initial generation did not return 42";
 		var initialLocation = Runtime.jitLocation(loaded, valueIndex);
@@ -379,7 +381,7 @@ class HotReloadMain {
 		compiler.update("Main.hx",
 			"class Box { public var value:Int; public function new(value:Int):Void { this.value = value; } } function make():Box { return new Box(40); } function read(box:Box):Int { return box.value; } function fail():Int { throw new Box(1); } function main():Int { return read(make()); }");
 		var initial = compiler.compile("Main"),
-			loaded = Runtime.load(HlWriter.encode(initial.module), initial.runtimeIdentity);
+			loaded = Runtime.load(HlWriter.encode(initial.module).flatten(), initial.runtimeIdentity);
 		var retained = Runtime.retainObject(loaded, initial.functionIds.get("Main.make"));
 		var retirement = Runtime.retirementStatus(loaded);
 		if (retirement.ownedNativeRoots == 0 || !retirement.has(OwnedNativeRoots))
@@ -411,7 +413,7 @@ class HotReloadMain {
 		var compiler = new Compiler();
 		compiler.update("Main.hx", "function value():Int { return 40; } function make():() -> Int { return value; } function main():Int { return value(); }");
 		var initial = compiler.compile("Main"),
-			loaded = Runtime.load(HlWriter.encode(initial.module), initial.runtimeIdentity);
+			loaded = Runtime.load(HlWriter.encode(initial.module).flatten(), initial.runtimeIdentity);
 		var makeId = initial.functionIds.get("Main.make");
 		var initialClosure = Runtime.retainClosure(loaded, makeId);
 		if (Runtime.callRetainedClosureInt(initialClosure) != 40)
@@ -450,11 +452,18 @@ class HotReloadMain {
 		var survivor = new Compiler();
 		survivor.update("Main.hx", "function main():Int { return 42; }");
 		var survivorResult = survivor.compile("Main");
-		var prefix = Sys.getCwd() + "/jit-support-lifetime";
-		File.saveBytes(prefix + "-owner.hl", HlWriter.encode(ownerResult.module));
+		var tmp = Sys.getEnv("TMPDIR"),
+			directory = (tmp == null || tmp == "" ? "/tmp" : tmp)
+				+ "/haxeon-jit-support-lifetime-"
+				+ Std.int(Sys.time() * 1000)
+				+ "-"
+				+ Std.random(1000000);
+		FileSystem.createDirectory(directory);
+		var prefix = directory + "/jit-support-lifetime";
+		File.saveBytes(prefix + "-owner.hl", HlWriter.encode(ownerResult.module).flatten());
 		File.saveBytes(prefix + "-owner.hli", ownerResult.runtimeIdentity);
 		File.saveContent(prefix + "-owner.id", Std.string(ownerResult.functionIds.get("main")));
-		File.saveBytes(prefix + "-survivor.hl", HlWriter.encode(survivorResult.module));
+		File.saveBytes(prefix + "-survivor.hl", HlWriter.encode(survivorResult.module).flatten());
 		File.saveBytes(prefix + "-survivor.hli", survivorResult.runtimeIdentity);
 		File.saveContent(prefix + "-survivor.id", Std.string(survivorResult.functionIds.get("main")));
 		var test = Sys.getEnv("HAXEON_HASHLINK_DIR") + "/haxeon-jit-support-lifetime";
@@ -462,6 +471,9 @@ class HotReloadMain {
 		test += ".exe";
 		#end
 		var status = Sys.command(test, [prefix + "-owner", prefix + "-survivor"]);
+		for (name in FileSystem.readDirectory(directory))
+			FileSystem.deleteFile(directory + "/" + name);
+		FileSystem.deleteDirectory(directory);
 		if (status != 0)
 			throw 'JIT support trampoline did not survive owner-module retirement (exit $status)';
 	}
@@ -470,7 +482,7 @@ class HotReloadMain {
 		var compiler = new Compiler();
 		compiler.update("Main.hx", "function main():Int { return 42; }");
 		var result = compiler.compile("Main"),
-			bytes = HlWriter.encode(result.module),
+			bytes = HlWriter.encode(result.module).flatten(),
 			mainId = result.functionIds.get("main");
 		for (i in 0...100) {
 			runDisposableGeneration(bytes, result.runtimeIdentity, mainId);
@@ -507,7 +519,7 @@ class HotReloadMain {
 			invalidInitializer = identity.sub(0, identity.length);
 		invalidInitializer.setInt32(28, 1);
 		try {
-			Runtime.load(HlWriter.encode(code), invalidInitializer);
+			Runtime.load(HlWriter.encode(code).flatten(), invalidInitializer);
 			throw "runtime identity accepted an unmapped initializer slot";
 		} catch (error:RuntimeError) {
 			if (error.status != RuntimeStatus.BadFormat)
@@ -518,7 +530,7 @@ class HotReloadMain {
 		legacyIdentity.set(3, 2);
 		legacyIdentity.blit(28, identity, 32, identity.length - 32);
 		try {
-			Runtime.load(HlWriter.encode(code), legacyIdentity);
+			Runtime.load(HlWriter.encode(code).flatten(), legacyIdentity);
 			throw "throwing module initializer unexpectedly loaded";
 		} catch (error:RuntimeError) {
 			if (error.status != RuntimeStatus.BadFormat)
@@ -538,6 +550,36 @@ class HotReloadMain {
 			if (error.status != RuntimeStatus.BadArgument)
 				throw error;
 		}
+	}
+
+	/**
+	 * A live module keeps every function, reachable or not: its host can call any function by id, and an edit that makes a class used
+	 * or unused must patch like any other edit and not move the module's layout.
+	 */
+	static function testLiveReachability():Void {
+		var unused = "class Spare { public function new() {} public function read():Int { return 40; } public function more():Int { return 2; } } "
+			+ "function main():Int { return 42; }",
+			used = "class Spare { public function new() {} public function read():Int { return 40; } public function more():Int { return 2; } } "
+				+ "function main():Int { var s = new Spare(); return s.read() + s.more(); }";
+		var compiler = new Compiler();
+		compiler.update("Main.hx", unused);
+		var first = compiler.compile("Main");
+		var loaded = Runtime.load(HlWriter.encode(first.module).flatten(), first.runtimeIdentity);
+		if (!first.functionIds.exists("Spare.read") || !first.functionIds.exists("Spare.more"))
+			throw "a live module must keep the methods of a class nothing uses";
+		var step = 0, baseRevision = first.revision;
+		for (source in [used, unused, used, unused]) {
+			step++;
+			compiler.update("Main.hx", source);
+			var changed = compiler.compile("Main");
+			if (changed.requiresReload || changed.patchBytes == null)
+				throw 'step $step: making a class used or unused must patch, not reload: ${[for (reason in changed.reloadReasons) Std.string(reason)]}';
+			Runtime.patchSet(loaded, new PatchSet(baseRevision, changed.revision, changed.patchBytes, changed.changedFunctions));
+			baseRevision = changed.revision;
+			if (Runtime.callInt(loaded, changed.functionIds.get("main")) != 42)
+				throw 'step $step: the patched module does not run the edited program';
+		}
+		Runtime.dispose(loaded);
 	}
 
 	static function testLiveAbiPatchMatrix():Void {
@@ -598,7 +640,7 @@ class HotReloadMain {
 			compiler.update("Main.hx", fixture.before);
 			var initial = compiler.compile("Main"),
 				mainId = initial.functionIds.get("main");
-			var loaded = Runtime.load(HlWriter.encode(initial.module), initial.runtimeIdentity);
+			var loaded = Runtime.load(HlWriter.encode(initial.module).flatten(), initial.runtimeIdentity);
 			compiler.update("Main.hx", fixture.after);
 			var changed = compiler.compile("Main");
 			if (changed.requiresReload || changed.patchBytes == null || changed.changedFunctions.length == 0)
@@ -617,7 +659,7 @@ class HotReloadMain {
 		var initial = compiler.compile("Main"),
 			mainId = initial.functionIds.get("main"),
 			helperId = initial.functionIds.get("Main.helper"),
-			loaded = Runtime.load(HlWriter.encode(initial.module), initial.runtimeIdentity);
+			loaded = Runtime.load(HlWriter.encode(initial.module).flatten(), initial.runtimeIdentity);
 		compiler.acknowledgePublication(initial.revision);
 		var state = compiler.exportIdentityState();
 		if (state.compare(compiler.exportIdentityState()) != 0)
@@ -693,7 +735,7 @@ class HotReloadMain {
 			|| uninterrupted.baseTypes != restored.baseTypes
 			|| uninterrupted.changedFunctions.join(",") != restored.changedFunctions.join(",")
 			|| uninterrupted.changedSlots.join(",") != restored.changedSlots.join(",")
-			|| HlWriter.encode(uninterrupted.module).compare(HlWriter.encode(restored.module)) != 0)
+			|| HlWriter.encode(uninterrupted.module).flatten().compare(HlWriter.encode(restored.module).flatten()) != 0)
 			throw "Restored assembler output disagreed with uninterrupted assembly";
 		probeCompiler("mutated restored assembler");
 	}
@@ -734,7 +776,7 @@ class HotReloadMain {
 		indices.set("value", 0);
 		ids.set("value", 71000);
 		bySlot.set(0, 71000);
-		var loaded = Runtime.load(HlWriter.encode(code), HlRuntimeIdentity.encode(moduleId, 1, indices, ids));
+		var loaded = Runtime.load(HlWriter.encode(code).flatten(), HlRuntimeIdentity.encode(moduleId, 1, indices, ids));
 		var initialCapacity = Runtime.metadataTypeCapacity(loaded);
 		if (Runtime.metadataTypeCount(loaded) != code.types.length || initialCapacity - code.types.length != 65536)
 			throw "type arena did not expose its fixed append reserve";
@@ -825,7 +867,7 @@ class HotReloadMain {
 		indices.set("value", 0);
 		ids.set("value", 70000);
 		bySlot.set(0, 70000);
-		var loaded = Runtime.load(HlWriter.encode(code), HlRuntimeIdentity.encode(moduleId, 1, indices, ids));
+		var loaded = Runtime.load(HlWriter.encode(code).flatten(), HlRuntimeIdentity.encode(moduleId, 1, indices, ids));
 		code.ints.push(2);
 		code.floats.push(3.5);
 		code.strings.push("new symbol");

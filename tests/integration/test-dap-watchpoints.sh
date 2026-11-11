@@ -20,7 +20,7 @@ if [[ ! -d "$adapter_dir/node_modules" ]]; then npm --prefix "$adapter_dir" ci -
 		LD_LIBRARY_PATH="$tools_dir/neko-runtime/root/usr/lib/x86_64-linux-gnu" \
 		NEKOPATH="$tools_dir/neko-runtime/root/usr/lib/x86_64-linux-gnu/neko" haxe build.hxml
 )
-"$tools_dir/haxe/haxe" --cwd "$repo_dir" -cp src --run Main \
+"$tools_dir/haxe/haxe" --cwd "$repo_dir" common.hxml --run Main \
 	"$repo_dir/tests/dap/DapWatchpointProbe.hx" "$repo_dir/out/dap-watchpoint-probe.hl" >/dev/null
 
 python3 - "$dap_home/config/adapters.json" "$adapter_dir" <<'PY'

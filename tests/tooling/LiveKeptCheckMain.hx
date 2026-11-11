@@ -11,6 +11,7 @@ import compiler.ir.hl.HlLower;
  */
 class LiveKeptCheckMain {
 	static function main():Void {
+		checkOpcodeComparison();
 		var program = Frontend.compile("function value():Int return 7; function main():Int return value() + 1;");
 		var layout:Map<String, Int> = [];
 		HlLower.lower(program, layout);
@@ -43,4 +44,31 @@ class LiveKeptCheckMain {
 			throw 'a wrong kept opcode must be reported by name, got: $message';
 		Sys.println("PASS: a wrong kept function is reported by name");
 	}
+	static function checkOpcodeComparison():Void {
+		var left:Array<HlInstruction> = [Jump("a"), Label("a"), CallN(0, 3, [1, 2]), LoadBool(0, true)];
+		var right:Array<HlInstruction> = [Jump("renamed"), Label("renamed"), CallN(0, 3, [1, 2]), LoadBool(0, true)];
+		var functionOf = function(ops:Array<HlInstruction>) return new HlFunction(0, 0, [], ops);
+		var compare = function(ops:Array<HlInstruction>) return compiler.hl.HlFunctionEquality.difference(functionOf(left), functionOf(ops));
+		if (compare(right) != null)
+			throw "Equivalent labels and copied register arrays must compare equal";
+		right[2] = CallN(0, 3, [1, 4]);
+		if (compare(right) == null)
+			throw "A changed array operand must compare unequal";
+		right[2] = CallN(0, 3, [1, 2]);
+		right[1] = Label("other");
+		if (compare(right) == null)
+			throw "Label renaming must be consistent";
+		right[1] = Label("renamed");
+		right[3] = LoadBool(0, false);
+		if (compare(right) == null)
+			throw "A changed boolean operand must compare unequal";
+		right[3] = LoadInt(0, 1);
+		if (compare(right) == null)
+			throw "Different constructors must compare unequal";
+		if (compiler.hl.HlFunctionEquality.difference(functionOf([Label("a"), Label("b")]),
+			functionOf([Label("same"), Label("same")])) == null)
+			throw "Label renaming must be one-to-one";
+		Sys.println("PASS: typed opcode comparison preserves operands and label bijections");
+	}
+
 }

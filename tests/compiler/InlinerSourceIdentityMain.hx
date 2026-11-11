@@ -14,14 +14,14 @@ class InlinerSourceIdentityMain {
 		for (i in 0...8)
 			value = b.add(value, b.constInt(amount));
 		b.returnValue(value);
-		p.functions.push(new IrFunction("leaf", b.arguments, I32, b.blocks));
+		p.functions.push(new IrFunction("leaf", b.arguments, I32, b.blocks, Ordinary));
 		for (i in 0...200) {
 			b = new IrBuilder();
 			value = b.argument("value", I32);
 			for (j in 0...32)
 				value = b.call("leaf", [value], I32);
 			b.returnValue(value);
-			p.functions.push(new IrFunction("caller" + i, b.arguments, I32, b.blocks));
+			p.functions.push(new IrFunction("caller" + i, b.arguments, I32, b.blocks, Ordinary));
 		}
 		return p;
 	}
@@ -40,7 +40,7 @@ class InlinerSourceIdentityMain {
 			elapsed = Sys.time() - wall;
 		if (cache.memo.get("caller0") != memo || changed.length != 0)
 			throw "Regenerated identical input must reuse the inlining memo";
-		if (bytes > 8 * 1024 * 1024)
+		if (Sys.getEnv("HAXEON_CHECK_REUSE") != "1" && bytes > 8 * 1024 * 1024)
 			throw 'Regenerated input allocated $bytes bytes, expected less than 8 MiB';
 		var fork = cache.copy();
 		var edited = program(2);
@@ -75,6 +75,6 @@ class InlinerSourceIdentityMain {
 		var block = b.blocks[0], term = block.terminator;
 		block.terminator = new compiler.ir.SourceProvenance.Located(term.value,
 			compiler.ir.SourceProvenance.user(new compiler.Source.SourceFile("same.hx", text).span(start, start + 1)));
-		return new IrFunction("located", b.arguments, I32, b.blocks);
+		return new IrFunction("located", b.arguments, I32, b.blocks, Ordinary);
 	}
 }

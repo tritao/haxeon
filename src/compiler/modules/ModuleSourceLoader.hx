@@ -36,6 +36,19 @@ class ModuleSourceLoader {
 		addRootMapping(normalized, null, true);
 	}
 
+	/**
+	 * The portable package that ships beside the standard library (`lib/haxeon-io` next to `stdlib`), which both builds of the compiler
+	 * compile. It is part of the standard library for every purpose, and absent in a checkout that has not got it.
+	 */
+	public function addPortableLibraryRoot(standardLibraryPath:String):Void {
+		var trimmed = standardLibraryPath;
+		while (trimmed.length > 1 && (StringTools.endsWith(trimmed, "/") || StringTools.endsWith(trimmed, "\\")))
+			trimmed = trimmed.substr(0, trimmed.length - 1);
+		var portable = haxe.io.Path.join([haxe.io.Path.directory(trimmed), "lib", "haxeon-io"]);
+		if (FileSystem.exists(portable) && FileSystem.isDirectory(portable))
+			addStandardLibraryRoot(portable);
+	}
+
 	public function addPackageRoot(packageName:String, path:String):Void {
 		if (packageName == null || packageName.length == 0)
 			throw "Package source root requires a package name";

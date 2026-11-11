@@ -9,7 +9,7 @@ class FileDialogOptions {
 	public var title:Null<String> = null;
 	public var initialPath:Null<String> = null;
 	public var suggestedName:Null<String> = null;
-	public var flags:DialogFlags = cast 0;
+	public var flags:DialogFlags = DialogFlags.empty();
 	public var filters:Array<FileDialogFilter> = [];
 
 	public function new() {

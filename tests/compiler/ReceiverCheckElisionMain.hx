@@ -34,7 +34,7 @@ class ReceiverCheckElisionMain {
 		b.select(yes); check(b, receiver); b.jump(merge);
 		b.select(no); b.jump(merge);
 		b.select(merge); check(b, receiver); b.returnValue(b.constInt(42));
-		var fn = new IrFunction("main", b.arguments, I32, b.blocks), bytes = IrFunctionStateCodec.encode(fn);
+		var fn = new IrFunction("main", b.arguments, I32, b.blocks, Ordinary), bytes = IrFunctionStateCodec.encode(fn);
 		var optimized = IrReceiverCheckElision.run(fn);
 		expect(checks(optimized) == 1, "fresh, repeated and dominating checks are eliminated");
 		expect(bytes.compare(IrFunctionStateCodec.encode(fn)) == 0, "input remains unchanged");
@@ -49,7 +49,7 @@ class ReceiverCheckElisionMain {
 		b.select(yes); check(b, receiver); b.jump(merge);
 		b.select(no); b.jump(merge);
 		b.select(merge); check(b, receiver); b.returnValue(b.constInt(42));
-		fn = new IrFunction("main", b.arguments, I32, b.blocks); optimized = IrReceiverCheckElision.run(fn);
+		fn = new IrFunction("main", b.arguments, I32, b.blocks, Ordinary); optimized = IrReceiverCheckElision.run(fn);
 		expect(checks(optimized) == 2, "a check on only one predecessor does not dominate the merge");
 		p = program(optimized); IrVerifier.verify(p); threw = false;
 		try new IrInterpreter(p).run("main", [null, false]) catch (_:Dynamic) threw = true;
@@ -61,7 +61,7 @@ class ReceiverCheckElisionMain {
 		b.select(header); b.branch(condition, body, exit);
 		b.select(body); check(b, receiver); b.jump(header);
 		b.select(exit); check(b, receiver); b.returnValue(b.constInt(42));
-		fn = new IrFunction("main", b.arguments, I32, b.blocks); optimized = IrReceiverCheckElision.run(fn);
+		fn = new IrFunction("main", b.arguments, I32, b.blocks, Ordinary); optimized = IrReceiverCheckElision.run(fn);
 		expect(checks(optimized) == 1, "a pre-loop check dominates checks on both loop and exit edges");
 		IrVerifier.verify(program(optimized));
 
@@ -70,7 +70,7 @@ class ReceiverCheckElisionMain {
 		b.select(header); b.branch(condition, body, exit);
 		b.select(body); check(b, receiver); b.jump(header);
 		b.select(exit); check(b, receiver); b.returnValue(b.constInt(42));
-		fn = new IrFunction("main", b.arguments, I32, b.blocks); optimized = IrReceiverCheckElision.run(fn);
+		fn = new IrFunction("main", b.arguments, I32, b.blocks, Ordinary); optimized = IrReceiverCheckElision.run(fn);
 		expect(checks(optimized) == 2, "a back-edge check must not justify the first iteration or exit");
 		p = program(optimized); IrVerifier.verify(p); threw = false;
 		try new IrInterpreter(p).run("main", [null, false]) catch (_:Dynamic) threw = true;
@@ -79,14 +79,14 @@ class ReceiverCheckElisionMain {
 		b = new IrBuilder(); receiver = b.argument("receiver", Obj("Box"));
 		var checked = check(b, receiver); check(b, receiver); b.returnValue(b.constInt(42));
 		var binding:IrDebugBinding = {identity: "checked", name: "checked", value: checked, path: "test.hx", scopeStart: 0, scopeEnd: 1};
-		fn = new IrFunction("main", b.arguments, I32, b.blocks, [binding]);
+		fn = new IrFunction("main", b.arguments, I32, b.blocks, Ordinary, [binding]);
 		optimized = IrReceiverCheckElision.run(fn);
 		expect(checks(optimized) == 1, "a debug-referenced check remains defined");
 
 		b = new IrBuilder(); receiver = b.argument("receiver", Obj("Box")); var next = b.createBlock();
 		check(b, receiver); b.blocks[0].instructions.push(new Located(EndTry(0, false), SourceProvenance.generated("test"))); b.jump(next);
 		b.select(next); check(b, receiver); b.returnValue(b.constInt(42));
-		fn = new IrFunction("main", b.arguments, I32, b.blocks);
+		fn = new IrFunction("main", b.arguments, I32, b.blocks, Ordinary);
 		expect(checks(IrReceiverCheckElision.run(fn)) == 2, "handler-bearing functions do not propagate check facts across blocks");
 		Sys.println("PASS: receiver checks preserve null failures across control flow");
 	}

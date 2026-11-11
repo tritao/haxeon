@@ -61,7 +61,36 @@ class DeclarationIndex {
 	public final aliases:Map<String, AstTypeAlias> = [];
 	public final enums:Map<String, AstEnum> = [];
 	public final enumAbstracts:Map<String, compiler.syntax.Ast.AstEnumAbstract> = [];
+
+	/** The same enum abstracts and aliases in declaration order, for the lookups that go through all of them (a map is walked through an iterator whose calls are dynamic). */
+	public final enumAbstractList:Array<compiler.syntax.Ast.AstEnumAbstract> = [];
+
+	public final aliasList:Array<compiler.syntax.Ast.AstTypeAlias> = [];
 	public final abstracts:Map<String, compiler.syntax.Ast.AstAbstract> = [];
+	final enumAbstractViews:Map<String, compiler.syntax.Ast.AstAbstract> = [];
+
+	/** Both abstract declaration forms share conversion and method lookup. */
+	public function abstractDeclaration(name:String):Null<compiler.syntax.Ast.AstAbstract> {
+		var ordinary = abstracts.get(name);
+		if (ordinary != null) return ordinary;
+		var known = enumAbstractViews.get(name);
+		if (known != null) return known;
+		var declaration = enumAbstracts.get(name);
+		if (declaration == null) return null;
+		var view:compiler.syntax.Ast.AstAbstract = {
+			name: name, metadata: declaration.metadata, typeParameters: [], underlying: declaration.underlying,
+			fromTypes: declaration.fromTypes, toTypes: declaration.toTypes, methods: [], span: declaration.span
+		};
+		enumAbstractViews.set(name, view);
+		return view;
+	}
+
+	public function abstractNames():Array<String> {
+		var names = [for (name in abstracts.keys()) name];
+		for (name in enumAbstracts.keys()) names.push(name);
+		names.sort(Reflect.compare);
+		return names;
+	}
 	public final interfaces:Map<String, AstInterface> = [];
 	public final classes:Map<String, AstClass> = [];
 	public final symbols:Map<String, DeclarationSymbol> = [];
@@ -96,6 +125,7 @@ class DeclarationIndex {
 		for (alias in program.aliases) {
 			declareType(alias.name, DeclarationKind.Alias, alias.span);
 			aliases.set(alias.name, alias);
+			aliasList.push(alias);
 			aliasSpans.set(alias.name, alias.span);
 		}
 		for (decl in program.enums) {
@@ -107,6 +137,7 @@ class DeclarationIndex {
 		for (decl in program.enumAbstracts) {
 			declareType(decl.name, DeclarationKind.Abstract, decl.span);
 			enumAbstracts.set(decl.name, decl);
+			enumAbstractList.push(decl);
 			for (value in decl.values)
 				declare(DeclarationKind.Member, decl.name + "." + value.name, value.span);
 		}
@@ -446,7 +477,7 @@ class DeclarationIndex {
 		}
 		var enumAbstract = enumAbstracts.get(name);
 		if (enumAbstract != null)
-			return resolveInner(enumAbstract.underlying, span, resolving, substitutions);
+			return TAbstract(name, [], resolveInner(enumAbstract.underlying, span, resolving, substitutions));
 		var decl = abstracts.get(name);
 		if (decl != null) {
 			if (decl.typeParameters.length != 0)

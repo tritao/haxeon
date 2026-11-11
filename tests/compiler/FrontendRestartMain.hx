@@ -22,6 +22,12 @@ class FrontendRestartMain {
 		var arithmetic = compile(arithmeticSource);
 		expectReasons(arithmetic, ["Main.read needs haxeon.DynamicOps"], "Dynamic arithmetic");
 		var passes = arithmetic.metrics.frontendPassFunctions;
+		var reports = arithmetic.metrics.frontendPassReports;
+		if (reports.length != passes.length
+			|| reports[0].indexOf("pass1 graph=") != 0
+			|| reports[1].indexOf("pass2 graph=") != 0
+			|| reports[1].indexOf("parse-within=") < 0)
+			throw 'Every frontend pass must report its stages and its parsing: $reports';
 		// The second pass types the functions of the new module and nothing else: the program with the module imported types its
 		// own function and the always-present map module's besides.
 		var plain = compile("function main():Int return 42;").metrics.frontendPassFunctions;

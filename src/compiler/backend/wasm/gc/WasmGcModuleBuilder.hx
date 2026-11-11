@@ -1,5 +1,6 @@
 package compiler.backend.wasm.gc;
 
+import compiler.ir.IrReachability;
 import compiler.backend.wasm.WasmScalarClosureEscapes;
 import compiler.backend.wasm.WasmValueLayout;
 import compiler.backend.wasm.WasmFlattenValueFields;
@@ -72,24 +73,26 @@ class WasmGcModuleBuilder {
 		}), inlineValueFields = true;
 		program = fieldLowering.rewrite();
 		scalarAbi.validate(program);
+		if (options.developmentMetadata == false)
+			program = compiler.ir.IrEnumRuntimeTypes.physical(program);
 		var preferredEntry = WasmModuleSupport.hasFunction(program,
 			"main") ? "main" : WasmModuleSupport.hasFunction(program, "Main.main") ? "Main.main" : program.entryPoint,
 			exportedFunctions = exports,
 			roots = exportRoots.copy();
 		if (WasmModuleSupport.hasFunction(program, "__init"))
 			roots.push("__init");
-		var reachable = WasmModuleSupport.reachableFunctionsWithGeneratedRuntimeRoots(program, preferredEntry, roots);
+		var reachable = IrReachability.withGeneratedRuntimeRoots(program, preferredEntry, roots);
 		if (inlineValueFields) {
 			var added = true;
 			while (added) {
 				added = scalarAbi.retainOriginals(reachable, roots);
 				if (fieldLowering.retainOriginals(reachable, roots)) added = true;
 				if (scalarAbi.retainVirtualTargets(program, reachable, roots)) added = true;
-				if (added) reachable = WasmModuleSupport.reachableFunctionsWithGeneratedRuntimeRoots(program, preferredEntry, roots);
+				if (added) reachable = IrReachability.withGeneratedRuntimeRoots(program, preferredEntry, roots);
 			}
 		}
 		validateGcSubset(program, reachable, preferredEntry);
-		var usedNatives = WasmModuleSupport.reachableNatives(program, reachable),
+		var usedNatives = IrReachability.natives(program, reachable),
 			usedCNatives = reachableGcCNatives(program, reachable),
 			requiresScratchMemory = false,
 			requiresLinearMemory = false;
@@ -385,7 +388,7 @@ class WasmGcModuleBuilder {
 	}
 
 	static function validateGcSubset(program:IrProgram, reachable:Map<String, Bool>, preferredEntry:String):Void {
-		var usedNatives = WasmModuleSupport.reachableNatives(program, reachable),
+		var usedNatives = IrReachability.natives(program, reachable),
 			directCNatives = WasmModuleSupport.reachableCNatives(program, reachable),
 			usedCNatives = reachableGcCNatives(program, reachable);
 		for (native in program.natives)

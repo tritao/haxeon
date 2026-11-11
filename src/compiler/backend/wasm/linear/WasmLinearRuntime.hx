@@ -1,5 +1,6 @@
 package compiler.backend.wasm.linear;
 
+import compiler.ir.IrReachability;
 import compiler.ir.Ir.IrProgram;
 import compiler.ir.Ir.IrType;
 import compiler.backend.wasm.WasmFmod;
@@ -104,13 +105,22 @@ class WasmLinearRuntime {
 		functions.set("__haxeon_bytes_data_pointer", bytesDataPointer);
 		var outputReserve = addBytesOutputReserve(module, allocator, bytesDataPointer);
 		functions.set("__haxeon_bytes_output_reserve", outputReserve);
+		// Semantic closure signatures stay distinct; this native has one fixed I32 ABI.
+		var receiverQuery:Null<Int> = null;
 		for (native in program.natives) {
 			var reflection = WasmLinearReflection.define(context, native);
 			if (reflection != null) {
 				functions.set(native.name, reflection);
 				continue;
 			}
-			var runtimeFunction = addRuntimeNativeFunction(module, native, allocator, bytesDataPointer, outputReserve, program);
+			var runtimeFunction = switch native.symbol {
+				case "__closure_receiver_if_match":
+					if (receiverQuery == null)
+						receiverQuery = addRuntimeNativeFunction(module, native, allocator, bytesDataPointer, outputReserve, program);
+					receiverQuery;
+				default:
+					addRuntimeNativeFunction(module, native, allocator, bytesDataPointer, outputReserve, program);
+			};
 			if (runtimeFunction != null)
 				functions.set(native.name, runtimeFunction);
 			else {
@@ -166,7 +176,11 @@ class WasmLinearRuntime {
 						case "__reflect_is_object":
 							functions.set(native.name, addDynamicIsObject(module, native.name, program));
 						case "__std_string":
-							functions.set(native.name, addDynamicString(module, native.name, allocator, strings, program));
+							var integerString = addIntToString(module, "__haxeon_i32_to_string", allocator),
+								int64String = addInt64ToString(module, "__haxeon_i64_to_string", allocator);
+							functions.set("__haxeon_i32_to_string", integerString);
+							functions.set("__haxeon_i64_to_string", int64String);
+							functions.set(native.name, module.addFunction(dynamicString(module, native.name, strings, program, integerString, int64String)));
 						case "__dynamic_equal":
 							// Emitted after the native scan so the string helper has an index.
 						case "__dynamic_object_type_id":
@@ -3889,11 +3903,9 @@ class WasmLinearRuntime {
 		return module.addFunction(builder.finish());
 	}
 
-	static function addDynamicString(module:WasmModule, name:String, allocator:Int, strings:Map<String, Int>, program:IrProgram, ?floatString:Int,
-			?functions:Map<String, Int>):Int {
-		var integerString = addIntToString(module, "__haxeon_i32_to_string", allocator),
-			int64String = addInt64ToString(module, "__haxeon_i64_to_string", allocator),
-			nullString = requiredStringOffset(strings, "null"),
+	static function dynamicString(module:WasmModule, name:String, strings:Map<String, Int>, program:IrProgram, integerString:Int, int64String:Int,
+			?floatString:Int, ?functions:Map<String, Int>):WasmFunction {
+		var nullString = requiredStringOffset(strings, "null"),
 			objectString = requiredStringOffset(strings, "Object"),
 			trueString = requiredStringOffset(strings, "true"),
 			falseString = requiredStringOffset(strings, "false"),
@@ -3935,7 +3947,7 @@ class WasmLinearRuntime {
 		// Objects print through their class's toString, or their class name without one, as on HL.
 		// Method indices exist only after user functions are declared (finalizeDynamicString).
 		for (object in program.objects) {
-			var method = WasmModuleSupport.stringMethod(program, object.name),
+			var method = IrReachability.stringMethod(program, object.name),
 				methodIndex = method == null || functions == null ? null : functions.get(method);
 			builder.localGet(value);
 			builder.emit(I32Load(0));
@@ -3989,7 +4001,7 @@ class WasmLinearRuntime {
 		// concrete object table; they still follow the standard "Object" fallback.
 		builder.i32Const(objectString);
 		builder.return_();
-		return module.addFunction(builder.finish());
+		return builder.finish();
 	}
 
 	/**
@@ -4011,9 +4023,12 @@ class WasmLinearRuntime {
 			floatString = context.functions.get("runtime.Ryu.format");
 		if (dynamicString == null)
 			return;
-		var replacement = addDynamicString(context.module, "__std_string.final", context.allocatorFunction, context.strings, context.program, floatString,
-			context.functions);
-		context.module.setFunction(dynamicString, context.module.functionAt(replacement));
+		var integerString = context.functions.get("__haxeon_i32_to_string"),
+			int64String = context.functions.get("__haxeon_i64_to_string");
+		if (integerString == null || int64String == null)
+			throw "Dynamic string numeric formatters were not registered";
+		context.module.setFunction(dynamicString, WasmLinearRuntime.dynamicString(context.module, "__std_string", context.strings, context.program,
+			integerString, int64String, floatString, context.functions));
 	}
 
 	public static function addStringEqual(module:WasmModule, name:String):Int {

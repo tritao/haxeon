@@ -8,6 +8,7 @@ import compiler.types.StructProperties;
 enum ConversionPlan {
 	Identity;
 	IntToFloat;
+	AbstractIntToFloat;
 	IntToInt64;
 	FromDynamic;
 	AbstractCast;
@@ -55,6 +56,8 @@ class TypeRelations {
 			return WrapNullable;
 		if (abstractConversion(actual, expected))
 			return AbstractCast;
+		if (abstractIntToFloat(actual, expected))
+			return AbstractIntToFloat;
 		if (!isAssignable(actual, expected))
 			return Incompatible;
 		switch actual {
@@ -121,6 +124,8 @@ class TypeRelations {
 		}
 		if (abstractConversion(actual, expected))
 			return true;
+		if (abstractIntToFloat(actual, expected))
+			return true;
 		return switch expected {
 			case TDynamic: true;
 			case TInstance(expectedKind, _, _):
@@ -142,6 +147,7 @@ class TypeRelations {
 						}
 					default: false;
 				}
+			case TAnonymous(_, _): anonymousReadOnlyWidening(actual, expected);
 			case TNullable(expectedElement):
 				switch actual {
 					case TNull: true;
@@ -149,7 +155,7 @@ class TypeRelations {
 				}
 			case TArray(expectedElement):
 				switch actual {
-					case TArray(actualElement): equals(actualElement, expectedElement);
+					case TArray(actualElement): equals(actualElement, expectedElement) || anonymousReadOnlyWidening(actualElement, expectedElement);
 					default: false;
 				}
 			case TIterator(expectedElement):
@@ -174,12 +180,42 @@ class TypeRelations {
 		};
 	}
 
+	/** A mutable structural field can be viewed through the same read-only field. */
+	static function anonymousReadOnlyWidening(actual:CompilerType, expected:CompilerType):Bool {
+		return switch [actual, expected] {
+			case [TAnonymous(_, actualFields), TAnonymous(_, expectedFields)]:
+				if (actualFields.length != expectedFields.length) false; else {
+					var matches = true;
+					for (target in expectedFields) {
+						var found = false;
+						for (source in actualFields) if (source.name == target.name) {
+							found = source.optional == target.optional && (!source.isFinal || target.isFinal)
+								&& equals(source.type, target.type);
+							break;
+						}
+						if (!found) { matches = false; break; }
+					}
+					matches;
+				}
+			default: false;
+		};
+	}
+
 	/** Struct conformance in a generic constraint selects the specialized implementation. */
 	public function satisfiesConstraint(actual:CompilerType, expected:CompilerType):Bool {
 		switch actual {
 			case TTypeParameter(_, _):
 				return declarations.typeParameterSatisfies(actual, expected);
 			case _:
+		}
+		switch actual {
+			case TAbstract(name, _, _) if (declarations.enumAbstracts.exists(name)):
+				var declaration = declarations.enumAbstracts.get(name);
+				if (declaration.conformances != null) for (conformance in declaration.conformances) {
+					var resolved = declarations.resolve(conformance, declaration.span);
+					if (equals(resolved, expected) || nominalReaches(resolved, expected)) return true;
+				}
+			default:
 		}
 		if (StructProperties.isConstraintType(expected))
 			return StructProperties.satisfies(declarations, actual, representationConstraintName(expected));
@@ -466,4 +502,10 @@ class TypeRelations {
 	function abstractConversion(actual:CompilerType, expected:CompilerType):Bool {
 		return declarations.conversions.allows(actual, expected);
 	}
+
+	function abstractIntToFloat(actual:CompilerType, expected:CompilerType):Bool
+		return switch [actual, expected] {
+			case [TAbstract(_, _, TInt), TFloat]: declarations.conversions.allowsDirectTo(actual, TInt);
+			default: false;
+		};
 }

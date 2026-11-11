@@ -14,7 +14,7 @@ class ProfilerHotReloadTarget {
 		compiler.update("Main.hx", "function main():Int return Work.work();");
 		var initial = compiler.compile("Main"),
 			workId = initial.functionIds.get("Work.work"),
-			loaded = Runtime.load(HlWriter.encode(initial.module), initial.runtimeIdentity);
+			loaded = Runtime.load(HlWriter.encode(initial.module).flatten(), initial.runtimeIdentity);
 		Sys.sleep(2.0);
 		runFor(loaded, workId, beforePatch);
 		compiler.update("Work.hx",

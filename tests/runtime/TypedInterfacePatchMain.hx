@@ -15,7 +15,7 @@ class TypedInterfacePatchMain {
   "function main():Int return Store.run();\n";
  static function exercise():Void {
   var compiler=new Compiler();compiler.update("Main.hx",source(false,0));
-  var first=compiler.compile("Main"),live=Runtime.load(HlWriter.encode(first.module),first.runtimeIdentity),main=first.functionIds.get("main");
+  var first=compiler.compile("Main"),live=Runtime.load(HlWriter.encode(first.module).flatten(),first.runtimeIdentity),main=first.functionIds.get("main");
   if(Runtime.callInt(live,main)!=2)throw "Initial typed class entry failed";
   compiler.update("Main.hx",source(true,9));var appended=compiler.compile("Main");
   if(appended.requiresReload || appended.patchBytes==null)throw "Adding a typed interface implementation required a reload: "+Std.string(appended.reloadReasons);

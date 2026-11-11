@@ -29,7 +29,7 @@ class ExplorerFocusSequence {
 		var focused = false;
 		for (record in explorer.context.inspect())
 			if (!focused && ((targetLabel != null && record.label == targetLabel) ||
-				(targetLabel == null && record.role == AccessibilityRole.TextField))) {
+				(targetLabel == null && record.role == Type.enumIndex(AccessibilityRole.TextField)))) {
 				var widgetId = new WidgetId(record.id);
 				focused = explorer.context.focusWidget(widgetId);
 				if (focused && (selectTextArea || showComposition)) {

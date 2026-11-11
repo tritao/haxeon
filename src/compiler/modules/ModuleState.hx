@@ -122,6 +122,12 @@ class ModuleState {
 	}
 
 	/** The caller supplied new text for the module. */
+	/**
+	 * The text of the file changed after IR may have been made from the old one: functions kept across the edit, and helpers whose spans
+	 * come from this file, can still name its old content hash. The frontend gives them the current hashes once and clears this.
+	 */
+	public var editedSinceIrScan = false;
+
 	public function update(source:SourceFile):Void {
 		loadedText = source.text;
 		render(source);
@@ -130,6 +136,8 @@ class ModuleState {
 	/** The compiler replaces the text it compiles; the text the caller supplied stays as it was. */
 	public function render(source:SourceFile):Void {
 		this.source = source;
+		if (revision > 0)
+			editedSinceIrScan = true;
 		revision++;
 		tokens = [];
 		ast = null;
@@ -145,6 +153,7 @@ class ModuleState {
 		var result = new ModuleState(name, source);
 		result.loadedText = loadedText;
 		result.revision = revision;
+		result.editedSinceIrScan = editedSinceIrScan;
 		result.parseVersion = parseVersion;
 		result.typeVersion = typeVersion;
 		result.tokens = tokens;

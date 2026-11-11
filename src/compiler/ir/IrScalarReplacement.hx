@@ -74,7 +74,7 @@ class IrScalarReplacement {
 				return fn;
 		}
 		var bindings = IrInliner.substitute(blocks, result.substitutions, fn.debugBindings);
-		return new IrFunction(fn.name, fn.arguments, fn.result, blocks, bindings, fn.inlineHint, fn.retention);
+		return fn.withBlocks(blocks, bindings);
 	}
 
 	public static function run(blocks:Array<IrBlock>, objects:IrObjectTable, nextValue:Int, forcePhis = false):ScalarReplacementResult {
@@ -90,7 +90,7 @@ class IrScalarReplacement {
 						hasHandlers = true;
 					default:
 				}
-		var graph = new IrGraph(new IrFunction("scalar-replacement", [], Void, blocks));
+		var graph = new IrGraph(new IrFunction("scalar-replacement", [], Void, blocks, Ordinary));
 		var frontier = dominanceFrontiers(graph),
 			children = dominatorChildren(graph);
 		for (found in candidates) {
@@ -188,9 +188,11 @@ class IrScalarReplacement {
 					default:
 				}
 				var uses = 0;
-				for (input in IrOperands.inputs(instruction))
+				for (inputIndex in 0...IrOperands.count(instruction)) {
+					var input = IrOperands.at(instruction, inputIndex);
 					if (input.id == object.id)
 						uses++;
+				}
 				if (uses == 0)
 					continue;
 				if (block != home || position <= allocation)
@@ -358,9 +360,11 @@ class IrScalarReplacement {
 					default:
 				}
 				var uses = 0;
-				for (input in IrOperands.inputs(instruction))
+				for (inputIndex in 0...IrOperands.count(instruction)) {
+					var input = IrOperands.at(instruction, inputIndex);
 					if (input.id == object.id)
 						uses++;
+				}
 				if (uses == 0)
 					continue;
 				if (block == home) {

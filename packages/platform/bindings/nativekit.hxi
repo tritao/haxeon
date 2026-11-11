@@ -2287,6 +2287,8 @@ interface NativeKit @target("portable-abi64") @library("nativekit") {
 		 * The fifth pointer button.
 		 */
 		NK_POINTER_BUTTON_5 = 4;
+		NK_POINTER_BUTTON_6 = 5;
+		NK_POINTER_BUTTON_7 = 6;
 		/**
 		 * Highest pointer-button value reserved for state queries.
 		 */
@@ -2378,6 +2380,85 @@ interface NativeKit @target("portable-abi64") @library("nativekit") {
 	 * Signed result returned by NativeKit operations.
 	 */
 	enum nk_result : i32 {
+		NK_RESULT_TRANSPORT_RECEIVE_OVERFLOW = -208;
+		NK_RESULT_TRANSPORT_ADDRESS_IN_USE = -207;
+		NK_RESULT_TRANSPORT_CLOSED = -206;
+		NK_RESULT_TRANSPORT_WOULD_BLOCK = -205;
+		NK_RESULT_TRANSPORT_CANCELED = -204;
+		NK_RESULT_TRANSPORT_PROTOCOL = -203;
+		NK_RESULT_TRANSPORT_TIMEOUT = -202;
+		NK_RESULT_TRANSPORT_CONNECTION = -201;
+		NK_RESULT_TRANSPORT_DNS = -200;
+		NK_RESULT_HTTP_WOULD_BLOCK = -109;
+		NK_RESULT_HTTP_PROXY = -108;
+		NK_RESULT_HTTP_REDIRECT = -107;
+		NK_RESULT_HTTP_RESPONSE_LIMIT = -106;
+		NK_RESULT_HTTP_PROTOCOL = -105;
+		NK_RESULT_HTTP_CANCELED = -104;
+		NK_RESULT_HTTP_TIMEOUT = -103;
+		NK_RESULT_HTTP_TLS = -102;
+		NK_RESULT_HTTP_CONNECTION = -101;
+		NK_RESULT_HTTP_DNS = -100;
+		/**
+		 * The user or operating system denied access required by the operation.
+		 */
+		NK_ERROR_PERMISSION_DENIED = -15;
+		/**
+		 * A task or asynchronous operation was cancelled before completion.
+		 */
+		NK_ERROR_CANCELLED = -14;
+		/**
+		 * A payload exceeds the bounded size accepted by the target contract.
+		 */
+		NK_ERROR_PAYLOAD_TOO_LARGE = -13;
+		/**
+		 * A requested service, method, plugin, or named object does not exist.
+		 */
+		NK_ERROR_NOT_FOUND = -12;
+		/**
+		 * A caller-provided output buffer is too small for the requested result.
+		 */
+		NK_ERROR_BUFFER_TOO_SMALL = -11;
+		/**
+		 * A valid request can no longer complete in its current lifecycle state.
+		 */
+		NK_ERROR_INVALID_REQUEST = -10;
+		/**
+		 * A non-terminal event could not be added because the queue is full.
+		 */
+		NK_ERROR_QUEUE_FULL = -9;
+		/**
+		 * The operation could not allocate the required memory.
+		 */
+		NK_ERROR_OUT_OF_MEMORY = -8;
+		/**
+		 * An operation that requires the UI thread was called elsewhere.
+		 */
+		NK_ERROR_WRONG_THREAD = -7;
+		/**
+		 * NativeKit is already initialized by another active runtime.
+		 */
+		NK_ERROR_ALREADY_INITIALIZED = -6;
+		/**
+		 * NativeKit has not been initialized on the calling thread.
+		 */
+		NK_ERROR_NOT_INITIALIZED = -5;
+		/**
+		 * The requested feature or operation is unavailable on this backend.
+		 */
+		NK_ERROR_UNSUPPORTED = -4;
+		/**
+		 * A handle is zero, stale, or belongs to a different resource kind.
+		 */
+		NK_ERROR_INVALID_HANDLE = -3;
+		/**
+		 * A caller-provided pointer, value, size, or combination is invalid.
+		 */
+		NK_ERROR_INVALID_ARGUMENT = -2;
+		/**
+		 * The backend encountered an unspecified failure.
+		 */
+		NK_ERROR_UNKNOWN = -1;
 		/**
 		 * Operation completed successfully.
 		 */
@@ -2386,66 +2467,6 @@ interface NativeKit @target("portable-abi64") @library("nativekit") {
 		 * Operation was accepted and will complete through a later event.
 		 */
 		NK_PENDING = 1;
-		/**
-		 * The backend encountered an unspecified failure.
-		 */
-		NK_ERROR_UNKNOWN = -1;
-		/**
-		 * A caller-provided pointer, value, size, or combination is invalid.
-		 */
-		NK_ERROR_INVALID_ARGUMENT = -2;
-		/**
-		 * A handle is zero, stale, or belongs to a different resource kind.
-		 */
-		NK_ERROR_INVALID_HANDLE = -3;
-		/**
-		 * The requested feature or operation is unavailable on this backend.
-		 */
-		NK_ERROR_UNSUPPORTED = -4;
-		/**
-		 * NativeKit has not been initialized on the calling thread.
-		 */
-		NK_ERROR_NOT_INITIALIZED = -5;
-		/**
-		 * NativeKit is already initialized by another active runtime.
-		 */
-		NK_ERROR_ALREADY_INITIALIZED = -6;
-		/**
-		 * An operation that requires the UI thread was called elsewhere.
-		 */
-		NK_ERROR_WRONG_THREAD = -7;
-		/**
-		 * The operation could not allocate the required memory.
-		 */
-		NK_ERROR_OUT_OF_MEMORY = -8;
-		/**
-		 * A non-terminal event could not be added because the queue is full.
-		 */
-		NK_ERROR_QUEUE_FULL = -9;
-		/**
-		 * A valid request can no longer complete in its current lifecycle state.
-		 */
-		NK_ERROR_INVALID_REQUEST = -10;
-		/**
-		 * A caller-provided output buffer is too small for the requested result.
-		 */
-		NK_ERROR_BUFFER_TOO_SMALL = -11;
-		/**
-		 * A requested service, method, plugin, or named object does not exist.
-		 */
-		NK_ERROR_NOT_FOUND = -12;
-		/**
-		 * A payload exceeds the bounded size accepted by the target contract.
-		 */
-		NK_ERROR_PAYLOAD_TOO_LARGE = -13;
-		/**
-		 * A task or asynchronous operation was cancelled before completion.
-		 */
-		NK_ERROR_CANCELLED = -14;
-		/**
-		 * The user or operating system denied access required by the operation.
-		 */
-		NK_ERROR_PERMISSION_DENIED = -15;
 	}
 	/**
 	 * Reference point used by nk_resource_seek().

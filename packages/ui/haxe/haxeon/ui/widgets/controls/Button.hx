@@ -18,7 +18,6 @@ import haxeon.ui.icons.IconName;
 import haxeon.ui.theme.TextRole;
 import haxeon.ui.style.StyleResolver;
 import haxeon.ui.style.StyleState;
-import haxeon.ui.style.StyleStateUtil;
 import haxeon.ui.style.StyleTarget;
 import haxeon.ui.style.StyleProperty;
 import haxeon.ui.semantics.AccessibilityState;
@@ -53,7 +52,7 @@ class Button implements View {
 	/** Semantic role override used by composite controls such as tabs and menus. */
 	public var semanticRole:AccessibilityRole;
 	/** Action capabilities override used by composite controls. */
-	public var semanticActions:Int;
+	public var semanticActions:AccessibilityAction;
 	public var onClick:Void->Void;
 	/** Optional event-aware activation, useful for positioning a menu by its trigger. */
 	public var onClickEvent:Null<UiEvent->Void>;
@@ -97,9 +96,9 @@ class Button implements View {
 	}
 
 	function buildButton(context:BuildContext, id:haxeon.ui.core.WidgetId):RenderNode {
-		var flags:Int = context.interactionStates.get(id);
-		flags = StyleStateUtil.withState(flags, StyleState.Selected, selected);
-		flags = StyleStateUtil.withState(flags, StyleState.Disabled, !enabled);
+		var flags:StyleState = context.interactionStates.get(id);
+		flags = (selected ? flags.insert(StyleState.Selected) : flags.remove(StyleState.Selected));
+		flags = (!enabled ? flags.insert(StyleState.Disabled) : flags.remove(StyleState.Disabled));
 		var resolvedClasses = classes.copy();
 		if (variant == ButtonVariant.Navigation)
 			resolvedClasses.push("navigation");
@@ -171,7 +170,7 @@ class Button implements View {
 		return new LayoutStyle();
 	}
 
-	function styleTarget(resolvedClasses:Array<String>, flags:Int):StyleTarget {
+	function styleTarget(resolvedClasses:Array<String>, flags:StyleState):StyleTarget {
 		var first = firstTarget;
 		if (first != null && targetMatches(first, resolvedClasses, flags)) return first;
 		var others = otherTargets;
@@ -187,7 +186,7 @@ class Button implements View {
 		return target;
 	}
 
-	static function targetMatches(target:StyleTarget, classes:Array<String>, flags:Int):Bool {
+	static function targetMatches(target:StyleTarget, classes:Array<String>, flags:StyleState):Bool {
 		if (target.states != flags || target.classes.length != classes.length) return false;
 		for (index in 0...classes.length) if (target.classes[index] != classes[index]) return false;
 		return true;

@@ -35,6 +35,6 @@ class ReflectMethodsMain {
 			+ "  if (!remove(callbacks, first.apply) || callbacks.length != 1 || !Reflect.compareMethods(callbacks[0], second.apply)) return 6;\n"
 			+ "  return 42;\n"
 			+ "}");
-		File.saveBytes(Sys.args()[0], HlWriter.encode(compiler.compile("Main").module));
+		File.saveBytes(Sys.args()[0], HlWriter.encode(compiler.compile("Main").module).flatten());
 	}
 }

@@ -23,6 +23,7 @@ class WasmGcContext {
 	final stringGlobals:Map<String, Int> = [];
 	final valueArrayBridgeGlobals:Map<String, Int> = [];
 	final enumCaseGlobals:Map<String, Int> = [];
+	var enumTagAdapters:Null<Map<String, {box:Null<String>, unbox:Null<String>}>>;
 
 	public function new(module:WasmModule, plan:WasmGcTypePlan, functions:Map<String, Int>, globals:Map<String, Int>, methods:Map<String, String>) {
 		this.module = module;
@@ -30,6 +31,22 @@ class WasmGcContext {
 		this.functions = functions;
 		this.globals = globals;
 		this.methods = methods;
+	}
+
+	public function enumTagAdapter(name:String, box:Bool):String {
+		if (enumTagAdapters == null) {
+			enumTagAdapters = [];
+			for (fn in plan.program.functions) switch fn.kind {
+				case EnumTagAdapter(EnumTag(type), isBox):
+					var entry = enumTagAdapters.get(type);
+					if (entry == null) { entry = {box: null, unbox: null}; enumTagAdapters.set(type, entry); }
+					if (isBox) entry.box = fn.name; else entry.unbox = fn.name;
+				default:
+			}
+		}
+		var entry = enumTagAdapters.get(name), result = entry == null ? null : (box ? entry.box : entry.unbox);
+		if (result == null) throw 'Missing enum tag adapter for $name';
+		return result;
 	}
 
 	/** The passive data segment holding a string literal's UTF-8 bytes, shared by every use of that literal. */

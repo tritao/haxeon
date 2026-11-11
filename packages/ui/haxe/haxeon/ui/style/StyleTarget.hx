@@ -7,7 +7,7 @@ class StyleTarget {
 	public final id:Null<String>;
 	public final classes:Array<String>;
 	public final tags:Array<String>;
-	public final states:Int;
+	public final states:StyleState;
 	/** Hash of the selector inputs other than pseudo-state, computed without allocating. */
 	public final selectorHash:Int;
 	/** Shared by every target without classes or tags; never mutated. */
@@ -41,7 +41,7 @@ class StyleTarget {
 	}
 
 	public function new(widgetType:String, ?key:String, ?id:String,
-			?classes:Array<String>, ?tags:Array<String>, states:Int = 0) {
+			?classes:Array<String>, ?tags:Array<String>, states:StyleState = StyleState.empty()) {
 		if (widgetType == null || widgetType.length == 0)
 			throw "Style targets require a widget type";
 		this.widgetType = widgetType;
@@ -107,7 +107,7 @@ class StyleTarget {
 		return value == null ? "-1:" : value.length + ":" + value;
 
 	public function hasState(state:StyleState):Bool
-		return StyleStateUtil.contains(states, state);
+		return (states & state) != StyleState.empty();
 
 	public function hasClass(name:String):Bool
 		return contains(classes, name);

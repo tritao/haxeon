@@ -32,7 +32,7 @@ class LoadStoreMain {
 
 	static function finish(b:IrBuilder, out:IrValue):IrFunction {
 		b.returnValue(out);
-		return new IrFunction("test", b.arguments, out.type, b.blocks);
+		return new IrFunction("test", b.arguments, out.type, b.blocks, Ordinary);
 	}
 
 	static function fieldCase(name:String, gap:(IrBuilder, IrValue, IrValue) -> Void, expected:Int):Void {
@@ -119,7 +119,7 @@ class LoadStoreMain {
 			scopeStart: 0,
 			scopeEnd: 10
 		};
-		fn = new IrFunction(fn.name, fn.arguments, fn.result, fn.blocks, [binding]);
+		fn = new IrFunction(fn.name, fn.arguments, fn.result, fn.blocks, Ordinary, [binding]);
 		var result = IrLoadStoreForwarding.run(fn);
 		expect(loads(result) == 0, "store then load");
 		expect(result.debugBindings[0].value == stored, "debug binding substitution");

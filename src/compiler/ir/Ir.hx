@@ -31,6 +31,8 @@ enum IrType {
 	TypeRef;
 	Array(element:IrType);
 	Enum(name:String);
+	/** Payload-free enum storage: constructor index + 1 in I32; zero is the null value. */
+	EnumTag(name:String);
 	Obj(name:String);
 	Abstract(name:String);
 	Virtual(name:String);
@@ -53,6 +55,14 @@ class IrValue {
 
 /** Value contributed by one predecessor to an SSA phi definition. */
 typedef IrPhiInput = {final block:Int; final value:IrValue;}
+
+/** Compiler operations whose operands include semantic data rather than encoded linkage names. */
+enum IrIntrinsic {
+	EnumDynamicBox(type:IrType);
+	EnumDynamicView(type:IrType);
+	EnumTagBox(type:IrType);
+	EnumTagUnbox(type:IrType);
+}
 
 /** Typed SSA operations independent of HashLink register and symbol indices. */
 enum IrInstruction {
@@ -116,6 +126,7 @@ enum IrInstruction {
 	MakeEnum(output:IrValue, typeName:String, constructor:Int, arguments:Array<IrValue>);
 	EnumIndex(output:IrValue, value:IrValue);
 	EnumField(output:IrValue, value:IrValue, constructor:Int, field:Int);
+	Intrinsic(output:IrValue, operation:IrIntrinsic, arguments:Array<IrValue>);
 }
 
 /** Mandatory control transfer ending an SSA basic block. */
@@ -225,6 +236,15 @@ typedef IrObject = {
 	final methods:Array<IrObjectMethod>;
 }
 
+/** Copies of an IR object that change one part and carry every other field over, including ones added later. */
+class IrObjectTools {
+	public static function withMethods(object:IrObject, methods:Array<IrObjectMethod>):IrObject {
+		var copy:Dynamic = Reflect.copy(object);
+		copy.methods = methods;
+		return copy;
+	}
+}
+
 /** Callable contract required by an IR interface. */
 typedef IrInterfaceMethod = {final name:String; final arguments:Array<IrType>; final result:IrType;}
 
@@ -289,6 +309,27 @@ class IrProgram {
 
 	public var positionalSources:Map<String, String> = [];
 
+	/** The generated helpers of this program, by what each serves (`IrProviders`); an index over `functions`, built when asked. */
+	public function providers():Map<String, String>
+		return IrProviders.rows(functions);
+
 	public function new(entryPoint:String)
 		this.entryPoint = entryPoint;
+
+	/** A program with its own function and native lists, sharing everything else with this one. */
+	public function copy():IrProgram {
+		var result = new IrProgram(entryPoint);
+		result.natives = natives.copy();
+		result.cNatives = cNatives;
+		result.functions = functions.copy();
+		result.objects = objects;
+		result.interfaces = interfaces;
+		result.enums = enums;
+		result.staticFields = staticFields;
+		result.positionalFingerprints = positionalFingerprints;
+		result.parameterDefaults = parameterDefaults;
+		result.positionalPlaces = positionalPlaces;
+		result.positionalSources = positionalSources;
+		return result;
+	}
 }

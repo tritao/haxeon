@@ -1,5 +1,6 @@
 package compiler.ir;
 
+import compiler.types.TypedAst.TypedFunctionRole;
 import compiler.ir.IrStaticNullChecks.IrStaticCheckCache;
 import compiler.runtime.RuntimeType;
 import compiler.types.Type.NominalKind;
@@ -119,7 +120,7 @@ class IrProgramAssembler {
 		for (index in 1...functions.length)
 			lastCall = boot.call(functions[index].name, [], Void);
 		boot.returnValue(lastCall);
-		functions.unshift(new IrFunction("__init", [], Void, boot.blocks));
+		functions.unshift(new IrFunction("__init", [], Void, boot.blocks, Ordinary));
 		return functions;
 	}
 
@@ -151,7 +152,7 @@ class IrProgramAssembler {
 			}
 			if (statements.length > 0)
 				functions.push(generator.generateFunction({
-					name: classDecl.name + "." + compiler.hl.incremental.HlModuleAssembler.LIVE_INITIALIZER,
+					name: classDecl.name + "." + compiler.hl.incremental.HlModuleAssembler.LIVE_INITIALIZER, role: UserFunction,
 					owner: classDecl.name,
 					isStatic: false,
 					// Gives it a receiver without a prototype slot, as a constructor has.
@@ -169,7 +170,7 @@ class IrProgramAssembler {
 
 	static function initializerFunction(generator:IrGenerator, name:String, statements:Array<TypedStatement>, span:compiler.Source.SourceSpan):IrFunction
 		return generator.generateFunction({
-			name: name,
+			name: name, role: UserFunction,
 			owner: null,
 			isStatic: true,
 			isConstructor: false,
@@ -278,8 +279,12 @@ class IrProgramAssembler {
 		return result;
 	}
 
-	public static function enumsFrom(generator:IrGenerator, typed:TypedProgram):Array<IrEnum>
-		return [
+	/**
+	 * Sorted by name: the typed program lists specialized enums in the order they were first made, which depends on which functions a
+	 * session typed (a warm session types fewer than a fresh compiler), and the order is the order of the module's type table.
+	 */
+	public static function enumsFrom(generator:IrGenerator, typed:TypedProgram):Array<IrEnum> {
+		var result:Array<IrEnum> = [
 			for (enumDecl in typed.enums)
 				{
 					name: enumDecl.name,
@@ -290,6 +295,9 @@ class IrProgramAssembler {
 					]
 				}
 		];
+		result.sort((left, right) -> Reflect.compare(left.name, right.name));
+		return result;
+	}
 
 	public static function interfacesFrom(generator:IrGenerator, typed:TypedProgram):Array<IrInterface> {
 		return [
@@ -525,20 +533,29 @@ class IrProgramAssembler {
 				var builder = new IrBuilder();
 				builder.argument("this", Obj(object.name));
 				builder.returnValue(builder.constInt(count));
-				allFunctions.push(new IrFunction(object.name + ".$haxeonObservableFieldCount", builder.arguments, I32, builder.blocks));
+				allFunctions.push(new IrFunction(object.name + ".$haxeonObservableFieldCount", builder.arguments, I32, builder.blocks, Ordinary));
 			}
+		if (objects != null) {
+			var reflectionInput = new IrProgram(entryPoint == null ? "main" : entryPoint);
+			reflectionInput.objects = objects;
+			reflectionInput.interfaces = interfaces == null ? [] : interfaces;
+			reflectionInput.enums = enums == null ? [] : enums;
+			reflectionInput.staticFields = staticFields == null ? [] : staticFields;
+			reflectionInput.functions = allFunctions;
+			reflectionInput.natives = natives == null ? [] : natives;
+			reflectionInput.cNatives = cNatives == null ? [] : cNatives;
+			allFunctions = compiler.compilation.IrPassMeter.measure("enum-dynamic-dispatch", () -> IrEnumDynamicDispatch.rewrite(allFunctions, reflectionInput, reflectableObjects));
+		}
 		if (objects != null)
-			allFunctions = IrEnumDynamicDispatch.rewrite(allFunctions);
+			allFunctions = compiler.compilation.IrPassMeter.measure("value-dynamic-dispatch", () -> IrValueDynamicDispatch.rewrite(allFunctions, objects));
 		if (objects != null)
-			allFunctions = IrValueDynamicDispatch.rewrite(allFunctions, objects);
-		if (objects != null)
-			GenericOwnerErasure.generate(generator.facts, allFunctions, objects);
+			compiler.compilation.IrPassMeter.measureVoid("generic-owner-erasure", () -> GenericOwnerErasure.generate(generator.facts, allFunctions, objects));
 		if (objects != null && interfaces != null)
-			allFunctions = IrValueInterfaceBoxes.rewrite(allFunctions, objects, interfaces);
+			allFunctions = compiler.compilation.IrPassMeter.measure("value-interface-boxes", () -> IrValueInterfaceBoxes.rewrite(allFunctions, objects, interfaces));
 		if (objects != null && interfaces != null) {
-			allFunctions = IrTypedInterfaceDispatch.rewriteValueCalls(allFunctions, objects, interfaces);
+			allFunctions = compiler.compilation.IrPassMeter.measure("typed-interface-calls", () -> IrTypedInterfaceDispatch.rewriteValueCalls(allFunctions, objects, interfaces));
 			var beforeTypedInterfaces = allFunctions.length;
-			IrTypedInterfaceDispatch.generate(allFunctions, objects, interfaces);
+			compiler.compilation.IrPassMeter.measureVoid("typed-interface-generate", () -> IrTypedInterfaceDispatch.generate(allFunctions, objects, interfaces));
 			if (allFunctions.length > beforeTypedInterfaces) {
 				var existing = allFunctions.slice(0, beforeTypedInterfaces);
 				allFunctions = existing.concat(IrValueInterfaceBoxes.rewrite(allFunctions.slice(beforeTypedInterfaces), objects, interfaces, existing));
@@ -546,12 +563,12 @@ class IrProgramAssembler {
 		}
 		// HashLink checks object casts itself, but interface casts need checks on every target.
 		if (objects != null)
-			allFunctions = IrCheckedDynamicCasts.rewrite(allFunctions, objects, generator.profile.nativeReflectionDispatch);
+			allFunctions = compiler.compilation.IrPassMeter.measure("checked-dynamic-casts", () -> IrCheckedDynamicCasts.rewrite(allFunctions, objects, generator.profile.nativeReflectionDispatch));
 		if (exportedFunctions != null && exportedFunctions.length > 0) {
 			var exported = [for (name in exportedFunctions) name => true];
 			allFunctions = [
 				for (fn in allFunctions)
-					exported.exists(fn.name) ? new IrFunction(fn.name, fn.arguments, fn.result, fn.blocks, fn.debugBindings, fn.inlineHint, Expose) : fn
+					exported.exists(fn.name) ? new IrFunction(fn.name, fn.arguments, fn.result, fn.blocks, fn.kind, fn.debugBindings, fn.inlineHint, Expose) : fn
 			];
 		}
 		if (valueTarget != null) {
@@ -565,7 +582,8 @@ class IrProgramAssembler {
 			enumInput.cNatives = cNatives == null ? [] : cNatives;
 			enumInput.enums = IrEnumRuntimeSpecializations.materialize(enums == null ? [] : enums, allFunctions, enumInput.objects, enumInput.staticFields,
 				enumInput.natives, enumInput.interfaces, enumInput.cNatives);
-			var enumOutput = IrInlineEnumLowering.run(enumInput, valueTarget, reflectableObjects);
+			IrEnumTagLowering.run(enumInput);
+			var enumOutput = compiler.compilation.IrPassMeter.measure("inline-enum-lowering", () -> IrInlineEnumLowering.run(enumInput, valueTarget, reflectableObjects));
 			allFunctions = enumOutput.functions;
 			objects = enumOutput.objects;
 			interfaces = enumOutput.interfaces;
@@ -574,10 +592,10 @@ class IrProgramAssembler {
 			enums = enumOutput.enums;
 		}
 		if (objects != null) {
-			allFunctions = new IrOptionalScalarFlow(objects).rewrite(objects, allFunctions);
+			allFunctions = compiler.compilation.IrPassMeter.measure("optional-scalar-flow", () -> new IrOptionalScalarFlow(objects).rewrite(objects, allFunctions));
 			allFunctions = IrOptionalValueFlow.addHelpers(allFunctions, objects);
 		}
-		allFunctions = IrStaticNullChecks.run(allFunctions, objects, staticChecks);
+		allFunctions = compiler.compilation.IrPassMeter.measure("static-null-checks", () -> IrStaticNullChecks.run(allFunctions, objects, staticChecks));
 		if (objects != null && reflectableObjects != null) {
 			reflectableObjects = reflectableObjects.copy();
 			var known:Map<String, Bool> = [for (name in reflectableObjects) name => true];
@@ -604,7 +622,7 @@ class IrProgramAssembler {
 				allFunctions = optionalStorage.rewrite(allFunctions);
 				objects = optionalStorage.physicalObjects(objects);
 			}
-			allFunctions = new IrNullableScalarFields(objects).rewrite(allFunctions);
+			allFunctions = compiler.compilation.IrPassMeter.measure("nullable-scalar-fields", () -> new IrNullableScalarFields(objects).rewrite(allFunctions));
 		}
 		var needsArrayRuntime = false,
 			needsTypedRefArrayRuntime = false,
@@ -642,7 +660,7 @@ class IrProgramAssembler {
 								needsExactTypeTestRuntime = true;
 							if (name == "__reflect_dynamic_object" || name == "__reflect_set_field")
 								needsDynamicObjectRuntime = true;
-							if (StringTools.startsWith(name, "__array_"))
+							if (name == IrArrayFactory.NAME || StringTools.startsWith(name, "__array_"))
 								needsArrayRuntime = true;
 							if (name == "__array_alloc_typed_ref")
 								needsTypedRefArrayRuntime = true;
@@ -745,7 +763,7 @@ class IrProgramAssembler {
 				arguments: [Dyn, TypeRef],
 				result: Bool
 			});
-		if (needsExactTypeTestRuntime)
+		if (needsExactTypeTestRuntime && !hasNative(natives, "__std_is_exact_type"))
 			program.natives.push({
 				name: "__std_is_exact_type",
 				library: "haxeon_runtime",
@@ -954,7 +972,8 @@ class IrProgramAssembler {
 		if ((switch (mainFunction.result) { case I32: true; default: false; }))
 			result = entry.call("__exit", [result], Void);
 		entry.returnValue(result);
-		program.functions.push(new IrFunction("__entry", [], Void, entry.blocks));
+		program.functions.push(new IrFunction("__entry", [], Void, entry.blocks, Ordinary));
+		IrEnumTagLowering.escapes(program);
 		return program;
 	}
 

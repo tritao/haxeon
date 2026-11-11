@@ -268,7 +268,8 @@ class WasmGcClosureAdapters {
 			body.push(LocalSet(result));
 			return result;
 		}
-		if (Type.enumEq(plan.valueType(from), plan.valueType(to)))
+		var tagBoundary = switch [from, to] { case [EnumTag(_), _] | [_, EnumTag(_)]: true; default: false; };
+		if (compiler.ir.IrVerifier.sameType(from, to) || (!tagBoundary && Type.enumEq(plan.valueType(from), plan.valueType(to))))
 			return local;
 		var boxed = local;
 		if ((switch (from) { case Dyn: false; default: true; })) {

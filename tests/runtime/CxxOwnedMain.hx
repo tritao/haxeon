@@ -16,6 +16,6 @@ class CxxOwnedMain {
 		compiler.update("Widget.hx", File.getContent(projectionDirectory + "/Widget.hx"));
 		compiler.update("CxxOwnedFixtureFunctions.hx", File.getContent(projectionDirectory + "/CxxOwnedFixtureFunctions.hx"));
 		compiler.update("Main.hx", File.getContent(Sys.getCwd() + "/tests/runtime/CxxOwnedProgram.hx"));
-		File.saveBytes(output, HlWriter.encode(compiler.compile("Main").module));
+		File.saveBytes(output, HlWriter.encode(compiler.compile("Main").module).flatten());
 	}
 }

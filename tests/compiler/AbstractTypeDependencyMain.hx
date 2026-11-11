@@ -13,7 +13,7 @@ class AbstractTypeDependencyMain {
 		for (revision in 0...2) {
 			compiler.update("Main.hx", revision == 0 ? source : StringTools.replace(source, "? 42 : 7", "? 43 : 7"));
 			var result = compiler.compile("Main");
-			execute(HlWriter.encode(result.module), revision == 0 ? 42 : 43);
+			execute(HlWriter.encode(result.module).flatten(), revision == 0 ? 42 : 43);
 		}
 		// The entry imports only Api; Sibling appears solely in the abstract's signature.
 		compiler = new Compiler();
@@ -37,7 +37,7 @@ class AbstractTypeDependencyMain {
 		compiler.update("Main.hx", "import pkg.Conversions; function main():Int return 42;");
 		compiler.compile("Main");
 		compiler = new Compiler();
-		compiler.update("pkg/Representation.hx", "package pkg; enum abstract Representation(Int) { var Zero=0; }");
+		compiler.update("pkg/Representation.hx", "package pkg; enum abstract Representation(Int) from Int to Int { var Zero=0; }");
 		compiler.update("pkg/Mode.hx", "package pkg; enum abstract Mode(Representation) { var Zero=0; }");
 		compiler.update("Main.hx", "import pkg.Mode; function main():Int return 42;");
 		compiler.compile("Main");

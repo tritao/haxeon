@@ -20,7 +20,7 @@ class AddedFunctionPatchMain {
 		var compiler = new Compiler();
 		compiler.update("Main.hx", program("", ""));
 		var build = compiler.compile("Main"),
-			live = Runtime.load(HlWriter.encode(build.module), build.runtimeIdentity),
+			live = Runtime.load(HlWriter.encode(build.module).flatten(), build.runtimeIdentity),
 			mainId = build.functionIds.get("main");
 		if (Runtime.callInt(live, mainId) != 2)
 			throw "The program did not run correctly before the edits";
@@ -49,7 +49,7 @@ class AddedFunctionPatchMain {
 			if (result != edit.expected)
 				throw 'After ${edit.label} the patched module returned $result instead of ${edit.expected}';
 			// A rejected patch falls back to loading the same build's full module, which must run on its own.
-			var fresh = Runtime.load(HlWriter.encode(changed.module), changed.runtimeIdentity),
+			var fresh = Runtime.load(HlWriter.encode(changed.module).flatten(), changed.runtimeIdentity),
 				reloaded = Runtime.callInt(fresh, changed.functionIds.get("main"));
 			Runtime.dispose(fresh);
 			if (reloaded != edit.expected)

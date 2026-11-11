@@ -72,7 +72,7 @@ fi
 
 (
     cd "$haxeon_dir"
-    .tools/haxe/haxe -cp src --run compiler.tools.HaxeonCompiler \
+    .tools/haxe/haxe common.hxml --run compiler.tools.HaxeonCompiler \
         --output="$test_root/nativekit-smoke.hl" \
         --entry=Smoke \
         --root="$platform_dir/tests" \

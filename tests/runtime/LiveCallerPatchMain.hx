@@ -22,7 +22,7 @@ class LiveCallerPatchMain {
 		compiler.update("Other.hx", "class Other {\n  public static function twice(v:Int):Int return Main.scale(v) + Main.scale(v);\n}\n");
 		compiler.update("Main.hx", source(0));
 		var build = compiler.compile("Main"),
-			live = Runtime.load(HlWriter.encode(build.module), build.runtimeIdentity),
+			live = Runtime.load(HlWriter.encode(build.module).flatten(), build.runtimeIdentity),
 			mainId = build.functionIds.get("main");
 		// twice(5) = 10 + 10, scale(1) = 2.
 		expect(Runtime.callInt(live, mainId), 20 * 1000 + 2, "before the edits");
@@ -81,7 +81,7 @@ class LiveCallerPatchMain {
 		return callee[version] + "function main():Int return Other.twice(5) * 1000 + scale(1);\n";
 
 	static function fresh(build:Dynamic):Int {
-		var module = Runtime.load(HlWriter.encode(build.module), build.runtimeIdentity);
+		var module = Runtime.load(HlWriter.encode(build.module).flatten(), build.runtimeIdentity);
 		var value = Runtime.callInt(module, build.functionIds.get("main"));
 		Runtime.dispose(module);
 		return value;

@@ -136,3 +136,70 @@ lowered-function cache 0.00, last assembler 0.07, inline cache 0.19.
   speed and fragmentation), and a per-build GC mark threshold set by the compiler through a runtime call in our HashLink (a global 0.2
   costs +17 s of GC on a cold build). The second is a decision for the user, not part of this work.
 
+
+## Rejected: a per-build GC mark threshold (2026-11-09)
+
+Setting the threshold per build through the runtime (cold 0.4, warm 0.2) raised the edit build's wall time by 3.4 s (GC time 2.5 s to 5.4 s) for a
+0.8 GB lower sampled peak, a difference that single samples could not separate from noise. Not kept; the launcher's `HL_GC_MARK_THRESHOLD=0.4` stands.
+
+## Page census by kind (2026-11-09, for the arena question)
+
+App, pre-merge tree (0405feb5 plus the step-0 pass fix), launcher environment, census of the worker's baseline state after a forced major GC,
+after the cold build and after the edit build (cold, no-op, no-op, edit in one worker). `scripts/hl-heap-tally.c` now also prints, per page
+kind, the page bytes and live bytes by the page's block size class, and the live pointer-free and raw blocks by size.
+
+| kind | after cold: page bytes / live / empty | after edit: page bytes / live / empty |
+|---|---|---|
+| scan | 3.66 / 2.15 / 1.51 GB | 4.27 / 2.48 / 1.79 GB |
+| pointer-free (noptr) | 1.67 / 0.73 / 0.94 GB | 2.52 / 1.08 / 1.44 GB |
+| raw | 0.38 / 0.07 / 0.31 GB | 0.50 / 0.13 / 0.37 GB |
+| empty pages | - | scan 11 MB, raw 21 MB, noptr 36 MB |
+
+Pointer-free plus raw pages hold 1.25 GB of empty space after the cold build and 1.81 GB after an edit. That is above the 1 GB the arena decision
+asked for, but where it sits matters:
+
+- Pointer-free empty space by block size class, after the edit: blocks under 256 B 0.82 GB (2^3 36 MB, 2^4 160, 2^5 178, 2^6 267, 2^7 179), 256 B to 4 KB
+  0.31 GB, 4 KB and up 0.34 GB. Live pointer-free blocks of 4 KB and more are about 0.52 GB (0.33 GB after cold); blocks under 128 B are 10M (cold)
+  to 13M (edit) objects of 8 to 127 bytes (strings, small buffers) holding about 0.3 GB.
+- Raw: 232 MB of the 370 MB empty space is in the 64 to 127 byte class (644k live blocks of about 66 B in 577 pages).
+- Scan: 0.58 GB empty in 16 to 31 byte blocks and 0.90 GB in 32 to 63 byte blocks, which is object-sized data, not buffers.
+- Largest live pointer-free blocks: 119 MiB (one block; the size of the encoded module), then 6.9 MiB (four after an edit, one after cold), 3.9 MiB,
+  2.3 MiB, two of 2.0 MiB. The dump has no allocation site, so the owner of the smaller ones is not known; nothing but the module bytes is named.
+
+So per-build byte buffers could account for at most about 0.35 GB of empty pointer-free space (the 4 KB and larger classes); the larger part of
+the empty space is many small blocks that die and leave pages part full, which an arena of large buffers does not touch.
+
+What an edit build allocates (bytes, from `--timings`; total about 12.0 GB): `ir-assembly` 5.3 GB (44%), `semantic` 1.8 GB, `typing-lowering` 1.7 GB,
+`encode` 1.3 GB (18.7M objects), `backend-assembly` 1.1 GB, `backend-functions` 0.8 GB, `write` 0.2 GB. The `encode` phase writes a module of about 100 MB
+and allocates 13 times that; it is the one phase that is mostly byte buffers.
+
+Could the worker use `runtime.memory.Arena`? Not as it is. `Arena` hands out `RawPtr<T>` values sized with `sizeof<T>`/`alignof<T>`, which only the Haxeon
+compiler understands, and the worker is built with the stock Haxe compiler (the test driver and the launcher run `haxe -hl`). It is also for GC-free native
+structs, not for `hl.Bytes` buffers. A byte-buffer arena would need a small native in `haxeon_runtime` (allocate a block, return `hl.Bytes` over it, free
+at the end of the build) and its owner must guarantee that nothing keeps a reference past the build.
+
+Allocation sites (2026-11-11): the allocation profiler (`hlprof-live --sources alloc`) did record samples; the earlier note that it recorded none was wrong,
+and so was the guess that the JIT's inline path skips the hook (the shared allocation policy sends every allocation to the full allocator, which calls it,
+while the callback is set). Its samples are counted per thread, one per N allocations, and carry only the allocator's return address, so they never name
+a compiler site. The tool for allocation sites is the runtime's allocation census: `HAXEON_COMPILER_ALLOC_CENSUS=<file>` makes the worker count allocations by
+type and sample call stacks by bytes during a build, and `scripts/alloc-sites.py <file>` ranks sites and types. Cold build of the app at a937d563's parent:
+720.7M allocations, 29.8 GiB; `bytes` and `array` backing stores are 59% of the bytes; the top site was `IrInlineEnumEligibility.reflectedUnsupportedEnums` at 6.9%
+(a string built per static field per object walked), then `IrOperands.inputs` at 4.4% across its three array literals, and nothing else above 2%.
+
+No byte-buffer arena (decided 2026-11-09): per-build byte buffers explain at most about 0.35 GB of the empty pointer-free space; the rest is small-object fragmentation, which is the target of the allocation-regions work.
+
+## Encode phase (2026-11-10)
+
+The encode phase of an app edit build allocated 1379 MB / 18.7M objects; it allocates 376 MB / 10.3M objects after: a chunked, never-reallocating output (`haxeon.io.ByteSink`), per-function span-group bytes in the writer cache, shared snapshot contents, the snapshot cross-check only under `HAXEON_CHECK_REUSE=1`, validation marks that survive a new debug file list, no per-instruction records in `writeFunction`, and the module and its debug sections kept as `SegmentedBytes` (no final copy). Left: the validator (the changed functions plus the tables), the prefix (rebuilt from the symbol tables on every edit that changes them) and re-encoding the changed functions.
+
+Not done, on purpose: Haxeon's own `BytesOutput` (native `realloc` buffer, one exact copy in `getBytes`) is not GC memory and does not fragment pages, so it does not grow in chunks. Follow-up: `.build-id` hashes the written 100 MB file by reading it back; a streaming SHA-256 over the segments would remove that read and its allocation.
+
+## Allocator size classes (2026-11-10)
+
+HashLink fork branch: `haxeon/allocator-size-classes` (vendor/hashlink, commit `8904375f3`, on top of `bfddf398f`; not pushed). Objects of 41 to 256 bytes have fixed classes of their own (steps of 8 up to 128, then 160, 192, 224, 256) instead of sharing the variable-size pages.
+
+- **Why.** A `perf` profile of the worker in a cold build put more than 75% of the samples of `gc_alloc_gen_owner_full` in the first-fit scan of `gc_alloc_var`: each allocation walked the free list of a fragmented page for a run long enough, under the global lock. A size histogram of the slow-path calls (about 290M in a cold build of the app) showed 175M above 40 bytes (41 to 64 bytes: 80M, 65 to 128: 32M, 129 to 256: 10M, 257 to 512: 2.9M, larger under 10M) and 116M thread-buffer refills of objects up to 40 bytes that got 5.9 blocks on average (49% got one) because free lists are fragmented. Batching several runs per refill under one lock was tried and dropped (compile time -0.5%, output identical): the lock was not the cost.
+- **Result** (app, cold, fresh worker, original and new runtime alternated, machine load 3 to 10): median compile 63.4 s to 54.8 s (-13.6%; the six pairs all went the same way), GC pause total unchanged (about 7 s), output byte-identical, page memory after a cold build 5.82 GB to 5.27 GB for the same 2.96 GB of live blocks (empty page space 2.86 GB to 2.31 GB). Driver suite 845/846 then 846/846 plain and checked; hot-reload, gdb-hot-reload and debug-metadata scripts pass; the `make`-built scripts (`test-hlb-debug-sections.sh`, `test-dap-hot-reload.sh`) fail at the vendor Makefile link (`hl_prof_boundary_install`), before and after the change; the HLB debug-section check passes when run with the CMake-built `hl`.
+- **Compiled code** still allocates inline only up to five words (`GC_JIT_INLINE_MAX`), because it zeroes the block word by word; larger classes are served by the C entry through the thread buffers.
+- **Allocation counts are lumpy.** `gc_stats.allocation_count` counts a thread buffer when it is reserved (up to 256 blocks at once), so a test cannot compare single-call windows (`IrFunctionRewriteMain` runs 2,000 calls).
+- **Next, only with evidence.** Allocations over 256 bytes still use first-fit. If a profile shows the scan again, extend the classes up to 1 to 2 KB, or improve the free-list structure.

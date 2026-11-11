@@ -557,15 +557,16 @@ class TextEditorState implements SemanticsValueSource {
 		return changed;
 	}
 
-	static function textEditHistoryKind(value:Int):TextEditorHistoryKind {
+	static function textEditHistoryKind(value:nativekit.ffi.NativeKitTypes.TextEditHistoryKind):TextEditorHistoryKind {
 		return switch (value) {
-			case 1: TextEditorHistoryKind.Typing;
-			case 2: TextEditorHistoryKind.DeleteBackward;
-			case 3: TextEditorHistoryKind.DeleteForward;
-			case 4: TextEditorHistoryKind.Paste;
-			case 5: TextEditorHistoryKind.Autocorrect;
-			case 6: TextEditorHistoryKind.Composition;
-			case _: TextEditorHistoryKind.Generic;
+			case nativekit.ffi.NativeKitTypes.TextEditHistoryKind.Typing: TextEditorHistoryKind.Typing;
+			case nativekit.ffi.NativeKitTypes.TextEditHistoryKind.DeleteBackward: TextEditorHistoryKind.DeleteBackward;
+			case nativekit.ffi.NativeKitTypes.TextEditHistoryKind.DeleteForward: TextEditorHistoryKind.DeleteForward;
+			case nativekit.ffi.NativeKitTypes.TextEditHistoryKind.Paste: TextEditorHistoryKind.Paste;
+			case nativekit.ffi.NativeKitTypes.TextEditHistoryKind.Autocorrect: TextEditorHistoryKind.Autocorrect;
+			case nativekit.ffi.NativeKitTypes.TextEditHistoryKind.Composition: TextEditorHistoryKind.Composition;
+			case nativekit.ffi.NativeKitTypes.TextEditHistoryKind.Generic: TextEditorHistoryKind.Generic;
+			default: throw "Invalid native text edit history kind";
 		};
 	}
 

@@ -14,7 +14,7 @@ class TryExitPatchMain {
 			+ "; } } function main():Int { var first = Gate.pick(); Gate.open = false; return first * 100 + Gate.pick(); }";
 		compiler.update("Main.hx", program(1, 2));
 		var first = compiler.compile("Main"),
-			live = Runtime.load(HlWriter.encode(first.module), first.runtimeIdentity),
+			live = Runtime.load(HlWriter.encode(first.module).flatten(), first.runtimeIdentity),
 			mainId = first.functionIds.get("main");
 		if (Runtime.callInt(live, mainId) != 102)
 			throw "The early-exit program did not run correctly before the edit";

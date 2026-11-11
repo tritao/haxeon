@@ -1,5 +1,7 @@
 package compiler.ir;
 
+import compiler.Provides.ProviderOperation;
+import compiler.Provides.ProviderOperations;
 import compiler.ir.Ir;
 import compiler.ir.SourceProvenance;
 import compiler.ir.SourceProvenance.Located;
@@ -72,22 +74,38 @@ class IrValueArrayElements {
 		unshift.returnValue(unshiftLength);
 		var pop = new IrBuilder(), popArray = pop.argument("array", arrayType), popLength = new IrValue(1000000, "$array-length", I32);
 		pop.currentBlock().instructions.push(new Located(ArraySize(popLength, popArray), SourceProvenance.generated("value-array-pop")));
+		switch storage {
+			case EnumTag(_):
+				var absent = pop.createBlock(), present = pop.createBlock();
+				pop.branch(pop.equal(popLength, pop.constInt(0)), absent, present);
+				pop.select(absent); pop.returnValue(pop.constNull(storage)); pop.select(present);
+			default:
+		}
 		var popIndex = pop.sub(popLength, pop.constInt(1)), popValue = pop.call(getName(), [popArray, popIndex], storage);
 		pop.call("__value_array_remove_at", [popArray, popIndex], Void); pop.returnValue(popValue);
 		var shift = new IrBuilder(), shiftArray = shift.argument("array", arrayType), shiftIndex = shift.constInt(0),
-			shiftValue = shift.call(getName(), [shiftArray, shiftIndex], storage);
+			shiftValue:IrValue;
+		switch storage {
+			case EnumTag(_):
+				var length = new IrValue(1000000, "$array-length", I32), absent = shift.createBlock(), present = shift.createBlock();
+				shift.currentBlock().instructions.push(new Located(ArraySize(length, shiftArray), SourceProvenance.generated("value-array-shift")));
+				shift.branch(shift.equal(length, shift.constInt(0)), absent, present);
+				shift.select(absent); shift.returnValue(shift.constNull(storage)); shift.select(present);
+			default:
+		}
+		shiftValue = shift.call(getName(), [shiftArray, shiftIndex], storage);
 		shift.call("__value_array_remove_at", [shiftArray, shiftIndex], Void); shift.returnValue(shiftValue);
-		var result = [new IrFunction(getName(), get.arguments, storage, get.blocks), new IrFunction(setName(), set.arguments, Void, set.blocks),
-			new IrFunction(pushName(), push.arguments, I32, push.blocks), new IrFunction(insertName(), insert.arguments, Void, insert.blocks),
-			new IrFunction(unshiftName(), unshift.arguments, I32, unshift.blocks), new IrFunction(popName(), pop.arguments, storage, pop.blocks),
-			new IrFunction(shiftName(), shift.arguments, storage, shift.blocks)];
+		var result = [new IrFunction(getName(), get.arguments, storage, get.blocks, Provider(TypeKey.of(element), ProviderOperations.detailed(ProviderOperation.ValueArrayElement, getName()))), new IrFunction(setName(), set.arguments, Void, set.blocks, Provider(TypeKey.of(element), ProviderOperations.detailed(ProviderOperation.ValueArrayElement, setName()))),
+			new IrFunction(pushName(), push.arguments, I32, push.blocks, Provider(TypeKey.of(element), ProviderOperations.detailed(ProviderOperation.ValueArrayElement, pushName()))), new IrFunction(insertName(), insert.arguments, Void, insert.blocks, Provider(TypeKey.of(element), ProviderOperations.detailed(ProviderOperation.ValueArrayElement, insertName()))),
+			new IrFunction(unshiftName(), unshift.arguments, I32, unshift.blocks, Provider(TypeKey.of(element), ProviderOperations.detailed(ProviderOperation.ValueArrayElement, unshiftName()))), new IrFunction(popName(), pop.arguments, storage, pop.blocks, Provider(TypeKey.of(element), ProviderOperations.detailed(ProviderOperation.ValueArrayElement, popName()))),
+			new IrFunction(shiftName(), shift.arguments, storage, shift.blocks, Provider(TypeKey.of(element), ProviderOperations.detailed(ProviderOperation.ValueArrayElement, shiftName())))];
 		if (iteratorUsed) {
 			var next = new IrBuilder(), iterator = next.argument("iterator", Iterator(element)),
 				iteratorArray = next.call(iteratorArrayName(), [iterator], arrayType),
 				iteratorIndex = next.call(iteratorAdvanceName(), [iterator], I32);
 			next.call(helpers.checker([], false), [iteratorArray, iteratorIndex], Void);
 			next.returnValue(bridge.readValue(next, iteratorArray, iteratorIndex, storage, []));
-			result.push(new IrFunction(iteratorNextName(), next.arguments, storage, next.blocks));
+			result.push(new IrFunction(iteratorNextName(), next.arguments, storage, next.blocks, Provider(TypeKey.of(element), ProviderOperations.detailed(ProviderOperation.ValueArrayElement, iteratorNextName()))));
 		}
 		return result;
 	}

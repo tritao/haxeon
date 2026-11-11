@@ -8,6 +8,7 @@ import compiler.syntax.Ast.AstFunction;
 import compiler.syntax.Ast.AstStatement;
 import compiler.types.Type.CompilerType;
 import compiler.types.Type.NominalKind;
+import compiler.types.typing.KeyPathTyping.KeyPathField;
 
 /** A stored field and its semantic type in the instantiation that declared it. */
 typedef ConformanceField = {final declaration:AstClass; final field:AstField; final type:CompilerType;}
@@ -15,7 +16,6 @@ typedef ConformanceMethod = {final declaration:AstClass; final method:AstFunctio
 
 /** Compiler expansion for Diffable field masks, class copies, and snapshot fingerprints. */
 class DiffIntrinsics {
-	static var serial = 0;
 
 	public static function handles(name:String):Bool
 		return switch name {
@@ -31,7 +31,7 @@ class DiffIntrinsics {
 			case "fingerprint":
 				expectArguments(name, arguments, 1, span);
 				var type = typeOf(arguments[0]), declaration = classOf(session, type, name, span),
-					value = hold("fingerprint-value", span), hash = hold("fingerprint-hash", span),
+					value = hold(session, "fingerprint-value", span), hash = hold(session, "fingerprint-hash", span),
 					statements:Array<AstStatement> = [
 						VarDeclaration(value, null, arguments[0], span),
 						VarDeclaration(hash, IntType, IntegerLiteral(17, span), span)
@@ -49,7 +49,14 @@ class DiffIntrinsics {
 				return BlockExpression(statements, Variable(hash, span), span);
 			case "bit":
 				expectArguments(name, arguments, 1, span);
-				var path = KeyPathTyping.known(session, pathOf(arguments[0]));
+				var path:Null<{final root:CompilerType; final fields:Array<KeyPathField>;}> = switch arguments[0] {
+					case KeyPathLiteral(root, fields, fieldSpan):
+						var resolved = KeyPathTyping.diffField(session, root, fields, fieldSpan);
+						{root: resolved.root, fields: resolved.fields};
+					case _:
+						var resolved = KeyPathTyping.known(session, pathOf(arguments[0]));
+						resolved == null ? null : {root: resolved.root, fields: resolved.fields};
+				};
 				if (path == null || path.fields.length != 1)
 					fail("E1009", '$name requires a known direct-field key path', span);
 				var declaration = classOf(session, path.root, name, span), field = path.fields[0].field.name;
@@ -71,7 +78,7 @@ class DiffIntrinsics {
 					fail("E1009", '$name is unnecessary for struct "${declaration.name}"; bind the value to a local to copy it', span);
 				if (declaration.typeParameters.length > 0)
 					fail("E1009", '$name does not support generic class "${compiler.semantic.SemanticSignature.display(type)}"', span);
-				var source = hold("copy-source", span), result = hold("copy-result", span),
+				var source = hold(session, "copy-source", span), result = hold(session, "copy-result", span),
 					statements:Array<AstStatement> = [
 						VarDeclaration(source, null, arguments[0], span),
 						VarDeclaration(result, null, New(declaration.name, [], span), span)
@@ -86,7 +93,7 @@ class DiffIntrinsics {
 			case "mask":
 				expectArguments(name, arguments, 2, span);
 				var declaration = classOf(session, typeOf(arguments[0]), name, span),
-					left = hold("left", span), right = hold("right", span), mask = hold("mask", span),
+					left = hold(session, "left", span), right = hold(session, "right", span), mask = hold(session, "mask", span),
 					fields = maskedFields(session, declaration, name, span),
 					statements:Array<AstStatement> = [
 						VarDeclaration(left, null, arguments[0], span),
@@ -100,7 +107,7 @@ class DiffIntrinsics {
 			case "apply":
 				expectArguments(name, arguments, 3, span);
 				var declaration = classOf(session, typeOf(arguments[0]), name, span),
-					target = hold("target", span), before = hold("before", span), after = hold("after", span), mask = hold("mask", span),
+					target = hold(session, "target", span), before = hold(session, "before", span), after = hold(session, "after", span), mask = hold(session, "mask", span),
 					fields = maskedFields(session, declaration, name, span),
 					statements:Array<AstStatement> = [
 						VarDeclaration(target, null, Call("$value.place", [arguments[0]], span), span),
@@ -247,8 +254,9 @@ class DiffIntrinsics {
 	static function differs(left:String, right:String, field:String, span:SourceSpan):AstExpression
 		return NotEqual(Member(Variable(left, span), field, span), Member(Variable(right, span), field, span), span);
 
-	static function hold(purpose:String, span:SourceSpan):String
-		return '$' + 'diff:$purpose:${span.start}:${serial++}';
+	/** A temporary named by its place and its ordinal in the function being typed, so the same source gives the same name in any session. */
+	static function hold(session:TypingSession, purpose:String, span:SourceSpan):String
+		return '$' + 'diff:$purpose:${span.start}:${session.currentContext.diffTemporary++}';
 
 	static function fail(code:String, message:String, span:SourceSpan):Void
 		BodyTyper.fail(code, message, span);

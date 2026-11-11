@@ -208,7 +208,7 @@ class HlPatchReader {
 
 	static function readType(input:BytesInput):HlTypeDef {
 		var tag = input.readByte();
-		if (tag == HlType.Enum)
+		if (tag == HlType.Enum || tag == HlType.EnumTag)
 			throw "Enum type patches require a structural reload";
 		if (tag == HlType.Obj || tag == HlType.Struct) {
 			var name = readIndex(input), base = readIndex(input), global = readUnsigned(input), fieldCount = readUnsigned(input),

@@ -85,10 +85,10 @@ class HlRemap {
 				note(types, index, symbols.internReference(type));
 			case NativeStorage(type, layout, index):
 				var next = symbols.internNativeFieldStorageType(type, layout);
-				if ((next == null) != (index == null))
-					return "native storage of " + Std.string(type);
-				if (index != null)
+				if (index != null && next != null)
 					note(types, index, next);
+				else if (index != null || next != null)
+					return "native storage of " + Std.string(type);
 			case GlobalSlot(name, type, index):
 				note(globals, index, symbols.internGlobal(name, type));
 			case GlobalByName(name, index):

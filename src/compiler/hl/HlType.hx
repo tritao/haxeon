@@ -26,4 +26,5 @@ enum abstract HlType(Int) from Int to Int {
 	var Struct = 21;
 	var Packed = 22;
 	var Guid = 23;
+	var EnumTag = 24;
 }

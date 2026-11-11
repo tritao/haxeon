@@ -97,7 +97,6 @@ class HlLower {
 	public final lowered:Map<String, compiler.hl.incremental.HlLoweredFunction> = [];
 
 	/** The owner `Class.field` was found on, by `Class.field`, for the field slot request. */
-	final fieldOwners:Map<String, String> = [];
 
 	final interfaceBases:Map<String, Array<String>> = [];
 
@@ -168,7 +167,8 @@ class HlLower {
 	final fieldReserve:Int;
 
 	/** HashLink field indices by `object.field`, resolved against the types this build publishes. */
-	final fieldIndices:Map<String, Int> = [];
+	/** The slot of an object field and the object that declares it, by type name then field name: a lookup makes no key string. */
+	final fieldSlots:Map<String, Map<String, {index:Int, owner:String}>> = [];
 
 	/** Objects a native signature reaches, which keep the layout the natives were built against (see `reservedSlots`). */
 	var nativeVisible:Map<String, Bool> = [];
@@ -348,8 +348,12 @@ class HlLower {
 		}
 		// Patches cannot add object types, so every base module carries String.
 		internType(IrType.Bytes);
-		for (enumDecl in program.enums)
-			symbols.reserveEnum(enumDecl.name);
+		var runtimeEnums = developmentMetadata ? program.enums : compiler.ir.IrEnumRuntimeTypes.declarations(program);
+		var boxedEnums = [for (declaration in runtimeEnums) declaration.name => true];
+		for (declaration in program.enums)
+			if (!boxedEnums.exists(declaration.name)) symbols.internScalarEnumTag(declaration.name);
+		for (enumDecl in runtimeEnums)
+			symbols.reserveEnum(enumDecl);
 		for (interfaceDecl in program.interfaces) {
 			symbols.reserveInterface(interfaceDecl.name);
 			interfaceBases.set(interfaceDecl.name, interfaceDecl.bases);
@@ -362,7 +366,7 @@ class HlLower {
 		for (object in program.objects)
 			if (object.isValue)
 				valueObjects.set(object.name, true);
-		for (enumDecl in program.enums)
+		for (enumDecl in runtimeEnums)
 			enumTypeIndices.set(enumDecl.name, symbols.internEnum(enumDecl));
 		var pendingInterfaces = program.interfaces.copy();
 		while (pendingInterfaces.length > 0) {
@@ -496,7 +500,7 @@ class HlLower {
 			}
 			allocationAfterSpanGroups = AllocationMeter.sample();
 			// The groups only point at the functions' locations; the section is encoded when the module is written.
-			code.debugSections.push(HlDebugSection.lazy(HlWriter.OPCODE_SOURCE_SPANS, 2, 0, () -> HlWriter.encodeOpcodeSourceSpanGroups(spanGroups)));
+			code.debugSections.push(HlDebugSection.lazy(HlWriter.OPCODE_SOURCE_SPANS, 2, 0, cache -> HlWriter.encodeOpcodeSourceSpanGroups(spanGroups, cache)));
 		}
 		if (debugCache != null)
 			debugCache.endGeneration();
@@ -549,18 +553,20 @@ class HlLower {
 			if (linked.fn != lowered.fn)
 				throw 'HAXEON_CHECK_REUSE: linking ${fn.name} against the tables it was lowered with moved its indices';
 		}
-		function same(what:String, expected:Array<Dynamic>, actual:Array<Dynamic>):Void {
-			if (expected.length != actual.length)
-				throw 'HAXEON_CHECK_REUSE: replaying the requests made $what table of ${actual.length} entries, lowering made ${expected.length}';
-			for (index in 0...expected.length)
-				if (Std.string(expected[index]) != Std.string(actual[index]))
-					throw 'HAXEON_CHECK_REUSE: replaying the requests made $what ${index} different from lowering\'s: ${Std.string(actual[index])} and ${Std.string(expected[index])}';
-		}
-		same("the integer", symbols.ints, environment.ints);
-		same("the float", symbols.floats, environment.floats);
-		same("the string", symbols.strings, environment.strings);
-		same("the global", symbols.globals, environment.globals);
-		same("the type", symbols.types, environment.types);
+
+		sameReplayTable("the integer", symbols.ints, environment.ints);
+		sameReplayTable("the float", symbols.floats, environment.floats);
+		sameReplayTable("the string", symbols.strings, environment.strings);
+		sameReplayTable("the global", symbols.globals, environment.globals);
+		sameReplayTable("the type", symbols.types, environment.types);
+	}
+
+	static function sameReplayTable<T>(what:String, expected:Array<T>, actual:Array<T>):Void {
+		if (expected.length != actual.length)
+			throw 'HAXEON_CHECK_REUSE: replaying the requests made $what table of ${actual.length} entries, lowering made ${expected.length}';
+		for (index in 0...expected.length)
+			if (Std.string(expected[index]) != Std.string(actual[index]))
+				throw 'HAXEON_CHECK_REUSE: replaying the requests made $what ${index} different from lowering\'s: ${Std.string(actual[index])} and ${Std.string(expected[index])}';
 	}
 
 	/**
@@ -737,8 +743,10 @@ class HlLower {
 			uses.set(value.id, (uses.exists(value.id) ? uses.get(value.id) : 0) + 1);
 		for (block in fn.blocks) {
 			for (instruction in block.instructions) {
-				for (input in compiler.ir.IrOperands.inputs(instruction.value))
+				for (inputIndex in 0...compiler.ir.IrOperands.count(instruction.value)) {
+					var input = compiler.ir.IrOperands.at(instruction.value, inputIndex);
 					countUse(input);
+				}
 				switch instruction.value {
 					case Phi(_, inputs):
 						for (input in inputs)
@@ -753,20 +761,22 @@ class HlLower {
 					case Jump(_):
 				}
 		}
-		var edges:Map<String, Array<{destination:IrValue, source:IrValue}>> = [];
+		var edges:Map<Int, Map<Int, Array<{destination:IrValue, source:IrValue}>>> = [];
 		for (block in fn.blocks)
 			for (instruction in block.instructions)
 				switch instruction.value {
 					case Phi(output, inputs):
 						defineRegister(output, registers, registerTypes);
 						for (input in inputs) {
-							var key = edgeKey(input.block, block.id);
-							var moves:Array<{destination:IrValue, source:IrValue}>;
-							if (edges.exists(key))
-								moves = edges.get(key);
-							else {
+							var from = edges.get(input.block);
+							if (from == null) {
+								from = [];
+								edges.set(input.block, from);
+							}
+							var moves = from.get(block.id);
+							if (moves == null) {
 								moves = [];
-								edges.set(key, moves);
+								from.set(block.id, moves);
 							}
 							moves.push({destination: output, source: input.value});
 						}
@@ -882,7 +892,10 @@ class HlLower {
 					case ConstBool(output, value):
 						instructions.push(HlInstruction.LoadBool(defineRegister(output, registers, registerTypes), value));
 					case ConstNull(output):
-						instructions.push(HlInstruction.LoadNull(defineRegister(output, registers, registerTypes)));
+						switch output.type {
+							case EnumTag(_): instructions.push(HlInstruction.LoadInt(defineRegister(output, registers, registerTypes), internInt(0)));
+							default: instructions.push(HlInstruction.LoadNull(defineRegister(output, registers, registerTypes)));
+						}
 					case TypeValue(output, type):
 						instructions.push(HlInstruction.LoadType(defineRegister(output, registers, registerTypes), internType(type)));
 					case ToDyn(output, value):
@@ -961,6 +974,7 @@ class HlLower {
 					case Equal(output, left, right):
 						lowerComparison(output, left, right, 2, nullValues.exists(left.id), nullValues.exists(right.id), registers, registerTypes,
 							instructions);
+					case Intrinsic(_, _, _): throw "Unlowered IR intrinsic reached HashLink";
 					case Call(output, functionName, arguments):
 						if (functionName == compiler.ir.IrReceiverCheck.NAME && nonNull.has(block.id, instructionIndex)) {
 							// A previous successful dereference or check already proved this SSA receiver non-null.
@@ -1193,6 +1207,8 @@ class HlLower {
 							requireRegister(value, registers)));
 					case ArraySize(output, array):
 						instructions.push(HlInstruction.ArraySize(defineRegister(output, registers, registerTypes), requireRegister(array, registers)));
+					case MakeEnum(output, _, constructor, _) if (switch output.type { case EnumTag(_): true; default: false; }):
+						instructions.push(HlInstruction.LoadInt(defineRegister(output, registers, registerTypes), internInt(constructor + 1)));
 					case MakeEnum(output, typeName, constructor, arguments):
 						var destination = defineRegister(output, registers, registerTypes),
 							enumConstructor = requireEnumConstructor(typeName, output.type, constructor),
@@ -1201,6 +1217,10 @@ class HlLower {
 							lowerEnumConstant(destination, typeName, enumConstructor, instructions);
 						else
 							instructions.push(HlInstruction.MakeEnum(destination, enumConstructor, args));
+					case EnumIndex(output, value) if (switch value.type { case EnumTag(_): true; default: false; }):
+						var one = temporaryRegister(IrType.I32, registerTypes);
+						instructions.push(HlInstruction.LoadInt(one, internInt(1)));
+						instructions.push(HlInstruction.Sub(defineRegister(output, registers, registerTypes), requireRegister(value, registers), one));
 					case EnumIndex(output, value):
 						instructions.push(HlInstruction.EnumIndex(defineRegister(output, registers, registerTypes), requireRegister(value, registers)));
 					case EnumField(output, value, constructor, field):
@@ -1235,9 +1255,9 @@ class HlLower {
 				case Rethrow(value):
 					instructions.push(HlInstruction.Rethrow(requireRegister(value, registers)));
 				case Jump(target):
-					var key = edgeKey(block.id, target);
-					if (edges.exists(key))
-						for (write in emitPhiMoves(edges.get(key), registers, registerTypes, instructions)) {
+					var jumpMoves = edgeMoves(edges, block.id, target);
+					if (jumpMoves != null)
+						for (write in emitPhiMoves(jumpMoves, registers, registerTypes, instructions)) {
 							var bindings = bindingsByValue.get(write.value.id);
 							if (bindings != null)
 								for (binding in bindings) {
@@ -1251,7 +1271,7 @@ class HlLower {
 						}
 					instructions.push(HlInstruction.Jump('block_$target'));
 				case Branch(condition, yes, no):
-					if (edges.exists(edgeKey(block.id, yes)) || edges.exists(edgeKey(block.id, no)))
+					if (edgeMoves(edges, block.id, yes) != null || edgeMoves(edges, block.id, no) != null)
 						throw "Phi elimination requires split critical edges";
 					if (fusedComparison != null)
 						instructions.push(withJumpTarget(fusedComparison, 'block_$yes'));
@@ -1461,8 +1481,11 @@ class HlLower {
 		return children;
 	}
 
-	static function edgeKey(from:Int, to:Int):String
-		return '$from:$to';
+	/** The phi moves on the edge `from` to `to`, or null when it has none. */
+	static function edgeMoves(edges:Map<Int, Map<Int, Array<{destination:IrValue, source:IrValue}>>>, from:Int, to:Int):Null<Array<{destination:IrValue, source:IrValue}>> {
+		var targets = edges.get(from);
+		return targets == null ? null : targets.get(to);
+	}
 
 	function emitPhiMoves(moves:Array<{destination:IrValue, source:IrValue}>, registers:Map<Int, Int>, registerTypes:Array<Int>,
 			instructions:Array<HlInstruction>):Array<{value:IrValue, position:Int}> {
@@ -1947,11 +1970,11 @@ class HlLower {
 	 * the IR: the IR declares the field's owner, the type its slot.
 	 */
 	function requireObjectFieldByType(typeName:String, name:String):Int {
-		var key = typeName + "." + name, cached = fieldIndices.get(key);
+		var byName = fieldSlots.get(typeName), cached = byName == null ? null : byName.get(name);
 		if (cached != null) {
 			if (requests != null)
-				requests.push(FieldSlot(fieldOwners.get(key), name, cached));
-			return cached;
+				requests.push(FieldSlot(cached.owner, name, cached.index));
+			return cached.index;
 		}
 		var owner = typeName;
 		while (true) {
@@ -1972,8 +1995,11 @@ class HlLower {
 		if (index == null)
 			throw 'IR field "$owner.$name" has no slot in its HashLink type';
 		var resolved:Int = index;
-		fieldIndices.set(key, resolved);
-		fieldOwners.set(key, owner);
+		if (byName == null) {
+			byName = [];
+			fieldSlots.set(typeName, byName);
+		}
+		byName.set(name, {index: resolved, owner: owner});
 		if (requests != null)
 			requests.push(FieldSlot(owner, name, resolved));
 		return resolved;

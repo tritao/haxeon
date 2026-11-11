@@ -89,7 +89,7 @@ read_locals() {
 }
 
 if [[ "${SKIP_DAP_BUILD:-0}" != 1 ]]; then
-	"$tools_dir/haxe/haxe" --cwd "$repo_dir" -cp src --run Main "$repo_dir/tests/dap/DapSteppingProbe.hx" "$repo_dir/out/dap-stepping-probe.hl" >/dev/null
+	"$tools_dir/haxe/haxe" --cwd "$repo_dir" common.hxml --run Main "$repo_dir/tests/dap/DapSteppingProbe.hx" "$repo_dir/out/dap-stepping-probe.hl" >/dev/null
 fi
 "${dap[@]}" start >/dev/null
 launch_json=$(python3 - "$repo_dir" <<'PY'

@@ -42,7 +42,7 @@ esac
 	--output="$hxi_path" \
 	"$repo_dir/tests/ffi/cxx_lifetime_fixture.hpp"
 
-"$repo_dir/.tools/haxe/haxe" -cp "$repo_dir/src" -cp "$repo_dir/tests/runtime" --run CxxLifetimeMain \
+"$repo_dir/.tools/haxe/haxe" -cp "$repo_dir/src" -cp "$repo_dir/lib/haxeon-io" -cp "$repo_dir/tests/runtime" --run CxxLifetimeMain \
 	"$repo_dir/out/cxx-lifetime-test.hl" "$hxi_path" "$projection_dir/Widget.hx"
 (
 	cd "$repo_dir/out"

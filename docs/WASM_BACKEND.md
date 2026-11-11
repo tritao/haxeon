@@ -230,7 +230,7 @@ Run the focused backend tests and Wasm32/GC parity suite:
 The command-line compiler accepts `--target=wasm32` and `--target=wasm-gc`:
 
 ```sh
-.tools/haxe/haxe --cwd . -cp src --run compiler.tools.HaxeonCompiler \
+.tools/haxe/haxe --cwd . common.hxml --run compiler.tools.HaxeonCompiler \
   --target=wasm-gc --output=out/main.wasm --entry=add \
   --root=stdlib --root=tests/programs tests/programs/add.hx
 ```

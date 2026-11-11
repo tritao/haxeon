@@ -45,7 +45,7 @@ class GcModuleLifetimeMain {
 		compiler.update("Main.hx",
 			"function make():() -> Int { var values = [40, 2]; return function() return values[0] + values[1]; } function main():Int { return 42; }");
 		var compiled = compiler.compile("Main");
-		var bytes = HlWriter.encode(compiled.module);
+		var bytes = HlWriter.encode(compiled.module).flatten();
 		Gc.enable(false);
 		ballast = new hl.NativeArray<Dynamic>(2000000);
 		for (i in 0...12) {

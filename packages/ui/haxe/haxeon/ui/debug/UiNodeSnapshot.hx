@@ -1,6 +1,9 @@
 package haxeon.ui.debug;
 
 import haxeon.ui.Rect;
+import haxeon.ui.semantics.AccessibilityState;
+import haxeon.ui.semantics.AccessibilityAction;
+import haxeon.ui.style.StyleState;
 import haxeon.ui.style.ComputedStyle;
 import haxeon.ui.style.StyleSource;
 import haxeon.ui.style.StyleInspectionEntry;
@@ -44,7 +47,7 @@ class UiNodeSnapshot {
 	public final focused:Bool;
 	public final hovered:Bool;
 	public final pressed:Bool;
-	public final interactionStates:Int;
+	public final interactionStates:StyleState;
 	public final styleType:Null<String>;
 	public final computedStyle:Null<ComputedStyle>;
 	public final styleEntries:Array<StyleInspectionEntry>;
@@ -73,16 +76,16 @@ class UiNodeSnapshot {
 	public final estimatedRenderTargetBytes:Float;
 	public final zIndex:Int;
 	public final role:Int;
-	public final semanticStates:Int;
+	public final semanticStates:AccessibilityState;
 	public final label:Null<String>;
 	public final value:Null<String>;
-	public final actions:Int;
+	public final actions:AccessibilityAction;
 
 	public function new(id:Int, parentId:Int, depth:Int, visualKind:Int, bounds:Rect,
 			clipBounds:Rect, contentBounds:Rect, visible:Bool, enabled:Bool,
 			focusable:Bool, focused:Bool, hovered:Bool, pressed:Bool, zIndex:Int, role:Int,
-			semanticStates:Int, label:Null<String>, value:Null<String>, actions:Int,
-			interactionStates:Int = 0, styleType:Null<String> = null,
+			semanticStates:AccessibilityState, label:Null<String>, value:Null<String>, actions:AccessibilityAction,
+			interactionStates:StyleState = StyleState.empty(), styleType:Null<String> = null,
 			computedStyle:Null<ComputedStyle> = null,
 			?styleEntries:Array<StyleInspectionEntry>, ?matchingStyleRules:Array<StyleSource>,
 			causesIsolation:Bool = false, ?inkOverflow:InkOverflow, ?paintBounds:Rect,

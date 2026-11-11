@@ -7,6 +7,7 @@ import driver.TestCatalog.NamedCase;
 import driver.TestCatalog.ProgramCase;
 import haxe.io.Path;
 import sys.FileSystem;
+import sys.io.File;
 import sys.io.Process;
 
 private typedef CommandResult = {
@@ -20,9 +21,18 @@ private typedef ProgramResult = {
 	var output:String;
 }
 
+/** A program case built and run once as a live build (a `Compiler`'s default) and once as a plain build, which prunes what nothing reaches. */
+private typedef ProgramRun = {
+	var test:ProgramCase;
+	var plain:Bool;
+
+	/** Built, edited twice and rebuilt in one compiler session (`Main --warm-edit`), each rebuild compared with a fresh build. */
+	var warm:Bool;
+}
+
 private typedef ActiveProgram = {
 	var index:Int;
-	var test:ProgramCase;
+	var run:ProgramRun;
 	var process:Process;
 }
 
@@ -65,9 +75,72 @@ class TestRunner {
 	}
 
 	/** Compile a program to HashLink: with the prebuilt compiler when available, else `haxe --run Main`. */
-	function compileProgram(source:String, output:String):Process
+	function compileProgram(source:String, output:String, run:ProgramRun):Process {
+		var arguments = [source, output].concat(run.warm ? ["--warm-edit"] : run.plain ? ["--plain"] : []);
 		return prebuiltMain != null ? new Process(hl,
-			[prebuiltMain, source, output]) : new Process(haxe, ["--cwd", root, "-cp", "src", "--run", "Main", source, output]);
+			[prebuiltMain].concat(arguments)) : new Process(haxe, ["--cwd", root, "common.hxml", "--run", "Main"].concat(arguments));
+	}
+
+	/**
+	 * Programs whose warm edit rebuild is known to differ from a fresh build, by name, with the design item that fixes each. A name here
+	 * is an expected failure: the case passes while the rebuild still differs in that way, and FAILS once it stops differing, so the
+	 * marker cannot outlive its cause. Nothing else is allowed to fail; do not add a name without a note that explains it.
+	 */
+	static final warmEditKnownFailures:Map<String, String> = [
+		"enum-generated-dependencies" => "docs/HELPER_OWNERSHIP.md: a shared helper's origin is chosen by the first requester"
+	];
+
+	/** The result for a warm edit build of a program that is marked as a known failure, or null when `run` is not such a build. */
+	static function knownWarmFailure(run:ProgramRun, compilation:CommandResult):Null<{passed:Bool, output:String}> {
+		var note = run.warm ? warmEditKnownFailures.get(run.test.name) : null;
+		if (note == null)
+			return null;
+		if (compilation.status == 0)
+			return {
+				passed: false,
+				output: compilation.output +
+				'FAIL: ${runName(run)} is marked as a known failure ($note) but its warm rebuild now equals a fresh build: remove the marker\n'
+			};
+		if (compilation.output.indexOf("differs from a fresh build") < 0)
+			return {
+				passed: false,
+				output: compilation.output + 'FAIL: ${runName(run)} is marked as a known failure ($note) but failed in another way\n'
+			};
+		return {passed: true, output: 'PASS: ${runName(run)} is a known failure, as marked ($note)\n'};
+	}
+
+	/**
+	 * A program, test main or executable case runs in a directory of its own: a fresh one under out/cases, holding a link to every entry of the repository root
+	 * except `out`, which is a new directory linking only the native build (out/cmake and the libraries), so what a program creates there is its own, and removed afterwards. Relative paths such as `out/x` and `tests/fixtures/...`
+	 * resolve there, so what a program writes can never collide with another run of it (the live, plain and warm builds run together)
+	 * or with another program, and leaves nothing in the tree. The tree itself is reached only through the links.
+	 */
+	function startProgram(compiled:String, ?arguments:Array<String>):Process {
+		var all = [compiled].concat(arguments == null ? [] : arguments);
+		if (Sys.systemName() == "Windows")
+			return new Process(hl, all);
+		return new Process("sh", [
+			"-c",
+			"r=$1; shift; mkdir -p \"$r/out/cases\" && d=$(mktemp -d \"$r/out/cases/run.XXXXXX\") || exit 125; for e in \"$r\"/* \"$r\"/.[!.]*; do case \"${e##*/}\" in out|.git) continue;; esac; [ -e \"$e\" ] && ln -s \"$e\" \"$d/\"; done; mkdir \"$d/out\"; for e in \"$r\"/out/cmake \"$r\"/out/*.hdll \"$r\"/out/*.so*; do [ -e \"$e\" ] && ln -s \"$e\" \"$d/out/\"; done; (cd \"$d\" && \"$@\"); s=$?; rm -rf \"$d\"; exit $s",
+			"sh",
+			root,
+			hl
+		].concat(all));
+	}
+
+	/** Programs must not name the shared tree: relative paths resolve in the run's own directory, absolute ones would escape it. */
+	function sharedTreeReference(source:String):Bool
+		return File.getContent(source).indexOf(root) >= 0;
+
+	static function runName(run:ProgramRun):String
+		return run.test.name + (run.warm ? " (warm edit rebuilds)" : run.plain ? " (plain build)" : "");
+
+	static function runOutput(root:String, run:ProgramRun):String
+		return Path.join([
+			root,
+			"out",
+			run.test.name + (run.warm ? ".warm" : run.plain ? ".plain" : "") + ".hl"
+		]);
 
 	/**
 	 * Test mains are compiled to HashLink and run there: faster than re-interpreting the compiler
@@ -81,7 +154,7 @@ class TestRunner {
 					steps: [
 						compileMainStep(test.name, compiled),
 						{
-							start: () -> new Process(hl, [compiled]),
+							start: () -> startProgram(compiled),
 							failure: status -> status == 0 ? null : 'FAIL: ${test.name} exited with $status'
 						}
 					],
@@ -110,7 +183,7 @@ class TestRunner {
 			expected = test.expectedExit,
 			exitDescription = (status:Int) -> expected == null ? 'non-zero exit $status' : 'exit $expected';
 		steps.push({
-			start: () -> new Process(hl, [output].concat(resolveArguments(output, test.runtimeArguments))),
+			start: () -> startProgram(output, resolveArguments(output, test.runtimeArguments)),
 			failure: status ->
 				(expected == null ? status != 0 : status == expected) ? null : 'FAIL: ${test.name} expected ${exitDescription(status)}, got $status'
 		});
@@ -166,24 +239,53 @@ class TestRunner {
 	}
 
 	public function runProgram(test:ProgramCase):Bool {
-		var result = runProgramCaptured(test, 0);
-		Sys.print(result.output);
-		return result.passed;
+		var failed = false;
+		for (run in runsOf(test)) {
+			var result = runProgramCaptured(run, 0);
+			Sys.print(result.output);
+			failed = failed || !result.passed;
+		}
+		return !failed;
 	}
 
+	/**
+	 * The builds of one program: live and plain, and, when HAXEON_CHECK_REUSE=1 asks for the reuse checks, a third that is edited and
+	 * rebuilt warm. A cold compile in a fresh process reuses nothing, so only that third build exercises the checks on a program.
+	 */
+	static function runsOf(test:ProgramCase):Array<ProgramRun> {
+		var runs:Array<ProgramRun> = [{test: test, plain: false, warm: false}, {test: test, plain: true, warm: false}];
+		if (Sys.getEnv("HAXEON_CHECK_REUSE") == "1")
+			runs.push({test: test, plain: true, warm: true});
+		return runs;
+	}
+
+	/** Every program is built and run twice, live and plain, so a difference between the two modes (what a plain build prunes) fails a case. */
 	public function runPrograms(tests:Array<ProgramCase>, jobs:Int):Int {
 		if (tests.length == 0)
 			return 0;
+		var named = [
+			for (test in tests)
+				if (sharedTreeReference(Path.join([root, "tests", "programs", test.name + ".hx"]))) test.name
+		];
+		if (named.length > 0) {
+			Sys.print([
+				for (name in named)
+					'FAIL: $name names the shared tree ($root); a program reaches files by relative path, which resolves in its own directory\n'
+			].join(""));
+			return named.length;
+		}
+		var runs:Array<ProgramRun> = [for (test in tests) for (run in runsOf(test)) run];
 		if (jobs == 1) {
 			var failures = 0;
-			for (test in tests)
-				if (!runProgram(test))
+			for (run in runs) {
+				var result = runProgramCaptured(run, 0);
+				Sys.print(result.output);
+				if (!result.passed)
 					failures++;
+			}
 			return failures;
 		}
-
-		var ordered = runProgramsParallel(tests, Std.int(Math.min(jobs, tests.length)));
-		return reportResults(ordered);
+		return reportResults(runProgramsParallel(runs, Std.int(Math.min(jobs, runs.length))));
 	}
 
 	function reportResults(results:Array<ProgramResult>):Int {
@@ -196,34 +298,36 @@ class TestRunner {
 		return failures;
 	}
 
-	function runProgramsParallel(tests:Array<ProgramCase>, jobs:Int):Array<ProgramResult> {
+	function runProgramsParallel(runs:Array<ProgramRun>, jobs:Int):Array<ProgramResult> {
 		var results:Array<ProgramResult> = [];
 		var compileOutput:Array<String> = [];
 		var compiled = [];
 		var next = 0;
 		var active:Array<ActiveProgram> = [];
-		while (next < tests.length || active.length > 0) {
-			while (next < tests.length && active.length < jobs) {
-				var test = tests[next];
-				var source = Path.join([root, "tests", "programs", test.name + ".hx"]);
-				var output = Path.join([root, "out", test.name + ".hl"]);
+		while (next < runs.length || active.length > 0) {
+			while (next < runs.length && active.length < jobs) {
+				var run = runs[next];
+				var source = Path.join([root, "tests", "programs", run.test.name + ".hx"]);
 				active.push({
 					index: next,
-					test: test,
-					process: compileProgram(source, output)
+					run: run,
+					process: compileProgram(source, runOutput(root, run), run)
 				});
 				next++;
 			}
 			var job = active.shift();
 			var compilation = finishCommand(job.process);
 			compileOutput[job.index] = compilation.output;
-			if (compilation.status == 0)
+			var known = knownWarmFailure(job.run, compilation);
+			if (known != null)
+				results[job.index] = {index: job.index, passed: known.passed, output: known.output};
+			else if (compilation.status == 0)
 				compiled.push(job.index);
 			else
 				results[job.index] = {
 					index: job.index,
 					passed: false,
-					output: compilation.output + 'FAIL: ${job.test.name} failed to compile\n'
+					output: compilation.output + 'FAIL: ${runName(job.run)} failed to compile\n'
 				};
 		}
 
@@ -232,14 +336,14 @@ class TestRunner {
 		while (next < compiled.length || active.length > 0) {
 			while (next < compiled.length && active.length < jobs) {
 				var index = compiled[next++];
-				var test = tests[index];
-				var output = Path.join([root, "out", test.name + ".hl"]);
-				active.push({index: index, test: test, process: new Process(hl, [output])});
+				var run = runs[index];
+				active.push({index: index, run: run, process: startProgram(runOutput(root, run))});
 			}
 			var job = active.shift();
 			var execution = finishCommand(job.process);
-			var passed = execution.status == job.test.expectedExit;
-			var message = passed ? 'PASS: ${job.test.name} source compiled and executed (exit ${job.test.expectedExit})\n' : 'FAIL: ${job.test.name} expected exit ${job.test.expectedExit}, got ${execution.status}\n';
+			var expected = job.run.test.expectedExit;
+			var passed = execution.status == expected;
+			var message = passed ? 'PASS: ${runName(job.run)} source compiled and executed (exit $expected)\n' : 'FAIL: ${runName(job.run)} expected exit $expected, got ${execution.status}\n';
 			results[job.index] = {
 				index: job.index,
 				passed: passed,
@@ -249,29 +353,32 @@ class TestRunner {
 		return results;
 	}
 
-	function runProgramCaptured(test:ProgramCase, index:Int):ProgramResult {
-		var source = Path.join([root, "tests", "programs", test.name + ".hx"]);
-		var output = Path.join([root, "out", test.name + ".hl"]);
-		var compilation = finishCommand(compileProgram(source, output));
+	function runProgramCaptured(run:ProgramRun, index:Int):ProgramResult {
+		var source = Path.join([root, "tests", "programs", run.test.name + ".hx"]);
+		var output = runOutput(root, run), test = run.test;
+		var compilation = finishCommand(compileProgram(source, output, run));
+		var known = knownWarmFailure(run, compilation);
+		if (known != null)
+			return {index: index, passed: known.passed, output: known.output};
 		if (compilation.status != 0) {
 			return {
 				index: index,
 				passed: false,
-				output: compilation.output + 'FAIL: ${test.name} failed to compile\n'
+				output: compilation.output + 'FAIL: ${runName(run)} failed to compile\n'
 			};
 		}
-		var execution = runCommand(hl, [output]);
+		var execution = finishCommand(startProgram(output));
 		if (execution.status != test.expectedExit) {
 			return {
 				index: index,
 				passed: false,
-				output: compilation.output + execution.output + 'FAIL: ${test.name} expected exit ${test.expectedExit}, got ${execution.status}\n'
+				output: compilation.output + execution.output + 'FAIL: ${runName(run)} expected exit ${test.expectedExit}, got ${execution.status}\n'
 			};
 		}
 		return {
 			index: index,
 			passed: true,
-			output: compilation.output + execution.output + 'PASS: ${test.name} source compiled and executed (exit ${test.expectedExit})\n'
+			output: compilation.output + execution.output + 'PASS: ${runName(run)} source compiled and executed (exit ${test.expectedExit})\n'
 		};
 	}
 
@@ -307,7 +414,7 @@ class TestRunner {
 	}
 
 	function configureRuntimeLibraryPath():Void {
-		var paths = [Path.join([root, "out"]), Sys.getEnv("HAXEON_HASHLINK_DIR")];
+		var paths = ["out", Sys.getEnv("HAXEON_HASHLINK_DIR")]; // "out" is relative so it is the out of the directory a run starts in
 		var variable = Sys.systemName() == "Windows" ? "PATH" : (Sys.systemName() == "Mac" ? "DYLD_LIBRARY_PATH" : "LD_LIBRARY_PATH");
 		var existing = Sys.getEnv(variable);
 		if (existing != null && existing != "")
@@ -322,8 +429,7 @@ class TestRunner {
 		return [
 			"--cwd",
 			root,
-			"-cp",
-			"src",
+			"common.hxml",
 			"-cp",
 			"tests",
 			"-cp",

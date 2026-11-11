@@ -130,7 +130,7 @@ class LambdaRenumberPatchMain {
 		var session = {
 			compiler: compiler,
 			build: build,
-			live: Runtime.load(HlWriter.encode(build.module), build.runtimeIdentity),
+			live: Runtime.load(HlWriter.encode(build.module).flatten(), build.runtimeIdentity),
 			mainId: build.functionIds.get("main")
 		};
 		var value = Runtime.callInt(session.live, session.mainId);
@@ -150,7 +150,7 @@ class LambdaRenumberPatchMain {
 		var now = Runtime.callInt(session.live, session.mainId);
 		if (now != stored)
 			throw '$label: stored handlers return $now instead of $stored';
-		var clean = Runtime.load(HlWriter.encode(changed.module), changed.runtimeIdentity);
+		var clean = Runtime.load(HlWriter.encode(changed.module).flatten(), changed.runtimeIdentity);
 		var value = Runtime.callInt(clean, changed.functionIds.get("main"));
 		Runtime.dispose(clean);
 		if (value != fresh)

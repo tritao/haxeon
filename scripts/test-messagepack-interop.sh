@@ -17,7 +17,7 @@ if [[ ! -x "$haxe" || ! -x "$hl" ]]; then
 fi
 
 mkdir -p "$root_dir/out"
-"$haxe" --cwd "$root_dir" -cp src --run Main tests/programs/messagepack-interop.hx "$output" >/dev/null
+"$haxe" --cwd "$root_dir" common.hxml --run Main tests/programs/messagepack-interop.hx "$output" >/dev/null
 
 if [[ "$(uname -s)" == "Darwin" ]]; then
 	export DYLD_LIBRARY_PATH="$root_dir/out:$hashlink_dir${DYLD_LIBRARY_PATH:+:$DYLD_LIBRARY_PATH}"

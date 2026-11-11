@@ -4,7 +4,7 @@ root_dir="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
 hashlink_dir=$("$root_dir/scripts/hashlink-path.sh")
 build_dir=$(mktemp -d)
 trap 'rm -rf -- "$build_dir"' EXIT
-"$root_dir/.tools/haxe/haxe" --cwd "$root_dir" -cp src -cp tests/compiler --run WasmSharedMemoryMain "$build_dir/shared.wasm" "$build_dir/unshared.wasm"
+"$root_dir/.tools/haxe/haxe" --cwd "$root_dir" common.hxml -cp tests/compiler --run WasmSharedMemoryMain "$build_dir/shared.wasm" "$build_dir/unshared.wasm"
 node - "$build_dir" <<'JS'
 const fs=require('fs'),dir=process.argv[2];
 const shared=new WebAssembly.Module(fs.readFileSync(dir+'/shared.wasm'));
@@ -17,7 +17,7 @@ for(const [module,memory] of [[shared,new WebAssembly.Memory({initial:1,maximum:
 }
 console.log('PASS: shared/unshared imports and bounded memory link validation');
 JS
-"$root_dir/.tools/haxe/haxe" --cwd "$root_dir" -cp src -main compiler.tools.HaxeonCompiler -hl "$build_dir/compiler.hl"
+"$root_dir/.tools/haxe/haxe" --cwd "$root_dir" common.hxml -main compiler.tools.HaxeonCompiler -hl "$build_dir/compiler.hl"
 cat > "$build_dir/contract.json" <<'JSON'
 {"name":"nativekit-haxeon-linear-memory","version":1,"address_model":"wasm32","page_size":65536,"host_base":0,"host_limit":1048576,"guest_base":1048576,"guest_limit":4194304,"memory_size":4194304}
 JSON

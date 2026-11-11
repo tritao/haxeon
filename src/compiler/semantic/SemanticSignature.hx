@@ -9,8 +9,9 @@ import compiler.types.Type.NominalKind;
 
 /** Deterministic spelling for resolved semantic types and callable signatures. */
 class SemanticSignature {
+	/** Final controls field writes; it does not change the anonymous object layout. */
 	public static function anonymousTypeName(fields:Array<compiler.types.Type.AnonymousField>):String
-		return '$' + 'anon:' + anonymousFields(fields);
+		return '$' + 'anon:' + anonymousFields([for (field in fields) {name: field.name, type: field.type, optional: field.optional, isFinal: false}]);
 
 	/**
 	 * A structure that contains itself cannot be spelled out from its fields, since the spelling would never end.

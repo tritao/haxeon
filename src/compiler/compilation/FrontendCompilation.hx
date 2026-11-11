@@ -57,6 +57,7 @@ typedef FrontendResult = {
 	final graphInitializationMs:Float;
 	final frontendRestarts:Array<String>;
 	final frontendPassFunctions:Array<Int>;
+	final frontendPassReports:Array<String>;
 	final frontendDoneAt:Float;
 	final typingLoweringDoneAt:Float;
 	final irAssemblyDoneAt:Float;
@@ -78,7 +79,11 @@ class FrontendCompilation {
 			retyped:Array<String>
 		}):FrontendResult {
 		seedRepresentationModules(context);
-		var allocationAtStart = AllocationMeter.sample();
+		var allocationAtStart = AllocationMeter.sample(),
+			passStartedAt = Sys.time() * 1000.0,
+			parseMsAtStart = context.parseMs,
+			parseBytesAtStart = context.parseBytes,
+			parseCountAtStart = context.parseCount;
 		var modules = context.modules,
 			graph = context.graph,
 			objectCache = context.objectCache,
@@ -162,6 +167,7 @@ class FrontendCompilation {
 		var frontendDoneAt = Sys.time() * 1000.0;
 		var allocationAfterSemantic = AllocationMeter.sample();
 		var allocationAfterAnalysis = allocationAfterSemantic;
+		var analysisDoneAt = frontendDoneAt, typingDoneAt = frontendDoneAt;
 		var allocationAfterProgramTyping = allocationAfterSemantic;
 		var typedNew:TypedProgram, typerMetrics:TyperPhaseMetrics, generator:IrGenerator;
 		var runtimeDependencies:Array<{var functionName:String; var target:String;}> = [];
@@ -185,10 +191,12 @@ class FrontendCompilation {
 			else
 				semantic = SemanticProgram.analyze(canonicalProgram);
 			allocationAfterAnalysis = AllocationMeter.sample();
+			analysisDoneAt = Sys.time() * 1000.0;
 			var typedResult = Typer.typeAnalyzedMeasured(semantic, selected, context.nativeSignatures(), entryPoint, genericSpecializations,
 				context.nativeLayoutTarget(), canReuseSemantic ? context.lastTypedProgram : null, semanticAssembly.facts, lowerToIr,
 				retainedFromPrevious(context, names, selected, lowerToIr, [for (classDecl in canonicalProgram.classes) classDecl.name => true]));
 			allocationAfterProgramTyping = AllocationMeter.sample();
+			typingDoneAt = Sys.time() * 1000.0;
 			typedNew = typedResult.program;
 			context.frontendPassFunctions.push(typedNew.functions.length);
 			generator = new IrGenerator(compiler.ir.ProgramFacts.of(typedNew), context.targetProfile());
@@ -426,19 +434,37 @@ class FrontendCompilation {
 				// Retained generated functions own further closures and adapters. Follow
 				// that ownership transitively, but never revive children of a retyped body.
 				var pending = [for (functionName in retainedSpecializations.keys()) functionName];
+				// The functions a function owns, by owner, found once: an origin, or the function a lambda is written in
+				// (`LambdaName.enclosing`). Looking for them among all the module's functions for each owner was quadratic.
+				var ownedBy:Map<String, Array<String>> = [];
+				function ownedFor(owner:String):Array<String> {
+					var list = ownedBy.get(owner);
+					if (list == null) {
+						list = [];
+						ownedBy.set(owner, list);
+					}
+					return list;
+				}
+				for (nested => fn in state.typedFunctions) {
+					if (fn.origin != null)
+						ownedFor(fn.origin).push(nested);
+					var enclosing = LambdaName.is(nested) ? LambdaName.enclosing(nested) : null;
+					if (enclosing != null && enclosing != fn.origin)
+						ownedFor(enclosing).push(nested);
+				}
 				while (pending.length > 0) {
 					var parent = pending.pop();
 					if (typedByName.exists(parent))
 						continue;
-					for (nested => fn in state.typedFunctions) {
-						if (valid.exists(nested) || invalidated.exists(nested))
-							continue;
-						if (fn.origin == parent || StringTools.startsWith(nested, "$lambda:" + parent + ":")) {
+					var owned = ownedBy.get(parent);
+					if (owned != null)
+						for (nested in owned) {
+							if (valid.exists(nested) || invalidated.exists(nested))
+								continue;
 							valid.set(nested, true);
 							owners.set(nested, name);
 							pending.push(nested);
 						}
-					}
 				}
 			}
 			if (lowerToIr)
@@ -508,6 +534,14 @@ class FrontendCompilation {
 				}
 			}
 		regenerated = uniqueSorted(regenerated);
+		context.frontendPassReports.push(passReport(context.frontendPassReports.length + 1, [
+			stage("graph", frontendGraphDoneAt - passStartedAt, AllocationMeter.delta("graph", allocationAtStart, allocationAfterGraph)),
+			stage("semantic-assembly", frontendDoneAt - frontendGraphDoneAt, AllocationMeter.delta("semantic", allocationAfterGraph, allocationAfterSemantic)),
+			stage("signature-inference", analysisDoneAt - frontendDoneAt, AllocationMeter.delta("analysis", allocationAfterSemantic, allocationAfterAnalysis)),
+			stage("typing", typingDoneAt - analysisDoneAt, AllocationMeter.delta("typing", allocationAfterAnalysis, allocationAfterProgramTyping)),
+			stage("ir-generation", Sys.time() * 1000.0 - typingDoneAt,
+				AllocationMeter.delta("ir-generation", allocationAfterProgramTyping, AllocationMeter.sample()))
+		], context.parseMs - parseMsAtStart, context.parseBytes - parseBytesAtStart, context.parseCount - parseCountAtStart));
 		// A runtime helper found while typing joins the program after this pass. What was typed so far is published, so the next
 		// pass is an incremental one over it: it has the newly reachable modules to type, and the work of this pass carries over.
 		if (includeTypedRuntimeDependencies(context, runtimeDependencies, typedNew.functions, owners, names, rollbackModules)) {
@@ -557,6 +591,7 @@ class FrontendCompilation {
 				graphInitializationMs: graphInitializationMs,
 				frontendRestarts: context.frontendRestarts,
 				frontendPassFunctions: context.frontendPassFunctions,
+				frontendPassReports: context.frontendPassReports,
 				frontendDoneAt: frontendDoneAt,
 				typingLoweringDoneAt: typingLoweringDoneAt,
 				irAssemblyDoneAt: typingLoweringDoneAt,
@@ -574,6 +609,34 @@ class FrontendCompilation {
 		}
 		cachedNames.sort(Reflect.compare);
 		cachedNames = uniqueSorted(cachedNames);
+		// A function kept across an edit of its file names the file's old text in its locations; give it the current hashes (see IrSourceRehash).
+		var currentHashes:Map<String, Int> = [for (state in modules) state.source.path => state.source.contentHash()];
+		var anyEdited = false;
+		for (moduleName in names) {
+			var edited = modules.get(moduleName);
+			if (edited != null && edited.editedSinceIrScan) {
+				anyEdited = true;
+				break;
+			}
+		}
+		if (anyEdited)
+			for (moduleName in names) {
+				var state = modules.get(moduleName);
+				if (state == null)
+					continue;
+				var rehashed:Map<String, IrFunction> = [];
+				for (functionName => fn in state.irFunctions) {
+					var replacement = compiler.ir.IrSourceRehash.of(fn, currentHashes);
+					if (replacement != fn)
+						rehashed.set(functionName, replacement);
+				}
+				if (!rehashed.keys().hasNext() && !state.editedSinceIrScan)
+					continue;
+				var writable = context.writableState(moduleName, rollbackModules);
+				for (functionName => replacement in rehashed)
+					writable.irFunctions.set(functionName, replacement);
+				writable.editedSinceIrScan = false;
+			}
 		var cached:Array<IrFunction> = [];
 		for (functionName in cachedNames) {
 			if (!owners.exists(functionName))
@@ -586,6 +649,15 @@ class FrontendCompilation {
 				throw 'Cached function "$functionName" has no IR body';
 			cached.push(functions.get(functionName));
 		}
+		if (Sys.getEnv("HAXEON_CHECK_REUSE") == "1")
+			for (functionName in cachedNames) {
+				var holder = modules.get(owners.get(functionName));
+				if (holder == null)
+					throw 'HAXEON_CHECK_REUSE: cached function "$functionName" has no owning module';
+				var held = holder.irFunctions.get(functionName);
+				if (compiler.ir.IrSourceRehash.of(held, currentHashes) != held)
+					throw 'HAXEON_CHECK_REUSE: cached function "$functionName" of module "${owners.get(functionName)}" names a file hash that is not the file\'s current one';
+			}
 		dropUnusedKeyPathFields(typedNew, cached);
 		if (token != null)
 			token.check();
@@ -619,7 +691,7 @@ class FrontendCompilation {
 			interfaces: IrProgramAssembler.interfacesFrom(generator, typedNew),
 			enums: IrProgramAssembler.enumsFrom(generator, typedNew),
 			staticFields: IrProgramAssembler.staticFieldsFrom(generator, typedNew),
-			initializers: IrProgramAssembler.staticInitializersFrom(generator, typedNew, initializationClasses, cached).concat(liveInitializers),
+			initializers: [for (fn in IrProgramAssembler.staticInitializersFrom(generator, typedNew, initializationClasses, cached)) compiler.ir.IrSourceRehash.of(fn, currentHashes)].concat(liveInitializers),
 			reflectable: IrProgramAssembler.reflectableObjectsFrom(typedNew)
 		};
 		// A plain build whose pipeline inputs equal the last build's gets that build's final IR: no pass runs. With HAXEON_CHECK_REUSE=1
@@ -630,10 +702,11 @@ class FrontendCompilation {
 			reuseMiss = context.livePatching ? "live patching" : previousPipeline == null ? "no earlier build" : previousPipeline.mismatch(inputs),
 			matchesPrevious = reuseMiss == null, checkingReuse = Sys.getEnv("HAXEON_CHECK_REUSE") == "1",
 			reusedPipeline:Null<PipelineSnapshot> = matchesPrevious ? previousPipeline : null, ir:IrProgram, inlinerChanged:Array<String>;
-		if (matchesPrevious && !checkingReuse) {
-			ir = previousPipeline.ir;
+		if (reusedPipeline != null && !checkingReuse) {
+			ir = reusedPipeline.ir;
 			inlinerChanged = [];
 		} else {
+			compiler.compilation.IrPassMeter.reset();
 			ir = IrProgramAssembler.assemble(generator, cached, irNatives, generated.objects, generated.interfaces, generated.enums,
 				generated.staticFields, generated.initializers, entryPoint, irCNatives, generated.reflectable, context.inlineCache().staticChecks,
 				context.valueArrayTarget(), context.exportedFunctions());
@@ -660,7 +733,9 @@ class FrontendCompilation {
 			if (context.livePatching && !context.isWasmTarget() && semantic != null)
 				ir.parameterDefaults = parameterDefaults(ir, semantic.signatures);
 			var valueArrayTarget = context.valueArrayTarget();
-			compiler.ir.IrValueArrayProgramRewrite.rewriteAll(ir, valueArrayTarget == HashLink ? 64 : 32, valueArrayTarget);
+			if (!context.developmentMetadata && !context.livePatching)
+				ir = compiler.ir.IrClosedEnumTagAbi.run(ir, generated.reflectable);
+			compiler.compilation.IrPassMeter.measureVoid("value-array-rewrite", () -> compiler.ir.IrValueArrayProgramRewrite.rewriteAll(ir, valueArrayTarget == HashLink ? 64 : 32, valueArrayTarget));
 			// Scalarize value joins before choosing the scalar call ABI. The HashLink call rewrite can introduce
 			// further value joins, so it needs a second pass after that rewrite.
 			if (context.isWasmTarget()) {
@@ -672,31 +747,36 @@ class FrontendCompilation {
 				}
 			}
 			if (!context.isWasmTarget()) {
-				compiler.ir.IrValueConstructors.rewrite(ir);
-				compiler.ir.IrValuePhiScalarization.rewrite(ir);
-				compiler.ir.IrScalarArguments.rewrite(ir);
-				compiler.ir.IrScalarClosures.rewrite(ir);
-				compiler.ir.IrValuePhiScalarization.rewrite(ir);
+				compiler.compilation.IrPassMeter.measureVoid("value-constructors", () -> compiler.ir.IrValueConstructors.rewrite(ir));
+				compiler.compilation.IrPassMeter.measureVoid("value-phi-scalarization", () -> compiler.ir.IrValuePhiScalarization.rewrite(ir));
+				compiler.compilation.IrPassMeter.measureVoid("scalar-arguments", () -> compiler.ir.IrScalarArguments.rewrite(ir));
+				compiler.compilation.IrPassMeter.measureVoid("scalar-closures", () -> compiler.ir.IrScalarClosures.rewrite(ir));
+				compiler.compilation.IrPassMeter.measureVoid("value-phi-scalarization", () -> compiler.ir.IrValuePhiScalarization.rewrite(ir));
 			}
 			var scalarObjects = compiler.ir.IrObjectTable.of([for (object in ir.objects) object.name => object]);
-			ir.functions = [
+			ir.functions = compiler.compilation.IrPassMeter.measure("scalar-replacement", () -> [
 				for (fn in ir.functions)
 					compiler.ir.IrScalarReplacement.rewrite(fn, scalarObjects, false, !context.isWasmTarget())
-			];
-			compiler.ir.IrNullableScalarFlow.rewrite(ir);
+			]);
+			compiler.compilation.IrPassMeter.measureVoid("nullable-scalar-flow", () -> compiler.ir.IrNullableScalarFlow.rewrite(ir));
+			compiler.ir.IrEnumTagLowering.escapes(ir);
 			// Compare and publish the final IR even when only load/store forwarding is enabled.
-			inlinerChanged = IrInliner.run(ir, context.inlineCache(), context.targetProfile(), context.inlineEnabled(), instrumentScope);
-			// The final IR is verified here, once, whatever backend follows: only the functions whose IR or reads of the program changed.
-			if (!context.livePatching) {
-				IrVerifier.verifyReusing(ir, context.verifyMemo);
-				if (checkingReuse)
+			inlinerChanged = compiler.compilation.IrPassMeter.measure("inliner", () -> IrInliner.run(ir, context.inlineCache(), context.targetProfile(), context.inlineEnabled(), instrumentScope));
+			// HashLink has its scalar closure ABI here. Wasm verifies after its target-specific closure escape adapters exist.
+			if (!context.livePatching && !context.isWasmTarget()) {
+				compiler.compilation.IrPassMeter.measureVoid("verifier", () -> IrVerifier.verifyReusing(ir, context.verifyMemo));
+				if (checkingReuse) {
 					try
 						IrVerifier.verify(ir)
 					catch (error:String)
 						throw 'HAXEON_CHECK_REUSE: verification skipped a function that fails in full: $error';
+					var providerProblem = compiler.ir.IrProviders.check(ir.functions);
+					if (providerProblem != null)
+						throw 'HAXEON_CHECK_REUSE: $providerProblem';
+				}
 			}
-			if (matchesPrevious) {
-				var difference = PipelineSnapshot.irDifference(previousPipeline.ir, ir);
+			if (reusedPipeline != null) {
+				var difference = PipelineSnapshot.irDifference(reusedPipeline.ir, ir);
 				if (difference != null)
 					throw 'HAXEON_CHECK_REUSE: the final IR reused for equal pipeline inputs differs from a fresh run ($difference)';
 			}
@@ -744,6 +824,7 @@ class FrontendCompilation {
 			graphInitializationMs: graphInitializationMs,
 			frontendRestarts: context.frontendRestarts,
 			frontendPassFunctions: context.frontendPassFunctions,
+				frontendPassReports: context.frontendPassReports,
 			frontendDoneAt: frontendDoneAt,
 			typingLoweringDoneAt: typingLoweringDoneAt,
 			irAssemblyDoneAt: irAssemblyDoneAt,
@@ -1072,13 +1153,11 @@ class FrontendCompilation {
 			pending:Array<String> = [];
 		for (name => state in modules) {
 			for (cached => fn in state.typedFunctions) {
-				if (!StringTools.startsWith(cached, "$value$equality:")
-					&& !StringTools.startsWith(cached, "$enum-equals:")
-					&& !StringTools.startsWith(cached, "$enum-reflect-equals:")
-					&& !StringTools.startsWith(cached, "$enum-custom:")
-					&& !StringTools.startsWith(cached, "$hash$value$equality:")
-					&& !StringTools.startsWith(cached, "$wire:")
-					&& !StringTools.startsWith(cached, "$json:"))
+				var shared = switch fn.role {
+					case ProviderFunction(_, operation): compiler.Provides.ProviderOperations.sharedAcrossModules(operation);
+					default: false;
+				};
+				if (!shared)
 					continue;
 				if (!holders.exists(cached) || reachable.exists(name))
 					holders.set(cached, state);
@@ -1199,6 +1278,10 @@ class FrontendCompilation {
 		for (pair in [["$lambda-env:", "$lambda:"], ["$function-adapter-env:", "$function-adapter:"]])
 			if (StringTools.startsWith(name, pair[0]))
 				return !functionNames.exists(pair[1] + name.substr(pair[0].length));
+		// The environment of a key path composition is named after its functions (`<name>:get` is always made) and, like a lambda's,
+		// by the place of the composition: an edit that moves it leaves the old environment with nothing to run.
+		if (StringTools.startsWith(name, "$keypath.compose:") && StringTools.endsWith(name, ":environment"))
+			return !functionNames.exists(name.substr(0, name.length - ":environment".length) + ":get");
 		return false;
 	}
 
@@ -1295,7 +1378,7 @@ class FrontendCompilation {
 		visiting.set(fn.name, true);
 		var origin = fn.origin;
 		if (origin == null)
-			throw 'No source module owns typed function "${fn.name}"';
+			throw 'No source module owns typed function "${fn.name}" (origin: ${fn.origin})';
 		var module:String;
 		if (owners.exists(origin))
 			module = owners.get(origin);
@@ -1304,7 +1387,7 @@ class FrontendCompilation {
 		else if (typedByName.exists(origin))
 			module = resolveFunctionModule(typedByName.get(origin), owners, typedByName, visiting);
 		else
-			throw 'No source module owns typed function "${fn.name}"';
+			throw 'No source module owns typed function "${fn.name}" (origin: ${fn.origin})';
 		owners.set(fn.name, module);
 		visiting.remove(fn.name);
 		return module;
@@ -1318,6 +1401,24 @@ class FrontendCompilation {
 			return null;
 		var className = name.substr(0, name.length - INITIALIZER_SUFFIX.length);
 		return owners.get(className + ".new");
+	}
+
+	static function stage(name:String, ms:Float, allocation:PhaseAllocation):{name:String, ms:Float, allocation:PhaseAllocation}
+		return {name: name, ms: ms, allocation: allocation};
+
+	/**
+	 * One frontend pass as a line: for each stage its time, bytes, objects and collections (with their time), and the parsing done inside
+	 * the pass (it happens in the graph and in semantic assembly, so it is shown apart rather than as a stage).
+	 */
+	static function passReport(number:Int, stages:Array<{name:String, ms:Float, allocation:PhaseAllocation}>, parseMs:Float, parseBytes:Float,
+			parseCount:Float):String {
+		var parts = ['pass$number'];
+		for (stage in stages) {
+			var a = stage.allocation;
+			parts.push('${stage.name}=${Math.round(stage.ms)}ms/${Math.round(a.bytes / 1048576.0)}MB/${Math.round(a.count / 1000.0)}k/${Std.int(a.collections)}gc(${Math.round(a.markMicros / 1000.0)}ms)');
+		}
+		parts.push('parse-within=${Math.round(parseMs)}ms/${Math.round(parseBytes / 1048576.0)}MB/${Math.round(parseCount / 1000.0)}k');
+		return parts.join(" ");
 	}
 
 	static function includeTypedRuntimeDependencies(context:CompilationContext, dependencies:Array<{var functionName:String; var target:String;}>,
@@ -1344,6 +1445,9 @@ class FrontendCompilation {
 				owner = context.declarationOwner(dependency.functionName.substr(compiler.types.typing.RuntimeDependencyTracker.TYPE_ORIGIN_PREFIX.length));
 			else if (fn != null)
 				owner = resolveFunctionModule(fn, owners, typedByName, []);
+			else if (owners.exists(dependency.functionName))
+				// Typed in an earlier build and kept: it is not among this pass's typed functions, but its module is known.
+				owner = owners.get(dependency.functionName);
 			else
 				owner = initializerModule(dependency.functionName, owners);
 			if (owner == null)

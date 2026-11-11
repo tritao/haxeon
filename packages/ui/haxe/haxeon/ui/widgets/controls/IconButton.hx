@@ -13,7 +13,6 @@ import haxeon.ui.semantics.AccessibilityRole;
 import haxeon.ui.semantics.AccessibilityState;
 import haxeon.ui.semantics.Semantics;
 import haxeon.ui.style.StyleState;
-import haxeon.ui.style.StyleStateUtil;
 import haxeon.ui.style.StyleTarget;
 import haxeon.ui.widgets.Icon;
 
@@ -47,8 +46,8 @@ class IconButton implements View {
 	}
 
 	function buildButton(context:BuildContext, id:haxeon.ui.core.WidgetId):RenderNode {
-		var flags = StyleStateUtil.withState(context.interactionStates.get(id),
-			StyleState.Disabled, !enabled);
+		var flags = context.interactionStates.get(id);
+		flags = !enabled ? flags.insert(StyleState.Disabled) : flags.remove(StyleState.Disabled);
 		var computed = context.resolveStyle(new StyleTarget("button", key, key,
 			["icon-button"], ["button", "icon-button"], flags), style);
 		var node = new RenderNode(id, LayoutVisualKind.Box, computed.toLayoutStyle());

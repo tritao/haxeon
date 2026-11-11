@@ -28,8 +28,6 @@ class Spinner implements View {
 			kind:SpinnerKind = SpinnerKind.Ring, ?color:Color, speed:Float = 1.0) {
 		if (key == null || key.length == 0)
 			throw "Spinners require a stable key";
-		if (!SpinnerPainter.isValidKind(kind))
-			throw "Spinner kind is invalid";
 		if (!finite(speed) || speed <= 0.0)
 			throw "Spinner speed must be finite and positive";
 		this.key = key;

@@ -63,7 +63,7 @@ function main():Int {
  return 42;
 }');
 		var path = "out/bytes-ascii-edge.hl";
-		File.saveBytes(path, HlWriter.encode(compiler.compile("Main").module));
+		File.saveBytes(path, HlWriter.encode(compiler.compile("Main").module).flatten());
 		var status = Sys.command(Sys.getEnv("HAXEON_HASHLINK_DIR") + "/hl", [path]);
 		FileSystem.deleteFile(path);
 		FileSystem.deleteFile(nativePath);

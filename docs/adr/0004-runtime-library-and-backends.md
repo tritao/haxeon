@@ -169,6 +169,54 @@ They are deleted.
 When a 64-bit target is needed, Linear32 becomes a linear model parameterized by pointer width, behind the same
 interface.
 
+### 6. Allocation regions are a runtime API (added 2026-11-09)
+
+HashLink's GC already keeps a registered owner's blocks in pages of their own (`dfd802296`: owner classes,
+`hl_gc_owner_live_count`, and `hl_gc_owner_release`, which frees a class's pages after a full collection and only when
+nothing in them is live). We add a per-thread current owner, `hl_gc_push_owner` and `hl_gc_pop_owner`, and a stdlib
+`Region` (create, run, live count, release).
+
+Allocations made inside a region share no page with long-lived data. Release is checked, so it can never leave a dangling
+reference; an escape only keeps pages alive and is reported. Uses:
+
+- the compiler's per-stage temporaries (IR passes first, then lowering and typing; outputs are allocated outside);
+- applications: per-frame or per-request work.
+
+On Wasm GC a region is a no-op hint, because the engine owns allocation. On Linear32 it can follow later.
+
+Rejected:
+
+- **Explicit allocator parameters per allocation** are invasive across generics, closures and the stdlib.
+- **Region types with static escape checking** are unsound or too restrictive with `Dynamic`, reflection and closures.
+- **Releasing without the liveness check** risks memory corruption.
+
+The compiler worker is built with stock Haxe, so the API is reached through `@:hlNative` declarations, not syntax.
+
+The census of 2026-11-09 (`COMPILER_MEMORY.md`, page census by kind) found that most empty page space is in small blocks
+(16 to 255 bytes) that die and leave pages part full. Large buffers can account for at most about 0.35 GB, so a byte-buffer
+arena was rejected, and regions are the tool for this.
+
+Regions grow in levels. Each level after the first is gated on the measurements of the one before:
+
+1. **Own pages, checked release.** This is the API above. Release costs a full collection and is safe; an escape only keeps
+   pages alive.
+2. **Bump allocation in region pages.** Mixed sizes are packed contiguously instead of in per-size-class pages. The
+   collector needs an object-start bitmap per region page to find block boundaries. This is a speed and density gain;
+   only if profiles show allocation cost.
+3. **Release without a full collection.** At release, look for pointers into the region in two places only: the non-region
+   pages written while the region was open, and the thread stacks. This reuses the incremental collector's write
+   discovery (`gc_write_tracking.c`: kernel dirty-page tracking on Linux, plus the software barrier queue). If nothing
+   points in, drop the region at once. Release then costs in proportion to the pages written, not to the heap, which makes
+   per-stage and later per-function regions practical. Check mode verifies every fast release against a full collection
+   across the test suite, because write discovery missing a write here means memory corruption, not a missed mark. Only
+   if level 1 shows small escape counts.
+4. **Evacuation of escaped objects.** Escaped objects found by level 3 are copied out and the referencing slots updated
+   (the Immix idea, applied to regions). Objects referenced only from the conservatively scanned stacks stay pinned.
+   Only if real code escapes a few objects often enough to keep pages alive.
+
+None of this applies to Wasm GC, where the engine owns allocation. Linear32's own collector could adopt levels 1 and 2
+later.
+
 ## Migration
 
 Every step keeps the full driver suite green, the Wasm suites at their baseline or better, and HL/Wasm parity at its

@@ -83,12 +83,12 @@ builds. Set `COMPILER` to this checkpoint, `PROBES` to Script's
 ```sh
 mkdir -p "$COMPILER/out/wamr-profile"
 
-"$HAXE" --cwd "$COMPILER" -cp src --run compiler.tools.HaxeonCompiler \
+"$HAXE" --cwd "$COMPILER" common.hxml --run compiler.tools.HaxeonCompiler \
   --target=wasm32 --output=out/wamr-profile/runtime-neutral-probe.default.wasm \
   --entry=RuntimeNeutralProbe --root="$PROBES" \
   "$PROBES/RuntimeNeutralProbe.hx"
 
-"$HAXE" --cwd "$COMPILER" -cp src --run compiler.tools.HaxeonCompiler \
+"$HAXE" --cwd "$COMPILER" common.hxml --run compiler.tools.HaxeonCompiler \
   --target=wasm32 --wasm-runtime-neutral \
   --output=out/wamr-profile/runtime-neutral-probe.neutral.wasm \
   --entry=RuntimeNeutralProbe --root="$PROBES" \

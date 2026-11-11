@@ -43,7 +43,7 @@ function main():Int {
   if (((x + y) : Int) != 42 || ((-x) : Int) != -20 || !(x < y)) return 6;
   return 42;
 }');
-		File.saveBytes(Sys.args()[0], HlWriter.encode(compiler.compile("Main").module));
+		File.saveBytes(Sys.args()[0], HlWriter.encode(compiler.compile("Main").module).flatten());
 		rejectBadComparison();
 		rejectAmbiguousOperator();
 	}

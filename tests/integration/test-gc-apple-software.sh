@@ -37,13 +37,13 @@ done
 # HXI records here use LP64 layouts; target the runner's ABI explicitly.
 export HAXEON_GC_BOUNDARY_TARGET=arm64-apple-darwin
 for generator in HxiCallMain HxiRetainedMain; do
- (cd "$root"; HAXEON_GC_BOUNDARY_STRESS=1 "$root/.tools/haxe/haxe" -cp src -cp tests/runtime --run "$generator" "$work/$generator.hl" "$work/fixture.dylib")
+ (cd "$root"; HAXEON_GC_BOUNDARY_STRESS=1 "$root/.tools/haxe/haxe" common.hxml -cp tests/runtime --run "$generator" "$work/$generator.hl" "$work/fixture.dylib")
  for threads in 1 4; do
   status=0
   HL_GC_THREADS=$threads "$vm" "$work/$generator.hl" || status=$?
   if [[ $status != 42 ]]; then echo "FAIL: Apple $generator returned $status"; exit 1; fi
  done
 done
-"$root/.tools/haxe/haxe" -cp "$root/src" -cp "$root/tests/runtime" -main GcModuleLifetimeMain -hl "$work/modules.hl"
+"$root/.tools/haxe/haxe" -cp "$root/src" -cp "$root/lib/haxeon-io" -cp "$root/tests/runtime" -main GcModuleLifetimeMain -hl "$work/modules.hl"
 for threads in 1 4; do HL_GC_THREADS=$threads "$vm" "$work/modules.hl"; done
 echo 'PASS: experimental Apple AArch64 software GC validation suite'

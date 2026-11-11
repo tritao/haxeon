@@ -2,6 +2,7 @@ package compiler.ir.codec;
 
 import compiler.ir.Ir;
 import compiler.ir.IrFunction;
+import compiler.ir.IrFunction.IrValueArraySlotOperation;
 import compiler.ir.IrVerifier;
 import compiler.ir.SourceProvenance;
 import compiler.ir.SourceProvenance.SourceOrigin;
@@ -12,6 +13,7 @@ class IrFunctionStateEquality {
 		if (left == right)
 			return true;
 		if (left.name != right.name
+			|| !sameKind(left.kind, right.kind)
 			|| left.inlineHint != right.inlineHint
 			|| left.retention != right.retention
 			|| !IrVerifier.sameType(left.result, right.result)
@@ -45,6 +47,46 @@ class IrFunctionStateEquality {
 		}
 		return true;
 	}
+
+	static function sameKind(a:compiler.ir.IrFunction.IrFunctionKind, b:compiler.ir.IrFunction.IrFunctionKind):Bool
+		return switch [a, b] {
+			case [Ordinary, Ordinary]: true;
+			case [GenericSpecialization, GenericSpecialization]: true;
+			case [SourceLambda, SourceLambda]: true;
+			case [IterationAdapter, IterationAdapter]: true;
+			case [GeneratedHelper, GeneratedHelper]: true;
+			case [Provider(aSubject, aOperation), Provider(bSubject, bOperation)]: aSubject == bSubject && aOperation == bOperation;
+			case [OptionalScalar(aOrigin), OptionalScalar(bOrigin)]: aOrigin == bOrigin;
+			case [NullableScalarArguments, NullableScalarArguments]: true;
+			case [EnumEquality(aReflective), EnumEquality(bReflective)]: aReflective == bReflective;
+			case [EnumDynamicUnbox(a), EnumDynamicUnbox(b)]: IrVerifier.sameType(a, b);
+			case [EnumTagAdapter(a, ab), EnumTagAdapter(b, bb)]: ab == bb && IrVerifier.sameType(a, b);
+			case [ValueArraySlot(aNamespace, aElement, aOperation), ValueArraySlot(bNamespace, bElement, bOperation)]:
+				aNamespace == bNamespace && IrVerifier.sameType(aElement, bElement) && sameSlotOperation(aOperation, bOperation);
+			case [WasmClosureRestore, WasmClosureRestore]: true;
+			case [ScalarArguments, ScalarArguments]: true;
+			case [ClosureAdapter(aSource, aTarget), ClosureAdapter(bSource, bTarget)]:
+				IrVerifier.sameType(aSource, bSource) && IrVerifier.sameType(aTarget, bTarget);
+			case [ClosureCast(aTarget), ClosureCast(bTarget)]: IrVerifier.sameType(aTarget, bTarget);
+			case [ClosureVarargs(aTarget), ClosureVarargs(bTarget)]: IrVerifier.sameType(aTarget, bTarget);
+			default: false;
+		};
+
+	static function sameSlotPath(a:Array<String>, b:Array<String>):Bool {
+		if (a.length != b.length) return false;
+		for (i in 0...a.length) if (a[i] != b[i]) return false;
+		return true;
+	}
+
+	static function sameSlotOperation(a:IrValueArraySlotOperation, b:IrValueArraySlotOperation):Bool
+		return switch [a, b] {
+			case [Read(ai, ap, ac), Read(bi, bp, bc)], [Write(ai, ap, ac), Write(bi, bp, bc)]:
+				ai == bi && ac == bc && sameSlotPath(ap, bp);
+			case [Check(ap, ai), Check(bp, bi)]: ai == bi && sameSlotPath(ap, bp);
+			case [OptionalWrite(ap, at), OptionalWrite(bp, bt)]: sameSlotPath(ap, bp) && IrVerifier.sameType(at, bt);
+			case [RequireScalar(at), RequireScalar(bt)]: IrVerifier.sameType(at, bt);
+			default: false;
+		};
 
 	static function value(a:IrValue, b:IrValue):Bool
 		return a == b || (a.id == b.id && a.name == b.name && IrVerifier.sameType(a.type, b.type));
@@ -219,6 +261,16 @@ class IrFunctionStateEquality {
 			};
 			case Call(output, name, arguments): switch b {
 				case Call(otherOutput, otherName, otherArguments): value(output, otherOutput) && name == otherName && values(arguments, otherArguments);
+				default: false;
+			};
+			case Intrinsic(output, operation, arguments): switch b {
+				case Intrinsic(otherOutput, otherOperation, otherArguments):
+					value(output, otherOutput) && values(arguments, otherArguments) && switch [operation, otherOperation] {
+						case [EnumDynamicBox(aType), EnumDynamicBox(bType)], [EnumDynamicView(aType), EnumDynamicView(bType)],
+							[EnumTagBox(aType), EnumTagBox(bType)], [EnumTagUnbox(aType), EnumTagUnbox(bType)]:
+							IrVerifier.sameType(aType, bType);
+						default: false;
+					};
 				default: false;
 			};
 			case CNativeCall(output, name, arguments): switch b {

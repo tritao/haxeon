@@ -1,10 +1,7 @@
 package haxeon.ui.style;
 
-import haxeon.ui.Paint;
-import haxeon.ui.TextLayout;
-
 /** Work categories affected by a resolved style property. */
-enum abstract StyleImpact(Int) from Int to Int {
+enum abstract StyleImpact(Int) implements Flags {
 	var None = 0;
 	var Layout = 1 << 0;
 	var TextLayout = 1 << 1;

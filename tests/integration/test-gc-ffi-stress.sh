@@ -15,9 +15,9 @@ vm=${HL_JIT_TEST_VM:-$("$root/scripts/hashlink-path.sh")/hl}
 "${CC:-cc}" -D_DEFAULT_SOURCE -I"$root/vendor/hashlink/src" "$root/tests/native/gc_ffi_roots.c" -L"$library" -L"$root/out" -Wl,--allow-shlib-undefined -l:haxeon_runtime.hdll -lhl -lpthread -ldl -o "$work/roots"
 # The generators use the pinned compiler's complete standard library. The
 # generated HXI program resolves Haxeon's GC extern from its source root.
-(cd "$root"; HAXEON_GC_BOUNDARY_STRESS=1 "$root/.tools/haxe/haxe" -cp src -cp tests/runtime --run HxiCallMain "$work/hxi.hl" "$work/fixture.so")
-(cd "$root"; HAXEON_GC_BOUNDARY_STRESS=1 "$root/.tools/haxe/haxe" -cp src -cp tests/runtime --run HxiRetainedMain "$work/borrowed.hl" "$work/fixture.so")
-"$root/.tools/haxe/haxe" -cp "$root/src" -cp "$root/tests/runtime" -main GcModuleLifetimeMain -hl "$work/modules.hl"
+(cd "$root"; HAXEON_GC_BOUNDARY_STRESS=1 "$root/.tools/haxe/haxe" common.hxml -cp tests/runtime --run HxiCallMain "$work/hxi.hl" "$work/fixture.so")
+(cd "$root"; HAXEON_GC_BOUNDARY_STRESS=1 "$root/.tools/haxe/haxe" common.hxml -cp tests/runtime --run HxiRetainedMain "$work/borrowed.hl" "$work/fixture.so")
+"$root/.tools/haxe/haxe" -cp "$root/src" -cp "$root/lib/haxeon-io" -cp "$root/tests/runtime" -main GcModuleLifetimeMain -hl "$work/modules.hl"
 export HL_GC_INCREMENTAL_TEST_SOFTWARE=1 HL_GC_INCREMENTAL_VALIDATE=1 HL_GC_MIN_TRIGGER=65536
 export LD_LIBRARY_PATH="$library:$root/out${LD_LIBRARY_PATH:+:$LD_LIBRARY_PATH}"
 export LD_PRELOAD="$work/no-proc.so"

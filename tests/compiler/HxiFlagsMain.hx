@@ -12,7 +12,11 @@ class HxiFlagsMain {
 			+ 'flags ShortFlags : u16 { NONE = 0; FIRST = 1; SECOND = 2; BOTH = 3; } '
 			+ 'flags WordFlags : u32 { NONE = 0; FIRST = 1; SECOND = 2; BOTH = 3; HIGH = 0x80000000; } '
 			+ 'flags WideFlags : u64 { NONE = 0; FIRST = 1; LOW = 1 << 31; HIGH = 1 << 63; BOTH = (1 << 63) | 1; } '
-			+ 'extern fn check_wide(value: WideFlags) -> WideFlags; }';
+			+ 'extern fn check_wide(value: WideFlags) -> WideFlags; '
+			+ 'extern fn read_word(value: ptr<WordFlags> @out) -> i32; '
+			+ 'extern fn mutate_word(value: ptr<WordFlags> @inout) -> i32; '
+			+ 'extern fn send_words(values: ptr<const<WordFlags>> @in_array("count"), count: u32) -> void; '
+			+ 'extern fn read_words(values: ptr<WordFlags> @out_array("count"), count: u32) -> void; }';
 		var model = HxiParser.parse("flag-widths.hxi", source),
 			projection = HxiProjection.source(model),
 			natives = HxiProjection.cNatives(model);
@@ -31,12 +35,14 @@ class HxiFlagsMain {
 			&& projection.indexOf("haxe.Int64.make(0, -2147483648)") >= 0
 			&& projection.indexOf("function high():WideFlags") >= 0
 			&& projection.indexOf("function contains(flag:WideFlags):Bool return haxe.Int64.compare(haxe.Int64.and(this, flag), flag) == 0") >= 0
-			&& natives.length == 1,
-			"flags should project to nominal bitwise-friendly types without narrowing the ABI");
-		var compiler = new Compiler();
+			&& natives.length == 6,
+			"flags should project to nominal bitwise-friendly types without narrowing the ABI; natives="
+			+ [for (native in natives) native.name].join(","));
+		var compiler = new Compiler(null, compiler.runtime.CompilerIntrinsics.configuration());
 		compiler.addStandardLibrarySourceRoot("stdlib");
 		compiler.addFfiInterface("flag-widths.hxi", source);
-		compiler.update("FlagsMain.hx", 'import flag_widths; function main():Int { return WideFlags.low().contains(WideFlags.low()) ? 42 : 0; }');
+		compiler.update("FlagsMain.hx",
+			'import flag_widths.*; function main():Int { var first=read_word(); var updated=mutate_word(first.value); send_words([updated.value]); var values=read_words(2); return WideFlags.low().contains(WideFlags.low()) ? values[0].rawValue() : 0; }');
 		compiler.compile("FlagsMain");
 
 		expectError('interface bad @target("x86_64-linux-gnu") { flags value : i32 { A = 1; } }', "unsigned 8/16/32/64-bit integer representation");

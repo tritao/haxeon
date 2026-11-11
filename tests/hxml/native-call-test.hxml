@@ -1,4 +1,4 @@
--cp src
+common.hxml
 -cp tests/runtime
 -main NativeCallMain
 -hl out/native-call-test.hl

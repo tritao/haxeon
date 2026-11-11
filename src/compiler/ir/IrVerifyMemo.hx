@@ -4,7 +4,7 @@ package compiler.ir;
  * One thing the verifier read about the rest of the program while it checked a function: the table, the key and the answer it got, kept
  * by reference. Whether a later answer is the same is decided by identity first and by the printed value only when identity differs.
  */
-final class IrVerifyRead {
+class IrVerifyRead {
 	public final table:String;
 	public final key:String;
 	public final value:Dynamic;
@@ -24,12 +24,18 @@ final class IrVerifyRead {
  * The verifier reads the program through `IrVerifyTable`s; every `get` and `exists` of a function's check is noted. A table has no
  * way to iterate, so a function-level check cannot read what it did not record.
  */
-final class IrVerifyMemo {
+class IrVerifyMemo {
 	final accepted:Map<String, {fn:IrFunction, reads:Array<IrVerifyRead>}> = [];
 	final tables:Map<String, String->Dynamic> = [];
 	var printed:haxe.ds.ObjectMap<Dynamic, String> = new haxe.ds.ObjectMap();
-	final current:Map<String, Map<String, IrVerifyRead>> = [];
-	var recordingFunction = false;
+
+	/** What the function being checked has read, one map per table, in the order the tables were first used. */
+	final current:Array<Map<String, IrVerifyRead>> = [];
+
+	final currentByTable:Map<String, Map<String, IrVerifyRead>> = [];
+
+	/** Whether the tables are noting their reads: from `begin` to `accept` or `abandon`. */
+	public var recordingFunction = false;
 
 	/** The functions whose inline-enum check passed, and what that check read besides the function (see `IrVerifier`). */
 	public final enumChecked:Map<String, IrFunction> = [];
@@ -101,28 +107,23 @@ final class IrVerifyMemo {
 				enumChecked.remove(name);
 	}
 
-	/** Called by the tables of `IrVerifier` for every read made while a function is checked. */
-	public function note(table:String, key:String, value:Dynamic):Void {
-		if (!recordingFunction)
-			return;
-		var reads = current.get(table);
+	/** The map a table notes its reads in; the same one for every call with the same name, so a table asks once. */
+	public function readsOf(table:String):Map<String, IrVerifyRead> {
+		var reads = currentByTable.get(table);
 		if (reads == null) {
 			reads = [];
-			current.set(table, reads);
+			currentByTable.set(table, reads);
+			current.push(reads);
 		}
-		if (!reads.exists(key))
-			reads.set(key, new IrVerifyRead(table, key, value));
+		return reads;
 	}
 
 	/** The printed form of an answer, once per object per build: a signature read by a thousand callers is printed once. */
 	function print(value:Dynamic):String {
 		if (value == null)
 			return "-";
-		switch Type.typeof(value) {
-			case TObject, TClass(_), TEnum(_):
-			default:
-				return Std.string(value);
-		}
+		if (!Reflect.isObject(value) && !Std.isOfType(value, String))
+			return Std.string(value);
 		var known = printed.get(value);
 		if (known == null) {
 			known = Std.string(value);

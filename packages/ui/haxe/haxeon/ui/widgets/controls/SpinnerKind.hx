@@ -1,13 +1,13 @@
 package haxeon.ui.widgets.controls;
 
 /** Procedural visual used by Spinner. */
-enum abstract SpinnerKind(Int) from Int to Int {
+enum SpinnerKind implements Hashable {
 	/** A rotating open arc. */
-	var Ring = 0;
+	Ring;
 	/** Twelve dots with a moving highlight. */
-	var Dots = 1;
+	Dots;
 	/** Twelve radial bars with a moving highlight. */
-	var Bars = 2;
+	Bars;
 	/** Two expanding and fading circles. */
-	var Pulse = 3;
+	Pulse;
 }

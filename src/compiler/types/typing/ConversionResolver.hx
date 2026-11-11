@@ -1,5 +1,6 @@
 package compiler.types.typing;
 
+import compiler.types.TypedAst.TypedFunctionRole;
 import compiler.Diagnostic;
 import compiler.Diagnostic.CompileError;
 import compiler.Source.SourceSpan;
@@ -95,6 +96,8 @@ class ConversionResolver {
 			case Identity: ValueCopy.bind(session, value, expected);
 			case IntToFloat:
 				new TypedExpression(TIntToFloat(value), TFloat, value.span);
+			case AbstractIntToFloat:
+				new TypedExpression(TIntToFloat(coerce(value, TInt, context, code)), TFloat, value.span);
 			case IntToInt64:
 				new TypedExpression(TIntToInt64(value), TInt64, value.span);
 			case FromDynamic:
@@ -225,7 +228,7 @@ class ConversionResolver {
 			}
 			statements.push(TReturn(result, span));
 			session.closureConversion.addFunction({
-				name: helper,
+				name: helper, role: ProviderFunction(target, compiler.Provides.ProviderOperation.DynamicStructure),
 				origin: origin,
 				originKind: compiler.types.TypedAst.FunctionOriginKind.Helper,
 				owner: null,
@@ -305,7 +308,7 @@ class ConversionResolver {
 			var converted = coerce(call, result, "iteration method result");
 			session.closureConversion.addEnvironment(environment, captures);
 			session.closureConversion.addFunction({
-				name: functionName,
+				name: functionName, role: IterationFunction,
 				origin: context,
 				originKind: compiler.types.TypedAst.FunctionOriginKind.Helper,
 				owner: environment,
@@ -436,7 +439,7 @@ class ConversionResolver {
 			return new TypedExpression(TCast(value), expected, span);
 		session.closureConversion.addEnvironment(environmentName, captures);
 		session.closureConversion.addFunction({
-			name: adapterName,
+			name: adapterName, role: OtherFunction,
 			origin: contextName,
 			originKind: compiler.types.TypedAst.FunctionOriginKind.Helper,
 			owner: environmentName,

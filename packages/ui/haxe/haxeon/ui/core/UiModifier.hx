@@ -1,11 +1,11 @@
 package haxeon.ui.core;
 
 /** Modifier bit values shared with NativeKit input events. */
-class UiModifier {
-	public static inline var Shift:Int = 1 << 0;
-	public static inline var Control:Int = 1 << 1;
-	public static inline var Alt:Int = 1 << 2;
-	public static inline var Super:Int = 1 << 3;
-	public static inline var CapsLock:Int = 1 << 4;
-	public static inline var NumLock:Int = 1 << 5;
+enum abstract UiModifier(Int) implements Flags {
+	var Shift = 1 << 0;
+	var Control = 1 << 1;
+	var Alt = 1 << 2;
+	var Super = 1 << 3;
+	var CapsLock = 1 << 4;
+	var NumLock = 1 << 5;
 }

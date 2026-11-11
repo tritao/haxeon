@@ -100,7 +100,7 @@ class IrNestedScalarReplacement {
 						default:
 					}
 		}
-		var graph = new IrGraph(new IrFunction("nested-scalar-check", [], Void, blocks));
+		var graph = new IrGraph(new IrFunction("nested-scalar-check", [], Void, blocks, Ordinary));
 		if (!onlyFieldUses(blocks, aliases, home, position, hasHandlers && !unchangedAfterHandlers(blocks, aliases, home, graph), graph)) return nextValue;
 		var layout = new IrInlineValueLayout(objects), slots = layout.slots(Obj(typeName)), fields:Array<IrObjectField> = [];
 		for (slot in slots) {
@@ -163,7 +163,7 @@ class IrNestedScalarReplacement {
 		if (copiedHome == null) throw "Missing nested scalar replacement block";
 		var copiedPosition = IrScalarReplacement.allocationPosition(copiedHome, root);
 		if (copiedPosition < 0) return nextValue;
-		var copiedGraph = new IrGraph(new IrFunction("nested-scalar-replacement", [], Void, copies)),
+		var copiedGraph = new IrGraph(new IrFunction("nested-scalar-replacement", [], Void, copies, Ordinary)),
 			localSubstitutions:Map<Int, IrValue> = [for (id => value in substitutions) id => value],
 			result = IrScalarReplacement.replace(copies, copiedGraph, IrScalarReplacement.dominanceFrontiers(copiedGraph),
 				IrScalarReplacement.dominatorChildren(copiedGraph), {object: root, typeName: typeName, block: copiedHome, position: copiedPosition},

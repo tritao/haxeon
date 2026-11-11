@@ -58,7 +58,7 @@ class DirectCallPatchMain {
 		var compiler = new Compiler();
 		compiler.update("Main.hx", program(1, false));
 		var build = compiler.compile("Main"),
-			live = Runtime.load(HlWriter.encode(build.module), build.runtimeIdentity);
+			live = Runtime.load(HlWriter.encode(build.module).flatten(), build.runtimeIdentity);
 		var check = (label:String, v:Int, extra:Bool) -> {
 			for (name => want in expected(v, extra)) {
 				var got = Runtime.callInt(live, build.functionIds.get(name));
@@ -105,7 +105,7 @@ class DirectCallPatchMain {
 					throw 'After ${edit.label} the entry of $name is in state ${Runtime.entryState(live, build.functionIds.get(name))}, not the atomic jump';
 		}
 		// A full module built from the last source runs the same, so the patched run was not special.
-		var fresh = Runtime.load(HlWriter.encode(build.module), build.runtimeIdentity);
+		var fresh = Runtime.load(HlWriter.encode(build.module).flatten(), build.runtimeIdentity);
 		var reloaded = Runtime.callInt(fresh, build.functionIds.get("Main.callLeaf"));
 		Runtime.dispose(fresh);
 		if (reloaded != expected(1, true).get("Main.callLeaf"))

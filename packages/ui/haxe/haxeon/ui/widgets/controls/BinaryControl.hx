@@ -21,7 +21,6 @@ import haxeon.ui.core.State;
 import haxeon.ui.core.UiEvent;
 import haxeon.ui.core.View;
 import haxeon.ui.style.StyleState;
-import haxeon.ui.style.StyleStateUtil;
 import haxeon.ui.style.StyleTarget;
 import haxeon.ui.style.StyleProperty;
 import haxeon.ui.semantics.AccessibilityAction;
@@ -81,8 +80,8 @@ class BinaryControl implements View implements Observable {
 	function buildControl(context:BuildContext, nodeId:haxeon.ui.core.WidgetId,
 			invalidation:Null<State<Bool>>):RenderNode {
 		var flags = context.interactionStates.get(nodeId);
-		flags = StyleStateUtil.withState(flags, StyleState.Checked, checked);
-		flags = StyleStateUtil.withState(flags, StyleState.Disabled, !enabled);
+		flags = (checked ? flags.insert(StyleState.Checked) : flags.remove(StyleState.Checked));
+		flags = (!enabled ? flags.insert(StyleState.Disabled) : flags.remove(StyleState.Disabled));
 		var target = new StyleTarget(toggle ? "toggle" : "checkbox", key, key,
 			null, [toggle ? "toggle" : "checkbox"], flags);
 		var computed = context.styleResolver.resolve(target, context.inheritedStyle, context.theme.styles,
@@ -184,7 +183,7 @@ class BinaryControl implements View implements Observable {
 			if (checked)
 				semantics.states |= AccessibilityState.Checked;
 			else
-				semantics.states &= ~AccessibilityState.Checked;
+				semantics.states = semantics.states.remove(AccessibilityState.Checked);
 			if (onChange != null) {
 				onChange(checked);
 				if (invalidation != null) invalidation.update(!invalidation.value);

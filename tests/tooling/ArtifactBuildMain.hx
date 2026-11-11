@@ -15,8 +15,9 @@ class ArtifactBuildMain {
 		FileSystem.createDirectory(root);
 		var main = root + "/Main.hx";
 		var finalSource = "class Main { public static function main():Int { return \"aa\".length; } }";
-		// Intermediate revision: a new method of the same class and a new string constant.
-		var intermediateSource = "class Main { public static function main():Int { return \"bbbbbbbb\".length + extra(); } static function extra():Int { return 3; } }";
+		// Intermediate revision: a new method of the same class and a new string constant. The method is recursive so it is not
+		// inlined: a function nothing reaches is not in the module.
+		var intermediateSource = "class Main { public static function main():Int { return \"bbbbbbbb\".length + extra(0); } static function extra(n:Int):Int { return n > 0 ? extra(n - 1) : 3; } }";
 		File.saveContent(main, finalSource);
 		var args = ["--target=hl", "--entry=Main", "--root=" + root];
 

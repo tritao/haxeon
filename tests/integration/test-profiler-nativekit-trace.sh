@@ -75,7 +75,7 @@ cmake --build "$scratch/nativekit" > "$scratch/nativekit-build.log" 2>&1 || {
 
 (
 	cd "$repo_dir"
-	.tools/haxe/haxe -cp src --run compiler.tools.HaxeonCompiler \
+	.tools/haxe/haxe common.hxml --run compiler.tools.HaxeonCompiler \
 		--output="$scratch/probe.hl" \
 		--entry=TraceProbe \
 		--root="$scratch/src" \

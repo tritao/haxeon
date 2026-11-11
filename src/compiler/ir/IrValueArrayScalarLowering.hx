@@ -80,6 +80,6 @@ class IrValueArrayScalarLowering {
 			// Scan the cloned body too: push and insert helpers call the element setter.
 			index++;
 		}
-		return changed ? new IrFunction(fn.name, fn.arguments, fn.result, blocks, fn.debugBindings, fn.inlineHint, fn.retention) : fn;
+		return changed ? fn.withBlocks(blocks) : fn;
 	}
 }

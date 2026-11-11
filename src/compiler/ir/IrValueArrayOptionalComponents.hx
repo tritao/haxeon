@@ -1,5 +1,7 @@
 package compiler.ir;
 
+import compiler.Provides.ProviderOperation;
+import compiler.Provides.ProviderOperations;
 import compiler.ir.Ir;
 import compiler.ir.SourceProvenance;
 import compiler.ir.SourceProvenance.Located;
@@ -87,9 +89,9 @@ class IrValueArrayOptionalComponents {
 			shiftValue = shift.call(getName(), [shiftArray, shiftIndex], wrapper);
 		shift.call("__value_array_remove_at", [shiftArray, shiftIndex], Void);
 		shift.returnValue(shiftValue);
-		return [new IrFunction(getName(), get.arguments, wrapper, get.blocks), new IrFunction(setName(), set.arguments, Void, set.blocks),
-			new IrFunction(pushName(), push.arguments, I32, push.blocks), new IrFunction(insertName(), insert.arguments, Void, insert.blocks),
-			new IrFunction(unshiftName(), unshift.arguments, I32, unshift.blocks), new IrFunction(popName(), pop.arguments, wrapper, pop.blocks),
-			new IrFunction(shiftName(), shift.arguments, wrapper, shift.blocks)];
+		return [new IrFunction(getName(), get.arguments, wrapper, get.blocks, Provider(TypeKey.of(element), ProviderOperations.detailed(ProviderOperation.ValueArrayElement, getName()))), new IrFunction(setName(), set.arguments, Void, set.blocks, Provider(TypeKey.of(element), ProviderOperations.detailed(ProviderOperation.ValueArrayElement, setName()))),
+			new IrFunction(pushName(), push.arguments, I32, push.blocks, Provider(TypeKey.of(element), ProviderOperations.detailed(ProviderOperation.ValueArrayElement, pushName()))), new IrFunction(insertName(), insert.arguments, Void, insert.blocks, Provider(TypeKey.of(element), ProviderOperations.detailed(ProviderOperation.ValueArrayElement, insertName()))),
+			new IrFunction(unshiftName(), unshift.arguments, I32, unshift.blocks, Provider(TypeKey.of(element), ProviderOperations.detailed(ProviderOperation.ValueArrayElement, unshiftName()))), new IrFunction(popName(), pop.arguments, wrapper, pop.blocks, Provider(TypeKey.of(element), ProviderOperations.detailed(ProviderOperation.ValueArrayElement, popName()))),
+			new IrFunction(shiftName(), shift.arguments, wrapper, shift.blocks, Provider(TypeKey.of(element), ProviderOperations.detailed(ProviderOperation.ValueArrayElement, shiftName())))];
 	}
 }

@@ -8,6 +8,7 @@ import haxe.io.Bytes;
 import haxe.io.BytesInput;
 import haxe.io.BytesOutput;
 import compiler.ir.IrFunction;
+import compiler.ir.IrFunction.IrValueArraySlotOperation;
 import compiler.ir.codec.IrInstructionCodec;
 import compiler.ir.codec.IrTerminatorCodec;
 import compiler.ir.codec.IrTypeCodec;
@@ -20,7 +21,7 @@ import compiler.ir.SourceProvenance.SourceOrigin;
 
 /** Deterministic framing for a complete SSA IR function. */
 class IrFunctionStateCodec {
-	static inline final VERSION = 12;
+	static inline final VERSION = 18;
 	static inline final MAX_BLOCKS = 0x100000;
 	static inline final MAX_INSTRUCTIONS = 0x1000000;
 
@@ -67,7 +68,7 @@ class IrFunctionStateCodec {
 
 	/**
 	 * Identifies what a function does, leaving out its name and where its code came from: two functions with the same
-	 * fingerprint run the same code, wherever their source sits and whatever they are called. Lambda ordinals are left out of
+	 * fingerprint run the same code, wherever their source sits and whatever they are called. SourceLambda ordinals are left out of
 	 * the names it mentions (`IrTypeCodec.withoutOrdinals`), so a lambda that only moved among its siblings keeps its
 	 * fingerprint even though its environment and nested lambdas are renamed with it (see `LambdaAlignment`).
 	 */
@@ -102,6 +103,43 @@ class IrFunctionStateCodec {
 		IrTypeCodec.writeType(output, fn.result, 0, erase);
 		output.writeByte(fn.inlineHint ? 1 : 0);
 		output.writeByte(fn.retention);
+		switch fn.kind {
+			case Ordinary: output.writeByte(0);
+			case ClosureAdapter(source, target):
+				output.writeByte(1);
+				IrTypeCodec.writeType(output, source, 0, erase);
+				IrTypeCodec.writeType(output, target, 0, erase);
+			case ClosureCast(target):
+				output.writeByte(2);
+				IrTypeCodec.writeType(output, target, 0, erase);
+			case ClosureVarargs(target):
+				output.writeByte(3);
+				IrTypeCodec.writeType(output, target, 0, erase);
+			case GenericSpecialization: output.writeByte(4);
+			case SourceLambda: output.writeByte(5);
+			case IterationAdapter: output.writeByte(9);
+			case GeneratedHelper: output.writeByte(10);
+			case OptionalScalar(original):
+				output.writeByte(15);
+				output.writeByte(original == null ? 0 : 1);
+				if (original != null) IrTypeCodec.writeString(output, original);
+			case NullableScalarArguments: output.writeByte(17);
+			case WasmClosureRestore: output.writeByte(19);
+			case ScalarArguments: output.writeByte(20);
+			case ValueArraySlot(namespace, element, operation):
+				output.writeByte(22);
+				// The namespace is a linkage identifier, not part of the helper's behavior.
+				output.writeInt32(identified ? namespace : 0);
+				IrTypeCodec.writeType(output, element, 0, erase);
+				writeSlotOperation(output, operation, erase);
+			case EnumEquality(reflective): output.writeByte(23); output.writeByte(reflective ? 1 : 0);
+			case EnumDynamicUnbox(type): output.writeByte(24); IrTypeCodec.writeType(output, type, 0, erase);
+			case EnumTagAdapter(type, box): output.writeByte(25); IrTypeCodec.writeType(output, type, 0, erase); output.writeByte(box ? 1 : 0);
+			case Provider(subject, operation):
+				output.writeByte(26);
+				IrTypeCodec.writeString(output, subject.toString());
+				IrTypeCodec.writeString(output, operation);
+		}
 		var debugBindings = identified ? fn.debugBindings : [];
 		output.writeInt32(debugBindings.length);
 		for (binding in debugBindings) {
@@ -158,7 +196,7 @@ class IrFunctionStateCodec {
 			if (input.readString(3) != "IRF")
 				throw "Invalid IR function state";
 			var version = input.readByte();
-			if (version < 1 || version > VERSION)
+			if (version != VERSION)
 				throw "Unsupported IR function state version";
 			var valuesArray = IrValueTableCodec.decode(readBytes(input, bytes.length)),
 				values = IrValueTableCodec.byId(valuesArray),
@@ -171,6 +209,40 @@ class IrFunctionStateCodec {
 				debugBindings:Array<compiler.ir.IrFunction.IrDebugBinding> = [];
 			var inlineHint = version >= 9 && input.readByte() != 0,
 				retention:compiler.ir.IrFunction.IrRetention = version >= 10 ? input.readByte() : Reachable;
+			var kind:compiler.ir.IrFunction.IrFunctionKind = switch input.readByte() {
+				case 0: Ordinary;
+				case 1: ClosureAdapter(IrTypeCodec.readType(input, bytes.length, 0), IrTypeCodec.readType(input, bytes.length, 0));
+				case 2: ClosureCast(IrTypeCodec.readType(input, bytes.length, 0));
+				case 3: ClosureVarargs(IrTypeCodec.readType(input, bytes.length, 0));
+				case 4: GenericSpecialization;
+				case 5: SourceLambda;
+				case 9: IterationAdapter;
+				case 10: GeneratedHelper;
+				case 15:
+					var present = input.readByte();
+					if (present != 0 && present != 1) throw "Invalid optional scalar origin";
+					OptionalScalar(present == 0 ? null : IrTypeCodec.readString(input, bytes.length));
+				case 17: NullableScalarArguments;
+				case 19: WasmClosureRestore;
+				case 20: ScalarArguments;
+				case 22:
+					var namespace = input.readInt32();
+					if (namespace < 0) throw "Invalid value-array slot namespace";
+					ValueArraySlot(namespace, IrTypeCodec.readType(input, bytes.length, 0), readSlotOperation(input, bytes.length));
+				case 23:
+					var flag = input.readByte();
+					if (flag != 0 && flag != 1) throw "Invalid enum equality role";
+					EnumEquality(flag == 1);
+				case 24: EnumDynamicUnbox(IrTypeCodec.readType(input, bytes.length, 0));
+				case 25:
+					var type = IrTypeCodec.readType(input, bytes.length, 0), flag = input.readByte();
+					if (flag != 0 && flag != 1) throw "Invalid enum tag adapter role";
+					EnumTagAdapter(type, flag == 1);
+				case 26:
+					var subject = compiler.ir.TypeKey.fromPersisted(IrTypeCodec.readString(input, bytes.length));
+					Provider(subject, cast IrTypeCodec.readString(input, bytes.length));
+				default: throw "Invalid IR function kind";
+			};
 			if (version >= 3) {
 				var bindingCount = input.readInt32();
 				if (bindingCount < 0 || bindingCount > IrValueTableCodec.MAX_VALUES)
@@ -230,7 +302,7 @@ class IrFunctionStateCodec {
 			}
 			if (input.position != bytes.length)
 				throw "Trailing IR function state data";
-			return new IrFunction(name, arguments, result, blocks, debugBindings, inlineHint, retention);
+			return new IrFunction(name, arguments, result, blocks, kind, debugBindings, inlineHint, retention);
 		} catch (error:haxe.io.Eof) {
 			throw "Truncated IR function state";
 		}
@@ -322,7 +394,7 @@ class IrFunctionStateCodec {
 				collectValue(output, values);
 				collectValue(left, values);
 				collectValue(right, values);
-			case Call(output, _, arguments), CNativeCall(output, _, arguments), CallClosure(output, _, arguments), MethodCall(output, _, _, arguments, _),
+			case Call(output, _, arguments), CNativeCall(output, _, arguments), Intrinsic(output, _, arguments), CallClosure(output, _, arguments), MethodCall(output, _, _, arguments, _),
 				MakeEnum(output, _, _, arguments):
 				collectValue(output, values);
 				for (argument in arguments)
@@ -367,6 +439,54 @@ class IrFunctionStateCodec {
 				throw "Conflicting IR value identity";
 		}
 		values.set(id, value);
+	}
+
+	static function writeSlotPath(output:BytesOutput, path:Array<String>):Void {
+		output.writeInt32(path.length);
+		for (part in path) IrTypeCodec.writeString(output, part);
+	}
+
+	static function readSlotPath(input:BytesInput, limit:Int):Array<String> {
+		var count = input.readInt32();
+		if (count < 0 || count > Std.int((limit - input.position) / 4)) throw "Invalid value-array slot path";
+		return [for (_ in 0...count) IrTypeCodec.readString(input, limit)];
+	}
+
+	static function writeSlotOperation(output:BytesOutput, operation:IrValueArraySlotOperation, erase:Bool):Void {
+		switch operation {
+			case Read(slot, path, carrier), Write(slot, path, carrier):
+				output.writeByte(switch operation { case Read(_, _, _): 0; default: 1; });
+				output.writeInt32(slot);
+				writeSlotPath(output, path);
+				output.writeByte(carrier ? 1 : 0);
+			case Check(path, includeSelf):
+				output.writeByte(2); writeSlotPath(output, path); output.writeByte(includeSelf ? 1 : 0);
+			case OptionalWrite(path, type):
+				output.writeByte(3); writeSlotPath(output, path); IrTypeCodec.writeType(output, type, 0, erase);
+			case RequireScalar(type):
+				output.writeByte(4); IrTypeCodec.writeType(output, type, 0, erase);
+		}
+	}
+
+	static function readSlotBool(input:BytesInput):Bool {
+		var value = input.readByte();
+		if (value != 0 && value != 1) throw "Invalid value-array slot flag";
+		return value == 1;
+	}
+
+	static function readSlotOperation(input:BytesInput, limit:Int):IrValueArraySlotOperation {
+		var tag = input.readByte();
+		return switch tag {
+			case 0, 1:
+				var slot = input.readInt32();
+				if (slot < 0) throw "Invalid value-array slot";
+				var path = readSlotPath(input, limit), carrier = readSlotBool(input);
+				tag == 0 ? Read(slot, path, carrier) : Write(slot, path, carrier);
+			case 2: Check(readSlotPath(input, limit), readSlotBool(input));
+			case 3: OptionalWrite(readSlotPath(input, limit), IrTypeCodec.readType(input, limit, 0));
+			case 4: RequireScalar(IrTypeCodec.readType(input, limit, 0));
+			default: throw "Invalid value-array slot operation";
+		};
 	}
 
 	static function writeBytes(output:BytesOutput, bytes:Bytes):Void {

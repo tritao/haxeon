@@ -38,7 +38,7 @@ write_workspace() {
 }
 
 run_cli() {
-	HAXEON_HOME="$home" HAXEON_SOURCE_CACHE="$source_cache" HAXEON_COMPILER_SOURCE="$repo_dir/src" "$haxe" --cwd "$repo_dir" -cp "$repo_dir/src" --run tools.HaxeonCli "$@"
+	HAXEON_HOME="$home" HAXEON_SOURCE_CACHE="$source_cache" HAXEON_COMPILER_SOURCE="$repo_dir/src" "$haxe" --cwd "$repo_dir" -cp "$repo_dir/src" -cp "$repo_dir/lib/haxeon-io" --run tools.HaxeonCli "$@"
 }
 
 # A shard count that is not a whole number of at least 1 is rejected before anything runs.

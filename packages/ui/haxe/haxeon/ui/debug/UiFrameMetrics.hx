@@ -1,5 +1,7 @@
 package haxeon.ui.debug;
 
+import haxeon.ui.core.UiDirtyFlag;
+
 /** Timing, style-cache, and style-invalidation counters for the most recent UI frame. */
 class UiFrameMetrics {
 	public final frameNumber:Int;
@@ -10,7 +12,7 @@ class UiFrameMetrics {
 	public final cachedStyleCount:Int;
 	public final styleChangedNodes:Int;
 	public final styleUnchangedNodes:Int;
-	public final styleInvalidationFlags:Int;
+	public final styleInvalidationFlags:UiDirtyFlag;
 	public final layoutInvalidatedNodes:Int;
 	public final textLayoutInvalidatedNodes:Int;
 	public final paintInvalidatedNodes:Int;
@@ -58,7 +60,7 @@ class UiFrameMetrics {
 
 	public function new(frameNumber:Int, nodeCount:Int, styleResolutions:Int,
 			styleCacheHits:Int, styleCacheMisses:Int, cachedStyleCount:Int,
-			styleChangedNodes:Int, styleUnchangedNodes:Int, styleInvalidationFlags:Int,
+			styleChangedNodes:Int, styleUnchangedNodes:Int, styleInvalidationFlags:UiDirtyFlag,
 			layoutInvalidatedNodes:Int, textLayoutInvalidatedNodes:Int,
 			paintInvalidatedNodes:Int, compositeInvalidatedNodes:Int,
 			semanticsInvalidatedNodes:Int,

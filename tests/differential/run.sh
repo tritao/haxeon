@@ -34,7 +34,7 @@ realtime_compile() {
 	if [[ -n ${HAXEON_MAIN_HL:-} && -f $HAXEON_MAIN_HL ]]; then
 		(cd "$root_dir" && run_hl "$root_dir/out:$hashlink_dir" "$HAXEON_MAIN_HL" "$1" "$2")
 	else
-		"$haxe" --cwd "$root_dir" -cp src --run Main "$1" "$2"
+		"$haxe" --cwd "$root_dir" common.hxml --run Main "$1" "$2"
 	fi
 }
 

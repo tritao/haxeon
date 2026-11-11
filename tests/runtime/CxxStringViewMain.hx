@@ -17,6 +17,6 @@ class CxxStringViewMain {
 		compiler.update("cxx_viewFunctions.hx", File.getContent(functionsPath));
 		compiler.update("Main.hx",
 			'import cxx_view; import Text; import cxx_viewFunctions; function main():Int { var text = Text.fromNative(cxx_view.__cxx_cxxview__acquire()); var value = "hé"; return text.count(value) == 3 && cxx_viewFunctions.count(value) == 3 ? 42 : 1; }');
-		File.saveBytes(output, HlWriter.encode(compiler.compile("Main").module));
+		File.saveBytes(output, HlWriter.encode(compiler.compile("Main").module).flatten());
 	}
 }

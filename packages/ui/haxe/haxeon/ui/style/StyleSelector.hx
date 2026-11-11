@@ -7,10 +7,10 @@ class StyleSelector {
 	public final idValue:Null<String>;
 	public final classNames:Array<String>;
 	public final tagNames:Array<String>;
-	public final stateMask:Int;
+	public final stateMask:StyleState;
 
 	function new(?widgetType:String, ?keyValue:String, ?idValue:String,
-			?classNames:Array<String>, ?tagNames:Array<String>, stateMask:Int = 0) {
+			?classNames:Array<String>, ?tagNames:Array<String>, stateMask:StyleState = StyleState.empty()) {
 		this.widgetType = widgetType;
 		this.keyValue = keyValue;
 		this.idValue = idValue;
@@ -63,9 +63,13 @@ class StyleSelector {
 	}
 
 	public function hasState():Bool
-		return stateMask != 0;
+		return !stateMask.isEmpty();
 
-	public function matches(target:StyleTarget):Bool {
+	public inline function matches(target:StyleTarget):Bool
+		return matchesWithoutStates(target) && target.states.contains(stateMask);
+
+	/** Structural matching for queries about rules that may become active. */
+	public function matchesWithoutStates(target:StyleTarget):Bool {
 		if (target == null)
 			return false;
 		if (widgetType != null && widgetType != target.widgetType)
@@ -80,13 +84,13 @@ class StyleSelector {
 		for (name in tagNames)
 			if (!target.hasTag(name))
 				return false;
-		return (target.states & stateMask) == stateMask;
+		return true;
 	}
 
 	/** Deterministic cascade specificity, used only between matching rules in one layer. */
 	public function specificity():Int
 		return (idValue == null ? 0 : 100) +
-			(classNames.length + tagNames.length + StyleStateUtil.count(stateMask)) * 10 +
+			(classNames.length + tagNames.length + countStates(stateMask)) * 10 +
 			(widgetType == null ? 0 : 1);
 
 	public function describe():String {
@@ -100,14 +104,22 @@ class StyleSelector {
 		for (name in tagNames)
 			result += "[" + name + "]";
 		var states:Array<String> = [];
-		if (StyleStateUtil.contains(stateMask, StyleState.Hovered)) states.push("hovered");
-		if (StyleStateUtil.contains(stateMask, StyleState.Pressed)) states.push("pressed");
-		if (StyleStateUtil.contains(stateMask, StyleState.Focused)) states.push("focused");
-		if (StyleStateUtil.contains(stateMask, StyleState.Disabled)) states.push("disabled");
-		if (StyleStateUtil.contains(stateMask, StyleState.Selected)) states.push("selected");
-		if (StyleStateUtil.contains(stateMask, StyleState.Checked)) states.push("checked");
+		if (stateMask.contains(StyleState.Hovered)) states.push("hovered");
+		if (stateMask.contains(StyleState.Pressed)) states.push("pressed");
+		if (stateMask.contains(StyleState.Focused)) states.push("focused");
+		if (stateMask.contains(StyleState.Disabled)) states.push("disabled");
+		if (stateMask.contains(StyleState.Selected)) states.push("selected");
+		if (stateMask.contains(StyleState.Checked)) states.push("checked");
 		for (state in states)
 			result += ":" + state;
+		return result;
+	}
+	static function countStates(states:StyleState):Int {
+		var remaining = states.rawValue(), result = 0;
+		while (remaining != 0) {
+			result += remaining & 1;
+			remaining = remaining >>> 1;
+		}
 		return result;
 	}
 }

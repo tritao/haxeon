@@ -1,5 +1,7 @@
 package compiler.ir;
 
+import compiler.Provides.ProviderOperation;
+import compiler.Provides.ProviderOperations;
 import compiler.ir.Ir;
 import compiler.ir.SourceProvenance.Located;
 
@@ -56,7 +58,7 @@ class IrValueInterfaceBoxes {
 				var result = builder.call(implementation.name, [payload].concat(adapted), implementation.result);
 				builder.returnValue((switch (contract.result) { case Void: true; default: false; }) ? result : GenericOwnerErasure.convert(builder, result, contract.result, objectMap));
 				methods.push({name: methodName, functionName: wrapper});
-				generated.push(new IrFunction(wrapper, builder.arguments, contract.result, builder.blocks));
+				generated.push(new IrFunction(wrapper, builder.arguments, contract.result, builder.blocks, Provider(TypeKey.of(Obj(valueName)), ProviderOperations.detailed(ProviderOperation.InterfaceBox, methodName))));
 			}
 			methods.sort((a, b) -> Reflect.compare(a.name, b.name));
 			var box:IrObject = {name: boxName, isValue: false, base: null, interfaces: value.interfaces.copy(),
@@ -77,7 +79,7 @@ class IrValueInterfaceBoxes {
 			builder.returnValue(builder.fieldGet(builder.safeCast(input, Obj(boxName)), "value", Obj(valueName)));
 			builder.select(direct);
 			builder.returnValue(builder.safeCast(input, Obj(valueName)));
-			generated.push(new IrFunction(name, builder.arguments, Obj(valueName), builder.blocks));
+			generated.push(new IrFunction(name, builder.arguments, Obj(valueName), builder.blocks, Provider(TypeKey.of(Obj(valueName)), ProviderOperation.InterfaceUnbox)));
 			return name;
 		}
 		function typeTestFor(valueName:String, exact:Bool):String {
@@ -93,7 +95,7 @@ class IrValueInterfaceBoxes {
 			builder.returnValue(builder.constBool(true));
 			builder.select(boxed);
 			builder.returnValue(builder.call(intrinsic, [input, builder.typeValue(Obj(boxName))], Bool));
-			generated.push(new IrFunction(name, builder.arguments, Bool, builder.blocks));
+			generated.push(new IrFunction(name, builder.arguments, Bool, builder.blocks, Provider(TypeKey.of(Obj(valueName)), ProviderOperations.detailed(ProviderOperation.InterfaceTypeTest, exact ? "exact" : "instance"))));
 			return name;
 		}
 		function interfaceCastFor(interfaceName:String):String {
@@ -132,67 +134,75 @@ class IrValueInterfaceBoxes {
 				builder.select(next);
 			}
 			builder.returnValue(builder.safeCast(input, Virtual(interfaceName)));
-			generated.push(new IrFunction(name, builder.arguments, Virtual(interfaceName), builder.blocks));
+			generated.push(new IrFunction(name, builder.arguments, Virtual(interfaceName), builder.blocks, Provider(TypeKey.of(Virtual(interfaceName)), ProviderOperation.InterfaceCast)));
 			return name;
 		}
 		var rewritten:Array<IrFunction> = [], needsTypeId = false;
-		for (fn in functions) {
-			var next = nextId(fn), changed = false, blocks:Array<IrBlock> = [], types:Map<Int, IrType> = [];
-			for (block in fn.blocks) for (located in block.instructions) switch located.value {
-				case TypeValue(out, type): types.set(out.id, type);
-				default:
+		// The function being rewritten: its type values and next free value id are only worked out when an instruction needs them.
+		var current:IrFunction = new IrFunction("", [], Void, [], Ordinary), typesOfCurrent:Null<Map<Int, IrType>> = null, next = -1;
+		function types():Map<Int, IrType> {
+			if (typesOfCurrent == null) {
+				typesOfCurrent = [];
+				for (block in current.blocks) for (located in block.instructions) switch located.value {
+					case TypeValue(out, type): typesOfCurrent.set(out.id, type);
+					default:
+				}
 			}
-			for (block in fn.blocks) {
-				var target = new IrBlock(block.id);
-				for (located in block.instructions) switch located.value {
-					case Call(out, "__dynamic_object_type_id", arguments) if (fn.name != TYPE_ID):
-						target.instructions.push(new Located(Call(out, TYPE_ID, arguments), located.provenance));
-						needsTypeId = true; changed = true;
-					case Call(out, intrinsic, arguments) if ((intrinsic == "__std_is_of_type" || intrinsic == "__std_is_exact_type")
-						&& arguments.length == 2 && types.exists(arguments[1].id)):
-						var object = switch types.get(arguments[1].id) { case Obj(name): objectMap.get(name); default: null; };
-						if (object == null || !object.isValue || object.interfaces.length == 0) target.instructions.push(located);
-						else {
-							target.instructions.push(new Located(Call(out, typeTestFor(object.name, intrinsic == "__std_is_exact_type"), [arguments[0]]), located.provenance));
-							changed = true;
-						}
-					case ToVirtual(out, input):
-						var object = switch input.type { case Obj(name): objectMap.get(name); default: null; };
-						if (object == null || !object.isValue) target.instructions.push(located);
-						else {
-							var name = boxFor(object.name), box = new IrValue(next++, "$interface-box", Obj(name));
-							target.instructions.push(new Located(NewObject(box, name), located.provenance));
-							target.instructions.push(new Located(FieldSet(box, "value", input), located.provenance));
-							target.instructions.push(new Located(ToVirtual(out, box), located.provenance));
-							changed = true;
-						}
-					case SafeCast(out, input):
-						var interfaceName = switch [out.type, input.type] { case [Virtual(name), Dyn]: name; default: null; };
-						if (interfaceName != null && interfaceMap.exists(interfaceName)) {
-							target.instructions.push(new Located(Call(out, interfaceCastFor(interfaceName), [input]), located.provenance));
-							changed = true;
-							continue;
-						}
+			return typesOfCurrent;
+		}
+		function freshId():Int {
+			if (next < 0)
+				next = nextId(current);
+			return next++;
+		}
+		function replacement(located:Located<IrInstruction>):Null<Array<Located<IrInstruction>>>
+			return switch located.value {
+				case Call(out, "__dynamic_object_type_id", arguments) if (current.name != TYPE_ID):
+					needsTypeId = true;
+					[new Located(Call(out, TYPE_ID, arguments), located.provenance)];
+				case Call(out, intrinsic, arguments) if ((intrinsic == "__std_is_of_type" || intrinsic == "__std_is_exact_type")
+					&& arguments.length == 2 && types().exists(arguments[1].id)):
+					var object = switch types().get(arguments[1].id) { case Obj(name): objectMap.get(name); default: null; };
+					if (object == null || !object.isValue || object.interfaces.length == 0) null;
+					else [new Located(Call(out, typeTestFor(object.name, intrinsic == "__std_is_exact_type"), [arguments[0]]), located.provenance)];
+				case ToVirtual(out, input):
+					var object = switch input.type { case Obj(name): objectMap.get(name); default: null; };
+					if (object == null || !object.isValue) null;
+					else {
+						var name = boxFor(object.name), box = new IrValue(freshId(), "$interface-box", Obj(name));
+						[
+							new Located(NewObject(box, name), located.provenance),
+							new Located(FieldSet(box, "value", input), located.provenance),
+							new Located(ToVirtual(out, box), located.provenance)
+						];
+					}
+				case SafeCast(out, input):
+					var interfaceName = switch [out.type, input.type] { case [Virtual(name), Dyn]: name; default: null; };
+					if (interfaceName != null && interfaceMap.exists(interfaceName))
+						[new Located(Call(out, interfaceCastFor(interfaceName), [input]), located.provenance)];
+					else {
 						var object = switch [out.type, input.type] {
 							case [Obj(name), Virtual(_) | Dyn]: objectMap.get(name);
 							default: null;
 						};
-						if (object == null || !object.isValue || object.interfaces.length == 0) target.instructions.push(located);
+						if (object == null || !object.isValue || object.interfaces.length == 0) null;
 						else {
-							var erased = input;
+							var erased = input, instructions:Array<Located<IrInstruction>> = [];
 							if ((switch (input.type) { case Dyn: false; default: true; })) {
-								erased = new IrValue(next++, "$interface-erased", Dyn);
-								target.instructions.push(new Located(ToDyn(erased, input), located.provenance));
+								erased = new IrValue(freshId(), "$interface-erased", Dyn);
+								instructions.push(new Located(ToDyn(erased, input), located.provenance));
 							}
-							target.instructions.push(new Located(Call(out, unboxFor(object.name), [erased]), located.provenance));
-							changed = true;
+							instructions.push(new Located(Call(out, unboxFor(object.name), [erased]), located.provenance));
+							instructions;
 						}
-					default: target.instructions.push(located);
-				}
-				target.terminator = block.terminator;
-				blocks.push(target);
-			}
-			rewritten.push(changed ? new IrFunction(fn.name, fn.arguments, fn.result, blocks, fn.debugBindings, fn.inlineHint, fn.retention) : fn);
+					}
+				default: null;
+			};
+		for (fn in functions) {
+			current = fn;
+			typesOfCurrent = null;
+			next = -1;
+			rewritten.push(IrFunctionRewrite.instructions(fn, replacement));
 		}
 		if (needsTypeId && !functionMap.exists(TYPE_ID)) {
 			// The physical class of an interface box is an implementation detail.
@@ -219,7 +229,7 @@ class IrValueInterfaceBoxes {
 				builder.jump(missing);
 			}, missing);
 			builder.select(missing); builder.returnValue(physical);
-			generated.push(new IrFunction(TYPE_ID, builder.arguments, I32, builder.blocks));
+			generated.push(new IrFunction(TYPE_ID, builder.arguments, I32, builder.blocks, GeneratedHelper));
 		}
 		return rewritten.concat(generated);
 	}

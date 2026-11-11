@@ -26,7 +26,7 @@ class EnumFieldInferenceMain {
 			+ "var mode:Int = Planner.mode; var gear:Int = planner.gear; "
 			+ "return planner.describe() + feed + fallback + idle + chosen + mode * 10000 + gear * 100000; }");
 		var result = compiler.compile("Main"),
-			live = Runtime.load(HlWriter.encode(result.module), result.runtimeIdentity);
+			live = Runtime.load(HlWriter.encode(result.module).flatten(), result.runtimeIdentity);
 		var value = Runtime.callInt(live, result.functionIds.get("main"));
 		Runtime.dispose(live);
 		if (value != 100 + 40 + 2 + 1000 + 5 + 70000 + 300000)

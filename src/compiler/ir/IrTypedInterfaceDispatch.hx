@@ -1,5 +1,7 @@
 package compiler.ir;
 
+import compiler.Provides.ProviderOperation;
+import compiler.Provides.ProviderOperations;
 import compiler.ir.Ir;
 import compiler.ir.SourceProvenance.Located;
 
@@ -35,45 +37,29 @@ class IrTypedInterfaceDispatch {
 		function isValue(type:IrType):Bool return switch type { case Obj(name): values.exists(name); default: false; };
 		function valueSignature(arguments:Array<IrType>, result:IrType):Bool
 			return isValue(result) || Lambda.exists(arguments, isValue);
-		var rewritten:Array<IrFunction> = [];
-		for (fn in functions) {
-			var blocks:Array<IrBlock> = [], changed = false;
-			for (block in fn.blocks) {
-				var target = new IrBlock(block.id);
-				for (located in block.instructions) {
-					var replaced = false;
-					var instruction = switch located.value {
-						case MethodCall(output, receiver, method, arguments, _):
-							switch receiver.type {
-								case Virtual(name):
-									var carriesValue = isValue(output.type);
-									for (argument in arguments) if (isValue(argument.type)) carriesValue = true;
-									if (!carriesValue) located.value;
-									else {
-										replaced = true;
-										Call(output, callName(name, method, [for (argument in arguments) argument.type], output.type), [receiver].concat(arguments));
-									}
-								default: located.value;
-							}
-						case InstanceClosure(output, name, receiver) if (!StringTools.startsWith(name, PREFIX)):
-							var separator = name.lastIndexOf(".");
-							if (separator < 0 || !contracts.exists(name.substr(0, separator))) located.value;
-							else switch [receiver.type, output.type] {
-								case [Virtual(owner), Function(arguments, result)] if (valueSignature(arguments, result)):
-									replaced = true;
-									InstanceClosure(output, callName(owner, name.substr(separator + 1), arguments, result), receiver);
-								default: located.value;
-							}
-						default: located.value;
-					};
-					if (!replaced) target.instructions.push(located);
-					else { changed = true; target.instructions.push(new Located(instruction, located.provenance)); }
-				}
-				target.terminator = block.terminator;
-				blocks.push(target);
-			}
-			rewritten.push(changed ? new IrFunction(fn.name, fn.arguments, fn.result, blocks, fn.debugBindings, fn.inlineHint, fn.retention) : fn);
-		}
+		function replacement(located:Located<IrInstruction>):Null<Array<Located<IrInstruction>>>
+			return switch located.value {
+				case MethodCall(output, receiver, method, arguments, _):
+					switch receiver.type {
+						case Virtual(name):
+							var carriesValue = isValue(output.type);
+							for (argument in arguments) if (isValue(argument.type)) carriesValue = true;
+							if (!carriesValue) null;
+							else [new Located(Call(output, callName(name, method, [for (argument in arguments) argument.type], output.type), [receiver].concat(arguments)),
+								located.provenance)];
+						default: null;
+					}
+				case InstanceClosure(output, name, receiver) if (!StringTools.startsWith(name, PREFIX)):
+					var separator = name.lastIndexOf(".");
+					if (separator < 0 || !contracts.exists(name.substr(0, separator))) null;
+					else switch [receiver.type, output.type] {
+						case [Virtual(owner), Function(arguments, result)] if (valueSignature(arguments, result)):
+							[new Located(InstanceClosure(output, callName(owner, name.substr(separator + 1), arguments, result), receiver), located.provenance)];
+						default: null;
+					}
+				default: null;
+			};
+		var rewritten:Array<IrFunction> = [for (fn in functions) IrFunctionRewrite.instructions(fn, replacement)];
 		return rewritten;
 	}
 
@@ -188,7 +174,7 @@ class IrTypedInterfaceDispatch {
 					entry.returnValue((switch signature.result { case Void: true; default: false; }) ? result :
 						GenericOwnerErasure.convert(entry, result, signature.result, byName));
 				}
-				var entryFunction = new IrFunction(entryName, entry.arguments, signature.result, entry.blocks),
+				var entryFunction = new IrFunction(entryName, entry.arguments, signature.result, entry.blocks, Provider(TypeKey.of(Obj(candidate.name)), ProviderOperations.detailed(ProviderOperation.TypedInterfaceEntry, entryName))),
 					entryIndex = functionIndices.get(entryName);
 				if (entryIndex == null) {
 					functionIndices.set(entryName, functions.length);
@@ -201,7 +187,7 @@ class IrTypedInterfaceDispatch {
 				builder.select(next);
 			}
 			builder.throwValue(builder.toDyn(builder.constString('Invalid receiver for $interfaceName.$method')));
-			var generated = new IrFunction(name, builder.arguments, signature.result, builder.blocks);
+			var generated = new IrFunction(name, builder.arguments, signature.result, builder.blocks, Provider(TypeKey.of(Virtual(interfaceName)), ProviderOperations.detailed(ProviderOperation.DynamicDispatch, name)));
 			if (existing == null) functions.push(generated);
 			else {
 				var index = functionIndices.get(name);

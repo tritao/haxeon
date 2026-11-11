@@ -54,8 +54,21 @@ class StructProperties {
 		return constraintName == FLAT_TYPE_NAME ? facts.flatPath : facts.portablePath;
 	}
 
+	/** Reference-free enum tags have a fixed portable four-byte native representation. */
+	public static function isTagEnum(declarations:DeclarationIndex, type:CompilerType):Bool {
+		return switch type {
+			case TInstance(NominalKind.Enum, name, _):
+				var declaration = declarations.enums.get(name);
+				declaration != null && !Lambda.exists(declaration.cases, constructor -> constructor.params.length != 0);
+			case TNullable(inner): isTagEnum(declarations, inner);
+			default: false;
+		};
+	}
+
 	static function evaluateAt(declarations:DeclarationIndex, type:CompilerType, path:String, visiting:Array<String>):StructPropertyFacts
 		return switch type {
+			case TInstance(NominalKind.Enum, _, _) | TNullable(_) if (isTagEnum(declarations, type)):
+				{flat: true, portable: true, flatPath: null, portablePath: null};
 			case TInt | TInt64 | TBool | TFloat:
 				{
 					flat: true,

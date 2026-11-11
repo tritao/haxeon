@@ -51,11 +51,7 @@ class SplitView implements View {
 		if (leading == null || trailing == null)
 			throw "SplitView requires leading and trailing views";
 		var resolved = options == null ? new SplitViewOptions() : options;
-		if ((resolved.orientation != SplitOrientation.Horizontal &&
-			resolved.orientation != SplitOrientation.Vertical) ||
-			(resolved.resizableSide != SplitSide.Leading &&
-				resolved.resizableSide != SplitSide.Trailing) ||
-			!finite(resolved.extent) || !finite(resolved.minimumExtent) ||
+		if (!finite(resolved.extent) || !finite(resolved.minimumExtent) ||
 			!finite(resolved.maximumExtent) || !finite(resolved.dividerExtent) ||
 			resolved.minimumExtent < 0.0 || resolved.maximumExtent < resolved.minimumExtent ||
 			resolved.dividerExtent < 0.0 ||

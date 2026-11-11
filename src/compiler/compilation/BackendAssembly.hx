@@ -80,7 +80,7 @@ class BackendAssembly {
 	/** Why two modules differ, or null when they encode to the same bytes. */
 	public static function moduleDifference(previous:HlCode, fresh:HlCode):Null<String> {
 		var left = HlWriter.encode(previous), right = HlWriter.encode(fresh);
-		if (left.compare(right) == 0)
+		if (left.equals(right))
 			return null;
 		var functions = previous.functions, others = fresh.functions;
 		if (functions.length != others.length)
@@ -101,19 +101,20 @@ class BackendAssembly {
 		// target-specific adapters.
 		var assemblyIr = ir;
 		if (context.isWasmTarget()) {
-			assemblyIr = new IrProgram(ir.entryPoint);
-			assemblyIr.natives = ir.natives.copy();
-			assemblyIr.cNatives = ir.cNatives;
-			assemblyIr.functions = ir.functions.copy();
-			assemblyIr.objects = ir.objects;
-			assemblyIr.interfaces = ir.interfaces;
-			assemblyIr.enums = ir.enums;
-			assemblyIr.staticFields = ir.staticFields;
-			assemblyIr.positionalFingerprints = ir.positionalFingerprints;
-			assemblyIr.parameterDefaults = ir.parameterDefaults;
-			assemblyIr.positionalPlaces = ir.positionalPlaces;
-			assemblyIr.positionalSources = ir.positionalSources;
+			assemblyIr = ir.copy();
 			compiler.ir.IrScalarClosures.rewrite(assemblyIr);
+			// The retained assembly adapters can introduce fresh nominal-tag escapes.
+			compiler.ir.IrEnumTagLowering.escapes(assemblyIr);
+		} else if (!context.livePatching) {
+			// A plain HashLink build writes only what is reachable from the entry: a function nothing reaches is not lowered or
+			// encoded, and a class no reachable function mentions loses its methods. The program in the result keeps everything
+			// (other backends and tools read it), and a live module keeps every function too, because its host can call any of
+			// them by id and a reachability change must not move its layout.
+			assemblyIr = ir.copy();
+			var reachable = compiler.ir.IrReachability.withGeneratedRuntimeRoots(ir, ir.entryPoint, null, true);
+			compiler.ir.IrReachability.prune(assemblyIr, reachable);
+			regenerated = [for (name in regenerated) if (reachable.exists(name)) name];
+			relocated = [for (name in relocated) if (reachable.exists(name)) name];
 		}
 		// Lambdas are named by their position among their siblings. When an edit moved those names onto other functions, give
 		// the running module's lambdas the names their functions have now (see `LambdaAlignment`), so the plan compares, and
@@ -144,13 +145,14 @@ class BackendAssembly {
 		// Without live patching nothing addresses this module by slot, symbol index or stable id, so assemble
 		// from scratch: the result depends only on the source, never on what the session compiled before.
 		// A plain build links the functions of the last one whose IR is unchanged instead of lowering them again (see `HlLoweredCache`).
-		var loweredCache = context.livePatching ? null : context.loweredCache;
-		var candidateAssembler = !context.livePatching ? new HlModuleAssembler(null,
+		var loweredCache:Null<compiler.hl.incremental.HlLoweredCache> = context.livePatching ? null : context.loweredCache;
+		var candidateAssembler = loweredCache != null ? new HlModuleAssembler(null,
 			loweredCache.debug) : context.compiledOnce
 			&& PatchPlanner.requiresFreshLayout(decision) ? freshLayout(baseAssembler) : baseAssembler.copy();
 		candidateAssembler.fieldReserve = context.livePatching && !context.isWasmTarget() ? liveFieldReserve : 0;
 		candidateAssembler.developmentMetadata = context.developmentMetadata || context.livePatching;
-		candidateAssembler.irVerified = !context.livePatching;
+		// The Wasm session's auxiliary HashLink copy acquired its own closure adapters above; verify that copy too.
+		candidateAssembler.irVerified = !context.livePatching && !context.isWasmTarget();
 		candidateAssembler.livePatching = context.livePatching;
 		if (loweredCache != null) {
 			loweredCache.forEnvironment(loweringEnvironment(candidateAssembler, context));
@@ -175,7 +177,7 @@ class BackendAssembly {
 			fresh.developmentMetadata = candidateAssembler.developmentMetadata;
 			fresh.irVerified = candidateAssembler.irVerified;
 			fresh.loweredCache = new compiler.hl.incremental.HlLoweredCache();
-			var freshAssembly = fresh.assemble(ir, context.rehydratedChanges(regenerated, ir), decision, relocated,
+			var freshAssembly = fresh.assemble(assemblyIr, context.rehydratedChanges(regenerated, assemblyIr), decision, relocated,
 				PatchPlanner.dispatchedFunctions(previousAbi, nextAbi));
 			if (fresh.developmentMetadata)
 				attachSourceSnapshots(context, freshAssembly.module);
@@ -259,6 +261,6 @@ class BackendAssembly {
 		code.sourceSnapshots.sort((left, right) -> left.sourceHash < right.sourceHash ? -1 : left.sourceHash > right.sourceHash ? 1 : 0);
 		if (code.sourceSnapshots.length > 0)
 			code.debugSections.push(compiler.hl.HlCode.HlDebugSection.lazy(HlWriter.SOURCE_SNAPSHOTS, 1, 0,
-				() -> HlWriter.encodeSourceSnapshots(code.sourceSnapshots)));
+				_ -> HlWriter.encodeSourceSnapshots(code.sourceSnapshots)));
 	}
 }

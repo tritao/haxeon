@@ -18,7 +18,7 @@ class MapValuesMain {
 			+ 'var action = function() return options[selectedIndex]; return action(); }; '
 			+ 'return choose() == "One" ? 0 : 2; } }');
 		var result = compiler.compile("Main");
-		var live = Runtime.load(HlWriter.encode(result.module), result.runtimeIdentity);
+		var live = Runtime.load(HlWriter.encode(result.module).flatten(), result.runtimeIdentity);
 		var code = Runtime.callInt(live, result.functionIds.get("Main.main"));
 		Runtime.dispose(live);
 		if (code != 0)

@@ -15,6 +15,6 @@ class CxxLifetimeMain {
 		compiler.update("Widget.hx", File.getContent(projectionPath));
 		compiler.update("Main.hx",
 			"import Widget; function main():Int { var widget = Widget.create(21); var value = widget.value(); widget.close(); widget.close(); return value == 21 && widget.isClosed() && Widget.destroyed() == 1 ? 42 : 1; }");
-		File.saveBytes(output, HlWriter.encode(compiler.compile("Main").module));
+		File.saveBytes(output, HlWriter.encode(compiler.compile("Main").module).flatten());
 	}
 }

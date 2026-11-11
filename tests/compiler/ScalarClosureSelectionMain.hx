@@ -18,15 +18,15 @@ class ScalarClosureSelectionMain {
 			});
 			var b = new IrBuilder(), arg = b.argument("v", Obj("Value"));
 			b.returnValue(b.constInt(1));
-			p.functions.push(new IrFunction("callee", b.arguments, I32, b.blocks));
+			p.functions.push(new IrFunction("callee", b.arguments, I32, b.blocks, Ordinary));
 			b = new IrBuilder();
 			b.argument("v", I32);
 			b.returnValue(b.constInt(1));
-			p.functions.push(new IrFunction("$scalar-arguments:callee", b.arguments, I32, b.blocks));
+			p.functions.push(new IrFunction("$scalar-arguments:callee", b.arguments, I32, b.blocks, Ordinary));
 			b = new IrBuilder();
 			b.staticClosure("callee", Function([Obj("Value")], I32));
 			b.returnValue(b.constInt(0));
-			p.functions.push(new IrFunction("main", b.arguments, I32, b.blocks));
+			p.functions.push(new IrFunction("main", b.arguments, I32, b.blocks, Ordinary));
 			for (i in 0...count) {
 				b = new IrBuilder();
 				var v = b.argument("v", I32);
@@ -37,7 +37,7 @@ class ScalarClosureSelectionMain {
 					v = b.add(v, b.constInt(j));
 				}
 				b.returnValue(v);
-				p.functions.push(new IrFunction("f" + i, b.arguments, I32, b.blocks));
+				p.functions.push(new IrFunction("f" + i, b.arguments, I32, b.blocks, Ordinary));
 			}
 			var original = p.functions.copy(),
 				before = AllocationMeter.sample();

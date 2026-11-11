@@ -12,7 +12,7 @@ class FunctionGlobalAbiMain {
   var p=new IrProgram("main"),readType:IrType=Function([],I32),applyType:IrType=Function([I32],I32);
   p.staticFields=[{name:"read",type:readType},{name:"apply",type:applyType},{name:"number",type:I32}];
   var b=new IrBuilder(),read=b.temporary(readType);b.emit(GlobalGet(read,"read"));b.returnValue(b.callClosure(read,[],I32));
-  p.functions=[new IrFunction("main",b.arguments,I32,b.blocks)];
+  p.functions=[new IrFunction("main",b.arguments,I32,b.blocks, Ordinary)];
   compiler.ir.IrVerifier.verify(p);
   var code=compiler.ir.hl.HlLower.lower(p,new Map()),readSignature=-1;
   for(index in 0...2)switch code.types[code.globals[index]] {

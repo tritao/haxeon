@@ -30,6 +30,6 @@ class StringConstantsMain {
 		var liveResult = live.compile("Main");
 		if (liveResult.module.constants.length != fixedResult.module.constants.length)
 			throw 'A live module should hold the same ${fixedResult.module.constants.length} literal constants, got ${liveResult.module.constants.length}';
-		File.saveBytes(Sys.args()[0], HlWriter.encode(fixedResult.module));
+		File.saveBytes(Sys.args()[0], HlWriter.encode(fixedResult.module).flatten());
 	}
 }

@@ -16,9 +16,6 @@ import nativekit.ffi.NativeKitTypes.TransportOptions;
 
 /** Small Haxe façade over NativeKit's asynchronous transports. */
 class TransportInterop {
-	/** nk_transport_receive uses this transport-specific status when drained. */
-	static inline final RECEIVE_WOULD_BLOCK:Int = -205;
-
 	public static function options(port:Int, ?host:String = "127.0.0.1"):TransportOptions {
 		if (port <= 0 || port > 65535)
 			throw BindingError.invalidArgument("TransportInterop.options", "NativeKit transport port is outside the valid range");
@@ -60,7 +57,7 @@ class TransportInterop {
 			throw BindingError.invalidArgument("TransportInterop.websocket", "Invalid WebSocket timeout");
 		var value = options(port, host);
 		value.set_kind(TransportKind.Websocket);
-		value.set_flags(TransportFlags.Messages | TransportFlags.Text | (secure ? TransportFlags.Secure : 0));
+		value.set_flags(TransportFlags.Messages | TransportFlags.Text | (secure ? TransportFlags.Secure : TransportFlags.empty()));
 		value.set_path(path);
 		value.set_timeout_ms(Std.int(timeout * 1000));
 		var result = NativeKit.nk_transport_connect(value);
@@ -73,7 +70,7 @@ class TransportInterop {
 	public static function receiveMessage(transport:TransportHandle):Null<Bytes> {
 		var buffer = Bytes.alloc(65536);
 		var result = NativeKit.nk_transport_receive(transport, buffer);
-		if (result.status == RECEIVE_WOULD_BLOCK)
+		if (result.status == Result.TransportWouldBlock)
 			return null;
 		if (result.status == Result.ErrorPayloadTooLarge) {
 			var needed = Int64.toInt(result.out_received);
@@ -93,7 +90,7 @@ class TransportInterop {
 		NativeKit.nk_transport_send_checked(transport, bytes);
 	}
 
-	public static function sendStatus(transport:TransportHandle, bytes:Bytes):Int {
+	public static function sendStatus(transport:TransportHandle, bytes:Bytes):Result {
 		if (bytes == null)
 			throw BindingError.invalidArgument("TransportInterop.sendStatus", "NativeKit transport cannot send null bytes");
 		return NativeKit.nk_transport_send(transport, bytes);
@@ -120,7 +117,7 @@ class TransportInterop {
 			throw BindingError.invalidArgument("TransportInterop.receive", "NativeKit transport receive capacity must be positive");
 		var buffer = Bytes.alloc(capacity);
 		var result = NativeKit.nk_transport_receive(transport, buffer);
-		if (result.status == RECEIVE_WOULD_BLOCK)
+		if (result.status == Result.TransportWouldBlock)
 			return Bytes.alloc(0);
 		if (result.status != Result.Ok)
 			throw new NativeKitError(result.status, "TransportInterop.receive", NativeKit.nk_last_error());

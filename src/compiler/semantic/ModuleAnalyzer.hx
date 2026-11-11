@@ -27,6 +27,7 @@ class ModuleAnalyzer {
 	// Import resolution reads the declarations of modules that are not parsed yet, once per imported declaration. Each such
 	// parse is kept here until the module's own parse adopts it.
 	final lookupParses:Map<String, LookupParse> = [];
+	final importedMembers:Map<String, {ast:compiler.syntax.Ast.AstProgram, members:Map<String, Bool>}> = [];
 
 	public function new(modules:Map<String, ModuleState>, types:TypeRegistry, natives:NativeRegistry, compiledOnce:Bool, defines:Map<String, String>,
 			sourceLoader:ModuleSourceLoader, ?buildSemanticModels = true, ?declarationOwners:DeclarationOwners) {
@@ -270,6 +271,8 @@ class ModuleAnalyzer {
 				addFunctionTypeDependencies(method, state, dependencies, abstractDecl.typeParameters);
 		}
 		for (abstractDecl in ast.enumAbstracts) {
+			if (abstractDecl.conformances != null)
+				for (type in abstractDecl.conformances) addModuleTypeDependency(type, state, dependencies);
 			addModuleTypeDependency(abstractDecl.underlying, state, dependencies);
 			for (type in abstractDecl.fromTypes.concat(abstractDecl.toTypes))
 				addModuleTypeDependency(type, state, dependencies);
@@ -492,38 +495,42 @@ class ModuleAnalyzer {
 		var ast = moduleAst(moduleName);
 		if (ast == null)
 			return false;
+		var entry = importedMembers.get(moduleName);
+		if (entry == null || entry.ast != ast) {
+			entry = {ast: ast, members: importedMembersOf(moduleName, ast)};
+			importedMembers.set(moduleName, entry);
+		}
+		return entry.members.exists(name);
+	}
+
+	/** The names `import module.name` takes as members of `moduleName`, worked out once per parsed module (see `isImportedMember`). */
+	static function importedMembersOf(moduleName:String, ast:compiler.syntax.Ast.AstProgram):Map<String, Bool> {
+		var members:Map<String, Bool> = [], typeNames:Map<String, Bool> = [];
 		for (declaration in ast.functions)
-			if (declaration.name == name)
-				return true;
+			members.set(declaration.name, true);
 		for (declaration in ast.classes)
-			if (declaration.name == name)
-				return false;
+			typeNames.set(declaration.name, true);
 		for (declaration in ast.enums)
-			if (declaration.name == name)
-				return false;
+			typeNames.set(declaration.name, true);
 		for (declaration in ast.abstracts)
-			if (declaration.name == name)
-				return false;
+			typeNames.set(declaration.name, true);
 		for (declaration in ast.enumAbstracts)
-			if (declaration.name == name)
-				return false;
+			typeNames.set(declaration.name, true);
 		for (declaration in ast.interfaces)
-			if (declaration.name == name)
-				return false;
+			typeNames.set(declaration.name, true);
 		for (declaration in ast.aliases)
-			if (declaration.name == name)
-				return false;
+			typeNames.set(declaration.name, true);
 		var mainName = QualifiedName.last(moduleName);
 		for (declaration in ast.classes)
 			if (declaration.name == mainName) {
 				for (method in declaration.methods)
-					if (method.isStatic && method.name == name)
-						return true;
+					if (method.isStatic && !typeNames.exists(method.name))
+						members.set(method.name, true);
 				for (field in declaration.fields)
-					if (field.isStatic && field.name == name)
-						return true;
+					if (field.isStatic && !typeNames.exists(field.name))
+						members.set(field.name, true);
 			}
-		return false;
+		return members;
 	}
 
 	function sourceModuleForDependency(path:String):Null<String> {

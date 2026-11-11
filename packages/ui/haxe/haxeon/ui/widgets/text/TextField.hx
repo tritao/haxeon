@@ -33,7 +33,6 @@ import haxeon.ui.core.UiKey;
 import haxeon.ui.core.UiModifier;
 import haxeon.ui.core.View;
 import haxeon.ui.style.StyleState;
-import haxeon.ui.style.StyleStateUtil;
 import haxeon.ui.style.StyleTarget;
 import haxeon.ui.style.StyleProperty;
 import haxeon.ui.style.StyleSource;
@@ -115,7 +114,7 @@ class TextField implements View {
 	/** Semantic role override used by composite editable controls. */
 	public var semanticRole:AccessibilityRole;
 	/** Semantic action capabilities override used by composite editable controls. */
-	public var semanticActions:Int;
+	public var semanticActions:AccessibilityAction;
 
 	public function new(key:String, value:String = "", ?onChange:String->Void,
 			?style:LayoutStyle, ?label:String, ?textStyle:TextStyle, ?textColor:Color,
@@ -215,7 +214,7 @@ class TextField implements View {
 			editor.configurePresentation(colorRangeProvider, decorationProvider, presentationRevision);
 
 			var flags = context.interactionStates.get(id);
-			flags = StyleStateUtil.withState(flags, StyleState.Disabled, !enabled);
+			flags = (!enabled ? flags.insert(StyleState.Disabled) : flags.remove(StyleState.Disabled));
 			var computed = context.styleResolver.resolve(
 				new StyleTarget("text-field", key, key, classes, ["text-field"], flags),
 				context.inheritedStyle, context.theme.styles, context.styleSheet, style, context.environment);
@@ -230,7 +229,7 @@ class TextField implements View {
 			node.enabled = enabled;
 			var semantics = new Semantics(semanticRole, label == null ? key : label);
 			semantics.setValueSource(editor, editor.documentLength());
-			semantics.actions = readOnly ? semanticActions & ~AccessibilityAction.SetValue : semanticActions;
+			semantics.actions = readOnly ? semanticActions.remove(AccessibilityAction.SetValue) : semanticActions;
 			if (readOnly)
 				semantics.states |= AccessibilityState.ReadOnly;
 			semantics.textStart = 0;
@@ -480,7 +479,7 @@ class TextField implements View {
 				editor.focused = false;
 				editor.draggingSelection = false;
 				editor.cancelPointerClick();
-				semantics.states &= ~AccessibilityState.Focused;
+				semantics.states = semantics.states.remove(AccessibilityState.Focused);
 				refresh();
 				context.textInput.deactivate(id);
 				publishDiagnostics(editor, context, null);
@@ -523,7 +522,7 @@ class TextField implements View {
 				var position = editor.hitTest(point.x - geometry.x,
 					point.y - geometry.y + editor.scrollOffsetY);
 				editor.resetCaretBlink(Sys.time());
-				var extend = (event.modifiers & UiModifier.Shift) != 0;
+				var extend = event.modifiers.contains(UiModifier.Shift);
 				if (extend)
 					editor.cancelPointerClick();
 				var clickCount = extend ? 1 : editor.registerPointerClick(position,
@@ -568,14 +567,14 @@ class TextField implements View {
 					(UiModifier.Control | UiModifier.Alt) &&
 					(event.key == UiKey.Left || event.key == UiKey.Right ||
 					 event.key == UiKey.Up || event.key == UiKey.Down)) return;
-				var extend = (event.modifiers & UiModifier.Shift) != 0;
-				var command = (event.modifiers & (UiModifier.Control | UiModifier.Super)) != 0;
+				var extend = event.modifiers.contains(UiModifier.Shift);
+				var command = (event.modifiers.contains(UiModifier.Control) || event.modifiers.contains(UiModifier.Super));
 				var action:Null<TextEditorAction> = event.key == UiKey.Escape ? ClearSelection :
 					command && event.key == UiKey.C ? Copy :
 					command && event.key == UiKey.X ? Cut :
 					extend && !command && event.key == UiKey.Delete ? Cut :
 					command && event.key == UiKey.V ? Paste :
-					(event.modifiers & UiModifier.Control) != 0 && event.key == UiKey.Insert ? Copy :
+					event.modifiers.contains(UiModifier.Control) && event.key == UiKey.Insert ? Copy :
 					extend && event.key == UiKey.Insert ? Paste :
 					command && event.key == UiKey.Enter ? (extend ? InsertLineAbove : InsertLineBelow) : null;
 				if (action != null && (!readOnly || action == Copy || action == ClearSelection) && onEditorAction != null && onEditorAction(action)) {
@@ -595,20 +594,20 @@ class TextField implements View {
 					return;
 				}
 				var macWordNavigation = #if (mac || ios)
-					(event.modifiers & UiModifier.Alt) != 0 &&
-					(event.modifiers & UiModifier.Control) == 0;
+					event.modifiers.contains(UiModifier.Alt) &&
+					!event.modifiers.contains(UiModifier.Control);
 				#else
 					false;
 				#end
 				var wordNavigation = #if (mac || ios)
 					macWordNavigation;
 				#else
-					(event.modifiers & UiModifier.Control) != 0;
+					event.modifiers.contains(UiModifier.Control);
 				#end
 				if (additionalSelections.length > 0 && onNavigationIntent != null) {
 					var navigation:Null<TextNavigationIntent> = switch (event.key) {
-						case UiKey.Left: #if (mac || ios) (event.modifiers & UiModifier.Super) != 0 ? LineBoundary(false, extend) : #end wordNavigation ? Word(-1, extend, macWordNavigation) : Character(-1, extend);
-						case UiKey.Right: #if (mac || ios) (event.modifiers & UiModifier.Super) != 0 ? LineBoundary(true, extend) : #end wordNavigation ? Word(1, extend, macWordNavigation) : Character(1, extend);
+						case UiKey.Left: #if (mac || ios) event.modifiers.contains(UiModifier.Super) ? LineBoundary(false, extend) : #end wordNavigation ? Word(-1, extend, macWordNavigation) : Character(-1, extend);
+						case UiKey.Right: #if (mac || ios) event.modifiers.contains(UiModifier.Super) ? LineBoundary(true, extend) : #end wordNavigation ? Word(1, extend, macWordNavigation) : Character(1, extend);
 						case UiKey.Up: wordNavigation ? Paragraph(-1, extend, macWordNavigation) :
 							multiline ? VisualLine(-1, extend) : null;
 						case UiKey.Down: wordNavigation ? Paragraph(1, extend, macWordNavigation) :
@@ -620,9 +619,9 @@ class TextField implements View {
 						case _: null;
 					};
 					#if (mac || ios)
-					if ((event.modifiers & UiModifier.Super) != 0 && event.key == UiKey.Up)
+					if (event.modifiers.contains(UiModifier.Super) && event.key == UiKey.Up)
 						navigation = DocumentBoundary(false, extend);
-					else if ((event.modifiers & UiModifier.Super) != 0 && event.key == UiKey.Down)
+					else if (event.modifiers.contains(UiModifier.Super) && event.key == UiKey.Down)
 						navigation = DocumentBoundary(true, extend);
 					#end
 					if (command && (event.key == UiKey.Home || event.key == UiKey.End))
@@ -645,7 +644,7 @@ class TextField implements View {
 				var textEdited = false;
 				var previousRevision = editor.documentRevision();
 				// Select-all is exactly Ctrl+A (Cmd+A on macOS); Shift/Alt variants belong to the application keymap.
-				if (command && event.key == UiKey.A && (event.modifiers & (UiModifier.Shift | UiModifier.Alt)) == 0)
+				if (command && event.key == UiKey.A && (!event.modifiers.contains(UiModifier.Shift) && !event.modifiers.contains(UiModifier.Alt)))
 					changed = editor.selectAll();
 				else if (command && event.key == UiKey.C)
 					copyCurrentSelection(context, editor);
@@ -672,9 +671,9 @@ class TextField implements View {
 						});
 				}
 				#if (mac || ios)
-				else if ((event.modifiers & UiModifier.Super) != 0 && event.key == UiKey.Left)
+				else if (event.modifiers.contains(UiModifier.Super) && event.key == UiKey.Left)
 					changed = editor.moveCaretToLineBoundary(false, extend);
-				else if ((event.modifiers & UiModifier.Super) != 0 && event.key == UiKey.Right)
+				else if (event.modifiers.contains(UiModifier.Super) && event.key == UiKey.Right)
 					changed = editor.moveCaretToLineBoundary(true, extend);
 				#end
 				else if (wordNavigation && event.key == UiKey.Left)
@@ -694,9 +693,9 @@ class TextField implements View {
 				else if (multiline && event.key == UiKey.Down)
 					changed = editor.moveCaretVertically(1, extend);
 				#if (mac || ios)
-				else if ((event.modifiers & UiModifier.Super) != 0 && event.key == UiKey.Up)
+				else if (event.modifiers.contains(UiModifier.Super) && event.key == UiKey.Up)
 					changed = editor.placeCaret(0, extend);
-				else if ((event.modifiers & UiModifier.Super) != 0 && event.key == UiKey.Down)
+				else if (event.modifiers.contains(UiModifier.Super) && event.key == UiKey.Down)
 					changed = editor.placeCaret(editor.documentLength(), extend);
 				#end
 				else if (event.key == UiKey.Left)
@@ -853,7 +852,7 @@ class TextField implements View {
 		context.textInput.update(window, editor.documentLength(),
 			window.selectionStart, window.selectionEnd, editor.compositionStart,
 			editor.compositionEnd, 0,
-			multiline ? 1 : 0,
+			multiline ? nativekit.ffi.NativeKitTypes.TextInputFlags.Multiline : nativekit.ffi.NativeKitTypes.TextInputFlags.empty(),
 			caretRect, selectionGeometry, compositionGeometry);
 	}
 

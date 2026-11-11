@@ -14,6 +14,17 @@ class FlowFacts {
 	final invalidatedPrefixes:Array<String> = [];
 	final invalidatedNamespaces:Array<String> = [];
 	final erasedNamespaces:Array<String> = [];
+
+	/** The namespace of facts about expression paths. */
+	static inline final EXPRESSION_PREFIX = "$expression:";
+
+	/** Whether `bindingId` is `prefix` or a path below it (`prefix.`...), without making `prefix + "."`. */
+	static function isUnder(bindingId:String, prefix:String):Bool
+		return bindingId == prefix
+			|| (bindingId.length > prefix.length
+				&& bindingId.charCodeAt(prefix.length) == 46
+				&& StringTools.startsWith(bindingId, prefix));
+
 	final erasedMentions:Array<String> = [];
 	final invalidatedFields:Array<String> = [];
 
@@ -106,7 +117,7 @@ class FlowFacts {
 		if (stableRefinedTypes.exists(bindingId))
 			return stableRefinedTypes.get(bindingId);
 		for (prefix in invalidatedPrefixes)
-			if (bindingId == prefix || StringTools.startsWith(bindingId, prefix + "."))
+			if (isUnder(bindingId, prefix))
 				return null;
 		if (invalidated.exists(bindingId))
 			return null;
@@ -153,7 +164,7 @@ class FlowFacts {
 
 	function resolveStable(bindingId:String):Null<CompilerType> {
 		for (prefix in invalidatedPrefixes)
-			if (bindingId == prefix || StringTools.startsWith(bindingId, prefix + "."))
+			if (isUnder(bindingId, prefix))
 				return null;
 		if (invalidated.exists(bindingId))
 			return null;
@@ -185,10 +196,10 @@ class FlowFacts {
 		if (invalidationSink != null)
 			invalidationSink.invalidatePrefix(prefix);
 		for (bindingId in refinedTypes.keys())
-			if (bindingId == prefix || StringTools.startsWith(bindingId, prefix + "."))
+			if (isUnder(bindingId, prefix))
 				refinedTypes.remove(bindingId);
 		for (bindingId in stableRefinedTypes.keys())
-			if (bindingId == prefix || StringTools.startsWith(bindingId, prefix + "."))
+			if (isUnder(bindingId, prefix))
 				stableRefinedTypes.remove(bindingId);
 		invalidatedPrefixes.push(prefix);
 	}
@@ -219,7 +230,7 @@ class FlowFacts {
 	public function invalidateMentioning(fragment:String):Void {
 		if (invalidationSink != null)
 			invalidationSink.invalidateMentioning(fragment);
-		var expressionPrefix = '$' + 'expression:';
+		var expressionPrefix = EXPRESSION_PREFIX;
 		for (bindingId in refinedTypes.keys())
 			if (StringTools.startsWith(bindingId, expressionPrefix) && bindingId.indexOf(fragment) >= 0)
 				refinedTypes.remove(bindingId);
@@ -230,7 +241,7 @@ class FlowFacts {
 	}
 
 	function mentionsErased(bindingId:String):Bool {
-		if (!StringTools.startsWith(bindingId, '$' + 'expression:'))
+		if (erasedMentions.length == 0 || !StringTools.startsWith(bindingId, EXPRESSION_PREFIX))
 			return false;
 		for (fragment in erasedMentions)
 			if (bindingId.indexOf(fragment) >= 0)
@@ -257,19 +268,22 @@ class FlowFacts {
 
 	/** Whether an expression fact's path has a `.field` segment, ending the path or followed by `.` or a map-entry `:`. */
 	static function mentionsField(bindingId:String, field:String):Bool {
-		if (!StringTools.startsWith(bindingId, '$' + 'expression:'))
+		if (field.length == 0 || !StringTools.startsWith(bindingId, EXPRESSION_PREFIX))
 			return false;
-		var segment = "." + field, from = 0;
+		// ".field" followed by the end, "." or ":"; found as `field` with a "." before it, so no "." + field string is made per call.
+		var from = 0;
 		while (true) {
-			var at = bindingId.indexOf(segment, from);
+			var at = bindingId.indexOf(field, from);
 			if (at < 0)
 				return false;
-			var end = at + segment.length;
-			if (end == bindingId.length)
-				return true;
-			var next = bindingId.charAt(end);
-			if (next == "." || next == ":")
-				return true;
+			if (at > 0 && bindingId.charCodeAt(at - 1) == 46) {
+				var end = at + field.length;
+				if (end == bindingId.length)
+					return true;
+				var next = bindingId.charCodeAt(end);
+				if (next == 46 || next == 58)
+					return true;
+			}
 			from = at + 1;
 		}
 	}

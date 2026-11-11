@@ -1,4 +1,4 @@
--cp src
+common.hxml
 -cp benchmarks
 -main BenchmarkMain
 -hl out/benchmark.hl

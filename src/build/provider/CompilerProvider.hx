@@ -83,9 +83,10 @@ class CompilerProvider {
 			environment = runtimeLibraryEnvironment(context.compilerHome);
 		} else {
 			command = haxe.io.Path.join([context.compilerHome, ".tools", "haxe", "haxe" + suffix]);
-			argumentsWithLauncher = ["-cp", compilerSourcePath, "--run", "compiler.tools.HaxeonCompiler"].concat(arguments);
+			argumentsWithLauncher = build.CompilerSources.classPath(compilerSourcePath).concat(["--run", "compiler.tools.HaxeonCompiler"]).concat(arguments);
 			inputs.push(command);
-			inputs.push(compilerSourcePath);
+			for (root in build.CompilerSources.roots(compilerSourcePath))
+				inputs.push(root);
 			environment = new Map();
 		}
 		inputs.push(haxe.io.Path.join([context.compilerHome, "stdlib"]));

@@ -213,6 +213,19 @@ class CfgVerifier {
 					for (argument in arguments)
 						require(argument, available, block.id);
 					define(out, defined, available, block.id);
+				case Intrinsic(out, operation, arguments):
+					if (arguments.length != 1) throw "CFG enum Dynamic intrinsic requires one argument";
+					require(arguments[0], available, block.id);
+					switch operation {
+						case EnumDynamicBox(type):
+							switch type { case Enum(_): default: throw "CFG enum Dynamic box requires an enum type"; }
+							if (!sameType(arguments[0].type, type) || !sameType(out.type, Dyn)) throw "Invalid CFG enum Dynamic box signature";
+						case EnumDynamicView(type):
+							switch type { case Enum(_): default: throw "CFG enum Dynamic view requires an enum type"; }
+							if (!sameType(arguments[0].type, Array(Dyn)) || !sameType(out.type, Array(Dyn))) throw "Invalid CFG enum Dynamic view signature";
+						case EnumTagBox(_), EnumTagUnbox(_): throw "Enum tag adapters are introduced after CFG lowering";
+					}
+					define(out, defined, available, block.id);
 				case StaticClosure(out, _):
 					switch out.type {
 						case Function(_, _):

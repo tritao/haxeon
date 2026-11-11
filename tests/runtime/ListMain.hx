@@ -17,6 +17,6 @@ class ListMain {
 			+ "  var total = 0; for (value in values.iterator()) total += value;\n"
 			+ "  return values.length == 2 ? total : 0;\n"
 			+ "}");
-		File.saveBytes(Sys.args()[0], HlWriter.encode(compiler.compile("Main").module));
+		File.saveBytes(Sys.args()[0], HlWriter.encode(compiler.compile("Main").module).flatten());
 	}
 }

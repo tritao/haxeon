@@ -40,6 +40,15 @@ class CompilationContext {
 
 	public final frontendPassFunctions:Array<Int> = [];
 
+	/** One line per frontend pass: where its time and allocation went (see `FrontendCompilation.passReport`). */
+	public final frontendPassReports:Array<String> = [];
+
+	/** Time and allocation of every `parse` so far; a pass reports the difference, since parsing happens in the graph and in semantic assembly. */
+	public var parseMs = 0.0;
+
+	public var parseBytes = 0.0;
+	public var parseCount = 0.0;
+
 	public var assembler(get, set):HlModuleAssembler;
 	public var publishedAbi(get, set):Null<RuntimeAbiDescriptor>;
 	public var compiledOnce(get, set):Bool;
@@ -66,8 +75,14 @@ class CompilationContext {
 	public function writableState(name:String, rollback:Map<String, ModuleState>):ModuleState
 		return owner.writableState(name, rollback);
 
-	public function parse(state:ModuleState, entry:String, body:Map<String, Bool>, signatures:Map<String, Bool>, structural:Map<String, Bool>):Void
+	public function parse(state:ModuleState, entry:String, body:Map<String, Bool>, signatures:Map<String, Bool>, structural:Map<String, Bool>):Void {
+		var startedAt = Sys.time() * 1000.0, before = AllocationMeter.sample();
 		moduleAnalyzer.parse(state, entry, body, signatures, structural);
+		var after = AllocationMeter.sample();
+		parseMs += Sys.time() * 1000.0 - startedAt;
+		parseBytes += after.bytes - before.bytes;
+		parseCount += after.count - before.count;
+	}
 
 	public function identitySalt():String
 		return owner.identitySalt();

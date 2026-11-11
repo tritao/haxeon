@@ -173,7 +173,7 @@ class ModuleMain {
 			throw "Native layout changed persistent user-function identity";
 		if (buildA.functionIndices.get("main") == buildB.functionIndices.get("main"))
 			throw "Test did not exercise distinct backend native layouts";
-		File.saveBytes(output, HlWriter.encode(compacted.module));
+		File.saveBytes(output, HlWriter.encode(compacted.module).flatten());
 
 		var missing = new Compiler();
 		missing.update("Main.hx", "function main():Int { return Missing.value(); }");

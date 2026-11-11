@@ -12,8 +12,8 @@ function main():Int {
 		return 0;
 	var directory = "out/sys-runtime-é";
 	var renamed = "out/sys-runtime-renamed-é";
-	var file = "out/sys-runtime-renamed-é/value-ß.txt";
-	var bytesFile = "out/sys-runtime-renamed-é/bytes-ç.txt";
+	var file = renamed + "/value-ß.txt";
+	var bytesFile = renamed + "/bytes-ç.txt";
 	if (Sys.exists(file))
 		Sys.delete(file);
 	if (Sys.exists(bytesFile))

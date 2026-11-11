@@ -1,5 +1,7 @@
 package compiler.ir;
 
+import compiler.Provides.ProviderOperation;
+import compiler.Provides.ProviderOperations;
 import compiler.ir.IrStaticNullChecks.IrStaticCheckCache;
 import compiler.types.Type.CompilerType;
 import compiler.types.Type.NominalKind;
@@ -55,6 +57,7 @@ private class FunctionScratch {
 	public var loweringScopedDisposal = false;
 	public var localOptionalPlaces:Map<String, OptionalFieldPlace> = [];
 	public var arrayValuePlaceSerial = 0;
+
 	public var observableAccessSerial = 0;
 	public var observableConstructorInitialization:Bool;
 
@@ -240,9 +243,21 @@ class IrGenerator {
 			var cfg = CfgIteratorReplacement.run(generateCfg(fn)),
 				built = SsaBuilder.build(cfg);
 			var retention:compiler.ir.IrFunction.IrRetention = fn.isExposed == true ? Expose : fn.isKept == true ? Keep : Reachable;
-			return fn.isInline == true
-				|| retention != Reachable ? new IrFunction(built.name, built.arguments, built.result, built.blocks, built.debugBindings, fn.isInline == true,
-					retention) : built;
+			var kind:compiler.ir.IrFunction.IrFunctionKind = switch fn.role {
+				case UserFunction: Ordinary;
+				case GenericFunction: GenericSpecialization;
+				case LambdaFunction: SourceLambda;
+				case IterationFunction: IterationAdapter;
+				case OtherFunction: GeneratedHelper;
+				// Two source types can lower to one IR type (every Int-like hash key is i32), so the semantic type stays in the row as detail.
+				case ProviderFunction(type, operation):
+					switch lowerType(type) {
+						// The enum equality helpers keep the structured role the tag-storage passes read.
+						case Enum(_) if (operation == ProviderOperation.Equals || operation == ProviderOperation.ReflectEquals): EnumEquality(operation == ProviderOperation.ReflectEquals);
+						case lowered: Provider(TypeKey.of(lowered), ProviderOperations.detailed(operation, compiler.semantic.SemanticSignature.type(type)));
+					}
+			};
+			return new IrFunction(built.name, built.arguments, built.result, built.blocks, kind, built.debugBindings, fn.isInline == true, retention);
 		} catch (error:String) {
 			throw 'CFG generation failed for ${fn.name}: $error';
 		}
@@ -252,6 +267,7 @@ class IrGenerator {
 	 * Every function is generated with scratch state of its own (`FunctionScratch`): its IR must not depend on how many functions were
 	 * generated before it, or a function generated again would never equal its earlier IR.
 	 */
+
 	public function generateCfg(fn:TypedFunction):CfgFunction {
 		var outer = scratch;
 		scratch = new FunctionScratch(fn.isConstructor);
@@ -1800,6 +1816,10 @@ class IrGenerator {
 					case TNullLiteral: builder.constNull(Dyn);
 					default: builder.toDyn(lowerExpression(value, builder, localTypes));
 				}
+			case TEnumDynamicBox(value, enumType):
+				builder.intrinsic(compiler.ir.Ir.IrIntrinsic.EnumDynamicBox(lowerType(enumType)), [lowerExpression(value, builder, localTypes)], Dyn);
+			case TEnumDynamicView(array, enumType):
+				builder.intrinsic(compiler.ir.Ir.IrIntrinsic.EnumDynamicView(lowerType(enumType)), [lowerExpression(array, builder, localTypes)], lowerType(expression.type));
 			case TLocal(name):
 				var type = requireLocalType(localTypes, name, 'Missing typed local "$name"');
 				abiBoundaryCast(builder, builder.load(name, type), lowerType(expression.type));
@@ -3356,10 +3376,11 @@ class IrGenerator {
 			case TRange: Array(I32);
 			case TVoid: Void;
 			case TTypeParameter(owner, name): throw 'Unsubstituted type parameter "$owner.$name" reached IR lowering';
-			case TInstance(kind, name, _):
+			case TInstance(kind, name, arguments):
 				switch kind {
 					case NominalKind.Class:
-						var physical = facts.genericOwnerAliases.get(compiler.semantic.SemanticSignature.type(type));
+						// An owner alias is made only for a generic class with type arguments, so a class without any needs no signature string.
+						var physical = arguments.length == 0 ? null : facts.genericOwnerAliases.get(compiler.semantic.SemanticSignature.type(type));
 						Std.string(name) == "haxe.io.Eof" || physical == null && isErasedGenericOwner(type) ? Dyn : Obj(physical == null ? name : physical);
 					case NominalKind.Interface: Virtual(name);
 					case NominalKind.Enum: Enum(compiler.types.typing.EnumRuntimeType.name(type));
@@ -3636,7 +3657,7 @@ class IrGenerator {
 		var elementType = lowerType(element),
 			arrayType:IrType = Array(elementType);
 		if (profile.nativeArrayChecks && RuntimeType.requireArrayName(element) == "ref" && !IrTypeTools.isDynamic(elementType))
-			return builder.safeCast(builder.toDyn(builder.call("__array_alloc_typed_ref", [length, builder.typeValue(elementType)], Array(Dyn))), arrayType);
+			return builder.call(IrArrayFactory.NAME, [length], arrayType);
 		return builder.call(arrayAllocatorName(element), [length], arrayType);
 	}
 

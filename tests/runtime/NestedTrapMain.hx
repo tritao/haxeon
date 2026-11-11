@@ -56,6 +56,6 @@ class NestedTrapMain {
 			])
 		];
 		code.entryPoint = 2;
-		File.saveBytes(Sys.args()[0], HlWriter.encode(code));
+		File.saveBytes(Sys.args()[0], HlWriter.encode(code).flatten());
 	}
 }

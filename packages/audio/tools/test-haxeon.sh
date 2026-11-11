@@ -14,7 +14,7 @@ if [[ ! -f "$haxeon_dir/out/haxeon_runtime.hdll" ]]; then
 fi
 mapfile -t sources < <(find "$package_dir/src" "$haxeon_dir/packages/platform/src" -name '*.hx' -print | sort)
 for fixture in AudioSmoke; do
-    (cd "$haxeon_dir" && .tools/haxe/haxe -cp src --run compiler.tools.HaxeonCompiler \
+    (cd "$haxeon_dir" && .tools/haxe/haxe common.hxml --run compiler.tools.HaxeonCompiler \
         --output="$build_dir/$fixture.hl" --entry="$fixture" \
         --root="$haxeon_dir/packages/platform/tests" --root="$package_dir/tests" --root="$package_dir/src" --root="$haxeon_dir/packages/platform/src" \
         --ffi-interface="$haxeon_dir/packages/platform/bindings/nativekit.hxi" \

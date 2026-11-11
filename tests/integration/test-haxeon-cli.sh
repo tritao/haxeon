@@ -32,14 +32,14 @@ mkdir -p "$android_project"
 	cd "$android_project"
 	"$cli" init --target android
 )
-"$repo_dir/.tools/haxe/haxe" --cwd "$repo_dir" -cp "$repo_dir/src" --run tools.AndroidBuild \
+"$repo_dir/.tools/haxe/haxe" --cwd "$repo_dir" -cp "$repo_dir/src" -cp "$repo_dir/lib/haxeon-io" --run tools.AndroidBuild \
 	--project "$android_project/haxeon.json" "$android_project/build/app.hl"
 for artifact in app.hl app.hli app.entry app.hcs; do
 	test -s "$android_project/build/$artifact"
 done
 
 android_demo="$project_dir/android demo"
-"$repo_dir/.tools/haxe/haxe" --cwd "$repo_dir" -cp "$repo_dir/src" --run tools.AndroidBuild \
+"$repo_dir/.tools/haxe/haxe" --cwd "$repo_dir" -cp "$repo_dir/src" -cp "$repo_dir/lib/haxeon-io" --run tools.AndroidBuild \
 	"$repo_dir/android/demo/Main.hx" "$android_demo/app.hl"
 for artifact in app.hl app.hli app.entry app.hcs; do
 	test -s "$android_demo/$artifact"

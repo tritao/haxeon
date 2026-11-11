@@ -49,13 +49,23 @@ int main(int argc, char **argv) {
 	char *data = malloc(1 << 26); size_t dataCap = 1 << 26;
 	typedef struct { uint64_t b; int32_t s; } blk;
 	blk *blocks = malloc(sizeof(blk) * (1 << 20)); size_t blocksCap = 1 << 20;
+	// Pointer-free (kind 2) and raw (kind 1) blocks by size class, and the largest of each, for what a per-build arena could hold.
+	uint64_t histBlocks[4][40] = {{0}}, histBytes[4][40] = {{0}}, top[4][32] = {{0}};
+	#define NOTE_BLOCK(k, sz) do { if ((k) == 1 || (k) == 2) { int bucket = 0; uint64_t v = (uint64_t)(sz); while (v > 1) { v >>= 1; bucket++; } \
+		histBlocks[k][bucket]++; histBytes[k][bucket] += (sz); \
+		int low = 0; for (int q = 1; q < 32; q++) if (top[k][q] < top[k][low]) low = q; if ((uint64_t)(sz) > top[k][low]) top[k][low] = (sz); } } while (0)
+	// Page bytes and live bytes by page kind and by the page's block size class: where the empty space is.
+	uint64_t clsPages[4][40] = {{0}}, clsPageBytes[4][40] = {{0}}, clsLive[4][40] = {{0}};
 	for (int p = 0; p < pages; p++) {
-		uint64_t base = rp(f); int32_t kind = ri(f), size = ri(f); ri(f);
+		uint64_t base = rp(f); int32_t kind = ri(f), size = ri(f), blockSize = ri(f);
+		(void)blockSize; uint64_t liveBefore = liveBytes[kind & 3], pageFirst = 0;
 		if (kind >= 0 && kind < 4) { pageBytes[kind] += size; pageCount[kind]++; }
 		if (kind & 2) {
 			for (;;) {
 				uint64_t b = rp(f); if (!b) break; int32_t s = ri(f); uint64_t t = 0;
 				if (kind >= 0 && kind < 4) liveBytes[kind] += s;
+				if (!pageFirst) pageFirst = s;
+				NOTE_BLOCK(kind, s);
 				if (s >= 8) t = rp(f);
 				entry *e = t ? slot(t) : NULL;
 				if (e && e->kind) { e->blocks++; e->bytes += s; }
@@ -66,6 +76,8 @@ int main(int argc, char **argv) {
 			for (;;) {
 				uint64_t b = rp(f); if (!b) break; int32_t s = ri(f);
 				if (kind >= 0 && kind < 4) liveBytes[kind] += s;
+				if (!pageFirst) pageFirst = s;
+				NOTE_BLOCK(kind, s);
 				if (n == blocksCap) { blocksCap *= 2; blocks = realloc(blocks, sizeof(blk) * blocksCap); }
 				blocks[n].b = b; blocks[n].s = s; n++;
 			}
@@ -80,10 +92,24 @@ int main(int argc, char **argv) {
 				else { unknownBlocks++; unknownBytes += s; }
 			}
 		}
+		if (kind >= 0 && kind < 4) {
+			int cls = 0; { uint64_t v = pageFirst ? pageFirst : 1; while (v > 1) { v >>= 1; cls++; } }
+			if (!pageFirst) cls = 39;   // no live block: the page is empty
+			clsPageBytes[kind][cls] += size; clsLive[kind][cls] += liveBytes[kind] - liveBefore; clsPages[kind][cls]++;
+		}
 	}
 	printf("# pages %d ntypes %d fcount %d private_data %d mark_stack %d\n", pages, ntypes, fcount, privateData, markStack);
 	const char *kn[4] = {"dynamic(scan)","raw","noptr","finalizer"};
 	for (int k = 0; k < 4; k++) printf("# page-kind %s pages %llu page-bytes %llu live-block-bytes %llu\n", kn[k], (unsigned long long)pageCount[k], (unsigned long long)pageBytes[k], (unsigned long long)liveBytes[k]);
+	for (int k = 0; k <= 2; k++)
+		for (int b = 0; b < 40; b++) if (clsPages[k][b])
+			printf("# page-class %s %s%d pages %llu page-bytes %llu live-bytes %llu\n", kn[k], b == 39 ? "empty-" : "block-2^", b == 39 ? 0 : b, (unsigned long long)clsPages[k][b], (unsigned long long)clsPageBytes[k][b], (unsigned long long)clsLive[k][b]);
+	for (int k = 1; k <= 2; k++) {
+		for (int b = 0; b < 40; b++) if (histBlocks[k][b])
+			printf("# size-class %s 2^%d blocks %llu bytes %llu\n", kn[k], b, (unsigned long long)histBlocks[k][b], (unsigned long long)histBytes[k][b]);
+		for (int q = 0; q < 32; q++) for (int r = q + 1; r < 32; r++) if (top[k][r] > top[k][q]) { uint64_t t = top[k][q]; top[k][q] = top[k][r]; top[k][r] = t; }
+		printf("# largest-%s", kn[k]); for (int q = 0; q < 32 && top[k][q]; q++) printf(" %llu", (unsigned long long)top[k][q]); printf("\n");
+	}
 	printf("other\tpointer-free-or-untyped\t0\t%llu\t%llu\n", (unsigned long long)ptrfreeBlocks, (unsigned long long)ptrfreeBytes);
 	printf("other\traw-blocks\t0\t%llu\t%llu\n", (unsigned long long)rawBlocks, (unsigned long long)rawBytes);
 	printf("other\tscan-blocks-without-type\t0\t%llu\t%llu\n", (unsigned long long)unknownBlocks, (unsigned long long)unknownBytes);

@@ -45,7 +45,7 @@ grep -q 'haxeon_cxx_thunk_last_error' "$repo_dir/out/cxx_thunk_generated.cpp"
 grep -q 'C++ exception' "$repo_dir/out/cxx_thunk_projection/Counter.hx"
 grep -q 'class CxxThunkFixtureFunctions' "$repo_dir/out/cxx_thunk_projection/CxxThunkFixtureFunctions.hx"
 
-"$repo_dir/.tools/haxe/haxe" -cp "$repo_dir/src" -cp "$repo_dir/tests/runtime" --run CxxThunkMain \
+"$repo_dir/.tools/haxe/haxe" -cp "$repo_dir/src" -cp "$repo_dir/lib/haxeon-io" -cp "$repo_dir/tests/runtime" --run CxxThunkMain \
 	"$repo_dir/out/cxx-thunk-test.hl" "$repo_dir/out/cxx_thunk_fixture.hxi" "$repo_dir/out/cxx_thunk_projection/Counter.hx" \
 	"$repo_dir/out/cxx_thunk_projection/CxxThunkFixtureFunctions.hx"
 (

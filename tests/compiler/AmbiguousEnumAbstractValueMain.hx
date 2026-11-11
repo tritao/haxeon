@@ -9,10 +9,10 @@ class AmbiguousEnumAbstractValueMain {
 	static function main():Void {
 		var first = [
 			"p/First.hx",
-			"package p; enum abstract First(Int) { var Red = 1; var Left = 3; }"
+			"package p; enum abstract First(Int) from Int to Int { var Red = 1; var Left = 3; }"
 		], second = [
 			"q/Second.hx",
-			"package q; enum abstract Second(Int) { var Red = 2; var Right = 4; }"
+			"package q; enum abstract Second(Int) from Int to Int { var Red = 2; var Right = 4; }"
 			];
 
 		// Neither abstract is in the using package: ambiguous, and the error lists both.
@@ -33,8 +33,8 @@ class AmbiguousEnumAbstractValueMain {
 
 		// Two abstracts in the using package: the same-package rule cannot choose either.
 		var local = failure([
-			["r/Left.hx", "package r; enum abstract Left(Int) { var Red = 1; }"],
-			["r/Right.hx", "package r; enum abstract Right(Int) { var Red = 2; }"],
+			["r/Left.hx", "package r; enum abstract Left(Int) from Int to Int { var Red = 1; }"],
+			["r/Right.hx", "package r; enum abstract Right(Int) from Int to Int { var Red = 2; }"],
 			[
 				"r/User.hx",
 				"package r; class User { public static function pick():Int { var colour:Int = Red; return colour + Left.Red + Right.Red; } }"

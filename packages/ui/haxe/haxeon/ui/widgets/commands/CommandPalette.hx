@@ -1,4 +1,6 @@
 package haxeon.ui.widgets.commands;
+
+import haxeon.ui.core.UiModifier;
 import haxeon.ui.widgets.KeyedView;
 import haxeon.ui.widgets.layout.Align;
 import haxeon.ui.widgets.layout.Row;
@@ -127,7 +129,7 @@ private class CommandPaletteModel implements SearchPickerModel {
 		if (onResult != null) onResult(result);
 		if (result.succeeded && onDismiss != null) onDismiss();
 	}
-	public function navigate(key:Int, modifiers:Int, pageSize:Int):Void {
+	public function navigate(key:Int, modifiers:UiModifier, pageSize:Int):Void {
 		if (key == UiKey.Enter) { activate(selectedIndex()); return; }
 		if (firstEnabledIndex() < 0) return;
 		var step = key == UiKey.Up || key == UiKey.PageUp ? -1 : 1;

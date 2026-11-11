@@ -6,7 +6,7 @@ mkdir -p "$repo_dir/out"
 
 "$repo_dir/scripts/build-native.sh"
 fixture_path=$(bash "$repo_dir/tests/integration/build-native-call-fixture.sh")
-HAXEON_HXI_TRACE=1 "$repo_dir/.tools/haxe/haxe" -cp "$repo_dir/src" -cp "$repo_dir/tests/runtime" --run HxiCallMain \
+HAXEON_HXI_TRACE=1 "$repo_dir/.tools/haxe/haxe" -cp "$repo_dir/src" -cp "$repo_dir/lib/haxeon-io" -cp "$repo_dir/tests/runtime" --run HxiCallMain \
 	"$repo_dir/out/hxi-call-test.hl" "$fixture_path"
 (
 	cd "$repo_dir/out"
@@ -20,7 +20,7 @@ HAXEON_HXI_TRACE=1 "$repo_dir/.tools/haxe/haxe" -cp "$repo_dir/src" -cp "$repo_d
 	fi
 )
 
-"$repo_dir/.tools/haxe/haxe" -cp "$repo_dir/src" -cp "$repo_dir/tests/runtime" --run HxiValueHandleMain \
+"$repo_dir/.tools/haxe/haxe" -cp "$repo_dir/src" -cp "$repo_dir/lib/haxeon-io" -cp "$repo_dir/tests/runtime" --run HxiValueHandleMain \
 	"$repo_dir/out/hxi-value-handle-test.hl" "$fixture_path"
 (
 	cd "$repo_dir/out"
@@ -34,7 +34,7 @@ HAXEON_HXI_TRACE=1 "$repo_dir/.tools/haxe/haxe" -cp "$repo_dir/src" -cp "$repo_d
 	fi
 )
 
-"$repo_dir/.tools/haxe/haxe" -cp "$repo_dir/src" -cp "$repo_dir/tests/runtime" --run HxiSpanMain \
+"$repo_dir/.tools/haxe/haxe" -cp "$repo_dir/src" -cp "$repo_dir/lib/haxeon-io" -cp "$repo_dir/tests/runtime" --run HxiSpanMain \
 	"$repo_dir/out/hxi-span-test.hl" "$fixture_path"
 (
 	cd "$repo_dir/out"
@@ -48,7 +48,7 @@ HAXEON_HXI_TRACE=1 "$repo_dir/.tools/haxe/haxe" -cp "$repo_dir/src" -cp "$repo_d
 	fi
 )
 
-"$repo_dir/.tools/haxe/haxe" -cp "$repo_dir/src" -cp "$repo_dir/tests/runtime" --run HxiOutputsMain \
+"$repo_dir/.tools/haxe/haxe" -cp "$repo_dir/src" -cp "$repo_dir/lib/haxeon-io" -cp "$repo_dir/tests/runtime" --run HxiOutputsMain \
 	"$repo_dir/out/hxi-outputs-test.hl" "$fixture_path"
 (
 	cd "$repo_dir/out"
@@ -62,7 +62,7 @@ HAXEON_HXI_TRACE=1 "$repo_dir/.tools/haxe/haxe" -cp "$repo_dir/src" -cp "$repo_d
 	fi
 )
 
-"$repo_dir/.tools/haxe/haxe" -cp "$repo_dir/src" -cp "$repo_dir/tests/runtime" --run HxiRetainedMain \
+"$repo_dir/.tools/haxe/haxe" -cp "$repo_dir/src" -cp "$repo_dir/lib/haxeon-io" -cp "$repo_dir/tests/runtime" --run HxiRetainedMain \
 	"$repo_dir/out/hxi-retained-test.hl" "$fixture_path"
 (
 	cd "$repo_dir/out"

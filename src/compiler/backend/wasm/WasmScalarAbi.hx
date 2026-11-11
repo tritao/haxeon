@@ -1,5 +1,7 @@
 package compiler.backend.wasm;
 
+import compiler.ir.IrReachability;
+import compiler.ir.IrProgramIndex;
 import compiler.backend.wasm.WasmScalarClosureEscapes;
 
 import compiler.backend.wasm.WasmValueLayout;
@@ -11,7 +13,6 @@ import compiler.ir.IrOperands;
 import compiler.ir.IrVerifier;
 import compiler.ir.SourceProvenance.Located;
 import compiler.backend.wasm.WasmModuleSupport;
-import compiler.backend.wasm.WasmProgramIndex;
 
 /** Source signature retained while a direct function uses scalar Wasm parameters and results. */
 typedef WasmScalarSignature = {
@@ -61,28 +62,19 @@ class WasmScalarAbi {
 			for (method in object.methods) instanceMethods.set(method.functionName, true);
 		}
 		for (fn in program.functions)
-			if (StringTools.startsWith(fn.name, "$generic:") && fn.arguments.length > 0 && fn.arguments[0].name == "this"
+			if ((switch fn.kind { case GenericSpecialization: true; default: false; }) && fn.arguments.length > 0 && fn.arguments[0].name == "this"
 				&& values.isValue(fn.arguments[0].type))
 				instanceMethods.set(fn.name, true);
 		// An optional-flow clone of a value method still mutates its receiver. Treating it as an ordinary
 		// direct function would pass the receiver by value and silently discard its writes.
-		for (fn in program.functions)
-			if (StringTools.startsWith(fn.name, compiler.ir.IrOptionalScalarFlow.PREFIX)
-				&& instanceMethods.exists(fn.name.substr(compiler.ir.IrOptionalScalarFlow.PREFIX.length)))
+		for (fn in program.functions) switch fn.kind {
+			case OptionalScalar(original) if (original != null && instanceMethods.exists(original)):
 				instanceMethods.set(fn.name, true);
+			default:
+		}
 		for (fn in program.functions) {
-			if ((StringTools.startsWith(fn.name, "$") && !StringTools.startsWith(fn.name, "$generic:") && !StringTools.startsWith(fn.name, compiler.ir.GenericOwnerErasure.METHOD_REFERENCE_PREFIX) && !StringTools.startsWith(fn.name, WasmScalarClosureEscapes.RESTORE_CALL_PREFIX) && !StringTools.startsWith(fn.name, "$value$equality:") && !StringTools.startsWith(fn.name, "$equality:") && !compiler.types.typing.HashGenerator.isHashName(fn.name)
-					&& !compiler.types.typing.EnumEqualityGenerator.isEqualityName(fn.name)
-					&& !StringTools.startsWith(fn.name, "$lambda:") && !StringTools.startsWith(fn.name, "$iteration-adapter:")
-					&& !StringTools.startsWith(fn.name, compiler.ir.IrInlineEnumCaseAccess.HELPER_PREFIX)
-					&& !StringTools.startsWith(fn.name, compiler.ir.IrTypedInterfaceDispatch.PREFIX)
-					&& !StringTools.startsWith(fn.name, compiler.ir.IrTypedInterfaceDispatch.ADAPTER_PREFIX)
-					&& !StringTools.startsWith(fn.name, compiler.ir.IrValueInterfaceBoxes.UNBOX_PREFIX)
-					&& !StringTools.startsWith(fn.name, compiler.ir.IrOptionalScalarFlow.PREFIX)
-					&& !StringTools.startsWith(fn.name, compiler.ir.IrNullableScalarFlow.CALL_PREFIX)
-					&& !StringTools.startsWith(fn.name, compiler.ir.IrValueArrayElements.PREFIX)
-					&& !StringTools.startsWith(fn.name, compiler.types.typing.KeyPathTyping.HELPER_PREFIX)
-					&& !compiler.ir.IrOptionalValueFlow.isBoundaryHelper(fn.name)) || instanceMethods.exists(fn.name)) continue;
+			var declared = compiler.ir.IrScalarAbiEligibility.permits(fn.kind, true) && !instanceMethods.exists(fn.name);
+			if (!declared) continue;
 			var args = [for (argument in fn.arguments) argument.type], hasValue = values.isValue(fn.result), safe = scalarizable(fn.result);
 			for (argument in args) { if (values.isValue(argument)) hasValue = true; if (!scalarizable(argument)) safe = false; }
 			if (hasValue && safe) {
@@ -97,10 +89,10 @@ class WasmScalarAbi {
 			for (method in object.methods) methodNames.push(method.functionName);
 		}
 		for (fn in program.functions)
-			if (StringTools.startsWith(fn.name, "$generic:") && fn.arguments.length > 0 && fn.arguments[0].name == "this"
+			if ((switch fn.kind { case GenericSpecialization: true; default: false; }) && fn.arguments.length > 0 && fn.arguments[0].name == "this"
 				&& values.isValue(fn.arguments[0].type)) methodNames.push(fn.name);
 		for (fn in program.functions)
-			if (StringTools.startsWith(fn.name, compiler.ir.IrOptionalScalarFlow.PREFIX) && instanceMethods.exists(fn.name))
+			if ((switch fn.kind { case OptionalScalar(_): true; default: false; }) && instanceMethods.exists(fn.name))
 				methodNames.push(fn.name);
 		for (name in methodNames) valueMethods.set(name, true);
 		var candidates:Map<String, Bool> = [];
@@ -165,7 +157,7 @@ class WasmScalarAbi {
 		return Std.string(receiver) + ":" + method.length + ":" + method;
 
 	function planScalarVirtuals():Void {
-		var index = WasmProgramIndex.of(program), seen:Map<String, Bool> = [];
+		var index = IrProgramIndex.of(program), seen:Map<String, Bool> = [];
 		for (fn in program.functions) for (block in fn.blocks) for (located in block.instructions) switch located.value {
 			case MethodCall(out, receiver, method, _, _) if (!values.isValue(receiver.type)):
 				var key = virtualKey(receiver.type, method);
@@ -216,7 +208,7 @@ class WasmScalarAbi {
 			entry = WasmModuleSupport.hasFunction(program, "main") ? "main" :
 				WasmModuleSupport.hasFunction(program, "Main.main") ? "Main.main" : program.entryPoint;
 		if (WasmModuleSupport.hasFunction(program, "__init")) roots.push("__init");
-		var reachable = WasmModuleSupport.reachableFunctionsWithGeneratedRuntimeRoots(program, entry, roots);
+		var reachable = IrReachability.withGeneratedRuntimeRoots(program, entry, roots);
 		// A kept function is still internal; retention alone is not a host ABI boundary.
 		for (fn in program.functions) if (fn.name == entry || (!planningBoundaries && (roots.indexOf(fn.name) >= 0 || fn.retention == Expose))) {
 			for (argument in fn.arguments) if (closureArity(argument.type) >= 0) excluded.set(Std.string(argument.type), true);
@@ -305,7 +297,7 @@ class WasmScalarAbi {
 			case MethodCall(_, receiver, method, arguments, _):
 				// A typed virtual call transports the same closure reference. Its scalar callable ABI is safe
 				// only when every possible implementation accepts the exact declared signature at that position.
-				var index = WasmProgramIndex.of(program), targets = switch receiver.type {
+				var index = IrProgramIndex.of(program), targets = switch receiver.type {
 					case Obj(name): index.subtypesOf(name);
 					case Virtual(name): index.implementorsOf(name);
 					default: [];
@@ -537,10 +529,10 @@ class WasmScalarAbi {
 		result.functions = [for (fn in program.functions) rewriteFunction(fn)];
 		for (fn in program.functions) {
 			var direct = directClones.get(fn.name);
-			if (direct != null) result.functions.push(rewriteFunction(new IrFunction(direct, fn.arguments, fn.result, fn.blocks,
+			if (direct != null) result.functions.push(rewriteFunction(new IrFunction(direct, fn.arguments, fn.result, fn.blocks, GeneratedHelper,
 				fn.debugBindings, fn.inlineHint)));
 			var clone = methodClones.get(fn.name);
-			if (clone != null) result.functions.push(rewriteFunction(new IrFunction(clone, fn.arguments, fn.result, fn.blocks,
+			if (clone != null) result.functions.push(rewriteFunction(new IrFunction(clone, fn.arguments, fn.result, fn.blocks, GeneratedHelper,
 				fn.debugBindings, fn.inlineHint)));
 		}
 		result.objects = program.objects; result.interfaces = program.interfaces; result.enums = program.enums;
@@ -733,7 +725,7 @@ class WasmScalarAbi {
 			replacement.terminator = terminator;
 			blocks.push(replacement);
 		}
-		return new IrFunction(fn.name, args, fn.result, blocks, fn.debugBindings, fn.inlineHint, fn.retention);
+		return fn.withBlocks(blocks, null, args);
 	}
 
 	function expandVirtualCall(block:IrBlock, origin:Located<IrInstruction>, out:IrValue, receiver:IrValue, method:String,

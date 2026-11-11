@@ -93,7 +93,7 @@ else
 	HAXEON_DIR="$haxeon_dir" "$module_dir/tools/update-haxeon-wasm-hxi.sh" --check
 fi
 
-compiler=("$haxe_bin" -cp src --run compiler.tools.HaxeonCompiler)
+compiler=("$haxe_bin" common.hxml --run compiler.tools.HaxeonCompiler)
 if [[ ${NATIVEKIT_HAXEON_SELF_HOSTED:-0} == 1 ]]; then
 	compiler=("$haxeon_dir/scripts/hl")
 	if [[ -n ${NATIVEKIT_HAXEON_DIAGNOSTICS_PORT:-} ]]; then

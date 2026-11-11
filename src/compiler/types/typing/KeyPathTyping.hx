@@ -50,6 +50,17 @@ class KeyPathTyping {
 		};
 
 	public static function literal(session:TypingSession, parsedRoot:AstType, suffix:Array<String>, span:SourceSpan):TypedExpression {
+		var path = resolveLiteral(session, parsedRoot, suffix, span, false);
+		return define(session, path.root, path.value, path.fields, true, span);
+	}
+
+	/** Resolve a field identity for Diff.bit without creating a property-bypassing key path value. */
+	public static function diffField(session:TypingSession, parsedRoot:AstType, suffix:Array<String>, span:SourceSpan):{
+		final root:CompilerType; final value:CompilerType; final fields:Array<KeyPathField>;
+	} return resolveLiteral(session, parsedRoot, suffix, span, true);
+
+	static function resolveLiteral(session:TypingSession, parsedRoot:AstType, suffix:Array<String>, span:SourceSpan,
+			allowStoredProperty:Bool):{final root:CompilerType; final value:CompilerType; final fields:Array<KeyPathField>;} {
 		var rootSyntax = parsedRoot, names = suffix.copy();
 		switch parsedRoot {
 			case NamedType(name):
@@ -81,15 +92,16 @@ class KeyPathTyping {
 			if (entry.field.isStatic) fail('Cannot form a key path to static field "$name"', span);
 			if (!accessible(session, entry.declaration.name) && entry.field.isPublic != true)
 				fail('Cannot access private field "${entry.declaration.name}.$name" in a key path', span);
-			if (entry.field.readAccess == GetAccess || entry.field.writeAccess == SetAccess
+			if ((entry.field.readAccess == GetAccess || entry.field.writeAccess == SetAccess
 				|| entry.field.readAccess == DynamicAccess || entry.field.writeAccess == DynamicAccess)
+				&& !(allowStoredProperty && DiffIntrinsics.hasStoredField(entry.field)))
 				fail('Cannot form a key path to computed property "$name"', span);
 			if (entry.field.readAccess == NeverAccess || entry.field.readAccess == NullAccess && !accessible(session, entry.declaration.name))
 				fail('Cannot read field "$name" through a key path', span);
 			fields.push(entry);
 			value = entry.type;
 		}
-		return define(session, root, value, fields, true, span);
+		return {root: root, value: value, fields: fields};
 	}
 
 	public static function define(session:TypingSession, root:CompilerType, value:CompilerType, fields:Array<KeyPathField>,
@@ -125,7 +137,10 @@ class KeyPathTyping {
 			writable: writable,
 			rootWriteback: rootWriteback,
 			writeError: writeError,
-			span: span,
+			// One definition serves every use of the path and its accessors are kept from build to build, so their place cannot be a use
+			// (the last one typed would win) or a declaration (it moves when text above it changes, while a build that does not type
+			// the path again keeps the old place). It is compiler-owned code: a generated span in the first field's file, at a fixed offset.
+			span: fields.length > 0 ? new compiler.Source.SourceSpan(fields[0].field.span.file, 0, 0, false, null, "key-path") : span,
 			origin: origin
 		});
 		session.recordKeyPathUse(session.currentContext.name, name);

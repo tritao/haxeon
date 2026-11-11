@@ -1,5 +1,6 @@
 package compiler.tools;
 
+import compiler.compilation.IrPassMeter;
 import compiler.Compiler.CompileResult;
 import compiler.service.CancellationToken;
 import compiler.ffi.CHeaderEmitter;
@@ -187,6 +188,10 @@ class CompilerDriver {
 				+ milliseconds(artifactsWrittenAt - backendDoneAt)
 				+ (stampedAt < 0 ? "" : " stamp=" + milliseconds(stampedAt - requestStartedAt) + (deferFullModule ? " (patch first)" : "")));
 			report(phaseReport(result, backendDoneAt - backendStartedAt));
+			for (line in result.metrics.frontendPassReports)
+				report("frontend " + line);
+			report("ir pass allocation (MB/k objects): "
+				+ [for (entry in IrPassMeter.entries()) entry.name + "=" + Math.round(entry.bytes / 1048576.0) + "/" + Math.round(entry.count / 1000.0)].join(" "));
 			report(allocationReport("compiler allocation phases:", result.metrics.allocationPhases));
 			report(allocationReport("driver allocation phases:", [
 				AllocationMeter.delta("prepare", allocationAtStart, allocationAfterPrepare),

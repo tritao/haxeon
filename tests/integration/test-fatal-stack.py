@@ -18,7 +18,7 @@ def main():
     with tempfile.TemporaryDirectory(prefix="haxeon-fatal-stack-") as directory:
         project = Path(directory)
         bytecode = project / "fatal.hl"
-        subprocess.run([str(ROOT / ".tools/haxe/haxe"), "-cp", "src", "--run",
+        subprocess.run([str(ROOT / ".tools/haxe/haxe"), "-cp", "src", "-cp", "lib/haxeon-io", "--run",
                         "compiler.tools.HaxeonCompiler", "--entry=FatalStack",
                         "--root=tests/fixtures", "--define=haxeon-inline=0", "--output=" + str(bytecode),
                         "tests/fixtures/FatalStack.hx"], cwd=ROOT, check=True,

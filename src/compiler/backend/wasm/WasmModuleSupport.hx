@@ -1,5 +1,6 @@
 package compiler.backend.wasm;
 
+import compiler.ir.IrProgramIndex;
 import compiler.ir.Ir.IrProgram;
 import compiler.ir.Ir.IrType;
 import compiler.ir.Ir.IrValue;
@@ -34,7 +35,8 @@ class WasmModuleSupport {
 				for (block in fn.blocks)
 					for (located in block.instructions)
 						switch located.value {
-							case MakeEnum(_, name, constructor, arguments) if (arguments.length == 0):
+							case MakeEnum(output, name, constructor, arguments) if (arguments.length == 0
+								&& (switch output.type { case Enum(_): true; default: false; })):
 								used.set(enumCaseKey(name, constructor), true);
 							case _:
 						}
@@ -93,25 +95,6 @@ class WasmModuleSupport {
 		for (fn in program.functions)
 			if (fn.retention == Expose && result.indexOf(fn.name) < 0)
 				result.push(fn.name);
-		return result;
-	}
-
-	public static function reachableNatives(program:IrProgram, reachable:Map<String, Bool>):Map<String, Bool> {
-		var result:Map<String, Bool> = [];
-		for (fn in program.functions)
-			if (reachable.exists(fn.name))
-				for (block in fn.blocks)
-					for (located in block.instructions)
-						switch located.value {
-							case Call(_, name, _):
-								result.set(name, true);
-							case StaticClosure(_, name):
-								result.set(name, true);
-							// Dynamic iterators read through the Array<Dynamic> element reader.
-							case IteratorNext(output, _) if ((switch (output.type) { case Dyn: true; default: false; })):
-								result.set("__array_get_any", true);
-							default:
-						}
 		return result;
 	}
 
@@ -222,7 +205,7 @@ class WasmModuleSupport {
 								default:
 							}
 						case InstanceClosure(output, name, _):
-							var target = WasmProgramIndex.of(program).func(name);
+							var target = IrProgramIndex.of(program).func(name);
 							if (target == null || target.arguments.length == 0)
 								throw 'Wasm instance closure target "$name" has no receiver';
 							var closureArguments = switch output.type {
@@ -328,105 +311,14 @@ class WasmModuleSupport {
 		return false;
 	}
 
-	public static function reachableFunctions(program:IrProgram, entry:String, ?additionalRoots:Array<String>):Map<String, Bool> {
-		var index = WasmProgramIndex.of(program),
-			byName:Map<String, IrFunction> = [],
-			reachable:Map<String, Bool> = [],
-			pending:Array<String> = [entry];
-		if (additionalRoots != null)
-			for (root in additionalRoots)
-				pending.push(root);
-		for (fn in program.functions)
-			byName.set(fn.name, fn);
-		while (pending.length > 0) {
-			var name = pending.pop();
-			if (reachable.exists(name) || !byName.exists(name))
-				continue;
-			reachable.set(name, true);
-			var fn = byName.get(name);
-			for (block in fn.blocks)
-				for (located in block.instructions)
-					switch located.value {
-						case Call(_, target, _):
-							enqueueFunction(target, byName, pending);
-						case StaticClosure(_, target), InstanceClosure(_, target, _):
-							enqueueFunction(target, byName, pending);
-						case MethodCall(_, object, method, _, _):
-							switch object.type {
-								case Obj(objectName):
-									for (candidate in index.subtypesOf(objectName))
-										enqueueFunction(index.findMethod(candidate.name, method), byName, pending);
-								case Virtual(interfaceName):
-									for (candidate in index.implementorsOf(interfaceName))
-										enqueueFunction(index.findMethod(candidate.name, method), byName, pending);
-								default:
-							}
-						default:
-					}
-		}
-		return reachable;
-	}
-
-	/**
-	 * Computes Wasm reachability including calls introduced while lowering
-	 * runtime natives. Those calls are not present in the source IR, so they
-	 * cannot be discovered by reachableFunctions alone. Native declarations
-	 * carry these generated-function dependencies from the core runtime ABI;
-	 * keep the expansion centralized so the linear and GC backends cannot drift
-	 * apart.
-	 */
-	public static function reachableFunctionsWithGeneratedRuntimeRoots(program:IrProgram, entry:String, ?additionalRoots:Array<String>):Map<String, Bool> {
-		var roots:Array<String> = additionalRoots == null ? [] : additionalRoots.copy();
-		// `@:keep` and `@:expose` functions stay even when nothing calls them.
-		for (fn in program.functions)
-			if (fn.retention != Reachable && roots.indexOf(fn.name) < 0)
-				roots.push(fn.name);
-		var reachable = reachableFunctions(program, entry, roots);
-		while (true) {
-			var added = false, usedNatives = reachableNatives(program, reachable);
-			// Dynamic stringification calls each class's toString, as HashLink's `__string` proto does.
-			for (native in program.natives)
-				if (usedNatives.exists(native.name) && native.symbol == "__std_string")
-					for (object in program.objects) {
-						var method = stringMethod(program, object.name);
-						if (method != null && roots.indexOf(method) < 0) {
-							roots.push(method);
-							added = true;
-						}
-					}
-			for (native in program.natives)
-				if (usedNatives.exists(native.name) && native.generatedFunctionDependencies != null)
-					for (dependency in native.generatedFunctionDependencies)
-						if (roots.indexOf(dependency) < 0) {
-							roots.push(dependency);
-							added = true;
-						}
-
-			if (!added)
-				return reachable;
-			reachable = reachableFunctions(program, entry, roots);
-		}
-	}
-
-	static function enqueueFunction(name:Null<String>, byName:Map<String, IrFunction>, pending:Array<String>):Void
-		if (name != null && byName.exists(name))
-			pending.push(name);
-
-	/** The toString implementation an object of exactly this class uses, if any. */
-	public static function stringMethod(program:IrProgram, objectName:String):Null<String>
-		return findMethod(program, objectName, "__string");
-
-	static function findMethod(program:IrProgram, objectName:String, methodName:String):Null<String>
-		return WasmProgramIndex.of(program).findMethod(objectName, methodName);
-
 	static function isObjectSubtype(program:IrProgram, actual:String, expected:String):Bool
-		return WasmProgramIndex.of(program).isObjectSubtype(actual, expected);
+		return IrProgramIndex.of(program).isObjectSubtype(actual, expected);
 
 	static function implementsInterface(program:IrProgram, objectName:String, interfaceName:String):Bool
-		return WasmProgramIndex.of(program).implementsInterface(objectName, interfaceName);
+		return IrProgramIndex.of(program).implementsInterface(objectName, interfaceName);
 
 	static function interfaceExtends(program:IrProgram, actual:String, expected:String):Bool
-		return WasmProgramIndex.of(program).interfaceExtends(actual, expected);
+		return IrProgramIndex.of(program).interfaceExtends(actual, expected);
 
 	// Type tests emit a class's id once per class per test site, so named types remember theirs.
 	static function programFunction(program:IrProgram, name:String):IrFunction {
@@ -450,7 +342,7 @@ class WasmModuleSupport {
 
 	public static function requireValueType(type:IrType):WasmValueType
 		return switch type {
-			case I32, Bool: I32;
+			case I32, Bool, EnumTag(_): I32;
 			case I64: I64;
 			case F32: F64;
 			case F64: F64;

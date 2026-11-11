@@ -34,8 +34,6 @@ class SpinnerPainter {
 			kind:SpinnerKind = SpinnerKind.Ring) {
 		if (scheduler == null)
 			throw "Spinner painter requires an animation scheduler";
-		if (!isValidKind(kind))
-			throw "Spinner kind is invalid";
 		if (!finite(speed) || speed <= 0.0)
 			throw "Spinner speed must be finite and positive";
 		this.scheduler = scheduler;
@@ -73,8 +71,6 @@ class SpinnerPainter {
 
 	/** Updates paint, speed, and kind while retaining the resource identity. */
 	public function configure(nextKind:SpinnerKind, nextColor:Color, speed:Float):Void {
-		if (!isValidKind(nextKind))
-			throw "Spinner kind is invalid";
 		if (nextColor == null)
 			throw "Spinner painter requires a color";
 		if (!finite(speed) || speed <= 0.0)
@@ -208,10 +204,6 @@ class SpinnerPainter {
 		return new PathBuilder().moveTo(-0.11, -0.94).lineTo(0.11, -0.94)
 			.lineTo(0.11, -0.58).lineTo(-0.11, -0.58).close().build();
 	}
-
-	public static function isValidKind(value:SpinnerKind):Bool
-		return value == SpinnerKind.Ring || value == SpinnerKind.Dots ||
-			value == SpinnerKind.Bars || value == SpinnerKind.Pulse;
 
 	static function sameColor(left:Color, right:Color):Bool
 		return haxeon.Equality.equals(left, right);

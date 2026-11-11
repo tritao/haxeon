@@ -33,6 +33,6 @@ function main():Int {
 	static function main():Void {
 		var fixed = build(false).compile("Main");
 		build(true).compile("Main");
-		File.saveBytes(Sys.args()[0], HlWriter.encode(fixed.module));
+		File.saveBytes(Sys.args()[0], HlWriter.encode(fixed.module).flatten());
 	}
 }

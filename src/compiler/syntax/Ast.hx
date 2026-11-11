@@ -135,6 +135,7 @@ typedef AstEnumAbstractValue = {final name:String; final value:AstExpression; fi
 typedef AstEnumAbstract = {
 	final name:String;
 	final metadata:Array<AstMetadata>;
+	final ?conformances:Array<AstType>;
 	final underlying:AstType;
 	final fromTypes:Array<AstType>;
 	final toTypes:Array<AstType>;

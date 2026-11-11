@@ -112,3 +112,22 @@ linked function is compared with a fresh lowering, the final IR is verified in f
 function is lowered again (`HlFunctionEquality`: type, slot, registers, opcodes with labels compared one to one, debug data). Functions
 frozen on purpose (retired by a signature change, or dropped from the program) are skipped. The full driver suite and `test-hot-reload` pass
 with it. It is a test aid, never a fallback.
+
+
+## Performance rules for compiler code
+
+- **Iterating a Map goes through dynamic calls in the stock-Haxe worker.** An iterator is a structural type, so `for (x in map)`,
+  `for (k => v in map)` and `map.keys()` make a dynamic call per element (about 3% of a cold build before the hot sites were fixed). On a
+  hot path keep an array next to the map, filled where entries are added, and iterate that. The Haxeon-built worker (ADR 0003 section 12)
+  may make this moot; until then it is measured, not folklore.
+- **Hash a name once.** A name used for several lookups in a pass (a callee, a local) is looked up once to get a dense number, and the
+  per-name state after that is an array indexed by it (see `SsaBuilder`, `IrInliner`).
+- **Allocation sites come from the allocation census, not the profiler.** `HAXEON_COMPILER_ALLOC_CENSUS=<file>` on a build and
+  `scripts/alloc-sites.py <file>` rank where a build allocates (stacks sampled by bytes, exact counts by type). The profiler's alloc samples
+  carry only the allocator's return address and cannot name a site.
+- **Do not build a key or a list to look something up or to iterate once.** A prefix test with `a + "."` per element, a `[x, y]` literal returned
+  from a helper that callers only loop over, and a `"len:owner:field"` map key each allocate per call; the census found them at 6.9%, 4.4% and 1.7% of a
+  cold build's bytes. Group once and look up by the parts (`IrInlineEnumEligibility`, `IrOptionalFieldStorage`), or give the helper `count`/`at`
+  (`IrOperands`). A callback is no substitute: a closure that captures allocates at each call.
+- **A new map keyed by a string that a pass fills and a hot loop reads is a candidate for the two rules above**; check a profile share before
+  and after (`hlprof-live`, folded stacks), not the wall time of a loaded machine.

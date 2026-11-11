@@ -34,7 +34,7 @@ elif [[ -x "$haxeon_dir/scripts/build-native.sh" ]]; then
     (cd "$haxeon_dir" && scripts/build-native.sh)
 fi
 
-(cd "$haxeon_dir" && .tools/haxe/haxe -cp src --run compiler.tools.HaxeonCompiler \
+(cd "$haxeon_dir" && .tools/haxe/haxe common.hxml --run compiler.tools.HaxeonCompiler \
     --output="$artifact" \
     --entry=ShowcaseDesktop \
     --root="$module_dir/examples/ui_showcase" \

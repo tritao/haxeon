@@ -1,9 +1,12 @@
 package compiler.types.typing;
 
+import compiler.types.TypedAst.TypedFunctionRole;
 import compiler.Source.SourceSpan;
 import compiler.types.Type.CompilerType;
 import compiler.types.Type.NominalKind;
 import compiler.types.TypedAst.TypedExpression;
+import compiler.Provides.ProviderOperation;
+import compiler.Provides;
 import compiler.types.TypedAst.TypedFunction;
 import compiler.types.TypedAst.TypedStatement;
 import compiler.types.typing.TypingSession.EqualityRequest;
@@ -15,9 +18,6 @@ class EnumEqualityGenerator {
 	public static inline final REFLECTIVE_PREFIX = "$enum-reflect-equals:";
 
 	/** Both generated operations keep a semantic value signature when eligible enums become inline values. */
-	public static function isEqualityName(name:String):Bool
-		return StringTools.startsWith(name, EQUALS_PREFIX) || StringTools.startsWith(name, REFLECTIVE_PREFIX);
-
 	public static function equalsName(type:CompilerType):String
 		return EQUALS_PREFIX + Sha256.encode(compiler.semantic.SemanticSignature.type(type)).substr(0, 32);
 
@@ -99,6 +99,10 @@ class EnumEqualityGenerator {
 				var custom = reflective ? null : EnumConformanceMethods.method(session, type, "equals");
 				if (custom != null) {
 					statements.push(TReturn(new TypedExpression(TCall(EnumConformanceMethods.name(type, "equals"), [left, right]), TBool, span), span));
+				} else if (!Lambda.exists(declaration.cases, constructor -> constructor.params.length != 0)) {
+					// A nominal tag has no payload to inspect. Keep this constant-size even when
+					// a Dynamic/reflection adapter needs a callable equality implementation.
+					statements.push(TReturn(new TypedExpression(TEqual(left, right), TBool, span), span));
 				} else {
 					var leftIndex = new TypedExpression(TEnumIndex(left), TInt, span),
 						rightIndex = new TypedExpression(TEnumIndex(right), TInt, span);
@@ -130,6 +134,7 @@ class EnumEqualityGenerator {
 		}
 		return {
 			name: reflective ? reflectiveName(type) : equalsName(type),
+			role: ProviderFunction(type, reflective ? ReflectEquals : Equals),
 			origin: req.origin,
 			originKind: Helper,
 			typeArguments: null,

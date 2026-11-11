@@ -1,4 +1,4 @@
--cp src
+common.hxml
 -cp tests/tooling
 -main PatchOpcodeTests
 -hl out/patch-opcodes-test.hl

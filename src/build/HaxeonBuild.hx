@@ -71,7 +71,7 @@ class HaxeonBuild {
 		}
 
 		var seed = path("out", "bootstrap", "compiler-seed.hl");
-		var status = run(haxe(), ["--cwd", root(), "-cp", "src", "--run", "compiler.tools.HaxeonCompiler"].concat(compilerArguments(seed, sourcesFile)));
+		var status = run(haxe(), ["--cwd", root(), "common.hxml", "--run", "compiler.tools.HaxeonCompiler"].concat(compilerArguments(seed, sourcesFile)));
 		if (status != 0)
 			return status;
 		var compiler = seed;
@@ -156,7 +156,7 @@ class HaxeonBuild {
 
 	static function sourceManifest():Array<String> {
 		var result = [];
-		for (directory in ["src", "stdlib"])
+		for (directory in ["src", "lib", "stdlib"])
 			collectSources(path(directory), result);
 		result.sort(Reflect.compare);
 		return result;
@@ -221,7 +221,7 @@ class HaxeonBuild {
 		return environment.projectRoot;
 
 	static function usage(status:Int = 0):Int {
-		Sys.println("Usage: haxe -cp src --run build.HaxeonBuild <command>");
+		Sys.println("Usage: haxe common.hxml --run build.HaxeonBuild <command>");
 		Sys.println("  native [preset]  Configure and build HashLink and the runtime");
 		Sys.println("  bootstrap        Rebuild the checked-in compiler through convergence");
 		Sys.println("  bootstrap-self   Verify the checked-in compiler rebuilds identically");

@@ -13,12 +13,12 @@ if [[ ! -x "$haxe_bin" ]]; then
 fi
 
 mkdir -p "$root_dir/out"
-"$haxe_bin" --cwd "$root_dir" -cp "$root_dir/src" --run compiler.tools.HaxeonCompiler \
+"$haxe_bin" --cwd "$root_dir" -cp "$root_dir/src" -cp "$root_dir/lib/haxeon-io" --run compiler.tools.HaxeonCompiler \
 	--target=wasm32 --wasm-memory-stats --wasm-gc-stress \
 	--export=wasm-gc-invariants.allocationBurst --output="$stress_artifact" \
 	--entry=wasm-gc-invariants --root="$root_dir/tests/programs" "$root_dir/tests/programs/wasm-gc-invariants.hx"
 
-"$haxe_bin" --cwd "$root_dir" -cp "$root_dir/src" --run compiler.tools.HaxeonCompiler \
+"$haxe_bin" --cwd "$root_dir" -cp "$root_dir/src" -cp "$root_dir/lib/haxeon-io" --run compiler.tools.HaxeonCompiler \
 	--target=wasm32 --wasm-memory-stats \
 	--export=wasm-gc-invariants.allocationBurst \
 	--export=wasm-gc-invariants.deepGraphExercise --export=wasm-gc-invariants.wideGraphExercise \

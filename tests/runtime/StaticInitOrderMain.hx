@@ -14,7 +14,7 @@ class StaticInitOrderMain {
 		compiler.update("Consumer.hx",
 			"import Provider; class Consumer { public static var value:Int = Provider.value + 2; } function main():Int { return Consumer.value; }");
 		var result = compiler.compile("Consumer"),
-			live = Runtime.load(HlWriter.encode(result.module), result.runtimeIdentity);
+			live = Runtime.load(HlWriter.encode(result.module).flatten(), result.runtimeIdentity);
 		var value = Runtime.callInt(live, result.functionIds.get("main"));
 		if (value != 42)
 			throw "Static initializers did not respect module dependency order";
@@ -36,7 +36,7 @@ class StaticInitOrderMain {
 		];
 		if (helpers.length < 10)
 			throw "Static initialization was not split into bounded functions";
-		live = Runtime.load(HlWriter.encode(chunked.module), chunked.runtimeIdentity);
+		live = Runtime.load(HlWriter.encode(chunked.module).flatten(), chunked.runtimeIdentity);
 		if (Runtime.callInt(live, chunked.functionIds.get("main")) != 82)
 			throw "Static initializer order changed across chunks";
 		Runtime.dispose(live);
@@ -75,14 +75,14 @@ class StaticInitOrderMain {
 			compiler = new Compiler();
 			compiler.update("Main.hx", source);
 			var ordered = compiler.compile("Main");
-			live = Runtime.load(HlWriter.encode(ordered.module), ordered.runtimeIdentity);
+			live = Runtime.load(HlWriter.encode(ordered.module).flatten(), ordered.runtimeIdentity);
 			if (Runtime.callInt(live, ordered.functionIds.get("main")) != 7)
 				throw 'Static initializers ran before their dependency: $description';
 			Runtime.dispose(live);
 		}
 		// The stateless frontend uses the same assembler without the incremental function cache.
 		var fullIr = Frontend.compile('class Seed { public static final value:Int = 0; } class Consumer { public static final values:Array<String> = ["All"].concat([for (value in Provider.values) value]); } class Provider { public static final values:Array<String> = ["Welding"]; } function main():Int return Consumer.values.length;');
-		var full = runBytecode("out/static-init-full.hl", HlWriter.encode(HlLower.lower(fullIr)));
+		var full = runBytecode("out/static-init-full.hl", HlWriter.encode(HlLower.lower(fullIr)).flatten());
 		if (full.status != 2)
 			throw "Stateless frontend initialized a consumer before its provider: " + full.output;
 		// The first probe has no reads; later probes must not reuse its cached references.
@@ -112,7 +112,7 @@ class StaticInitOrderMain {
 				|| writes.indexOf("browser.Browser.categories") < 0
 				|| writes.indexOf("catalog.Catalog.categories") > writes.indexOf("browser.Browser.categories"))
 				throw 'Cross-module comprehension initialized before its provider (incremental=$incremental): $writes';
-			live = Runtime.load(HlWriter.encode(result.module), result.runtimeIdentity);
+			live = Runtime.load(HlWriter.encode(result.module).flatten(), result.runtimeIdentity);
 			if (Runtime.callInt(live, result.functionIds.get("main")) != (incremental ? 3 : 2))
 				throw "Cross-module comprehension produced the wrong categories";
 			Runtime.dispose(live);
@@ -143,7 +143,7 @@ class StaticInitOrderMain {
 		compiler.update("Main.hx",
 			'class Missing { public static final values:Array<Int> = null; } class Consumer { public static final count:Int = Missing.values.length; } function main():Int return Consumer.count;');
 		var nullResult = compiler.compile("Main");
-		var failed = runBytecode("out/static-init-null.hl", HlWriter.encode(nullResult.module));
+		var failed = runBytecode("out/static-init-null.hl", HlWriter.encode(nullResult.module).flatten());
 		if (failed.status == 0 || failed.output.indexOf('Cannot dereference null static "Missing.values"') < 0)
 			throw "Null static dereference at startup did not report an error: " + failed.output;
 		Sys.println("PASS: static initializers respect dependency order");

@@ -6,12 +6,13 @@ import compiler.syntax.Lexer;
 import compiler.syntax.Parser;
 import compiler.Source.SourceFile;
 import compiler.semantic.ModuleCanonicalizer;
+import compiler.semantic.LocalScope;
 
 class ModuleCanonicalizerMain {
 	static function main():Void {
 		var source = 'function helper(value:Alias):Alias { return value; } function run(value:Alias):Alias { return helper(value); }',
 			program = new Parser(new Lexer(new SourceFile("demo/Main.hx", source)).tokenize()).parseProgram(),
-			locals:Map<String, Bool> = ["helper" => true, "run" => true],
+			locals = LocalScope.ofNames(["helper" => true, "run" => true]),
 			aliases = AliasTable.of(["Alias" => "demo.Value"]),
 			canonical = ModuleCanonicalizer.canonicalFunction(program.functions[1], "demo.Main", "demo.Main", locals, null, aliases);
 		expect(canonical.name == "demo.Main.run", "function name should be module-qualified");
@@ -32,7 +33,7 @@ class ModuleCanonicalizerMain {
 		}, "import aliases should preserve qualified member suffixes");
 
 		// An assignment target is a dotted name, and an imported class in it is qualified like any other reference.
-		function assigned(name:String, locals:Map<String, Bool>, aliases:Null<AliasTable>):String
+		function assigned(name:String, locals:LocalScope, aliases:Null<AliasTable>):String
 			return switch ModuleCanonicalizer.canonicalStatement(Assignment(name, IntegerLiteral(1, canonical.span), canonical.span), "demo.Main",
 				"demo.Main", locals, aliases) {
 				case Assignment(target, _, _): target;
@@ -42,7 +43,8 @@ class ModuleCanonicalizerMain {
 		expect(assigned("Cache.hits", locals, imports) == "lib.Cache.hits", "an imported class in an assignment target should be qualified");
 		expect(assigned("hits", locals, imports) == "hits", "a bare assignment target is never an import");
 		expect(assigned("owner.hits", locals, imports) == "owner.hits", "a receiver that is not an import is left alone");
-		expect(assigned("Cache.hits", ["Cache" => true], imports) == "Cache.hits", "a name declared in the module shadows an import in an assignment target");
+		expect(assigned("Cache.hits", LocalScope.ofNames(["Cache" => true]), imports) == "Cache.hits",
+			"a name declared in the module shadows an import in an assignment target");
 		expect(assigned("Cache.hits", locals, null) == "Cache.hits", "without imports an assignment target is unchanged");
 
 		// A table layers shared maps under the names it sets itself, in the order they were attached, without changing them.

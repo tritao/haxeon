@@ -8,9 +8,13 @@ class IrGraph {
 	public final predecessors:Map<Int, Array<Int>> = [];
 	public final successors:Map<Int, Array<Int>> = [];
 	public final order:Array<Int> = [];
-	public final immediate:Map<Int, Int> = [];
 
+	/** Immediate dominators; computed the first time they are asked for, since most users of a graph only walk its edges. */
+	public var immediate(get, never):Map<Int, Int>;
+
+	final dominators:Map<Int, Int> = [];
 	final rank:Map<Int, Int> = [];
+	var dominatorsComputed = false;
 
 	public function new(fn:IrFunction) {
 		if (fn.blocks.length == 0)
@@ -22,19 +26,30 @@ class IrGraph {
 		}
 		visit(fn.blocks[0].id, []);
 		order.reverse();
+	}
+
+	function get_immediate():Map<Int, Int> {
+		if (!dominatorsComputed) {
+			dominatorsComputed = true;
+			computeDominators();
+		}
+		return dominators;
+	}
+
+	function computeDominators():Void {
 		for (i in 0...order.length)
 			rank.set(order[i], i);
-		immediate.set(order[0], order[0]);
+		dominators.set(order[0], order[0]);
 		var changed = true;
 		while (changed) {
 			changed = false;
 			for (i in 1...order.length) {
 				var id = order[i], parent:Null<Int> = null;
 				for (pred in predecessors.get(id))
-					if (immediate.exists(pred))
+					if (dominators.exists(pred))
 						parent = parent == null ? pred : intersect(parent, pred);
-				if (parent != null && (!immediate.exists(id) || immediate.get(id) != parent)) {
-					immediate.set(id, parent);
+				if (parent != null && (!dominators.exists(id) || dominators.get(id) != parent)) {
+					dominators.set(id, parent);
 					changed = true;
 				}
 			}
@@ -102,9 +117,9 @@ class IrGraph {
 	function intersect(left:Int, right:Int):Int {
 		while (left != right) {
 			while (requiredInt(rank, left) > requiredInt(rank, right))
-				left = requiredInt(immediate, left);
+				left = requiredInt(dominators, left);
 			while (requiredInt(rank, right) > requiredInt(rank, left))
-				right = requiredInt(immediate, right);
+				right = requiredInt(dominators, right);
 		}
 		return left;
 	}

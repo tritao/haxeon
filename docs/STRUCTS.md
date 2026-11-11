@@ -479,10 +479,51 @@ type IDs, without a lookup allocation or an added header field. `Reflect.compare
 invalid-comparison result when either operand is an enum, including when the other operand is null. These checks
 apply to canonical escape boxes; typed inline packets keep their scalar/reference lanes.
 
+### Payload-free enums are scalar tags
+
+An enum whose constructors all have zero parameters always uses a nominal four-byte tag in locals, parameters,
+results, class and struct fields, generic fields, and arrays. Payload-enum escape eligibility does not apply to
+these types: there is no payload or reference to spill. Constructor indices are encoded as index plus one;
+zero represents null, including `Null<E>`, without another wrapper or presence bit. Such fields are Flat and
+Portable; a record containing an enum tag and an Int occupies eight bytes with four-byte alignment.
+
+The IR retains the enum's nominal identity separately from its I32 carrier. An enum tag is not an Int and tags
+of different enums are not interchangeable. Flattened interface boxes retain the nominal tag and its four-byte
+scalar-storage metadata; the verifier rejects other tag storage widths. Typed array access uses four-byte scalar lanes and preserves the
+nominal element descriptor, including through iterator and Dynamic views. A genuine Dynamic or reflection escape
+returns the enum's cached boxed case; checked unboxing verifies the exact enum type before reading its index.
+HashLink also records a distinct `HENUMTAG` type whose value occupies four bytes. Its descriptor retains the boxed
+enum type and case-cache global indices. Native boxed-enum payload reflection and formatting therefore retain the logical enum type instead
+of treating the stored tag as an Int. Cache slots are ordinary module globals, rooted and remapped with the module;
+no untracked cache allocation outlives it. Closure signatures retain this nominal descriptor while using the I32 ABI.
+Reflected class and anonymous-record fields use logical get/set adapters, so reflective writes cannot store an
+integer or a case of another enum in a tag field. Escaping closures use the same checked box/unbox boundary.
+
+Release modules omit boxed enum descriptors when no boxed carrier or reflective descriptor is reachable.
+After source typing, a closed tag that never crosses such a boundary uses the ordinary integer ABI,
+including integer array allocation, rather than generating lane-array bridges for an unobservable nominal
+descriptor. The escape proof follows class fields and methods, inherited interfaces, arrays, iterators and
+closure signatures transitively. Genuine Dynamic/reflection/native boundaries keep nominal checked adapters.
+Development/live-patch modules retain their descriptors, since subsequent patches can add reflective uses.
+A constant tag constructor is not an allocation safepoint and introduces no GC-root stores.
+`EnumTagReleaseSizeMain` pairs the same release program using a tag enum and an Int abstract (fields, calls,
+closures and arrays), checks that the tag version is no larger on all three targets with inlining off/on,
+and separately verifies nested reflection and erased-array get/set.
+
+`EnumTagStorageMain` checks the nominal IR carrier, its codec, lane layout and malformed-IR rejection.
+`SourceEnumTagMain` checks source-level fields, Flat sizes, nullable tags, arrays/iterators, reflection get/set,
+wrong-type casts, closures and generic fields on HashLink, Wasm32 and Wasm GC with inlining off and on.
+Repeated typed operations and warmed Dynamic round trips allocate zero objects at 8 and 1,024 iterations.
+`EnumTagPatchMain` covers native scalar descriptors across symbol persistence and live body patches, including
+retained fields and fresh module loads. Wasm's existing Dynamic formatter supports nullary case names but does not
+format payload enums; extending that formatter is a separate follow-up, not part of tag storage.
+Enums with any payload constructor keep the classification and widening inventory below; their nullary cases
+still reuse cached boxed instances when the enum is classified boxed.
+
 ### Source inline enum activation: remaining blockers
 
 The production pipeline selects source enum storage before optional-flow, reflection and scalar-call lowering. The
-first subset is closed and non-generic; unsupported uses select boxed storage for the whole enum, including uses in
+first payload subset is closed and non-generic; unsupported uses select boxed storage for the whole payload enum, including uses in
 uncalled typed bodies. This conservative program-wide classification can be widened without changing the language
 semantics. The remaining inventory below distinguishes widening work from the first activation. Sizes describe scope, not elapsed time: **S** is a local change, **M** is a cross-cutting
 compiler change, and **L** spans multiple semantic/runtime boundaries. Update this list as each item lands.
@@ -520,7 +561,7 @@ No other payload enum allocates in these windows. In particular, backspace uses 
 windows. Their planned ports remain required, but are not evidence for prioritizing an unrelated blocker ahead of the
 measured typing path.
 
-The latest candidate still allocates one 24-byte `TextEditIntent` for `type-char`: three paired control/candidate runs
+The preliminary widening candidate still allocated one 24-byte `TextEditIntent` for `type-char`: three paired control/candidate runs
 had 835 objects each and median totals of 60,064 / 60,056 bytes. It does not regress, but does not unlock the enum.
 Its remaining trace includes checked casts and runtime descriptors for virtual contracts, for example
 `$checked-dynamic-cast:Virtual(haxeon.ui.core.View)`. These uses also appear in generic-erased interface code; resolving
@@ -548,6 +589,16 @@ possible program. Keep the documented boxed classification for their unsupported
 | E6 beyond the typing path | General direct enum Dynamic/reflection/throw/native escape adapters | Only the callable/reflection paths needed by `TextEditIntent` are in this session; no other finite payload enum allocates in these windows |
 | E7 beyond the typing path | Remaining callable payload/container/descriptor associations | Implement what admits `TextEditIntent`; broader descriptor/container widening has no additional measured enum cost in these windows |
 | E1/E2 general widening | Reachable-use classification, canonical native Flat enum layouts and representation-changing reload coverage | No measured finite enum besides the typing path is waiting for these; UI native-boundary mappings remain part of the required ports |
+
+The final shared-reach/closed-tag closeout supersedes that preliminary typing
+result. A calibrated isolated action census on `0e2acb1e` measures `type-char`
+at **417 objects / 16,360 bytes**, versus the published `bb4072f8` checkpoint's
+418 / 16,384. The missing site is exactly the 24-byte `TextEditIntent` from the
+input callback. Its 32-byte closure retains its allocation and changes only its
+signature. All other 14 action totals are identical. This does not activate the
+general E3/E4/E8 families: their broader ABI follow-ups stay deferred. The frozen
+census tables and the final delta are distinguished in `ALLOCATION_CENSUS.md`
+and `packages/ui/docs/VALUE_TYPES.md`.
 
 #### UI sizing conversion: measured stop
 
@@ -641,6 +692,13 @@ or interface/function signature, instruction output or operand, phi input, termi
 all bodies even during selective incremental verification. Only the generated box/unbox adapters, identified against
 the selected declaration and canonical adapter signature (including their existing scalar/optional ABI clones), may
 contain boxed enum temporaries. An arbitrary helper prefix does not grant that exception.
+
+ABI-dependent closure escape checks run after the selected target has constructed its explicit adapters. HashLink
+finishes that ABI in the frontend and can memoize verification there. Wasm finishes it in the backend and verifies
+the adapted program unconditionally. A Wasm compilation session also verifies its separately adapted auxiliary
+HashLink assembly; fresh recomputation uses that same adapted input. No private-payload escape is exempted merely
+because it occurs in a closure. Cold and edited builds with reuse checking, and forged unadapted backend payloads,
+exercise this ordering on both Wasm targets.
 
 Arrays and iterators retain logical `Enum(E)` element descriptors while transporting reference handles to lane storage;
 that exception does not admit an array or iterator of callbacks taking/returning nominal `E` values. A nominal enum type
@@ -769,6 +827,120 @@ prove an RSS improvement. Five paired allocation censuses of the same workload h
 1,825,370 / 1,825,374 allocations and a paired median difference of +6. Three further type comparisons found only
 byte-buffer differences, of -6, -4, and +3 allocations; their source is not established. The 30-cycle selection
 census type comparison found only 176 additional byte-buffer bytes and no allocation-count difference.
+
+## Closed raw-value enums
+
+A native, wire or file-format constant keeps its declared raw value:
+
+```haxe
+enum abstract PixelFormat(Int) implements RawRepresentable {
+    var Rgba8 = 1;
+    var Rgb8 = 2;
+}
+var code:Int = PixelFormat.Rgba8.rawValue();
+var format:Null<PixelFormat> = PixelFormat.fromRaw(code);
+```
+
+`RawRepresentable` synthesizes inline `rawValue():Int|String` and static
+`fromRaw(value):Null<Self>` from the declaration's current constants. Unknown raw
+values return null; aliases with the same raw value denote the same value. Both
+members are reserved names. Constants must be compile-time Int/String values.
+The conformance rejects implicit `from`/`to` conversions. Explicit conversion is
+required in both directions, including calls, assignments and native boundaries.
+
+Enum abstracts retain their nominal type during checking and use their underlying
+scalar/reference representation in storage. Bare constants resolve from that
+nominal expected type; no declaration-side hint table survives erasure. Generic
+`T:RawRepresentable` calls resolve against the concrete enum abstract. Synthesized
+helpers are requested on demand and regenerated when constants change. Array search
+and String-array joining choose the raw storage operation while keeping the
+nominal element type for argument checks.
+`rawValue()` and constrained reads allocate nothing with inlining disabled too.
+`fromRaw()` follows the existing `Null<Int>`/`Null<String>` ABI; this feature does
+not introduce scalar nullable specialization (queue item a2).
+
+### Native enum boundaries
+
+A generated binding owns the native integer codes. Non-flags native enums are
+closed `enum abstract X(Int) implements RawRepresentable`; their parameters and
+record fields retain that type. There are no implicit Int conversions. Ordinary
+UI choices already migrated in this series retain their plain enums. Their
+exhaustive UI-to-native switches share one home, `haxeon.ui.NativeEnums`, including
+layout policy, cursor, effect, mask, cache and accessibility projections. UI
+fingerprints and snapshots use the UI case, independently of native codes.
+For future types, a UI choice that mirrors a native enum one to one uses the
+generated binding type directly; a separate UI enum and mapping are appropriate
+only when the UI meaning differs. RawRepresentable belongs on a distinct UI type
+only when that type's own number is a file, wire or persisted-data format.
+
+Typed reads from C use a generated checked decoder returning X directly, rather
+than the nullable `fromRaw` result. The successful path stays an integer carrier
+and allocates nothing. An unknown code throws at the native boundary. No open
+native enum mechanism is introduced; add one only for a real extensible platform
+contract. Flag reads retain the separate documented policy of masking bits the
+imported schema does not declare.
+
+One out-of-line decoder method is shared per native enum in its owning generated
+type module's decoder class. Dependent interfaces reuse that decoder rather than
+regenerating checks. Consecutive declared codes use exact range guards; sparse
+domains keep their gaps rejected rather than generating one switch arm per code.
+The regression
+fixture covers a dependency and separate function/type modules in the same
+package. Scalar and fixed-array record getters, output values, counted arrays,
+native results and span-call results use the checked projection. Callback enum
+arguments and results also validate at their generated boundary. Explicit raw
+native memory remains subject to the native-memory rules.
+
+The native-enum fixture rejects implicit Int/String conversions on all three
+targets, with inlining off/on. The focused count is zero objects for 8 and 1,024
+successful scalar/fixed-array decode/read/write iterations on each target.
+
+Native declarations must cover every valid code, including unnamed but finite
+values. NativeKit's GTK backend maps physical buttons 6/7 to native codes 5/6,
+while its public header names only codes 0–4 and 7. The binding import header names
+those missing values. The C importer merges compatible `hxi:enum` value groups
+for one integer typedef, canonicalizes the combined raw-value order, and rejects
+conflicting enum/flags contracts. This completes the closed domain 0–7 without
+changing the vendor pin or accepting arbitrary values; code 8 is rejected.
+
+The common native result domain includes the header-declared HTTP/transport
+errors carried in event results and receive calls. These finite domains are
+combined from C constants in the import header, so valid subsystem errors pass
+checked reads while unknown values still fail. The Net API remains in its own
+interface. Cross-target native-record tests cover a transport status, an HTTP
+status and rejection of an unknown result.
+
+## Closed flags
+
+`enum abstract Access(Int) implements Flags` declares named bits and combinations.
+Every nonzero constant must be a single bit or contain only declared single bits;
+zero and the signed high bit are supported. Implicit `from`/`to` conversions are
+rejected. Conformance uses the same declared-interface lookup as `Equatable`,
+`Hashable` and `RawRepresentable`, including inherited interfaces.
+
+The compiler synthesizes inline `|`, `&`, `contains`, `insert`, `remove`,
+`isEmpty`, `isSingle`, `empty`, `rawValue`, `fromRaw` and `toString`. Set updates
+return a new value. `contains(mask)` tests all bits, including an empty mask;
+use `!(value & mask).isEmpty()` to test any bit. `fromRaw(Int):Self` throws when
+unknown bits are present. Sets occupy one Int and operations do not allocate,
+including calls without inlining; formatting a combination creates a String.
+Haxeon's own flags use this conformance rather than `haxe.EnumFlags`.
+
+Native reads have a separate, explicit policy: generated field, out/inout,
+buffer and return-value projections mask the raw word with the union of the
+bits declared in the HXI schema before constructing the flags value. This drops
+platform or future native bits the Haxe type does not model; it does not weaken
+`Flags.fromRaw` for Haxeon data. Generated `__hxi_flags_from_native_*` helpers
+apply the same policy to handwritten event/persisted-data decoders. Raw pointer
+access remains raw memory: such decoders must use the boundary helper rather
+than call `fromRaw` directly. Signed high bits and 8/16/32/64-bit native words
+retain their declared bits.
+
+
+Integer `RawRepresentable.fromRaw` helpers use one typed switch with duplicate
+raw values combined; String helpers retain equality tests. General IR switch
+lowering currently emits branches, so backend jump-table selection remains a
+follow-up rather than a claimed benefit of this synthesis.
 
 ## Equality and hashing
 

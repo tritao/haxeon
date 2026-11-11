@@ -98,12 +98,12 @@ jobs:
       - name: Verify self-hosted compiler convergence
         if: matrix.platform == 'windows'
         shell: pwsh
-        run: ./.tools/haxe/haxe.exe --cwd . -cp src --run build.HaxeonBuild bootstrap
+        run: ./.tools/haxe/haxe.exe --cwd . common.hxml --run build.HaxeonBuild bootstrap
 
       - name: Run cross-platform core tests
         if: matrix.platform == 'windows'
         shell: pwsh
-        run: ./.tools/haxe/haxe.exe --cwd . -cp src --run build.HaxeonBuild test 8
+        run: ./.tools/haxe/haxe.exe --cwd . common.hxml --run build.HaxeonBuild test 8
 
       - name: Build with the MSVC Debug CRT
         if: matrix.platform == 'windows'
@@ -115,7 +115,7 @@ jobs:
       - name: Run core tests with the MSVC Debug CRT
         if: matrix.platform == 'windows'
         shell: pwsh
-        run: ./.tools/haxe/haxe.exe --cwd . -cp src --run build.HaxeonBuild test 8
+        run: ./.tools/haxe/haxe.exe --cwd . common.hxml --run build.HaxeonBuild test 8
 
       - name: C++ CMake FFI integration
         if: matrix.platform == 'windows'

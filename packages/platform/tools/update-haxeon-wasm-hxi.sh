@@ -25,6 +25,7 @@ HAXEON_DIR="$haxeon_dir" "$haxeon_dir/scripts/haxeon-ffi-audit" \
     --interface=NativeKit \
     --include="$nativekit_dir/include" \
     --source-label=bindings/haxe/nativekit_import.h \
+    --exclude-header="$nativekit_dir/include/nativekit_net.h" \
     --output="$destination" \
     "$platform_dir/bindings/nativekit_import.h"
 

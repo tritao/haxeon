@@ -1,5 +1,6 @@
 package compiler.types.typing;
 
+import compiler.types.TypedAst.TypedFunctionRole;
 import compiler.Source.SourceSpan;
 import compiler.syntax.Ast.AstFunction;
 import compiler.types.Type.CompilerType;
@@ -45,7 +46,7 @@ class EnumInterfaceAdapter {
    receiver = new TypedExpression(TLocal("this"), ownerType, span),
    payload = new TypedExpression(TField(receiver, "value"), request.type, span),
    constructor:TypedFunction = {
-    name: key + ".new", origin: request.origin, originKind: Helper, owner: key, isStatic: false, isConstructor: true,
+    name: key + ".new", role: OtherFunction, origin: request.origin, originKind: Helper, owner: key, isStatic: false, isConstructor: true,
     arguments: [{name: "value", type: request.type}], result: TVoid,
     statements: [TFieldAssign(receiver, "value", new TypedExpression(TLocal("value"), request.type, span), span), TReturnVoid(span)],
     cells: [], cellCaptures: [], span: span
@@ -78,7 +79,7 @@ class EnumInterfaceAdapter {
      case TVoid: [TExpression(call, span), TReturnVoid(span)];
      default: [TReturn(call, span)];
     };
-    methods.push({name: key + "." + contract.name, origin: request.origin, originKind: Helper, owner: key, isStatic: false, isConstructor: false,
+    methods.push({name: key + "." + contract.name, role: OtherFunction, origin: request.origin, originKind: Helper, owner: key, isStatic: false, isConstructor: false,
      arguments: args, result: result, statements: body, cells: [], cellCaptures: [], span: span});
    }
   }

@@ -48,8 +48,8 @@ class WindowFocusTests {
 		root.children[0].on(UiEventKind.Focus, function(_) { gained++; });
 		root.children[0].on(UiEventKind.FocusLost, function(_) { lost++; });
 		check(context.focusWidget(first), "initial focus");
-		input.consume(WindowStateChanged(source, 0));
-		input.consume(WindowStateChanged(source, 0));
+		input.consume(WindowStateChanged(source, nativekit.ffi.NativeKitTypes.WindowStateFlags.empty()));
+		input.consume(WindowStateChanged(source, nativekit.ffi.NativeKitTypes.WindowStateFlags.empty()));
 		check(context.focus.focusedId == null && lost == 1, "loss clears focus once");
 		input.consume(WindowStateChanged(source, WindowStateFlags.Active));
 		check(context.focus.focusedId != null && context.focus.focusedId.equals(first) && gained == 2,
@@ -57,21 +57,21 @@ class WindowFocusTests {
 		input.consume(WindowStateChanged(source, WindowStateFlags.Active));
 		check(gained == 2, "duplicate activation must not refocus");
 		// A background frame rebuild must not lose the remembered stable ID.
-		input.consume(WindowStateChanged(source, 0));
+		input.consume(WindowStateChanged(source, nativekit.ffi.NativeKitTypes.WindowStateFlags.empty()));
 		context.submit(view, frame);
 		input.consume(WindowStateChanged(source, WindowStateFlags.Active));
 		check(context.focus.focusedId != null && context.focus.focusedId.equals(first), "restore after rebuild");
-		input.consume(WindowStateChanged(source, 0));
+		input.consume(WindowStateChanged(source, nativekit.ffi.NativeKitTypes.WindowStateFlags.empty()));
 		context.clearFocus();
 		input.consume(WindowStateChanged(source, WindowStateFlags.Active));
 		check(context.focus.focusedId == null, "explicit clear cancels restoration");
 		context.focusWidget(first);
-		input.consume(WindowStateChanged(source, 0));
+		input.consume(WindowStateChanged(source, nativekit.ffi.NativeKitTypes.WindowStateFlags.empty()));
 		context.focusWidget(second);
 		input.consume(WindowStateChanged(source, WindowStateFlags.Active));
 		check(context.focus.focusedId.equals(second), "activation must preserve a newer focus choice");
 		context.focusWidget(first);
-		input.consume(WindowStateChanged(source, 0));
+		input.consume(WindowStateChanged(source, nativekit.ffi.NativeKitTypes.WindowStateFlags.empty()));
 		view.showFirst = false;
 		context.submit(view, frame);
 		input.consume(WindowStateChanged(source, WindowStateFlags.Active));
@@ -79,7 +79,7 @@ class WindowFocusTests {
 		view.showFirst = true;
 		context.submit(view, frame);
 		context.focusWidget(first);
-		input.consume(WindowStateChanged(source, 0));
+		input.consume(WindowStateChanged(source, nativekit.ffi.NativeKitTypes.WindowStateFlags.empty()));
 		view.enableFirst = false;
 		context.submit(view, frame);
 		input.consume(WindowStateChanged(source, WindowStateFlags.Active));
@@ -87,7 +87,7 @@ class WindowFocusTests {
 		view.enableFirst = true;
 		context.submit(view, frame);
 		context.focusWidget(first);
-		input.consume(WindowStateChanged(source, 0));
+		input.consume(WindowStateChanged(source, nativekit.ffi.NativeKitTypes.WindowStateFlags.empty()));
 		view.trapSecond = true;
 		context.submit(view, frame);
 		input.consume(WindowStateChanged(source, WindowStateFlags.Active));

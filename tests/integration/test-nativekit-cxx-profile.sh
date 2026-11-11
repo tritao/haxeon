@@ -144,7 +144,7 @@ grep -q 'public function reset():Void' "$positive_dir/projection/DisplayList.hx"
 grep -q 'public function size():haxe.Int64' "$positive_dir/projection/DisplayList.hx"
 grep -q 'DisplayListFunctions' "$positive_dir/projection/NativeKitDisplayListFunctions.hx"
 
-"$repo_dir/.tools/haxe/haxe" -cp "$repo_dir/src" -cp "$repo_dir/tests/runtime" --run NativeKitCxxMain \
+"$repo_dir/.tools/haxe/haxe" -cp "$repo_dir/src" -cp "$repo_dir/lib/haxeon-io" -cp "$repo_dir/tests/runtime" --run NativeKitCxxMain \
 	"$repo_dir/out/nativekit-cxx-display-list-test.hl" "$positive_hxi" "$positive_dir/projection/DisplayList.hx" \
 	"$positive_dir/projection/NativeKitDisplayListFunctions.hx"
 (

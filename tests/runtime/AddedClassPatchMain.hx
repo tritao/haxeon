@@ -35,7 +35,7 @@ class AddedClassPatchMain {
 		var compiler = new Compiler();
 		compiler.update("Main.hx", program("", "keys.length", "(x:Int) -> x + offset", ""));
 		var build = compiler.compile("Main"),
-			live = Runtime.load(HlWriter.encode(build.module), build.runtimeIdentity),
+			live = Runtime.load(HlWriter.encode(build.module).flatten(), build.runtimeIdentity),
 			mainId = build.functionIds.get("main");
 		// 3 * 1000 + 15 * 10 + 6
 		var before = Runtime.callInt(live, mainId);
@@ -109,7 +109,7 @@ class AddedClassPatchMain {
 		after = Runtime.callInt(live, mainId);
 		if (after != expected)
 			throw 'After editing an added class the patched module returned $after instead of $expected';
-		var fresh = Runtime.load(HlWriter.encode(edited.module), edited.runtimeIdentity);
+		var fresh = Runtime.load(HlWriter.encode(edited.module).flatten(), edited.runtimeIdentity);
 		var clean = Runtime.callInt(fresh, edited.functionIds.get("main"));
 		Runtime.dispose(fresh);
 		// A fresh module runs the same code: the stored lambda did not change.

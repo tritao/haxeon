@@ -1,9 +1,12 @@
 package compiler.types.typing;
 
+import compiler.types.TypedAst.TypedFunctionRole;
 import compiler.Source.SourceSpan;
 import compiler.types.Type.CompilerType;
 import compiler.types.Type.NominalKind;
 import compiler.types.TypedAst.TypedExpression;
+import compiler.Provides.ProviderOperation;
+import compiler.Provides;
 import compiler.types.TypedAst.TypedFunction;
 import compiler.types.TypedAst.TypedStatement;
 import compiler.types.typing.TypingSession.EqualityRequest;
@@ -14,9 +17,6 @@ class HashGenerator {
 
 	public static function hashName(type:CompilerType):String
 		return "$hash" + ValueEqualityGenerator.equalsName(type);
-
-	public static function isHashName(name:String):Bool
-		return StringTools.startsWith(name, HASH_PREFIX);
 
 	public static function request(session:TypingSession, type:CompilerType, origin:String, span:SourceSpan):Void {
 		var name = hashName(type);
@@ -145,7 +145,7 @@ class HashGenerator {
 				BodyTyper.fail("E1025", 'Cannot synthesize Hashable for type "${compiler.semantic.SemanticSignature.display(type)}"', span);
 		}
 		return {
-			name: hashName(type), origin: req.origin, originKind: Helper, typeArguments: null,
+			name: hashName(type), role: ProviderFunction(type, Hash), origin: req.origin, originKind: Helper, typeArguments: null,
 			owner: null, isStatic: true, isConstructor: false,
 			arguments: [{name: "value", type: type}], result: TInt,
 			statements: statements, cells: [], cellCaptures: [], span: span

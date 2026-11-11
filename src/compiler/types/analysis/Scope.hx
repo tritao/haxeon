@@ -45,6 +45,14 @@ class Scope {
 	final facts:FlowFacts;
 	var nextLocalId:Int = 0;
 	final values:Map<String, ScopeValue> = [];
+
+	/**
+	 * The same values in definition order, and by identity. Walking a map goes through an iterator object whose every call is dynamic, and
+	 * looking a value up by id by walking the map compared every id of the scope; the visible set is asked for at every branch of every function.
+	 */
+	final valueList:Array<ScopeValue> = [];
+
+	final valuesById:Map<String, ScopeValue> = [];
 	final assigned:Map<String, Bool> = [];
 	final captures:Map<String, Bool> = [];
 	final captureStorageTypes:Map<String, CompilerType> = [];
@@ -72,6 +80,9 @@ class Scope {
 			keyPathConstant: null
 		};
 		values.set(name, value);
+		valueList.push(value);
+		if (!valuesById.exists(value.id))
+			valuesById.set(value.id, value);
 		assigned.set(value.id, initialized);
 	}
 
@@ -379,9 +390,9 @@ class Scope {
 	}
 
 	function resolveById(id:String):Null<ScopeValue> {
-		for (_ => value in values)
-			if (value.id == id)
-				return value;
+		var found = valuesById.get(id);
+		if (found != null)
+			return found;
 		var outer = parent;
 		return outer == null ? null : outer.resolveById(id);
 	}
@@ -441,10 +452,10 @@ class Scope {
 		return result;
 	}
 
-	function visibleValues():Array<ScopeValue> {
+	public function visibleValues():Array<ScopeValue> {
 		var outer = parent,
 			result:Array<ScopeValue> = outer == null ? [] : outer.visibleValues();
-		for (_ => value in values)
+		for (value in valueList)
 			result.push(value);
 		return result;
 	}

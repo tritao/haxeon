@@ -1,5 +1,5 @@
 // Compiles without the native UI libraries. From the Haxeon root:
-//   .tools/haxe/haxe -cp src --run compiler.tools.HaxeonCompiler --output=OUT.hl --entry=KeyHashTests \
+//   .tools/haxe/haxe common.hxml --run compiler.tools.HaxeonCompiler --output=OUT.hl --entry=KeyHashTests \
 //     --root=packages/ui/tests/key-hash --root=packages/ui/haxe packages/ui/tests/key-hash/KeyHashTests.hx \
 //     packages/ui/haxe/haxeon/ui/core/KeyHash.hx
 //   LD_LIBRARY_PATH=out:$(scripts/hashlink-path.sh) $(scripts/hashlink-path.sh)/hl OUT.hl

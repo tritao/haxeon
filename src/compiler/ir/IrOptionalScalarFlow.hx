@@ -1,5 +1,6 @@
 package compiler.ir;
 
+import compiler.Provides.ProviderOperation;
 import compiler.ir.Ir;
 import compiler.ir.IrInlineValueLayout.IrInlineValueSlot;
 import compiler.types.typing.HashGenerator;
@@ -18,10 +19,11 @@ class IrOptionalScalarFlow {
 	var candidates:Map<String, IrFunction> = [];
 	final functions:Map<String, IrFunction> = [];
 	final receiverChecks:Map<String, IrFunction> = [];
-	final methodCache:Map<String, Null<String>> = [];
+	final resolution:IrMethodResolution;
 
 	public function new(declarations:Array<IrObject>) {
 		objects = [for (object in declarations) object.name => object];
+		resolution = IrMethodResolution.of(declarations);
 		layouts = new IrInlineValueLayout(IrObjectTable.of(objects));
 	}
 
@@ -104,34 +106,14 @@ class IrOptionalScalarFlow {
 		}
 		return result;
 	}
-	function method(typeName:Null<String>, name:String):Null<String> {
-		while (typeName != null) {
-			var object = objects.get(typeName);
-			if (object == null) return null;
-			for (entry in object.methods) if (entry.name == name) return entry.functionName;
-			typeName = object.base;
-		}
-		return null;
-	}
+	function method(typeName:Null<String>, name:String):Null<String> return typeName == null ? null : resolution.find(typeName, name);
 	/** Resolve class dispatch only when every possible subclass has the same implementation. */
 	function resolvedMethod(exact:Map<Int, String>, receiver:IrValue, name:String):Null<String> {
 		if (exact.exists(receiver.id)) return method(exact.get(receiver.id), name);
 		var typeName = switch receiver.type { case Obj(value): value; default: return null; };
 		var root = objects.get(typeName);
 		if (root == null || root.isValue) return null;
-		var key = typeName.length + ":" + typeName + name;
-		if (methodCache.exists(key)) return methodCache.get(key);
-		var target = method(typeName, name);
-		if (target != null) for (object in objects) {
-			var parent:Null<String> = object.name, depth = 0;
-			while (parent != null && parent != typeName && depth++ < 256) {
-				var entry = objects.get(parent);
-				parent = entry == null ? null : entry.base;
-			}
-			if (depth >= 256 || (parent == typeName && method(object.name, name) != target)) { target = null; break; }
-		}
-		methodCache.set(key, target);
-		return target;
+		return resolution.uniqueImplementation(typeName, name);
 	}
 	function hasCandidateMethod(exact:Map<Int, String>, receiver:IrValue, name:String):Bool {
 		var target = resolvedMethod(exact, receiver, name);
@@ -145,7 +127,7 @@ class IrOptionalScalarFlow {
 			b.branch(b.equal(receiver, b.constNull(receiver.type)), missing, present);
 			b.select(missing); b.terminate(Throw(b.toDyn(b.constString("Null access"))));
 			b.select(present); b.returnValue(b.constVoid());
-			receiverChecks.set(name, new IrFunction(name, b.arguments, Void, b.blocks));
+			receiverChecks.set(name, new IrFunction(name, b.arguments, Void, b.blocks, Provider(TypeKey.of(Obj(typeName)), ProviderOperation.ReceiverCheck)));
 		}
 		return name;
 	}
@@ -285,10 +267,8 @@ class IrOptionalScalarFlow {
 	};
 	function canPassAliases(name:String, arguments:Array<IrValue>, aliases:Map<Int, OptionalAlias>, terminalReceiver:Bool = false):Bool {
 		if (!hasAlias(arguments, aliases)) return true;
-		if (StringTools.startsWith(name, "$") && !StringTools.startsWith(name, "$generic:")
-				&& !StringTools.startsWith(name, "$lambda:") && !StringTools.startsWith(name, "$value$equality:")
-				&& !StringTools.startsWith(name, "$equality:") && !HashGenerator.isHashName(name)) return false;
 		var called = functions.get(name);
+		if (StringTools.startsWith(name, "$") && (called == null || !IrProviders.passesAliases(called))) return false;
 		if (called == null || called.arguments.length != arguments.length) return false;
 		for (index in 0...arguments.length) if (aliases.exists(arguments[index].id)) {
 			var formal = called.arguments[index];
@@ -727,7 +707,7 @@ class IrOptionalScalarFlow {
 		}
 		debug = [for (binding in debug) if (!removed.exists(binding.value.id)) binding];
 		var result = optional(fn.result) == null ? fn.result : Obj(wrapper(optional(fn.result)).name);
-		return new IrFunction(clone ? PREFIX + fn.name : fn.name, args, result, blocks, debug, fn.inlineHint,
+		return new IrFunction(clone ? PREFIX + fn.name : fn.name, args, result, blocks, clone ? OptionalScalar(fn.name) : fn.kind, debug, fn.inlineHint,
 			clone ? compiler.ir.IrFunction.IrRetention.Reachable : fn.retention);
 	}
 }

@@ -1,5 +1,6 @@
 package compiler.backend.wasm.linear;
 
+import compiler.ir.IrReachability;
 import compiler.backend.Backend.BackendOptions;
 import compiler.backend.Backend.BackendResult;
 import compiler.backend.MemoryContract.MemoryContract;
@@ -123,6 +124,7 @@ class WasmLinearModuleBuilder {
 		// Interface/cast adapters may have been generated after the initial
 		// signature rewrite. Keep their checked closure casts on the target ABI too.
 		adapters.rewriteSignatureChecks();
+		compiler.ir.IrEnumTagLowering.escapes(logical);
 		if (!Lambda.exists(logical.natives, n -> n.name == "__std_is_of_type") && generated.length > 0)
 			logical.natives.push({name: "__std_is_of_type", library: "haxeon_runtime", symbol: "__std_is_of_type", arguments: [Dyn, TypeRef], result: Bool});
 		IrVerifier.verify(logical);
@@ -148,6 +150,10 @@ class WasmLinearModuleBuilder {
 			signature != null && signature.throwsReceiver ? fn : compiler.ir.IrScalarReplacement.rewrite(fn, physicalObjects, true);
 		}];
 		abi.validate(flattened);
+		if (options.developmentMetadata == false) {
+			flattened = compiler.ir.IrEnumRuntimeTypes.physical(flattened);
+			logical = compiler.ir.IrEnumRuntimeTypes.physical(logical);
+		}
 		var builder = new WasmLinearModuleBuilder(flattened, logical, options, patchChanged, target);
 		builder.boundaryExportNames = boundaryExports;
 		builder.boundaryExportAdapters = exportAdapters;
@@ -196,7 +202,7 @@ class WasmLinearModuleBuilder {
 		var roots = [for (name in exportedFunctions) boundaryExportAdapters.exists(name) ? boundaryExportAdapters.get(name) : name];
 		if (WasmModuleSupport.hasFunction(program, "__init"))
 			roots.push("__init");
-		reachable = WasmModuleSupport.reachableFunctionsWithGeneratedRuntimeRoots(program, preferredEntry, roots);
+		reachable = IrReachability.withGeneratedRuntimeRoots(program, preferredEntry, roots);
 		var plannedFunctions:Map<String, Bool> = [], rootSet:Map<String, Bool> = [];
 		for (fn in program.functions) plannedFunctions.set(fn.name, true);
 		var changed = true;
@@ -209,16 +215,16 @@ class WasmLinearModuleBuilder {
 				for (block in fn.blocks) for (located in block.instructions) switch located.value {
 					case SafeCast(output, _): switch output.type {
 						case Function(_, _):
-							var name = WasmLinearClosureAdapters.castName(output.type);
+							var name = closureAdapters.castName(output.type);
 							if (plannedFunctions.exists(name) && !rootSet.exists(name)) { roots.push(name); rootSet.set(name, true); changed = true; }
 						default:
 					}
 					default:
 				}
-			if (changed) reachable = WasmModuleSupport.reachableFunctionsWithGeneratedRuntimeRoots(program, preferredEntry, roots);
+			if (changed) reachable = IrReachability.withGeneratedRuntimeRoots(program, preferredEntry, roots);
 		}
 		usedCNatives = WasmModuleSupport.reachableCNatives(program, reachable);
-		usedNatives = WasmModuleSupport.reachableNatives(program, reachable);
+		usedNatives = IrReachability.natives(program, reachable);
 		compiler.backend.wasm.WasmValueLaneRuntime.attach(program, reachable, usedNatives);
 		layout = new WasmLayout(program, logicalProgram, module.runtimeTypeIds);
 		strings = [];

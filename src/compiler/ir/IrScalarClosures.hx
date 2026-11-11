@@ -54,8 +54,10 @@ class IrScalarClosures {
 				uses.set(input.id, (uses.exists(input.id) ? uses.get(input.id) : 0) + 1);
 			for (block in fn.blocks) {
 				for (located in block.instructions) {
-					for (input in IrOperands.inputs(located.value))
+					for (inputIndex in 0...IrOperands.count(located.value)) {
+						var input = IrOperands.at(located.value, inputIndex);
 						use(input);
+					}
 					switch located.value {
 						case Phi(_, inputs):
 							for (input in inputs)
@@ -248,11 +250,19 @@ class IrScalarClosures {
 		};
 
 	function toDynamic(builder:IrBuilder, value:IrValue, type:IrType):IrValue {
+		switch type {
+			case EnumTag(name): return builder.intrinsic(EnumTagBox(EnumTag(name)), [value], Dyn);
+			default:
+		}
 		var enumName = inlineEnum(type);
 		return enumName == null ? builder.toDyn(value) : builder.call(IrInlineEnumEscapes.boxName(enumName), [value], Dyn);
 	}
 
 	function fromDynamic(builder:IrBuilder, value:IrValue, type:IrType):IrValue {
+		switch type {
+			case EnumTag(name): return builder.intrinsic(EnumTagUnbox(EnumTag(name)), [value], type);
+			default:
+		}
 		var enumName = inlineEnum(type);
 		return enumName == null ? builder.safeCast(value, type) : builder.call(IrInlineEnumEscapes.unboxName(enumName), [value], type);
 	}
@@ -428,7 +438,7 @@ class IrScalarClosures {
 					scopeEnd: binding.scopeEnd
 				}
 		];
-		return new IrFunction(fn.name, [for (argument in fn.arguments) map(argument)], mapType(fn.result), blocks, debug, fn.inlineHint, fn.retention);
+		return fn.withBlocks(blocks, debug, [for (argument in fn.arguments) map(argument)], mapType(fn.result));
 	}
 
 	/** A scalar closure escapes through a signature-specific adapter; only that target proves its original type. */
@@ -454,7 +464,7 @@ class IrScalarClosures {
 			probe = b.staticClosure(wrapper, probeType),
 			found = b.call(receiverQuery("$scalar-closure:receiver:signature:" + suffix, Dyn, probeType), [closure, probe], Dyn);
 		b.returnValue(b.equal(b.equal(found, b.constNull(Dyn)), b.constBool(false)));
-		generatedMakers.push(new IrFunction(name, b.arguments, Bool, b.blocks));
+		generatedMakers.push(new IrFunction(name, b.arguments, Bool, b.blocks, GeneratedHelper));
 		return name;
 	}
 
@@ -486,7 +496,7 @@ class IrScalarClosures {
 				b.returnValue(b.constNull(outputType));
 				b.select(present);
 				b.returnValue(b.safeCast(b.call(innerErasure.maker, [b.safeCast(source, inner)], erasedType(inner)), outputType));
-				generatedMakers.push(new IrFunction(maker, b.arguments, outputType, b.blocks));
+				generatedMakers.push(new IrFunction(maker, b.arguments, outputType, b.blocks, GeneratedHelper));
 				return result;
 			case Function(_, _):
 			default:
@@ -520,7 +530,7 @@ class IrScalarClosures {
 			case Dyn: true;
 			default: false;
 		}) ? call : toDynamic(body, call, logical.result));
-		generatedFunctions.push(new IrFunction(wrapper, body.arguments, Dyn, body.blocks));
+		generatedFunctions.push(new IrFunction(wrapper, body.arguments, Dyn, body.blocks, GeneratedHelper));
 		generatedObjects.push({
 			name: environment,
 			isValue: false,
@@ -554,7 +564,7 @@ class IrScalarClosures {
 		var captured = make.newObject(environment);
 		make.fieldSet(captured, "closure", source);
 		make.returnValue(make.instanceClosure(wrapper, captured, erasedType(type)));
-		generatedMakers.push(new IrFunction(maker, make.arguments, erasedType(type), make.blocks));
+		generatedMakers.push(new IrFunction(maker, make.arguments, erasedType(type), make.blocks, GeneratedHelper));
 		return result;
 	}
 
@@ -602,7 +612,7 @@ class IrScalarClosures {
 				b.returnValue(b.constNull(type));
 				b.select(present);
 				b.returnValue(b.safeCast(b.call(innerMaker, [original], inner), type));
-				generatedMakers.push(new IrFunction(maker, b.arguments, type, b.blocks));
+				generatedMakers.push(new IrFunction(maker, b.arguments, type, b.blocks, GeneratedHelper));
 				return maker;
 			case Function(_, _):
 			default:
@@ -696,7 +706,7 @@ class IrScalarClosures {
 			}
 			call.returnValue(call.constVoid());
 		}
-		generatedMakers.push(new IrFunction(wrapper, call.arguments, resultSlots.length == 0 ? mapType(logical.result) : Void, call.blocks));
+		generatedMakers.push(new IrFunction(wrapper, call.arguments, resultSlots.length == 0 ? mapType(logical.result) : Void, call.blocks, ScalarArguments));
 		var make = new IrBuilder(),
 			boxed = make.argument("closure", Dyn),
 			missing = make.createBlock(),
@@ -724,7 +734,7 @@ class IrScalarClosures {
 			captured = make.newObject(environment);
 		make.fieldSet(captured, "closure", decoded);
 		make.returnValue(make.instanceClosure(wrapper, captured, physical));
-		generatedMakers.push(new IrFunction(maker, make.arguments, physical, make.blocks));
+		generatedMakers.push(new IrFunction(maker, make.arguments, physical, make.blocks, GeneratedHelper));
 		return maker;
 	}
 

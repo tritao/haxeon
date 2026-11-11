@@ -348,8 +348,8 @@ class DockWorkspace implements View {
 			var descriptor = model.get(panelId);
 			if (descriptor != null)
 				hash.addString(panelId).addString(descriptor.title).addInt(descriptor.badgeCount)
-					.addInt(descriptor.icon == null ? -1 : cast descriptor.icon).addBool(descriptor.enabled)
-					.addInt(cast descriptor.headerMode);
+					.addInt(descriptor.icon == null ? -1 : Type.enumIndex(descriptor.icon)).addBool(descriptor.enabled)
+					.addInt(Type.enumIndex(descriptor.headerMode));
 		}
 		return true;
 	}

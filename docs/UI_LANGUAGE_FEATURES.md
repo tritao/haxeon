@@ -1,7 +1,7 @@
 # Language features for the reactive UI model
 
-Status: proposal (2026-10-31). Lists the Haxeon language and compiler features that
-[ADR 0002](adr/0002-reactive-ui-model.md) needs or benefits from, with the stage each one serves. Several extend designs
+Status: updated after the 2026-11-11 stage 3 decision. Lists the Haxeon language and compiler features that
+[ADR 0002](adr/0002-reactive-ui-model.md) needs or may benefit from, with the stage each one serves. Several extend designs
 already in progress: [STRUCTS.md](STRUCTS.md), [INLINING_AND_VALUE_TYPES.md](INLINING_AND_VALUE_TYPES.md),
 [NATIVE_MEMORY.md](NATIVE_MEMORY.md) and the deferred [SCOPED_PLACES.md](SCOPED_PLACES.md). Each feature gets its own
 design document before it is implemented. The broader plan for conformances, generic specialization, result builders
@@ -12,7 +12,7 @@ compiler implements general mechanisms without UI-specific concepts or general-p
 
 ## Needed by the design
 
-### 1a. Result builders (stages 3–5)
+### 1a. Result builders (conditional, not needed by stage 3)
 
 A library declares a builder type whose fixed, typed methods combine sequential statements, `if` with or without
 `else`, `switch` and `for`. A `@:builder(ViewBuilder)` annotation on an interface method is inherited by implementations;
@@ -21,19 +21,20 @@ ordinary bound errors. Each control-flow form has one fixed lowering signature, 
 methods; diagnostics point to the user's control flow and type checking stays fast. The compiler knows builders, not UI.
 A separate result-builder design is required before implementation.
 
-### 1b. Lazy parameters (stages 3–5)
+### 1b. Lazy parameters (conditional, not needed by stage 3)
 
 A parameter such as `text:Lazy<String>` receives the caller's expression unevaluated. The UI library turns it into a
 binding, keeping props live across component boundaries; logging, assertions and defaults can use the same general
 feature. A separate lazy-parameter design is required before implementation. `Observable` supplies tracked reads, and
 reads outside tracking scopes remain runtime debug checks.
 
-The stage 3 experiment compares run-once bindings and re-running scopes behind the same `ViewBuilder` interface; author
-code is identical and requires no rewrite when that implementation choice is made.
+Stage 3 selected ordinary Haxe re-running scopes for structure and explicit library bindings for live text. The measured
+hybrid closes the gap to run-once bindings, so neither result builders nor lazy parameters is a stage 5 prerequisite.
+Their descriptions above are proposals, not commitments; revisit them only if later measurements justify separate designs.
 
-Features 2 and 3 serve the shared node store, which ADR 0002 keeps as an option until its stage 2 prototype. Feature 3 is
-`STRUCTS.md`'s existing plan and useful on its own; feature 2 is worth building only if the store goes ahead. Feature 4
-pays off under any model.
+Features 2 and 3 served the shared node store prototype, which ADR 0002 rejected at stage 2. Feature 3 is `STRUCTS.md`'s
+existing plan and remains useful on its own; feature 2 is conditional on a new measured need. Feature 4 pays off under
+any model.
 
 ### 2. Per-field change channels (stage 2, if the store goes ahead)
 
@@ -138,9 +139,10 @@ Start with what pays off whatever the experiments decide, then let the ADR's go/
 2. Structs for small values (4), after `STRUCTS.md` stages 1a and 1b: copies and optionals, then the Wasm GC
    representation. `Rect` and `Insets` can be measured on HashLink before 1b lands, but not merged as a default for Wasm.
 3. `Observable` model fields (5a): after ADR 0002 stage 1, independent of the stage 3 experiment.
-4. Result builders and lazy parameters (1a–1b): write separate designs, then support the shared author-facing API used
-   by the stage 3 component experiment and later widget migration.
-5. `STRUCTS.md` stages 2, 3 and 5 (3): shared with Beartooth, and needed by the stage 2 store prototype.
-6. Change-channel setters (2): only if the store prototype passes.
+4. Result builders and lazy parameters (1a–1b): defer; write separate designs only if later evidence shows the selected
+   scoped-structure and text-binding model needs them.
+5. `STRUCTS.md` stages 2, 3 and 5 (3): continue on their own merits, including Beartooth's needs; stage 2 rejected the
+   UI node store.
+6. Change-channel setters (2): defer unless a new measured need appears.
 7. The field-diff extensions (8–10) and closures (7): when a need appears.
 8. Purity contracts (5): only if the runtime read-only checks of ADR 0002 stage 1 leave real holes.

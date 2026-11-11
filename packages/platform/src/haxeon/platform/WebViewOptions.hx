@@ -9,7 +9,7 @@ class WebViewOptions {
 	public var height:Int;
 	public var x:Int = 0;
 	public var y:Int = 0;
-	public var flags:WebviewFlags = cast 0;
+	public var flags:WebviewFlags = WebviewFlags.empty();
 	public var initialUrl:Null<String> = null;
 
 	public function new(width:Int, height:Int) {

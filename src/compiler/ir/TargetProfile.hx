@@ -10,7 +10,7 @@ enum TargetKind {
  * What the IR generator and the IR passes need to know about the target, as one immutable value that is passed to them. A build
  * holds one; there is no ambient target state.
  */
-final class TargetProfile {
+class TargetProfile {
 	public final kind:TargetKind;
 
 	/** The target stores a value class field inline in its parent and hands out a pointer into it (HashLink). */
@@ -45,11 +45,11 @@ final class TargetProfile {
 		this.nativeReflectionDispatch = nativeReflectionDispatch;
 	}
 
-	public static final hashLink = new TargetProfile(TargetKind.HashLink, true, true, true, true, true, false);
-	public static final wasm = new TargetProfile(TargetKind.Wasm, false, false, false, true, false, true);
+	public static final hashLink:TargetProfile = new TargetProfile(TargetKind.HashLink, true, true, true, true, true, false);
+	public static final wasm:TargetProfile = new TargetProfile(TargetKind.Wasm, false, false, false, true, false, true);
 
 	/** The portable IR `Frontend.compile` builds for tests that run no backend: HashLink's layout, with the runtime-specific fast paths off. */
-	public static final portable = hashLink.withNativeArrayChecks(false).withNativeStringFastPaths(false);
+	public static final portable:TargetProfile = hashLink.withNativeArrayChecks(false).withNativeStringFastPaths(false);
 
 	public function withNativeArrayChecks(enabled:Bool):TargetProfile
 		return new TargetProfile(kind, packedValueFields, headerlessValueClasses, dynamicObjectLiterals, enabled, nativeStringFastPaths,

@@ -21,12 +21,23 @@ The rules for every entry:
 | Interfaces as the abstraction | No separate trait feature. Interface bounds dispatch statically and specialize for struct type arguments; a struct boxes only when converted to an interface-typed value. | [STRUCTS.md](STRUCTS.md) |
 | Generic specialization for structs | Generic code over struct type arguments uses the concrete representation, the general fix for `Array<S>`, `Map<K, S>` and `T`-typed closures boxing structs. Extends [GENERIC_SPECIALIZATION.md](GENERIC_SPECIALIZATION.md). | [STRUCTS.md](STRUCTS.md) |
 | `Equatable`, `Hashable` | Value-only declared equality, synthesized when every field supports it; nonconforming struct comparisons are errors. Class/interface `==` is always identity; classes cannot declare either capability. Replaces `@:structural`. | [STRUCTS.md](STRUCTS.md) |
+| `RawRepresentable` | Closed Int/String enum abstracts synthesize inline raw-value access and checked conversion from declared constants; implicit conversions are rejected. Implemented. | [STRUCTS.md](STRUCTS.md#closed-raw-value-enums) |
+| `Flags` | Closed integer flags synthesize checked bit sets, immutable operations and readable formatting with no implicit conversions. Implemented. | [STRUCTS.md](STRUCTS.md#closed-flags) |
 | `Diffable` | Explicit conformance for field masks (`Diff.mask/apply/bit/all`); writes only to writable fields. | [STRUCTS.md](STRUCTS.md) |
 | Key paths | Typed field references, readable/writable capabilities, composition and `Diff.bit` paths. Escaped nullable-struct values await scalar callable ABI support. | [KEY_PATHS.md](KEY_PATHS.md) |
 | Signals core | `Signal<T>`, `Derived<T>` and `Effect`, with push invalidation, pull recomputation and per-frame batching. | [ADR 0002](adr/0002-reactive-ui-model.md) |
 | `Observable` | Classes whose fields are tracked individually by the compiler; replaces per-field signals and revision counters. | [ADR 0002](adr/0002-reactive-ui-model.md) |
-| Result builders | A library-declared builder lowers `if`, `switch` and `for` in a body; attached to an interface method and inherited by implementers. | [UI_LANGUAGE_FEATURES.md](UI_LANGUAGE_FEATURES.md) |
-| Lazy parameters | `Lazy<T>` parameters receive the caller's expression unevaluated. | [UI_LANGUAGE_FEATURES.md](UI_LANGUAGE_FEATURES.md) |
+| Result builders | Conditional proposal: a library-declared builder lowers `if`, `switch` and `for`; stage 3 did not require it. | [UI_LANGUAGE_FEATURES.md](UI_LANGUAGE_FEATURES.md) |
+| Lazy parameters | Conditional proposal: `Lazy<T>` parameters receive the caller's expression unevaluated; stage 3 did not require it. | [UI_LANGUAGE_FEATURES.md](UI_LANGUAGE_FEATURES.md) |
+
+### RawRepresentable (implemented)
+
+Closed `enum abstract X(Int|String) implements RawRepresentable` synthesizes inline
+`rawValue()` and checked static `fromRaw(value):Null<X>` from declared constants.
+Unknown values return null; implicit `from`/`to` conversions are compile errors.
+The nominal type survives checking while storage keeps the underlying
+representation. Generic constrained calls specialize against the concrete type.
+See [STRUCTS.md](STRUCTS.md#closed-raw-value-enums).
 
 ### Key paths (implemented)
 
@@ -51,6 +62,13 @@ See [KEY_PATHS.md](KEY_PATHS.md) for the specification and measured blocker.
 
 Drawn mostly from Swift, filtered for Haxeon's goals: value types without allocation, typed native interop, and explicit
 capabilities.
+
+### Generated UI-to-native enum mappings (NativeMapped by case name)
+
+Consider generating exhaustive mappings between plain UI enums and closed native
+binding enums from case names, with an explicit renaming table where necessary.
+Revisit once roughly 15–20 hand-written mappings justify it; native integer
+ownership stays in the generated binding, and UI tags remain independent.
 
 ### Inline enums with payloads
 
@@ -210,10 +228,8 @@ Check each against what Haxeon already supports before designing it.
 1. `Equatable`, `Hashable` and `Diffable`, replacing the former structural metadata; key paths specified alongside.
 2. Signals core (ADR 0002 stage 1).
 3. `Observable` (ADR 0002 stage 1b).
-4. Result builders and lazy parameters, only if the ADR 0002 stage 3 component experiment needs them. The experiment
-   runs first with plain Haxe expressions (re-running scopes) against explicit library primitives (run-once
-   bindings); plain code is preferred when it is within 10% on allocation and frame time, because it keeps code
-   meaning what it looks like.
+4. Result builders and lazy parameters are deferred. ADR 0002 stage 3 selected plain Haxe structural scopes and a
+   minimal explicit text binding; revisit these features only if later measurements establish a need.
 5. Flat structs, arrays of structs and generic specialization for structs, with inline enums. Struct arrays and
    struct-specialized generic storage are implemented across HashLink, Wasm32 and Wasm GC; payload enums use declared
    value equality. The closed source subset uses inline lanes; wider enum transport and the UI conversion remain in progress. See [STRUCTS.md](STRUCTS.md) and

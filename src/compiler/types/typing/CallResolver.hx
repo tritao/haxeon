@@ -109,6 +109,17 @@ class CallResolver {
 
 	/** Resolve an abstract's declared @:op method using the semantic operand types. */
 	public function typeAbstractOperator(symbol:String, operands:Array<TypedExpression>, span:SourceSpan, scope:Scope):Null<TypedExpression> {
+		if ((symbol == "|" || symbol == "&") && operands.length == 2) for (operand in operands) switch operand.type {
+			case TAbstract(owner, _, _):
+				var declaration = session.enumAbstractDecls.get(owner);
+				if (declaration != null && FlagsGenerator.conforms(session, declaration)) {
+					if (!sameType(operands[0].type, operand.type) || !sameType(operands[1].type, operand.type))
+						fail("E1010", "Flags operators require two values of the same flags type", span);
+					return new TypedExpression(TCall(FlagsGenerator.request(session, owner, symbol == "|" ? "$or" : "$and", span), operands), operand.type, span);
+				}
+			default:
+		}
+
 		var owners:Array<String> = [];
 		for (operand in operands)
 			switch operand.type {
@@ -124,7 +135,8 @@ class CallResolver {
 			score:Int
 		}> = null, ambiguous:Null<String> = null;
 		for (owner in owners) {
-			var declaration = requiredMapValue(session.declarations.abstracts, owner);
+			var declaration = session.declarations.abstractDeclaration(owner);
+			if (declaration == null) throw 'Missing abstract declaration "$owner"';
 			for (method in declaration.methods) {
 				if (!method.isStatic || method.arguments.length != operands.length || method.metadata == null)
 					continue;
@@ -413,8 +425,7 @@ class CallResolver {
 		var typed:Array<TypedExpression> = [];
 		for (i in 0...arguments.length) {
 			var supplied = argumentType(parameters[i], substitutions),
-				value = EnumAbstractHints.typed(session, EnumAbstractHints.named(session, parameters[i].type), arguments[i],
-					() -> typeExpression(arguments[i], scope, supplied, false));
+				value = typeExpression(arguments[i], scope, supplied, false);
 			typed.push(coerce(value, supplied, 'argument ${i + 1} to "$name"', "E1009"));
 		}
 		for (i in arguments.length...parameters.length) {
@@ -466,8 +477,7 @@ class CallResolver {
 				expected:Null<CompilerType> = null;
 			if (allTypeParametersBound(parameters, substitutions))
 				expected = session.declarations.resolve(declared.type, declared.span, substitutions);
-			var argument = EnumAbstractHints.typed(session, EnumAbstractHints.named(session, declared.type), arguments[index],
-				() -> typeExpression(arguments[index], scope, expected, expected != null));
+			var argument = typeExpression(arguments[index], scope, expected, expected != null);
 			inferTypeParameters(declared.type, argument.type, parameters, substitutions, argument.span);
 			typed.push(argument);
 		}
@@ -685,8 +695,20 @@ class CallResolver {
 			default:
 				return null;
 		}
-		var declaration = requiredMapValue(session.declarations.abstracts, abstractName),
-			method:Null<AstFunction> = null;
+		var rawDeclaration = session.enumAbstractDecls.get(abstractName);
+		if (rawDeclaration != null && FlagsGenerator.conforms(session, rawDeclaration) && FlagsGenerator.isMember(name, false)) {
+			var info = FlagsGenerator.signature(abstractName, name), typed = typeCallArguments(arguments, info.arguments.slice(1), scope, name);
+			return new TypedExpression(TCall(FlagsGenerator.request(session, abstractName, name, span), [receiver].concat(typed)), info.result, span);
+		}
+
+		if (name == "rawValue" && rawDeclaration != null && RawRepresentableGenerator.conforms(session, rawDeclaration)) {
+			if (arguments.length != 0) fail("E1008", "rawValue expects no arguments", span);
+			return new TypedExpression(TCall(RawRepresentableGenerator.request(session, abstractName, name, span), [receiver]),
+				lowerType(rawDeclaration.underlying), span);
+		}
+		var declaration = session.declarations.abstractDeclaration(abstractName);
+		if (declaration == null) throw 'Missing abstract declaration "$abstractName"';
+		var method:Null<AstFunction> = null;
 		for (candidate in declaration.methods)
 			if (candidate.name == name && !candidate.isStatic && candidate.name != "new")
 				method = candidate;
@@ -931,6 +953,24 @@ class CallResolver {
 	}
 
 	public function typeNamedCall(name:String, arguments:Array<AstExpression>, span:SourceSpan, scope:Scope, expectedType:Null<CompilerType>):TypedExpression {
+		var rawOwnerEnd = name.lastIndexOf(".");
+		if (rawOwnerEnd > 0) {
+			var owner = name.substring(0, rawOwnerEnd), member = name.substring(rawOwnerEnd + 1), declaration = session.enumAbstractDecls.get(owner);
+			if (declaration != null && FlagsGenerator.conforms(session, declaration) && FlagsGenerator.isMember(member, true)) {
+				var info = FlagsGenerator.signature(owner, member), typed = typeCallArguments(arguments, info.arguments, scope, name);
+				return new TypedExpression(TCall(FlagsGenerator.request(session, owner, member, span), typed), info.result, span);
+			}
+		}
+
+		if (rawOwnerEnd > 0 && name.substring(rawOwnerEnd + 1) == "fromRaw") {
+			var rawOwner = name.substring(0, rawOwnerEnd), declaration = session.enumAbstractDecls.get(rawOwner);
+			if (declaration != null && RawRepresentableGenerator.conforms(session, declaration)) {
+				if (arguments.length != 1) fail("E1008", "fromRaw expects one argument", span);
+				var raw = lowerType(declaration.underlying), argument = coerce(typeExpression(arguments[0], scope, raw, false), raw, "fromRaw argument", "E1009");
+				return new TypedExpression(TCall(RawRepresentableGenerator.request(session, rawOwner, "fromRaw", span), [argument]),
+					TNullable(TAbstract(rawOwner, [], raw)), span);
+			}
+		}
 		if (StringTools.startsWith(name, "super.") && name.indexOf(".", 6) < 0)
 			return typeSuperMethodCall(name.substring(6), arguments, span, scope);
 		// A canonical module function is only the fallback for a bare source call; members still win.
@@ -1846,14 +1886,14 @@ class CallResolver {
 			scope.invalidateAllExpressions();
 			return new TypedExpression(TArraySort(receiver, comparator), TVoid, span);
 		}
-		if (name == "join" && sameType(element, TString)) {
+		if (name == "join" && sameType(enumAbstractStorage(element), TString)) {
 			if (arguments.length != 1)
 				fail("E1008", "Array.join expects one separator", span);
 			var separator = coerce(typeExpressionValue(arguments[0], scope, TString), TString, "join separator", "E1002");
 			return new TypedExpression(TCollectionCall(receiver, "join", [separator]), TString, span);
 		}
 		if (name == "indexOf") {
-			switch element {
+			switch enumAbstractStorage(element) {
 				case TInt, TFloat, TBool, TString, TNativeScalar("u32"):
 				default:
 					if (RuntimeType.arrayName(element) != "ref")
@@ -1881,6 +1921,13 @@ class CallResolver {
 			return library;
 		throw new CompileError(new Diagnostic("E1007", 'Unknown array method "$name"', span));
 	}
+
+	/** Choose a raw collection operation without changing the nominal element checked at the call site. */
+	function enumAbstractStorage(type:CompilerType):CompilerType
+		return switch type {
+			case TAbstract(owner, _, representation) if (session.enumAbstractDecls.exists(owner)): enumAbstractStorage(representation);
+			default: type;
+		};
 
 	static function isDynamicType(type:CompilerType):Bool return switch type { case TDynamic: true; default: false; };
 

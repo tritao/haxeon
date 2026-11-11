@@ -15,6 +15,6 @@ class CxxVirtualMain {
 		compiler.update("Renderer.hx", File.getContent(projectionPath));
 		compiler.update("Main.hx",
 			"import CxxVirtual; import Renderer; function main():Int { var renderer = Renderer.fromNative(CxxVirtual.__cxx_cxxvirt__acquire()); return renderer.draw(21) == 42 ? 42 : 1; }");
-		File.saveBytes(output, HlWriter.encode(compiler.compile("Main").module));
+		File.saveBytes(output, HlWriter.encode(compiler.compile("Main").module).flatten());
 	}
 }

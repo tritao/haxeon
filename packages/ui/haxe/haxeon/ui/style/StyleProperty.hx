@@ -24,15 +24,15 @@ class StylePropertyBase {
 	public final copiedOnRead:Bool;
 	public final inherited:Bool;
 	public final impact:StyleImpact;
-	public final hasInterpolation:Bool;
+	public var hasInterpolation(default, null):Bool;
 
-	public function new(name:String, slot:Int, inherited:Bool, impact:StyleImpact, hasInterpolation:Bool) {
+	public function new(name:String, slot:Int, inherited:Bool, impact:StyleImpact) {
 		this.name = name;
 		this.slot = slot;
 		this.copiedOnRead = name == "effects" || name == "backdropEffects" || name == "decorations" || name == "mask";
 		this.inherited = inherited;
 		this.impact = impact;
-		this.hasInterpolation = hasInterpolation;
+		this.hasInterpolation = false;
 	}
 }
 
@@ -40,13 +40,9 @@ class StylePropertyBase {
 class StyleProperty<T> extends StylePropertyBase {
 	static var nextSlot:Int = 0;
 	public final defaultValue:T;
-	public final interpolate:Null<T->T->Float->T>;
-
-	public function new(name:String, defaultValue:T, inherited:Bool, impact:StyleImpact,
-			?interpolate:T->T->Float->T) {
-		super(name, allocateSlot(name), inherited, impact, interpolate != null);
+	public function new(name:String, defaultValue:T, inherited:Bool, impact:StyleImpact) {
+		super(name, allocateSlot(name), inherited, impact);
 		this.defaultValue = defaultValue;
-		this.interpolate = interpolate;
 	}
 
 	public static function allocateSlot(name:String):Int {
@@ -73,92 +69,92 @@ class StyleProperty<T> extends StylePropertyBase {
 	public static final Height:StyleAxisProperty = new StyleAxisProperty(
 		"height", LayoutAxis.fit(), false, StyleImpact.Layout);
 	public static final Direction:StyleProperty<LayoutDirection> = new StyleProperty(
-		"direction", LayoutDirection.TopToBottom, false, StyleImpact.Layout, null);
+		"direction", LayoutDirection.TopToBottom, false, StyleImpact.Layout);
 	public static final ChildAlignX:StyleProperty<LayoutAlignmentX> = new StyleProperty(
-		"childAlignX", LayoutAlignmentX.Start, false, StyleImpact.Layout, null);
+		"childAlignX", LayoutAlignmentX.Start, false, StyleImpact.Layout);
 	public static final ChildAlignY:StyleProperty<LayoutAlignmentY> = new StyleProperty(
-		"childAlignY", LayoutAlignmentY.Start, false, StyleImpact.Layout, null);
+		"childAlignY", LayoutAlignmentY.Start, false, StyleImpact.Layout);
 	public static final ChildDistribution:StyleProperty<LayoutDistribution> = new StyleProperty(
-		"childDistribution", LayoutDistribution.Start, false, StyleImpact.Layout, null);
+		"childDistribution", LayoutDistribution.Start, false, StyleImpact.Layout);
 	public static final Positioning:StyleProperty<LayoutPositioning> = new StyleProperty(
-		"positioning", LayoutPositioning.Flow, false, StyleImpact.Layout, null);
+		"positioning", LayoutPositioning.Flow, false, StyleImpact.Layout);
 	public static final AspectRatio:StyleProperty<Float> = new StyleProperty(
-		"aspectRatio", 0.0, false, StyleImpact.Layout, null);
+		"aspectRatio", 0.0, false, StyleImpact.Layout);
 	public static final WrapMode:StyleProperty<LayoutWrapMode> = new StyleProperty(
-		"wrapMode", LayoutWrapMode.NoWrap, false, StyleImpact.Layout, null);
+		"wrapMode", LayoutWrapMode.NoWrap, false, StyleImpact.Layout);
 	public static final RowGap:StyleProperty<Float> = new StyleProperty(
-		"rowGap", 0.0, false, StyleImpact.Layout, null);
+		"rowGap", 0.0, false, StyleImpact.Layout);
 	public static final ColumnGap:StyleProperty<Float> = new StyleProperty(
-		"columnGap", 0.0, false, StyleImpact.Layout, null);
+		"columnGap", 0.0, false, StyleImpact.Layout);
 	public static final AlignSelf:StyleProperty<LayoutSelfAlignment> = new StyleProperty(
-		"alignSelf", LayoutSelfAlignment.Inherit, false, StyleImpact.Layout, null);
+		"alignSelf", LayoutSelfAlignment.Inherit, false, StyleImpact.Layout);
 	public static final PositionX:StyleProperty<Float> = new StyleProperty(
-		"positionX", 0.0, false, StyleImpact.Layout, null);
+		"positionX", 0.0, false, StyleImpact.Layout);
 	public static final PositionY:StyleProperty<Float> = new StyleProperty(
-		"positionY", 0.0, false, StyleImpact.Layout, null);
+		"positionY", 0.0, false, StyleImpact.Layout);
 	public static final ZIndex:StyleProperty<Int> = new StyleProperty(
-		"zIndex", 0, false, StyleImpact.Paint | StyleImpact.HitGeometry, null);
+		"zIndex", 0, false, StyleImpact.Paint | StyleImpact.HitGeometry);
 	public static final Overlay:StyleProperty<Bool> = new StyleProperty(
-		"overlay", false, false, StyleImpact.Paint | StyleImpact.HitGeometry, null);
+		"overlay", false, false, StyleImpact.Paint | StyleImpact.HitGeometry);
 	public static final ClipToParent:StyleProperty<Bool> = new StyleProperty(
-		"clipToParent", true, false, StyleImpact.Paint | StyleImpact.HitGeometry, null);
+		"clipToParent", true, false, StyleImpact.Paint | StyleImpact.HitGeometry);
 	public static final Padding:StyleInsetsProperty = new StyleInsetsProperty(
 		"padding", new Insets(0.0, 0.0, 0.0, 0.0), false, StyleImpact.Layout);
 	public static final ChildGap:StyleProperty<Float> = new StyleProperty(
-		"childGap", 0.0, false, StyleImpact.Layout, null);
+		"childGap", 0.0, false, StyleImpact.Layout);
 	public static final Background:StyleColorProperty = new StyleColorProperty(
 		"background", Color.rgba(0.0, 0.0, 0.0, 0.0), false, StyleImpact.Paint, colorInterpolate);
-	public static final RadiusTopLeft:StyleProperty<Float> = new StyleProperty(
+	public static final RadiusTopLeft:StyleProperty<Float> = new StyleInterpolatedProperty(
 		"radiusTopLeft", 0.0, false, StyleImpact.Paint, floatInterpolate);
-	public static final RadiusTopRight:StyleProperty<Float> = new StyleProperty(
+	public static final RadiusTopRight:StyleProperty<Float> = new StyleInterpolatedProperty(
 		"radiusTopRight", 0.0, false, StyleImpact.Paint, floatInterpolate);
-	public static final RadiusBottomRight:StyleProperty<Float> = new StyleProperty(
+	public static final RadiusBottomRight:StyleProperty<Float> = new StyleInterpolatedProperty(
 		"radiusBottomRight", 0.0, false, StyleImpact.Paint, floatInterpolate);
-	public static final RadiusBottomLeft:StyleProperty<Float> = new StyleProperty(
+	public static final RadiusBottomLeft:StyleProperty<Float> = new StyleInterpolatedProperty(
 		"radiusBottomLeft", 0.0, false, StyleImpact.Paint, floatInterpolate);
 	public static final ClipHorizontal:StyleProperty<Bool> = new StyleProperty(
-		"clipHorizontal", false, false, StyleImpact.Paint | StyleImpact.HitGeometry, null);
+		"clipHorizontal", false, false, StyleImpact.Paint | StyleImpact.HitGeometry);
 	public static final ClipVertical:StyleProperty<Bool> = new StyleProperty(
-		"clipVertical", false, false, StyleImpact.Paint | StyleImpact.HitGeometry, null);
+		"clipVertical", false, false, StyleImpact.Paint | StyleImpact.HitGeometry);
 	public static final Visible:StyleProperty<Bool> = new StyleProperty(
-		"visible", true, false, StyleImpact.Paint | StyleImpact.HitGeometry, null);
+		"visible", true, false, StyleImpact.Paint | StyleImpact.HitGeometry);
 	public static final Transform:StyleTransformProperty = new StyleTransformProperty(
 		"transform", Transform2D.identity(), false, StyleImpact.Composite | StyleImpact.HitGeometry);
-	public static final TransformOriginX:StyleProperty<Float> = new StyleProperty(
+	public static final TransformOriginX:StyleProperty<Float> = new StyleInterpolatedProperty(
 		"transformOriginX", 0.5, false, StyleImpact.Composite | StyleImpact.HitGeometry, floatInterpolate);
-	public static final TransformOriginY:StyleProperty<Float> = new StyleProperty(
+	public static final TransformOriginY:StyleProperty<Float> = new StyleInterpolatedProperty(
 		"transformOriginY", 0.5, false, StyleImpact.Composite | StyleImpact.HitGeometry, floatInterpolate);
 	public static final BorderColor:StyleColorProperty = new StyleColorProperty(
 		"borderColor", Color.rgba(0.0, 0.0, 0.0, 0.0), false, StyleImpact.Paint, colorInterpolate);
-	public static final BorderWidth:StyleProperty<Float> = new StyleProperty(
+	public static final BorderWidth:StyleProperty<Float> = new StyleInterpolatedProperty(
 		"borderWidth", 0.0, false, StyleImpact.Paint, floatInterpolate);
 	public static final OutlineColor:StyleColorProperty = new StyleColorProperty(
 		"outlineColor", Color.rgba(0.0, 0.0, 0.0, 0.0), false, StyleImpact.Paint, colorInterpolate);
-	public static final OutlineWidth:StyleProperty<Float> = new StyleProperty(
+	public static final OutlineWidth:StyleProperty<Float> = new StyleInterpolatedProperty(
 		"outlineWidth", 0.0, false, StyleImpact.Paint, floatInterpolate);
 	public static final ShadowColor:StyleColorProperty = new StyleColorProperty(
 		"shadowColor", Color.rgba(0.0, 0.0, 0.0, 0.0), false, StyleImpact.Paint, colorInterpolate);
-	public static final ShadowOffsetX:StyleProperty<Float> = new StyleProperty(
+	public static final ShadowOffsetX:StyleProperty<Float> = new StyleInterpolatedProperty(
 		"shadowOffsetX", 0.0, false, StyleImpact.Paint, floatInterpolate);
-	public static final ShadowOffsetY:StyleProperty<Float> = new StyleProperty(
+	public static final ShadowOffsetY:StyleProperty<Float> = new StyleInterpolatedProperty(
 		"shadowOffsetY", 0.0, false, StyleImpact.Paint, floatInterpolate);
 	/** UI-facing blur radius. The native renderer converts it to Gaussian sigma. */
-	public static final ShadowBlur:StyleProperty<Float> = new StyleProperty(
+	public static final ShadowBlur:StyleProperty<Float> = new StyleInterpolatedProperty(
 		"shadowBlur", 0.0, false, StyleImpact.Paint, floatInterpolate);
-	public static final ShadowSpread:StyleProperty<Float> = new StyleProperty(
+	public static final ShadowSpread:StyleProperty<Float> = new StyleInterpolatedProperty(
 		"shadowSpread", 0.0, false, StyleImpact.Paint, floatInterpolate);
 	/** Ordered post-layout geometry and image decorations. */
-	public static final Decorations:StyleProperty<DecorationChain> = new StyleProperty(
+	public static final Decorations:StyleProperty<DecorationChain> = new StyleInterpolatedProperty(
 		"decorations", DecorationChain.empty(), false, StyleImpact.Paint,
 		DecorationChain.interpolate);
-	public static final Opacity:StyleProperty<Float> = new StyleProperty(
+	public static final Opacity:StyleProperty<Float> = new StyleInterpolatedProperty(
 		"opacity", 1.0, false, StyleImpact.Composite, floatInterpolate);
 	/** Ordered post-layout filters applied to this node and its descendants. */
-	public static final Effects:StyleProperty<EffectChain> = new StyleProperty(
+	public static final Effects:StyleProperty<EffectChain> = new StyleInterpolatedProperty(
 		"effects", EffectChain.empty(), false, StyleImpact.Composite,
 		EffectChain.interpolate);
 	/** Ordered filters applied to the already-rendered backdrop behind this node. */
-	public static final BackdropEffects:StyleProperty<EffectChain> = new StyleProperty(
+	public static final BackdropEffects:StyleProperty<EffectChain> = new StyleInterpolatedProperty(
 		"backdropEffects", EffectChain.empty(), false, StyleImpact.Composite,
 		EffectChain.interpolate);
 	/** Source-alpha mask applied during isolated-layer composition. */
@@ -225,6 +221,20 @@ class StyleProperty<T> extends StylePropertyBase {
 	}
 }
 
+/** Interpolation is an explicit capability; discrete properties carry no function signature. */
+class StyleInterpolatedProperty<T> extends StyleProperty<T> {
+	public final interpolate:T->T->Float->T;
+
+	public function new(name:String, defaultValue:T, inherited:Bool, impact:StyleImpact,
+			interpolate:T->T->Float->T) {
+		if (interpolate == null) throw "An interpolated style property requires an interpolator";
+		super(name, defaultValue, inherited, impact);
+		this.interpolate = interpolate;
+		hasInterpolation = true;
+	}
+
+}
+
 /** A color property retains its typed comparison and interpolation callbacks. */
 class StyleColorProperty extends StylePropertyBase {
 	public final defaultValue:Color;
@@ -232,10 +242,11 @@ class StyleColorProperty extends StylePropertyBase {
 	final colorInterpolate:Null<Color->Color->Float->Color>;
 	public function new(name:String, defaultValue:Color, inherited:Bool, impact:StyleImpact,
 			?interpolate:Color->Color->Float->Color, ?equalValue:Color->Color->Bool) {
-		super(name, StyleProperty.allocateSlot(name), inherited, impact, interpolate != null);
+		super(name, StyleProperty.allocateSlot(name), inherited, impact);
 		this.defaultValue = defaultValue;
 		colorEqual = equalValue;
 		colorInterpolate = interpolate;
+		hasInterpolation = interpolate != null;
 	}
 	public function sameColor(left:Color, right:Color):Bool
 		return colorEqual == null ? haxeon.Equality.equals(left, right) : colorEqual(left, right);
@@ -251,7 +262,7 @@ class StyleInsetsProperty extends StylePropertyBase {
 	final insetsEqual:Null<Insets->Insets->Bool>;
 	public function new(name:String, defaultValue:Insets, inherited:Bool, impact:StyleImpact,
 			?equalValue:Insets->Insets->Bool) {
-		super(name, StyleProperty.allocateSlot(name), inherited, impact, false);
+		super(name, StyleProperty.allocateSlot(name), inherited, impact);
 		this.defaultValue = defaultValue;
 		insetsEqual = equalValue;
 	}
@@ -264,7 +275,7 @@ class StyleAxisProperty extends StylePropertyBase {
 	final axisEqual:Null<LayoutAxis->LayoutAxis->Bool>;
 	public function new(name:String, defaultValue:LayoutAxis, inherited:Bool, impact:StyleImpact,
 			?equalValue:LayoutAxis->LayoutAxis->Bool) {
-		super(name, StyleProperty.allocateSlot(name), inherited, impact, false);
+		super(name, StyleProperty.allocateSlot(name), inherited, impact);
 		this.defaultValue = defaultValue;
 		axisEqual = equalValue;
 	}
@@ -277,7 +288,7 @@ class StyleTransformProperty extends StylePropertyBase {
 	final transformEqual:Null<Transform2D->Transform2D->Bool>;
 	public function new(name:String, defaultValue:Transform2D, inherited:Bool, impact:StyleImpact,
 			?equalValue:Transform2D->Transform2D->Bool) {
-		super(name, StyleProperty.allocateSlot(name), inherited, impact, false);
+		super(name, StyleProperty.allocateSlot(name), inherited, impact);
 		this.defaultValue = defaultValue;
 		transformEqual = equalValue;
 	}

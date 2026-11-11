@@ -1,5 +1,7 @@
 package compiler.ir;
 
+import compiler.Provides.ProviderOperation;
+import compiler.Provides.ProviderOperations;
 import compiler.ir.Ir;
 import compiler.ir.SourceProvenance.Located;
 import compiler.ir.codec.IrTypeCodec;
@@ -71,7 +73,7 @@ class IrValueArrayPlaceMethods {
 			var entry = requests[index++], originalName = resolveMethod(entry.receiverType, entry.method, originals),
 				original = originals.get(originalName);
 			if (original == null) throw 'Missing array place method "$originalName"';
-			result.push(specialize(entry.name, original, entry.path));
+			result.push(specialize(Provider(TypeKey.of(element), ProviderOperations.detailed(ProviderOperation.ValueArrayMethod, entry.name)), entry.name, original, entry.path));
 		}
 		var writes = [for (name in valueWrites.keys()) name]; writes.sort(Reflect.compare);
 		var bridge = new IrValueArrayBridge(element, element, objects, helpers);
@@ -81,7 +83,7 @@ class IrValueArrayPlaceMethods {
 				position = builder.argument("index", I32);
 			builder.call(helpers.checker(request.path, false), [array, position], Void);
 			builder.returnValue(bridge.readValue(builder, array, position, request.type, request.path));
-			result.push(new IrFunction(name, builder.arguments, request.type, builder.blocks));
+			result.push(new IrFunction(name, builder.arguments, request.type, builder.blocks, Provider(TypeKey.of(element), ProviderOperations.detailed(ProviderOperation.ValueArrayElement, name))));
 		}
 		for (name in writes) {
 			var request = valueWrites.get(name), builder = new IrBuilder(), array = builder.argument("array", Array(element)),
@@ -89,13 +91,13 @@ class IrValueArrayPlaceMethods {
 			builder.call(helpers.checker(request.path, false), [array, position], Void);
 			bridge.writeValue(builder, array, position, value, request.type, request.path);
 			builder.returnValue(builder.constVoid());
-			result.push(new IrFunction(name, builder.arguments, Void, builder.blocks));
+			result.push(new IrFunction(name, builder.arguments, Void, builder.blocks, Provider(TypeKey.of(element), ProviderOperations.detailed(ProviderOperation.ValueArrayElement, name))));
 		}
 		finished = true;
 		return result;
 	}
 
-	public function specialize(name:String, fn:IrFunction, path:Array<String>):IrFunction {
+	public function specialize(kind:compiler.ir.IrFunction.IrFunctionKind, name:String, fn:IrFunction, path:Array<String>):IrFunction {
 		if (fn.arguments.length == 0 || !isValue(fn.arguments[0].type))
 			throw 'Array place method "$name" has no value receiver';
 		var receiver = fn.arguments[0], next = nextId(fn), array = new IrValue(next++, "$array-place", Array(element)),
@@ -460,7 +462,7 @@ class IrValueArrayPlaceMethods {
 		}
 		var debug = [for (binding in fn.debugBindings) if (!aliases.exists(binding.value.id) && !optionalScalars.exists(binding.value.id)
 			&& !virtualFresh.exists(binding.value.id) && !optionalFresh.exists(binding.value.id)) binding];
-		return new IrFunction(name, [array, index].concat(fn.arguments.slice(1)), fn.result, blocks, debug, fn.inlineHint, fn.retention);
+		return new IrFunction(name, [array, index].concat(fn.arguments.slice(1)), fn.result, blocks, kind, debug, fn.inlineHint, fn.retention);
 	}
 
 	function request(receiverType:IrType, method:String, path:Array<String>):String {

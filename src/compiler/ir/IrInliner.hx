@@ -204,14 +204,29 @@ class IrInliner {
 	final profile:TargetProfile;
 
 	final byName:Map<String, IrFunction> = [];
-	final done:Map<String, IrFunction> = [];
-	final dependenciesOf:Map<String, Array<IrFunction>> = [];
-	final impure:Map<String, Bool> = [];
-	final visiting:Map<String, Bool> = [];
+
+	/**
+	 * Every function has a number, assigned once in name order, and the per-function state below is indexed by it: a callee name is
+	 * hashed once per call instruction, and nothing after that hashes a string. Sorting numbers is sorting names.
+	 */
+	final ids:Map<String, Int> = [];
+
+	final functions:Array<IrFunction> = [];
+	final done:Array<Null<IrFunction>> = [];
+	final dependenciesOf:Array<Null<Array<IrFunction>>> = [];
+	final dependencyIdsOf:Array<Null<Array<Int>>> = [];
+	final impure:Array<Bool> = [];
+	final visiting:Array<Bool> = [];
 	final entryPoint:String;
 
 	/** The program's objects and the direct subclasses of each (for resolving a virtual call when every override agrees). */
+	/** The most classes a method call's resolution looks at: the receiver's class and the classes that extend it. */
+	static inline final MaxSubclassWalk = 256;
+
 	final table:IrObjectTable;
+
+	/** Which function each class and method resolve to, shared with the other passes that resolve calls. */
+	final resolution:IrMethodResolution;
 
 	/** The print of every object of the program, by name. */
 	final objectPrints:Map<String, Int> = [];
@@ -222,18 +237,36 @@ class IrInliner {
 	final nextMemo:Map<String, InlineMemo> = [];
 
 	/** One entry per function being inlined: the callee functions it has consulted so far. */
-	final frames:Array<Map<String, IrFunction>> = [];
+	final frames:Array<Array<Int>> = [];
 
-	final frameNames:Array<String> = [];
+	/** The serial of each frame, and the serial of the frame that last recorded a function together with its dependencies. */
+	final frameSerials:Array<Int> = [];
+
+	final expandedBy:Array<Int> = [];
+	var serials = 0;
+
+	final frameIds:Array<Int> = [];
 	final frameImpure:Array<Bool> = [];
 
 	/** Parallel to `frames`: the objects each function being inlined has consulted so far. */
 	final objectFrames:Array<Map<String, Bool>> = [];
 
 	/** The objects consulted, with their prints, by each function inlined or reused so far. */
-	final objectsOf:Map<String, Map<String, Int>> = [];
+	final objectsOf:Array<Null<Map<String, Int>>> = [];
 
 	var depth = 0;
+
+	/**
+	 * The strongly connected component of each function in the call graph of the original bodies. Inlining never goes into a call
+	 * to a function of the caller's own component (a cycle): a function's inlined form then depends only on its own source and on
+	 * the callees outside its component, not on where the walk happened to enter the cycle. Before, a call to an ancestor of the walk
+	 * was skipped, which made the result depend on the order and kept every function in a cycle (and every caller of one) out of the
+	 * memo.
+	 */
+	final components:Array<Int> = [];
+
+	/** HAXEON_CHECK_REUSE=1: a function with a usable memo is inlined again and the two results must be equal. */
+	static final checkingMemo:Bool = Sys.getEnv("HAXEON_CHECK_REUSE") == "1";
 
 	function new(program:IrProgram, cache:IrInlineCache, profile:TargetProfile, allowInline:Bool) {
 		this.allowInline = allowInline;
@@ -242,6 +275,20 @@ class IrInliner {
 		this.cache = cache;
 		for (fn in program.functions)
 			byName.set(fn.name, fn);
+		var names = [for (name in byName.keys()) name];
+		names.sort(Reflect.compare);
+		for (name in names) {
+			ids.set(name, functions.length);
+			functions.push(byName.get(name));
+			done.push(null);
+			dependenciesOf.push(null);
+			dependencyIdsOf.push(null);
+			impure.push(false);
+			visiting.push(false);
+			objectsOf.push(null);
+			components.push(-1);
+			expandedBy.push(-1);
+		}
 		// What every function's inlining depends on whatever it looks at. Each object's own description is not here: a memo
 		// entry records the objects it consulted, so a change to one object does not invalidate the rest.
 		fingerprint = cache.fingerprintId([
@@ -272,6 +319,79 @@ class IrInliner {
 			objectPrints.set(name, cache.objectPrintId(name, text));
 		}
 		table = new IrObjectTable(objects, subclasses);
+		resolution = IrMethodResolution.of(program.objects);
+		computeComponents();
+	}
+
+	/** Tarjan's algorithm over the call edges of the original bodies, visiting functions in name order so the numbering is deterministic. */
+	function computeComponents():Void {
+		var count = functions.length, edges:Array<Array<Int>> = [];
+		for (id in 0...count) {
+			var targets:Array<Int> = [];
+			for (block in functions[id].blocks)
+				for (located in block.instructions)
+					switch located.value {
+						case Call(_, callee, _):
+							var target = ids.get(callee);
+							if (target != null)
+								targets.push(target);
+						case MethodCall(_, receiver, method, _, _):
+							var callee = resolveMethod(receiver, method),
+								target = callee == null ? null : ids.get(callee);
+							if (target != null)
+								targets.push(target);
+						default:
+					}
+			edges.push(targets);
+		}
+		var order:Array<Int> = [for (_ in 0...count) -1], low:Array<Int> = [for (_ in 0...count) 0], onStack:Array<Bool> = [for (_ in 0...count) false],
+			stack:Array<Int> = [], counter = 0, component = 0;
+		for (root in 0...count) {
+			if (order[root] >= 0)
+				continue;
+			var path:Array<Int> = [root], cursors:Array<Int> = [0];
+			order[root] = counter;
+			low[root] = counter;
+			counter++;
+			stack.push(root);
+			onStack[root] = true;
+			while (path.length > 0) {
+				var node = path[path.length - 1],
+					cursor = cursors[cursors.length - 1],
+					targets = edges[node];
+				if (cursor < targets.length) {
+					cursors[cursors.length - 1] = cursor + 1;
+					var next = targets[cursor];
+					if (order[next] < 0) {
+						order[next] = counter;
+						low[next] = counter;
+						counter++;
+						stack.push(next);
+						onStack[next] = true;
+						path.push(next);
+						cursors.push(0);
+					} else if (onStack[next] && order[next] < low[node])
+						low[node] = order[next];
+				} else {
+					if (low[node] == order[node]) {
+						var member:Int;
+						do {
+							member = stack.pop();
+							onStack[member] = false;
+							components[member] = component;
+						} while (member != node);
+						component++;
+					}
+					path.pop();
+					cursors.pop();
+					if (path.length > 0) {
+						var parent = path[path.length - 1];
+						if (low[node] < low[parent])
+							low[parent] = low[node];
+					}
+				}
+			}
+		}
 	}
 
 	/** Include every field storage fact consulted by scalar replacement and load/store forwarding. */
@@ -327,7 +447,7 @@ class IrInliner {
 			publishedBytes:Map<String, {fn:IrFunction, bytes:Null<Bytes>}> = [],
 			instrumented:Map<String, {source:IrFunction, scope:String, result:IrFunction}> = [];
 		for (fn in program.functions) {
-			var result = inliner.inlinedVersion(fn.name);
+			var result = inliner.inlinedVersionOf(fn.name);
 			// Keep inlining decisions based on the original post-inline bodies. Removing dead values in a memoized callee
 			// would otherwise change the caller's budget and can introduce new allocations through a different expansion.
 			var clean = cache.cleaned.get(fn.name);
@@ -405,32 +525,45 @@ class IrInliner {
 		}
 	}
 
-	function inlinedVersion(name:String):IrFunction {
-		var known = done.get(name);
+	function inlinedVersionOf(name:String):Null<IrFunction> {
+		var id = ids.get(name);
+		return id == null ? null : inlinedVersion(id);
+	}
+
+	function inlinedVersion(id:Int):IrFunction {
+		var known = done[id];
 		if (known != null) {
-			consultResult(name);
+			consultResult(id);
 			return known;
 		}
-		var original = byName.get(name);
-		if (original == null)
-			return null;
-		var memo = cache.memo.get(name);
-		if (memo != null
-			&& memo.source == original
-			&& memo.fingerprint == fingerprint
-			&& dependenciesCurrent(memo.dependencies)
-			&& objectsCurrent(memo.objects)) {
-			done.set(name, memo.result);
-			dependenciesOf.set(name, memo.dependencies);
-			objectsOf.set(name, memo.objects);
+		var original = functions[id], name = original.name;
+		var memo = cache.memo.get(name),
+			usable = memo != null
+				&& memo.source == original
+				&& memo.fingerprint == fingerprint
+				&& dependenciesCurrent(memo.dependencies)
+				&& objectsCurrent(memo.objects);
+		if (usable && !checkingMemo && memo != null) {
+			done[id] = memo.result;
+			dependenciesOf[id] = memo.dependencies;
+			var memoDependencyIds:Array<Int> = [];
+			for (dependency in memo.dependencies) {
+				var dependencyId = ids.get(dependency.name);
+				if (dependencyId == null)
+					throw 'Inline memo of "$name" depends on unknown function "${dependency.name}"';
+				memoDependencyIds.push(dependencyId);
+			}
+			dependencyIdsOf[id] = memoDependencyIds;
+			objectsOf[id] = memo.objects;
 			nextMemo.set(name, memo);
-			consultResult(name);
+			consultResult(id);
 			return memo.result;
 		}
-		visiting.set(name, true);
+		visiting[id] = true;
 		depth++;
 		frames.push([]);
-		frameNames.push(name);
+		frameSerials.push(++serials);
+		frameIds.push(id);
 		frameImpure.push(false);
 		var consultedObjects:Map<String, Bool> = [];
 		objectFrames.push(consultedObjects);
@@ -443,23 +576,36 @@ class IrInliner {
 		objectFrames.pop();
 		table.consulted = objectFrames.length > 0 ? objectFrames[objectFrames.length - 1] : null;
 		var consulted = frames.pop(), isImpure = frameImpure.pop();
-		frameNames.pop();
+		frameSerials.pop();
+		frameIds.pop();
 		depth--;
-		visiting.remove(name);
-		var dependencies:Array<IrFunction> = [];
-		var names = [for (dependencyName in consulted.keys()) dependencyName];
-		names.sort(Reflect.compare);
-		for (dependencyName in names)
-			dependencies.push(consulted.get(dependencyName));
+		visiting[id] = false;
+		// The functions consulted, once each and in name order (numbers are in name order).
+		consulted.sort((left, right) -> left - right);
+		var dependencies:Array<IrFunction> = [], dependencyIds:Array<Int> = [], last = -1;
+		for (consultedId in consulted)
+			if (consultedId != last) {
+				last = consultedId;
+				dependencies.push(functions[consultedId]);
+				dependencyIds.push(consultedId);
+			}
 		var objectPrintsOf:Map<String, Int> = [for (objectName in consultedObjects.keys()) objectName => printOf(objectName)];
-		done.set(name, result);
-		dependenciesOf.set(name, dependencies);
-		objectsOf.set(name, objectPrintsOf);
+		if (usable && checkingMemo && memo != null) {
+			if (!compiler.ir.codec.IrFunctionStateEquality.same(memo.result, result))
+				throw 'HAXEON_CHECK_REUSE: the inlined form of $name differs from the one its memo holds';
+			result = memo.result;
+		}
+		done[id] = result;
+		dependenciesOf[id] = dependencies;
+		dependencyIdsOf[id] = dependencyIds;
+		objectsOf[id] = objectPrintsOf;
 		if (isImpure)
-			impure.set(name, true);
+			impure[id] = true;
 		else
-			nextMemo.set(name, new InlineMemo(original, fingerprint, dependencies, objectPrintsOf, result));
-		consultResult(name);
+			nextMemo.set(name, usable
+				&& checkingMemo
+				&& memo != null ? memo : new InlineMemo(original, fingerprint, dependencies, objectPrintsOf, result));
+		consultResult(id);
 		return result;
 	}
 
@@ -471,24 +617,26 @@ class IrInliner {
 	}
 
 	/** Records `name`'s pristine body and everything its inlined form depended on in the function being inlined. */
-	function consultResult(name:String):Void {
+	function consultResult(id:Int):Void {
 		if (frames.length == 0)
 			return;
-		var frame = frames[frames.length - 1];
-		var original = byName.get(name);
-		if (original != null)
-			frame.set(name, original);
-		var dependencies = dependenciesOf.get(name);
-		if (dependencies != null)
-			for (dependency in dependencies)
-				frame.set(dependency.name, dependency);
-		var consultedObjects = objectsOf.get(name);
+		var top = frames.length - 1, frame = frames[top];
+		frame.push(id);
+		// A function recorded with its dependencies in this frame needs no second expansion.
+		if (expandedBy[id] == frameSerials[top])
+			return;
+		expandedBy[id] = frameSerials[top];
+		var dependencyIds = dependencyIdsOf[id];
+		if (dependencyIds != null)
+			for (dependency in dependencyIds)
+				frame.push(dependency);
+		var consultedObjects = objectsOf[id];
 		if (consultedObjects != null && objectFrames.length > 0) {
 			var objectFrame = objectFrames[objectFrames.length - 1];
 			for (objectName in consultedObjects.keys())
 				objectFrame.set(objectName, true);
 		}
-		if (impure.exists(name))
+		if (impure[id])
 			frameImpure[frameImpure.length - 1] = true;
 	}
 
@@ -504,15 +652,18 @@ class IrInliner {
 				actuals = [object].concat(arguments);
 			default:
 		}
-		if (target == null || !byName.exists(target))
+		var id = target == null ? null : ids.get(target);
+		if (id == null)
 			return null;
-		var original = byName.get(target);
+		var original = functions[id];
 		if (frames.length > 0)
-			frames[frames.length - 1].set(target, original);
-		if (visiting.exists(target)) {
-			// Skipping the function being inlined is context-free; skipping an ancestor depends on the order of the walk.
-			if (frameNames.length == 0 || frameNames[frameNames.length - 1] != target)
-				frameImpure[frameImpure.length - 1] = true;
+			frames[frames.length - 1].push(id);
+		// A call into the caller's own cycle is never inlined (see `components`); this covers recursion and every ancestor of the walk.
+		if (frameIds.length > 0 && components[id] == components[frameIds[frameIds.length - 1]])
+			return null;
+		if (visiting[id]) {
+			// Unreachable now (an ancestor is always in the caller's component); kept as the guard it was.
+			frameImpure[frameImpure.length - 1] = true;
 			return null;
 		}
 		if (depth > MaxChainDepth) {
@@ -528,7 +679,7 @@ class IrInliner {
 		for (index in 0...actuals.length)
 			if (!bindable(actuals[index].type, original.arguments[index].type))
 				return null;
-		var candidate = inlinedVersion(target);
+		var candidate = inlinedVersion(id);
 		if (candidate == null || !fits(candidate))
 			return null;
 		// HashLink's JIT keeps registers only inside a basic block, so a branching body costs more spliced in than called;
@@ -546,35 +697,22 @@ class IrInliner {
 			case Obj(name): name;
 			default: return null;
 		};
-		var target:Null<String> = null, work = [typeName], visited = 0;
-		while (work.length > 0 && visited < 256) {
-			var name = work.pop();
-			visited++;
-			var implementation = implementationIn(name, method);
-			if (implementation == null || (target != null && target != implementation))
-				return null;
-			target = implementation;
-			var children = table.subclassesOf(name);
-			if (children != null)
-				for (child in children)
-					work.push(child);
+		// The answer comes from the shared table; what the walk used to read is recorded for the memo's dependencies: the class
+		// and its bases, and every class that extends it.
+		var consulted = table.consulted;
+		if (consulted != null) {
+			var name:Null<String> = typeName;
+			while (name != null) {
+				var descriptor = table.get(name);
+				name = descriptor == null || descriptor.base == null ? null : Std.string(descriptor.base);
+			}
+			for (name in resolution.subtreeOf(typeName))
+				consulted.set(name, true);
 		}
-		return work.length > 0 ? null : target;
-	}
-
-	function implementationIn(typeName:String, method:String):Null<String> {
-		var name:Null<String> = typeName, steps = 0;
-		while (name != null && steps < 64) {
-			var descriptor = table.get(name);
-			if (descriptor == null)
-				return null;
-			for (candidate in descriptor.methods)
-				if (candidate.name == method)
-					return candidate.functionName;
-			name = descriptor.base == null ? null : Std.string(descriptor.base);
-			steps++;
-		}
-		return null;
+		// A call on a class with more than MaxSubclassWalk classes below it stays unresolved, as it did when this walked the subclasses
+		// itself and gave up after that many. Lifting the limit resolves calls on very wide hierarchies (MachineComponent in the app),
+		// which changes the output, so it is a separate measured step.
+		return resolution.subtreeOf(typeName).length > MaxSubclassWalk ? null : resolution.uniqueImplementation(typeName, method);
 	}
 
 	/** Cheap syntactic screen on the original body, before the callee's own calls are inlined. */
@@ -715,12 +853,12 @@ class IrInliner {
 		if (replaced.substitutions.keys().hasNext())
 			bindings = substitute(blocks, replaced.substitutions, bindings);
 		var consult = function(name:String):Void {
-			var original = byName.get(name);
-			if (original != null && frames.length > 0)
-				frames[frames.length - 1].set(name, original);
+			var consultedId = ids.get(name);
+			if (consultedId != null && frames.length > 0)
+				frames[frames.length - 1].push(consultedId);
 		};
 		new IrCopyElision(byName, resolveMethod, consult).run(blocks);
-		return new IrFunction(fn.name, fn.arguments, fn.result, blocks, bindings, fn.inlineHint, fn.retention);
+		return fn.withBlocks(blocks, bindings);
 	}
 
 	/** Value receivers are non-null values; reference receivers must retain the method call's null check. */
@@ -1050,6 +1188,7 @@ class IrInliner {
 			case LessEqual(out, a, b): LessEqual(use(out), use(a), use(b));
 			case Equal(out, a, b): Equal(use(out), use(a), use(b));
 			case Call(out, name, arguments): Call(use(out), name, [for (argument in arguments) use(argument)]);
+			case Intrinsic(out, operation, arguments): Intrinsic(use(out), operation, [for (argument in arguments) use(argument)]);
 			case CNativeCall(out, name, arguments): CNativeCall(use(out), name, [for (argument in arguments) use(argument)]);
 			case StaticClosure(out, name): StaticClosure(use(out), name);
 			case InstanceClosure(out, name, receiver): InstanceClosure(use(out), name, use(receiver));

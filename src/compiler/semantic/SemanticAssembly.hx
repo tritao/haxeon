@@ -95,6 +95,7 @@ class SemanticAssembly {
 		}
 		// Type names that every module sees: dotted ones ("pkg.Type") and plain ones ("Type"). They are attached to each module's
 		// table as shared layers instead of being copied into it.
+		var aliasesByPackage = indexAliasesByPackage(sourceTypeAliases);
 		var dottedSourceAliases:Map<String, String> = [],
 			plainSourceAliases:Map<String, String> = [];
 		for (sourceName => declarationName in sourceTypeAliases)
@@ -200,7 +201,7 @@ class SemanticAssembly {
 				contributionReuseMs += Sys.time() * 1000.0 - contributionStartedAt;
 				continue;
 			}
-			var locals:Map<String, Bool> = [],
+			var locals = LocalScope.ofNames([]),
 				aliases = AliasTable.of(context.importAliases(ast.imports, ast.importAliases));
 			// An explicit import outranks a same-named type elsewhere in the
 			// program, such as an unpackaged `Path` shadowing `import nav.Path`.
@@ -258,7 +259,7 @@ class SemanticAssembly {
 			}
 			var visiblePackage = ast.packageName;
 			if (visiblePackage != null)
-				aliases.attach(visibleTypeAliases(visiblePackage, sourceTypeAliases, visibleAliasesByPackage));
+				aliases.attach(visibleTypeAliases(visiblePackage, aliasesByPackage, visibleAliasesByPackage));
 			aliases.attach(plainSourceAliases);
 			ModuleCanonicalizer.addDeclaredTypeAliases(aliases, ast, ast.packageName);
 			// Enum constructors imported through their enum type are expression
@@ -921,22 +922,53 @@ class SemanticAssembly {
 		callers.push(caller);
 	}
 
-	static function visibleTypeAliases(packageName:String, sourceTypeAliases:Map<String, String>, cache:Map<String, Map<String, String>>):Map<String, String> {
+	/**
+	 * The source aliases grouped by the packages they are visible from: an alias is listed under every package `P` that both its source
+	 * name and its declaration name start with (`P.`), and under the root package (""). Each group keeps the aliases in the order of
+	 * `sourceTypeAliases`, so what a package sees is built exactly as walking all of them would build it.
+	 */
+	static function indexAliasesByPackage(sourceTypeAliases:Map<String, String>):Map<String, Array<{source:String, declaration:String}>> {
+		var index:Map<String, Array<{source:String, declaration:String}>> = [];
+		function add(packageName:String, source:String, declaration:String):Void {
+			var group = index.get(packageName);
+			if (group == null) {
+				group = [];
+				index.set(packageName, group);
+			}
+			group.push({source: source, declaration: declaration});
+		}
+		for (sourceName => declarationName in sourceTypeAliases) {
+			add("", sourceName, declarationName);
+			var dot = sourceName.indexOf(".");
+			while (dot >= 0) {
+				if (declarationName.length > dot
+					&& declarationName.charCodeAt(dot) == ".".code
+					&& StringTools.startsWith(declarationName, sourceName.substr(0, dot)))
+					add(sourceName.substr(0, dot), sourceName, declarationName);
+				dot = sourceName.indexOf(".", dot + 1);
+			}
+		}
+		return index;
+	}
+
+	static function visibleTypeAliases(packageName:String, aliasIndex:Map<String, Array<{source:String, declaration:String}>>,
+			cache:Map<String, Map<String, String>>):Map<String, String> {
 		if (cache.exists(packageName))
 			return cache.get(packageName);
 		var result:Map<String, String> = [],
 			visiblePackage:Null<String> = packageName;
 		while (visiblePackage != null) {
 			var currentPackage:String = visiblePackage,
-				packagePrefix = currentPackage.length == 0 ? "" : currentPackage + ".";
-			for (sourceName => declarationName in sourceTypeAliases)
-				if (StringTools.startsWith(sourceName, packagePrefix) && StringTools.startsWith(declarationName, packagePrefix)) {
-					var relativeSourceName = sourceName.substring(packagePrefix.length, sourceName.length),
-						simpleName = declarationName.substring(packagePrefix.length, declarationName.length);
+				prefixLength = currentPackage.length == 0 ? 0 : currentPackage.length + 1,
+				group = aliasIndex.get(currentPackage);
+			if (group != null)
+				for (alias in group) {
+					var relativeSourceName = alias.source.substring(prefixLength, alias.source.length),
+						simpleName = alias.declaration.substring(prefixLength, alias.declaration.length);
 					if (!result.exists(relativeSourceName))
-						result.set(relativeSourceName, declarationName);
+						result.set(relativeSourceName, alias.declaration);
 					if (simpleName.indexOf(".") < 0 && !result.exists(simpleName))
-						result.set(simpleName, declarationName);
+						result.set(simpleName, alias.declaration);
 				}
 			var separator = currentPackage.lastIndexOf(".");
 			visiblePackage = separator < 0 ? null : currentPackage.substring(0, separator);

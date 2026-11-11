@@ -54,7 +54,7 @@ class WasmFlattenValueFields {
 			if (original == null || original.arguments.length == 0) throw 'Missing Wasm GC place method "${method.original}"';
 			var next = nextId(original), owner = new IrValue(next, "$wasm-gc-place-owner", Obj(method.owner)),
 				args = [owner].concat(original.arguments.slice(1)),
-				clone = new IrFunction(method.name, args, original.result, original.blocks, [], original.inlineHint),
+				clone = new IrFunction(method.name, args, original.result, original.blocks, GeneratedHelper, [], original.inlineHint),
 				place:FlattenedPlace = {owner: owner, path: method.path, typeName: method.typeName};
 			var rewritten = rewriteFunction(clone, {id: original.arguments[0].id, place: place});
 			functions.push(rewritten);
@@ -218,7 +218,7 @@ class WasmFlattenValueFields {
 		for (block in blocks) if (edgeCopies.exists(block.id))
 			for (instruction in edgeCopies.get(block.id)) block.instructions.push(instruction);
 		var bindings = [for (binding in fn.debugBindings) if (!aliases.exists(binding.value.id)) binding];
-		return new IrFunction(fn.name, fn.arguments, fn.result, blocks, bindings, fn.inlineHint, fn.retention);
+		return fn.withBlocks(blocks, bindings);
 	}
 
 	/** Fold a holder check into an immediately following scalar access, without moving it across evaluation. */

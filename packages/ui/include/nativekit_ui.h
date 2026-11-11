@@ -325,7 +325,7 @@ enum NK_ENUM(nkui_composite_mode) {
 
 /** Flags describing why a layer needs an isolated render target. */
 typedef uint32_t nkui_layer_flags;
-enum NK_ENUM(nkui_layer_flags) {
+enum NK_FLAGS(nkui_layer_flags) {
     /** Allocate a separate target even when opacity is 1. */
     NKUI_LAYER_ISOLATED = 1u << 0,
     /** The four bounds fields identify the logical target region. */

@@ -28,7 +28,7 @@ class StableLambdaPatchMain {
 			+ "function main():Int { return Ui.first() * 100 + Ui.second(); }\n";
 		compiler.update("Main.hx", program("", "", 2));
 		var build = compiler.compile("Main"),
-			live = Runtime.load(HlWriter.encode(build.module), build.runtimeIdentity),
+			live = Runtime.load(HlWriter.encode(build.module).flatten(), build.runtimeIdentity),
 			mainId = build.functionIds.get("main");
 		if (Runtime.callInt(live, mainId) != 209)
 			throw "The program did not run correctly before the edits";

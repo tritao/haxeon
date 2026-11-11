@@ -301,7 +301,7 @@ class HlPatchWriter {
 			for (snapshot in code.sourceSnapshots)
 				if (referenced.exists(snapshot.sourceHash)) snapshot
 		];
-		return selected.length == 0 ? null : HlWriter.encodeSourceSnapshots(selected);
+		return selected.length == 0 ? null : HlWriter.encodeSourceSnapshots(selected).flatten();
 	}
 
 	static function encodeDebug(functions:Array<HlFunction>, stableIdsBySlot:Map<Int, Int>):Null<HaxeBytes> {
@@ -430,6 +430,12 @@ class HlPatchWriter {
 		var h:Int = cast 0x811C9DC5;
 		for (i in 0...count)
 			switch values[i] {
+				case EnumTag(boxedType, cacheGlobals):
+					h = hashBytes(intBytes(HashLinkType.EnumTag), h);
+					h = hashBytes(intBytes(boxedType), h);
+					h = hashBytes(intBytes(cacheGlobals.length), h);
+					for (global in cacheGlobals)
+						h = hashBytes(intBytes(global), h);
 				case Simple(kind):
 					h = hashBytes(intBytes(kind), h);
 				case Parameterized(kind, parameter):
@@ -512,7 +518,7 @@ class HlPatchWriter {
 	static function writeType(out:BytesOutput, type:HlTypeDef):Void
 		switch type {
 			case Simple(kind):
-				if (kind == HashLinkType.Ref || kind == HashLinkType.Null || kind == HashLinkType.Packed)
+				if (kind == HashLinkType.Ref || kind == HashLinkType.Null || kind == HashLinkType.Packed || kind == HashLinkType.EnumTag)
 					throw 'HashLink type $kind requires a parameter';
 				if (kind == HashLinkType.Obj || kind == HashLinkType.Struct || kind == HashLinkType.Virtual || kind == HashLinkType.Enum)
 					throw 'HashLink type $kind requires its layout';
@@ -546,7 +552,7 @@ class HlPatchWriter {
 					writeIndex(out, field.name);
 					writeIndex(out, field.type);
 				}
-			case Enum(_, _, _):
+			case Enum(_, _, _), EnumTag(_, _):
 				throw "Enum type patches require a structural reload";
 		}
 

@@ -204,7 +204,7 @@ class StdlibMain {
 			throw 'haxe.io.Bytes source binding "$symbol" was not emitted';
 		for (symbol in streamSymbols.keys())
 			throw 'byte stream source binding "$symbol" was not emitted';
-		File.saveBytes(output, HlWriter.encode(result.module));
+		File.saveBytes(output, HlWriter.encode(result.module).flatten());
 
 		var invalid = new Compiler();
 		CompilerIntrinsics.register(invalid);

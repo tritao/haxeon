@@ -25,7 +25,7 @@ class SourceInlineEnumMain {
 		invalid.natives = program.natives;
 		invalid.cNatives = program.cNatives;
 		invalid.functions = program.functions.concat([
-			new compiler.ir.IrFunction("invalidInlineNull", b.arguments, Obj("$inline-enum:Packet"), b.blocks)
+			new compiler.ir.IrFunction("invalidInlineNull", b.arguments, Obj("$inline-enum:Packet"), b.blocks, Ordinary)
 		]);
 		var error = "";
 		try
@@ -80,7 +80,7 @@ class SourceInlineEnumMain {
 				if (temp == null)
 					temp = "out";
 				var path = temp + "/first-" + target + inlining + (target == "hl" ? ".hl" : ".wasm");
-				var bytes = target == "hl" ? HlWriter.encode(result.module) : new WasmBackend().compile(result.ir, {
+				var bytes = target == "hl" ? HlWriter.encode(result.module).flatten() : new WasmBackend().compile(result.ir, {
 					target: target == "wasm32" ? Wasm32 : WasmGc,
 					debugNames: true,
 					wasmMemoryStats: target == "wasm32",
@@ -112,7 +112,7 @@ class SourceInlineEnumMain {
 		var path = root + "/native-map-enum-" + target + "-" + inlining + "-" + Std.random(0x7fffffff)
 			+ (target == "hl" ? ".hl" : ".wasm");
 		if (target == "hl") {
-			sys.io.File.saveBytes(path, HlWriter.encode(compiled.module));
+			sys.io.File.saveBytes(path, HlWriter.encode(compiled.module).flatten());
 			var vm = Sys.getEnv("HAXEON_HASHLINK_DIR"), process = new sys.io.Process(vm == null ? "scripts/hl" : vm + "/hl", [path]),
 				error = process.stderr.readAll().toString(), status = process.exitCode();
 			process.close();

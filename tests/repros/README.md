@@ -3,7 +3,7 @@
 From the repository root, compile and run:
 
 ```sh
-haxeon/.tools/haxe/haxe --cwd haxeon -cp src --run Main tests/programs/json-typed-object-array.hx out/json-typed-object-array.hl
+haxeon/.tools/haxe/haxe --cwd haxeon common.hxml --run Main tests/programs/json-typed-object-array.hx out/json-typed-object-array.hl
 LD_LIBRARY_PATH="$PWD/haxeon/out:$(haxeon/scripts/hashlink-path.sh)" $(haxeon/scripts/hashlink-path.sh)/hl haxeon/out/json-typed-object-array.hl
 ```
 

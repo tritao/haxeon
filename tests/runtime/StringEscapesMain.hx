@@ -52,7 +52,7 @@ class StringEscapesMain {
 		compiler.addStandardLibrarySourceRoot("stdlib");
 		compiler.update("Main.hx", source);
 		var result = compiler.compile("Main"),
-			live = Runtime.load(HlWriter.encode(result.module), result.runtimeIdentity);
+			live = Runtime.load(HlWriter.encode(result.module).flatten(), result.runtimeIdentity);
 		for (index in 0...cases.length) {
 			var actual = Runtime.callInt(live, result.functionIds.get('Main.case$index'));
 			if (actual != cases[index].expected)

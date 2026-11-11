@@ -491,7 +491,7 @@ class TestMain {
 		builder.constInt(7);
 		var repeated = builder.constInt(7);
 		builder.returnValue(repeated);
-		ir.functions.push(new IrFunction("main", [], IrType.I32, builder.blocks));
+		ir.functions.push(new IrFunction("main", [], IrType.I32, builder.blocks, Ordinary));
 		var lowered = HlLower.lower(ir);
 		if (lowered.ints.length != 1 || lowered.ints[0] != 7)
 			throw "IR lowering did not deduplicate integer constants";
@@ -732,7 +732,7 @@ class TestMain {
 				}
 		if (!nullableEnumHasJump)
 			throw "Nullable enum null checks must lower through HashLink's dedicated null branch";
-		HlWriter.encode(nullableEnumHl);
+		HlWriter.encode(nullableEnumHl).flatten();
 		Sys.println("PASS: nullable enum null checks use dedicated HashLink null branches");
 
 		var deepBlockCount = 2048, deepBlocks:Array<CfgBlock> = [];
@@ -766,7 +766,7 @@ class TestMain {
 			else
 				postdomBuilder.jump(postdomBlocks[index + 1]);
 		}
-		var postdom = new WasmCfgAnalysis(new IrFunction("postdom-chain", [], IrType.I32, postdomBuilder.blocks));
+		var postdom = new WasmCfgAnalysis(new IrFunction("postdom-chain", [], IrType.I32, postdomBuilder.blocks, Ordinary));
 		for (index in 0...postdomBlocks.length - 1)
 			if (postdom.postImmediate.get(index) != index + 1)
 				throw 'Post-dominator chain failed across bitset word boundary at block $index';
@@ -799,7 +799,7 @@ class TestMain {
 		mismatchedIteratorBlock.instructions.push(located(compiler.ir.Ir.IrInstruction.IteratorNext(wrongIteratorElement, mismatchedIterator)));
 		mismatchedIteratorBlock.terminator = located(compiler.ir.Ir.IrTerminator.Return(wrongIteratorElement));
 		var mismatchedIteratorProgram = new IrProgram("main");
-		mismatchedIteratorProgram.functions.push(new IrFunction("main", [mismatchedIterator], Bytes, [mismatchedIteratorBlock]));
+		mismatchedIteratorProgram.functions.push(new IrFunction("main", [mismatchedIterator], Bytes, [mismatchedIteratorBlock], Ordinary));
 		expectIrError(mismatchedIteratorProgram, "IR verification failed for main: IR value 1 has the wrong type");
 		Sys.println("PASS: IR verifier rejects iterator element type mismatches");
 		var persistedType = Function([
@@ -913,7 +913,7 @@ class TestMain {
 		if (!provenanceLines.exists(2) || !provenanceLines.exists(3))
 			throw "SSA IR did not retain expression and statement source lines";
 		var debugCode = HlLower.lower(provenanceProgram),
-			debugBytes = HlWriter.encode(debugCode);
+			debugBytes = HlWriter.encode(debugCode).flatten();
 		if (debugBytes.get(4) != 1)
 			throw "HLB writer did not enable function debug metadata";
 		for (fn in debugCode.functions)
@@ -2065,7 +2065,7 @@ class TestMain {
 		];
 		objectCode.functions = [new HlFunction(3, 0, [1], [LoadInt(0, 0), Return(0)])];
 		objectCode.entryPoint = 0;
-		if (HlWriter.encode(objectCode).length == 0)
+		if (HlWriter.encode(objectCode).flatten().length == 0)
 			throw "HashLink object type did not serialize";
 		var incrementalClass = new Compiler();
 		incrementalClass.update("Main.hx",
@@ -2095,7 +2095,7 @@ class TestMain {
 
 	static function expectError(code:HlCode, expected:String):Void {
 		try {
-			HlWriter.encode(code);
+			HlWriter.encode(code).flatten();
 			throw 'writer accepted invalid module; expected "$expected"';
 		} catch (error:String) {
 			if (error != expected)

@@ -1,5 +1,6 @@
 package compiler.types.typing;
 
+import compiler.types.TypedAst.TypedFunctionRole;
 import compiler.Source.SourceSpan;
 import compiler.semantic.SemanticSignature;
 import compiler.types.KeyPathType;
@@ -43,11 +44,14 @@ class KeyPathRuntime {
 				caches.set(cacheName, cache);
 				newClasses.push(cache);
 			}
-			var hasField = false;
-			for (field in cache.fields) if (field.name == fieldName) hasField = true;
-			if (!hasField) cache.fields.push({name: fieldName, type: pathType, metadata: [],
+			// A cache class kept from an earlier build holds the field as it was typed then; the declaration it is placed at may have moved
+			// since, so the field is made again from the definition rather than kept.
+			var made:TypedField = {name: fieldName, type: pathType, metadata: [],
 				initializer: nil(pathType, span), inlineValue: null,
-				readAccess: null, writeAccess: null, isStatic: true, isInline: false, isFinal: false, span: span});
+				readAccess: null, writeAccess: null, isStatic: true, isInline: false, isFinal: false, span: span};
+			var fieldIndex = -1;
+			for (index in 0...cache.fields.length) if (cache.fields[index].name == fieldName) fieldIndex = index;
+			if (fieldIndex < 0) cache.fields.push(made) else cache.fields[fieldIndex] = made;
 			var readName = name + ":read", writeName = name + ":write",
 				steps = [for (entry in definition.fields) "/" + entry.declaration.name + "." + entry.field.name].join(""),
 				tail = [for (entry in definition.fields) entry.field.name].join("."),
@@ -99,6 +103,7 @@ class KeyPathRuntime {
 
 	static function fn(name:String, definition:KeyPathDefinition, arguments:Array<{name:String, type:CompilerType}>, result:CompilerType,
 			statements:Array<TypedStatement>):TypedFunction
-		return {name: name, origin: definition.origin, originKind: Helper, owner: null, isStatic: true, isConstructor: false,
+		return {name: name, role: ProviderFunction(definition.root, compiler.Provides.ProviderOperations.detailed(compiler.Provides.ProviderOperation.KeyPath, name)),
+			origin: definition.origin, originKind: Helper, owner: null, isStatic: true, isConstructor: false,
 			arguments: arguments, result: result, statements: statements, cells: [], cellCaptures: [], span: definition.span};
 }

@@ -15,4 +15,4 @@ mkdir -p "$(dirname "$output_file")"
 rm -f "$root_dir/android/app/src/main/assets/app.hlp" "$root_dir/android/app/src/main/assets/app.hxr" "$root_dir/android/app/src/main/assets/app.hcs.pending"
 
 export LD_LIBRARY_PATH="$root_dir/out:$("$root_dir/scripts/hashlink-path.sh")${LD_LIBRARY_PATH:+:$LD_LIBRARY_PATH}"
-"$haxe_bin" --cwd "$root_dir" -cp src --run tools.AndroidBuild "$root_dir/android/demo/Main.hx" "$output_file"
+"$haxe_bin" --cwd "$root_dir" common.hxml --run tools.AndroidBuild "$root_dir/android/demo/Main.hx" "$output_file"

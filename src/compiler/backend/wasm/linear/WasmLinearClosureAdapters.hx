@@ -6,6 +6,7 @@ import compiler.ir.Ir.IrValue;
 import compiler.ir.Ir.IrBlock;
 import compiler.ir.Ir.IrInstruction;
 import compiler.ir.IrBuilder;
+import compiler.ir.IrReachability;
 import compiler.ir.IrFunction;
 import compiler.ir.SourceProvenance.Located;
 import compiler.backend.wasm.WasmLayout;
@@ -41,14 +42,14 @@ class WasmLinearClosureAdapters {
 		return id;
 	}
 
-	public static function castName(type:IrType):String
-		return '__haxeon_closure_cast_${closureKey(type)}';
+	public function castName(type:IrType):String
+		return '__haxeon_closure_cast_${signatureId(type)}';
 
-	static function adapterName(source:String, target:String):String
+	static function adapterName(source:Int, target:Int):String
 		return '__haxeon_closure_adapter_${source}_$target';
 
 	static function closureKey(type:IrType):String
-		return haxe.crypto.Sha256.encode(Std.string(type)).substr(0, 32);
+		return Std.string(type);
 
 	static function arguments(type:IrType):Array<IrType>
 		return switch type {
@@ -81,7 +82,7 @@ class WasmLinearClosureAdapters {
 				default:
 			}
 		}
-		var reachable = WasmModuleSupport.reachableFunctionsWithGeneratedRuntimeRoots(program, entry, roots);
+		var reachable = IrReachability.withGeneratedRuntimeRoots(program, entry, roots);
 		for (fn in program.functions) for (block in fn.blocks) for (located in block.instructions)
 			switch located.value {
 				case InstanceClosure(_, name, _) if (name == WasmDynamicCalls.VARARGS_TARGET):
@@ -110,7 +111,7 @@ class WasmLinearClosureAdapters {
 			var targetsNow = [for (key in targetTypes.keys()) key], sourcesNow = [for (key in sourceTypes.keys()) key];
 			for (target in targetsNow) for (source in sourcesNow)
 				if (source != target && arguments(sourceTypes.get(source)).length == arguments(targetTypes.get(target)).length) {
-					var fn = adapters.adapter(sourceTypes.get(source), source, targetTypes.get(target), target);
+					var fn = adapters.adapter(sourceTypes.get(source), targetTypes.get(target));
 					for (block in fn.blocks) for (located in block.instructions) switch located.value {
 						case SafeCast(output, _): switch output.type {
 							case Function(_, _):
@@ -134,7 +135,7 @@ class WasmLinearClosureAdapters {
 		for (pair in pairs) {
 			var targetType = targetTypes.get(pair.target);
 			for (source in pair.sources) if (source != "varargs")
-				program.functions.push(adapters.adapter(sourceTypes.get(source), source, targetType, pair.target));
+				program.functions.push(adapters.adapter(sourceTypes.get(source), targetType));
 			program.functions.push(adapters.castFunction(targetType, [for (source in pair.sources) {key: source, type: sourceTypes.get(source)}]));
 		}
 		return adapters;
@@ -162,13 +163,13 @@ class WasmLinearClosureAdapters {
 				}
 				target.terminator = block.terminator; blocks.push(target);
 			}
-			rewritten.push(changed ? new IrFunction(fn.name, fn.arguments, fn.result, blocks, fn.debugBindings, fn.inlineHint, fn.retention) : fn);
+			rewritten.push(changed ? fn.withBlocks(blocks) : fn);
 		}
 		var names = [for (name in helpers.keys()) name]; names.sort(Reflect.compare);
 		for (name in names) {
 			var type = helpers.get(name), b = new IrBuilder(), value = b.argument("closure", Dyn), signature = b.call(SIGNATURE_FUNCTION, [value], I32);
 			b.returnValue(b.equal(signature, b.constInt(signatureId(type))));
-			rewritten.push(new IrFunction(name, b.arguments, Bool, b.blocks));
+			rewritten.push(new IrFunction(name, b.arguments, Bool, b.blocks, GeneratedHelper));
 		}
 		program.functions = rewritten;
 	}
@@ -178,7 +179,7 @@ class WasmLinearClosureAdapters {
 		var builder = new IrBuilder();
 		builder.argument("closure", Dyn);
 		builder.returnValue(builder.constInt(0));
-		return new IrFunction(SIGNATURE_FUNCTION, builder.arguments, I32, builder.blocks, null, false, Keep);
+		return new IrFunction(SIGNATURE_FUNCTION, builder.arguments, I32, builder.blocks, Ordinary, null, false, Keep);
 	}
 
 	public function defineSignatureQuery(module:WasmModule, functions:Map<String, Int>):Void {
@@ -211,13 +212,13 @@ class WasmLinearClosureAdapters {
 		for (source in sources)
 			when(source.key == "varargs" ? -1 : signatureId(source.type),
 				() -> builder.returnValue(builder.toDyn(builder.instanceClosure(source.key == "varargs" ? WasmDynamicCalls.varargsAdapterName(targetType) :
-					adapterName(source.key, closureKey(targetType)), closure, targetType))));
+					adapterName(signatureId(source.type), signatureId(targetType)), closure, targetType))));
 		builder.throwValue(builder.toDyn(builder.constString('Cannot cast to ${Std.string(targetType)}')));
-		return new IrFunction(castName(targetType), builder.arguments, Dyn, builder.blocks);
+		return new IrFunction(castName(targetType), builder.arguments, Dyn, builder.blocks, ClosureCast(targetType), null, false, Reachable);
 	}
 
 	/** Receives the original closure and the target's arguments; converts each way through Dynamic. */
-	function adapter(sourceType:IrType, source:String, targetType:IrType, target:String):IrFunction {
+	function adapter(sourceType:IrType, targetType:IrType):IrFunction {
 		var builder = new IrBuilder(), original = builder.argument("closure", Dyn), targetTypes = arguments(targetType), targetArguments = [
 			for (index in 0...targetTypes.length)
 				builder.argument('argument$index', targetTypes[index])
@@ -227,7 +228,7 @@ class WasmLinearClosureAdapters {
 			], sourceResult = result(sourceType), targetResult = result(targetType), value = builder.callClosure(callee, converted, sourceResult);
 		builder.returnValue((switch (targetResult) { case Void: true; default: false; }) ? ((switch (sourceResult) { case Void: true; default: false; }) ? value : builder.constVoid()) : (switch (sourceResult) { case Void: true; default: false; }) ? zero(builder,
 			targetResult) : convert(builder, value, targetResult));
-		return new IrFunction(adapterName(source, target), builder.arguments, targetResult, builder.blocks);
+		return new IrFunction(adapterName(signatureId(sourceType), signatureId(targetType)), builder.arguments, targetResult, builder.blocks, ClosureAdapter(sourceType, targetType), null, false, Reachable);
 	}
 
 	function convert(builder:IrBuilder, value:IrValue, type:IrType):IrValue {
@@ -242,11 +243,13 @@ class WasmLinearClosureAdapters {
 	}
 
 	function toDynamic(builder:IrBuilder, value:IrValue):IrValue {
+		switch value.type { case EnumTag(name): return builder.intrinsic(EnumTagBox(EnumTag(name)), [value], Dyn); default: }
 		var enumName = switch value.type { case Obj(name): inlineEnums.get(name); default: null; };
 		return enumName == null ? builder.toDyn(value) : builder.call(compiler.ir.IrInlineEnumEscapes.boxName(enumName), [value], Dyn);
 	}
 
 	function fromDynamic(builder:IrBuilder, value:IrValue, type:IrType):IrValue {
+		switch type { case EnumTag(name): return builder.intrinsic(EnumTagUnbox(EnumTag(name)), [value], type); default: }
 		var enumName = switch type { case Obj(name): inlineEnums.get(name); default: null; };
 		return enumName == null ? builder.safeCast(value, type) : builder.call(compiler.ir.IrInlineEnumEscapes.unboxName(enumName), [value], type);
 	}

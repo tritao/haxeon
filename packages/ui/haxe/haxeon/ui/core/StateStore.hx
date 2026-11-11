@@ -8,6 +8,11 @@ class StateStore {
 	/** The IDs in `paths`, oldest first, so a prune can walk them in place instead of snapshotting the map's keys. */
 	final pathIds:Array<Int> = [];
 	final managed:Map<Int, Bool>;
+	/** Stable membership avoids copying all managed IDs on each frame. */
+	final managedIds:Array<Int> = [];
+	/** Reuse the normal cleanup worklist; nested cleanup gets its own list. */
+	final staleScratch:Array<Int> = [];
+	var sweeping:Bool = false;
 	final frameUsed:IdSet;
 	/** Scratch for usedIdsSince, reused so collecting a subtree's states allocates only the result. */
 	final seenScratch:IdSet = new IdSet(256);
@@ -149,8 +154,11 @@ class StateStore {
 	public function endFrame():Void {
 		if (!frameActive)
 			return;
-		var stale:Array<Int> = [];
-		for (id in managed.keys())
+		var nested = sweeping;
+		var stale:Array<Int> = nested ? [] : staleScratch;
+		stale.resize(0);
+		sweeping = true;
+		for (id in managedIds)
 			if (!frameUsed.has(id)) {
 				stale.push(id);
 			}
@@ -168,6 +176,18 @@ class StateStore {
 			managed.remove(id);
 			handles.remove(id);
 		}
+		if (stale.length > 0) {
+			var read = 0, write = 0;
+			seenScratch.clear();
+			while (read < managedIds.length) {
+				var id = managedIds[read++];
+				// A later disposer can recreate an earlier ID while this sweep is in progress.
+				if (managed.exists(id) && seenScratch.add(id)) managedIds[write++] = id;
+			}
+			managedIds.resize(write);
+		}
+		stale.resize(0);
+		sweeping = nested;
 		frameUsed.clear();
 		frameUseOrder.resize(0);
 		frameActive = false;
@@ -207,6 +227,7 @@ class StateStore {
 	public function onUnmount(id:WidgetId, disposer:Void->Void):Void {
 		onDispose(id, disposer);
 		managed.set(id.value, true);
+		managedIds.push(id.value);
 	}
 
 	/** Releases registered widget resources and clears the store. */
@@ -223,6 +244,7 @@ class StateStore {
 		}
 		disposers.clear();
 		managed.clear();
+		managedIds.resize(0);
 		frameUsed.clear();
 		frameActive = false;
 		handles.clear();

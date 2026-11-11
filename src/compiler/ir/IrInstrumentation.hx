@@ -159,7 +159,7 @@ class IrInstrumentation {
 				copy.terminator = block.terminator;
 				blocks.push(copy);
 			}
-			functions.push(new IrFunction(fn.name, fn.arguments, fn.result, blocks, fn.debugBindings, fn.inlineHint, fn.retention));
+			functions.push(fn.withBlocks(blocks));
 		}
 		program.functions = functions;
 		program.natives = [for (native in program.natives) if (!isProbe(native.name)) native];
@@ -234,7 +234,7 @@ class IrInstrumentation {
 				firstOrdinary++;
 			entry.instructions.insert(firstOrdinary, op(Call(value(Void), Enter, [])));
 		}
-		return new IrFunction(fn.name, fn.arguments, fn.result, blocks, fn.debugBindings, fn.inlineHint, fn.retention);
+		return fn.withBlocks(blocks);
 	}
 
 	static function hasTry(fn:IrFunction):Bool {

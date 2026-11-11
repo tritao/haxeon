@@ -10,7 +10,7 @@ class InstanceModuleMain {
 		var result = compiler.compile("Main");
 		if (!result.functionIndices.exists("Box.new") || !result.functionIndices.exists("Box.get"))
 			throw "Incremental compiler did not retain instance methods";
-		File.saveBytes(Sys.args()[0], HlWriter.encode(result.module));
+		File.saveBytes(Sys.args()[0], HlWriter.encode(result.module).flatten());
 		Sys.println("PASS: incremental instance class compiled");
 	}
 }

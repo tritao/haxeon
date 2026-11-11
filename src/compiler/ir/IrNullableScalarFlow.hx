@@ -1,5 +1,7 @@
 package compiler.ir;
 
+import compiler.Provides.ProviderOperation;
+import compiler.Provides.ProviderOperations;
 import compiler.ir.Ir;
 import compiler.ir.SourceProvenance.Located;
 
@@ -60,7 +62,7 @@ class IrNullableScalarFlow {
 				builder.returnValue(builder.constBool(true));
 				builder.select(compare);
 				builder.returnValue(builder.equal(payload, otherPayload));
-				program.functions.push(new IrFunction(name, builder.arguments, Bool, builder.blocks));
+				program.functions.push(new IrFunction(name, builder.arguments, Bool, builder.blocks, Provider(TypeKey.of(type), ProviderOperations.detailed(ProviderOperation.NullableScalarHelper, "equal"))));
 			} else {
 				var yes = builder.createBlock(), no = builder.createBlock();
 				builder.branch(present, yes, no);
@@ -68,7 +70,7 @@ class IrNullableScalarFlow {
 				builder.returnValue(payload);
 				builder.select(no);
 				builder.terminate(Throw(builder.toDyn(builder.constString("Null access"))));
-				program.functions.push(new IrFunction(name, builder.arguments, type, builder.blocks));
+				program.functions.push(new IrFunction(name, builder.arguments, type, builder.blocks, Provider(TypeKey.of(type), ProviderOperations.detailed(ProviderOperation.NullableScalarHelper, "require"))));
 			}
 		}
 	}
@@ -114,9 +116,11 @@ class IrNullableScalarFlow {
 					out = IrOperands.output(instruction);
 				if (out != null && out.id >= next)
 					next = out.id + 1;
-				for (input in IrOperands.inputs(instruction))
+				for (inputIndex in 0...IrOperands.count(instruction)) {
+					var input = IrOperands.at(instruction, inputIndex);
 					if (input.id >= next)
-						next = input.id + 1;
+							next = input.id + 1;
+				}
 				if (out != null && inner(out.type) != null)
 					switch instruction {
 						case ConstNull(_):
@@ -170,19 +174,21 @@ class IrNullableScalarFlow {
 								for (arg in args)
 									reject(arg);
 						default:
-							for (value in IrOperands.inputs(instruction))
+							for (valueIndex in 0...IrOperands.count(instruction)) {
+								var value = IrOperands.at(instruction, valueIndex);
 								if (candidates.exists(value.id)) {
-									var allowed = switch instruction {
-										case SafeCast(out, input) if (input.id == value.id
-											&& Type.enumEq(out.type, inner(value.type))): true;
-										case Equal(_, left, right)
-											if ((left.id == value.id && nulls.exists(right.id))
-												|| (right.id == value.id && nulls.exists(left.id))): true;
-										default: false;
-									};
-									if (!allowed)
-										reject(value);
-								}
+										var allowed = switch instruction {
+											case SafeCast(out, input) if (input.id == value.id
+												&& Type.enumEq(out.type, inner(value.type))): true;
+											case Equal(_, left, right)
+												if ((left.id == value.id && nulls.exists(right.id))
+													|| (right.id == value.id && nulls.exists(left.id))): true;
+											default: false;
+										};
+										if (!allowed)
+											reject(value);
+									}
+							}
 					}
 				}
 				if (block.terminator != null)
@@ -289,7 +295,8 @@ class IrNullableScalarFlow {
 		var debug = [for (binding in fn.debugBindings) if (!parts.exists(binding.value.id)) binding];
 		debug = IrInliner.substitute(blocks, substitutions, debug);
 		return {
-			fn: new IrFunction(clone ? specializationName(fn.name) : fn.name, arguments, fn.result, blocks, debug, fn.inlineHint,
+			fn: new IrFunction(clone ? specializationName(fn.name) : fn.name, arguments, fn.result, blocks,
+				clone ? (switch fn.kind { case ScalarArguments: GeneratedHelper; default: NullableScalarArguments; }) : fn.kind, debug, fn.inlineHint,
 				clone ? compiler.ir.IrFunction.IrRetention.Reachable : fn.retention),
 			eligible: true
 		};

@@ -1,8 +1,12 @@
 package compiler.types.typing;
 
+import compiler.types.TypedAst.TypedFunctionRole;
 import compiler.syntax.Ast.AstFunction;
 import compiler.types.Type.CompilerType;
 import compiler.types.Type.NominalKind;
+import compiler.Provides.ProviderOperation;
+import compiler.Provides.ProviderOperations;
+import compiler.Provides;
 import compiler.types.TypedAst.TypedFunction;
 import haxe.crypto.Sha256;
 import compiler.Source.SourceSpan;
@@ -58,7 +62,7 @@ class EnumConformanceMethods {
 						: TTypeParameter(owner, declaration.typeParameters[index]));
 				var typed = typer.typeFunction(method, owner, true, substitutions, name(type, method.name), type);
 				{
-					name: typed.name, origin: origin, originKind: Helper, typeArguments: null, owner: null,
+					name: typed.name, role: ProviderFunction(type, ProviderOperations.detailed(ProviderOperation.CustomMethod, method.name)), origin: origin, originKind: Helper, typeArguments: null, owner: null,
 					isStatic: true, isConstructor: false, isInline: typed.isInline, isKept: false, isExposed: false,
 					arguments: typed.arguments, result: typed.result, statements: typed.statements,
 					cells: typed.cells, cellCaptures: typed.cellCaptures, span: typed.span

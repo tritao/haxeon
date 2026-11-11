@@ -15,7 +15,7 @@ class FunctionValueLanesMain {
 			var object:IrObject = {name:"CallbackValue", isValue:true, base:null, interfaces:[], methods:[],
 				fields:[{name:"first", type:Function([I32], I32)}, {name:"second", type:Function([I32], I32)}]};
 			var objects = IrObjectTable.of([object.name => object]);
-			var factory = new IrValueArrayFactory(objects, Obj(object.name), target == HashLink ? 64 : 32, target);
+			var factory = new IrValueArrayFactory(objects, Obj(object.name), target == HashLink ? 64 : 32, target, 0);
 			var copies = factory.helpers.copySlots(["first"], ["second"]);
 			if (copies.length != 1) throw "equal function fields must support value copies";
 			var builder = new IrBuilder(), index = builder.constInt(0), array = builder.call(factory.allocateName(), [builder.constInt(1)], Array(Obj(object.name)));
@@ -28,7 +28,7 @@ class FunctionValueLanesMain {
 			var inc = new IrBuilder(), input = inc.argument("input", I32); inc.returnValue(inc.add(input, inc.constInt(1)));
 			var program = new IrProgram("main");
 			program.objects = [object];
-			program.functions = [new IrFunction("main",builder.arguments,I32,builder.blocks), new IrFunction("increment",inc.arguments,I32,inc.blocks)]
+			program.functions = [new IrFunction("main",builder.arguments,I32,builder.blocks, Ordinary), new IrFunction("increment",inc.arguments,I32,inc.blocks, Ordinary)]
 				.concat(factory.functions()).concat(factory.helpers.functions());
 			var natives:Map<String, IrNative> = [];
 			for (native in factory.natives().concat(factory.helpers.natives()).concat(access.natives())) natives.set(native.name,native);
@@ -37,10 +37,10 @@ class FunctionValueLanesMain {
 			if (target == HashLink) {
 				var wrapper=new IrBuilder(), result=wrapper.call("main",[],I32);
 				wrapper.call("exit",[result],Void); wrapper.returnValue(wrapper.constVoid());
-				program.functions.push(new IrFunction("run",wrapper.arguments,Void,wrapper.blocks));
+				program.functions.push(new IrFunction("run",wrapper.arguments,Void,wrapper.blocks, Ordinary));
 				program.natives.push({name:"exit",library:"std",symbol:"sys_exit",arguments:[I32],result:Void}); program.entryPoint="run";
 				var path="out/function-value-lanes.hl";
-				sys.io.File.saveBytes(path,compiler.hl.HlWriter.encode(compiler.ir.hl.HlLower.lower(program)));
+				sys.io.File.saveBytes(path,compiler.hl.HlWriter.encode(compiler.ir.hl.HlLower.lower(program)).flatten());
 				var process=new sys.io.Process(Sys.getEnv("HAXEON_HASHLINK_DIR") + "/hl",[path]), error=process.stderr.readAll().toString(), status=process.exitCode(); process.close();
 				if(status!=42) throw 'HashLink callback lane returned $status: $error';
 			} else {

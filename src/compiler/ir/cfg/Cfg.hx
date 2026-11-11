@@ -1,6 +1,7 @@
 package compiler.ir.cfg;
 
 import compiler.ir.Ir.IrType;
+import compiler.ir.Ir.IrIntrinsic;
 import compiler.ir.SourceProvenance.Located;
 import compiler.Source.SourceSpan;
 
@@ -82,6 +83,7 @@ enum CfgInstruction {
 	MakeEnum(output:CfgValue, typeName:String, constructor:Int, arguments:Array<CfgValue>);
 	EnumIndex(output:CfgValue, value:CfgValue);
 	EnumField(output:CfgValue, value:CfgValue, constructor:Int, field:Int);
+	Intrinsic(output:CfgValue, operation:IrIntrinsic, arguments:Array<CfgValue>);
 }
 
 /** Mandatory transfer of control ending a mutable CFG block. */

@@ -20,7 +20,7 @@ class NullReferenceMain {
 			+ "  return text == null && nullString() == null && nullArray() == null && nullMap() == null\n"
 			+ "    && nullFunction() == null && nullObject() == null ? 42 : 1;\n"
 			+ "}");
-		File.saveBytes(Sys.args()[0], HlWriter.encode(compiler.compile("Main").module));
+		File.saveBytes(Sys.args()[0], HlWriter.encode(compiler.compile("Main").module).flatten());
 
 		for (primitive in ["Int", "Bool", "Float"]) {
 			var rejectedPrimitive = false;

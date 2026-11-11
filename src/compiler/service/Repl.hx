@@ -23,6 +23,6 @@ class Repl {
 			stableId = result.functionIds.get("main");
 		if (stableId == null)
 			throw "REPL compilation did not produce a stable entry function";
-		return {bytes: HlWriter.encode(result.module), identity: result.runtimeIdentity, stableId: stableId};
+		return {bytes: HlWriter.encode(result.module).flatten(), identity: result.runtimeIdentity, stableId: stableId};
 	}
 }

@@ -13,5 +13,5 @@ if [[ ! -x "$haxe" || ! -x "$hl" ]]; then
 	exit 1
 fi
 
-"$haxe" --cwd "$repo_dir" -cp "$repo_dir/src" -cp "$repo_dir/tests/tooling" -hl "$temporary_dir/build-system.hl" -main BuildSystemMain
+"$haxe" --cwd "$repo_dir" -cp "$repo_dir/src" -cp "$repo_dir/lib/haxeon-io" -cp "$repo_dir/tests/tooling" -hl "$temporary_dir/build-system.hl" -main BuildSystemMain
 LD_LIBRARY_PATH="$home/out:$("$home/scripts/hashlink-path.sh")${LD_LIBRARY_PATH:+:$LD_LIBRARY_PATH}" "$hl" "$temporary_dir/build-system.hl"

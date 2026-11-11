@@ -15,7 +15,7 @@ class LiveOptionalScalarMain {
       compiler.ir.IrInliner.enabled = inlining;
       var compiler = new Compiler();
       compiler.update("Main.hx", source(1));
-      var first = compiler.compile("Main"), live = Runtime.load(HlWriter.encode(first.module), first.runtimeIdentity), id = first.functionIds.get("main");
+      var first = compiler.compile("Main"), live = Runtime.load(HlWriter.encode(first.module).flatten(), first.runtimeIdentity), id = first.functionIds.get("main");
       if (Runtime.callInt(live, id) != 41) throw "initial optional scalar call failed";
       compiler.update("Main.hx", source(2));
       var next = compiler.compile("Main");

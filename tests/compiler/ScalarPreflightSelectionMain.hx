@@ -30,7 +30,7 @@ class ScalarPreflightSelectionMain {
 					value = builder.add(value, builder.constInt(j));
 				}
 				builder.returnValue(value);
-				program.functions.push(new IrFunction("f" + i, builder.arguments, I32, builder.blocks));
+				program.functions.push(new IrFunction("f" + i, builder.arguments, I32, builder.blocks, Ordinary));
 			}
 			var original = program.functions.copy();
 			var expected = compiler.ir.codec.CanonicalIrCodec.encode(program);

@@ -481,15 +481,13 @@ class Theme {
 
 	/** Returns the complete concrete style associated with a semantic role. */
 	public function textRole(role:TextRole):TextRoleStyle {
-		if (role == TextRole.Heading)
-			return heading;
-		if (role == TextRole.Label)
-			return label;
-		if (role == TextRole.Caption)
-			return caption;
-		if (role == TextRole.Button)
-			return button;
-		return body;
+		return switch role {
+			case Body: body;
+			case Heading: heading;
+			case Label: label;
+			case Caption: caption;
+			case Button: button;
+		};
 	}
 
 	static inline function channelLuminance(channel:Float):Float

@@ -1,6 +1,7 @@
 package compiler.ir.codec;
 
 import compiler.ir.Ir.IrInstruction;
+import compiler.ir.Ir.IrIntrinsic;
 import compiler.ir.Ir.IrType;
 import compiler.ir.Ir.IrValue;
 import haxe.io.Bytes as HaxeBytes;
@@ -11,7 +12,7 @@ import compiler.ir.codec.IrValueTableCodec;
 
 /** Closed, versioned encoding for every persisted IR instruction operand. */
 class IrInstructionCodec {
-	static inline final VERSION = 8;
+	static inline final VERSION = 9;
 	static final CONSTRUCTORS:Map<String, Bool> = [
 		"Phi" => true,
 		"ConstVoid" => true,
@@ -53,6 +54,7 @@ class IrInstructionCodec {
 		"LessEqual" => true,
 		"Equal" => true,
 		"Call" => true,
+		"Intrinsic" => true,
 		"CNativeCall" => true,
 		"StaticClosure" => true,
 		"InstanceClosure" => true,
@@ -221,6 +223,24 @@ class IrInstructionCodec {
 				begin(output, "Call", 3);
 				writeValue(output, value);
 				writeName(output, name, erase);
+				writeValues(output, arguments);
+			case Intrinsic(value, operation, arguments):
+				begin(output, "Intrinsic", 4);
+				writeValue(output, value);
+				switch operation {
+					case EnumDynamicBox(type):
+						writeInt(output, 0);
+						writeType(output, type, erase);
+					case EnumDynamicView(type):
+						writeInt(output, 1);
+						writeType(output, type, erase);
+					case EnumTagBox(type):
+						writeInt(output, 2);
+						writeType(output, type, erase);
+					case EnumTagUnbox(type):
+						writeInt(output, 3);
+						writeType(output, type, erase);
+				}
 				writeValues(output, arguments);
 			case CNativeCall(value, name, arguments):
 				begin(output, "CNativeCall", 3);
@@ -423,6 +443,19 @@ class IrInstructionCodec {
 			case "Call":
 				arity(3);
 				Call(readValue(input, values), readText(input, totalLength), readValues(input, values));
+			case "Intrinsic":
+				arity(4);
+				var value = readValue(input, values),
+					tag = readInt(input),
+					type = readType(input, totalLength);
+				var operation:IrIntrinsic = switch tag {
+					case 0: EnumDynamicBox(type);
+					case 1: EnumDynamicView(type);
+					case 2: EnumTagBox(type);
+					case 3: EnumTagUnbox(type);
+					default: throw "Invalid IR intrinsic";
+				};
+				Intrinsic(value, operation, readValues(input, values));
 			case "CNativeCall":
 				arity(3);
 				CNativeCall(readValue(input, values), readText(input, totalLength), readValues(input, values));

@@ -38,7 +38,7 @@ stamp="$cli.inputs"
 if [[ ! -f "$cli" || ! -f "$stamp" || "$(cat "$stamp")" != "$fingerprint" ]]; then
 	temporary="$cli.tmp.$$"
 	trap 'rm -f "$temporary" "$temporary.inputs"' EXIT
-	"$haxe" -cp "$root_dir/src" -main tools.HaxeonCli -hl "$temporary"
+	"$haxe" -cp "$root_dir/src" -cp "$root_dir/lib/haxeon-io" -main tools.HaxeonCli -hl "$temporary"
 	printf '%s\n' "$fingerprint" > "$temporary.inputs"
 	mv "$temporary" "$cli"
 	mv "$temporary.inputs" "$stamp"

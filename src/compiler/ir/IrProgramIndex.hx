@@ -1,20 +1,19 @@
-package compiler.backend.wasm;
+package compiler.ir;
 
 import compiler.ir.Ir.IrInterface;
 import compiler.ir.Ir.IrObject;
 import compiler.ir.Ir.IrProgram;
-import compiler.ir.IrFunction;
 
 /**
- * Name lookups over one IR program for the Wasm backends.
+ * Name lookups over one IR program, for reachability and the backends.
  *
  * Virtual dispatch and reachability ask, for each call site, which classes
  * extend or implement a type. Answering that by scanning `program.objects`
  * made those passes quadratic in the number of classes; this index answers
  * each lookup by name and remembers the subtype sets it has computed.
  */
-class WasmProgramIndex {
-	static var cached:Null<WasmProgramIndex>;
+class IrProgramIndex {
+	static var cached:Null<IrProgramIndex>;
 
 	final program:IrProgram;
 	final functionCount:Int;
@@ -27,10 +26,10 @@ class WasmProgramIndex {
 	final implementors:Map<String, Array<IrObject>> = [];
 
 	/** The index for `program`, rebuilt when its declaration arrays change. */
-	public static function of(program:IrProgram):WasmProgramIndex {
+	public static function of(program:IrProgram):IrProgramIndex {
 		var index = cached;
 		if (index == null || !index.matches(program)) {
-			index = new WasmProgramIndex(program);
+			index = new IrProgramIndex(program);
 			cached = index;
 		}
 		return index;

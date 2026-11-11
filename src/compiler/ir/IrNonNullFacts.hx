@@ -49,7 +49,18 @@ private class NonNullFactSet {
 class IrNonNullFacts {
 	final proven:Map<Int, Map<Int, Bool>> = [];
 
+	/** Whether any instruction of `fn` has a receiver whose non-nullness could be proven: without one there is nothing to analyze. */
+	static function hasReceiver(fn:IrFunction):Bool {
+		for (block in fn.blocks)
+			for (located in block.instructions)
+				if (checked(located.value) != null)
+					return true;
+		return false;
+	}
+
 	public function new(fn:IrFunction, ?checkedDereferences:Bool = false) {
+		if (!hasReceiver(fn))
+			return;
 		var receivers:Map<Int, Bool> = [],
 			nulls:Map<Int, Bool> = [],
 			tests:Map<Int, Int> = [],
