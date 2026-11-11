@@ -29,6 +29,9 @@ class TyperBoundaryMain {
 		expect(hasRuntimeDependency(measured.runtimeDependencies, "main", "Std"), "Float string conversion should retain the Std runtime dependency");
 		assertDiagnostic("function main():Int { var value:Int; return value; }", "E1023", "may be used before assignment");
 		assertDiagnostic("function identity(value:Int):Int return value; function main():Int return identity(\"wrong\");", "E1009", "argument 1");
+		assertDiagnostic("typedef ReadPoint = { final x:Int; }; typedef WritePoint = { var x:Int; }; "
+			+ "function change(points:Array<WritePoint>):Void points[0].x = 2; "
+			+ "function main():Void { var points:Array<ReadPoint> = [{x:1}]; change(points); }", "E1009", "argument 1");
 		assertDiagnosticAt("project/stdlib/Intruder.hx", "class Key {} function main():Int return __reference_equal(new Key(), new Key()) ? 42 : 0;",
 			"E1025", "stdlib-only");
 		// Value class instances are stored inline in fields, so null cannot reach one; it used to segfault at runtime.
