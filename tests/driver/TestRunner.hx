@@ -7,6 +7,7 @@ import driver.TestCatalog.NamedCase;
 import driver.TestCatalog.ProgramCase;
 import haxe.io.Path;
 import sys.FileSystem;
+import sys.io.File;
 import sys.io.Process;
 
 private typedef CommandResult = {
@@ -106,6 +107,29 @@ class TestRunner {
 			};
 		return {passed: true, output: 'PASS: ${runName(run)} is a known failure, as marked ($note)\n'};
 	}
+
+	/**
+	 * A program runs in a directory of its own: a fresh one under out/cases, holding a link to every entry of the repository root
+	 * except `out`, which is a new empty directory, and removed afterwards. Relative paths such as `out/x` and `tests/fixtures/...`
+	 * resolve there, so what a program writes can never collide with another run of it (the live, plain and warm builds run together)
+	 * or with another program, and leaves nothing in the tree. The tree itself is reached only through the links.
+	 */
+	function startProgram(compiled:String):Process {
+		if (Sys.systemName() == "Windows")
+			return new Process(hl, [compiled]);
+		return new Process("sh", [
+			"-c",
+			"mkdir -p \"$1/out/cases\" && d=$(mktemp -d \"$1/out/cases/run.XXXXXX\") || exit 125; for e in \"$1\"/*; do [ \"${e##*/}\" = out ] || ln -s \"$e\" \"$d/\"; done; mkdir \"$d/out\"; (cd \"$d\" && \"$2\" \"$3\"); s=$?; rm -rf \"$d\"; exit $s",
+			"sh",
+			root,
+			hl,
+			compiled
+		]);
+	}
+
+	/** Programs must not name the shared tree: relative paths resolve in the run's own directory, absolute ones would escape it. */
+	function sharedTreeReference(source:String):Bool
+		return File.getContent(source).indexOf(root) >= 0;
 
 	static function runName(run:ProgramRun):String
 		return run.test.name + (run.warm ? " (warm edit rebuilds)" : run.plain ? " (plain build)" : "");
@@ -234,6 +258,11 @@ class TestRunner {
 	public function runPrograms(tests:Array<ProgramCase>, jobs:Int):Int {
 		if (tests.length == 0)
 			return 0;
+		var named = [for (test in tests) if (sharedTreeReference(Path.join([root, "tests", "programs", test.name + ".hx"]))) test.name];
+		if (named.length > 0) {
+			Sys.print([for (name in named) 'FAIL: $name names the shared tree ($root); a program reaches files by relative path, which resolves in its own directory\n'].join(""));
+			return named.length;
+		}
 		var runs:Array<ProgramRun> = [for (test in tests) for (run in runsOf(test)) run];
 		if (jobs == 1) {
 			var failures = 0;
@@ -297,7 +326,7 @@ class TestRunner {
 			while (next < compiled.length && active.length < jobs) {
 				var index = compiled[next++];
 				var run = runs[index];
-				active.push({index: index, run: run, process: new Process(hl, [runOutput(root, run)])});
+				active.push({index: index, run: run, process: startProgram(runOutput(root, run))});
 			}
 			var job = active.shift();
 			var execution = finishCommand(job.process);
@@ -327,7 +356,7 @@ class TestRunner {
 				output: compilation.output + 'FAIL: ${runName(run)} failed to compile\n'
 			};
 		}
-		var execution = runCommand(hl, [output]);
+		var execution = finishCommand(startProgram(output));
 		if (execution.status != test.expectedExit) {
 			return {
 				index: index,

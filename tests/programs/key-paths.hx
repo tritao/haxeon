@@ -164,7 +164,7 @@ function allocationChecks():Bool {
 	KeyPathCensus.prepare();
 	var operations=[KeyPathCensus.known,KeyPathCensus.escapedClass,KeyPathCensus.escapedStruct,
 		KeyPathCensus.escapedStaticStruct,KeyPathCensus.escapedComposition,KeyPathCensus.knownComposition,KeyPathCensus.escapedStructValue];
-	var dump=Sys.getCwd()+"/out/key-paths-census-"+Sys.getPid()+".json";
+	var dump=Sys.getCwd()+"/out/key-paths-census.json";
 	var index=0;
 	for(operation in operations) {
 		hl.Gc.censusStart(0);
