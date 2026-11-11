@@ -591,6 +591,28 @@ class FrontendCompilation {
 		}
 		cachedNames.sort(Reflect.compare);
 		cachedNames = uniqueSorted(cachedNames);
+		// A function kept across an edit of its file names the file's old text in its locations; give it the current hashes (see IrSourceRehash).
+		var currentHashes:Map<String, Int> = [for (state in modules) state.source.path => state.source.contentHash()];
+		for (moduleName in names) {
+			var state = modules.get(moduleName);
+			if (state == null)
+				continue;
+			var rehashed:Map<String, IrFunction> = [];
+			for (functionName => fn in state.irFunctions) {
+				if (state.irSourceRevisions.get(functionName) == state.revision)
+					continue;
+				var replacement = compiler.ir.IrSourceRehash.of(fn, currentHashes);
+				if (replacement != fn)
+					rehashed.set(functionName, replacement);
+			}
+			if (Lambda.empty(rehashed))
+				continue;
+			var writable = context.writableState(moduleName, rollbackModules);
+			for (functionName => replacement in rehashed) {
+				writable.irFunctions.set(functionName, replacement);
+				writable.irSourceRevisions.set(functionName, writable.revision);
+			}
+		}
 		var cached:Array<IrFunction> = [];
 		for (functionName in cachedNames) {
 			if (!owners.exists(functionName))
@@ -603,6 +625,11 @@ class FrontendCompilation {
 				throw 'Cached function "$functionName" has no IR body';
 			cached.push(functions.get(functionName));
 		}
+		if (Sys.getEnv("HAXEON_CHECK_REUSE") == "1")
+			for (functionName in cachedNames)
+				if (compiler.ir.IrSourceRehash.of(modules.get(owners.get(functionName)).irFunctions.get(functionName), currentHashes)
+					!= modules.get(owners.get(functionName)).irFunctions.get(functionName))
+					throw 'HAXEON_CHECK_REUSE: cached function "$functionName" of module "${owners.get(functionName)}" names a file hash that is not the file\'s current one';
 		dropUnusedKeyPathFields(typedNew, cached);
 		if (token != null)
 			token.check();
@@ -636,7 +663,7 @@ class FrontendCompilation {
 			interfaces: IrProgramAssembler.interfacesFrom(generator, typedNew),
 			enums: IrProgramAssembler.enumsFrom(generator, typedNew),
 			staticFields: IrProgramAssembler.staticFieldsFrom(generator, typedNew),
-			initializers: IrProgramAssembler.staticInitializersFrom(generator, typedNew, initializationClasses, cached).concat(liveInitializers),
+			initializers: [for (fn in IrProgramAssembler.staticInitializersFrom(generator, typedNew, initializationClasses, cached)) compiler.ir.IrSourceRehash.of(fn, currentHashes)].concat(liveInitializers),
 			reflectable: IrProgramAssembler.reflectableObjectsFrom(typedNew)
 		};
 		// A plain build whose pipeline inputs equal the last build's gets that build's final IR: no pass runs. With HAXEON_CHECK_REUSE=1
