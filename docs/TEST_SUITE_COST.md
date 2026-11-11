@@ -129,3 +129,23 @@ Results go to `out/gate/<commit>-<mode>-<time>/`: a log per suite and `summary.t
 cores, per suite the exit code, seconds and the driver's pass/fail line, a coverage line per driver run (`programs: N live, N plain,
 warm-edit: yes (N)`) and the exit code. A gate report quotes that file and nothing else, so a report cannot describe a configuration the
 run did not use. The coverage line counts the passing program cases in the log, so a driver that silently ran fewer cases shows it.
+
+### The self-hosting target
+
+`MEASURE_APP=self-hosting scripts/measure-cold.sh <label> [runs]` measures the project of `tests/integration/test-compiler-embedding.sh`
+(source: `tests/fixtures/self-hosting/Main.hx`), in which Haxeon compiles the compiler's own sources: 5236 functions retyped, about 147 million
+compile-count. It needs no app checkout, so it is the target for work on a loaded or app-less machine. It is **a different workload from the
+Materia app**: quote a percentage only against the same target (the app's -35% cold-build figure is not comparable with these).
+
+Baseline, 2026-11-11, at load 3 to 6, five interleaved pairs, runs flagged polluted left out (the first version of the script took another
+worker's CPU and RSS into three of ten runs):
+
+| | compiler time | wall | worker CPU | peak RSS |
+|---|---|---|---|---|
+| before the allocator word scan (`flush_free_list`, 875bc1d25) | 9.7 to 10.3 s (mean 10.0) | 10.7 to 11.3 s | 13.4 to 13.6 s | 1.29 to 1.32 GB |
+| with it (`haxeon/allocator-word-scan`) | 9.4 to 9.7 s (mean 9.5) | 10.4 to 10.7 s | 11.9 to 13.3 s | 1.24 to 1.36 GB |
+
+The word scan is 5.1% in compiler time, in every pair. The CPU column rests on three clean runs on the new side, so it is a trend, not a result.
+A run line ends in `polluted=...` when a worker of the measured root was alive at the start, a second one appeared, or another checkout's
+worker ran during it; the script samples only workers whose runtime lives under `HAXEON_ROOT`.
+

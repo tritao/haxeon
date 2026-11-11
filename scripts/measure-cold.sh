@@ -5,7 +5,9 @@
 #
 # Environment:
 #   HAXEON_ROOT         the Haxeon checkout whose compiler is measured (default: this checkout)
-#   MEASURE_APP         the app project directory, holding haxeon.json (required)
+#   MEASURE_APP         the app project directory, holding haxeon.json (required), or `self-hosting`: the project of
+#                       tests/integration/test-compiler-embedding.sh, in which Haxeon compiles the compiler's own sources (about 5200
+#                       functions retyped). It is a different workload from the Materia app, so quote percentages only against the same target.
 #   MEASURE_OUT         where outputs, logs and samples go (default: out/measure-cold)
 #   MEASURE_MAX_LOAD    wait while the 1-minute load average is at or above this (default 6): a loaded machine measures noise
 #
@@ -24,10 +26,17 @@ export LC_ALL=C
 label=${1:?usage: measure-cold.sh <label> [runs]}
 runs=${2:-3}
 root=${HAXEON_ROOT:-$(cd "$(dirname "$0")/.." && pwd)}
-app=${MEASURE_APP:?set MEASURE_APP to the app project directory}
+app=${MEASURE_APP:?set MEASURE_APP to the app project directory, or self-hosting}
 out=${MEASURE_OUT:-$root/out/measure-cold}
 max_load=${MEASURE_MAX_LOAD:-6}
 mkdir -p "$out"
+if [ "$app" = self-hosting ]; then
+	# The project sits in a directory of its own so that `../haxeon` below is its link to the compiler.
+	app=$out/self-hosting/app
+	mkdir -p "$app/src"
+	cp "$root/tests/fixtures/self-hosting/Main.hx" "$app/src/Main.hx"
+	printf '{"version": 1, "package": {"name": "embedding-test"}, "entry": "Main", "sourceRoots": ["src"], "scopeSourceRoots": false, "dependencies": {"haxeon-compiler": {"path": "%s/embed"}}}\n' "$root" >"$app/haxeon.json"
+fi
 link=$app/../haxeon
 previous=$(readlink "$link" || true)
 ln -sfn "$root" "$link"
