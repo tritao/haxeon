@@ -18,6 +18,10 @@ import compiler.ir.SourceProvenance.SourceLocation;
 class IrSourceRehash {
 	/** `hashes` maps a file path to its current content hash; a location whose file is not in it is left as it is. */
 	public static function of(fn:IrFunction, hashes:Map<String, Int>):IrFunction {
+		// Look first, without allocating: nearly every function of nearly every build is current, and a copy made to find that out costs
+		// as much as the function.
+		if (!isStale(fn, hashes))
+			return fn;
 		var rehomed:Map<SourceProvenance, SourceProvenance> = [], changed = false;
 		function fix(provenance:SourceProvenance):SourceProvenance {
 			var location = provenance.location;
@@ -45,5 +49,26 @@ class IrSourceRehash {
 			blocks.push(copy);
 		}
 		return changed ? fn.derive(blocks) : fn;
+	}
+
+	static function stale(provenance:SourceProvenance, hashes:Map<String, Int>):Bool {
+		var location = provenance.location;
+		if (location == null || location.sourceHash == 0)
+			return false;
+		var current = hashes.get(location.path);
+		return current != null && current != location.sourceHash;
+	}
+
+	/** Whether any location of `fn` names a file by a hash other than the file's current one. */
+	public static function isStale(fn:IrFunction, hashes:Map<String, Int>):Bool {
+		for (block in fn.blocks) {
+			for (instruction in block.instructions)
+				if (stale(instruction.provenance, hashes))
+					return true;
+			var terminator = block.terminator;
+			if (terminator != null && stale(terminator.provenance, hashes))
+				return true;
+		}
+		return false;
 	}
 }

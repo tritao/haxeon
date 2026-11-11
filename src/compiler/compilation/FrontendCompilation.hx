@@ -593,26 +593,32 @@ class FrontendCompilation {
 		cachedNames = uniqueSorted(cachedNames);
 		// A function kept across an edit of its file names the file's old text in its locations; give it the current hashes (see IrSourceRehash).
 		var currentHashes:Map<String, Int> = [for (state in modules) state.source.path => state.source.contentHash()];
+		var anyEdited = false;
 		for (moduleName in names) {
-			var state = modules.get(moduleName);
-			if (state == null)
-				continue;
-			var rehashed:Map<String, IrFunction> = [];
-			for (functionName => fn in state.irFunctions) {
-				if (state.irSourceRevisions.get(functionName) == state.revision)
-					continue;
-				var replacement = compiler.ir.IrSourceRehash.of(fn, currentHashes);
-				if (replacement != fn)
-					rehashed.set(functionName, replacement);
-			}
-			if (Lambda.empty(rehashed))
-				continue;
-			var writable = context.writableState(moduleName, rollbackModules);
-			for (functionName => replacement in rehashed) {
-				writable.irFunctions.set(functionName, replacement);
-				writable.irSourceRevisions.set(functionName, writable.revision);
+			var edited = modules.get(moduleName);
+			if (edited != null && edited.editedSinceIrScan) {
+				anyEdited = true;
+				break;
 			}
 		}
+		if (anyEdited)
+			for (moduleName in names) {
+				var state = modules.get(moduleName);
+				if (state == null)
+					continue;
+				var rehashed:Map<String, IrFunction> = [];
+				for (functionName => fn in state.irFunctions) {
+					var replacement = compiler.ir.IrSourceRehash.of(fn, currentHashes);
+					if (replacement != fn)
+						rehashed.set(functionName, replacement);
+				}
+				if (Lambda.empty(rehashed) && !state.editedSinceIrScan)
+					continue;
+				var writable = context.writableState(moduleName, rollbackModules);
+				for (functionName => replacement in rehashed)
+					writable.irFunctions.set(functionName, replacement);
+				writable.editedSinceIrScan = false;
+			}
 		var cached:Array<IrFunction> = [];
 		for (functionName in cachedNames) {
 			if (!owners.exists(functionName))
