@@ -33,6 +33,8 @@ switch-expression-block	42
 switch-expression-throw-arm	42
 member-range	42
 trailing-object-comma	42
+quoted-object-field	42
+object-literal-empty-branch	42
 block-comprehension	42
 transparent-abstract	42
 computed-field-assignment	42

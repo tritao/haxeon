@@ -1874,16 +1874,18 @@ class Parser {
 		// `{` opens an object literal when empty or starting with `name:`, and a block expression valued by its last expression otherwise.
 		if (check(TokenKind.LeftBrace)
 			&& peekKind(1) != TokenKind.RightBrace
-			&& !(peekKind(1) == TokenKind.Identifier && peekKind(2) == TokenKind.Colon))
+			&& !((peekKind(1) == TokenKind.Identifier || peekKind(1) == TokenKind.StringLiteral) && peekKind(2) == TokenKind.Colon))
 			return parseExpressionBranch();
 		if (match(TokenKind.LeftBrace)) {
 			var start = previous().span, fields = [];
 			if (!check(TokenKind.RightBrace)) {
 				while (true) {
-					var name = consume(TokenKind.Identifier);
+					// A quoted field name (`{"package": 1}`) names any field, including a keyword.
+					var name = check(TokenKind.StringLiteral) ? advance() : consume(TokenKind.Identifier),
+						fieldName = name.kind == TokenKind.StringLiteral ? decodeString(name.text, name.span) : name.text;
 					consume(TokenKind.Colon);
-					var value = parseAnchoredExpression("{" + name.text + "}");
-					fields.push({name: name.text, value: value, span: name.span.merge(expressionSpan(value))});
+					var value = parseAnchoredExpression("{" + fieldName + "}");
+					fields.push({name: fieldName, value: value, span: name.span.merge(expressionSpan(value))});
 					if (!match(TokenKind.Comma) || check(TokenKind.RightBrace))
 						break;
 				}
@@ -2072,7 +2074,10 @@ class Parser {
 	}
 
 	function parseExpressionBranch(comprehensionValue:Bool = false):AstExpression {
-		if (!check(TokenKind.LeftBrace) || (peekKind(1) == TokenKind.Identifier && peekKind(2) == TokenKind.Colon))
+		// `{}`, `{name: ...}` and `{"name": ...}` are object literals; a block here must end in a value.
+		if (!check(TokenKind.LeftBrace)
+			|| peekKind(1) == TokenKind.RightBrace
+			|| ((peekKind(1) == TokenKind.Identifier || peekKind(1) == TokenKind.StringLiteral) && peekKind(2) == TokenKind.Colon))
 			return parseExpression();
 		advance();
 		var start = previous().span, statements = [];
