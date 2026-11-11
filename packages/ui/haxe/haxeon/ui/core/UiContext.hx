@@ -140,6 +140,10 @@ class UiContext {
 	var cursorHandler:Null<UiCursorShape->Void>;
 	var currentCursor:UiCursorShape;
 	var lastFrameMetrics:Null<UiFrameMetrics>;
+	var pendingReusedMetrics:Bool = false;
+	var reusedMetricsSeconds:Float = 0.0;
+	var reusedMetricsCachedStyles:Int = 0;
+	var reusedMetricsHoverNodes:Int = -1;
 	var frameNumber:Int;
 	var diagnosticStage:Int = 0;
 	public final textInput:TextInputBridge;
@@ -309,6 +313,7 @@ class UiContext {
 	function maybeVerifyRetention(build:Void->View, frame:LayoutFrame, result:RenderNode):RenderNode {
 		if (verifyRetentionEvery <= 0 || verifying)
 			return result;
+		if (pendingReusedMetrics) return result;
 		var metrics = lastFrameMetrics;
 		if (metrics != null && metrics.reusedSubmission)
 			return result;
@@ -478,12 +483,11 @@ class UiContext {
 			patchOnly = planInteractionPatches(cacheKey, frame);
 		if (reuse) {
 			frameNumber++;
-			lastFrameMetrics = new UiFrameMetrics(frameNumber, submittedNodeCount, 0, 0, 0,
-				buildContext.styleResolver.cachedStyleCount, 0, submittedNodeCount, UiDirtyFlag.None,
-				0, 0, 0, 0, 0, 0, Sys.time() - submitStartedAt, false, true, 0,
-				submittedNodeCount);
-			lastFrameMetrics.markReusedSubmission();
-			if (hoverPaintNodes >= 0) lastFrameMetrics.hoverPaintUpdatedNodes = hoverPaintNodes;
+			lastFrameMetrics = null;
+			pendingReusedMetrics = true;
+			reusedMetricsSeconds = Sys.time() - submitStartedAt;
+			reusedMetricsCachedStyles = buildContext.styleResolver.cachedStyleCount;
+			reusedMetricsHoverNodes = hoverPaintNodes;
 			diagnosticStage = 0;
 			return cast root;
 		}
@@ -759,6 +763,7 @@ class UiContext {
 		frameNumber++;
 		var submitEndedAt = Sys.time();
 		var submitEndAllocatedAt = AllocationProbe.now();
+		pendingReusedMetrics = false;
 		lastFrameMetrics = new UiFrameMetrics(frameNumber, nodeCount,
 			buildContext.styleResolver.resolutions - styleResolutionsBefore,
 			buildContext.styleResolver.cacheHits - styleCacheHitsBefore,
@@ -1000,14 +1005,15 @@ class UiContext {
 		var nativeRenderStartedAt = Sys.time();
 		var nativeRenderStartAllocatedAt = AllocationProbe.now();
 		session.render(renderer, surface, frame);
-		if (lastFrameMetrics != null) {
+		var renderMetrics = frameMetrics;
+		if (renderMetrics != null) {
 			var renderEndedAt = Sys.time();
-			lastFrameMetrics.completeRender(renderEndedAt - renderStartedAt, paintedNodes,
+			renderMetrics.completeRender(renderEndedAt - renderStartedAt, paintedNodes,
 				paintSkippedNodes, emptyPaintNodes);
-			lastFrameMetrics.setRenderPhases(nativeRenderStartedAt - renderStartedAt,
+			renderMetrics.setRenderPhases(nativeRenderStartedAt - renderStartedAt,
 				renderEndedAt - nativeRenderStartedAt);
 			var renderEndAllocatedAt = AllocationProbe.now();
-			lastFrameMetrics.setRenderAllocations(nativeRenderStartAllocatedAt - renderStartAllocatedAt,
+			renderMetrics.setRenderAllocations(nativeRenderStartAllocatedAt - renderStartAllocatedAt,
 				renderEndAllocatedAt - nativeRenderStartAllocatedAt);
 		}
 		if (RenderCost.enabled) RenderCost.render(renderStartedAt, nativeRenderStartedAt, Sys.time(), submittedNodeCount);
@@ -1455,8 +1461,17 @@ class UiContext {
 
 	/** Timing and style-cache counters captured during the latest submit/render. */
 	public var frameMetrics(get, never):Null<UiFrameMetrics>;
-	function get_frameMetrics():Null<UiFrameMetrics>
+	function get_frameMetrics():Null<UiFrameMetrics> {
+		if (pendingReusedMetrics) {
+			lastFrameMetrics = new UiFrameMetrics(frameNumber, submittedNodeCount, 0, 0, 0,
+				reusedMetricsCachedStyles, 0, submittedNodeCount, UiDirtyFlag.None,
+				0, 0, 0, 0, 0, 0, reusedMetricsSeconds, false, true, 0, submittedNodeCount);
+			lastFrameMetrics.markReusedSubmission();
+			if (reusedMetricsHoverNodes >= 0) lastFrameMetrics.hoverPaintUpdatedNodes = reusedMetricsHoverNodes;
+			pendingReusedMetrics = false;
+		}
 		return lastFrameMetrics;
+	}
 
 	/** Returns cumulative native geometric hit-test diagnostics. */
 	public var hitTestMetrics(get, never):LayoutHitTestStats;
