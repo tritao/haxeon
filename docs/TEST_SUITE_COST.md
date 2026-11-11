@@ -113,3 +113,19 @@ compiler is measured, so one app can be built by two checkouts and the lines com
 The worker is followed by pid, not picked by CPU: the first version took the busiest compiler process on the machine, and read a leftover
 worker's 91 s and 6.5 GB for a build that used 64 s and 5.5 GB. Quote medians of at least 3, interleave the sides, and never compare a
 number taken with a different app tree or at a different load.
+
+## 8. The gate
+
+`scripts/gate.sh quick|wave|full [jobs]` is the one way to run the suites for a report. It builds the compiler entry point and the build tool
+once (a failed build stops it), refuses a tree with tracked changes (`GATE_ALLOW_DIRTY=1` runs and records "dirty"), and runs, in order:
+
+| mode | suites |
+|---|---|
+| quick | the NUL guard; the driver in its default configuration (each program built live and plain, named cases, executables) |
+| wave | quick, then the driver with `HAXEON_CHECK_REUSE=1` (adds the warm-edit rebuilds and the reuse comparisons) |
+| full | wave, then `scripts/test.sh` |
+
+Results go to `out/gate/<commit>-<mode>-<time>/`: a log per suite and `summary.txt` with the commit, mode, jobs, load at start and end,
+cores, per suite the exit code, seconds and the driver's pass/fail line, a coverage line per driver run (`programs: N live, N plain,
+warm-edit: yes (N)`) and the exit code. A gate report quotes that file and nothing else, so a report cannot describe a configuration the
+run did not use. The coverage line counts the passing program cases in the log, so a driver that silently ran fewer cases shows it.
