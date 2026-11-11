@@ -17,7 +17,21 @@ import compiler.ir.cfg.Cfg;
  * and functions with exception handling are skipped.
  */
 class CfgIteratorReplacement {
+	static function createsIterator(cfg:CfgFunction):Bool {
+		for (block in cfg.blocks)
+			for (located in block.instructions)
+				switch located.value {
+					case IteratorNew(_, _): return true;
+					default:
+				}
+		return false;
+	}
+
 	public static function run(cfg:CfgFunction):CfgFunction {
+		// A replaced iterator is one this function creates and stores once; with no creation there is nothing to replace, and most
+		// functions have none. Finding that out here keeps the walk over the function's locals for the functions that can use it.
+		if (!createsIterator(cfg))
+			return cfg;
 		var candidates:Map<String, IrType> = [];
 		for (name => type in cfg.localTypes)
 			switch type {
