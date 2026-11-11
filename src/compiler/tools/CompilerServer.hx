@@ -107,7 +107,7 @@ class CompilerServer {
 						#if (hl && !haxeon)
 						var memoryAfter = hl.Gc.stats();
 						send(client,
-							{message: 'worker allocations: bytes=${Math.round(memoryAfter.totalAllocated - memoryBefore.totalAllocated)} count=${Math.round(memoryAfter.allocationCount - memoryBefore.allocationCount)} heap=${Math.round(memoryAfter.currentMemory)}'});
+							{message: 'worker allocations: bytes=${WholeNumber.text(memoryAfter.totalAllocated - memoryBefore.totalAllocated)} count=${WholeNumber.text(memoryAfter.allocationCount - memoryBefore.allocationCount)} heap=${WholeNumber.text(memoryAfter.currentMemory)}'});
 						#end
 						send(client,
 							{message: 'compiler: ${Math.round((Sys.time() - started) * 1000)} ms, ${result.metrics.retypedFunctions} functions retyped'});
