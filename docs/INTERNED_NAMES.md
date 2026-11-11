@@ -68,3 +68,16 @@ A pass that builds a name (concatenation, prefix) builds it through `Names.of`, 
   no public constructor, and check mode (`HAXEON_CHECK_REUSE=1`) compares the text form of reused entries against a fresh run.
 - Memory: a `Name` is a two-field object plus its string; the table pins them. At 10^5 names it is a few MB, against a 5 GB worker.
 - Wasm and C backends: they read names as text; the conversion is at their input. No behaviour change expected.
+
+
+## Measured, 2026-11-11: Name ids inside the method tables do not pay
+
+Step 2 as written above (Name ids inside `IrProgramIndex` and `IrMethodResolution`) was measured on a cold profile of the tree after the
+method-resolution table landed (10,052 samples, 199 Hz): `IrProgramIndex` is 0.01% of cold CPU and `IrMethodResolution` 0.12% (its
+`uniqueImplementation`, `subtreeOf`, `find` and `methodsOf` together). Do not do it; there is nothing to win.
+
+String-map operations are still 22.6% of cold CPU, but they are spread thin over many callers. The ones in the IR passes are the
+verifier's tables (`IrVerifyTable.exists` 0.82% and `.get` 0.46%, `IrObjectTable.get` 0.53%, `IrVerifyMemo.note` 0.42%) and the inliner
+(`consultResult`, `calleeOf`, `inlinedVersion`, `computeComponents`: about 1.9% self, 10.9% inclusive). The inliner hashes a callee name five
+or six times per call instruction; those are better fixed by giving each function a dense id once than by a program-wide Name type.
+The SSA builder was the same story and was fixed the same way (locals numbered once, 5.9% to 4.5% of cold).
