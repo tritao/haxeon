@@ -122,7 +122,7 @@ once (a failed build stops it), refuses a tree with tracked changes (`GATE_ALLOW
 | mode | suites |
 |---|---|
 | quick | the NUL guard; the driver in its default configuration (each program built live and plain, named cases, executables) |
-| wave | quick, then the driver with `HAXEON_CHECK_REUSE=1` (adds the warm-edit rebuilds and the reuse comparisons), then `scripts/test-wasm-backend.sh` and the self-hosting compile (`tests/integration/test-compiler-embedding.sh`) |
+| wave | quick, then the driver with `HAXEON_CHECK_REUSE=1` (adds the warm-edit rebuilds and the reuse comparisons), then `scripts/test-wasm-backend.sh` the self-hosting compile (`tests/integration/test-compiler-embedding.sh`) and the external-tool build (`tests/integration/test-external-tool-build.sh`) |
 | full | wave, then `scripts/test.sh` run to the end (a copy that continues past a failing stage; the summary lists every failing stage) |
 
 Results go to `out/gate/<commit>-<mode>-<time>/`: a log per suite and `summary.txt` with the commit, mode, jobs, load at start and end,

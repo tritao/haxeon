@@ -8,5 +8,5 @@ if (-not (Test-Path $Haxe)) {
 }
 
 $env:HAXEON_HOME = $RootDir
-& $Haxe -cp (Join-Path $RootDir "src") --run tools.HaxeonCli @args
+& $Haxe --cwd $RootDir common.hxml --run tools.HaxeonCli @args
 exit $LASTEXITCODE

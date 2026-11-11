@@ -30,15 +30,16 @@ fi
 fingerprint=$(
 	cd "$root_dir"
 	{
-		find src .tools/haxe/std -type f -exec "${checksum[@]}" {} +
-		"${checksum[@]}" scripts/haxeon .tools/haxe/haxe
+		find src lib .tools/haxe/std -type f -exec "${checksum[@]}" {} +
+		"${checksum[@]}" scripts/haxeon common.hxml .tools/haxe/haxe
 	} | LC_ALL=C sort | "${checksum[@]}"
 )
 stamp="$cli.inputs"
 if [[ ! -f "$cli" || ! -f "$stamp" || "$(cat "$stamp")" != "$fingerprint" ]]; then
 	temporary="$cli.tmp.$$"
 	trap 'rm -f "$temporary" "$temporary.inputs"' EXIT
-	"$haxe" -cp "$root_dir/src" -cp "$root_dir/lib/haxeon-io" -main tools.HaxeonCli -hl "$temporary"
+	# The class paths of the compiler come from common.hxml, the one list every stock-Haxe build of these sources uses.
+	"$haxe" --cwd "$root_dir" common.hxml -main tools.HaxeonCli -hl "$temporary"
 	printf '%s\n' "$fingerprint" > "$temporary.inputs"
 	mv "$temporary" "$cli"
 	mv "$temporary.inputs" "$stamp"
