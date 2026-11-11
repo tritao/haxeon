@@ -1,0 +1,5 @@
+-cp src
+-cp tests
+-cp tests/runtime
+-main ResumedCaptureChangePatchMain
+-hl out/resumed-capture-change-patch-test.hl

@@ -307,6 +307,8 @@ class TestCatalog {
 				"adding a lambda beside others patches the running module and keeps stored closures"),
 			hxmlCase("runtime", "added-class-patch", "tests/hxml/added-class-patch-test.hxml", "added-class-patch-test.hl", 0,
 				"adding classes and closure environments patches the running module"),
+			hxmlCase("runtime", "resumed-capture-change-patch", "tests/hxml/resumed-capture-change-patch-test.hxml", "resumed-capture-change-patch-test.hl", 0,
+				"a resumed live compiler patches a lambda whose captures changed, and its deletion"),
 			hxmlCase("runtime", "lambda-renumber-patch", "tests/hxml/lambda-renumber-patch-test.hxml", "lambda-renumber-patch-test.hl", 0,
 				"inserting, deleting and reordering lambdas at one anchor patches, and stored closures keep their functions"),
 			hxmlCase("runtime", "live-signature-patch", "tests/hxml/live-signature-patch-test.hxml", "live-signature-patch-test.hl", 0,
