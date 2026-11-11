@@ -118,9 +118,7 @@ class BuildPlanner {
 				libraryRequirements.push(statik);
 		}
 		libraryRequirements = libraryRequirements.concat(ffiNativeLibraries);
-		var kind = switch target {
-			case _: project.manifest.target == "wasm32" ? WasmModule : HashLinkModule;
-		};
+		var kind = project.manifest.target == "wasm32" ? WasmModule : HashLinkModule;
 		if (intent == Check)
 			kind = Diagnostics;
 		var moduleId = new ArtifactId(project.rootPackage.name, kind, target);

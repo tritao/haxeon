@@ -89,6 +89,8 @@ class BuildPlan {
 				throw 'Build plan dependency cycle at $key';
 			active.set(key, true);
 			var artifact = byKey.get(key);
+			if (artifact == null)
+				throw 'Build plan has no artifact $key';
 			for (dependency in artifact.dependencies)
 				visit(dependency.key());
 			active.remove(key);

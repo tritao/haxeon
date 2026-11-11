@@ -290,7 +290,10 @@ class CompilerServer {
 	}
 
 	/** Lets clients measure and liveness-check this worker without connecting to it. */
-	#if hl
+	#if haxeon
+	static function processId():Int
+		return Sys.getPid();
+	#elseif hl
 	@:hlNative("std", "sys_getpid") static function processId():Int
 		return 0;
 	#else
