@@ -427,9 +427,34 @@ retention scenarios, budgets that may only go down, memory runs, compiler suites
    `5a02f3dac4ccc56cb2479f8788e42d9271f3b5ead275beecb96e61f8d6ccf780`. The calibrated harness SHA-256 was `426e07eec67e6744c35eb60f355077ef9ceea6bef8dcbc1ac4eb906b95b941e1`.
    The prototype is removed; the existing incremental bridge and verify mode remain in use.
 
-3. **Component model experiment.** Compare run-once bindings and small re-running scopes using the same builder-style
-   panel code and tracked model. Measure allocation and frame time, decide decision 2, and amend this record; authors do
-   not rewrite panels when the implementation changes.
+3. **Component model experiment.** Test plain Haxe, without builders, lazy parameters or other language features.
+   Start with re-running scopes (R) on `CncPanel` and run-once bindings (B) on `TelemetryPanel`. CNC currently samples
+   an `Equatable` presentation and patches its whole description; telemetry builds a plot and keyed worker, zone and
+   separation rows from the current snapshot. R needs tracked scopes with owned cleanup and an equality-gated child
+   input; B needs owned live-leaf bindings and only the conditional and keyed iteration primitives the panel uses.
+   Scope and binding lifetimes must follow mount/unmount, including changed dependencies and keyed row removal.
+
+   Compare both mechanisms on **both** panels before applying the decision rule, using temporary crossover versions
+   during the experiment. Measure the unchanged frame, CNC source/selection/progress/hold/resume and telemetry
+   snapshot/worker/zone/row changes, as well as the existing console ↔ telemetry budget actions. Extend the existing
+   warmed, calibrated exact action-window census for live updates; report object counts, requested bytes and site
+   attribution alongside paired uninstrumented frame times. Retain all 15 existing budget action comparisons against
+   the same current-model control. Existing `RenderNode`/widget and reconcile allocations are V, callbacks and captured
+   environments C, dependency edges T, and children arrays and formatted strings A; attribute actual captures rather
+   than assuming every site disappears. Test updates, equal-child skipping, binding stability and zero-allocation
+   unchanged frames on HashLink, Wasm32 and Wasm GC. Record source readability and debugging tradeoffs with results.
+   Prefer R within 10% of B on both panels; otherwise test a structural-R/leaf-binding hybrid. Every action must allocate
+   no more than control, fewer mechanisms break a tie, and builders plus `Lazy<T>` are a separate later item only if B
+   wins by over 10% on both panels and the hybrid cannot close the gap.
+
+   The existing `CncRetention` fixture covers source replacement, selection, progress, hold, resume, speed and
+   hide/remount; `panel-flows` exercises telemetry physics steps and worker zones. Use identical seeded inputs and
+   warmed state for the three implementations, and add isolated windows around the triggering input or simulation
+   step through the submitted frame. The existing `submit` timer starts after those triggers, so preserve separate
+   input and frame timings rather than treating it as total action time. Calibrate each census window with the marker
+   and byte-sum checks described in `ALLOCATION_CENSUS.md`; exclude only that marker. A panel-flow baseline failure
+   must be reproduced on control before it is classified as the known failure, and must not stand in for live-update
+   measurements.
 4. **General compiler support.** Implement result builders and lazy parameters, with separate designs and target tests;
    runtime debug checks enforce tracked reads.
 5. **Widgets, then panels.** Convert leaf widgets and panels to the builder API; delete `selfUpdating`/`reconcile`,
