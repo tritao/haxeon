@@ -88,5 +88,43 @@ function main():Int {
 	for (arguments in bad)
 		expectThrows(() -> Shards.run(tracked, arguments), "a bad shard argument is rejected");
 	expectThrows(() -> Shards.assignment([{name: "same", run: () -> {}}, {name: "same", run: () -> {}}], 1, 2), "two groups with one name are rejected");
+
+	// `--only` runs the named groups in their listed order; `*` matches any run of characters.
+	expect(Shards.matches("t*", "t3") && Shards.matches("*3", "t3") && Shards.matches("t*3", "t3") && Shards.matches("*", "x"), "wildcards match");
+	expect(!Shards.matches("t", "t3") && !Shards.matches("t*4", "t3") && !Shards.matches("a*b*c", "abxc0"), "wildcards do not over-match");
+	expect(Shards.matches("ab*b", "abb") && !Shards.matches("ab*ab", "ab"), "a wildcard does not reuse the prefix");
+	ran = [];
+	expect(!Shards.run(tracked, ["--only", "t3,t1"]) && ran.join(",") == "t1,t3", "--only runs named groups in listed order");
+	ran = [];
+	expect(!Shards.run(tracked, ["--only", "t*"]) && ran.length == 5, "--only with a wildcard");
+	ran = [];
+	Shards.run(tracked, ["--shard", "1/2", "--only", "t*"]);
+	expect(ran.length == firstShard, "--only within a shard keeps to the shard");
+	expectThrows(() -> Shards.run(tracked, ["--only", "t1,missing"]), "a pattern naming no group is rejected");
+	expectThrows(() -> Shards.run(tracked, ["--only"]), "--only needs names");
+	expectThrows(() -> Shards.run(tracked, ["--only", ""]), "an empty pattern is rejected");
+
+	// `--list` names the selected groups and runs none of them.
+	ran = [];
+	expect(!Shards.run(tracked, ["--list", "--only", "t2"]) && ran.length == 0, "--list runs nothing");
+
+	// `--keep-going` runs every selected group past failures and reports all of them.
+	ran = [];
+	var failing:Array<TestGroup> = [
+		{name: "ok1", run: () -> ran.push("ok1")},
+		{name: "bad1", run: () -> throw "first"},
+		{name: "ok2", run: () -> ran.push("ok2")},
+		{name: "bad2", run: () -> throw "second"}
+	];
+	var report = "";
+	try
+		Shards.run(failing, ["--keep-going"])
+	catch (error:Dynamic)
+		report = Std.string(error);
+	expect(ran.join(",") == "ok1,ok2", "groups after a failure still run");
+	expect(report.indexOf("2 of 4 groups failed") >= 0 && report.indexOf("bad1, bad2") >= 0, "every failure is reported: " + report);
+	ran = [];
+	expectThrows(() -> Shards.run(failing, []), "without --keep-going the first failure stops the run");
+	expect(ran.join(",") == "ok1", "without --keep-going later groups do not run");
 	return 42;
 }
