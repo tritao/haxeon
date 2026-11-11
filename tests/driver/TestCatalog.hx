@@ -147,6 +147,7 @@ class TestCatalog {
 		"SemanticDependencyCollectorMain",
 		"ResolvedSemanticDependencyMain",
 		"InlineDefaultArgumentMain",
+		"InlineEnumAbstractConstantMain",
 		"InvalidationMain",
 		"LambdaNameMain",
 		"IrProgramAssemblerMain",
