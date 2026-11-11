@@ -21,7 +21,10 @@ private typedef OptionalMethodRequest = {final owner:String; final field:String;
 class IrOptionalFieldStorage {
 	final objects:Map<String, IrObject>;
 	final layouts:IrInlineValueLayout;
-	final plans:Map<String, OptionalFieldPlan> = [];
+	/** The plans by owner, then field: a lookup builds no key string. `key` is only for names and for the order plans are emitted in. */
+	final plans:Map<String, Map<String, OptionalFieldPlan>> = [];
+
+	var planCount = 0;
 
 	public function new(declarations:Array<IrObject>) {
 		objects = [for (object in declarations) object.name => object];
@@ -30,7 +33,7 @@ class IrOptionalFieldStorage {
 			for (field in object.fields)
 				switch field.type {
 					case Nullable(Obj(name)) if (isValue(name)):
-						plans.set(key(object.name, field.name), {
+						addPlan({
 							owner: object.name,
 							field: field.name,
 							type: field.type,
@@ -40,8 +43,24 @@ class IrOptionalFieldStorage {
 				}
 	}
 
+	function addPlan(plan:OptionalFieldPlan):Void {
+		var fields = plans.get(plan.owner);
+		if (fields == null) {
+			fields = [];
+			plans.set(plan.owner, fields);
+		}
+		if (!fields.exists(plan.field))
+			planCount++;
+		fields.set(plan.field, plan);
+	}
+
+	function planFor(owner:String, field:String):Null<OptionalFieldPlan> {
+		var fields = plans.get(owner);
+		return fields == null ? null : fields.get(field);
+	}
+
 	public function hasFields():Bool
-		return plans.keys().hasNext();
+		return planCount > 0;
 
 	/** The physical field declarations; field order remains deterministic. */
 	public function physicalObjects(declarations:Array<IrObject>):Array<IrObject> {
@@ -49,7 +68,7 @@ class IrOptionalFieldStorage {
 			for (object in declarations) {
 				var fields:Array<IrObjectField> = [];
 				for (field in object.fields) {
-					var plan = plans.get(key(object.name, field.name));
+					var plan = planFor(object.name, field.name);
 					if (plan == null)
 						fields.push(field);
 					else
@@ -78,12 +97,10 @@ class IrOptionalFieldStorage {
 	/** Replace logical reads and writes, including generated reflection operations, with field-specific accessors. */
 	public function rewrite(functions:Array<IrFunction>):Array<IrFunction> {
 		var all = functions.copy();
-		var names = [for (name in plans.keys()) name];
-		names.sort(Reflect.compare);
-		for (name in names) {
-			var plan = plans.get(name);
-			if (plan == null)
-				throw 'Missing optional field plan "$name"';
+		var ordered = [for (fields in plans) for (plan in fields) {name: key(plan.owner, plan.field), plan: plan}];
+		ordered.sort((a, b) -> Reflect.compare(a.name, b.name));
+		for (entry in ordered) {
+			var plan = entry.plan;
 			all.push(accessor(plan, false));
 			all.push(accessor(plan, true));
 			var element = switch plan.type {
@@ -121,7 +138,7 @@ class IrOptionalFieldStorage {
 
 	/** Clone a value method with its receiver represented by an owner and field path. */
 	function specializeMethod(name:String, request:OptionalMethodRequest, fn:IrFunction):IrFunction {
-		var plan = plans.get(key(request.owner, request.field));
+		var plan = planFor(request.owner, request.field);
 		if (plan == null || fn.arguments.length == 0)
 			throw 'Invalid optional method specialization "$name"';
 		var receiver = fn.arguments[0],
@@ -302,7 +319,7 @@ class IrOptionalFieldStorage {
 		if (object == null)
 			return null;
 		for (field in object.fields) {
-			var plan = plans.get(key(name, field.name));
+			var plan = planFor(name, field.name);
 			if (plan != null)
 				for (slot in plan.slots)
 					if (IrInlineValueLayout.slotName(field.name, slot) == physicalName)
@@ -371,8 +388,8 @@ class IrOptionalFieldStorage {
 							default: true;
 						}))
 							throw 'Invalid optional field copy "$name"';
-						var target = plans.get(key(fields[0], fields[1])),
-							source = plans.get(key(fields[2], fields[3]));
+						var target = planFor(fields[0], fields[1]),
+							source = planFor(fields[2], fields[3]);
 						if (target == null
 							|| source == null
 							|| !Type.enumEq(target.type, source.type)
@@ -565,7 +582,7 @@ class IrOptionalFieldStorage {
 			default: return null;
 		};
 		while (name != null) {
-			var plan = plans.get(key(name, field));
+			var plan = planFor(name, field);
 			if (plan != null)
 				return plan;
 			var object = objects.get(name);
