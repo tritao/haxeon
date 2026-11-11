@@ -114,7 +114,8 @@ class IrFunction {
 		return switch kind {
 			case Provider(subject, operation): Serves(subject, operation);
 			case ValueArraySlot(_, element, _): Serves(TypeKey.of(element), ProviderOperation.detailed(ProviderOperation.ValueArraySlot, name));
-			case EnumEquality(reflective): arguments.length == 2 ? Serves(TypeKey.of(arguments[0].type), reflective ? ProviderOperation.ReflectEquals : ProviderOperation.Equals) : None;
+			// Two source enums can lower to one IR type, each with its own helper, so the helper's name (a function of the source type) is the detail.
+			case EnumEquality(reflective): arguments.length == 2 ? Serves(TypeKey.of(arguments[0].type), ProviderOperation.detailed(reflective ? ProviderOperation.ReflectEquals : ProviderOperation.Equals, name)) : None;
 			case EnumDynamicUnbox(type): Serves(TypeKey.of(type), ProviderOperation.DynamicUnbox);
 			case EnumTagAdapter(type, box): Serves(TypeKey.of(type), box ? ProviderOperation.EnumTagBox : ProviderOperation.EnumTagUnbox);
 			default: None;
