@@ -1,5 +1,6 @@
 import compiler.ir.Ir;
 import compiler.ir.IrFunction;
+import compiler.ir.IrFunction.IrValueArraySlotOperation;
 import compiler.ir.SourceProvenance;
 import compiler.ir.SourceProvenance.Located;
 import compiler.ir.codec.IrFunctionStateCodec;
@@ -14,7 +15,7 @@ class IrStateEqualityMain {
 			where = SourceProvenance.user(new compiler.Source.SourceFile("test.hx", "x").span(0, 1));
 		b.instructions.push(new Located(instruction, where));
 		b.terminator = new Located(Return(v), where);
-		return new IrFunction("probe", [v, w], I32, [b], None, [], [
+		return new IrFunction("probe", [v, w], I32, [b], Ordinary, [
 			{
 				identity: "local",
 				name: "v",
@@ -34,7 +35,47 @@ class IrStateEqualityMain {
 	}
 
 	static function main():Void {
+		var body = fn(ConstInt(new IrValue(0, "v", I32), 1));
+		var adapter = new IrFunction(body.name, body.arguments, body.result, body.blocks, ClosureAdapter(Function([I32], I32), Function([Dyn], Dyn)), body.debugBindings, false, Reachable);
+		var castFunction = new IrFunction(body.name, body.arguments, body.result, body.blocks, ClosureCast(Function([Dyn], Dyn)), body.debugBindings, false, Reachable);
+		var otherAdapter = new IrFunction(body.name, body.arguments, body.result, body.blocks, ClosureAdapter(Function([I64], I32), Function([Dyn], Dyn)), body.debugBindings, false, Reachable);
+		var retained = new IrFunction(body.name, body.arguments, body.result, body.blocks, adapter.kind, body.debugBindings, true, Keep);
+		if (!IrFunctionStateEquality.same(retained, retained.withBlocks(retained.blocks)))
+			throw "Replacing blocks must preserve function metadata";
+		compare(adapter, IrFunctionStateCodec.decode(IrFunctionStateCodec.encode(adapter)));
+		compare(adapter, castFunction);
+		compare(adapter, otherAdapter);
+		compare(body, adapter);
+		for (kind in [GenericSpecialization, SourceLambda, Equality, Hash, KeyPath, IterationAdapter,
+			GeneratedHelper, ScalarArguments, InlineEnumAccess, TypedInterface, ValueUnbox, GenericMethodReference,
+			OptionalScalar(null), OptionalScalar("owner.method"), OptionalValueBoundary, NullableScalarArguments,
+			ValueArrayElement, WasmClosureRestore, EnumEquality(true), EnumEquality(false), EnumDynamicUnbox(Enum("Example")),
+			EnumTagAdapter(EnumTag("Example"), true), EnumTagAdapter(EnumTag("Example"), false)]) {
+			var functionWithKind = new IrFunction(body.name, body.arguments, body.result, body.blocks, kind, body.debugBindings);
+			if (!IrFunctionStateEquality.same(functionWithKind, IrFunctionStateCodec.decode(IrFunctionStateCodec.encode(functionWithKind))))
+				throw 'Function role failed to round-trip: $kind';
+		}
+		for (operation in [Read(2, ["a", "b"], true), Write(3, ["a"], false), Check(["a"], true),
+			OptionalWrite(["b"], I32), RequireScalar(F64)]) {
+			var slot = new IrFunction(body.name, body.arguments, body.result, body.blocks, ValueArraySlot(3, Obj("Element"), operation));
+			if (!IrFunctionStateEquality.same(slot, IrFunctionStateCodec.decode(IrFunctionStateCodec.encode(slot))))
+				throw 'Value-array slot operation failed to round-trip: $operation';
+		}
+		var slotA = new IrFunction(body.name, body.arguments, body.result, body.blocks, ValueArraySlot(3, Obj("Element"), Read(2, ["a"], true)));
+		var slotB = new IrFunction(body.name, body.arguments, body.result, body.blocks, ValueArraySlot(3, Obj("Element"), Read(2, ["b"], true)));
+		if (IrFunctionStateEquality.same(slotA, slotB)) throw "Distinct slot paths must differ";
+		compare(slotA, slotB);
+		var renamedSlot = new IrFunction(body.name, body.arguments, body.result, body.blocks, ValueArraySlot(4, Obj("Element"), Read(2, ["a"], true)));
+		if (IrFunctionStateCodec.codeFingerprint(slotA) != IrFunctionStateCodec.codeFingerprint(renamedSlot))
+			throw "Slot linkage IDs must not change code fingerprints";
 		var v = new IrValue(0, "v", I32), w = new IrValue(1, "w", I32);
+		var intrinsic = fn(Intrinsic(v, EnumDynamicBox(Enum("First")), [w]));
+		compare(intrinsic, IrFunctionStateCodec.decode(IrFunctionStateCodec.encode(intrinsic)));
+		compare(intrinsic, fn(Intrinsic(v, EnumDynamicBox(Enum("Second")), [w])));
+		compare(intrinsic, fn(Intrinsic(v, EnumDynamicView(Enum("First")), [w])));
+		var tagIntrinsic = fn(Intrinsic(v, EnumTagBox(EnumTag("First")), [w]));
+		compare(tagIntrinsic, IrFunctionStateCodec.decode(IrFunctionStateCodec.encode(tagIntrinsic)));
+		compare(tagIntrinsic, fn(Intrinsic(v, EnumTagUnbox(EnumTag("First")), [w])));
 		var cases:Array<{original:IrInstruction, changed:Array<IrInstruction>}> = [
 			{
 				original: Phi(v, [{block: 0, value: v}]),
@@ -437,12 +478,12 @@ class IrStateEqualityMain {
 			}
 		];
 		for (changed in [
-			new IrFunction("renamed", original.arguments, original.result, original.blocks, None, [], original.debugBindings),
-			new IrFunction(original.name, [w, v], original.result, original.blocks, None, [], original.debugBindings),
-			new IrFunction(original.name, original.arguments, I64, original.blocks, None, [], original.debugBindings),
-			new IrFunction(original.name, original.arguments, original.result, original.blocks, None, [], changedBindings),
-			new IrFunction(original.name, original.arguments, original.result, original.blocks, None, [], original.debugBindings, true),
-			new IrFunction(original.name, original.arguments, original.result, original.blocks, None, [], original.debugBindings, false,
+			new IrFunction("renamed", original.arguments, original.result, original.blocks, Ordinary, original.debugBindings),
+			new IrFunction(original.name, [w, v], original.result, original.blocks, Ordinary, original.debugBindings),
+			new IrFunction(original.name, original.arguments, I64, original.blocks, Ordinary, original.debugBindings),
+			new IrFunction(original.name, original.arguments, original.result, original.blocks, Ordinary, changedBindings),
+			new IrFunction(original.name, original.arguments, original.result, original.blocks, Ordinary, original.debugBindings, true),
+			new IrFunction(original.name, original.arguments, original.result, original.blocks, Ordinary, original.debugBindings, false,
 				compiler.ir.IrFunction.IrRetention.Keep),
 			fn(ConstInt(v, 42), SourceProvenance.generated("first")),
 			fn(ConstInt(v, 42), SourceProvenance.generated("second"))

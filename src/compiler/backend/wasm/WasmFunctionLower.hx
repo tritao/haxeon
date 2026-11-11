@@ -653,6 +653,8 @@ class WasmFunctionLower {
 				emit(body, [I32Const(value ? 1 : 0), LocalSet(requiredLocal(values, output.id))]);
 			case ConstFloat(output, value):
 				emit(body, [F64Const(value), LocalSet(requiredLocal(values, output.id))]);
+			case ConstNull(output) if (switch output.type { case EnumTag(_): true; default: false; }):
+				emit(body, [I32Const(0), LocalSet(requiredLocal(values, output.id))]);
 			case ConstNull(output):
 				emit(body, context.representation.values.nullValue(output.type, requiredLocal(values, output.id)));
 			case ConstVoid(_):
@@ -666,12 +668,13 @@ class WasmFunctionLower {
 				var represented = context.representation.values.safeCast(output, value, requiredLocal(values, output.id), requiredLocal(values, value.id));
 				if (emitIfHandled(body, represented)) {} else
 					switch output.type {
-						case Function(_, _) if (functions.exists(compiler.backend.wasm.linear.WasmLinearClosureAdapters.castName(output.type))):
+						case Function(_, _) if (Std.isOfType(context.representation.values, WasmLinearRepresentation)
+							&& functions.exists((cast context.representation.values:WasmLinearRepresentation).closureAdapters.castName(output.type))):
 							// A closure created with another representation is adapted (WasmLinearClosureAdapters).
 							emit(body, [
 								LocalGet(requiredLocal(values, value.id)),
 								Call(WasmModuleSupport.requiredFunctionIndex(functions,
-									compiler.backend.wasm.linear.WasmLinearClosureAdapters.castName(output.type))),
+									(cast context.representation.values:WasmLinearRepresentation).closureAdapters.castName(output.type))),
 								LocalSet(requiredLocal(values, output.id))
 							]);
 						case Function(_, _) if (Std.isOfType(context.representation.values, WasmLinearRepresentation)):
@@ -978,6 +981,8 @@ class WasmFunctionLower {
 				if (address == null)
 					throw "Wasm static data address was not placed in the data section";
 				emit(body, [I32Const(address), LocalSet(requiredLocal(values, output.id))]);
+			case MakeEnum(output, _, constructor, _) if (switch output.type { case EnumTag(_): true; default: false; }):
+				emit(body, [I32Const(constructor + 1), LocalSet(requiredLocal(values, output.id))]);
 			case MakeEnum(output, typeName, constructor, arguments):
 				var represented = context.representation.aggregates.makeEnum(typeName, constructor, arguments, requiredLocal(values, output.id),
 					[for (argument in arguments) requiredLocal(values, argument.id)]);
@@ -1013,6 +1018,9 @@ class WasmFunctionLower {
 					if (cache != null)
 						emit(body, [LocalGet(requiredLocal(values, output.id)), GlobalSet(cache), End]);
 				}
+			case EnumIndex(output, value) if (switch value.type { case EnumTag(_): true; default: false; }):
+				emit(body, [LocalGet(requiredLocal(values, value.id)), I32Eqz, If(null)].concat(trapOrThrow(1)).concat([
+					End, LocalGet(requiredLocal(values, value.id)), I32Const(1), I32Sub, LocalSet(requiredLocal(values, output.id))]));
 			case EnumIndex(output, value):
 				var represented = context.representation.aggregates.enumIndex(value, requiredLocal(values, output.id), requiredLocal(values, value.id));
 				if (emitIfHandled(body, represented)) {} else
@@ -1351,6 +1359,7 @@ class WasmFunctionLower {
 				emit(body,
 					context.representation.values.equal(requiredLocal(values, output.id), left, right, requiredLocal(values, left.id),
 						requiredLocal(values, right.id)));
+			case Intrinsic(_, _, _): throw "Unlowered IR intrinsic reached Wasm";
 			case Call(output, name, arguments):
 				var gcRepresentation:Null<WasmGcRepresentation> = Std.isOfType(context.representation.values, WasmGcRepresentation) ?
 					cast(context.representation.values, WasmGcRepresentation) : null;
@@ -1364,14 +1373,16 @@ class WasmFunctionLower {
 				}
 				if (name == compiler.ir.IrReceiverCheck.NAME) {
 					var check:Array<WasmInstruction> = [LocalGet(requiredLocal(values, arguments[0].id)),
-						gcRepresentation == null ? I32Eqz : RefIsNull, If(null)];
+						gcRepresentation == null || (switch arguments[0].type { case EnumTag(_): true; default: false; }) ? I32Eqz : RefIsNull, If(null)];
 					if (!knownNonNull) emit(body, check.concat(trapOrThrow(1)).concat([End]));
 					return;
 				}
 				if (compiler.ir.IrScalarWordBits.matches(name)) {
 					if (arguments.length != 1 || !compiler.ir.IrScalarWordBits.valid(name,arguments[0].type,output.type)) throw "Invalid scalar word transport signature";
 					body.push(LocalGet(requiredLocal(values,arguments[0].id)));
-					body.push(name == compiler.ir.IrScalarWordBits.PACK ? I64ExtendI32U : I32WrapI64);
+					if (!((switch output.type { case I32, EnumTag(_): true; default: false; })
+						&& (switch arguments[0].type { case I32, EnumTag(_): true; default: false; })))
+						body.push(name == compiler.ir.IrScalarWordBits.PACK ? I64ExtendI32U : I32WrapI64);
 					body.push(LocalSet(requiredLocal(values,output.id)));
 					return;
 				}
@@ -1965,7 +1976,7 @@ class WasmFunctionLower {
 			case Phi(output, _), ConstVoid(output), ConstInt(output, _), ConstFloat(output, _), ConstString(output, _), StaticDataAddress(output, _),
 				ConstBool(output, _), PointerOffset(output, _, _), MemoryLoad(output, _, _, _), ConstNull(output), TypeValue(output, _), ToDyn(output, _),
 				IntToFloat(output, _), IntToInt64(output, _), FloatToInt(output, _), FloatToFloat(output, _), SafeCast(output, _), Catch(output),
-				GlobalGet(output, _), Add(output, _, _), Sub(output, _, _), Mul(output, _, _), Div(output, _, _), Mod(output, _, _), BitAnd(output, _, _),
+				GlobalGet(output, _), Intrinsic(output, _, _), Add(output, _, _), Sub(output, _, _), Mul(output, _, _), Div(output, _, _), Mod(output, _, _), BitAnd(output, _, _),
 				BitXor(output, _, _), BitOr(output, _, _), ShiftLeft(output, _, _), ShiftRight(output, _, _), UnsignedShiftRight(output, _, _),
 				Less(output, _, _), LessEqual(output, _, _), Equal(output, _, _), Call(output, _, _), CNativeCall(output, _, _), StaticClosure(output, _),
 				InstanceClosure(output, _, _), CallClosure(output, _, _), ToVirtual(output, _), Upcast(output, _), MethodCall(output, _, _, _, _), NewObject(output, _),

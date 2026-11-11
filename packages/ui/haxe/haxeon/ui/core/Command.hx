@@ -51,7 +51,7 @@ class Command {
 		return result;
 	}
 
-	public function matchesShortcut(key:Int, modifiers:Int):Bool {
+	public function matchesShortcut(key:Int, modifiers:UiModifier):Bool {
 		if (shortcut != null && shortcut.matches(key, modifiers)) return true;
 		for (alternate in alternateShortcuts)
 			if (alternate.matches(key, modifiers)) return true;

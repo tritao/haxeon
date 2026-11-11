@@ -698,8 +698,8 @@ class FrontendCompilation {
 			reuseMiss = context.livePatching ? "live patching" : previousPipeline == null ? "no earlier build" : previousPipeline.mismatch(inputs),
 			matchesPrevious = reuseMiss == null, checkingReuse = Sys.getEnv("HAXEON_CHECK_REUSE") == "1",
 			reusedPipeline:Null<PipelineSnapshot> = matchesPrevious ? previousPipeline : null, ir:IrProgram, inlinerChanged:Array<String>;
-		if (matchesPrevious && !checkingReuse) {
-			ir = previousPipeline.ir;
+		if (reusedPipeline != null && !checkingReuse) {
+			ir = reusedPipeline.ir;
 			inlinerChanged = [];
 		} else {
 			compiler.compilation.IrPassMeter.reset();
@@ -729,6 +729,8 @@ class FrontendCompilation {
 			if (context.livePatching && !context.isWasmTarget() && semantic != null)
 				ir.parameterDefaults = parameterDefaults(ir, semantic.signatures);
 			var valueArrayTarget = context.valueArrayTarget();
+			if (!context.developmentMetadata && !context.livePatching)
+				ir = compiler.ir.IrClosedEnumTagAbi.run(ir, generated.reflectable);
 			compiler.compilation.IrPassMeter.measureVoid("value-array-rewrite", () -> compiler.ir.IrValueArrayProgramRewrite.rewriteAll(ir, valueArrayTarget == HashLink ? 64 : 32, valueArrayTarget));
 			// Scalarize value joins before choosing the scalar call ABI. The HashLink call rewrite can introduce
 			// further value joins, so it needs a second pass after that rewrite.
@@ -753,10 +755,11 @@ class FrontendCompilation {
 					compiler.ir.IrScalarReplacement.rewrite(fn, scalarObjects, false, !context.isWasmTarget())
 			]);
 			compiler.compilation.IrPassMeter.measureVoid("nullable-scalar-flow", () -> compiler.ir.IrNullableScalarFlow.rewrite(ir));
+			compiler.ir.IrEnumTagLowering.escapes(ir);
 			// Compare and publish the final IR even when only load/store forwarding is enabled.
 			inlinerChanged = compiler.compilation.IrPassMeter.measure("inliner", () -> IrInliner.run(ir, context.inlineCache(), context.targetProfile(), context.inlineEnabled(), instrumentScope));
-			// The final IR is verified here, once, whatever backend follows: only the functions whose IR or reads of the program changed.
-			if (!context.livePatching) {
+			// HashLink has its scalar closure ABI here. Wasm verifies after its target-specific closure escape adapters exist.
+			if (!context.livePatching && !context.isWasmTarget()) {
 				compiler.compilation.IrPassMeter.measureVoid("verifier", () -> IrVerifier.verifyReusing(ir, context.verifyMemo));
 				if (checkingReuse) {
 					try
@@ -768,8 +771,8 @@ class FrontendCompilation {
 						throw 'HAXEON_CHECK_REUSE: $providerProblem';
 				}
 			}
-			if (matchesPrevious) {
-				var difference = PipelineSnapshot.irDifference(previousPipeline.ir, ir);
+			if (reusedPipeline != null) {
+				var difference = PipelineSnapshot.irDifference(reusedPipeline.ir, ir);
 				if (difference != null)
 					throw 'HAXEON_CHECK_REUSE: the final IR reused for equal pipeline inputs differs from a fresh run ($difference)';
 			}
@@ -1146,9 +1149,9 @@ class FrontendCompilation {
 			pending:Array<String> = [];
 		for (name => state in modules) {
 			for (cached => fn in state.typedFunctions) {
-				var shared = switch fn.provides {
-					case Serves(_, operation): compiler.Provides.ProviderOperation.sharedAcrossModules(operation);
-					case null, None: false;
+				var shared = switch fn.role {
+					case ProviderFunction(_, operation): compiler.Provides.ProviderOperation.sharedAcrossModules(operation);
+					default: false;
 				};
 				if (!shared)
 					continue;
@@ -1371,7 +1374,7 @@ class FrontendCompilation {
 		visiting.set(fn.name, true);
 		var origin = fn.origin;
 		if (origin == null)
-			throw 'No source module owns typed function "${fn.name}"';
+			throw 'No source module owns typed function "${fn.name}" (origin: ${fn.origin})';
 		var module:String;
 		if (owners.exists(origin))
 			module = owners.get(origin);
@@ -1380,7 +1383,7 @@ class FrontendCompilation {
 		else if (typedByName.exists(origin))
 			module = resolveFunctionModule(typedByName.get(origin), owners, typedByName, visiting);
 		else
-			throw 'No source module owns typed function "${fn.name}"';
+			throw 'No source module owns typed function "${fn.name}" (origin: ${fn.origin})';
 		owners.set(fn.name, module);
 		visiting.remove(fn.name);
 		return module;

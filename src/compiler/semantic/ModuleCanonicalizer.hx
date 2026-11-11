@@ -191,6 +191,7 @@ class ModuleCanonicalizer {
 		return {
 			name: qualifiedTypeName(packageName, decl.name),
 			metadata: canonicalMetadata(decl.metadata, module, entry, locals, aliases),
+			conformances: decl.conformances == null ? [] : [for (type in decl.conformances) canonicalType(type, aliases)],
 			underlying: canonicalType(decl.underlying, aliases),
 			fromTypes: [for (type in decl.fromTypes) canonicalType(type, aliases)],
 			toTypes: [for (type in decl.toTypes) canonicalType(type, aliases)],

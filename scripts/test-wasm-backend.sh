@@ -146,9 +146,11 @@ for target in wasm32 wasm-gc; do
 	haxeon_compile_async \
 		--target=$target --output=out/wasm-cli-host-streams-$target.wasm --entry=wasm-host-services \
 		--wasm-import-memory --root=tests/programs tests/programs/wasm-host-services.hx
-	haxeon_compile_async \
-		--target=$target --output=out/wasm-cli-host-callbacks-$target.wasm --entry=wasm-callbacks \
-		--root=tests/ffi --ffi-interface=tests/ffi/wasm_callbacks.hxi tests/ffi/wasm-callbacks.hx
+	for inline in 0 1; do
+		HAXEON_INLINE="$inline" haxeon_compile_async \
+			--target=$target --output=out/wasm-cli-host-callbacks-inline-$inline-$target.wasm --entry=wasm-callbacks \
+			--root=tests/ffi --ffi-interface=tests/ffi/wasm_callbacks.hxi tests/ffi/wasm-callbacks.hx
+	done
 done
 haxeon_compile_async \
 	--target=wasm-gc --output=out/wasm-cli-gc-hxi-value-records.wasm --entry=wasm32-value-records \
@@ -274,8 +276,10 @@ const cases = [
 	["out/wasm-cli-gc-hxi-value-records.wasm", 42],
 	["out/wasm-cli-host-services-wasm32.wasm", 42],
 	["out/wasm-cli-host-services-wasm-gc.wasm", 42],
-	["out/wasm-cli-host-callbacks-wasm32.wasm", 42],
-	["out/wasm-cli-host-callbacks-wasm-gc.wasm", 42],
+	["out/wasm-cli-host-callbacks-inline-0-wasm32.wasm", 42],
+	["out/wasm-cli-host-callbacks-inline-1-wasm32.wasm", 42],
+	["out/wasm-cli-host-callbacks-inline-0-wasm-gc.wasm", 42],
+	["out/wasm-cli-host-callbacks-inline-1-wasm-gc.wasm", 42],
 	["out/wasm-cli-try-catch.wasm", 42],
 	["out/wasm-cli-try-nested.wasm", 42],
 	["out/wasm-cli-try-bounds.wasm", 42],

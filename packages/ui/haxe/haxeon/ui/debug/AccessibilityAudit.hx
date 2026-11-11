@@ -43,7 +43,7 @@ class AccessibilityAudit {
 				"Render node IDs must be unique within a frame"));
 		ids.set(node.id.value, true);
 		var semantics:Null<Semantics> = cast node.semantics;
-		if ((node.focusable || semantics != null && semantics.actions != 0) && semantics == null)
+		if ((node.focusable || semantics != null && !semantics.actions.isEmpty()) && semantics == null)
 			issues.push(new AccessibilityIssue(node.id.value, "missing-semantics",
 				"Interactive nodes need an accessibility role and state"));
 		if (semantics != null) {
@@ -75,20 +75,19 @@ class AccessibilityAudit {
 				issues.push(new AccessibilityIssue(node.id.value, "tab-list-no-selected-tab",
 					"A tab list needs one selected tab"));
 			if (semantics.role == AccessibilityRole.Tab &&
-				(semantics.actions & AccessibilityAction.Select) == 0)
+				!semantics.actions.contains(AccessibilityAction.Select))
 				issues.push(new AccessibilityIssue(node.id.value, "tab-no-select",
 					"Tabs need to expose the Select action"));
 			if (semantics.role == AccessibilityRole.Switch &&
-				(semantics.actions & AccessibilityAction.Toggle) == 0)
+				!semantics.actions.contains(AccessibilityAction.Toggle))
 				issues.push(new AccessibilityIssue(node.id.value, "switch-no-toggle",
 					"Switches need to expose the Toggle action"));
-			var isExpandable = (semantics.actions & (AccessibilityAction.Expand |
-				AccessibilityAction.Collapse)) != 0 ||
-				(semantics.states & AccessibilityState.Expanded) != 0 ||
+			var isExpandable = (semantics.actions.contains(AccessibilityAction.Expand) || semantics.actions.contains(AccessibilityAction.Collapse)) ||
+				semantics.states.contains(AccessibilityState.Expanded) ||
 				(semantics.role == AccessibilityRole.TreeItem && node.children.length > 0);
-			var requiredExpansionAction = (semantics.states & AccessibilityState.Expanded) != 0
+			var requiredExpansionAction = semantics.states.contains(AccessibilityState.Expanded)
 				? AccessibilityAction.Collapse : AccessibilityAction.Expand;
-			if (isExpandable && (semantics.actions & requiredExpansionAction) == 0)
+			if (isExpandable && !semantics.actions.contains(requiredExpansionAction))
 				issues.push(new AccessibilityIssue(node.id.value, "expandable-missing-actions",
 					"Expandable items need an action matching their current expanded state"));
 			if ((semantics.role == AccessibilityRole.Slider ||
@@ -104,14 +103,14 @@ class AccessibilityAudit {
 					"An item's position cannot exceed the collection size"));
 			if (semantics.role == AccessibilityRole.Cell)
 				auditGridCell(node, semantics, issues);
-			if ((semantics.states & AccessibilityState.Modal) != 0 && !node.focusTrap)
+			if (semantics.states.contains(AccessibilityState.Modal) && !node.focusTrap)
 				issues.push(new AccessibilityIssue(node.id.value, "modal-without-focus-trap",
 					"Modal elements need a focus trap"));
 		}
 		var effectiveEnabled = ancestorsEnabled && node.enabled &&
-			(semantics == null || (semantics.states & AccessibilityState.Disabled) == 0);
+			(semantics == null || !semantics.states.contains(AccessibilityState.Disabled));
 		var focusable = node.focusable || semantics != null &&
-			(semantics.states & AccessibilityState.Focusable) != 0;
+			semantics.states.contains(AccessibilityState.Focusable);
 		if (focusable && !effectiveEnabled)
 			issues.push(new AccessibilityIssue(node.id.value, "focusable-disabled",
 				"Disabled nodes cannot remain focusable"));
@@ -129,7 +128,7 @@ class AccessibilityAudit {
 			if (semantics != null && semantics.role == AccessibilityRole.TabList)
 				continue;
 			if (semantics != null && semantics.role == AccessibilityRole.Tab &&
-				(semantics.states & AccessibilityState.Selected) != 0)
+				semantics.states.contains(AccessibilityState.Selected))
 				return true;
 			if (hasSelectedTab(child))
 				return true;

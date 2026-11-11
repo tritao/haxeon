@@ -12,7 +12,7 @@ class InlineEnumReferenceMain {
  static function checkRejected(label:String,make:IrBuilder->IrValue,result:IrType,expected:String) {
   var b=new IrBuilder();b.returnValue(make(b));var p=new IrProgram("main");
   p.objects=[{name:"Source",isValue:false,base:null,interfaces:[],methods:[],fields:[{name:"code",type:I32}]}];
-  p.functions=[new IrFunction("main",b.arguments,result,b.blocks, None, [])];
+  p.functions=[new IrFunction("main",b.arguments,result,b.blocks, Ordinary)];
   var error="";try IrVerifier.verify(p)catch(e:Dynamic)error=Std.string(e);
   if(error.indexOf(expected)<0)throw "Verifier did not reject "+label+" with "+expected+": "+error;
  }
@@ -31,7 +31,7 @@ class InlineEnumReferenceMain {
   var p=new IrProgram("main");
   p.objects=[{name:"Source",isValue:false,base:null,interfaces:[],methods:[],fields:[{name:"code",type:I32}]},
    {name:"Payload",isValue:true,base:null,interfaces:[],methods:[],fields:[{name:"reference0",type:IrValueLaneReference.type()}]}];
-  p.functions=[new IrFunction("main",b.arguments,I32,b.blocks, None, [])];
+  p.functions=[new IrFunction("main",b.arguments,I32,b.blocks, Ordinary)];
   var pick=new IrBuilder(),arg=pick.argument("source",Obj("Source")),keep=pick.argument("keep",Bool),storage=pick.newObject("Payload");
   IrInlineEnumReferenceAccess.write(pick,storage,0,arg);
   var retained=pick.createBlock(),empty=pick.createBlock(),done=pick.createBlock();
@@ -41,9 +41,9 @@ class InlineEnumReferenceMain {
   var absent=pick.fieldGet(storage,"reference0",IrValueLaneReference.type());pick.jump(done);
   pick.select(done);var selected=pick.phi(IrValueLaneReference.type(),[{block:retained.id,value:present},{block:empty.id,value:absent}]);
   pick.returnValue(pick.call(IrValueLaneReference.UNPACK,[selected],Obj("Source")));
-  p.functions.push(new IrFunction("pick",pick.arguments,Obj("Source"),pick.blocks, None, []));
+  p.functions.push(new IrFunction("pick",pick.arguments,Obj("Source"),pick.blocks, Ordinary));
   var entry=new IrBuilder();entry.call("__exit",[entry.call("main",[],I32)],Void);entry.returnValue(entry.constVoid());
-  p.functions.push(new IrFunction("entry",entry.arguments,Void,entry.blocks, None, []));
+  p.functions.push(new IrFunction("entry",entry.arguments,Void,entry.blocks, Ordinary));
   p.natives=[{name:"__exit",library:"std",symbol:"sys_exit",arguments:[I32],result:Void}];
   IrVerifier.verify(p);
   var casts=0;
@@ -86,8 +86,8 @@ class InlineEnumReferenceMain {
    var restored = IrInlineEnumReferenceAccess.read(check,saved,0,Obj("RootSource"));
    check.returnValue(check.fieldGet(restored,"code",I32));
    p.functions = [
-    new IrFunction("prepareRoot",prepare.arguments,Void,prepare.blocks, None, [],null,false,compiler.ir.IrFunction.IrRetention.Expose),
-    new IrFunction("checkRoot",check.arguments,I32,check.blocks, None, [])
+    new IrFunction("prepareRoot",prepare.arguments,Void,prepare.blocks, Ordinary,null,false,compiler.ir.IrFunction.IrRetention.Expose),
+    new IrFunction("checkRoot",check.arguments,I32,check.blocks, Ordinary)
    ];
    if (target == HashLink) {
     p.natives = [
@@ -99,7 +99,7 @@ class InlineEnumReferenceMain {
     for (_ in 0...128) { var garbage=entry.newObject("RootSource");entry.fieldSet(garbage,"code",entry.constInt(-1)); }
     entry.call("major",[],Void);
     entry.call("__exit",[entry.call("checkRoot",[],I32)],Void); entry.returnValue(entry.constVoid());
-    p.functions.push(new IrFunction("entry",entry.arguments,Void,entry.blocks, None, [])); p.entryPoint="entry";
+    p.functions.push(new IrFunction("entry",entry.arguments,Void,entry.blocks, Ordinary)); p.entryPoint="entry";
    }
    IrVerifier.verify(p);
    var bytes = target == HashLink ? new compiler.backend.hl.HlBackend().compile(p,{target:target,debugNames:true}).bytes

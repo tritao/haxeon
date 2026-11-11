@@ -135,7 +135,7 @@ class IrStaticNullChecks {
 									builder.terminate(Throw(builder.toDyn(builder.constString('Cannot dereference null static "$name"'))));
 									builder.select(present);
 									builder.returnValue(builder.constVoid());
-									var created = new IrFunction(helperName, builder.arguments, Void, builder.blocks, Serves(TypeKey.of(valueType == null ? Dyn : valueType), ProviderOperation.detailed(ProviderOperation.ReceiverCheck, helperName)), []);
+									var created = new IrFunction(helperName, builder.arguments, Void, builder.blocks, Provider(TypeKey.of(valueType == null ? Dyn : valueType), ProviderOperation.detailed(ProviderOperation.ReceiverCheck, helperName)));
 									helpers.set(helperName, created);
 									store.helpers.set(helperName, created);
 								}
@@ -155,7 +155,7 @@ class IrStaticNullChecks {
 			}
 			// Cached functions belong to the frontend; never instrument them in place.
 			// A function with no static receiver gets no check, and stays the frontend's own object.
-			var copied = used.keys().hasNext() ? fn.derive(blocks) : fn;
+			var copied = used.keys().hasNext() ? fn.withBlocks(blocks) : fn;
 			nextCopies.set(fn.name, {source: fn, result: copied, statics: [for (name in used.keys()) name]});
 			result.push(copied);
 		}

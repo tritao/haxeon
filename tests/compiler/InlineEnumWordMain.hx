@@ -76,7 +76,7 @@ class InlineEnumWordMain {
 		var program = new IrProgram("main");
 		program.objects = [{name: "PayloadWords", isValue: true, base: null, interfaces: [], methods: [],
 			fields: [for (index in 0...6) {name: 'scalar$index', type: wordType}]}];
-		program.functions = [new IrFunction("main", builder.arguments, I32, builder.blocks, None, [])];
+		program.functions = [new IrFunction("main", builder.arguments, I32, builder.blocks, Ordinary)];
 		var entry = new IrBuilder(), warm = entry.call("main", [], I32), captures:Array<String> = [];
 		for (n in [8, 1024]) {
 			var path = stem + "-census-" + n + ".json";
@@ -89,7 +89,7 @@ class InlineEnumWordMain {
 		}
 		entry.call("__exit", [warm], Void);
 		entry.returnValue(entry.constVoid());
-		program.functions.push(new IrFunction("entry", entry.arguments, Void, entry.blocks, None, []));
+		program.functions.push(new IrFunction("entry", entry.arguments, Void, entry.blocks, Ordinary));
 		program.natives = IrInlineEnumWordAccess.natives().concat([
 			{name: "start", library: "std", symbol: "gc_census_start", arguments: [I32], result: Void},
 			{name: "stop", library: "std", symbol: "gc_census_stop", arguments: [], result: Void},

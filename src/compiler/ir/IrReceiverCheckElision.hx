@@ -48,6 +48,6 @@ class IrReceiverCheckElision {
 			copy.terminator = block.terminator;
 			blocks.push(copy);
 		}
-		return changed ? fn.derive(blocks) : fn;
+		return changed ? fn.withBlocks(blocks) : fn;
 	}
 }

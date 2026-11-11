@@ -57,8 +57,6 @@ private class FunctionScratch {
 	public var localOptionalPlaces:Map<String, OptionalFieldPlace> = [];
 	public var arrayValuePlaceSerial = 0;
 
-	/** The helpers this function asks for that do not exist yet (`TRequestCall`), in the order it asks. */
-	public final requests:Array<compiler.Provides.HelperRequest<IrType>> = [];
 	public var observableAccessSerial = 0;
 	public var observableConstructorInitialization:Bool;
 
@@ -241,19 +239,24 @@ class IrGenerator {
 
 	public function generateFunction(fn:TypedFunction):IrFunction {
 		try {
-			var cfg = CfgIteratorReplacement.run(generateCfg(fn)), requests = lastRequests,
+			var cfg = CfgIteratorReplacement.run(generateCfg(fn)),
 				built = SsaBuilder.build(cfg);
 			var retention:compiler.ir.IrFunction.IrRetention = fn.isExposed == true ? Expose : fn.isKept == true ? Keep : Reachable;
-			var provides:compiler.Provides<TypeKey> = switch fn.provides {
-				case null, None: None;
+			var kind:compiler.ir.IrFunction.IrFunctionKind = switch fn.role {
+				case UserFunction: Ordinary;
+				case GenericFunction: GenericSpecialization;
+				case LambdaFunction: SourceLambda;
+				case IterationFunction: IterationAdapter;
+				case OtherFunction: GeneratedHelper;
 				// Two source types can lower to one IR type (every Int-like hash key is i32), so the semantic type stays in the row as detail.
-				case Serves(type, operation): Serves(TypeKey.of(lowerType(type)), ProviderOperation.detailed(operation, compiler.semantic.SemanticSignature.type(type)));
+				case ProviderFunction(type, operation):
+					switch lowerType(type) {
+						// The enum equality helpers keep the structured role the tag-storage passes read.
+						case Enum(_) if (operation == ProviderOperation.Equals || operation == ProviderOperation.ReflectEquals): EnumEquality(operation == ProviderOperation.ReflectEquals);
+						case lowered: Provider(TypeKey.of(lowered), ProviderOperation.detailed(operation, compiler.semantic.SemanticSignature.type(type)));
+					}
 			};
-			return fn.isInline == true
-				|| retention != Reachable
-				|| provides != None
-				|| requests.length > 0 ? new IrFunction(built.name, built.arguments, built.result, built.blocks, provides, requests, built.debugBindings, fn.isInline == true,
-					retention) : built;
+			return new IrFunction(built.name, built.arguments, built.result, built.blocks, kind, built.debugBindings, fn.isInline == true, retention);
 		} catch (error:String) {
 			throw 'CFG generation failed for ${fn.name}: $error';
 		}
@@ -263,15 +266,12 @@ class IrGenerator {
 	 * Every function is generated with scratch state of its own (`FunctionScratch`): its IR must not depend on how many functions were
 	 * generated before it, or a function generated again would never equal its earlier IR.
 	 */
-	/** The requests of the function `generateCfg` finished last. */
-	public var lastRequests:Array<compiler.Provides.HelperRequest<IrType>> = [];
 
 	public function generateCfg(fn:TypedFunction):CfgFunction {
 		var outer = scratch;
 		scratch = new FunctionScratch(fn.isConstructor);
 		try {
 			var cfg = generateFunctionCfg(fn);
-			lastRequests = scratch.requests;
 			scratch = outer;
 			return cfg;
 		} catch (error:Dynamic) {
@@ -1815,6 +1815,10 @@ class IrGenerator {
 					case TNullLiteral: builder.constNull(Dyn);
 					default: builder.toDyn(lowerExpression(value, builder, localTypes));
 				}
+			case TEnumDynamicBox(value, enumType):
+				builder.intrinsic(compiler.ir.Ir.IrIntrinsic.EnumDynamicBox(lowerType(enumType)), [lowerExpression(value, builder, localTypes)], Dyn);
+			case TEnumDynamicView(array, enumType):
+				builder.intrinsic(compiler.ir.Ir.IrIntrinsic.EnumDynamicView(lowerType(enumType)), [lowerExpression(array, builder, localTypes)], lowerType(expression.type));
 			case TLocal(name):
 				var type = requireLocalType(localTypes, name, 'Missing typed local "$name"');
 				abiBoundaryCast(builder, builder.load(name, type), lowerType(expression.type));
@@ -2062,10 +2066,6 @@ class IrGenerator {
 			case TCall(name, args):
 				var directBase = args.length > 0 && isCurrentObject(args[0]) && directBaseMethod(name, localTypes);
 				builder.call(name, lowerOperands(args, builder, localTypes, directBase), lowerType(expression.type));
-			case TRequestCall(args, request):
-				// The IR keeps the request with the function, for the pass that answers it (see IrFunction.requests).
-				scratch.requests.push({name: request.name, type: lowerType(request.type), operation: request.operation});
-				builder.call(request.name, lowerOperands(args, builder, localTypes), lowerType(expression.type));
 			case TCNativeCall(name, args): builder.cNativeCall(name, lowerOperands(args, builder, localTypes), lowerType(expression.type));
 			case TCollectionCall(receiver, operation, args):
 				var customMap = switch receiver.type {
@@ -3656,7 +3656,7 @@ class IrGenerator {
 		var elementType = lowerType(element),
 			arrayType:IrType = Array(elementType);
 		if (profile.nativeArrayChecks && RuntimeType.requireArrayName(element) == "ref" && !IrTypeTools.isDynamic(elementType))
-			return builder.safeCast(builder.toDyn(builder.call("__array_alloc_typed_ref", [length, builder.typeValue(elementType)], Array(Dyn))), arrayType);
+			return builder.call(IrArrayFactory.NAME, [length], arrayType);
 		return builder.call(arrayAllocatorName(element), [length], arrayType);
 	}
 

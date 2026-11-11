@@ -46,7 +46,7 @@ class WasmTypeIdPlanMain {
 		builder.typeValue(Array(Obj("ChobQKjKLS")));
 		if (addCollision) builder.typeValue(Array(Obj("CbXKjoemVa")));
 		builder.returnValue(builder.constInt(42));
-		program.functions = [new IrFunction("main", builder.arguments, I32, builder.blocks, None, [])];
+		program.functions = [new IrFunction("main", builder.arguments, I32, builder.blocks, Ordinary)];
 		program.objects = [for (name in ["CbXKjoemVa", "ChobQKjKLS"])
 			{name:name, isValue:false, base:null, interfaces:[], fields:[], methods:[]}];
 		return program;

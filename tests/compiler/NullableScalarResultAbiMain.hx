@@ -57,7 +57,7 @@ class NullableScalarResultAbiMain {
 		}
 		b.call("__exit", [result], Void);
 		b.returnValue(b.constVoid());
-		p.functions.push(new IrFunction("entry", b.arguments, Void, b.blocks, None, []));
+		p.functions.push(new IrFunction("entry", b.arguments, Void, b.blocks, Ordinary));
 		p.entryPoint = target == HashLink ? "entry" : "main";
 		var bytes = target == HashLink
 			? new compiler.backend.hl.HlBackend().compile(p, {target: target, debugNames: true}).bytes

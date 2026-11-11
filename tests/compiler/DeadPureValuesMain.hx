@@ -20,7 +20,7 @@ class DeadPureValuesMain {
 		b.call("effect", [input], I32); // Calls remain observable.
 		b.returnValue(input);
 		var binding:IrDebugBinding = {identity: "debug", name: "debug", value: debug, path: "test.hx", scopeStart: 0, scopeEnd: 1};
-		var fn = new IrFunction("test", b.arguments, I32, b.blocks, None, [], [binding]);
+		var fn = new IrFunction("test", b.arguments, I32, b.blocks, Ordinary, [binding]);
 		var before = IrFunctionStateCodec.encode(fn), result = IrDeadPureValues.run(fn);
 		expect(before.compare(IrFunctionStateCodec.encode(fn)) == 0, "input was mutated");
 		expect(result.blocks[0].instructions.length == 4, "dead chain removed, debug value, divisor, division and call retained");
@@ -34,7 +34,7 @@ class DeadPureValuesMain {
 		b.select(right); var c = b.constInt(41); b.jump(merge);
 		b.select(merge); var chosen = b.phi(I32, [{block: left.id, value: a}, {block: right.id, value: c}]);
 		b.returnValue(b.add(chosen, b.constInt(2)));
-		fn = new IrFunction("main", b.arguments, I32, b.blocks, None, []);
+		fn = new IrFunction("main", b.arguments, I32, b.blocks, Ordinary);
 		var program = new IrProgram("main"); program.functions = [IrDeadPureValues.run(fn)];
 		IrVerifier.verify(program);
 		var interpreter = new IrInterpreter(program);

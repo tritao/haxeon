@@ -51,7 +51,7 @@ class CanvasCommandBuffer {
 
 	public function composite(mode:CompositeMode):Void {
 		header(NativeKitUI.CommandOpcode.SetCompositeMode, 12);
-		word(cast mode);
+		word(NativeEnums.compositeMode(mode).rawValue());
 	}
 
 	public function paint(value:Paint):Void
@@ -115,7 +115,7 @@ class CanvasCommandBuffer {
 		header(NativeKitUI.CommandOpcode.BeginLayer, commandSize,
 			NativeKitUIConstants.NKUI_LAYER_COMMAND_VERSION);
 		float(opacity);
-		word(cast mode);
+		word(NativeEnums.compositeMode(mode).rawValue());
 		if (bounds == null) {
 			float(0.0); float(0.0); float(0.0); float(0.0);
 		} else {
@@ -135,15 +135,13 @@ class CanvasCommandBuffer {
 		var matrix:Array<Float> = [];
 		for (index in 0...20)
 			matrix.push(0.0);
-		var kind = 0;
+		var kind = NativeEnums.effectKind(value.kind);
 		switch value.kind {
 			case EffectKind.Blur:
-				kind = 2;
 				var blur:BlurEffect = cast value;
 				matrix[0] = blur.sigma;
 			case EffectKind.DropShadow:
 				var shadow:DropShadowEffect = cast value;
-				kind = 3;
 				matrix[0] = shadow.sigma;
 				matrix[2] = shadow.offsetX;
 				matrix[3] = shadow.offsetY;
@@ -151,19 +149,17 @@ class CanvasCommandBuffer {
 				matrix[5] = shadow.color.green;
 				matrix[6] = shadow.color.blue;
 				matrix[7] = shadow.color.alpha;
-			case EffectKind.Custom:
-				kind = 4;
+			case EffectKind.Custom: {}
 			case EffectKind.ColorMatrix:
-				kind = 1;
 				var colorMatrix:ColorMatrixEffect = cast value;
 				matrix = colorMatrix.matrix.copy();
-			default:
+			case EffectKind.Brightness | EffectKind.Contrast | EffectKind.Saturate | EffectKind.HueRotate:
 				throw "Effect chain normalization left an unsupported operation";
 		}
-		word(kind);
+		word(kind.rawValue());
 		for (component in matrix)
 			float(component);
-		if (kind == 4) {
+		if (kind == NativeKitUI.NkuiEffectKind.Custom) {
 			var custom:CustomEffect = cast value;
 			word(custom.definition.id);
 			word(custom.components.length);
@@ -190,13 +186,13 @@ class CanvasCommandBuffer {
 
 	function writeMask(value:Mask):Void {
 		if (value == null) {
-			word(0);
+			word(NativeKitUI.NkuiMaskKind.None.rawValue());
 			word(0);
 			for (index in 0...8)
 				float(0.0);
 			return;
 		}
-		word(cast(value.kind, Int));
+		word(NativeEnums.maskKind(value.kind).rawValue());
 		word(value.image == null ? 0 : value.image.nativeHandle().rawValue());
 		for (index in 0...8) {
 			var parameter = 0.0;
@@ -227,8 +223,8 @@ class CanvasCommandBuffer {
 		header(NativeKitUI.CommandOpcode.StrokePath, 28);
 		word(path.nativeHandle().rawValue());
 		float(width);
-		word(cast cap);
-		word(cast join);
+		word(NativeEnums.lineCap(cap).rawValue());
+		word(NativeEnums.lineJoin(join).rawValue());
 		float(miterLimit);
 	}
 
@@ -236,14 +232,14 @@ class CanvasCommandBuffer {
 	@:noCompletion
 	@:allow(DisplayList)
 	@:allow(Canvas)
-	private function submit(list:nkui_display_list):Int
+	private function submit(list:nkui_display_list):NativeKitUI.UiStatus
 		return submitRange(list, 0, length);
 
 	/** Internal range submission bridge. */
 	@:noCompletion
 	@:allow(DisplayList)
 	@:allow(Canvas)
-	private function submitRange(list:nkui_display_list, offset:Int, count:Int):Int {
+	private function submitRange(list:nkui_display_list, offset:Int, count:Int):NativeKitUI.UiStatus {
 		if (offset < 0 || offset > length || count < 0 || count > length - offset)
 			throw "Command range is out of bounds";
 		return NativeKitUI.nkui_display_list_submit_slice(list, bytes, offset, count);
@@ -264,7 +260,7 @@ class CanvasCommandBuffer {
 	function header(opcode:NativeKitUI.CommandOpcode, size:Int,
 		version:Int = NativeKitUIConstants.NKUI_COMMAND_VERSION):Void {
 		require(size);
-		var rawOpcode:Int = cast opcode;
+		var rawOpcode = opcode.rawValue();
 		bytes.set(length, rawOpcode & 255);
 		bytes.set(length + 1, (rawOpcode >> 8) & 255);
 		bytes.set(length + 2, version);

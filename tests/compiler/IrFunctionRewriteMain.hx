@@ -28,7 +28,7 @@ class IrFunctionRewriteMain {
 		b.jump(third);
 		b.select(third);
 		b.returnValue(b.add(one, two));
-		var fn = new IrFunction("sample", b.arguments, I32, b.blocks, None, []);
+		var fn = new IrFunction("sample", b.arguments, I32, b.blocks, Ordinary);
 
 		var unchanged = IrFunctionRewrite.instructions(fn, keep);
 		expect(unchanged == fn, "a rule that replaces nothing must return the same function object");

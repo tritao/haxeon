@@ -5,9 +5,9 @@ import Hashable;
 /** A normalized key/modifier chord used by application commands. */
 struct Shortcut implements Hashable {
 	public final key:Int;
-	public final modifiers:Int;
+	public final modifiers:UiModifier;
 
-	public function new(key:Int, modifiers:Int = 0) {
+	public function new(key:Int, modifiers:UiModifier = UiModifier.empty()) {
 		if (key <= 0)
 			throw "Shortcuts require a positive key";
 		this.key = key;
@@ -15,21 +15,21 @@ struct Shortcut implements Hashable {
 	}
 
 	/** Ignores lock-state bits; command chords are physical modifier chords. */
-	public static function normalizeModifiers(modifiers:Int):Int
+	public static function normalizeModifiers(modifiers:UiModifier):UiModifier
 		return modifiers & (UiModifier.Shift | UiModifier.Control | UiModifier.Alt |
 			UiModifier.Super);
 
-	public function matches(key:Int, modifiers:Int):Bool
+	public function matches(key:Int, modifiers:UiModifier):Bool
 		return this.key == key && this.modifiers == normalizeModifiers(modifiers);
 
 	public function equals(other:Shortcut):Bool
 		return key == other.key && modifiers == other.modifiers;
 
 	public function hash():Int
-		return key * 31 + modifiers;
+		return key * 31 + modifiers.rawValue();
 
 	public function toString():String
-		return 'Shortcut($key, $modifiers)';
+		return 'Shortcut($key, ${modifiers.rawValue()})';
 
 	/** Text for people, such as "Ctrl+Shift+S". */
 	public function label():String {
@@ -50,7 +50,7 @@ struct Shortcut implements Hashable {
 		if (text == null || text.length == 0)
 			return null;
 		var parts = text.toLowerCase().split("+");
-		var modifiers = 0;
+		var modifiers = UiModifier.empty();
 		for (index in 0...parts.length - 1)
 			switch (parts[index]) {
 				case "ctrl": modifiers |= UiModifier.Control;
@@ -68,14 +68,15 @@ struct Shortcut implements Hashable {
 		return key >= 340 && key <= 347;
 
 	function modifierNames(stable:Bool):Array<String> {
+		var modifiers = this.modifiers;
 		var parts:Array<String> = [];
-		if ((modifiers & UiModifier.Control) != 0)
+		if (modifiers.contains(UiModifier.Control))
 			parts.push(stable ? "ctrl" : "Ctrl");
-		if ((modifiers & UiModifier.Shift) != 0)
+		if (modifiers.contains(UiModifier.Shift))
 			parts.push(stable ? "shift" : "Shift");
-		if ((modifiers & UiModifier.Alt) != 0)
+		if (modifiers.contains(UiModifier.Alt))
 			parts.push(stable ? "alt" : "Alt");
-		if ((modifiers & UiModifier.Super) != 0)
+		if (modifiers.contains(UiModifier.Super))
 			parts.push(stable ? "super" : "Super");
 		return parts;
 	}

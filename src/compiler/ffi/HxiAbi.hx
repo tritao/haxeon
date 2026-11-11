@@ -30,6 +30,7 @@ typedef HxiTypeLayout = {size:Int, align:Int}
 /** Resolves target-dependent C types without conflating them with fixed-width types. */
 class HxiAbi {
 	public final target:String;
+	public final interfaceName:Null<String>;
 	public final pointerBits:Int;
 	public final longBits:Int;
 	public final wcharBits:Int;
@@ -40,6 +41,7 @@ class HxiAbi {
 	final declarations:Map<String, HxiDeclaration> = [];
 	final model:Null<HxiInterface>;
 	final classifications:Map<String, HxiAbiValue> = [];
+	final flagMasks:Map<String, haxe.Int64> = [];
 	final voidClassifications:Map<String, HxiAbiValue> = [];
 	var cachedFunctions:Null<Array<HxiFunctionAbi>>;
 
@@ -52,6 +54,7 @@ class HxiAbi {
 
 	function new(model:Null<HxiInterface>, target:String, visibleDeclarations:Null<Map<String, HxiDeclaration>>) {
 		this.model = model;
+		this.interfaceName = model == null ? null : model.name;
 		this.target = target.toLowerCase();
 		var architecture = switch this.target {
 			case "portable-abi64": "portable64";
@@ -137,6 +140,38 @@ class HxiAbi {
 			case Nullable(element) | Const(element): pointerLike(element);
 			case _: false;
 		};
+
+	/** Native enums retain their nominal type while sharing the integer call ABI. */
+	public function isEnumValue(value:HxiAbiValue):Bool
+		return switch value {
+			case EnumerationValue(_, _, _): true;
+			default: false;
+		};
+
+	public function isFlagsValue(value:HxiAbiValue):Bool
+		return switch value {
+			case EnumerationValue(name, _, _): switch declarations.get(name) {
+					case Enumeration(_, _, true, _, _): true;
+					default: false;
+				};
+			default: false;
+		};
+
+	/** The schema is immutable; compute each native flags mask once per ABI. */
+	public function flagsMask(name:String):haxe.Int64 {
+		if (flagMasks.exists(name))
+			return flagMasks.get(name);
+		var mask = haxe.Int64.ofInt(0);
+		switch declarations.get(name) {
+			case Enumeration(_, _, true, values, _):
+				for (value in values)
+					mask = haxe.Int64.or(mask, value.value);
+			default:
+				throw 'Not a native flags declaration "$name"';
+		}
+		flagMasks.set(name, mask);
+		return mask;
+	}
 
 	public function semanticDeclarations():Map<String, HxiDeclaration>
 		return declarations.copy();

@@ -22,10 +22,10 @@ class InterfaceValueDispatchMain {
   var b=new IrBuilder(),receiver=b.argument("reader",Virtual("Derived")),result=b.methodCall(receiver,"read",[],Obj("Value"));
   b.methodCall(receiver,"accept",[result],Void);b.instanceClosure("Base.read",receiver,Function([],Obj("Value")));
   b.instanceClosure("Base.accept",receiver,Function([Obj("Value")],Void));b.returnValue(b.methodCall(receiver,"plain",[],I32));
-  var main=new IrFunction("main",b.arguments,I32,b.blocks, None, []),original=[
-   new IrFunction("Owner.read",read.arguments,Obj("Value"),read.blocks, None, []),
-   new IrFunction("Owner.accept",accept.arguments,Void,accept.blocks, None, []),
-   new IrFunction("Owner.plain",plain.arguments,I32,plain.blocks, None, []),main];
+  var main=new IrFunction("main",b.arguments,I32,b.blocks, Ordinary),original=[
+   new IrFunction("Owner.read",read.arguments,Obj("Value"),read.blocks, Ordinary),
+   new IrFunction("Owner.accept",accept.arguments,Void,accept.blocks, Ordinary),
+   new IrFunction("Owner.plain",plain.arguments,I32,plain.blocks, Ordinary),main];
   var rewritten=IrTypedInterfaceDispatch.rewriteValueCalls(original,[value,owner],interfaces);
   if(rewritten[0]!=original[0] || rewritten[3]==main)throw "Value interface rewrite did not preserve unchanged functions";
   var oldMethods=0,methods=0,calls=0,closures=0;
@@ -59,7 +59,7 @@ class InterfaceValueDispatchMain {
   if(compiler.hl.persistence.HlTypeDefStateCodec.encode(restored).compare(stored)!=0)throw "Private typed entries did not survive persistence";
   var bad=rewritten.copy();
   for(i in 0...bad.length)if(IrTypedInterfaceDispatch.isAdapterEntry(bad[i].name)) {
-   var entry=bad[i];bad[i]=new IrFunction(entry.name,entry.arguments,Bool,entry.blocks, None, []);break;
+   var entry=bad[i];bad[i]=new IrFunction(entry.name,entry.arguments,Bool,entry.blocks, Ordinary);break;
   }
   var invalid=new IrProgram("main");invalid.functions=bad;invalid.objects=p.objects;invalid.interfaces=p.interfaces;
   var badRejected=false;try new compiler.ir.hl.HlTypedInterfaceTables(invalid) catch(error:Dynamic)badRejected=Std.string(error).indexOf("Invalid private typed interface entry")>=0;
@@ -72,7 +72,7 @@ class InterfaceValueDispatchMain {
   var index=-1;for(i in 0...rewritten.length)if(StringTools.startsWith(rewritten[i].name,IrTypedInterfaceDispatch.PREFIX)){index=i;break;}
   if(index<0)throw "Missing dispatcher definition";
   var existing=rewritten[index];
-  rewritten[index]=new IrFunction(existing.name,existing.arguments,Bool,existing.blocks, None, []);
+  rewritten[index]=new IrFunction(existing.name,existing.arguments,Bool,existing.blocks, Ordinary);
   var rejected=false;try IrTypedInterfaceDispatch.generate(rewritten,[value,owner],interfaces) catch(error:Dynamic) {
    rejected=Std.string(error).indexOf("Conflicting typed interface dispatch")>=0;
   }

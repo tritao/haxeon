@@ -44,7 +44,7 @@ class InlineValueLayoutMain {
 			|| lanes.slots[1].bitOffset != 8 || lanes.slots[2].index != 1 || lanes.slots[2].bitWidth != 32
 			|| !lanes.slots[3].isReference || lanes.slots[3].index != 0 || !lanes.slots[4].isReference || lanes.slots[4].index != 1)
 			throw "nested optional leaves must address their own packed scalar and reference slots";
-		var nestedHelpers = new IrValueArraySlotHelpers(Nullable(Obj("Value")), lanes);
+		var nestedHelpers = new IrValueArraySlotHelpers(0, Nullable(Obj("Value")), lanes);
 		var parentCheck = nestedHelpers.checker(["child"], false), childCheck = nestedHelpers.checker(["child"], true);
 		var checkCounts:Map<String, Int> = [];
 		var nestedFunctions = nestedHelpers.functions();
@@ -82,7 +82,7 @@ class InlineValueLayoutMain {
 		var lanePlanProgram = new IrProgram("main"), laneMain = new IrBuilder();
 		laneMain.returnValue(laneMain.constInt(42));
 		lanePlanProgram.objects = [objects.get("Mixed")];
-		lanePlanProgram.functions = [new IrFunction("main", laneMain.arguments, I32, laneMain.blocks, None, [])];
+		lanePlanProgram.functions = [new IrFunction("main", laneMain.arguments, I32, laneMain.blocks, Ordinary)];
 		lanePlanProgram.natives = [{name: "$value-array:test-allocate", library: "haxeon_runtime", symbol: "__value_array_alloc",
 			arguments: [I32, TypeRef, I32, I32, I32, Bool], result: Array(Obj("Mixed"))}];
 		var lanePlan = new compiler.backend.wasm.gc.WasmGcTypePlan(lanePlanProgram),
@@ -116,11 +116,14 @@ class InlineValueLayoutMain {
 		ordinaryPlan.addTo(ordinaryModule);
 		if (ordinaryPlan.valueArrayWrapperTypeIndex >= 0 || !ordinaryModule.typeAt(ordinaryPlan.arrayType(Obj("Mixed"))).finalType)
 			throw "Programs without inline value arrays must retain the ordinary array type plan";
-		var mixedHelpers = new IrValueArraySlotHelpers(Obj("Mixed"), mixed);
+		var mixedHelpers = new IrValueArraySlotHelpers(1, Obj("Mixed"), mixed);
 		if (mixedHelpers.slot(["optional"], true) != 2 || mixedHelpers.slot(["optional"], false, true) != 3
 			|| mixedHelpers.slot(["owner"]) != 5)
 			throw "a lane place must distinguish optional flags, payloads and reference fields";
 		var optionalCheck = mixedHelpers.checker(["optional"], true);
+		if (mixedHelpers.checker(["optional"], true) != optionalCheck
+			|| mixedHelpers.checker(["a.b"], true) == mixedHelpers.checker(["a", "b"], true))
+			throw "Slot check requests must use structural paths";
 		var checkProgram = new IrProgram(optionalCheck);
 		checkProgram.objects = [objects.get("Mixed")];
 		checkProgram.functions = mixedHelpers.functions();
@@ -137,7 +140,7 @@ class InlineValueLayoutMain {
 		accessBuilder.returnValue(restoredValue);
 		var accessProgram = new IrProgram("access");
 		accessProgram.objects = [objects.get("Mixed")];
-		accessProgram.functions = [new IrFunction("access", accessBuilder.arguments, I32, accessBuilder.blocks, None, [])];
+		accessProgram.functions = [new IrFunction("access", accessBuilder.arguments, I32, accessBuilder.blocks, Ordinary)];
 		accessProgram.natives = access.natives();
 		IrVerifier.verify(accessProgram);
 		compiler.ir.hl.HlLower.lower(accessProgram);
@@ -302,7 +305,7 @@ class InlineValueLayoutMain {
 		builder.returnValue(builder.constInt(0));
 		var program = new IrProgram("main");
 		program.objects = lowering.physicalObjects([for (object in objects) object]);
-		program.functions = lowering.rewrite([new IrFunction("main", [], I32, builder.blocks, None, [])]);
+		program.functions = lowering.rewrite([new IrFunction("main", [], I32, builder.blocks, Ordinary)]);
 		IrVerifier.verify(program);
 		if (new IrInterpreter(program).run() != 42) throw "nullable inline field did not retain and clear its value";
 		var referenceBuilder = new IrBuilder(), original = referenceBuilder.newObject("LaneReferenceObject");
@@ -318,7 +321,7 @@ class InlineValueLayoutMain {
 		referenceBuilder.select(different); referenceBuilder.returnValue(referenceBuilder.constInt(0));
 		var referenceProgram = new IrProgram("main");
 		referenceProgram.objects = [{name: "LaneReferenceObject", isValue: false, base: null, interfaces: [], fields: [], methods: []}];
-		referenceProgram.functions = [new IrFunction("main", [], I32, referenceBuilder.blocks, None, [])];
+		referenceProgram.functions = [new IrFunction("main", [], I32, referenceBuilder.blocks, Ordinary)];
 		IrVerifier.verify(referenceProgram);
 		if (new IrInterpreter(referenceProgram).run() != 42) throw "lane reference casts must preserve identity";
 		var hlCode = compiler.ir.hl.HlLower.lower(referenceProgram), casts = 0;
@@ -337,7 +340,7 @@ class InlineValueLayoutMain {
 			firstResult = bridgeMain.callClosure(firstClosure, [], I32), secondResult = bridgeMain.callClosure(secondClosure, [], I32);
 		bridgeMain.returnValue(bridgeMain.add(firstResult, secondResult));
 		var bridgeProgram = new IrProgram("main");
-		bridgeProgram.functions = [new IrFunction("main", [], I32, bridgeMain.blocks, None, []), new IrFunction(bridgeClosureName, [], I32, bridgeBody.blocks, None, [])];
+		bridgeProgram.functions = [new IrFunction("main", [], I32, bridgeMain.blocks, Ordinary), new IrFunction(bridgeClosureName, [], I32, bridgeBody.blocks, Ordinary)];
 		var bridgeBytes = new compiler.backend.wasm.WasmBackend().compile(bridgeProgram,
 			{target: WasmGc, debugNames: true, wasmGcAllocationCount: true}).bytes;
 		// These synthetic native descriptors deliberately exercise layouts unrelated to Mixed.
@@ -401,9 +404,9 @@ class InlineValueLayoutMain {
 		var bridgeAccepts = new IrBuilder(); bridgeAccepts.argument("value", Dyn); bridgeAccepts.returnValue(bridgeAccepts.constBool(true));
 		var allocationProgram = new IrProgram("main");
 		allocationProgram.objects = [objects.get("Mixed"), {name: "AllocationOwner", isValue: false, base: null, interfaces: [], fields: [], methods: []}];
-		allocationProgram.functions = [new IrFunction("main", [], I32, allocationBuilder.blocks, None, []),
-			new IrFunction(readName, bridgeRead.arguments, Dyn, bridgeRead.blocks, None, []), new IrFunction(writeName, bridgeWrite.arguments, Void, bridgeWrite.blocks, None, []),
-			new IrFunction(acceptsName, bridgeAccepts.arguments, Bool, bridgeAccepts.blocks, None, [])];
+		allocationProgram.functions = [new IrFunction("main", [], I32, allocationBuilder.blocks, Ordinary),
+			new IrFunction(readName, bridgeRead.arguments, Dyn, bridgeRead.blocks, Ordinary), new IrFunction(writeName, bridgeWrite.arguments, Void, bridgeWrite.blocks, Ordinary),
+			new IrFunction(acceptsName, bridgeAccepts.arguments, Bool, bridgeAccepts.blocks, Ordinary)];
 		allocationProgram.natives = [{name: "$value-array:test-allocate", library: "haxeon_runtime", symbol: "__value_array_alloc",
 			arguments: [I32, TypeRef, I32, I32, I32, Bool], result: allocationType},
 			{name: "$value-array:test-retype", library: "haxeon_runtime", symbol: "__value_array_retype",
@@ -450,8 +453,8 @@ class InlineValueLayoutMain {
 		forwardBuilder.select(forwardSuccess); forwardBuilder.returnValue(forwardBuilder.constInt(1));
 		forwardBuilder.select(forwardFailure); forwardBuilder.returnValue(forwardBuilder.constInt(0));
 		var forwardProgram = new IrProgram("main"); forwardProgram.objects = allocationProgram.objects;
-		forwardProgram.functions = [new IrFunction("main", [], I32, forwardBuilder.blocks, None, []), new IrFunction(readName, bridgeRead.arguments, Dyn, bridgeRead.blocks, None, []),
-			new IrFunction(writeName, bridgeWrite.arguments, Void, bridgeWrite.blocks, None, []), new IrFunction(acceptsName, bridgeAccepts.arguments, Bool, bridgeAccepts.blocks, None, [])];
+		forwardProgram.functions = [new IrFunction("main", [], I32, forwardBuilder.blocks, Ordinary), new IrFunction(readName, bridgeRead.arguments, Dyn, bridgeRead.blocks, Ordinary),
+			new IrFunction(writeName, bridgeWrite.arguments, Void, bridgeWrite.blocks, Ordinary), new IrFunction(acceptsName, bridgeAccepts.arguments, Bool, bridgeAccepts.blocks, Ordinary)];
 		forwardProgram.natives = allocationProgram.natives.concat([
 			{name:"__array_alloc_ref", library:"haxeon_runtime", symbol:"__array_alloc_ref", arguments:[I32], result:Array(Dyn)},
 			{name:"$value-array:test-forward", library:"haxeon_runtime", symbol:"__value_array_retype", arguments:[Array(Dyn),TypeRef,I32,I32,I32,Bool,readClosureType,writeClosureType,acceptsClosureType], result:allocationType}]);
@@ -474,7 +477,7 @@ class InlineValueLayoutMain {
 		lazyBuilder.select(lazyFailure); lazyBuilder.returnValue(lazyBuilder.constInt(0));
 		var lazyProgram = new IrProgram("main");
 		lazyProgram.objects = allocationProgram.objects;
-		lazyProgram.functions = [new IrFunction("main", [], I32, lazyBuilder.blocks, None, [])];
+		lazyProgram.functions = [new IrFunction("main", [], I32, lazyBuilder.blocks, Ordinary)];
 		lazyProgram.natives = allocationProgram.natives;
 		var lazyBytes = new compiler.backend.wasm.WasmBackend().compile(lazyProgram,
 			{target: WasmGc, debugNames: true, wasmGcAllocationCount: true}).bytes;
@@ -624,7 +627,7 @@ class InlineValueLayoutMain {
 		scalarBuilder.returnValue(scalarBuilder.constInt(1));
 		scalarBuilder.select(scalarFailure); scalarBuilder.returnValue(scalarBuilder.constInt(0));
 		var scalarProgram = new IrProgram("main"); scalarProgram.objects = allocationProgram.objects;
-		scalarProgram.functions = [new IrFunction("main", [], I32, scalarBuilder.blocks, None, [])];
+		scalarProgram.functions = [new IrFunction("main", [], I32, scalarBuilder.blocks, Ordinary)];
 		scalarProgram.natives = allocationProgram.natives.concat([
 			{name:"__value_array_write_i32", library:"haxeon_runtime", symbol:"__value_array_write_i32", arguments:[allocationType,I32,I32,I32,I32], result:Void},
 			{name:"__value_array_read_i32", library:"haxeon_runtime", symbol:"__value_array_read_i32", arguments:[allocationType,I32,I32,I32,Bool], result:I32},
@@ -647,7 +650,7 @@ class InlineValueLayoutMain {
 			invalidBuilder.constInt(32), invalidBuilder.constBool(true)], I32);
 		invalidBuilder.returnValue(invalidRead);
 		var invalidProgram = new IrProgram("main"); invalidProgram.objects = scalarProgram.objects; invalidProgram.natives = scalarProgram.natives;
-		invalidProgram.functions = [new IrFunction("main", [], I32, invalidBuilder.blocks, None, [])];
+		invalidProgram.functions = [new IrFunction("main", [], I32, invalidBuilder.blocks, Ordinary)];
 		var invalidBytes = new compiler.backend.wasm.WasmBackend().compile(invalidProgram, {target: WasmGc, debugNames: true}).bytes;
 		var directory = Sys.getEnv("TMPDIR");
 		if (directory == null || directory.length == 0) directory = ".";
@@ -707,7 +710,7 @@ class InlineValueLayoutMain {
 		invalidBuilder.call(IrValueLaneReference.PACK, [invalidBuilder.constInt(1)], IrValueLaneReference.type());
 		invalidBuilder.returnValue(invalidBuilder.constInt(0));
 		var invalidProgram = new IrProgram("main");
-		invalidProgram.functions = [new IrFunction("main", [], I32, invalidBuilder.blocks, None, [])];
+		invalidProgram.functions = [new IrFunction("main", [], I32, invalidBuilder.blocks, Ordinary)];
 		var rejected = false;
 		try IrVerifier.verify(invalidProgram) catch (_:Dynamic) rejected = true;
 		if (!rejected) throw "lane reference casts must reject scalar values";

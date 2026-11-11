@@ -399,7 +399,7 @@ class HlModuleAssembler {
 		if (returned == null)
 			return null;
 		builder.returnValue(returned);
-		return new IrFunction(name, builder.arguments, old.result, builder.blocks, None, [], null, false, old.retention);
+		return new IrFunction(name, builder.arguments, old.result, builder.blocks, Ordinary, null, false, old.retention);
 	}
 
 	/** The source name of a function's argument: IR names locals `$l<number>:<name>`. */
@@ -608,7 +608,7 @@ class HlModuleAssembler {
 	 */
 	function reserveProgramTypes(program:IrProgram):Void {
 		for (enumDecl in program.enums)
-			symbols.reserveEnum(enumDecl.name);
+			symbols.reserveEnum(enumDecl);
 		for (interfaceDecl in program.interfaces)
 			symbols.reserveInterface(interfaceDecl.name);
 		for (object in program.objects)

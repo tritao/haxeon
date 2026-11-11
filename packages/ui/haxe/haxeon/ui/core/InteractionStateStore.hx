@@ -1,11 +1,13 @@
 package haxeon.ui.core;
 
+import haxeon.ui.style.StyleState;
+
 /** Persistent generic interaction flags, separate from widget-owned values. */
 class InteractionStateStore {
-	final values:Map<Int, Int>;
-	final pending:Map<Int, Int> = [];
+	final values:Map<Int, StyleState>;
+	final pending:Map<Int, StyleState> = [];
 	/** Borrowed until the next state change or acknowledge; reused by every caller in one input transaction. */
-	final changeScratch:Array<{id:Int, before:Int, after:Int}> = [];
+	final changeScratch:Array<{id:Int, before:StyleState, after:StyleState}> = [];
 	var changesRevision:Int = -1;
 	public var revision(default, null):Int;
 
@@ -14,10 +16,10 @@ class InteractionStateStore {
 		revision = 0;
 	}
 
-	public function get(id:WidgetId):Int
-		return id == null || !values.exists(id.value) ? 0 : values.get(id.value);
+	public function get(id:WidgetId):StyleState
+		return id == null || !values.exists(id.value) ? StyleState.empty() : values.get(id.value);
 
-	public function set(id:WidgetId, value:Int):Void {
+	public function set(id:WidgetId, value:StyleState):Void {
 		if (id == null)
 			throw "Interaction state requires a widget ID";
 		var previous = get(id);
@@ -29,13 +31,14 @@ class InteractionStateStore {
 	}
 
 	/** Net state changes since the last submitted frame, bounded by touched widget IDs. */
-	public function changes():Array<{id:Int, before:Int, after:Int}> {
+	public function changes():Array<{id:Int, before:StyleState, after:StyleState}> {
 		if (changesRevision == revision)
 			return changeScratch;
 		var count = 0;
 		if (pending.size() != 0)
 			for (id in pending.keys()) {
-				var before:Int = cast pending.get(id), after:Int = cast values.get(id);
+				if (!values.exists(id)) throw "Pending interaction change has no current state";
+				var after:StyleState = values.get(id), before:StyleState = pending.get(id);
 				if (before == after) continue;
 				if (count == changeScratch.length)
 					changeScratch.push({id:id, before:before, after:after});

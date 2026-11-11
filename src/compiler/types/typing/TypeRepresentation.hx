@@ -53,6 +53,11 @@ typedef GenericCallRepresentationResult = {
 
 typedef GenericArgumentTypeResolver = (AstArgument, Null<Map<String, CompilerType>>) -> CompilerType;
 
+typedef ScalarMapRecordPair = {
+	final semantic:Array<compiler.types.Type.AnonymousField>;
+	final physical:Array<compiler.types.Type.AnonymousField>;
+};
+
 /**
  * Owns the boundary between source-level types and emitted representations.
  *
@@ -106,7 +111,7 @@ class TypeRepresentation {
 		return adaptArguments(arguments, [
 			for (representation in resolveMethodArguments(receiver, owner, method))
 				representation.physical
-		]);
+		], receiver);
 	}
 
 	/** Adapt constructor arguments, including constructors without a declaration. */
@@ -529,12 +534,93 @@ class TypeRepresentation {
 	}
 
 	/** Apply the ABI cast required to cross from a physical to semantic type. */
-	public function boundaryCast(value:TypedExpression, target:CompilerType):TypedExpression {
+	public function boundaryCast(value:TypedExpression, target:CompilerType, ?owner:CompilerType):TypedExpression {
 		if (TypeRelations.equals(value.type, target))
 			return value;
+		rejectMapStorageChange(value, target, owner);
 		if (ConversionResolver.functionSignaturesDiffer(value.type, target))
 			return conversions.adaptFunction(value, target, value.span);
 		return new TypedExpression(TAbiCast(value), target, value.span, value.stableFlowValue);
+	}
+
+	/** a2 removes this diagnostic when erased map ABI crossings retain their storage kind. */
+	function rejectMapStorageChange(value:TypedExpression, target:CompilerType, owner:Null<CompilerType>):Void {
+		if (isNullMapValue(value)) return;
+		if (hasMapStorageChange(mapBoundaryType(value.type), mapBoundaryType(target), [])) {
+			var context = owner == null ? "Generic map boundary" : 'Type "${SemanticSignature.display(owner)}"';
+			throw new CompileError(new Diagnostic("E1009",
+				'$context: scalar map values in unspecialized generic owners are not supported yet at a storage-changing boundary (${SemanticSignature.display(value.type)} to ${SemanticSignature.display(target)})', value.span));
+		}
+	}
+
+	function mapStorageName(key:CompilerType, value:CompilerType):Null<String> {
+		var name = session.mapName(key, value);
+		return name == RuntimeType.SPECIALIZED_MAP ? ownerAliases.get(SemanticSignature.type(TMap(key, value))) : name;
+	}
+
+	static function mapBoundaryType(type:CompilerType):CompilerType
+		return switch type {
+			case TNullable(value), TAbstract(_, _, value): mapBoundaryType(value);
+			default: type;
+		};
+
+	static function isNullMapValue(value:TypedExpression):Bool
+		return switch value.expression {
+			case TNullLiteral: true;
+			case TAbiCast(inner): isNullMapValue(inner);
+			default: false;
+		};
+
+	function hasMapStorageChange(actual:CompilerType, physical:CompilerType,
+			seen:Array<ScalarMapRecordPair>):Bool {
+		return switch actual {
+			case TAbstract(_, _, representation):
+				hasMapStorageChange(representation, switch physical { case TAbstract(_, _, value): value; default: physical; }, seen);
+			case TMap(key, value): switch physical {
+				case TMap(erasedKey, erasedValue):
+					var storage = mapStorageName(key, value), erasedStorage = mapStorageName(erasedKey, erasedValue);
+					(storage != null && erasedStorage != null && storage != erasedStorage)
+						|| hasMapStorageChange(key, erasedKey, seen) || hasMapStorageChange(value, erasedValue, seen);
+				default: false;
+			};
+			case TNullable(value), TArray(value), TIterator(value): switch physical {
+				case TNullable(erasedValue), TArray(erasedValue), TIterator(erasedValue): hasMapStorageChange(value, erasedValue, seen);
+				default: false;
+			};
+			case TInstance(_, _, values): switch physical {
+				case TInstance(_, _, erasedValues): scalarMapArguments(values, erasedValues, seen);
+				default: false;
+			};
+			case TFunction(values, result): switch physical {
+				case TFunction(erasedValues, erasedResult): scalarMapArguments(values, erasedValues, seen) || hasMapStorageChange(result, erasedResult, seen);
+				default: false;
+			};
+			case TKeyPath(root, value, _): switch physical {
+				case TKeyPath(erasedRoot, erasedValue, _): hasMapStorageChange(root, erasedRoot, seen) || hasMapStorageChange(value, erasedValue, seen);
+				default: false;
+			};
+			case TAnonymous(_, fields): switch physical {
+				case TAnonymous(_, erasedFields) if (fields.length == erasedFields.length):
+					var active = false;
+					for (pair in seen) if (pair.semantic == fields && pair.physical == erasedFields) active = true;
+					if (active) false else {
+						seen.push({semantic: fields, physical: erasedFields});
+						var found = false;
+						for (index in 0...fields.length) if (hasMapStorageChange(fields[index].type, erasedFields[index].type, seen)) found = true;
+						seen.pop();
+						found;
+					}
+				default: false;
+			};
+			default: false;
+		};
+	}
+
+	function scalarMapArguments(actual:Array<CompilerType>, physical:Array<CompilerType>,
+			seen:Array<ScalarMapRecordPair>):Bool {
+		if (actual.length != physical.length) return false;
+		for (index in 0...actual.length) if (hasMapStorageChange(actual[index], physical[index], seen)) return true;
+		return false;
 	}
 
 	/** Resolve a class/interface field with both semantic and physical types. */
@@ -574,10 +660,10 @@ class TypeRepresentation {
 			default: false;
 		};
 
-	function adaptArguments(arguments:Array<TypedExpression>, expected:Array<CompilerType>):Array<TypedExpression> {
+	function adaptArguments(arguments:Array<TypedExpression>, expected:Array<CompilerType>, ?owner:CompilerType):Array<TypedExpression> {
 		return [
 			for (index in 0...arguments.length)
-				boundaryCast(arguments[index], expected[index])
+				boundaryCast(arguments[index], expected[index], owner)
 		];
 	}
 

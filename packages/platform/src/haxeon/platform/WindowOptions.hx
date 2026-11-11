@@ -10,7 +10,7 @@ class WindowOptions {
 	public var width:Int;
 	public var height:Int;
 	public var title:Null<String> = null;
-	public var flags:WindowFlags = cast 0;
+	public var flags:WindowFlags = WindowFlags.empty();
 	public var kind:WindowKind = cast 0;
 	public var owner:Null<Window> = null;
 

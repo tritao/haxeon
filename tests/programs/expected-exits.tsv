@@ -544,3 +544,10 @@ helper-ownership-enum-equality	42
 helper-ownership-struct-equality	42
 helper-ownership-wire-codec	42
 helper-ownership-generic-and-custom	42
+enum-tag-storage	42
+raw-representable	42
+flags	42
+enum-tag-interface-box	42
+generic-map-read-view	42
+abstract-int-float	42
+diff-stored-property	42

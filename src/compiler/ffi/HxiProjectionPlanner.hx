@@ -95,7 +95,7 @@ class HxiProjectionPlanner {
 					var signature = signatures.get(name);
 					if (signature == null)
 						throw 'Missing native signature for HXI function "$name"';
-					functions.push(projectFunction(source, name, parameters, result, signature, profile));
+					functions.push(projectFunction(source, name, parameters, result, signature, profile, abi));
 				case Alias(_, _, _) | Constant(_, _, _):
 			}
 		}
@@ -103,7 +103,7 @@ class HxiProjectionPlanner {
 	}
 
 	static function projectFunction(source:HxiInterface, nativeName:String, parameters:Array<HxiParameter>, result:HxiType, signature:HxiFunctionAbi,
-			profile:HxiProjectionProfile):ProjectedFunction {
+			profile:HxiProjectionProfile, abi:HxiAbi):ProjectedFunction {
 		var publicName = HxiHaxeEmitter.projectedFunctionName(nativeName, profile),
 			derivedCountParameters:Map<String, Bool> = [],
 			outputs:Array<ProjectedOutputResult> = [];
@@ -186,7 +186,8 @@ class HxiProjectionPlanner {
 				|| spanResult
 				|| ownedResult != null
 				|| aggregateResult != null
-				|| callbackResult ? '__hxi_raw_$nativeName' : publicName,
+				|| callbackResult
+				|| abi.isEnumValue(signature.result) ? '__hxi_raw_$nativeName' : publicName,
 			policy = HxiHaxeEmitter.resultErrorProjection(result, profile),
 			checked:Null<ProjectedCheckedFunction> = null,
 			byteSlice:Null<String> = null;

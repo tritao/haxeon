@@ -28,7 +28,7 @@ class InputEventDecoder {
 			var text=EventBytes.readUtf8Slice(c.data,v.get_text_offset(),v.get_text_length(),48);
 			var affinity = v.get_selection_affinity();
 			var history = v.get_history_kind();
-			if (affinity > 4 || history > 6)
+			if (affinity > 4)
 				throw BindingError.invalidData("InputEventDecoder.decode", "NativeKit text edit payload has invalid metadata");
 			TextEdit(c.source,new PlatformTextEdit(v.get_action(),text,v.get_replace_start(),v.get_replace_end(),v.get_selection_start(),v.get_selection_end(),v.get_composition_start(),v.get_composition_end(),affinity,history));
 		case EventKind.AccessibilityAction:

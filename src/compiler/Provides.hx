@@ -13,6 +13,8 @@ enum abstract ProviderOperation(String) to String {
 	var ViewDynamic = "view-dynamic";
 	var DynamicTest = "dynamic-test";
 	var DynamicUnbox = "dynamic-unbox";
+	var EnumTagBox = "enum-tag-box";
+	var EnumTagUnbox = "enum-tag-unbox";
 	var DynamicDispatch = "dynamic-dispatch";
 	var KeyPath = "keypath";
 	var TypedInterfaceEntry = "typed-interface-entry";
@@ -37,6 +39,8 @@ enum abstract ProviderOperation(String) to String {
 	var DynamicStructure = "dynamic-structure";
 	var StaticInitializer = "static-initializer";
 	var ReceiverCheck = "receiver-check";
+	var RawRepresentable = "raw-representable";
+	var Flags = "flags";
 
 	/**
 	 * Whether the helpers of this operation are generated on demand from a request in one module and called from others, so a module
@@ -44,7 +48,7 @@ enum abstract ProviderOperation(String) to String {
 	 */
 	public static function sharedAcrossModules(operation:String):Bool {
 		var colon = operation.indexOf(":"), base = colon < 0 ? operation : operation.substr(0, colon);
-		return base == Equals || base == ReflectEquals || base == CustomMethod || base == Hash || base == Wire || base == Json;
+		return base == Equals || base == ReflectEquals || base == CustomMethod || base == Hash || base == Wire || base == Json || base == RawRepresentable || base == Flags;
 	}
 
 	/** An operation with a further word that tells apart the helpers of one family for a type: `custom-method:hash`, `wire:value-encode`. */
@@ -53,25 +57,8 @@ enum abstract ProviderOperation(String) to String {
 }
 
 /**
- * A call to a helper that does not exist yet: the pass that answers requests makes it. The request is data the pass reads, so it no
- * longer finds the helpers it must make by the shape of the name of a call. `K` names the subject as in `Provides`: the source type on a
- * typed expression, the IR type on a function.
- */
-typedef HelperRequest<K> = {
-	/** The callee the call goes to; a symbol, not parsed by anyone. */
-	final name:String;
-
-	final type:K;
-	final operation:ProviderOperation;
-}
-
-/**
- * Whether a function is a helper that serves an operation on a type, and which. Every `$`-named function in the final IR is one of
- * these, a clone or lambda or adapter of another function (`None`, checked against `IrProviders.isDerivedName`), or the check fails:
- * see `IrProviders.check`.
- *
- * `K` is how the type is named. A typing-time generator has the source type (`Provides<CompilerType>`, on `TypedFunction`); the IR
- * names it by `compiler.ir.TypeKey` (`Provides<TypeKey>`, on `IrFunction`), and `IrGenerator` converts when it lowers the function.
+ * Whether a function is a helper that serves an operation on a type, and which: the view of `IrFunction.kind` that the provider table
+ * (`IrProviders`) reads. `K` is how the type is named; on a function it is `compiler.ir.TypeKey`.
  */
 enum Provides<K> {
 	/** Not a helper for a type: a user function, a lambda, a clone of another function, an adapter, a marker. */

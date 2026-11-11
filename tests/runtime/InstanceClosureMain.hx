@@ -40,13 +40,13 @@ class InstanceClosureMain {
 			fields: [{name: "value", type: IrType.I32}],
 			methods: []
 		});
-		program.functions.push(new IrFunction("Env.invoke", methodBuilder.arguments, IrType.I32, methodBuilder.blocks, None, []));
-		program.functions.push(new IrFunction("main", [], IrType.I32, mainBuilder.blocks, None, []));
+		program.functions.push(new IrFunction("Env.invoke", methodBuilder.arguments, IrType.I32, methodBuilder.blocks, Ordinary));
+		program.functions.push(new IrFunction("main", [], IrType.I32, mainBuilder.blocks, Ordinary));
 		var entryBuilder = new IrBuilder(),
 			mainResult = entryBuilder.call("main", [], IrType.I32),
 			exited = entryBuilder.call("__exit", [mainResult], IrType.Void);
 		entryBuilder.returnValue(exited);
-		program.functions.push(new IrFunction("__entry", [], IrType.Void, entryBuilder.blocks, None, []));
+		program.functions.push(new IrFunction("__entry", [], IrType.Void, entryBuilder.blocks, Ordinary));
 		File.saveBytes(Sys.args()[0], HlWriter.encode(HlLower.lower(program)).flatten());
 	}
 }

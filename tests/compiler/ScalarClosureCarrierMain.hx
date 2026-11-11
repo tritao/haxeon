@@ -18,37 +18,37 @@ class ScalarClosureCarrierMain {
   var carrier=IrValueLaneReference.type(),name=IrScalarArguments.PREFIX+"callback",signature:IrType=Function([carrier],I32);
   var callee=new IrBuilder();callee.argument("value",carrier);callee.returnValue(callee.constInt(42));
   var b=new IrBuilder(),fn=b.staticClosure(name,signature);b.returnValue(b.callClosure(fn,[b.constNull(carrier)],I32));
-  var p=new IrProgram("main");p.functions=[new IrFunction(name,callee.arguments,I32,callee.blocks, None, []),new IrFunction("main",b.arguments,I32,b.blocks, None, [])];
+  var p=new IrProgram("main");p.functions=[new IrFunction(name,callee.arguments,I32,callee.blocks, Ordinary),new IrFunction("main",b.arguments,I32,b.blocks, Ordinary)];
   compiler.ir.IrVerifier.verify(p);Sys.println("PASS: exact carrier argument through verified scalar closure");
   for(stack in [false,true])reject(stack?"native borrowing scalar prefix with stack reference":"native borrowing scalar prefix with carrier",function(p){
    var type:IrType=stack?compiler.ir.IrHlScalarRef.type(I32):carrier,signature:IrType=Function([type],I32);
    p.natives=[{name:name,library:"test",symbol:"not_verified",arguments:[type],result:I32}];
    var b=new IrBuilder();b.staticClosure(name,signature);b.returnValue(b.constInt(42));
-   p.functions=[new IrFunction("main",b.arguments,I32,b.blocks, None, [])];
+   p.functions=[new IrFunction("main",b.arguments,I32,b.blocks, Ordinary)];
   },"A scalar closure must target a verified scalar function");
   reject("native prefix cannot consume a scalar stack reference directly",function(p){
    var type=compiler.ir.IrHlScalarRef.type(I32);p.natives=[{name:name,library:"test",symbol:"not_verified",arguments:[type],result:Void}];
    var b=new IrBuilder(),reference=b.call(compiler.ir.IrHlScalarRef.ADDRESS,[b.constInt(42)],type);b.call(name,[reference],Void);b.returnValue(b.constInt(42));
-   p.functions=[new IrFunction("main",b.arguments,I32,b.blocks, None, [])];
+   p.functions=[new IrFunction("main",b.arguments,I32,b.blocks, Ordinary)];
   },"A scalar stack reference cannot escape its call");
   reject("carrier callable Dynamic escape",function(p){
    var c=new IrBuilder();c.argument("value",carrier);c.returnValue(c.constInt(42));
    var b=new IrBuilder();b.toDyn(b.staticClosure(name,signature));b.returnValue(b.constInt(42));
-   p.functions=[new IrFunction(name,c.arguments,I32,c.blocks, None, []),new IrFunction("main",b.arguments,I32,b.blocks, None, [])];
+   p.functions=[new IrFunction(name,c.arguments,I32,c.blocks, Ordinary),new IrFunction("main",b.arguments,I32,b.blocks, Ordinary)];
   },"requires a logical Dynamic adapter");
   reject("carrier callable unchecked cast",function(p){
    var b=new IrBuilder();b.safeCast(b.constNull(Dyn),signature);b.returnValue(b.constInt(42));
-   p.functions=[new IrFunction("main",b.arguments,I32,b.blocks, None, [])];
+   p.functions=[new IrFunction("main",b.arguments,I32,b.blocks, Ordinary)];
   },"requires a logical cast adapter");
   reject("one matching position cannot hide a mismatched repeated argument",function(p){
    var c=new IrBuilder();c.argument("value",carrier);c.argument("other",Dyn);c.returnValue(c.constInt(42));
    var b=new IrBuilder(),fn=b.staticClosure(name,Function([carrier,Dyn],I32)),value=b.constNull(carrier);
    b.returnValue(b.callClosure(fn,[value,value],I32));
-   p.functions=[new IrFunction(name,c.arguments,I32,c.blocks, None, []),new IrFunction("main",b.arguments,I32,b.blocks, None, [])];
+   p.functions=[new IrFunction(name,c.arguments,I32,c.blocks, Ordinary),new IrFunction("main",b.arguments,I32,b.blocks, Ordinary)];
   },"Wrong IR closure argument type");
   reject("ordinary callable cannot consume a carrier",function(p){
    var b=new IrBuilder(),fn=b.argument("fn",Function([Dyn],I32));b.returnValue(b.callClosure(fn,[b.constNull(carrier)],I32));
-   p.functions=[new IrFunction("main",b.arguments,I32,b.blocks, None, [])];
+   p.functions=[new IrFunction("main",b.arguments,I32,b.blocks, Ordinary)];
   },"A value lane reference cannot escape its operation");
  }
  static function main():Void {checkVerifier();runTargets();}
@@ -58,17 +58,17 @@ class ScalarClosureCarrierMain {
   var p=new IrProgram("main");p.objects=[owner];p.staticFields=[{name:"owner",type:Obj(owner.name)},{name:"callback",type:signature}];
   var call=new IrBuilder(),tag=call.argument("tag",I32),reference=call.argument("reference",carrier),
    restored=call.call(IrValueLaneReference.UNPACK,[reference],Obj(owner.name));call.returnValue(call.add(tag,call.fieldGet(restored,"number",I32)));
-  p.functions=[new IrFunction(name,call.arguments,I32,call.blocks, None, [])];
+  p.functions=[new IrFunction(name,call.arguments,I32,call.blocks, Ordinary)];
   var prepare=new IrBuilder(),value=prepare.newObject(owner.name);prepare.fieldSet(value,"number",prepare.constInt(40));
   prepare.emit(GlobalSet("owner",value));prepare.emit(GlobalSet("callback",prepare.staticClosure(name,signature)));prepare.returnValue(prepare.constVoid());
-  p.functions.push(new IrFunction("prepare",prepare.arguments,Void,prepare.blocks, None, [],null,false,Expose));
+  p.functions.push(new IrFunction("prepare",prepare.arguments,Void,prepare.blocks, Ordinary,null,false,Expose));
   var b=new IrBuilder(),count=b.argument("count",I32),initial=b.currentBlock().id,start=b.constInt(0),header=b.createBlock(),body=b.createBlock(),done=b.createBlock(),
    indices:Array<IrPhiInput>=[{block:initial,value:start}],sums:Array<IrPhiInput>=[{block:initial,value:start}];
   b.jump(header);b.select(header);var index=b.phi(I32,indices),sum=b.phi(I32,sums);b.branch(b.less(index,count),body,done);b.select(body);
   var fn=global(b,"callback",signature),payload=b.call(IrValueLaneReference.PACK,[global(b,"owner",Obj(owner.name))],carrier),result=b.callClosure(fn,[b.constInt(2),payload],I32);
   indices.push({block:b.currentBlock().id,value:b.add(index,b.constInt(1))});sums.push({block:b.currentBlock().id,value:b.add(sum,result)});b.jump(header);b.select(done);b.returnValue(sum);
-  p.functions.push(new IrFunction("perform",b.arguments,I32,b.blocks, None, [],null,false,Expose));
-  var main=new IrBuilder();main.returnValue(main.constInt(42));p.functions.push(new IrFunction("main",main.arguments,I32,main.blocks, None, []));
+  p.functions.push(new IrFunction("perform",b.arguments,I32,b.blocks, Ordinary,null,false,Expose));
+  var main=new IrBuilder();main.returnValue(main.constInt(42));p.functions.push(new IrFunction("main",main.arguments,I32,main.blocks, Ordinary));
   compiler.ir.IrInliner.run(p,new compiler.ir.IrInliner.IrInlineCache(), compiler.ir.TargetProfile.wasm,inlineEnabled);compiler.ir.IrVerifier.verify(p);
   var root=Sys.getEnv("TMPDIR");if(root==null)root="/tmp";var stem=root+"/scalar-carrier-closure-"+Std.random(0x7fffffff),captures:Array<String>=[];
   if(target==HashLink){
@@ -85,7 +85,7 @@ class ScalarClosureCarrierMain {
     var next=entry.createBlock();entry.branch(entry.equal(value,entry.constInt(42*n)),next,bad);entry.select(next);
    }
    entry.call("exit",[entry.constInt(42)],Void);entry.returnValue(entry.constVoid());entry.select(bad);entry.call("exit",[entry.constInt(1)],Void);entry.returnValue(entry.constVoid());
-   p.functions.push(new IrFunction("entry",entry.arguments,Void,entry.blocks, None, []));p.entryPoint="entry";
+   p.functions.push(new IrFunction("entry",entry.arguments,Void,entry.blocks, Ordinary));p.entryPoint="entry";
   }
   var backendTarget:compiler.backend.Backend.BackendTarget=target==HashLink?HashLink:target==Wasm32?Wasm32:WasmGc,
    bytes=target==HashLink?new compiler.backend.hl.HlBackend().compile(p,{target:backendTarget,debugNames:true}).bytes:

@@ -48,9 +48,6 @@ typedef EnumInterfaceAdapterRequest = {
 class TypingSession {
 	public var signatures:Map<String, AstFunction> = [];
 
-	/** The enum abstract a bare value name being typed right now must belong to; see `EnumAbstractHints`. */
-	public var abstractHint:Null<String>;
-
 	public var methodInfo:Map<String, SemanticMethodInfo> = [];
 	public final externals:Map<String, {arguments:Array<CompilerType>, result:CompilerType}>;
 	public var classDecls:Map<String, compiler.syntax.Ast.AstClass> = [];
@@ -121,10 +118,16 @@ class TypingSession {
 
 	/** Hash implementations generated from declared `Hashable` conformance. */
 	public final hashRequests:Map<String, EqualityRequest> = [];
+	public final flagsMasks:Map<String, Int> = [];
+	public final flagsRequests:Map<String, {owner:String, method:String, origin:String, span:SourceSpan}> = [];
+	public final rawRepresentableRequests:Map<String, {owner:String, method:String, origin:String, span:SourceSpan}> = [];
 
 	public final cNativeFunctions:Map<String, Bool> = [];
 	public final inlineConstants:Map<String, ResolvedInlineConstant> = [];
 	public final inlineConstantsInProgress:Map<String, Bool> = [];
+	public final enumAbstractConstants:Map<String, compiler.types.TypedAst.TypedExpression> = [];
+	public final enumAbstractConstantsInProgress:Map<String, Bool> = [];
+	public var enumAbstractConstantOwner:Null<String> = null;
 
 	/** Resolved field sequences used by path operations and descriptor generation. */
 	public final keyPathDefinitions:Map<String, KeyPathTyping.KeyPathDefinition> = [];
@@ -147,6 +150,12 @@ class TypingSession {
 
 	inline function get_currentContext():TypingContext
 		return bodyContexts[bodyContexts.length - 1];
+
+	/** Helpers requested while checking defaults belong to the callee's real function, not its pseudo-body. */
+	public function generatedFunctionOrigin():String {
+		var name = currentContext.name;
+		return StringTools.startsWith(name, "$default:") ? name.substr("$default:".length) : name;
+	}
 
 	public function new(externals:Null<Map<String, {arguments:Array<CompilerType>, result:CompilerType}>>,
 			specializations:Null<GenericSpecializationRegistry>, ?nativeAbiTarget:String) {
@@ -173,6 +182,9 @@ class TypingSession {
 	}
 
 	public function bindSemantic(semantic:SemanticProgram):Void {
+		enumAbstractConstants.clear();
+		flagsMasks.clear();
+		enumAbstractConstantsInProgress.clear();
 		for (declaration in semantic.program.enums)
 			helperSpans.set(declaration.name, declaration.span);
 		for (declaration in semantic.program.classes)

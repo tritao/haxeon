@@ -19,6 +19,10 @@ class EnumEqualityIncrementalMain {
 		if (new IrInterpreter(dynamicCompiler.compile("Main").ir).run("main") != 1) throw "initial Dynamic enum equality was not used";
 		dynamicCompiler.update("Value.hx", source("false"));
 		if (new IrInterpreter(dynamicCompiler.compile("Main").ir).run("main") != 2) throw "incremental Dynamic enum equality retained a stale method body";
+		dynamicCompiler.update("Alpha.hx", "enum Alpha { One; }");
+		dynamicCompiler.update("Main.hx", "function main():Int { var extra:Dynamic = Alpha.One, a:Dynamic = Value.Item(1), b:Dynamic = Value.Item(2); return extra == null ? 0 : a == b ? 1 : 2; }");
+		if (new IrInterpreter(dynamicCompiler.compile("Main").ir).run("main") != 2)
+			throw "adding an enum changed a cached Dynamic equality helper";
 		var arrayCompiler = new Compiler(null, CompilerIntrinsics.configuration());
 		arrayCompiler.update("Equatable.hx", "interface Equatable {}");
 		arrayCompiler.update("Value.hx", genericSource("true"));

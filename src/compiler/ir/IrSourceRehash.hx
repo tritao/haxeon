@@ -48,7 +48,7 @@ class IrSourceRehash {
 			copy.terminator = terminator == null ? null : new Located<IrTerminator>(terminator.value, fix(terminator.provenance));
 			blocks.push(copy);
 		}
-		return changed ? fn.derive(blocks) : fn;
+		return changed ? fn.withBlocks(blocks) : fn;
 	}
 
 	static function stale(provenance:SourceProvenance, hashes:Map<String, Int>):Bool {

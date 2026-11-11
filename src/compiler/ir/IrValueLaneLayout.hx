@@ -211,7 +211,7 @@ class IrValueLaneLayout {
 	function scalar(type:IrType, storage:Null<IrScalarStorage>):Null<{bits:Int, signed:Bool}> {
 		var bits = switch type {
 			case Bool: 8;
-			case I32 | F32: 32;
+			case I32 | F32 | EnumTag(_): 32;
 			case I64 | F64: 64;
 			case RawPtr: pointerBits;
 			case TypeRef: target == HashLink ? pointerBits : 32;

@@ -36,7 +36,8 @@ class IrScalarArguments {
 		// Methods that call out may snapshot only a fresh receiver: a field place can be changed by an alias
 		// while the method runs, and must keep its original receiver ABI.
 		for (fn in program.functions) {
-			if (StringTools.startsWith(fn.name, "$") && !IrProviders.scalarAbiHelper(fn)) continue;
+			var declared = IrScalarAbiEligibility.permits(fn.kind, false);
+			if (!declared) continue;
 			var hasValue = isValue(fn.result, objects), eligible = true, pinnedEligible = !argumentsOnly, pinnedHasValue = hasValue,
 				argumentCount = 0, pinnedArgumentCount = 1;
 			if (argumentsOnly && hasValue) eligible = false;
@@ -413,7 +414,7 @@ class IrScalarArguments {
 			}
 			blocks.push(copy);
 		}
-		return new IrFunction(PREFIX + (preserveReceiver ? "$receiver:" : "") + fn.name, args, returnSlots.length > 0 ? Void : fn.result, blocks, None, [], fn.debugBindings, fn.inlineHint);
+		return new IrFunction(PREFIX + (preserveReceiver ? "$receiver:" : "") + fn.name, args, returnSlots.length > 0 ? Void : fn.result, blocks, ScalarArguments, fn.debugBindings, fn.inlineHint);
 	}
 
 	static function rewriteCalls(fn:IrFunction, byName:Map<String, IrFunction>, candidates:Map<String, IrFunction>, pinnedCandidates:Map<String, IrFunction>, objects:Map<String, IrObject>,
@@ -510,7 +511,7 @@ class IrScalarArguments {
 			copy.terminator = block.terminator;
 			blocks.push(copy);
 		}
-		return changed ? fn.derive(blocks) : fn;
+		return changed ? fn.withBlocks(blocks) : fn;
 	}
 
 	/** The Wasm scalar ABI reads fields at the call site. Only an unaliased value is stable there;

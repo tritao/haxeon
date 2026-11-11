@@ -16,7 +16,7 @@ class TextInputState {
 	public var compositionStart:Null<Int> = null;
 	public var compositionEnd:Null<Int> = null;
 	public var inputType:TextInputType = TextInputType.Text;
-	public var flags:TextInputFlags = cast 0;
+	public var flags:TextInputFlags = TextInputFlags.empty();
 	public var action:TextInputAction = TextInputAction.Default;
 	public var cursorX:Float = 0;
 	public var cursorY:Float = 0;

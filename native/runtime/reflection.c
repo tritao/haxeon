@@ -25,6 +25,7 @@ HL_PRIM vdynamic *HL_NAME(__reflect_copy)(vdynamic *object) {
 			switch (value_type->kind) {
 			case HUI8:
 			case HUI16:
+			case HENUMTAG:
 			case HI32:
 			case HBOOL:
 				hl_dyn_seti(copy, name, value_type, hl_dyn_geti(object, name, value_type));
@@ -62,6 +63,7 @@ HL_PRIM void HL_NAME(__reflect_set_field)(vdynamic *object, vstring *name,
 	switch (value->t->kind) {
 	case HUI8:
 	case HUI16:
+	case HENUMTAG:
 	case HI32:
 	case HBOOL: hl_dyn_seti(object, field, value->t, value->v.i); break;
 	case HI64: hl_dyn_seti64(object, field, value->v.i64); break;
@@ -106,6 +108,7 @@ HL_PRIM bool HL_NAME(__reflect_delete_field)(vdynamic *object, vstring *name) {
 	switch (slot->t->kind) {
 	case HUI8:
 	case HUI16:
+	case HENUMTAG:
 	case HI32:
 	case HBOOL: hl_dyn_seti(object, field, slot->t, 0); break;
 	case HI64: hl_dyn_seti64(object, field, 0); break;

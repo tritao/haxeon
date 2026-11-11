@@ -491,6 +491,12 @@ class HlWriter {
 
 	function writeType(type:HlTypeDef):Void {
 		switch type {
+			case EnumTag(boxedType, cacheGlobals):
+				output.writeByte(HlType.EnumTag);
+				writeIndex(boxedType);
+				writeUnsignedIndex(cacheGlobals.length);
+				for (global in cacheGlobals)
+					writeUnsignedIndex(global);
 			case Simple(kind):
 				output.writeByte(kind);
 			case Parameterized(kind, parameter):

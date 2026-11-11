@@ -52,6 +52,8 @@ class HlSymbolTable {
 	var objectMethodIndices:Map<String, Map<String, Int>> = [];
 	var interfaceMethodIndices:Map<String, Map<String, Int>> = [];
 	var pendingTypes:Map<String, Bool> = [];
+	/** Counts are needed only while reserved boxed descriptors are still being assembled. */
+	final pendingEnumCaseCounts:Map<String, Int> = [];
 
 	/** The literal globals in index order, so a build reads only these and a patch only the ones past the published globals. */
 	var stringConstants:Array<{global:Int, value:String}> = [];
@@ -277,6 +279,14 @@ class HlSymbolTable {
 		return index;
 	}
 
+	/** Release-only tags with no boxed use have exactly the ordinary I32 runtime type. */
+	public function internScalarEnumTag(name:String):Void {
+		var key = typeKey(EnumTag(name));
+		if (typeIndices.exists(key)) return;
+		ensureWritable();
+		typeIndices.set(key, internType(I32));
+	}
+
 	public function internType(type:IrType):Int {
 		var key = typeKey(type);
 		if (typeIndices.exists(key))
@@ -285,6 +295,23 @@ class HlSymbolTable {
 		switch type {
 			case Abstract(_) if (compiler.ir.IrHlScalarRef.element(type) != null):
 				var index = internReference(compiler.ir.IrHlScalarRef.element(type));
+				typeIndices.set(key, index);
+				return index;
+			case EnumTag(name):
+				var boxed = typeIndices.get('enum:$name');
+				if (boxed == null)
+					throw 'Enum tag "$name" must be registered before use';
+				var caseCount = switch types[boxed] {
+					case HlTypeDef.Enum(_, _, constructors): constructors.length;
+					default:
+						var pendingCount = pendingEnumCaseCounts.get(name);
+						if (pendingCount == null)
+							throw 'Missing enum tag declaration "$name"';
+						pendingCount;
+				};
+				var cacheGlobals = [for (i in 0...caseCount) internEnumConstant(name, i)];
+				var index = types.length;
+				types.push(HlTypeDef.EnumTag(boxed, cacheGlobals));
 				typeIndices.set(key, index);
 				return index;
 			case Function(arguments, result):
@@ -327,6 +354,7 @@ class HlSymbolTable {
 			default: HlTypeDef.Simple(switch type {
 					case Void: HlType.Void;
 					case I32: HlType.I32;
+					case EnumTag(_): throw "Enum tag must be interned with its descriptor";
 					case I64: HlType.I64;
 					case Bool: HlType.Bool;
 					case F32: HlType.F32;
@@ -377,8 +405,10 @@ class HlSymbolTable {
 
 	public function internEnum(enumDecl:IrEnum):Int {
 		var key = 'enum:${enumDecl.name}';
-		if (typeIndices.exists(key) && !pendingTypes.exists(key))
+		if (typeIndices.exists(key) && !pendingTypes.exists(key)) {
+			pendingEnumCaseCounts.remove(enumDecl.name);
 			return typeIndices.get(key);
+		}
 		ensureWritable();
 		var constructors:Array<HlEnumConstructor> = [
 			for (constructor in enumDecl.cases)
@@ -392,6 +422,7 @@ class HlSymbolTable {
 			types.push(Enum(internString(enumDecl.name), 0, constructors));
 			typeIndices.set(key, index);
 		}
+		pendingEnumCaseCounts.remove(enumDecl.name);
 		return index;
 	}
 
@@ -693,8 +724,10 @@ class HlSymbolTable {
 	public function hasObjectMethods(name:String):Bool
 		return objectMethodIndices.exists(name);
 
-	public function reserveEnum(name:String):Int
-		return reserveType('enum:$name');
+	public function reserveEnum(declaration:IrEnum):Int {
+		pendingEnumCaseCounts.set(declaration.name, declaration.cases.length);
+		return reserveType('enum:${declaration.name}');
+	}
 
 	public function reserveInterface(name:String):Int
 		return reserveType('virt:$name');
@@ -817,6 +850,7 @@ class HlSymbolTable {
 			case Obj(name): 'obj:$name';
 			case Abstract(name): 'abstract:$name';
 			case Enum(name): 'enum:$name';
+			case EnumTag(name): 'enum-tag:$name';
 			case Virtual(name): 'virt:$name';
 			case Function(arguments, result): 'fun(${[for (argument in arguments) typeKey(argument)].join(",")})->${typeKey(result)}';
 		};

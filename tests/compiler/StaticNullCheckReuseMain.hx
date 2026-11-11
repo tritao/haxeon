@@ -21,7 +21,7 @@ class StaticNullCheckReuseMain {
 		b.blocks[0].instructions.push(new Located(GlobalGet(g, global), SourceProvenance.generated("test")));
 		var v = b.fieldGet(g, "v", I32);
 		b.returnValue(b.add(v, b.constInt(offset)));
-		return new IrFunction(name, b.arguments, I32, b.blocks, None, []);
+		return new IrFunction(name, b.arguments, I32, b.blocks, Ordinary);
 	}
 
 	static function caller(name:String, callees:Array<String>):IrFunction {
@@ -29,7 +29,7 @@ class StaticNullCheckReuseMain {
 		for (callee in callees)
 			b.call(callee, [], I32);
 		b.returnValue(b.constVoid());
-		return new IrFunction(name, b.arguments, Void, b.blocks, None, []);
+		return new IrFunction(name, b.arguments, Void, b.blocks, Ordinary);
 	}
 
 	static function program(offset:Int):Array<IrFunction>
@@ -101,7 +101,7 @@ class StaticNullCheckReuseMain {
 		b.blocks[0].instructions.push(new Located(GlobalGet(src, "S.src"), SourceProvenance.generated("test")));
 		b.call(compiler.ir.IrOptionalFieldStorage.copyName("Box", "v", "Box", "v"), [dst, src], Void);
 		b.returnValue(b.constVoid());
-		var init = new IrFunction("__init", [], Void, b.blocks, None, []), checked = byName(IrStaticNullChecks.run([init], [referenceObject])).get("__init");
+		var init = new IrFunction("__init", [], Void, b.blocks, Ordinary), checked = byName(IrStaticNullChecks.run([init], [referenceObject])).get("__init");
 		var checks:Array<String> = [];
 		for (block in checked.blocks) for (located in block.instructions) switch located.value {
 			case Call(_, name, _) if (StringTools.startsWith(name, "__static$nonnull$")): checks.push(name);

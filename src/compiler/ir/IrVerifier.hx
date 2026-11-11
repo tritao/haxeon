@@ -4,6 +4,7 @@ import compiler.ir.Ir;
 import compiler.ir.Ir.IrInterface;
 import compiler.ir.Ir.IrEnum;
 import compiler.ir.Ir.IrCNativeArgumentMode;
+import compiler.ir.IrFunction.IrFunctionKind;
 
 /** Rejects malformed or ill-typed SSA programs before backend lowering. */
 class IrVerifier {
@@ -17,6 +18,7 @@ class IrVerifier {
 		function laneArray(type:IrType):Bool return switch type {
 			case Array(Obj(name)) | Array(Nullable(Obj(name))): valueObjects.exists(name);
 			case Array(Enum(name)) | Array(Nullable(Enum(name))): valueEnums.exists(name);
+			case Array(EnumTag(_)): true;
 			default: false;
 		};
 		for (fn in program.functions) for (block in fn.blocks) for (located in block.instructions) {
@@ -190,7 +192,15 @@ class IrVerifier {
 	}
 
 	static function verifySelected(program:IrProgram, selected:Null<Map<String, Bool>>, memo:Null<IrVerifyMemo>):Void {
-		var signatures:Map<String, {arguments:Array<IrType>, result:IrType}> = [];
+		var signatures:Map<String, {arguments:Array<IrType>, result:IrType, kind:IrFunctionKind}> = [];
+		var closureCasts:Map<String, String> = [];
+		for (fn in program.functions) switch fn.kind {
+			case ClosureCast(target):
+				var key = Std.string(target);
+				if (closureCasts.exists(key)) throw 'Duplicate closure cast for $key';
+				closureCasts.set(key, fn.name);
+			default:
+		}
 		var scalarFunctions = [for (fn in program.functions) if (StringTools.startsWith(fn.name, IrScalarArguments.PREFIX)) fn.name => true];
 		for (native in program.natives)
 			addSignature(signatures, native.name, native.arguments, native.result);
@@ -199,7 +209,7 @@ class IrVerifier {
 		for (native in program.cNatives)
 			addSignature(signatures, native.name, native.arguments, native.result);
 		for (fn in program.functions)
-			addSignature(signatures, fn.name, [for (a in fn.arguments) a.type], fn.result);
+			addSignature(signatures, fn.name, [for (a in fn.arguments) a.type], fn.result, fn.kind);
 		var objects:Map<String, IrObject> = [];
 		var physicalValues:Map<String, Bool> = [];
 		var interfaces:Map<String, IrInterface> = [];
@@ -239,6 +249,7 @@ class IrVerifier {
 			enums.set(enumDecl.name, enumDecl);
 		}
 		verifyInlineEnumsLowered(program, memo);
+		IrEnumTagStorage.verify(program);
 		var globals:Map<String, IrType> = [];
 		for (field in program.staticFields) {
 			if (globals.exists(field.name))
@@ -249,7 +260,25 @@ class IrVerifier {
 		var carrierSlots:Map<String, Bool> = [];
 		var laneValues = new IrInlineValueLayout(objectTable);
 		for (fn in program.functions) {
-			var access = IrValueArraySlotHelpers.carrierAccess(fn.name);
+			switch fn.kind {
+				case EnumTagAdapter(type, box):
+					switch type { case EnumTag(_): default: throw "Enum tag adapter requires a tag type"; }
+					if (fn.arguments.length != 1 || !sameType(fn.arguments[0].type, box ? type : Dyn)
+						|| !sameType(fn.result, box ? Dyn : type)) throw "Invalid enum tag adapter signature";
+				case ValueArraySlot(namespace, _, operation):
+					if (namespace < 0) throw "Invalid value-array slot namespace";
+					switch operation {
+						case Read(slot, _, _), Write(slot, _, _):
+							if (slot < 0) throw "Invalid value-array slot";
+						default:
+					}
+				default:
+			}
+			var access = switch fn.kind {
+				case ValueArraySlot(_, element, Read(_, path, true)): {element: element, path: path, write: false};
+				case ValueArraySlot(_, element, Write(_, path, true)): {element: element, path: path, write: true};
+				default: null;
+			};
 			if (access == null) continue;
 			var fieldFound = false;
 			var stored = switch access.element {
@@ -272,10 +301,12 @@ class IrVerifier {
 		if (memo != null) {
 			memo.attach(["signatures" => k -> signatures.get(k), "objects" => k -> objects.get(k), "interfaces" => k -> interfaces.get(k),
 				"enums" => k -> enums.get(k), "globals" => k -> globals.get(k), "scalarFunctions" => k -> scalarFunctions.get(k),
-				"carrierSlots" => k -> carrierSlots.get(k), "physicalValues" => k -> physicalValues.get(k)]);
+				"carrierSlots" => k -> carrierSlots.get(k), "physicalValues" => k -> physicalValues.get(k),
+				"closureCasts" => k -> closureCasts.get(k)]);
 			memo.forget([for (fn in program.functions) fn.name => true]);
 		}
 		var tables = {
+			closureCasts: new IrVerifyTable("closureCasts", closureCasts, memo),
 			signatures: new IrVerifyTable("signatures", signatures, memo),
 			objects: new IrVerifyTable("objects", objects, memo),
 			interfaces: new IrVerifyTable("interfaces", interfaces, memo),
@@ -293,7 +324,7 @@ class IrVerifier {
 					if (memo != null)
 						memo.begin();
 					verifyFunction(fn, tables.signatures, tables.objects, tables.interfaces, tables.enums, tables.globals, tables.scalarFunctions,
-						tables.carrierSlots, tables.physicalValues);
+						tables.carrierSlots, tables.physicalValues, tables.closureCasts);
 					if (memo != null)
 						memo.accept(fn);
 				} catch (error:String) {
@@ -308,6 +339,7 @@ class IrVerifier {
 		var size = storage.size;
 		return switch type {
 			case I32: size == 1 || size == 2 || size == 4;
+			case EnumTag(_): size == 4;
 			case I64: size == 1 || size == 2 || size == 4 || size == 8;
 			case F32: size == 4;
 			case F64: size == 8;
@@ -368,15 +400,15 @@ class IrVerifier {
 	static function validAggregateLayout(size:Int, alignment:Int):Bool
 		return size > 0 && size <= 0x10000000 && alignment > 0 && alignment <= 0x10000 && (alignment & (alignment - 1)) == 0;
 
-	static function verifyFunction(fn:IrFunction, signatures:IrVerifyTable<{arguments:Array<IrType>, result:IrType}>, objects:IrVerifyTable<IrObject>,
-			interfaces:IrVerifyTable<IrInterface>, enums:IrVerifyTable<IrEnum>, globals:IrVerifyTable<IrType>, scalarFunctions:IrVerifyTable<Bool>, carrierSlots:IrVerifyTable<Bool>, physicalValues:IrVerifyTable<Bool>):Void {
+	static function verifyFunction(fn:IrFunction, signatures:IrVerifyTable<{arguments:Array<IrType>, result:IrType, kind:IrFunctionKind}>, objects:IrVerifyTable<IrObject>,
+			interfaces:IrVerifyTable<IrInterface>, enums:IrVerifyTable<IrEnum>, globals:IrVerifyTable<IrType>, scalarFunctions:IrVerifyTable<Bool>, carrierSlots:IrVerifyTable<Bool>, physicalValues:IrVerifyTable<Bool>, closureCasts:IrVerifyTable<String>):Void {
 		if (IrHlScalarRef.element(fn.result) != null) throw "A scalar stack reference cannot be returned";
-		if (IrValueLaneReference.isCarrier(fn.result) && !(carrierSlots.exists(fn.name) && !carrierSlots.get(fn.name))) throw "A value lane reference cannot be returned";
+		if (IrValueLaneReference.isCarrier(fn.result) && !(carrierSlots.exists(fn.name) && carrierSlots.get(fn.name) == false)) throw "A value lane reference cannot be returned";
 		for (arg in fn.arguments)
 			if (IrHlScalarRef.element(arg.type) != null && !StringTools.startsWith(fn.name, IrScalarArguments.PREFIX))
 				throw "A scalar stack reference cannot cross an ordinary function boundary";
 			else if (IrValueLaneReference.isCarrier(arg.type) && !StringTools.startsWith(fn.name, IrScalarArguments.PREFIX)
-				&& !(carrierSlots.exists(fn.name) && carrierSlots.get(fn.name)))
+				&& !(carrierSlots.exists(fn.name) && carrierSlots.get(fn.name) == true))
 				throw "A value lane reference cannot cross an ordinary function boundary";
 		var graph = new IrGraph(fn), values = scratchValues;
 		values.reset();
@@ -401,7 +433,7 @@ class IrVerifier {
 			var block = graph.block(id), ordinary = false;
 			for (position in 0...block.instructions.length) {
 				var instruction = block.instructions[position].value;
-				verifyScalarReferenceUse(instruction, scalarFunctions, carrierSlots, physicalValues, fn, signatures, lanes, scalarRefs);
+				verifyScalarReferenceUse(instruction, scalarFunctions, carrierSlots, physicalValues, fn, signatures, closureCasts, lanes, scalarRefs);
 				switch instruction {
 					case Phi(_, _):
 						if (ordinary)
@@ -483,21 +515,18 @@ class IrVerifier {
 		default: IrValueLaneReference.isCarrier(type);
 	};
 
-	static function closureSignatureKey(type:IrType):String
-		return haxe.crypto.Sha256.encode(Std.string(type)).substr(0, 32);
-
-	/** A Wasm32 closure adapter casts its erased receiver through a generated signature checker. */
+	/** A generated adapter may cast its erased receiver only at its declared semantic signature. */
 	static function isGeneratedClosureAdapterCast(fn:IrFunction, output:IrValue, input:IrValue,
-			signatures:IrVerifyTable<{arguments:Array<IrType>, result:IrType}>):Bool {
-		if (!sameType(input.type, Dyn) || fn.arguments.length == 0 || !sameType(fn.arguments[0].type, Dyn)) return false;
-		var prefix = "__haxeon_closure_adapter_";
-		if (!StringTools.startsWith(fn.name, prefix)) return false;
-		var keys = fn.name.substr(prefix.length).split("_");
-		if (keys.length != 2) return false;
-		var targetType:IrType = Function([for (index in 1...fn.arguments.length) fn.arguments[index].type], fn.result),
-			sourceKey = closureSignatureKey(output.type), targetKey = closureSignatureKey(targetType);
-		if (keys[0] != sourceKey || keys[1] != targetKey) return false;
-		var castSignature = signatures.get("__haxeon_closure_cast_" + sourceKey);
+			signatures:IrVerifyTable<{arguments:Array<IrType>, result:IrType, kind:IrFunctionKind}>, closureCasts:IrVerifyTable<String>):Bool {
+		var source:IrType, target:IrType;
+		switch fn.kind { case ClosureAdapter(s, t): source = s; target = t; default: return false; }
+		if (!sameType(input.type, Dyn) || fn.arguments.length == 0 || !sameType(fn.arguments[0].type, Dyn)
+			|| !sameType(output.type, source)) return false;
+		var actualTarget:IrType = Function([for (index in 1...fn.arguments.length) fn.arguments[index].type], fn.result);
+		if (!sameType(target, actualTarget)) return false;
+		var castName = closureCasts.get(Std.string(source));
+		if (castName == null) return false;
+		var castSignature = signatures.get(castName);
 		if (castSignature == null || castSignature.arguments.length != 1 || !sameType(castSignature.arguments[0], Dyn)
 			|| !sameType(castSignature.result, Dyn)) return false;
 		for (block in fn.blocks) for (located in block.instructions) switch located.value {
@@ -508,43 +537,41 @@ class IrVerifier {
 	}
 
 	static function isGeneratedClosureAdapterValue(fn:IrFunction, value:IrValue,
-			signatures:IrVerifyTable<{arguments:Array<IrType>, result:IrType}>):Bool {
-		var castPrefix = "__haxeon_closure_cast_";
-		if (!StringTools.startsWith(fn.name, castPrefix) || fn.arguments.length != 1 || !sameType(fn.arguments[0].type, Dyn)
-			|| !sameType(fn.result, Dyn)) return false;
-		var targetKey = closureSignatureKey(value.type);
-		if (fn.name != castPrefix + targetKey) return false;
-		var targetArguments = switch value.type { case Function(arguments, _): arguments; default: return false; },
-			targetResult = switch value.type { case Function(_, result): result; default: return false; };
+			signatures:IrVerifyTable<{arguments:Array<IrType>, result:IrType, kind:IrFunctionKind}>):Bool {
+		var target:IrType;
+		switch fn.kind { case ClosureCast(t): target = t; default: return false; }
+		if (fn.arguments.length != 1 || !sameType(fn.arguments[0].type, Dyn) || !sameType(fn.result, Dyn)
+			|| !sameType(target, value.type)) return false;
+		var targetArguments = switch target { case Function(arguments, _): arguments; default: return false; },
+			targetResult = switch target { case Function(_, result): result; default: return false; };
 		for (block in fn.blocks) for (located in block.instructions) switch located.value {
 			case InstanceClosure(output, name, receiver) if (output.id == value.id && receiver.id == fn.arguments[0].id):
-				if (name != "__haxeon_varargs_adapter_" + Std.string(value.type)) {
-					var prefix = "__haxeon_closure_adapter_";
-					if (!StringTools.startsWith(name, prefix)) continue;
-					var keys = name.substr(prefix.length).split("_");
-					if (keys.length != 2 || keys[1] != targetKey) continue;
-				}
 				var adapter = signatures.get(name);
 				if (adapter == null || adapter.arguments.length != targetArguments.length + 1 || !sameType(adapter.arguments[0], Dyn)
 					|| !sameType(adapter.result, targetResult)) continue;
-			var matches = true;
-			for (index in 0...targetArguments.length) if (!sameType(adapter.arguments[index + 1], targetArguments[index])) matches = false;
-			if (matches) return true;
+				var validKind = switch adapter.kind {
+					case ClosureAdapter(_, t), ClosureVarargs(t): sameType(t, target);
+					default: false;
+				};
+				if (!validKind) continue;
+				var matches = true;
+				for (index in 0...targetArguments.length) if (!sameType(adapter.arguments[index + 1], targetArguments[index])) matches = false;
+				if (matches) return true;
 			default:
 		}
 		return false;
 	}
 
 	static function verifyScalarReferenceUse(instruction:IrInstruction, scalarFunctions:IrVerifyTable<Bool>, carrierSlots:IrVerifyTable<Bool>,
-			physicalValues:IrVerifyTable<Bool>, fn:IrFunction, signatures:IrVerifyTable<{arguments:Array<IrType>, result:IrType}>, lanes:Bool,
-			scalarRefs:Bool):Void {
+			physicalValues:IrVerifyTable<Bool>, fn:IrFunction, signatures:IrVerifyTable<{arguments:Array<IrType>, result:IrType, kind:IrFunctionKind}>,
+			closureCasts:IrVerifyTable<String>, lanes:Bool, scalarRefs:Bool):Void {
 		switch instruction {
 			case ToDyn(output, value) if (sameType(output.type, Dyn) && !IrValueLaneReference.isCarrier(value.type) && requiresLogicalValueAdapter(value.type, physicalValues)
 				&& !isGeneratedClosureAdapterValue(fn, value, signatures)):
 				throw "Inline value storage requires a logical Dynamic adapter";
 			case SafeCast(output, value) if (sameType(output.type, Dyn) && !IrValueLaneReference.isCarrier(value.type) && requiresLogicalValueAdapter(value.type, physicalValues)
 				|| sameType(value.type, Dyn) && !IrValueLaneReference.isCarrier(output.type) && requiresLogicalValueAdapter(output.type, physicalValues)
-					&& !isGeneratedClosureAdapterCast(fn, output, value, signatures)):
+					&& !isGeneratedClosureAdapterCast(fn, output, value, signatures, closureCasts)):
 				throw "Inline value storage requires a logical cast adapter";
 			default:
 		}
@@ -563,7 +590,7 @@ class IrVerifier {
 		if (output != null && IrValueLaneReference.isCarrier(output.type)) switch instruction {
 			case Call(_, name, _) if (name == IrValueLaneReference.PACK || name == IrValueLaneReference.READ):
 			case ConstNull(_), FieldGet(_, _, _), Phi(_, _):
-			case Call(_, name, _) if (name == IrHlScalarRef.LOAD || carrierSlots.exists(name) && !carrierSlots.get(name)):
+			case Call(_, name, _) if (name == IrHlScalarRef.LOAD || carrierSlots.exists(name) && carrierSlots.get(name) == false):
 			default: throw "Only a value lane operation can create a lane reference";
 		}
 		if (lanes) for (inputIndex in 0...IrOperands.count(instruction)) {
@@ -571,7 +598,7 @@ class IrVerifier {
 			if (IrValueLaneReference.isCarrier(input.type)) switch instruction {
 				case FieldSet(_, _, value) if (value.id == input.id):
 				case Phi(_, _):
-				case Call(_, name, _) if (scalarFunctions.exists(name) || carrierSlots.exists(name) && carrierSlots.get(name)):
+				case Call(_, name, _) if (scalarFunctions.exists(name) || carrierSlots.exists(name) && carrierSlots.get(name) == true):
 				case Call(_, name, args) if ((name == IrHlScalarRef.STORE && args.length == 2 && args[1].id == input.id)
 					|| (name == IrHlScalarRef.ADDRESS && args.length == 1 && args[0].id == input.id)):
 				case CallClosure(_, closure, args) if (IrScalarArguments.isPrivateClosureType(closure.type) && scalarClosureArgument(closure.type, args, input)):
@@ -670,7 +697,7 @@ class IrVerifier {
 							throw "IR inline enum null must use a tag-zero packet";
 					default:
 				}
-				if (!isReference(out.type))
+				if (!isReference(out.type) && !(switch out.type { case EnumTag(_): true; default: false; }))
 					throw 'IR null constant must produce a reference value';
 			case TypeValue(out, _):
 				expect(out, TypeRef);
@@ -751,9 +778,33 @@ class IrVerifier {
 				require(values, b);
 				if (!sameType(a.type, b.type)
 					|| (!sameType(a.type, I32) && !sameType(a.type, I64) && !sameType(a.type, F32) && !sameType(a.type, F64) && !sameType(a.type, Bool)
-						&& !isReference(a.type)))
+						&& !isReference(a.type) && !(switch a.type { case EnumTag(_): true; default: false; })))
 					throw 'IR equality requires matching primitive or reference values';
+			case Intrinsic(out, operation, args):
+				if (args.length != 1) throw "IR enum Dynamic intrinsic requires one argument";
+				require(values, args[0]);
+				switch operation {
+					case EnumDynamicBox(type):
+						switch type { case Enum(_): default: throw "IR enum Dynamic box requires an enum type"; }
+						if (!sameType(args[0].type, type) || !sameType(out.type, Dyn)) throw "Invalid IR enum Dynamic box signature";
+					case EnumDynamicView(type):
+						switch type { case Enum(_): default: throw "IR enum Dynamic view requires an enum type"; }
+						if (!sameType(args[0].type, Array(Dyn)) || !sameType(out.type, Array(Dyn))) throw "Invalid IR enum Dynamic view signature";
+					case EnumTagBox(type):
+						switch type { case EnumTag(_): default: throw "IR enum tag box requires a tag type"; }
+						if (!sameType(args[0].type, type) || !sameType(out.type, Dyn)) throw "Invalid IR enum tag box signature";
+					case EnumTagUnbox(type):
+						switch type { case EnumTag(_): default: throw "IR enum tag unbox requires a tag type"; }
+						if (!sameType(args[0].type, Dyn) || !sameType(out.type, type)) throw "Invalid IR enum tag unbox signature";
+				}
 			case Call(out, name, args), CNativeCall(out, name, args):
+				if (name == IrArrayFactory.NAME) {
+					switch instruction { case CNativeCall(_, _, _): throw "Array factory is not a C native"; default: }
+					if (args.length != 1 || !sameType(args[0].type, I32)
+						|| !(switch out.type { case Array(_): true; default: false; })) throw "Invalid typed array factory signature";
+					require(values, args[0]);
+					return;
+				}
 				if (IrScalarWordBits.matches(name)) {
 					switch instruction { case CNativeCall(_, _, _): throw "Scalar word transport is not a C native"; default: }
 					if (args.length != 1 || !IrScalarWordBits.valid(name,args[0].type,out.type)) throw "Invalid scalar word transport signature";
@@ -788,7 +839,7 @@ class IrVerifier {
 				}
 				if (name == IrReceiverCheck.NAME) {
 					switch instruction { case CNativeCall(_, _, _): throw "A receiver check is not a C native"; default: }
-					if (args.length != 1 || (switch (out.type) { case Void: false; default: true; }) || !isReference(args[0].type)) throw "Invalid receiver check";
+					if (args.length != 1 || (switch (out.type) { case Void: false; default: true; }) || (!isReference(args[0].type) && !(switch args[0].type { case EnumTag(_): true; default: false; }))) throw "Invalid receiver check";
 					require(values, args[0]);
 					return;
 				}
@@ -807,9 +858,9 @@ class IrVerifier {
 						throw 'Invalid scalar reference intrinsic type for $name';
 					return;
 				}
-				if (!signatures.exists(name))
-					throw 'Unknown IR call "$name"';
 				var signature = signatures.get(name);
+				if (signature == null)
+					throw 'Unknown IR call "$name"';
 				if (args.length != signature.arguments.length)
 					throw 'Wrong IR argument count for "$name"';
 				for (i in 0...args.length) {
@@ -820,15 +871,15 @@ class IrVerifier {
 				if (!sameType(out.type, signature.result) && !trustedNativeResult(name, out.type, signature.result))
 					throw 'Wrong IR result type for "$name"';
 			case StaticClosure(out, name):
-				if (!signatures.exists(name))
-					throw 'Unknown IR closure target "$name"';
 				var signature = signatures.get(name);
+				if (signature == null)
+					throw 'Unknown IR closure target "$name"';
 				if (!sameType(out.type, Function(signature.arguments, signature.result)))
 					throw 'Wrong IR closure type for "$name"';
 			case InstanceClosure(out, name, receiver):
-				if (!signatures.exists(name))
-					throw 'Unknown or receiver-less IR closure target "$name"';
 				var signature = signatures.get(name);
+				if (signature == null)
+					throw 'Unknown or receiver-less IR closure target "$name"';
 				if (signature.arguments.length == 0)
 					throw 'Unknown or receiver-less IR closure target "$name"';
 				require(values, receiver);
@@ -958,9 +1009,9 @@ class IrVerifier {
 			case MakeEnum(out, typeName, constructor, arguments):
 				if (!isEnumType(out.type, typeName, enums))
 					throw 'Unknown or mismatched IR enum "$typeName"';
-				if (!enums.exists(typeName))
-					throw 'Invalid IR enum constructor "$typeName"';
 				var enumDecl = enums.get(typeName);
+				if (enumDecl == null)
+					throw 'Invalid IR enum constructor "$typeName"';
 				if (constructor < 0 || constructor >= enumDecl.cases.length)
 					throw 'Invalid IR enum constructor "$typeName"';
 				var constructorDecl = enumDecl.cases[constructor];
@@ -975,7 +1026,7 @@ class IrVerifier {
 				expect(out, I32);
 				require(values, value);
 				switch value.type {
-					case Enum(_):
+					case Enum(_), EnumTag(_):
 					default: throw 'IR enum index requires an enum value';
 				}
 			case EnumField(out, value, constructor, field):
@@ -984,9 +1035,9 @@ class IrVerifier {
 					case Enum(name): name;
 					default: throw 'IR enum field requires an enum value';
 				};
-				if (!enums.exists(typeName))
-					throw 'Invalid IR enum field constructor';
 				var enumDecl = enums.get(typeName);
+				if (enumDecl == null)
+					throw 'Invalid IR enum field constructor';
 				if (constructor < 0 || constructor >= enumDecl.cases.length)
 					throw 'Invalid IR enum field constructor';
 				var constructorDecl = enumDecl.cases[constructor];
@@ -998,9 +1049,10 @@ class IrVerifier {
 		require(values, value);
 		return switch value.type {
 			case Obj(name):
-				if (!objects.exists(name))
+				var object = objects.get(name);
+				if (object == null)
 					throw 'Unknown IR object "$name"';
-				objects.get(name);
+				object;
 			default: throw 'IR value ${value.id} is not an object';
 		};
 	}
@@ -1014,6 +1066,7 @@ class IrVerifier {
 	static function isEnumType(type:IrType, name:String, enums:IrVerifyTable<IrEnum>):Bool
 		return switch type {
 			case Enum(value): value == name && enums.exists(name);
+			case EnumTag(value): value == name && enums.exists(name);
 			default: false;
 		};
 
@@ -1024,7 +1077,8 @@ class IrVerifier {
 		var baseName = object.base;
 		if (baseName != null && objects.exists(baseName)) {
 			var base = objects.get(baseName);
-			return findField(base, name, objects);
+			if (base != null)
+				return findField(base, name, objects);
 		}
 		return null;
 	}
@@ -1036,26 +1090,27 @@ class IrVerifier {
 		var baseName = object.base;
 		if (baseName == null || !objects.exists(baseName))
 			return null;
-		return findMethodFunction(objects.get(baseName), name, objects);
+		var base = objects.get(baseName);
+		return base == null ? null : findMethodFunction(base, name, objects);
 	}
 
 	static function methodSignature(type:IrType, name:String, signatures, objects:IrVerifyTable<IrObject>,
-			interfaces:IrVerifyTable<IrInterface>):Null<{arguments:Array<IrType>, result:IrType}> {
+			interfaces:IrVerifyTable<IrInterface>):Null<{arguments:Array<IrType>, result:IrType, kind:IrFunctionKind}> {
 		return switch type {
 			case Obj(_):
 				var object = requireObjectType(type, objects),
 					functionName = findMethodFunction(object, name, objects);
 				if (functionName == null || !signatures.exists(functionName)) null; else signatures.get(functionName);
 			case Virtual(interfaceName):
-				if (!interfaces.exists(interfaceName)) null; else {
-					var interfaceDecl = interfaces.get(interfaceName);
+				var interfaceDecl = interfaces.get(interfaceName);
+				if (interfaceDecl == null) null; else {
 					var method = findInterfaceMethod(interfaceDecl, name, interfaces);
 					if (method == null)
 						null;
 					else {
 						var arguments:Array<IrType> = [Virtual(interfaceName)];
 						arguments = arguments.concat(method.arguments);
-						{arguments: arguments, result: method.result};
+						{arguments: arguments, result: method.result, kind: Ordinary};
 					}
 				}
 			default: null;
@@ -1067,8 +1122,8 @@ class IrVerifier {
 			if (method.name == name)
 				return method;
 		for (base in interfaceDecl.bases) {
-			if (interfaces.exists(base)) {
-				var baseDecl = interfaces.get(base);
+			var baseDecl = interfaces.get(base);
+			if (baseDecl != null) {
 				var found = findInterfaceMethod(baseDecl, name, interfaces);
 				if (found != null)
 					return found;
@@ -1080,17 +1135,18 @@ class IrVerifier {
 	static function requireObjectType(type:IrType, objects:IrVerifyTable<IrObject>):IrObject {
 		return switch type {
 			case Obj(name):
-				if (!objects.exists(name))
+				var object = objects.get(name);
+				if (object == null)
 					throw 'Unknown IR object "$name"';
-				objects.get(name);
+				object;
 			default: throw "IR method receiver is not an object";
 		};
 	}
 
-	static function addSignature(map:Map<String, {arguments:Array<IrType>, result:IrType}>, name:String, arguments:Array<IrType>, result:IrType):Void {
+	static function addSignature(map:Map<String, {arguments:Array<IrType>, result:IrType, kind:IrFunctionKind}>, name:String, arguments:Array<IrType>, result:IrType, kind:IrFunctionKind = Ordinary):Void {
 		if (map.exists(name))
 			throw 'Duplicate IR function "$name"';
-		map.set(name, {arguments: arguments, result: result});
+		map.set(name, {arguments: arguments, result: result, kind: kind});
 	}
 
 	/** The one table of value types and definition sites, cleared and reused by every function (`IrVerifyValues`). */
@@ -1116,6 +1172,10 @@ class IrVerifier {
 				};
 			case Enum(a): switch right {
 					case Enum(b): a == b;
+					default: false;
+				};
+			case EnumTag(a): switch right {
+					case EnumTag(b): a == b;
 					default: false;
 				};
 			case Abstract(a): switch right {
@@ -1172,7 +1232,7 @@ class IrVerifier {
 	static function abiCompatible(actual:IrType, expected:IrType):Bool
 		return switch expected {
 			case Array(Dyn): switch actual {
-					case Array(element): isReference(element);
+					case Array(element): isReference(element) || (switch element { case EnumTag(_): true; default: false; });
 					default: false;
 				};
 			case Dyn: isReference(actual);
@@ -1197,8 +1257,9 @@ class IrVerifier {
 		return switch actual {
 			case Obj(actualName): switch expected {
 					case Obj(_):
-						if (!objects.exists(actualName)) false; else {
-							var base = objects.get(actualName).base;
+						var object = objects.get(actualName);
+						if (object == null) false; else {
+							var base = object.base;
 							base != null && compatible(Obj(base), expected, objects, interfaces)
 							;
 						}
@@ -1226,9 +1287,9 @@ class IrVerifier {
 	static function interfaceExtends(actual:String, expected:String, interfaces:IrVerifyTable<IrInterface>):Bool {
 		if (actual == expected)
 			return true;
-		if (!interfaces.exists(actual))
-			return false;
 		var declaration = interfaces.get(actual);
+		if (declaration == null)
+			return false;
 		for (base in declaration.bases)
 			if (interfaceExtends(base, expected, interfaces))
 				return true;

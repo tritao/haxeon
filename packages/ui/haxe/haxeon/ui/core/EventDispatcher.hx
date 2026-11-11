@@ -4,7 +4,6 @@ import nativekit.ffi.NativeKitTypes;
 import nativekit.ffi.NativeKit;
 import haxeon.ui.core.CursorShape as UiCursorShape;
 import haxeon.ui.style.StyleState;
-import haxeon.ui.style.StyleStateUtil;
 
 /** Capture/target/bubble dispatch with per-pointer hover and pointer capture. */
 class EventDispatcher {
@@ -136,7 +135,7 @@ class EventDispatcher {
 		}
 	}
 
-	public function pointerMove(x:Float, y:Float, modifiers:Int = 0,
+	public function pointerMove(x:Float, y:Float, modifiers:UiModifier = UiModifier.empty(),
 			pointerId:Int = 0, data:Dynamic = null):Void {
 		rememberPointer(pointerId, x, y);
 		var path = hitPath(x, y);
@@ -159,7 +158,7 @@ class EventDispatcher {
 		}
 	}
 
-	public function pointerDown(x:Float, y:Float, button:Int, modifiers:Int = 0,
+	public function pointerDown(x:Float, y:Float, button:Int, modifiers:UiModifier = UiModifier.empty(),
 			pointerId:Int = 0, data:Dynamic = null, timestamp:Float = -1.0):Void {
 		if (capturedIds.exists(pointerId))
 			pointerCancel(pointerId, x, y, modifiers, data);
@@ -191,7 +190,7 @@ class EventDispatcher {
 	}
 
 	function dispatchOutsidePointerDown(path:Array<RenderNode>, x:Float, y:Float,
-			button:Int, modifiers:Int, pointerId:Int, data:Dynamic, timestamp:Float):Void {
+			button:Int, modifiers:UiModifier, pointerId:Int, data:Dynamic, timestamp:Float):Void {
 		var target = path.length == 0 ? root : path[path.length - 1];
 		if (target == null)
 			return;
@@ -213,7 +212,7 @@ class EventDispatcher {
 		return false;
 	}
 
-	public function pointerUp(x:Float, y:Float, button:Int, modifiers:Int = 0,
+	public function pointerUp(x:Float, y:Float, button:Int, modifiers:UiModifier = UiModifier.empty(),
 			pointerId:Int = 0, data:Dynamic = null):Void {
 		var probe = pointerUpProbe;
 		var stageStarted = probe == null ? 0.0 : Sys.time();
@@ -261,7 +260,7 @@ class EventDispatcher {
 	}
 
 	public function pointerCancel(pointerId:Int, x:Float, y:Float,
-			modifiers:Int = 0, data:Dynamic = null):Void {
+			modifiers:UiModifier = UiModifier.empty(), data:Dynamic = null):Void {
 		var path = capturedPath(pointerId);
 		if (path.length == 0)
 			path = pressedPath(pointerId);
@@ -280,20 +279,20 @@ class EventDispatcher {
 	}
 
 	public function scroll(x:Float, y:Float, deltaX:Float, deltaY:Float,
-			modifiers:Int = 0):Void {
+			modifiers:UiModifier = UiModifier.empty()):Void {
 		var path = hitPath(x, y);
 		if (path.length > 0)
 			dispatchPath(path, new UiEvent(UiEventKind.Scroll, path[path.length - 1].id,
 				x, y, deltaX, deltaY, 0, 0, modifiers));
 	}
 
-	public function key(kind:String, key:Int, modifiers:Int = 0, scancode:Int = 0):Void {
+	public function key(kind:String, key:Int, modifiers:UiModifier = UiModifier.empty(), scancode:Int = 0):Void {
 		var node = focus.focusedNode();
 		if (node == null) {
 			if (kind == UiEventKind.KeyDown || kind == UiEventKind.KeyRepeat) {
 				var handled = routeCommand(key, modifiers, [], kind == UiEventKind.KeyRepeat);
-				if (!handled && key == UiKey.Tab && (modifiers & ~UiModifier.Shift) == 0)
-					moveFocus((modifiers & UiModifier.Shift) != 0);
+				if (!handled && key == UiKey.Tab && modifiers.remove(UiModifier.Shift).isEmpty())
+					moveFocus(modifiers.contains(UiModifier.Shift));
 			}
 			return;
 		}
@@ -322,9 +321,9 @@ class EventDispatcher {
 			cancelCapturedPointerFor(node.id);
 		if (event.defaultPrevented)
 			return;
-		if (tabMovesFocus && key == UiKey.Tab && (modifiers & ~UiModifier.Shift) == 0 &&
+		if (tabMovesFocus && key == UiKey.Tab && modifiers.remove(UiModifier.Shift).isEmpty() &&
 			(kind == UiEventKind.KeyDown || kind == UiEventKind.KeyRepeat)) {
-			moveFocus((modifiers & UiModifier.Shift) != 0);
+			moveFocus(modifiers.contains(UiModifier.Shift));
 			return;
 		}
 		// A modal focus trap owns keyboard input, including keys its focused child
@@ -336,7 +335,7 @@ class EventDispatcher {
 		}
 		if (key == UiKey.Tab &&
 			(kind == UiEventKind.KeyDown || kind == UiEventKind.KeyRepeat))
-			moveFocus((modifiers & UiModifier.Shift) != 0);
+			moveFocus(modifiers.contains(UiModifier.Shift));
 		else if (kind == UiEventKind.KeyDown && (key == UiKey.Enter || key == UiKey.Space))
 				dispatchPath(path, new UiEvent(UiEventKind.Activate, node.id, 0.0, 0.0,
 				0.0, 0.0, 0, key, modifiers, null, null, scancode));
@@ -362,7 +361,7 @@ class EventDispatcher {
 		return true;
 	}
 
-	function routeCommand(key:Int, modifiers:Int, path:Array<RenderNode>, repeated:Bool = false,
+	function routeCommand(key:Int, modifiers:UiModifier, path:Array<RenderNode>, repeated:Bool = false,
 			?shortcutFilter:String->Bool):Bool {
 		if (commandRegistry == null)
 			return false;
@@ -384,7 +383,7 @@ class EventDispatcher {
 		var path = HitTest.pathTo(node);
 		if (path.length > 0)
 			dispatchPath(path, new UiEvent(kind, node.id, 0.0, 0.0,
-				0.0, 0.0, 0, 0, 0, text, data));
+				0.0, 0.0, 0, 0, haxeon.ui.core.UiModifier.empty(), text, data));
 	}
 
 	/** Dispatches a platform semantic action from its addressed node through capture and bubble. */
@@ -396,7 +395,7 @@ class EventDispatcher {
 		if (path.length == 0)
 			return false;
 		dispatchPath(path, new UiEvent(kind, id, 0.0, 0.0, deltaX, deltaY,
-			0, 0, 0, text, data));
+			0, 0, haxeon.ui.core.UiModifier.empty(), text, data));
 		return true;
 	}
 
@@ -410,7 +409,7 @@ class EventDispatcher {
 				if (path.length > 0) {
 					var target = path[path.length - 1];
 					var event = new UiEvent(UiEventKind.PointerMove, target.id, -1.0, -1.0,
-						0.0, 0.0, 0, 0, 0, null, null, 0, pointerId);
+						0.0, 0.0, 0, 0, haxeon.ui.core.UiModifier.empty(), null, null, 0, pointerId);
 					dispatchPath(path, event);
 				}
 			}
@@ -502,7 +501,7 @@ class EventDispatcher {
 			if (pathHasHandler(previous, index, UiEventKind.HoverLeave))
 				dispatchPath(previous,
 					new UiEvent(UiEventKind.HoverLeave, previous[index].id, x, y,
-						0.0, 0.0, 0, 0, 0, null, null, 0, pointerId), index);
+						0.0, 0.0, 0, 0, haxeon.ui.core.UiModifier.empty(), null, null, 0, pointerId), index);
 			index--;
 		}
 		for (index in common...path.length)
@@ -511,7 +510,7 @@ class EventDispatcher {
 			if (pathHasHandler(path, index, UiEventKind.HoverEnter))
 				dispatchPath(path,
 					new UiEvent(UiEventKind.HoverEnter, path[index].id, x, y,
-						0.0, 0.0, 0, 0, 0, null, null, 0, pointerId), index);
+						0.0, 0.0, 0, 0, haxeon.ui.core.UiModifier.empty(), null, null, 0, pointerId), index);
 			}
 		hoverPaths.set(pointerId, path);
 	}
@@ -661,10 +660,10 @@ class EventDispatcher {
 		var current = nodesById != null ? nodesById.get(node.id.value) : root == null ? null : root.find(node.id);
 		if (current != null && current != node) {
 			// Previous hover paths can still point at nodes replaced by this submission.
-			node.routeStates(StyleStateUtil.withState(node.states, state, enabled));
+			node.routeStates((enabled ? (node.states).insert(state) : (node.states).remove(state)));
 			node = current;
 		}
-		var next = StyleStateUtil.withState(node.states, state, enabled);
+		var next = (enabled ? (node.states).insert(state) : (node.states).remove(state));
 		if (next == node.states)
 			return;
 		node.routeStates(next);

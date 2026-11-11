@@ -103,7 +103,7 @@ class WasmGcDynamicArrays {
 		// __array_check_cast only dispatches to them; inline, its arms made one function too large to optimize.
 		for (native in operations)
 			if (native.name == "__array_check_cast")
-				for (element in plan.arrayElementTypes())
+				for (element in ordinaryElements(plan))
 					if (plan.runtimeTypeIds.id(element) != plan.runtimeTypeIds.id(Dyn))
 						shared(retypeName(element, plan), native.arguments, helper -> {
 							helper.retypeTo(element, 0, 1);
@@ -113,12 +113,16 @@ class WasmGcDynamicArrays {
 			functions.set(native.name, new WasmGcDynamicArrays(module, plan, program, representation, native.arguments.length, functions).emit(module, native));
 	}
 
+	/** Nominal scalar enums always use lane bridges, never the ordinary primitive boxing arms. */
+	static function ordinaryElements(plan:WasmGcTypePlan):Array<IrType>
+		return [for (element in plan.arrayElementTypes()) if (!(switch element { case EnumTag(_): true; default: false; })) element];
+
 	function new(module:WasmModule, plan:WasmGcTypePlan, program:IrProgram, gcRepresentation:WasmGcRepresentation, argumentCount:Int, functions:Map<String, Int>) {
 		this.module = module;
 		this.plan = plan;
 		this.functions = functions;
 		this.program = program;
-		elements = plan.arrayElementTypes();
+		elements = ordinaryElements(plan);
 		throws = WasmModuleSupport.hasExceptions(program);
 		nextLocal = argumentCount;
 		// The representation keeps some locals for the whole function (array references, the required
@@ -340,7 +344,7 @@ class WasmGcDynamicArrays {
 			case Dyn: "Dynamic";
 			case Array(_): "Array";
 			case Function(_, _): "Function";
-			case Obj(name), Enum(name), Virtual(name), Abstract(name): name;
+			case Obj(name), Enum(name), EnumTag(name), Virtual(name), Abstract(name): name;
 			default: "Object";
 		};
 

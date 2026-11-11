@@ -1,5 +1,7 @@
 package haxeon.ui.widgets.settings;
 
+import haxeon.ui.core.UiModifier;
+
 import Observable;
 
 import haxeon.ui.LayoutAlignmentY;
@@ -77,7 +79,7 @@ class ShortcutsPanel implements View implements Observable {
 	 * Handles a key press while recording. Returns true when the press was
 	 * used: assigned, cancelled with Escape, or a modifier held for a chord.
 	 */
-	public function press(key:Int, modifiers:Int):Bool {
+	public function press(key:Int, modifiers:UiModifier):Bool {
 		var id = recordingId;
 		if (id == null)
 			return false;
@@ -85,7 +87,7 @@ class ShortcutsPanel implements View implements Observable {
 			return true;
 		recordingId = null;
 		var normalized = Shortcut.normalizeModifiers(modifiers);
-		if (key == UiKey.Escape && normalized == 0) {
+		if (key == UiKey.Escape && normalized.isEmpty()) {
 			changed();
 			return true;
 		}

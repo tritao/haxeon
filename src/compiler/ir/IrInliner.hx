@@ -844,7 +844,7 @@ class IrInliner {
 				frames[frames.length - 1].push(consultedId);
 		};
 		new IrCopyElision(byName, resolveMethod, consult).run(blocks);
-		return fn.derive(blocks, null, null, bindings);
+		return fn.withBlocks(blocks, bindings);
 	}
 
 	/** Value receivers are non-null values; reference receivers must retain the method call's null check. */
@@ -1174,6 +1174,7 @@ class IrInliner {
 			case LessEqual(out, a, b): LessEqual(use(out), use(a), use(b));
 			case Equal(out, a, b): Equal(use(out), use(a), use(b));
 			case Call(out, name, arguments): Call(use(out), name, [for (argument in arguments) use(argument)]);
+			case Intrinsic(out, operation, arguments): Intrinsic(use(out), operation, [for (argument in arguments) use(argument)]);
 			case CNativeCall(out, name, arguments): CNativeCall(use(out), name, [for (argument in arguments) use(argument)]);
 			case StaticClosure(out, name): StaticClosure(use(out), name);
 			case InstanceClosure(out, name, receiver): InstanceClosure(use(out), name, use(receiver));

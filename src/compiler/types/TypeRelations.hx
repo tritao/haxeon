@@ -8,6 +8,7 @@ import compiler.types.StructProperties;
 enum ConversionPlan {
 	Identity;
 	IntToFloat;
+	AbstractIntToFloat;
 	IntToInt64;
 	FromDynamic;
 	AbstractCast;
@@ -55,6 +56,8 @@ class TypeRelations {
 			return WrapNullable;
 		if (abstractConversion(actual, expected))
 			return AbstractCast;
+		if (abstractIntToFloat(actual, expected))
+			return AbstractIntToFloat;
 		if (!isAssignable(actual, expected))
 			return Incompatible;
 		switch actual {
@@ -121,6 +124,8 @@ class TypeRelations {
 		}
 		if (abstractConversion(actual, expected))
 			return true;
+		if (abstractIntToFloat(actual, expected))
+			return true;
 		return switch expected {
 			case TDynamic: true;
 			case TInstance(expectedKind, _, _):
@@ -180,6 +185,15 @@ class TypeRelations {
 			case TTypeParameter(_, _):
 				return declarations.typeParameterSatisfies(actual, expected);
 			case _:
+		}
+		switch actual {
+			case TAbstract(name, _, _) if (declarations.enumAbstracts.exists(name)):
+				var declaration = declarations.enumAbstracts.get(name);
+				if (declaration.conformances != null) for (conformance in declaration.conformances) {
+					var resolved = declarations.resolve(conformance, declaration.span);
+					if (equals(resolved, expected) || nominalReaches(resolved, expected)) return true;
+				}
+			default:
 		}
 		if (StructProperties.isConstraintType(expected))
 			return StructProperties.satisfies(declarations, actual, representationConstraintName(expected));
@@ -466,4 +480,10 @@ class TypeRelations {
 	function abstractConversion(actual:CompilerType, expected:CompilerType):Bool {
 		return declarations.conversions.allows(actual, expected);
 	}
+
+	function abstractIntToFloat(actual:CompilerType, expected:CompilerType):Bool
+		return switch [actual, expected] {
+			case [TAbstract(_, _, TInt), TFloat]: declarations.conversions.allowsDirectTo(actual, TInt);
+			default: false;
+		};
 }

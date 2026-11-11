@@ -154,7 +154,7 @@ class IrLoadStoreForwarding {
 					scopeEnd: binding.scopeEnd
 				}
 		];
-		return fn.derive(blocks, null, null, bindings);
+		return fn.withBlocks(blocks, bindings);
 	}
 
 	/** Fields available on every normal path into each block. A null value is the analysis top. */

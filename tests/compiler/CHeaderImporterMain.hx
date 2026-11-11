@@ -44,6 +44,13 @@ class CHeaderImporterMain {
 			"record layout parser should keep only a record's own fields, not those of nested records");
 		expect(CHeaderImporter.isUserDeclaration({loc: {}}, ["D:/project/include"], "D:\\project\\include\\fixture.h"),
 			"C header declaration filtering should normalize Windows path separators");
+		var conflictingGroups = false;
+		try CHeaderImporter.importHeader("tests/ffi/import_conflicting_enum.h", "x86_64-linux-gnu", ["tests/ffi"])
+		catch (error:Dynamic) {
+			if (Std.string(error).indexOf('Conflicting C enum value groups for "sample_mode"') < 0) throw error;
+			conflictingGroups = true;
+		}
+		expect(conflictingGroups, "C enum extension groups must agree on their flags contract");
 		var firstModel = CHeaderImporter.importHeader("tests/ffi/import_fixture.h", "x86_64-linux-gnu", ["tests/ffi"]),
 			first = HxiWriter.write(firstModel, generatedHeader("tests/ffi/import_fixture.h", "x86_64-linux-gnu")),
 			second = importHeaderText("tests/ffi/import_fixture.h", "x86_64-linux-gnu", ["tests/ffi"]);
@@ -105,6 +112,8 @@ class CHeaderImporterMain {
 			"borrowed opaque output slots should preserve their ownership annotation");
 		expect(first.indexOf("enum sample_mode : u32") >= 0
 			&& first.indexOf("SAMPLE_MODE_ALTERNATE = 1") >= 0
+			&& first.indexOf("SAMPLE_MODE_EXTRA = 2") >= 0
+			&& first.indexOf("enum sample_mode : u32") == first.lastIndexOf("enum sample_mode : u32")
 			&& first.indexOf("type sample_mode = u32") < 0,
 			"annotated fixed-width enum aliases should import as nominal HXI enums");
 		expect(first.indexOf("flags sample_flags : u32") >= 0

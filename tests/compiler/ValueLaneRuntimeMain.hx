@@ -17,10 +17,10 @@ class ValueLaneRuntimeMain {
 		// Absent optional payloads must clear their storage without inventing a null type handle.
 		var handle:IrObject = {name:"OptionalHandle", isValue:true, base:null, interfaces:[], methods:[], fields:[{name:"type", type:TypeRef}]};
 		for (target in ([HashLink, Wasm32, WasmGc]:Array<IrValueLaneTarget>)) {
-			var factory = new compiler.ir.IrValueArrayFactory(compiler.ir.IrObjectTable.of([handle.name => handle]), Nullable(Obj(handle.name)), target == HashLink ? 64 : 32, target),
+			var factory = new compiler.ir.IrValueArrayFactory(compiler.ir.IrObjectTable.of([handle.name => handle]), Nullable(Obj(handle.name)), target == HashLink ? 64 : 32, target, 0),
 				program = new IrProgram("main"), body = new compiler.ir.IrBuilder();
 			body.returnValue(body.constInt(42)); program.objects = [handle];
-			program.functions = [new IrFunction("main", body.arguments, I32, body.blocks, None, [])].concat(factory.functions()).concat(factory.helpers.functions());
+			program.functions = [new IrFunction("main", body.arguments, I32, body.blocks, Ordinary)].concat(factory.functions()).concat(factory.helpers.functions());
 			program.natives = factory.natives().concat(factory.helpers.natives());
 			compiler.ir.IrVerifier.verify(program);
 		}

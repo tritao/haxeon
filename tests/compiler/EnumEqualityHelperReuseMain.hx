@@ -39,6 +39,11 @@ class EnumEqualityHelperReuseMain {
 			if (StringTools.startsWith(fn.name, "$enum-equals:")) helpers++;
 		if (helpers != 1)
 			throw 'expected one shared enum equality helper for $target inline=$inlineEnabled, found $helpers';
+		compiler.update("Alpha.hx", "enum Alpha { One; }");
+		compiler.update("Main.hx", "function main():Int { var extra:Dynamic=Alpha.One; return extra != null && A.same(new Box(Value.Item(1)), new Box(Value.Item(1))) && B.same(Value.Item(2), Value.Item(2)) ? 42 : 1; }");
+		updated = compiler.compile("Main");
+		if (new IrInterpreter(updated.ir).run("main") != 42)
+			throw 'adding an enum changed cached Dynamic equality for $target inline=$inlineEnabled';
 		switch target {
 			case "hl": new HlBackend().compile(updated.ir, {target: HashLink, debugNames: true});
 			case "wasm32": new WasmBackend().compile(updated.ir, {target: Wasm32, debugNames: true});

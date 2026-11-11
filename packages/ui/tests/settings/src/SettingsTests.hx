@@ -549,7 +549,7 @@ class SettingsTests {
 		var commands = sampleCommands(log);
 		check(commands.shortcutsFor("editor.palette").length == 2, "registered shortcuts, primary first");
 		commands.setShortcuts("scene.frame", [new Shortcut(UiKey.F2)]);
-		check(commands.dispatch(UiKey.F2, 0) && log.join(",") == "frame", "a custom binding runs its command");
+		check(commands.dispatch(UiKey.F2, haxeon.ui.core.UiModifier.empty()) && log.join(",") == "frame", "a custom binding runs its command");
 		commands.setShortcuts("editor.save", []);
 		check(!commands.dispatch(UiKey.S, UiModifier.Control) && log.length == 1, "an unbound command no longer runs");
 		commands.resetShortcuts("editor.save");
@@ -562,7 +562,7 @@ class SettingsTests {
 		commands.setShortcuts("plugin.later", [new Shortcut(UiKey.F5)]);
 		check(commands.customShortcutIds().indexOf("plugin.later") >= 0, "bindings for commands not registered yet are kept");
 		commands.register(new Command("plugin.later", "Later", () -> log.push("later")));
-		check(commands.dispatch(UiKey.F5, 0) && log[2] == "later", "and apply once the command is registered");
+		check(commands.dispatch(UiKey.F5, haxeon.ui.core.UiModifier.empty()) && log[2] == "later", "and apply once the command is registered");
 	}
 
 	static function shortcutPersistence():Void {
@@ -609,7 +609,7 @@ class SettingsTests {
 		check(panel.shortcutText("editor.palette") == "Ctrl+K, Ctrl+P" && panel.shortcutText("scene.frame") == "None",
 			"shortcut text");
 
-		check(!panel.press(UiKey.F2, 0), "keys are ignored until a row records");
+		check(!panel.press(UiKey.F2, UiModifier.empty()), "keys are ignored until a row records");
 		panel.record("scene.frame");
 		check(panel.recordingId == "scene.frame" && changes == 1, "clicking a shortcut starts recording");
 		check(panel.press(340, UiModifier.Shift) && panel.recordingId == "scene.frame", "a modifier alone keeps waiting");
@@ -617,7 +617,7 @@ class SettingsTests {
 		check(panel.shortcutText("scene.frame") == "Shift+F", "lock keys are not part of the chord");
 
 		panel.record("scene.frame");
-		check(panel.press(UiKey.Escape, 0) && panel.shortcutText("scene.frame") == "Shift+F", "Escape cancels recording");
+		check(panel.press(UiKey.Escape, UiModifier.empty()) && panel.shortcutText("scene.frame") == "Shift+F", "Escape cancels recording");
 
 		panel.record("scene.frame");
 		panel.press(UiKey.S, UiModifier.Control);

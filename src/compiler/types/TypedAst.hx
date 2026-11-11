@@ -100,7 +100,6 @@ enum TypedExpressionKind {
 	TCall(name:String, arguments:Array<TypedExpression>);
 
 	/** A call to a helper the IR does not have yet: a pass makes it from the request, which names the helper's subject and operation. */
-	TRequestCall(arguments:Array<TypedExpression>, request:compiler.Provides.HelperRequest<CompilerType>);
 	TCNativeCall(name:String, arguments:Array<TypedExpression>);
 	TCollectionCall(receiver:TypedExpression, operation:String, arguments:Array<TypedExpression>);
 	TClosureCall(callee:TypedExpression, arguments:Array<TypedExpression>);
@@ -130,6 +129,8 @@ enum TypedExpressionKind {
 	TArrayUnshift(array:TypedExpression, value:TypedExpression);
 	TArrayPop(array:TypedExpression);
 	TArraySort(array:TypedExpression, comparator:TypedExpression);
+	TEnumDynamicBox(value:TypedExpression, enumType:CompilerType);
+	TEnumDynamicView(array:TypedExpression, enumType:CompilerType);
 }
 
 /** Resolved field initializer in a typed object literal. */
@@ -296,6 +297,18 @@ enum abstract FunctionOriginKind(String) {
 	var Helper = "helper";
 }
 
+/** The declared role of a typed function, independent of its generated linkage name. */
+enum TypedFunctionRole {
+	UserFunction;
+	GenericFunction;
+	LambdaFunction;
+	IterationFunction;
+	OtherFunction;
+
+	/** A helper that serves `operation` for `subject`; IR generation lowers the subject to a `TypeKey` (see `IrFunctionKind.Provider`). */
+	ProviderFunction(subject:CompilerType, operation:compiler.Provides.ProviderOperation);
+}
+
 /**
  * Fully typed function or method body.
  *
@@ -304,6 +317,7 @@ enum abstract FunctionOriginKind(String) {
  */
 typedef TypedFunction = {
 	final name:String;
+	final role:TypedFunctionRole;
 
 	/**
 	 * The function this one is specialized from, written in, or made for. The two are typed, invalidated and kept together:
@@ -332,8 +346,6 @@ typedef TypedFunction = {
 	/** Declared `@:expose`: kept and exported to the host where the target has one. */
 	final ?isExposed:Bool;
 
-	/** What this function serves for a type when a generator made it as a helper (`compiler.Provides`); absent for any other function. */
-	final ?provides:compiler.Provides<CompilerType>;
 
 	final arguments:Array<{name:String, type:CompilerType}>;
 	final result:CompilerType;

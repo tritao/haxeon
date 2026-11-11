@@ -67,6 +67,30 @@ class DeclarationIndex {
 
 	public final aliasList:Array<compiler.syntax.Ast.AstTypeAlias> = [];
 	public final abstracts:Map<String, compiler.syntax.Ast.AstAbstract> = [];
+	final enumAbstractViews:Map<String, compiler.syntax.Ast.AstAbstract> = [];
+
+	/** Both abstract declaration forms share conversion and method lookup. */
+	public function abstractDeclaration(name:String):Null<compiler.syntax.Ast.AstAbstract> {
+		var ordinary = abstracts.get(name);
+		if (ordinary != null) return ordinary;
+		var known = enumAbstractViews.get(name);
+		if (known != null) return known;
+		var declaration = enumAbstracts.get(name);
+		if (declaration == null) return null;
+		var view:compiler.syntax.Ast.AstAbstract = {
+			name: name, metadata: declaration.metadata, typeParameters: [], underlying: declaration.underlying,
+			fromTypes: declaration.fromTypes, toTypes: declaration.toTypes, methods: [], span: declaration.span
+		};
+		enumAbstractViews.set(name, view);
+		return view;
+	}
+
+	public function abstractNames():Array<String> {
+		var names = [for (name in abstracts.keys()) name];
+		for (name in enumAbstracts.keys()) names.push(name);
+		names.sort(Reflect.compare);
+		return names;
+	}
 	public final interfaces:Map<String, AstInterface> = [];
 	public final classes:Map<String, AstClass> = [];
 	public final symbols:Map<String, DeclarationSymbol> = [];
@@ -453,7 +477,7 @@ class DeclarationIndex {
 		}
 		var enumAbstract = enumAbstracts.get(name);
 		if (enumAbstract != null)
-			return resolveInner(enumAbstract.underlying, span, resolving, substitutions);
+			return TAbstract(name, [], resolveInner(enumAbstract.underlying, span, resolving, substitutions));
 		var decl = abstracts.get(name);
 		if (decl != null) {
 			if (decl.typeParameters.length != 0)

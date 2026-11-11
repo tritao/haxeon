@@ -41,5 +41,28 @@
   },
   "enumNames": {
     "nk_resource_asset_load_state": "ResourceAssetLoadState"
+  },
+  "enumValueNames": {
+    "nk_result": {
+      "NK_RESULT_HTTP_DNS": "HttpDns",
+      "NK_RESULT_HTTP_CONNECTION": "HttpConnection",
+      "NK_RESULT_HTTP_TLS": "HttpTls",
+      "NK_RESULT_HTTP_TIMEOUT": "HttpTimeout",
+      "NK_RESULT_HTTP_CANCELED": "HttpCanceled",
+      "NK_RESULT_HTTP_PROTOCOL": "HttpProtocol",
+      "NK_RESULT_HTTP_RESPONSE_LIMIT": "HttpResponseLimit",
+      "NK_RESULT_HTTP_REDIRECT": "HttpRedirect",
+      "NK_RESULT_HTTP_PROXY": "HttpProxy",
+      "NK_RESULT_HTTP_WOULD_BLOCK": "HttpWouldBlock",
+      "NK_RESULT_TRANSPORT_DNS": "TransportDns",
+      "NK_RESULT_TRANSPORT_CONNECTION": "TransportConnection",
+      "NK_RESULT_TRANSPORT_TIMEOUT": "TransportTimeout",
+      "NK_RESULT_TRANSPORT_PROTOCOL": "TransportProtocol",
+      "NK_RESULT_TRANSPORT_CANCELED": "TransportCanceled",
+      "NK_RESULT_TRANSPORT_WOULD_BLOCK": "TransportWouldBlock",
+      "NK_RESULT_TRANSPORT_CLOSED": "TransportClosed",
+      "NK_RESULT_TRANSPORT_ADDRESS_IN_USE": "TransportAddressInUse",
+      "NK_RESULT_TRANSPORT_RECEIVE_OVERFLOW": "TransportReceiveOverflow"
+    }
   }
 }

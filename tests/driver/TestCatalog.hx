@@ -32,6 +32,13 @@ typedef ExecutableCase = {
 class TestCatalog {
 	static final compilerMains = [
 		"ValueLaneRuntimeMain",
+		"EnumTagStorageMain",
+		"RawRepresentableMain",
+		"FlagsMain",
+		"InterpreterInt32Main",
+		"EnumTagRewriteMain",
+		"EnumTagEqualityMain",
+		"SourceEnumTagMain",
 		"GeneratedDependencyCompletionMain",
 		"KeyPathTypingMain",
 		"KeyPathSpecMain",
@@ -64,6 +71,9 @@ class TestCatalog {
 		"OpportunityCensusMain",
 		"AllocationReportMain",
 		"GenericDynamicArgumentMain",
+		"GenericScalarMapOwnerMain",
+		"WasmClosureVerificationOrderMain",
+		"ScalarAbiEligibilityMain",
 		"GenericStructFunctionMain",
 		"GenericOwnerPolicyMain",
 		"GenericOwnerRecursionMain",
@@ -143,6 +153,7 @@ class TestCatalog {
 		"EnumInterpreterTypeMain",
 		"EnumDynamicOrderMain",
 		"NullaryEnumCacheMain",
+		"NativeEnumProjectionMain",
 		"ValueInterfaceHelperReuseMain",
 		"NominalInterfaceTypeMain",
 		"NullStringMapMain",
@@ -206,6 +217,11 @@ class TestCatalog {
 		"HxiInterfaceOrderMain",
 		"UnreachableDeclarationMain",
 		"WasmBackendMain",
+		"WasmStringFinalizationMain",
+		"WasmClosureReceiverRuntimeMain",
+		"ReflectionTagProjectionMain",
+		"EnumTagReleaseSizeMain",
+		"EnumEscapeReachMain",
 		"WasmDeepStructureMain",
 		"CHeaderImporterMain",
 		"CxxHeaderImporterMain",
@@ -264,6 +280,7 @@ class TestCatalog {
 		"CompilerKeepAliveMain"
 	];
 	static final runtimeMains = [
+		"EnumTagPatchMain",
 		"WorkerNullAccessMain",
 		"RuntimeDomainMain",
 		"GcAllocationPathsMain",

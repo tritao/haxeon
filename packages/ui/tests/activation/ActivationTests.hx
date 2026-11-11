@@ -34,7 +34,7 @@ class ActivationTests {
         var target:Null<RenderNode> = null;
         root.walk(function(node) {
             if (target == null && node.semantics != null &&
-                (node.semantics.actions & AccessibilityAction.Activate) != 0 &&
+                node.semantics.actions.contains(AccessibilityAction.Activate) &&
                 (label == "" || node.semantics.label == label)) target = node;
         });
         if (target == null) throw "Missing activation target: " + label;
@@ -45,7 +45,7 @@ class ActivationTests {
         node.on(UiEventKind.Click, function(_) rawClicks++);
         for (button in [1, 2, 3, 4]) {
             ui.pointerDown(x, y, button);
-            check((ui.interactionStates.get(node.id) & StyleState.Pressed) == 0,
+            check(!ui.interactionStates.get(node.id).contains(StyleState.Pressed),
                 label + ": auxiliary press showed primary pressed feedback");
             ui.pointerUp(x, y, button);
         }
@@ -62,16 +62,16 @@ class ActivationTests {
         ui.pointerUp(500, 500, 0);
         check(calls() == 0, label + ": cancelled or outside release activated");
         ui.pointerDown(x, y, 0, UiModifier.Control);
-        check(disabled || (ui.interactionStates.get(node.id) & StyleState.Pressed) != 0,
+        check(disabled || ui.interactionStates.get(node.id).contains(StyleState.Pressed),
             label + ": primary press lost pressed feedback");
         ui.pointerUp(x, y, 0, UiModifier.Control);
         if (disabled) {
             check(calls() == 0 && !ui.focusWidget(node.id) &&
-                !ui.accessibilityAction(node.id.value, AccessibilityAction.Activate, null, -1, -1, 1),
+                !ui.accessibilityAction(node.id.value, haxeon.ui.semantics.AccessibilityRequest.Activate, null, -1, -1, 1),
                 label + ": disabled control activated");
         } else {
             check(calls() == 1, label + ": primary click did not activate exactly once");
-            check(ui.accessibilityAction(node.id.value, AccessibilityAction.Activate, null, -1, -1, 1),
+            check(ui.accessibilityAction(node.id.value, haxeon.ui.semantics.AccessibilityRequest.Activate, null, -1, -1, 1),
                 label + ": accessibility activation failed");
             check(ui.focusWidget(node.id), label + ": keyboard focus failed");
             ui.key(UiEventKind.KeyDown, UiKey.Enter);
@@ -91,7 +91,7 @@ class ActivationTests {
         var eventButton = new Button("Event button", style());
         eventButton.onClickEvent = function(event) {
             if (event.kind == UiEventKind.Click)
-                check(event.button == 0 && (event.modifiers & UiModifier.Control) != 0, "Click event metadata changed");
+                check(event.button == 0 && event.modifiers.contains(UiModifier.Control), "Click event metadata changed");
             calls++;
         };
         exercise(fonts, eventButton, "Event button", function() return calls);

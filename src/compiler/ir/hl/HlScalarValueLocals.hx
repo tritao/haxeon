@@ -93,10 +93,10 @@ class HlScalarValueLocals {
 					return false;
 			}
 			switch field.type {
-				case Obj(name) if (objects.hasObject(name) && objects.object(name).isValue):
-					return false;
-				case Nullable(Obj(name)) if (objects.hasObject(name) && objects.object(name).isValue):
-					return false;
+				case Obj(name), Nullable(Obj(name)):
+					var object = objects.object(name);
+					if (object != null && object.isValue)
+						return false;
 				default:
 			}
 		}

@@ -22,7 +22,8 @@ function main():Int {
 		return 2;
 	var failing = new combine_fnCallback(function(left:Int, right:Float, userData:Null<hl.Abstract<"native_pointer">>):Int throw "callback failed");
 	WasmCallbacks.apply(failing, 1);
-	if (failing.errorKind() != 1 || failing.takeError().toString() != "callback failed" || failing.errorKind() != 0)
+	if (failing.errorKind() != HxiCallbackError.Exception || failing.takeError().toString() != "callback failed"
+		|| failing.errorKind() != HxiCallbackError.None)
 		return 3;
 	if (!combine.close() || !halve.close() || !failing.close() || combine.close())
 		return 4;

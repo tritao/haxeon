@@ -362,7 +362,7 @@ class WasmGcTypePlan {
 			case Void:
 				throw "Void has no Wasm GC value type";
 			// A native callback is the host's function-table index, like a raw pointer an i32 whose null is 0.
-			case I32, Bool, RawPtr, Abstract("native_callback"): I32;
+			case I32, EnumTag(_), Bool, RawPtr, Abstract("native_callback"): I32;
 			case I64: I64;
 			case F32: F64;
 			case F64: F64;
@@ -414,6 +414,7 @@ class WasmGcTypePlan {
 			case TypeRef: "T";
 			case Array(element): "A" + segment(typeKey(element));
 			case Enum(name): "E" + segment(name);
+			case EnumTag(name): "e" + segment(name);
 			case Obj(name): "O" + segment(name);
 			case Abstract(name): "H" + segment(name);
 			case Virtual(name): "V" + segment(name);

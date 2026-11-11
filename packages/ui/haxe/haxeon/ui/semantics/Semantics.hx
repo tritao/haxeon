@@ -11,8 +11,8 @@ class Semantics {
 	/** Where a deferred value is read from, and the source's revision when it was set. */
 	var valueSource:Null<SemanticsValueSource>;
 	var valueRevision:Int;
-	public var states:Int;
-	public var actions:Int;
+	public var states:AccessibilityState;
+	public var actions:AccessibilityAction;
 	public var numericValue:Float;
 	public var numericMinimum:Float;
 	public var numericMaximum:Float;
@@ -41,8 +41,8 @@ class Semantics {
 		storedValue = value;
 		valueSource = null;
 		valueRevision = 0;
-		states = 0;
-		actions = 0;
+		states = AccessibilityState.empty();
+		actions = AccessibilityAction.empty();
 		numericValue = 0.0;
 		numericMinimum = 0.0;
 		numericMaximum = 0.0;

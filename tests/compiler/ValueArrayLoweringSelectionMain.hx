@@ -24,16 +24,19 @@ class ValueArrayLoweringSelectionMain {
 			throw 'Unrelated bodies were rebuilt per element shape: one=$one eight=$eight';
 		if (slope > MAX_BYTES_PER_FUNCTION_PER_SHAPE)
 			throw 'An element shape costs $slope bytes per unrelated function, above ${MAX_BYTES_PER_FUNCTION_PER_SHAPE}: one=$one eight=$eight';
-		Sys.println('PASS: unrelated body allocation stays bounded across element shapes ($one / $eight bytes, ${Math.round(slope)} bytes per function per shape)');
+		var metadataOnly = overhead(1, true);
+		if (metadataOnly > one * 1.25)
+			throw 'Unused array signatures triggered a Dynamic-view rewrite: plain=$one metadata=$metadataOnly';
+		Sys.println('PASS: unrelated body allocation stays bounded across element shapes ($one / $eight bytes, ${Math.round(slope)} bytes per function per shape; unused array metadata $metadataOnly bytes)');
 	}
 
-	static function overhead(shapes:Int):Float
-		return measure(shapes, FUNCTIONS) - measure(shapes, 0);
+	static function overhead(shapes:Int, unusedArrayMetadata:Bool = false):Float
+		return measure(shapes, FUNCTIONS, unusedArrayMetadata) - measure(shapes, 0, unusedArrayMetadata);
 
-	static function measure(shapes:Int, functions:Int):Float {
+	static function measure(shapes:Int, functions:Int, unusedArrayMetadata:Bool):Float {
 		var program = new IrProgram("main"), entry = new IrBuilder();
 		entry.returnValue(entry.constInt(42));
-		program.functions.push(new IrFunction("main", entry.arguments, I32, entry.blocks, None, []));
+		program.functions.push(new IrFunction("main", entry.arguments, I32, entry.blocks, Ordinary));
 		for (i in 0...shapes) {
 			var name = "Record" + i;
 			program.objects.push({
@@ -46,12 +49,17 @@ class ValueArrayLoweringSelectionMain {
 			});
 			program.staticFields.push({name: "values" + i, type: Array(Obj(name))});
 		}
+		program.objects.push({name: "Ordinary", isValue: false, base: null, interfaces: [], methods: [], fields: []});
 		for (i in 0...functions) {
 			var b = new IrBuilder(), result = b.constInt(i);
+			if (unusedArrayMetadata) {
+				b.argument("unusedDynamic", Array(Dyn));
+				b.argument("unusedReference", Array(Obj("Ordinary")));
+			}
 			for (j in 0...20)
 				result = b.add(result, b.constInt(j));
 			b.returnValue(result);
-			program.functions.push(new IrFunction("unrelated" + i, b.arguments, I32, b.blocks, None, []));
+			program.functions.push(new IrFunction("unrelated" + i, b.arguments, I32, b.blocks, Ordinary));
 		}
 		var before = AllocationMeter.sample();
 		IrValueArrayProgramRewrite.rewriteAll(program, 64, HashLink);

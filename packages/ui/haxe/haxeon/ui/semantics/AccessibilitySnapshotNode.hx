@@ -8,8 +8,8 @@ class AccessibilitySnapshotNode {
 	public final parentId:Int;
 	public final childIndex:Int;
 	public final role:AccessibilityRole;
-	public final states:Int;
-	public final actions:Int;
+	public final states:AccessibilityState;
+	public final actions:AccessibilityAction;
 	public final bounds:Rect;
 	public final semantics:Semantics;
 	public final setSize:Int;
@@ -24,7 +24,7 @@ class AccessibilitySnapshotNode {
 	public final orientation:AccessibilityOrientation;
 
 	public function new(id:Int, parentId:Int, childIndex:Int, role:AccessibilityRole,
-			states:Int, actions:Int, bounds:Rect, semantics:Semantics) {
+			states:AccessibilityState, actions:AccessibilityAction, bounds:Rect, semantics:Semantics) {
 		this.id = id;
 		this.parentId = parentId;
 		this.childIndex = childIndex;

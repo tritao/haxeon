@@ -1,5 +1,6 @@
 package compiler.semantic;
 
+import compiler.types.TypedAst.TypedFunctionRole;
 import compiler.Source.SourceSpan;
 import compiler.modules.ModulePath;
 import compiler.syntax.Token;
@@ -623,7 +624,7 @@ class SemanticIndex {
 		currentCallerName = owner;
 		currentDependencyKind = SemanticDependencyKind.Initializer;
 		var synthetic:TypedFunction = {
-			name: owner,
+			name: owner, role: UserFunction,
 			owner: null,
 			isStatic: true,
 			isConstructor: false,
@@ -882,7 +883,7 @@ class SemanticIndex {
 				var token = referenceToken(tokens, expression.span, sourceLocalName(identity));
 				if (symbols.exists(id) && token != null)
 					bind(id, token.span);
-			case TCopy(value, _), TNullableWrap(value), TIntToFloat(value), TIntToInt64(value), TFloatToInt(value), TToDynamic(value), TNegate(value),
+			case TEnumDynamicBox(value, _), TEnumDynamicView(value, _), TCopy(value, _), TNullableWrap(value), TIntToFloat(value), TIntToInt64(value), TFloatToInt(value), TToDynamic(value), TNegate(value),
 				TNot(value), TThrowExpression(value), TNoReturn(value), TCast(value), TAbiCast(value), TToInterface(value, _), TArrayLength(value),
 				TStringLength(value):
 				indexExpression(fn, value, resolve, resolveEnumCase);
@@ -916,10 +917,6 @@ class SemanticIndex {
 					indexExpression(fn, argument, resolve, resolveEnumCase);
 			case TCall(name, arguments), TCNativeCall(name, arguments):
 				addCall(bindNamed(resolve, specializationOrigin(name), expression.span), expression.span, name);
-				for (argument in arguments)
-					indexExpression(fn, argument, resolve, resolveEnumCase);
-			case TRequestCall(arguments, request):
-				addCall(bindNamed(resolve, specializationOrigin(request.name), expression.span), expression.span, request.name);
 				for (argument in arguments)
 					indexExpression(fn, argument, resolve, resolveEnumCase);
 			case TFunctionRef(name):

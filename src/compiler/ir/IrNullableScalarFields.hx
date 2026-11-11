@@ -51,7 +51,7 @@ class IrNullableScalarFields {
 			copy.terminator = block.terminator;
 			blocks.push(copy);
 		}
-		return changed ? fn.derive(blocks) : fn;
+		return changed ? fn.withBlocks(blocks) : fn;
 	}
 
 	function needsRewrite(fn:IrFunction):Bool {
@@ -100,7 +100,7 @@ class IrNullableScalarFields {
 		builder.returnValue(value);
 		builder.select(changed);
 		builder.returnValue(builder.toDyn(normalized, type));
-		helpers.set(name, new IrFunction(name, builder.arguments, type, builder.blocks, Serves(TypeKey.of(type), ProviderOperation.detailed(ProviderOperation.NullableScalarHelper, name)), []));
+		helpers.set(name, new IrFunction(name, builder.arguments, type, builder.blocks, Provider(TypeKey.of(type), ProviderOperation.detailed(ProviderOperation.NullableScalarHelper, name))));
 		return name;
 	}
 

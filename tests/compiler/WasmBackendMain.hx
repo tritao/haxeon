@@ -51,9 +51,10 @@ class WasmBackendMain {
 			+ "function dead():Int { var erased:Dynamic = deadSource; var casted:Bool->Bool = cast erased; return 0; } "
 			+ "function main():Int return 42;");
 		compiler.backend.wasm.linear.WasmLinearClosureAdapters.generate(deadClosure, [], deadClosure.entryPoint, []);
-		for (fn in deadClosure.functions)
-			if (StringTools.startsWith(fn.name, "__haxeon_closure_adapter_") || StringTools.startsWith(fn.name, "__haxeon_closure_cast_"))
-				throw "unreachable closure casts must not generate adapters";
+		for (fn in deadClosure.functions) switch fn.kind {
+			case ClosureAdapter(_, _), ClosureCast(_): throw "unreachable closure casts must not generate adapters";
+			default:
+		}
 		var modeProgram = Frontend.compile("function main():Int return 42;");
 		for (target in [Wasm32, WasmGc]) {
 			var release = new WasmBackend().compile(modeProgram, {target: target, debugNames: true, developmentMetadata: false}).bytes;
@@ -172,7 +173,7 @@ class WasmBackendMain {
 			deep.select(next);
 		}
 		deep.returnValue(deep.fieldGet(deepValue, "x", I32));
-		var deepFunction = new IrFunction("deep-value-flow", deep.arguments, I32, deep.blocks, None, []),
+		var deepFunction = new IrFunction("deep-value-flow", deep.arguments, I32, deep.blocks, Ordinary),
 			deepResult = compiler.ir.IrScalarReplacement.rewrite(deepFunction, copyObjects, true);
 		for (block in deepResult.blocks) for (located in block.instructions) switch located.value {
 			case NewObject(_, _), FieldGet(_, _, _), FieldSet(_, _, _): throw "Deep value flow must be scalar-replaced";
@@ -223,7 +224,7 @@ class WasmBackendMain {
 		var rawPointerProgram = Frontend.compile("function main():Int return 42;");
 		rawPointerProgram.entryPoint = "main";
 		rawPointerProgram.functions = [
-			new IrFunction("main", rawPointerBuilder.arguments, RawPtr, rawPointerBuilder.blocks, None, [])
+			new IrFunction("main", rawPointerBuilder.arguments, RawPtr, rawPointerBuilder.blocks, Ordinary)
 		];
 		rawPointerProgram.cNatives.push({
 			name: "inspect_raw_pointer",
@@ -245,8 +246,8 @@ class WasmBackendMain {
 		generatedNativeBuilder.returnValue(generatedNativeBuilder.constInt(0));
 		var generatedNativeProgram = Frontend.compile("function main():Int return 42;");
 		generatedNativeProgram.functions = [
-			new IrFunction("main", [], I32, generatedNativeBuilder.blocks, None, []),
-			new IrFunction("runtime.Ryu.format", [], Bytes, [], None, [])
+			new IrFunction("main", [], I32, generatedNativeBuilder.blocks, Ordinary),
+			new IrFunction("runtime.Ryu.format", [], Bytes, [], Ordinary)
 		];
 		generatedNativeProgram.natives.push({
 			name: "__std_string",
@@ -260,7 +261,7 @@ class WasmBackendMain {
 		if (!generatedNativeReachable.exists("runtime.Ryu.format"))
 			throw "Wasm reachability must retain runtime helpers called by generated native wrappers";
 		var unusedRuntimeProgram = Frontend.compile("function main():Int return 42;");
-		unusedRuntimeProgram.functions.push(new IrFunction("runtime.Ryu.format", [], Bytes, [], None, []));
+		unusedRuntimeProgram.functions.push(new IrFunction("runtime.Ryu.format", [], Bytes, [], Ordinary));
 		if (IrReachability.withGeneratedRuntimeRoots(unusedRuntimeProgram, "main").exists("runtime.Ryu.format"))
 			throw "Wasm reachability must not root unused generated runtime helpers";
 		var intrinsicCompiler = new Compiler(null, CompilerIntrinsics.configuration());
@@ -320,7 +321,7 @@ class WasmBackendMain {
 		callbackRoots.newObject("Marker");
 		callbackRoots.call("retain", [callback, managed, optional], Void);
 		callbackRoots.returnValue(callbackRoots.constInt(42));
-		var callbackFunction = new IrFunction("callbackRoots", callbackRoots.arguments, I32, callbackRoots.blocks, None, []), callbackSafepoint = false;
+		var callbackFunction = new IrFunction("callbackRoots", callbackRoots.arguments, I32, callbackRoots.blocks, Ordinary), callbackSafepoint = false;
 		for (point in WasmGcRoots.analyze(callbackFunction)) if (point.block == 0 && point.instruction == 0) {
 			callbackSafepoint = true;
 			if (point.liveReferences.indexOf(callback.id) >= 0 || point.liveReferences.indexOf(managed.id) < 0
@@ -336,7 +337,7 @@ class WasmBackendMain {
 		nestedBuilder.fieldGet(nestedSource, "tag", I32);
 		nestedBuilder.call("retain", [nestedCopy, nestedChild], Void);
 		nestedBuilder.returnValue(nestedBuilder.constInt(42));
-		var nestedFunction = new IrFunction("nestedRoots", nestedBuilder.arguments, I32, nestedBuilder.blocks, None, []),
+		var nestedFunction = new IrFunction("nestedRoots", nestedBuilder.arguments, I32, nestedBuilder.blocks, Ordinary),
 			rootedInlineRead = false;
 		for (point in WasmGcRoots.analyze(nestedFunction, nestedProgram)) {
 			if (point.instruction == 1)
@@ -352,7 +353,7 @@ class WasmBackendMain {
 			manyRootArguments.push(manyRootsBuilder.argument('root$index', Obj("Marker")));
 		manyRootsBuilder.call("root_safepoint", manyRootArguments, Void);
 		manyRootsBuilder.returnValue(manyRootsBuilder.constInt(0));
-		var manyRootsFunction = new IrFunction("manyRoots", manyRootsBuilder.arguments, I32, manyRootsBuilder.blocks, None, []),
+		var manyRootsFunction = new IrFunction("manyRoots", manyRootsBuilder.arguments, I32, manyRootsBuilder.blocks, Ordinary),
 			manyLiveReferences:Array<Int> = [];
 		for (point in WasmGcRoots.analyze(manyRootsFunction))
 			if (point.block == 0 && point.instruction == 0)
@@ -380,7 +381,7 @@ class WasmBackendMain {
 		entryLoopBuilder.jump(entryBlock);
 		entryLoopBuilder.select(entryLoopExit);
 		entryLoopBuilder.returnValue(entryLoopBuilder.constInt(0));
-		var entryLoop = new IrFunction("entryLoop", entryLoopBuilder.arguments, I32, entryLoopBuilder.blocks, None, []),
+		var entryLoop = new IrFunction("entryLoop", entryLoopBuilder.arguments, I32, entryLoopBuilder.blocks, Ordinary),
 			entryLoopStructurer = new WasmStructurer(entryLoop);
 		if (!entryLoopStructurer.analysis.reducible || !entryLoopStructurer.canUseStructured())
 			throw "An entry-rooted single-header loop must remain reducible and structurably emitted";
@@ -397,7 +398,7 @@ class WasmBackendMain {
 		diamondBuilder.jump(diamondMerge);
 		diamondBuilder.select(diamondMerge);
 		diamondBuilder.returnValue(diamondBuilder.constInt(42));
-		var diamondAnalysis = new WasmCfgAnalysis(new IrFunction("diamond", diamondBuilder.arguments, I32, diamondBuilder.blocks, None, []));
+		var diamondAnalysis = new WasmCfgAnalysis(new IrFunction("diamond", diamondBuilder.arguments, I32, diamondBuilder.blocks, Ordinary));
 		if (diamondAnalysis.postImmediate.get(diamondEntry) != diamondMerge.id
 			|| diamondAnalysis.postImmediate.get(diamondLeft.id) != diamondMerge.id
 			|| diamondAnalysis.postImmediate.get(diamondRight.id) != diamondMerge.id
@@ -413,7 +414,7 @@ class WasmBackendMain {
 		exitsBuilder.returnValue(exitsBuilder.constInt(1));
 		exitsBuilder.select(exitsRight);
 		exitsBuilder.returnValue(exitsBuilder.constInt(2));
-		var exitsAnalysis = new WasmCfgAnalysis(new IrFunction("multipleExits", exitsBuilder.arguments, I32, exitsBuilder.blocks, None, []));
+		var exitsAnalysis = new WasmCfgAnalysis(new IrFunction("multipleExits", exitsBuilder.arguments, I32, exitsBuilder.blocks, Ordinary));
 		if (exitsAnalysis.postImmediate.get(exitsEntry) != exitsEntry || exitsAnalysis.mergeFor(exitsLeft.id, exitsRight.id) != null)
 			throw "Post-dominators must not invent a shared merge for distinct function exits";
 		var canonical = CanonicalIrCodec.decode(CanonicalIrCodec.encode(referenceProgram));
@@ -544,7 +545,7 @@ class WasmBackendMain {
 				result: I32
 			}
 		];
-		int64FlagsProgram.functions.push(new IrFunction("main", [], I32, int64FlagsBuilder.blocks, None, []));
+		int64FlagsProgram.functions.push(new IrFunction("main", [], I32, int64FlagsBuilder.blocks, Ordinary));
 		var int64FlagsWasm = new WasmBackend().compile(int64FlagsProgram, {target: Wasm32, debugNames: true});
 		if (int64FlagsWasm.bytes.length < 8 || int64FlagsWasm.bytes.get(0) != 0 || int64FlagsWasm.bytes.get(1) != 97)
 			throw "Wasm Int64 flag operations failed to lower into a module";
@@ -796,7 +797,7 @@ class WasmBackendMain {
 		];
 		var mainBuilder = new IrBuilder();
 		mainBuilder.returnValue(mainBuilder.constInt(42));
-		program.functions.push(new IrFunction("main", mainBuilder.arguments, I32, mainBuilder.blocks, None, []));
+		program.functions.push(new IrFunction("main", mainBuilder.arguments, I32, mainBuilder.blocks, Ordinary));
 
 		var plan = new WasmGcTypePlan(program),
 			baseIndex = plan.objectType("Base"),
@@ -1207,7 +1208,7 @@ class WasmBackendMain {
 			fields: [{name: "value", type: I32}],
 			methods: []
 		});
-		program.functions.push(new IrFunction("main", [], I32, builder.blocks, None, []));
+		program.functions.push(new IrFunction("main", [], I32, builder.blocks, Ordinary));
 		return new WasmBackend().compile(program, {target: Wasm32, debugNames: true}).bytes;
 	}
 
@@ -1240,7 +1241,7 @@ class WasmBackendMain {
 		block.instructions.push(new Located(ToDyn(boxed, wide), provenance));
 		block.instructions.push(new Located(Call(text, "__std_string", [boxed]), provenance));
 		block.terminator = new Located(Return(text), provenance);
-		program.functions.push(new IrFunction("stringifyInt64", [high, low], Bytes, [block], None, []));
+		program.functions.push(new IrFunction("stringifyInt64", [high, low], Bytes, [block], Ordinary));
 		return program;
 	}
 

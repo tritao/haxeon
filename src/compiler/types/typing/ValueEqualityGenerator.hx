@@ -1,5 +1,6 @@
 package compiler.types.typing;
 
+import compiler.types.TypedAst.TypedFunctionRole;
 import compiler.Source.SourceSpan;
 import compiler.types.Type.CompilerType;
 import compiler.types.Type.NominalKind;
@@ -152,14 +153,13 @@ class ValueEqualityGenerator {
 				throw 'Invalid value equality request for "$type"';
 		}
 		return {
-			name: equalsName(type),
+			name: equalsName(type), role: ProviderFunction(type, Equals),
 			origin: request.origin,
 			originKind: Helper,
 			typeArguments: null,
 			owner: null,
 			isStatic: true,
 			isConstructor: false,
-			provides: Serves(type, Equals),
 			arguments: [
 				{
 					name: "left",

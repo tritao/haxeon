@@ -118,7 +118,7 @@ class IrInterpreter {
 			case PointerOffset(_, _, _), MemoryLoad(_, _, _, _), MemoryStore(_, _, _):
 				throw "IR interpreter cannot execute unmanaged native memory operations";
 			case ConstBool(_, value): value;
-			case ConstNull(_): null;
+			case ConstNull(output): switch output.type { case EnumTag(_): 0; default: null; };
 			case TypeValue(_, type): new InterpTypeRef(type);
 			case ToDyn(_, input): value(values, input);
 			case IntToInt64(_, input): haxe.Int64.ofInt(value(values, input));
@@ -165,6 +165,15 @@ class IrInterpreter {
 			case LessEqual(_, left, right) if (left.type == I64): haxe.Int64.compare(cast value(values, left), cast value(values, right)) <= 0;
 			case Equal(_, left, right) if (left.type == I64 && right.type == I64):
 				haxe.Int64.compare(cast value(values, left), cast value(values, right)) == 0;
+			case Add(output, left, right), Sub(output, left, right), Mul(output, left, right) if (output.type == I32):
+				var a:Int = value(values, left), b:Int = value(values, right);
+				switch instruction {
+					case Add(_, _, _): a + b;
+					case Sub(_, _, _): a - b;
+					case Mul(_, _, _): a * b;
+					default: throw "Invalid Int32 arithmetic operation";
+				}
+
 			case Add(_, left, right): value(values, left) + value(values, right);
 			case Sub(_, left, right): value(values, left) - value(values, right);
 			case Mul(_, left, right): value(values, left) * value(values, right);
@@ -229,10 +238,38 @@ class IrInterpreter {
 			case Call(_, name, arguments) if (name == IrReferenceIdentity.NAME):
 				value(values,arguments[0]) == value(values,arguments[1]);
 			case Call(_, name, arguments) if (name == IrReceiverCheck.NAME):
-				if (value(values, arguments[0]) == null) throw "Null access";
+				switch arguments[0].type {
+					case EnumTag(_):
+						var tag:Int = value(values, arguments[0]);
+						if (tag == 0) throw "Null access";
+					default:
+						if (value(values, arguments[0]) == null) throw "Null access";
+				}
 				null;
+			case Call(output, name, arguments) if (IrScalarWordBits.matches(name)
+				&& arguments.length == 1 && IrScalarWordBits.valid(name, arguments[0].type, output.type)):
+				switch [arguments[0].type, output.type] {
+					case [EnumTag(_), I32] | [I32, EnumTag(_)]: value(values, arguments[0]);
+					default: throw "IR interpreter cannot execute native scalar word transport";
+				};
 			case Call(_, name, arguments) if (name == IrValueLaneReference.PACK || name == IrValueLaneReference.UNPACK):
 				value(values, arguments[0]);
+			case Call(output, IrArrayFactory.NAME, arguments):
+				var element = switch output.type { case Array(element): element; default: throw "Invalid array factory result"; },
+					length = Std.int(value(values, arguments[0]));
+				new InterpArray([for (_ in 0...length) defaultValue(element)], length + 8, element);
+			case Intrinsic(_, EnumDynamicBox(_), [input]) | Intrinsic(_, EnumDynamicView(_), [input]):
+				value(values, input);
+			case Intrinsic(_, EnumTagBox(EnumTag(name)), [input]):
+				var tag:Int = value(values, input), declaration = Lambda.find(program.enums, entry -> entry.name == name);
+				if (tag == 0) null;
+				else if (declaration == null || tag < 0 || tag > declaration.cases.length) throw "Invalid enum tag";
+				else new InterpEnum(name, tag - 1, []);
+			case Intrinsic(_, EnumTagUnbox(EnumTag(name)), [input]):
+				var actual = value(values, input);
+				if (actual == null) 0;
+				else if (!Std.isOfType(actual, InterpEnum) || cast(actual, InterpEnum).type != name) throw 'Invalid cast to $name';
+				else cast(actual, InterpEnum).constructor + 1;
 			case Call(output, name, arguments):
 				var args = [for (argument in arguments) value(values, argument)];
 				if (functions.exists(name)) execute(functions.get(name), args);
@@ -276,9 +313,19 @@ class IrInterpreter {
 				}
 				execute(target, args);
 			case ToVirtual(_, input), Upcast(_, input): value(values, input);
-			case MakeEnum(_, typeName, constructor, arguments):
-				new InterpEnum(typeName, constructor, [for (argument in arguments) value(values, argument)]);
-			case EnumIndex(_, input): cast(value(values, input), InterpEnum).constructor;
+			case MakeEnum(output, typeName, constructor, arguments):
+				switch output.type {
+					case EnumTag(_): constructor + 1;
+					default: new InterpEnum(typeName, constructor, [for (argument in arguments) value(values, argument)]);
+				};
+			case EnumIndex(_, input):
+				switch input.type {
+					case EnumTag(_):
+						var tag:Int = value(values, input);
+						if (tag == 0) throw "Null access";
+						tag - 1;
+					default: cast(value(values, input), InterpEnum).constructor;
+				};
 			case EnumField(_, input, _, field): cast(value(values, input), InterpEnum).fields[field];
 			default: throw 'IR interpreter does not yet execute ${Std.string(instruction)}';
 		};
@@ -370,6 +417,10 @@ class IrInterpreter {
 				checkArrayCast(arguments[0], cast(arguments[1], InterpTypeRef).type);
 			case "__array_alloc_i32", "__array_alloc_i64", "__array_alloc_bool", "__array_alloc_f64", "__array_alloc_bytes", "__array_alloc_ref":
 				new InterpArray([for (_ in 0...Std.int(arguments[0])) null], Std.int(arguments[0]) + 8);
+			case "__array_index_of_i32", "__array_index_of_bool", "__array_index_of_f64", "__array_index_of_bytes", "__array_index_of_ref":
+				interpArray(arguments[0]).values.indexOf(arguments[1]);
+			case "__array_join_bytes":
+				interpArray(arguments[0]).values.join(Std.string(arguments[1]));
 			case "__array_copy_i32", "__array_copy_i64", "__array_copy_bool", "__array_copy_f64", "__array_copy_bytes", "__array_copy_ref", "__array_copy_any":
 				var source = interpArray(arguments[0]);
 				new InterpArray(source.values.copy(), source.capacity, source.elementType);
@@ -390,6 +441,7 @@ class IrInterpreter {
 				popped.values.length == 0 ? null : popped.values.pop();
 			case "__string_length": Std.string(arguments[0]).length;
 			case "__string_concat": Std.string(arguments[0]) + Std.string(arguments[1]);
+			case "__string_concat3": Std.string(arguments[0]) + Std.string(arguments[1]) + Std.string(arguments[2]);
 			case "__string_equal": arguments[0] == null || arguments[1] == null ? arguments[0] == arguments[1] : Std.string(arguments[0]) == Std.string(arguments[1]);
 			case "__string_char_code_at": Std.string(arguments[0]).charCodeAt(Std.int(arguments[1]));
 			case "__string_to_lower_case": Std.string(arguments[0]).toLowerCase();
@@ -404,6 +456,8 @@ class IrInterpreter {
 			case "haxe.Int64.ofInt": haxe.Int64.ofInt(arguments[0]);
 			case "haxe.Int64.ushr": haxe.Int64.ushr(cast arguments[0], Std.int(arguments[1]));
 			case "haxe.Int64.xor": haxe.Int64.xor(cast arguments[0], cast arguments[1]);
+			case "haxe.Int64.and": haxe.Int64.and(cast arguments[0], cast arguments[1]);
+			case "haxe.Int64.compare": haxe.Int64.compare(cast arguments[0], cast arguments[1]);
 			case "haxe.Int64.toInt":
 				var bits:haxe.Int64 = cast arguments[0];
 				haxe.Int64.toInt(haxe.Int64.shr(haxe.Int64.shl(bits, 32), 32));
@@ -715,7 +769,7 @@ class IrInterpreter {
 
 	static function defaultValue(type:compiler.ir.Ir.IrType):Dynamic
 		return switch type {
-			case I32: 0;
+			case I32, EnumTag(_): 0;
 			case I64: haxe.Int64.ofInt(0);
 			case Bool: false;
 			case F32, F64: 0.0;
@@ -735,7 +789,7 @@ class IrInterpreter {
 				IntToFloat(output, _), IntToInt64(output, _), FloatToInt(output, _), FloatToFloat(output, _), SafeCast(output, _), Catch(output),
 				GlobalGet(output, _), Add(output, _, _), Sub(output, _, _), Mul(output, _, _), Div(output, _, _), Mod(output, _, _), BitAnd(output, _, _),
 				BitXor(output, _, _), BitOr(output, _, _), ShiftLeft(output, _, _), ShiftRight(output, _, _), UnsignedShiftRight(output, _, _),
-				Less(output, _, _), LessEqual(output, _, _), Equal(output, _, _), Call(output, _, _), CNativeCall(output, _, _), StaticClosure(output, _),
+				Less(output, _, _), LessEqual(output, _, _), Equal(output, _, _), Call(output, _, _), Intrinsic(output, _, _), CNativeCall(output, _, _), StaticClosure(output, _),
 				InstanceClosure(output, _, _), CallClosure(output, _, _), ToVirtual(output, _), Upcast(output, _), MethodCall(output, _, _, _, _), NewObject(output, _),
 				FieldGet(output, _, _), ArrayGet(output, _, _), ArraySize(output, _), IteratorNew(output, _), IteratorHasNext(output, _),
 				IteratorNext(output, _), MakeEnum(output, _, _, _), EnumIndex(output, _), EnumField(output, _, _, _): output;

@@ -48,6 +48,7 @@ abstract TypeKey(String) {
 			case Enum(name): "enum:" + name;
 			case Obj(name): "obj:" + name;
 			case Abstract(name): "abstract:" + name;
+			case EnumTag(name): "enumtag:" + name;
 			case Virtual(name): "virtual:" + name;
 			case Function(arguments, result): "fn(" + [for (argument in arguments) text(argument)].join(",") + ")->" + text(result);
 		};

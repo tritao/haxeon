@@ -1,5 +1,6 @@
 package haxeon.ui.core;
 
+import haxeon.ui.NativeEnums;
 import haxeon.reactive.ReactiveRuntime;
 
 import haxeon.ui.debug.RenderCost;
@@ -10,6 +11,7 @@ import nativekit.ffi.NativeKitTypes.WindowDecorationRegion as NativeWindowDecora
 import haxeon.ui.widgets.text.Text;
 
 import nativekit.ffi.NativeKitTypes;
+import nativekit.ffi.NativeKitTypes.CursorShape as NativeCursorShape;
 
 import haxeon.ui.LayoutFrame;
 import haxeon.ui.LayoutSession;
@@ -73,10 +75,10 @@ class UiContext {
 	/** Called when an active animation needs another host frame. */
 	public var onAnimationFrameRequested:Null<Void->Void>;
 	/** Modifier observation independent of keyboard focus (for pointer affordances). */
-	public var onModifiersChanged:Null<Int->Void>;
-	public var modifiers(default, null):Int = 0;
+	public var onModifiersChanged:Null<UiModifier->Void>;
+	public var modifiers(default, null):UiModifier = UiModifier.empty();
 
-	function updateModifiers(value:Int):Void {
+	function updateModifiers(value:UiModifier):Void {
 		if (modifiers == value) return;
 		modifiers = value;
 		var handler = onModifiersChanged;
@@ -135,8 +137,8 @@ class UiContext {
 	var decorationWindow:Null<WindowHandle>;
 	var decorationCapabilityChecked:Bool;
 	var decorationAvailable:Bool;
-	var cursorHandler:Null<CursorShape->Void>;
-	var currentCursor:CursorShape;
+	var cursorHandler:Null<UiCursorShape->Void>;
+	var currentCursor:UiCursorShape;
 	var lastFrameMetrics:Null<UiFrameMetrics>;
 	var frameNumber:Int;
 	var diagnosticStage:Int = 0;
@@ -204,7 +206,7 @@ class UiContext {
 		decorationCapabilityChecked = false;
 		decorationAvailable = false;
 		cursorHandler = null;
-		currentCursor = CursorShape.Arrow;
+		currentCursor = UiCursorShape.Arrow;
 		animations.onFrameRequested = function() {
 			if (!disposed && onAnimationFrameRequested != null)
 				onAnimationFrameRequested();
@@ -856,7 +858,7 @@ class UiContext {
 		for (node in submittedPaintNodes) {
 			var nodeId = node.id.value;
 			if (node.resolved != null && node.cachePolicy != CachePolicy.None)
-				session.setCachePolicy(node.id.value, node.cachePolicy);
+				session.setCachePolicy(node.id.value, NativeEnums.cachePolicy(node.cachePolicy));
 			if (!node.hasPaintHandler() || node.resolved == null) {
 				clearCustomPaintBindings(node.id.value);
 				continue;
@@ -880,7 +882,7 @@ class UiContext {
 						customPaintBound.set(nodeId, true);
 					}
 					if (node.cachePolicy != CachePolicy.None)
-						session.setCustomPaintCachePolicy(nodeId, node.cachePolicy);
+						session.setCustomPaintCachePolicy(nodeId, NativeEnums.cachePolicy(node.cachePolicy));
 				}
 			} else {
 				var canvas = customCanvases.get(nodeId);
@@ -916,7 +918,7 @@ class UiContext {
 					customPaintBound.set(nodeId, false);
 				}
 				if (hasCommands && node.cachePolicy != CachePolicy.None)
-					session.setCustomPaintCachePolicy(nodeId, node.cachePolicy);
+					session.setCustomPaintCachePolicy(nodeId, NativeEnums.cachePolicy(node.cachePolicy));
 				customGeometries.set(nodeId, geometry);
 				customPaintKeys.set(nodeId, node.retainedPaintKey());
 				customContentRevisions.set(nodeId, node.paintRevision);
@@ -1076,8 +1078,8 @@ class UiContext {
 		if (node.focusable && enabled)
 			actions |= haxeon.ui.semantics.AccessibilityAction.Focus;
 		if (!enabled)
-			actions = 0;
-		if ((actions & request.capability) == 0)
+			actions = haxeon.ui.semantics.AccessibilityAction.empty();
+		if (!actions.contains(request.capability))
 			return false;
 		var geometry:ResolvedLayoutItem = cast node.resolved;
 		if (action == AccessibilityRequest.Focus)
@@ -1132,7 +1134,7 @@ class UiContext {
 		}
 	}
 
-	public function pointerMove(x:Float, y:Float, modifiers:Int = 0,
+	public function pointerMove(x:Float, y:Float, modifiers:UiModifier = UiModifier.empty(),
 			pointerId:Int = 0, data:Dynamic = null):Void {
 		ensureLive();
 		updateModifiers(modifiers);
@@ -1140,7 +1142,7 @@ class UiContext {
 		updateCursor();
 	}
 
-	public function pointerDown(x:Float, y:Float, button:Int, modifiers:Int = 0,
+	public function pointerDown(x:Float, y:Float, button:Int, modifiers:UiModifier = UiModifier.empty(),
 			pointerId:Int = 0, data:Dynamic = null, timestamp:Float = -1.0):Void {
 		ensureLive();
 		updateModifiers(modifiers);
@@ -1148,7 +1150,7 @@ class UiContext {
 		updateCursor();
 	}
 
-	public function pointerUp(x:Float, y:Float, button:Int, modifiers:Int = 0,
+	public function pointerUp(x:Float, y:Float, button:Int, modifiers:UiModifier = UiModifier.empty(),
 			pointerId:Int = 0, data:Dynamic = null):Void {
 		ensureLive();
 		updateModifiers(modifiers);
@@ -1157,7 +1159,7 @@ class UiContext {
 	}
 
 	public function pointerCancel(pointerId:Int, x:Float, y:Float,
-			modifiers:Int = 0, data:Dynamic = null):Void {
+			modifiers:UiModifier = UiModifier.empty(), data:Dynamic = null):Void {
 		ensureLive();
 		events.pointerCancel(pointerId, x, y, modifiers, data);
 		updateCursor();
@@ -1178,7 +1180,7 @@ class UiContext {
 	}
 
 	/** Installs the platform bridge that applies the context's effective cursor. */
-	public function setCursorHandler(handler:Null<CursorShape->Void>):Void {
+	public function setCursorHandler(handler:Null<UiCursorShape->Void>):Void {
 		ensureLive();
 		cursorHandler = handler;
 		if (handler != null)
@@ -1191,13 +1193,13 @@ class UiContext {
 		events.setPointerCaptureHandler(handler);
 	}
 
-	public function scroll(x:Float, y:Float, deltaX:Float, deltaY:Float, modifiers:Int = 0):Void {
+	public function scroll(x:Float, y:Float, deltaX:Float, deltaY:Float, modifiers:UiModifier = UiModifier.empty()):Void {
 		ensureLive();
 		updateModifiers(modifiers);
 		events.scroll(x, y, deltaX, deltaY, modifiers);
 	}
 
-	public function key(kind:String, key:Int, modifiers:Int = 0, scancode:Int = 0):Void {
+	public function key(kind:String, key:Int, modifiers:UiModifier = UiModifier.empty(), scancode:Int = 0):Void {
 		ensureLive();
 		updateModifiers(modifiers);
 		// NativeKit preserves the keypad key code; UI controls share Enter behavior.
@@ -1225,7 +1227,7 @@ class UiContext {
 		if (!steadyForInteractionReuse(cacheKey, frame) || buildContext.hasRetainedEdits || buildContext.hasPendingPatches) return -1;
 		var changes = interactionStates.changes();
 		for (change in changes) {
-			if (((change.before ^ change.after) & ~haxeon.ui.style.StyleState.Hovered) != 0) return -1;
+			if (((change.before.rawValue() ^ change.after.rawValue()) & ~haxeon.ui.style.StyleState.Hovered.rawValue()) != 0) return -1;
 			var node = currentNodesById.get(change.id);
 			if (node == null || (node.recordsInteraction && buildContext.hoverRebuilds(node))) return -1;
 		}
@@ -1241,7 +1243,7 @@ class UiContext {
 
 	/** Nodes whose only change is custom paint during a patch-only frame; filled by `planInteractionPatches`. */
 	final patchFramePaintNodes:Array<RenderNode> = [];
-	static final patchInteractionMask:Int = haxeon.ui.style.StyleState.Hovered | haxeon.ui.style.StyleState.Pressed;
+	static final patchInteractionMask:haxeon.ui.style.StyleState = haxeon.ui.style.StyleState.Hovered | haxeon.ui.style.StyleState.Pressed;
 
 	/**
 	 * Decides whether the pending pointer changes can be met by rebuilding just the widgets that read them (self-updating
@@ -1252,22 +1254,22 @@ class UiContext {
 		if (inspectionEnabled || !buildContext.updateInPlace || !steadyForInteractionReuse(cacheKey, frame)) return false;
 		var changes = interactionStates.changes();
 		for (change in changes) {
-			var bits = change.before ^ change.after;
+			var bits = change.before.rawValue() ^ change.after.rawValue();
 			var node = currentNodesById.get(change.id);
 			if (node == null) return false;
 			// Routing stores the state a node was built with (Selected, Disabled) alongside the pointer bits, so the first pointer
 			// change of a node appears to set those too. Only a pointer bit, or a disagreement with the built state, is a change.
-			var other = bits & ~patchInteractionMask;
-			if (other != 0 && (change.after & other) != (node.states & other)) return false;
-			bits &= patchInteractionMask;
+			var other = bits & ~patchInteractionMask.rawValue();
+			if (other != 0 && (change.after.rawValue() & other) != (node.states.rawValue() & other)) return false;
+			bits &= patchInteractionMask.rawValue();
 			if (bits == 0) continue;
-			if (buildContext.updatingOwner(node) == null && node.recordsInteraction && (bits != haxeon.ui.style.StyleState.Hovered || buildContext.hoverRebuilds(node))) return false;
+			if (buildContext.updatingOwner(node) == null && node.recordsInteraction && (bits != haxeon.ui.style.StyleState.Hovered.rawValue() || buildContext.hoverRebuilds(node))) return false;
 		}
 		patchFramePaintNodes.resize(0);
 		for (change in changes) {
 			var node:RenderNode = cast currentNodesById.get(change.id);
 			var owner = buildContext.updatingOwner(node);
-			var hoverOnly = ((change.before ^ change.after) & ~haxeon.ui.style.StyleState.Hovered) == 0;
+			var hoverOnly = ((change.before.rawValue() ^ change.after.rawValue()) & ~haxeon.ui.style.StyleState.Hovered.rawValue()) == 0;
 			if (owner != null && (!hoverOnly || buildContext.hoverRebuilds(node))) {
 				if (owner == node || node.recordsInteraction) buildContext.queuePatch(owner.id);
 			} else if (node.hasPaintHandler()) patchFramePaintNodes.push(node);
@@ -1280,7 +1282,7 @@ class UiContext {
 		for (change in interactionStates.changes()) {
 			var node = currentNodesById.get(change.id);
 			if (node == null) continue;
-			var hoverOnly = ((change.before ^ change.after) & ~haxeon.ui.style.StyleState.Hovered) == 0;
+			var hoverOnly = ((change.before.rawValue() ^ change.after.rawValue()) & ~haxeon.ui.style.StyleState.Hovered.rawValue()) == 0;
 			if (node.recordsInteraction && (!hoverOnly || buildContext.hoverRebuilds(node))) rebuild = true;
 			else if (node.hasPaintHandler()) {
 				// Layout is already submitted; only the custom list depends on this paint-only routed change.
@@ -1297,7 +1299,7 @@ class UiContext {
 			var node = currentNodesById.get(change.id);
 			if (node == null) continue;
 			var owner = buildContext.updatingOwner(node);
-			var hoverOnly = ((change.before ^ change.after) & ~haxeon.ui.style.StyleState.Hovered) == 0;
+			var hoverOnly = ((change.before.rawValue() ^ change.after.rawValue()) & ~haxeon.ui.style.StyleState.Hovered.rawValue()) == 0;
 			if (owner != null && (!hoverOnly || buildContext.hoverRebuilds(node))) {
 				if (owner == node || node.recordsInteraction) buildContext.queuePatch(owner.id);
 			// Retained caches ignore hover no rule matches, so a cached node that paints it is repainted here.
@@ -1376,8 +1378,8 @@ class UiContext {
 		return animations.waitSeconds();
 
 	/** Reports pending work categories without changing the current full-submit behavior. */
-	public var dirtyFlags(get, never):Int;
-	function get_dirtyFlags():Int {
+	public var dirtyFlags(get, never):UiDirtyFlag;
+	function get_dirtyFlags():UiDirtyFlag {
 		var result = dirtyFlagsWithoutRootReads();
 		// Retained dependencies are validated against their tracked source versions.
 		if (buildContext.rootDependenciesDirty())
@@ -1388,8 +1390,8 @@ class UiContext {
 	}
 
 	/** Dirty categories other than dependency validation, which can run model getters. */
-	function dirtyFlagsWithoutRootReads():Int {
-		var result = 0;
+	function dirtyFlagsWithoutRootReads():UiDirtyFlag {
+		var result = UiDirtyFlag.empty();
 		if (interactionStates.revision != submittedInteractionRevision)
 			result |= UiDirtyFlag.NeedsStyle | UiDirtyFlag.NeedsTextLayout | UiDirtyFlag.NeedsLayout |
 				UiDirtyFlag.NeedsPaint | UiDirtyFlag.NeedsComposite | UiDirtyFlag.NeedsSemantics |
@@ -1516,10 +1518,10 @@ class UiContext {
 		textInput.dispose();
 		gestures.cancelAll();
 		if (cursorHandler != null)
-			cursorHandler(CursorShape.Arrow);
+			cursorHandler(UiCursorShape.Arrow);
 		cursorHandler = null;
 		events.setPointerCaptureHandler(null);
-		currentCursor = CursorShape.Arrow;
+		currentCursor = UiCursorShape.Arrow;
 		animations.cancelAll();
 		if (accessibilityBridge != null)
 			accessibilityBridge.dispose();
@@ -1567,7 +1569,7 @@ class UiContext {
 			var kind:WindowDecorationRegionKind = cast node.windowDecoration;
 			region.set_kind(kind);
 			region.set_cursor_shape(node.windowDecorationCursor == null
-				? 0 : nativeCursorShape(node.windowDecorationCursor));
+				? NativeCursorShape.Arrow : nativeCursorShape(node.windowDecorationCursor));
 			regions.push(region);
 		});
 		var window:WindowHandle = cast decorationWindow;
@@ -1596,19 +1598,18 @@ class UiContext {
 		return decorationAvailable;
 	}
 
-	static function nativeCursorShape(shape:UiCursorShape):Int {
-		return cast switch shape {
-			case UiCursorShape.Arrow: CursorShape.Arrow;
-			case UiCursorShape.Text: CursorShape.Ibeam;
-			case UiCursorShape.Crosshair: CursorShape.Crosshair;
-			case UiCursorShape.Hand: CursorShape.Hand;
-			case UiCursorShape.HorizontalResize: CursorShape.HorizontalResize;
-			case UiCursorShape.VerticalResize: CursorShape.VerticalResize;
-			case UiCursorShape.DiagonalResize: CursorShape.NwseResize;
-			case UiCursorShape.DiagonalResizeNesw: CursorShape.NeswResize;
-			case UiCursorShape.Move: CursorShape.Move;
-			case UiCursorShape.NotAllowed: CursorShape.NotAllowed;
-			case _: CursorShape.Arrow;
+	static function nativeCursorShape(shape:UiCursorShape):NativeCursorShape {
+		return switch shape {
+			case UiCursorShape.Arrow: NativeCursorShape.Arrow;
+			case UiCursorShape.Text: NativeCursorShape.Ibeam;
+			case UiCursorShape.Crosshair: NativeCursorShape.Crosshair;
+			case UiCursorShape.Hand: NativeCursorShape.Hand;
+			case UiCursorShape.HorizontalResize: NativeCursorShape.HorizontalResize;
+			case UiCursorShape.VerticalResize: NativeCursorShape.VerticalResize;
+			case UiCursorShape.DiagonalResize: NativeCursorShape.NwseResize;
+			case UiCursorShape.DiagonalResizeNesw: NativeCursorShape.NeswResize;
+			case UiCursorShape.Move: NativeCursorShape.Move;
+			case UiCursorShape.NotAllowed: NativeCursorShape.NotAllowed;
 		};
 	}
 

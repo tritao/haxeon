@@ -348,8 +348,12 @@ class HlLower {
 		}
 		// Patches cannot add object types, so every base module carries String.
 		internType(IrType.Bytes);
-		for (enumDecl in program.enums)
-			symbols.reserveEnum(enumDecl.name);
+		var runtimeEnums = developmentMetadata ? program.enums : compiler.ir.IrEnumRuntimeTypes.declarations(program);
+		var boxedEnums = [for (declaration in runtimeEnums) declaration.name => true];
+		for (declaration in program.enums)
+			if (!boxedEnums.exists(declaration.name)) symbols.internScalarEnumTag(declaration.name);
+		for (enumDecl in runtimeEnums)
+			symbols.reserveEnum(enumDecl);
 		for (interfaceDecl in program.interfaces) {
 			symbols.reserveInterface(interfaceDecl.name);
 			interfaceBases.set(interfaceDecl.name, interfaceDecl.bases);
@@ -362,7 +366,7 @@ class HlLower {
 		for (object in program.objects)
 			if (object.isValue)
 				valueObjects.set(object.name, true);
-		for (enumDecl in program.enums)
+		for (enumDecl in runtimeEnums)
 			enumTypeIndices.set(enumDecl.name, symbols.internEnum(enumDecl));
 		var pendingInterfaces = program.interfaces.copy();
 		while (pendingInterfaces.length > 0) {
@@ -549,18 +553,20 @@ class HlLower {
 			if (linked.fn != lowered.fn)
 				throw 'HAXEON_CHECK_REUSE: linking ${fn.name} against the tables it was lowered with moved its indices';
 		}
-		function same(what:String, expected:Array<Dynamic>, actual:Array<Dynamic>):Void {
-			if (expected.length != actual.length)
-				throw 'HAXEON_CHECK_REUSE: replaying the requests made $what table of ${actual.length} entries, lowering made ${expected.length}';
-			for (index in 0...expected.length)
-				if (Std.string(expected[index]) != Std.string(actual[index]))
-					throw 'HAXEON_CHECK_REUSE: replaying the requests made $what ${index} different from lowering\'s: ${Std.string(actual[index])} and ${Std.string(expected[index])}';
-		}
-		same("the integer", symbols.ints, environment.ints);
-		same("the float", symbols.floats, environment.floats);
-		same("the string", symbols.strings, environment.strings);
-		same("the global", symbols.globals, environment.globals);
-		same("the type", symbols.types, environment.types);
+
+		sameReplayTable("the integer", symbols.ints, environment.ints);
+		sameReplayTable("the float", symbols.floats, environment.floats);
+		sameReplayTable("the string", symbols.strings, environment.strings);
+		sameReplayTable("the global", symbols.globals, environment.globals);
+		sameReplayTable("the type", symbols.types, environment.types);
+	}
+
+	static function sameReplayTable<T>(what:String, expected:Array<T>, actual:Array<T>):Void {
+		if (expected.length != actual.length)
+			throw 'HAXEON_CHECK_REUSE: replaying the requests made $what table of ${actual.length} entries, lowering made ${expected.length}';
+		for (index in 0...expected.length)
+			if (Std.string(expected[index]) != Std.string(actual[index]))
+				throw 'HAXEON_CHECK_REUSE: replaying the requests made $what ${index} different from lowering\'s: ${Std.string(actual[index])} and ${Std.string(expected[index])}';
 	}
 
 	/**
@@ -886,7 +892,10 @@ class HlLower {
 					case ConstBool(output, value):
 						instructions.push(HlInstruction.LoadBool(defineRegister(output, registers, registerTypes), value));
 					case ConstNull(output):
-						instructions.push(HlInstruction.LoadNull(defineRegister(output, registers, registerTypes)));
+						switch output.type {
+							case EnumTag(_): instructions.push(HlInstruction.LoadInt(defineRegister(output, registers, registerTypes), internInt(0)));
+							default: instructions.push(HlInstruction.LoadNull(defineRegister(output, registers, registerTypes)));
+						}
 					case TypeValue(output, type):
 						instructions.push(HlInstruction.LoadType(defineRegister(output, registers, registerTypes), internType(type)));
 					case ToDyn(output, value):
@@ -965,6 +974,7 @@ class HlLower {
 					case Equal(output, left, right):
 						lowerComparison(output, left, right, 2, nullValues.exists(left.id), nullValues.exists(right.id), registers, registerTypes,
 							instructions);
+					case Intrinsic(_, _, _): throw "Unlowered IR intrinsic reached HashLink";
 					case Call(output, functionName, arguments):
 						if (functionName == compiler.ir.IrReceiverCheck.NAME && nonNull.has(block.id, instructionIndex)) {
 							// A previous successful dereference or check already proved this SSA receiver non-null.
@@ -1197,6 +1207,8 @@ class HlLower {
 							requireRegister(value, registers)));
 					case ArraySize(output, array):
 						instructions.push(HlInstruction.ArraySize(defineRegister(output, registers, registerTypes), requireRegister(array, registers)));
+					case MakeEnum(output, _, constructor, _) if (switch output.type { case EnumTag(_): true; default: false; }):
+						instructions.push(HlInstruction.LoadInt(defineRegister(output, registers, registerTypes), internInt(constructor + 1)));
 					case MakeEnum(output, typeName, constructor, arguments):
 						var destination = defineRegister(output, registers, registerTypes),
 							enumConstructor = requireEnumConstructor(typeName, output.type, constructor),
@@ -1205,6 +1217,10 @@ class HlLower {
 							lowerEnumConstant(destination, typeName, enumConstructor, instructions);
 						else
 							instructions.push(HlInstruction.MakeEnum(destination, enumConstructor, args));
+					case EnumIndex(output, value) if (switch value.type { case EnumTag(_): true; default: false; }):
+						var one = temporaryRegister(IrType.I32, registerTypes);
+						instructions.push(HlInstruction.LoadInt(one, internInt(1)));
+						instructions.push(HlInstruction.Sub(defineRegister(output, registers, registerTypes), requireRegister(value, registers), one));
 					case EnumIndex(output, value):
 						instructions.push(HlInstruction.EnumIndex(defineRegister(output, registers, registerTypes), requireRegister(value, registers)));
 					case EnumField(output, value, constructor, field):

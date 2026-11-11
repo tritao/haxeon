@@ -20,7 +20,9 @@ class PurityAnnotations {
 
 	/** Annotated functions and read-only compiler intrinsics; purity inference seeds from these. */
 	public static function isDeclaredPure(name:String, signatures:Map<String, AstFunction>, classDecls:Map<String, AstClass>):Bool
-		return compiler.runtime.CompilerIntrinsics.isPure(name) || hasPureAnnotation(name, signatures, classDecls);
+		return StringTools.startsWith(name, compiler.types.typing.FlagsGenerator.PREFIX)
+			|| StringTools.startsWith(name, compiler.types.typing.RawRepresentableGenerator.PREFIX)
+			|| compiler.runtime.CompilerIntrinsics.isPure(name) || hasPureAnnotation(name, signatures, classDecls);
 
 	/** `@:pure` on a function, or on the class of a static method. */
 	public static function hasPureAnnotation(name:String, signatures:Map<String, AstFunction>, classDecls:Map<String, AstClass>):Bool {

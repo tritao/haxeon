@@ -8,6 +8,7 @@ import compiler.syntax.Ast.AstFunction;
 import compiler.syntax.Ast.AstStatement;
 import compiler.types.Type.CompilerType;
 import compiler.types.Type.NominalKind;
+import compiler.types.typing.KeyPathTyping.KeyPathField;
 
 /** A stored field and its semantic type in the instantiation that declared it. */
 typedef ConformanceField = {final declaration:AstClass; final field:AstField; final type:CompilerType;}
@@ -48,7 +49,14 @@ class DiffIntrinsics {
 				return BlockExpression(statements, Variable(hash, span), span);
 			case "bit":
 				expectArguments(name, arguments, 1, span);
-				var path = KeyPathTyping.known(session, pathOf(arguments[0]));
+				var path:Null<{final root:CompilerType; final fields:Array<KeyPathField>;}> = switch arguments[0] {
+					case KeyPathLiteral(root, fields, fieldSpan):
+						var resolved = KeyPathTyping.diffField(session, root, fields, fieldSpan);
+						{root: resolved.root, fields: resolved.fields};
+					case _:
+						var resolved = KeyPathTyping.known(session, pathOf(arguments[0]));
+						resolved == null ? null : {root: resolved.root, fields: resolved.fields};
+				};
 				if (path == null || path.fields.length != 1)
 					fail("E1009", '$name requires a known direct-field key path', span);
 				var declaration = classOf(session, path.root, name, span), field = path.fields[0].field.name;

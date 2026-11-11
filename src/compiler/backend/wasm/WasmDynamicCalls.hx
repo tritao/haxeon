@@ -85,9 +85,10 @@ class WasmDynamicCalls {
 								targets.set(Std.string(signature), signature);
 							var key = (dynamicCall ? "dynamic:" : "typed:") + Std.string(signature);
 							if (!helpers.exists(key)) {
-								var prefix = !dynamicCall && compiler.ir.IrScalarArguments.isPrivateClosureType(signature)
+								var privateAbi = !dynamicCall && compiler.ir.IrScalarArguments.isPrivateClosureType(signature),
+									prefix = privateAbi
 									? compiler.ir.IrScalarArguments.PREFIX + "$wasm:closure-check:" : "__haxeon_invoke_";
-								helpers.set(key, callHelper(prefix + [for (_ in helpers.keys()) 1].length, signature, dynamicCall, isFunction));
+								helpers.set(key, callHelper(prefix + [for (_ in helpers.keys()) 1].length, signature, dynamicCall, isFunction, privateAbi));
 							}
 							var callee = closure;
 							if (dynamicCall) {
@@ -101,7 +102,7 @@ class WasmDynamicCalls {
 				}
 				blocks.push(copy);
 			}
-			result.functions.push(fn.derive(blocks));
+			result.functions.push(fn.withBlocks(blocks));
 		}
 		if (needsFunctionTest && !Lambda.exists(result.natives, n -> n.name == isFunction))
 			result.natives.push({
@@ -124,7 +125,7 @@ class WasmDynamicCalls {
 				capture = b.argument("capture", Obj(CAPTURE)),
 				args = b.argument("arguments", Array(Dyn));
 			b.returnValue(b.callClosure(b.fieldGet(capture, "callback", callbackType()), [args], Dyn));
-			result.functions.push(new IrFunction(VARARGS_TARGET, b.arguments, Dyn, b.blocks, None, []));
+			result.functions.push(new IrFunction(VARARGS_TARGET, b.arguments, Dyn, b.blocks, Ordinary));
 			if (!Lambda.exists(result.natives, n -> n.name == "__array_alloc_ref"))
 				result.natives.push({
 					name: "__array_alloc_ref",
@@ -181,11 +182,13 @@ class WasmDynamicCalls {
 	for (declaration in enums) if (declaration.inlineStorage != null)
 		inlineEnums.set(declaration.inlineStorage, declaration.name);
 	function toDynamic(value:IrValue):IrValue return switch value.type {
+		case EnumTag(name): b.intrinsic(EnumTagBox(EnumTag(name)), [value], Dyn);
 		case Obj(storage) if (inlineEnums.exists(storage)):
 			b.call(compiler.ir.IrInlineEnumEscapes.boxName(inlineEnums.get(storage)), [value], Dyn);
 		default: b.toDyn(value);
 	};
 	function fromDynamic(value:IrValue, target:IrType):IrValue return switch target {
+		case EnumTag(name): b.intrinsic(EnumTagUnbox(EnumTag(name)), [value], target);
 		case Obj(storage) if (inlineEnums.exists(storage)):
 			b.call(compiler.ir.IrInlineEnumEscapes.unboxName(inlineEnums.get(storage)), [value], target);
 		default: b.safeCast(value, target);
@@ -206,10 +209,10 @@ class WasmDynamicCalls {
 		}
 		var called = b.call(VARARGS_CALL, [original, array], Dyn);
 		b.returnValue((switch (result) { case Void: true; default: false; }) ? b.constVoid() : (switch (result) { case Dyn: true; default: false; }) ? called : fromDynamic(called, result));
-		return new IrFunction(name, b.arguments, result, b.blocks, None, [], null, false, Keep);
+		return new IrFunction(name, b.arguments, result, b.blocks, ClosureVarargs(type), null, false, Keep);
 	}
 
-	static function callHelper(name:String, type:IrType, dynamicCall:Bool, isFunction:String):IrFunction {
+	static function callHelper(name:String, type:IrType, dynamicCall:Bool, isFunction:String, privateAbi:Bool):IrFunction {
 		var b = new IrBuilder(),
 			closure = b.argument("closure", dynamicCall ? Dyn : type),
 			params:Array<IrType> = [],
@@ -235,6 +238,6 @@ class WasmDynamicCalls {
 			b.select(callable);
 		}
 		b.returnValue(b.callClosure(dynamicCall ? b.safeCast(closure, type) : closure, args, result));
-		return new IrFunction(name, b.arguments, result, b.blocks, None, []);
+		return new IrFunction(name, b.arguments, result, b.blocks, privateAbi ? ScalarArguments : Ordinary);
 	}
 }

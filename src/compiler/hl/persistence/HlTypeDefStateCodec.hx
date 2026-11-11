@@ -18,7 +18,7 @@ class HlTypeDefStateCodec {
 		var output = new BytesOutput();
 		output.bigEndian = false;
 		output.writeString("HTD");
-		output.writeByte(2);
+		output.writeByte(3);
 		writeList(output, types);
 		return output.getBytes();
 	}
@@ -27,7 +27,7 @@ class HlTypeDefStateCodec {
 		var input = new BytesInput(bytes);
 		input.bigEndian = false;
 		try {
-			if (input.readString(3) != "HTD" || input.readByte() != 2)
+			if (input.readString(3) != "HTD" || input.readByte() != 3)
 				throw "Invalid HashLink type state";
 			var result = readList(input, stringCount, globalCount);
 			if (input.position != bytes.length)
@@ -44,6 +44,10 @@ class HlTypeDefStateCodec {
 		output.writeInt32(types.length);
 		for (type in types)
 			switch type {
+				case EnumTag(boxedType, cacheGlobals):
+					output.writeByte(8);
+					output.writeInt32(boxedType);
+					writeInts(output, cacheGlobals);
 				case Simple(kind):
 					output.writeByte(0);
 					output.writeByte(kind);
@@ -155,6 +159,7 @@ class HlTypeDefStateCodec {
 						constructors.push({name: input.readInt32(), params: readInts(input)});
 					Enum(name, global, constructors);
 				case 6: Parameterized(cast input.readByte(), input.readInt32());
+				case 8: EnumTag(input.readInt32(), readInts(input));
 				default: throw "Unknown HashLink type state tag";
 			});
 		return result;
@@ -163,6 +168,20 @@ class HlTypeDefStateCodec {
 	static function validateReferences(types:Array<HlTypeDef>, strings:Int, globals:Int):Void {
 		for (definition in types)
 			switch definition {
+				case EnumTag(boxedType, cacheGlobals):
+					validateTypeReference(boxedType, types.length);
+					switch types[boxedType] {
+						case Enum(_, _, constructors):
+							if (constructors.length != cacheGlobals.length)
+								throw "Invalid HashLink enum tag case count";
+							for (i in 0...constructors.length)
+								if (constructors[i].params.length != 0)
+									throw "HashLink enum tag has payloads";
+						default: throw "Invalid HashLink enum tag boxed type";
+					}
+					for (global in cacheGlobals)
+						if (global < 0 || global >= globals)
+							throw "Invalid HashLink enum tag cache global";
 				case Simple(kind):
 					if (kind == HlType.Ref || kind == HlType.Null || kind == HlType.Packed)
 						throw "Parameterized HashLink type stored without its parameter";

@@ -86,7 +86,7 @@ class SsaBuilder {
 		for (block in cfg.blocks)
 			if (reachable[block.id] && roots.indexOf(block.id) < 0 && immediate[block.id] == -1)
 				rename(block.id);
-		return new IrFunction(cfg.name, arguments, cfg.result, output, None, [], debugBindings);
+		return new IrFunction(cfg.name, arguments, cfg.result, output, Ordinary, debugBindings);
 	}
 
 	function buildGraph():Void {
@@ -556,6 +556,9 @@ class SsaBuilder {
 				case Call(out, name, args):
 					var result = define(out);
 					emit(target, Call(result, name, [for (arg in args) resolve(arg)]), provenance);
+				case Intrinsic(out, operation, args):
+					var result = define(out);
+					emit(target, Intrinsic(result, operation, [for (arg in args) resolve(arg)]), provenance);
 				case CNativeCall(out, name, args):
 					var result = define(out);
 					emit(target, CNativeCall(result, name, [for (arg in args) resolve(arg)]), provenance);

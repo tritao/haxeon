@@ -144,6 +144,12 @@ class IrBuilder {
 		return out;
 	}
 
+	public function intrinsic(operation:IrIntrinsic, args:Array<IrValue>, result:IrType):IrValue {
+		var out = temporary(result);
+		emit(Intrinsic(out, operation, args));
+		return out;
+	}
+
 	public function methodCall(receiver:IrValue, name:String, args:Array<IrValue>, result:IrType):IrValue {
 		var out = temporary(result);
 		emit(MethodCall(out, receiver, name, args, false));

@@ -209,7 +209,7 @@ class WasmLinearRepresentation implements WasmValueRepresentation implements Was
 		}
 		if (field.scalarStorage != null) {
 			var storage = field.scalarStorage, read:Array<WasmInstruction> = [];
-			if (((switch (field.type) { case I32: true; default: false; }) || (switch (field.type) { case Bool: true; default: false; })) && storage.size == 1)
+			if (((switch (field.type) { case I32, EnumTag(_): true; default: false; }) || (switch (field.type) { case Bool: true; default: false; })) && storage.size == 1)
 				read = [storage.signed ? I32Load8S(field.offset) : I32Load8U(field.offset)];
 			else if ((switch (field.type) { case I32: true; default: false; }) && storage.size == 2)
 				read = [storage.signed ? I32Load16S(field.offset) : I32Load16U(field.offset)];
@@ -360,7 +360,7 @@ class WasmLinearRepresentation implements WasmValueRepresentation implements Was
 			return assignValueField([LocalGet(objectLocal)], field.offset, [LocalGet(valueLocal)], valueName, []);
 		var body:Array<WasmInstruction> = [LocalGet(objectLocal), LocalGet(valueLocal)], scalar = field.scalarStorage;
 		if (scalar != null) {
-			if (((switch (field.type) { case I32: true; default: false; }) || (switch (field.type) { case Bool: true; default: false; })) && scalar.size == 1) {
+			if (((switch (field.type) { case I32, EnumTag(_): true; default: false; }) || (switch (field.type) { case Bool: true; default: false; })) && scalar.size == 1) {
 				body.push(I32Store8(field.offset)); return body;
 			} else if ((switch (field.type) { case I32: true; default: false; }) && scalar.size == 2) {
 				body.push(I32Store16(field.offset)); return body;
@@ -409,7 +409,7 @@ class WasmLinearRepresentation implements WasmValueRepresentation implements Was
 			load = [I32Load(0), native.signed ? I64ExtendI32S : I64ExtendI32U];
 		else if ((switch (field.type) { case F32: true; default: false; }) && native.size == 4)
 			load = [F32Load(0), F64PromoteF32];
-		else if (((switch (field.type) { case I32: true; default: false; }) || (switch (field.type) { case Bool: true; default: false; }) || (switch (field.type) { case RawPtr: true; default: false; })) && native.size == 4)
+		else if (((switch (field.type) { case I32, EnumTag(_): true; default: false; }) || (switch (field.type) { case Bool: true; default: false; }) || (switch (field.type) { case RawPtr: true; default: false; })) && native.size == 4)
 			load = [I32Load(0)];
 		else if ((switch (field.type) { case I64: true; default: false; }) && native.size == 8)
 			load = [I64Load(0)];
@@ -425,7 +425,7 @@ class WasmLinearRepresentation implements WasmValueRepresentation implements Was
 		if (native == null)
 			throw 'Flat Wasm field "${field.name}" is missing layout metadata';
 		var body:Array<WasmInstruction> = flatFieldBase(objectLocal, native.offset).concat([LocalGet(valueLocal)]);
-		if (((switch (field.type) { case I32: true; default: false; }) || (switch (field.type) { case Bool: true; default: false; })) && native.size == 1)
+		if (((switch (field.type) { case I32, EnumTag(_): true; default: false; }) || (switch (field.type) { case Bool: true; default: false; })) && native.size == 1)
 			body.push(I32Store8(0));
 		else if ((switch (field.type) { case I32: true; default: false; }) && native.size == 2)
 			body.push(I32Store16(0));
@@ -433,7 +433,7 @@ class WasmLinearRepresentation implements WasmValueRepresentation implements Was
 			body = body.concat([I32WrapI64, I32Store(0)]);
 		else if ((switch (field.type) { case F32: true; default: false; }) && native.size == 4)
 			body = body.concat([F32DemoteF64, F32Store(0)]);
-		else if (((switch (field.type) { case I32: true; default: false; }) || (switch (field.type) { case Bool: true; default: false; }) || (switch (field.type) { case RawPtr: true; default: false; })) && native.size == 4)
+		else if (((switch (field.type) { case I32, EnumTag(_): true; default: false; }) || (switch (field.type) { case Bool: true; default: false; }) || (switch (field.type) { case RawPtr: true; default: false; })) && native.size == 4)
 			body.push(I32Store(0));
 		else if ((switch (field.type) { case I64: true; default: false; }) && native.size == 8)
 			body.push(I64Store(0));

@@ -19,7 +19,7 @@ class LocalTypeLoadMain {
 		];
 		for (description => body in bodies) {
 			var compiler = new Compiler();
-			compiler.update("Helper.hx", "enum abstract Helper(Int) { var One = 1; }");
+			compiler.update("Helper.hx", "enum abstract Helper(Int) from Int to Int { var One = 1; }");
 			compiler.update("Boom.hx", "class Boom { public function new() {} }");
 			compiler.update("Main.hx", body + "\nfunction main():Int return 0;");
 			try {

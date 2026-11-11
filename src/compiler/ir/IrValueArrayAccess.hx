@@ -27,8 +27,13 @@ class IrValueArrayAccess {
 			args.push(builder.constInt(slot.bitWidth)); types.push(I32);
 		}
 		if (suffix == "i32" || suffix == "i64") { args.push(builder.constBool(slot.signed)); types.push(Bool); }
-		declare(name, types, slot.type);
-		return builder.call(name, args, slot.type);
+		var physical = switch slot.type { case EnumTag(_): I32; default: slot.type; };
+		declare(name, types, physical);
+		var value = builder.call(name, args, physical);
+		return switch slot.type {
+			case EnumTag(_): builder.call(IrScalarWordBits.UNPACK, [value], slot.type);
+			default: value;
+		};
 	}
 
 	/** The caller grows the array before writing and marks the element initialized after all leaves are written. */
@@ -46,7 +51,11 @@ class IrValueArrayAccess {
 		if (suffix == "i32" || suffix == "i64" || suffix == "ptr" || suffix == "type") {
 			args.push(builder.constInt(slot.bitWidth)); types.push(I32);
 		}
-		args.push(value); types.push(slot.type);
+		var stored = switch slot.type {
+			case EnumTag(_): builder.call(IrScalarWordBits.PACK, [value], I32);
+			default: value;
+		};
+		args.push(stored); types.push(stored.type);
 		declare(name, types, Void);
 		builder.call(name, args, Void);
 	}
@@ -74,7 +83,7 @@ class IrValueArrayAccess {
 	}
 
 	static function scalarSuffix(type:IrType):String return switch type {
-		case I32: "i32";
+		case I32, EnumTag(_): "i32";
 		case I64: "i64";
 		case Bool: "bool";
 		case F32: "f32";

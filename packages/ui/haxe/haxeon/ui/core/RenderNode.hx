@@ -1,5 +1,7 @@
 package haxeon.ui.core;
 
+import haxeon.ui.style.StyleState;
+
 import haxeon.reactive.ReactiveRuntime;
 
 import haxeon.ui.debug.RenderCost;
@@ -52,7 +54,7 @@ class RenderNode {
 	public var enabled:Bool;
 	/** Generic pseudo-state flags maintained by the routed interaction system. */
 	/** Interaction state (hover, press, focus) the widget saw when it built this node. */
-	public var states(default, set):Int;
+	public var states(default, set):StyleState;
 	/**
 	 * Whether a widget recorded interaction state on this node. Structural nodes that never read it have no reason to rebuild
 	 * when the pointer moves over them, so cache validation ignores them.
@@ -66,7 +68,7 @@ class RenderNode {
 		invalidationFlags = UiDirtyFlag.NeedsPaint;
 	}
 
-	inline function set_states(value:Int):Int {
+	inline function set_states(value:StyleState):StyleState {
 		if (states != value || !recordsInteraction) paintKeyResolved = false;
 		recordsInteraction = true;
 		return states = value;
@@ -74,7 +76,7 @@ class RenderNode {
 
 	/** Keeps the routed state on the node without claiming that a widget built from it: that is what `recordsInteraction` says. */
 	@:allow(haxeon.ui.core.EventDispatcher)
-	function routeStates(value:Int):Void {
+	function routeStates(value:StyleState):Void {
 		var recorded = recordsInteraction;
 		states = value;
 		recordsInteraction = recorded;
@@ -109,7 +111,7 @@ class RenderNode {
 	/** Revision of opacity/effects and other compositing inputs. */
 	public var compositeRevision(default, null):Int;
 	/** Categories raised while this node was compared with its prior frame. */
-	public var invalidationFlags(default, null):Int;
+	public var invalidationFlags(default, null):UiDirtyFlag;
 	/** Most nodes never take handlers, custom paint or decorations, so these are allocated on first use. */
 	var handlers:Null<Array<HandlerEntry>>;
 	var outsidePointerDownHandlers:Null<Array<UiEvent->Void>>;
@@ -138,7 +140,7 @@ class RenderNode {
 		hitTestBehavior = HitTestBehavior.Auto;
 		cachePolicy = CachePolicy.None;
 		enabled = true;
-		states = 0;
+		states = StyleState.empty();
 		recordsInteraction = false;
 		styleType = null;
 		styleKey = null;
@@ -260,7 +262,7 @@ class RenderNode {
 	 */
 	public function fingerprint():Int {
 		var hash = fingerprintHash.reset();
-		hash.addInt(haxeon.Diff.fingerprint(layout.style)).addInt(cast layout.visualKind).addString(layout.text)
+		hash.addInt(haxeon.Diff.fingerprint(layout.style)).addInt(Type.enumIndex(layout.visualKind)).addString(layout.text)
 			.addInt(layout.measureVersion).addBool(hitTestSelf).addBool(focusable).addBool(enabled)
 			.addString(semantics == null ? null : semantics.label);
 		var text = layout.textColor;
@@ -667,7 +669,7 @@ class RenderNode {
 	function syncLayoutInputs(changes:LayoutChanges):Void {
 		syncHitTestPolicy();
 		syncSceneRevisions();
-		if ((invalidationFlags & UiDirtyFlag.NativeInputs) != 0) changes.inputs.set(id.value, 0);
+		if ((invalidationFlags & UiDirtyFlag.NativeInputs) != UiDirtyFlag.empty()) changes.inputs.set(id.value, 0);
 		for (child in children) child.syncLayoutInputs(changes);
 	}
 
@@ -693,7 +695,7 @@ class RenderNode {
 		var result = style != null && style.decorations.length > 0
 			? base + "|style-decorations:" + style.key() : base;
 		// Existing content revisions and routed states invalidate the complete local fingerprint.
-		paintKey = recordsInteraction ? result + "|hover:" + (states & haxeon.ui.style.StyleState.Hovered) : result;
+		paintKey = recordsInteraction ? result + "|hover:" + (states & haxeon.ui.style.StyleState.Hovered).rawValue() : result;
 		return paintKey;
 	}
 
@@ -848,24 +850,22 @@ class RenderNode {
 		var geometryChanged = false;
 		var compositeChanged = false;
 		if (diff.changed) {
-			invalidationFlags = UiDirtyFlag.NeedsStyle | UiDirtyFlag.fromStyleImpact(diff.impact);
-			if ((diff.impact & (StyleImpact.Paint | StyleImpact.TextLayout)) != 0)
+			invalidationFlags = UiDirtyFlag.NeedsStyle | styleDirtyFlags(diff.impact);
+			if (diff.impact.contains(StyleImpact.Paint) || diff.impact.contains(StyleImpact.TextLayout))
 				contentChanged = true;
-			if ((diff.impact & (StyleImpact.Layout | StyleImpact.TextLayout |
-				StyleImpact.HitGeometry)) != 0)
+			if (diff.impact.contains(StyleImpact.Layout) || diff.impact.contains(StyleImpact.TextLayout) || diff.impact.contains(StyleImpact.HitGeometry))
 				geometryChanged = true;
-			if ((diff.impact & StyleImpact.Composite) != 0)
+			if (diff.impact.contains(StyleImpact.Composite))
 				compositeChanged = true;
 		}
 
 		var rawFlags = layoutInputDiffFlags(previous);
 		invalidationFlags |= rawFlags;
-		if ((rawFlags & (UiDirtyFlag.NeedsPaint | UiDirtyFlag.NeedsTextLayout)) != 0)
+		if (rawFlags.contains(UiDirtyFlag.NeedsPaint) || rawFlags.contains(UiDirtyFlag.NeedsTextLayout))
 			contentChanged = true;
-		if ((rawFlags & (UiDirtyFlag.NeedsLayout | UiDirtyFlag.NeedsTextLayout |
-			UiDirtyFlag.NeedsHitGeometry)) != 0)
+		if (rawFlags.contains(UiDirtyFlag.NeedsLayout) || rawFlags.contains(UiDirtyFlag.NeedsTextLayout) || rawFlags.contains(UiDirtyFlag.NeedsHitGeometry))
 			geometryChanged = true;
-		if ((rawFlags & UiDirtyFlag.NeedsComposite) != 0)
+		if (rawFlags.contains(UiDirtyFlag.NeedsComposite))
 			compositeChanged = true;
 
 		// Text and external intrinsic content are not represented by computed
@@ -922,10 +922,10 @@ class RenderNode {
 		return (StyleLayoutFields | StylePaintFields | StyleHitFields | StyleTransformFields) == haxeon.Diff.all(LayoutStyle);
 
 	/** Classifies concrete LayoutNode mutations that bypass computed styles. */
-	function layoutInputDiffFlags(previous:RenderNode):Int {
+	function layoutInputDiffFlags(previous:RenderNode):UiDirtyFlag {
 		var before = previous.layout;
 		var after = layout;
-		var flags = 0;
+		var flags = UiDirtyFlag.empty();
 		var beforeStyle = before.style;
 		var afterStyle = layout.style;
 		// Generated from LayoutStyle's fields (haxeon.Diff); styleFieldsClassified checks each is in a group below.
@@ -1035,6 +1035,17 @@ class RenderNode {
 			throw "Render node has no resolved geometry; submit the UI first";
 		return cast resolved;
 	}
+	static function styleDirtyFlags(impact:StyleImpact):UiDirtyFlag {
+		var result = UiDirtyFlag.empty();
+		if (impact.contains(StyleImpact.Layout)) result |= UiDirtyFlag.NeedsLayout;
+		if (impact.contains(StyleImpact.TextLayout)) result |= UiDirtyFlag.NeedsTextLayout;
+		if (impact.contains(StyleImpact.Paint)) result |= UiDirtyFlag.NeedsPaint;
+		if (impact.contains(StyleImpact.Composite)) result |= UiDirtyFlag.NeedsComposite;
+		if (impact.contains(StyleImpact.Semantics)) result |= UiDirtyFlag.NeedsSemantics;
+		if (impact.contains(StyleImpact.HitGeometry)) result |= UiDirtyFlag.NeedsHitGeometry;
+		return result;
+	}
+
 }
 
 /** What a builder made on a node, as taken by RenderNode.snapshotBuilt and kept up to date by RenderNode.reconcile. */
@@ -1071,4 +1082,5 @@ private class HandlerEntry {
 		this.phase = phase;
 		this.handler = handler;
 	}
+
 }

@@ -65,7 +65,7 @@ class IrJumpThreading {
 			}
 			blocks.push(copy);
 		}
-		return fn.derive(blocks);
+		return fn.withBlocks(blocks);
 	}
 
 	static function finalTarget(id:Int, bridges:Map<Int, JumpBridge>):Int {

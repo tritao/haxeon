@@ -29,7 +29,6 @@ class EnumAbstractHints {
 			case TField(object, name): fieldDeclaredAs(session, object.type, name);
 			case TStaticField(owner, name): fieldOfClass(session, owner, name);
 			case TCall(name, _), TMethodCall(_, name, _): functionResult(session, name);
-			case TRequestCall(_, request): functionResult(session, request.name);
 			case TNullableWrap(value), TCast(value), TAbiCast(value): declaredAs(session, value);
 			default: null;
 		};

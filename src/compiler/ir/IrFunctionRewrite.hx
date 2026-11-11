@@ -42,6 +42,6 @@ class IrFunctionRewrite {
 			copy.terminator = block.terminator;
 			blocks.push(copy);
 		}
-		return blocks == null ? fn : fn.derive(blocks);
+		return blocks == null ? fn : fn.withBlocks(blocks);
 	}
 }

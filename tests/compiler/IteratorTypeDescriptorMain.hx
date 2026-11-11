@@ -57,7 +57,7 @@ class IteratorTypeDescriptorMain {
 			{name: "__array_alloc_typed_ref", library: "haxeon_runtime", symbol: "__array_alloc_typed_ref", arguments: [I32, TypeRef], result: Array(Dyn)},
 			{name: "__std_is_of_type", library: "haxeon_runtime", symbol: "__std_is_of_type", arguments: [Dyn, TypeRef], result: Bool}
 		];
-		program.functions = [new IrFunction("main", b.arguments, I32, b.blocks, None, [])];
+		program.functions = [new IrFunction("main", b.arguments, I32, b.blocks, Ordinary)];
 		program.objects.push({name: "Holder", isValue: false, base: null, interfaces: [],
 			fields: [{name: "value", type: Iterator(I32)}], methods: []});
 		var write = new IrBuilder(), holder = write.newObject("Holder"), receiver = write.toDyn(holder),
@@ -79,7 +79,7 @@ class IteratorTypeDescriptorMain {
 		write.select(unchanged); write.returnValue(write.constInt(42));
 		write.select(changed); write.returnValue(write.constInt(2));
 		write.select(after); write.returnValue(write.constInt(1));
-		program.functions.push(new IrFunction("erasedWrite", [], I32, write.blocks, None, []));
+		program.functions.push(new IrFunction("erasedWrite", [], I32, write.blocks, Ordinary));
 		compiler.ir.GenericOwnerErasure.generate(compiler.ir.ProgramFacts.empty(), program.functions, program.objects);
 		IrVerifier.verify(program);
 		if (new IrInterpreter(program).run() != 42) throw "interpreter lost an iterator element type";
@@ -125,7 +125,7 @@ class IteratorTypeDescriptorMain {
 			check.select(checkSecondMismatch); check.branch(secondMismatch, fail, pass);
 			check.select(pass); check.returnValue(check.constInt(42));
 			check.select(fail); check.returnValue(check.constInt(1));
-			program.functions.push(new IrFunction("checkLanes", [], I32, check.blocks, None, []));
+			program.functions.push(new IrFunction("checkLanes", [], I32, check.blocks, Ordinary));
 			if (![for (native in program.natives) native.name].contains("__std_is_of_type"))
 				program.natives.push({name: "__std_is_of_type", library: "haxeon_runtime", symbol: "__std_is_of_type", arguments: [Dyn, TypeRef], result: Bool});
 			compiler.ir.IrValueArrayProgramRewrite.rewriteAll(program, 32, target == Wasm32 ? Wasm32 : WasmGc);

@@ -30,12 +30,12 @@ class ObjectMain {
 			fields: [{name: "value", type: IrType.I32}],
 			methods: []
 		});
-		program.functions.push(new IrFunction("main", [], IrType.I32, builder.blocks, None, []));
+		program.functions.push(new IrFunction("main", [], IrType.I32, builder.blocks, Ordinary));
 		var entry = new IrBuilder(),
 			mainResult = entry.call("main", [], IrType.I32),
 			exited = entry.call("__exit", [mainResult], IrType.Void);
 		entry.returnValue(exited);
-		program.functions.push(new IrFunction("__entry", [], IrType.Void, entry.blocks, None, []));
+		program.functions.push(new IrFunction("__entry", [], IrType.Void, entry.blocks, Ordinary));
 		program.entryPoint = "__entry";
 		var lowered = HlLower.lower(program);
 		var output = Sys.args()[0];

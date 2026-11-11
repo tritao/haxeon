@@ -41,7 +41,7 @@ class IrValueLaneRuntime {
 	}
 
 	static function finish(b:IrBuilder, name:String, result:IrType):IrFunction
-		return new IrFunction(PREFIX + name, b.arguments, result, b.blocks, None, []);
+		return new IrFunction(PREFIX + name, b.arguments, result, b.blocks, GeneratedHelper);
 	static function primitive(b:IrBuilder, name:String, args:Array<IrValue>, result:IrType):IrValue
 		return b.call(PRIMITIVE + name, args, result);
 	static function call(b:IrBuilder, name:String, args:Array<IrValue>, result:IrType = Void):IrValue

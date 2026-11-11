@@ -63,7 +63,7 @@ class PhiEdges {
 						copy.instructions.push(instruction);
 				}
 		}
-		return fn.derive(result.concat(added));
+		return fn.withBlocks(result.concat(added));
 	}
 
 	static function edgeId(edges:Map<String, Int>, key:String):Int {

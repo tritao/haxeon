@@ -4,16 +4,16 @@ import haxeon.ui.style.StyleState;
 
 /** Interaction flags a retained subtree actually rendered when it was built. */
 class InteractionStateSnapshot {
-	static final interactionMask:Int = StyleState.Hovered | StyleState.Pressed | StyleState.Focused;
+	static final interactionMask:StyleState = StyleState.Hovered | StyleState.Pressed | StyleState.Focused;
 
 	static final NoIds:Array<WidgetId> = [];
-	static final NoValues:Array<Int> = [];
+	static final NoValues:Array<StyleState> = [];
 	static final NoBuilds:Array<SelfUpdatingBuild> = [];
 
 	var ids:Array<WidgetId>;
-	var values:Array<Int>;
+	var values:Array<StyleState>;
 	/** Per node, the flags its build depends on: Hovered drops out where no hover rule matches (BuildContext.hoverRebuilds). */
-	var masks:Array<Int>;
+	var masks:Array<StyleState>;
 	/** Widgets left out because they update themselves, with the builds that do it, kept alive with the cached subtree. */
 	var updatingBuilds:Array<SelfUpdatingBuild>;
 	var updatingBuildRevisions:Null<Array<Int>>;
@@ -50,7 +50,7 @@ class InteractionStateSnapshot {
 			}
 			if (node.recordsInteraction && context.updatingOwner(node) == null) {
 				var mask = interactionMask;
-				if (!context.hoverRebuilds(node)) mask &= ~StyleState.Hovered;
+				if (!context.hoverRebuilds(node)) mask = mask.remove(StyleState.Hovered);
 				if (ids.length == 0) {ids = []; values = []; masks = [];}
 				ids.push(node.id);
 				masks.push(mask);

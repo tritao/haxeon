@@ -16,8 +16,8 @@ function main():Int {
 		return [];
 	});
 	dispatcher.setRoot(root);
-	dispatcher.pointerMove(10.0, 10.0, 0, 3);
-	dispatcher.pointerMove(20.0, 20.0, 0, 7);
+	dispatcher.pointerMove(10.0, 10.0, haxeon.ui.core.UiModifier.empty(), 3);
+	dispatcher.pointerMove(20.0, 20.0, haxeon.ui.core.UiModifier.empty(), 7);
 	cancel = true;
 	dispatcher.setRoot(root);
 	if (calls.length != 1 || calls[0] != 10.0) return 1;

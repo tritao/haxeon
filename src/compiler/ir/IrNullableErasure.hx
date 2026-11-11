@@ -186,7 +186,7 @@ class IrNullableErasure {
 					scopeEnd: binding.scopeEnd
 				}
 		];
-		return fn.derive(blocks, arguments, IrTypeTools.erase(fn.result), bindings);
+		return fn.withBlocks(blocks, bindings, arguments, IrTypeTools.erase(fn.result));
 	}
 
 	static function eraseNative(native:IrNative):IrNative

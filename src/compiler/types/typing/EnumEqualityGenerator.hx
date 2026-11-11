@@ -1,5 +1,6 @@
 package compiler.types.typing;
 
+import compiler.types.TypedAst.TypedFunctionRole;
 import compiler.Source.SourceSpan;
 import compiler.types.Type.CompilerType;
 import compiler.types.Type.NominalKind;
@@ -98,6 +99,10 @@ class EnumEqualityGenerator {
 				var custom = reflective ? null : EnumConformanceMethods.method(session, type, "equals");
 				if (custom != null) {
 					statements.push(TReturn(new TypedExpression(TCall(EnumConformanceMethods.name(type, "equals"), [left, right]), TBool, span), span));
+				} else if (!Lambda.exists(declaration.cases, constructor -> constructor.params.length != 0)) {
+					// A nominal tag has no payload to inspect. Keep this constant-size even when
+					// a Dynamic/reflection adapter needs a callable equality implementation.
+					statements.push(TReturn(new TypedExpression(TEqual(left, right), TBool, span), span));
 				} else {
 					var leftIndex = new TypedExpression(TEnumIndex(left), TInt, span),
 						rightIndex = new TypedExpression(TEnumIndex(right), TInt, span);
@@ -128,14 +133,13 @@ class EnumEqualityGenerator {
 				BodyTyper.fail("E1025", 'Type.enumEq requires an enum value, got "${compiler.semantic.SemanticSignature.display(type)}"', span);
 		}
 		return {
-			name: reflective ? reflectiveName(type) : equalsName(type),
+			name: reflective ? reflectiveName(type) : equalsName(type), role: ProviderFunction(type, reflective ? ReflectEquals : Equals),
 			origin: req.origin,
 			originKind: Helper,
 			typeArguments: null,
 			owner: null,
 			isStatic: true,
 			isConstructor: false,
-			provides: Serves(type, reflective ? ReflectEquals : Equals),
 			arguments: [
 				{
 					name: "left",

@@ -142,7 +142,8 @@ class WasmGcRoots {
 	static function isSafepoint(instruction:IrInstruction, fields:Map<String, Bool>):Bool
 		return switch instruction {
 			case Call(_, _, _), CNativeCall(_, _, _), CallClosure(_, _, _), MethodCall(_, _, _, _, _), NewObject(_, _), InstanceClosure(_, _, _),
-				MakeEnum(_, _, _, _), IteratorNew(_, _), BeginTry(_, _, _): true;
+				IteratorNew(_, _), BeginTry(_, _, _): true;
+			case MakeEnum(output, _, _, _): switch output.type { case EnumTag(_): false; default: true; };
 			case FieldGet(_, object, name):
 				switch object.type {
 					case Obj(typeName): fields.exists(typeName + "." + name);

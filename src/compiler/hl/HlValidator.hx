@@ -11,8 +11,22 @@ class HlValidator {
 
 		for (type in code.types) {
 			switch type {
+				case EnumTag(boxedType, cacheGlobals):
+					requireType(code, boxedType, "enum tag boxed type");
+					switch code.types[boxedType] {
+						case Enum(_, _, constructors):
+							if (constructors.length != cacheGlobals.length)
+								throw "Enum tag case count mismatch";
+							for (i in 0...constructors.length) {
+								var global = cacheGlobals[i];
+								if (constructors[i].params.length != 0 || global < 0 || global >= code.globals.length
+									|| code.globals[global] != boxedType)
+									throw "Invalid enum tag case global";
+							}
+						default: throw "Enum tag requires a boxed enum descriptor";
+					}
 				case Simple(kind):
-					if (kind == HlType.Ref || kind == HlType.Null || kind == HlType.Packed)
+					if (kind == HlType.Ref || kind == HlType.Null || kind == HlType.Packed || kind == HlType.EnumTag)
 						throw 'HashLink type $kind requires a parameter';
 				case Parameterized(kind, parameter):
 					if (kind != HlType.Ref && kind != HlType.Null && kind != HlType.Packed)

@@ -25,14 +25,14 @@ class AccessibilityRequest {
 	public static inline var ScrollIntoView = 19;
 
 	public final action:Int;
-	public final capability:Int;
+	public final capability:AccessibilityAction;
 	public final kind:String;
 	public final value:Null<String>;
 	public final selectionStart:Int;
 	public final selectionEnd:Int;
 	public final granularity:Int;
 
-	function new(action:Int, capability:Int, kind:String, value:Null<String>,
+	function new(action:Int, capability:AccessibilityAction, kind:String, value:Null<String>,
 			selectionStart:Int, selectionEnd:Int, granularity:Int) {
 		this.action = action;
 		this.capability = capability;
@@ -45,7 +45,7 @@ class AccessibilityRequest {
 
 	public static function create(action:Int, value:Null<String>, selectionStart:Int,
 			selectionEnd:Int, granularity:Int):Null<AccessibilityRequest> {
-		var capability:Int;
+		var capability:AccessibilityAction;
 		var kind:String;
 		switch (action) {
 			case Activate: capability = AccessibilityAction.Activate; kind = UiEventKind.Activate;

@@ -499,3 +499,29 @@ and an unrelated Dynamic function cast of the same arity. A forged differing ove
 inlining modes, each typed method path at 8/1,024 iterations changes from 16/2,048 Wasm32 and Wasm GC allocations to zero;
 HashLink remains at zero bytes. `rpc-lifecycle` returns 42 on all three targets in both modes. Logical enum descriptors
 at genuine Dynamic/reflection callable boundaries remain E7 widening work in STRUCTS.md.
+
+### Scalar map storage in an opaque generic owner (a2)
+
+A map created and used inside a shared generic body keeps the body's erased storage consistently. In particular,
+the original `UiHostPendingResources<String>` smoke test and its Bool counterpart work on HashLink, Wasm32 and Wasm GC,
+with inlining off/on. This was reproduced with the pre-diagnostic compiler at `093617bb`; neither owner is rejected.
+
+The unsupported operation is a **storage-changing ABI crossing**, such as passing a concrete `Map<String, V>` into
+`ReadView<V>` whose constructor expects the erased reference-map representation. Before the diagnostic, the Bool
+probe failed on HashLink with `Can't cast map_string_bool to map_string_ref`. The String probe fails on HashLink with
+`Can't cast map_string_bytes to map_string_ref` and on Wasm GC with `RuntimeError: illegal cast`, in both inlining modes;
+Wasm32 accepts that String probe. Those String results were reproduced with `093617bb`.
+
+The compiler rejects these crossings with **E1009**, naming the concrete owner when available and both boundary types:
+`scalar map values in unspecialized generic owners are not supported yet at a storage-changing boundary`. It compares
+actual runtime map kinds through aliases and containers at ABI adaptation, rather than banning generic fields or
+instantiations. Null arguments, consistently erased owned maps, concrete fields and compatible specialized storage
+remain supported. The negative probes and the original String/Bool pending-resource runtime positives run on all three
+targets with inlining off/on. **a2 deletes this diagnostic and its rejection tests** when typed standard-map storage and
+scalar owner specialization preserve these crossings. This does not implement scalar specialization.
+
+The compiler's read-only verifier tables now accept typed lookup and membership
+callbacks instead of owning an erased map: each callback reads its concrete map kind, and the generic view preserves
+its nullable result type. The `generic-map-read-view` fixture checks false, true, missing keys and reference values on
+all three targets with both inlining settings. This does not add scalar specialization or claim allocation-free
+nullable scalar map reads.

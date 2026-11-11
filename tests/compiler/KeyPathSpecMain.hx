@@ -13,6 +13,10 @@ class KeyPathSpecMain {
 		reject(node,'var p=\\Node;','requires at least one stored field','E1009');
 		reject(node,'var p=\\Node.writeOnly;','Cannot read field','E1009');
 		reject(node,'var p=\\Node.computed;','computed property','E1009');
+		var storedProperty='class Backed { @:isVar public var value(get,set):Int; function get_value():Int return value; function set_value(v:Int):Int return value=v; } ';
+		reject(storedProperty,'var p=\\Backed.value;','computed property','E1009');
+		reject('interface Diffable {} class Computed implements Diffable { public var value(get,never):Int; function get_value():Int return 1; } ',
+			'var bit=haxeon.Diff.bit(\\Computed.value);','computed property','E1009');
 		reject(node,'var p:KeyPath<Node,Float>=\\Node.value;','Type mismatch','E1002');
 		reject(node,'var p:KeyPath<Node,Int>=\\Node.value; p.set(new Node(),1);','read-only KeyPath','E1009');
 		reject(node,'var p:KeyPath<Node,Int>=\\Node.value; p=p; p.set(new Node(),1);','read-only KeyPath','E1009');

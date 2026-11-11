@@ -1,5 +1,6 @@
 package compiler.types.typing;
 
+import compiler.types.TypedAst.TypedFunctionRole;
 import compiler.Source.SourceFile;
 import compiler.Source.SourceSpan;
 import compiler.types.Type.CompilerType;
@@ -1238,14 +1239,13 @@ class WireCodecGenerator {
 	static function generatedFunction(name:String, arguments:Array<{name:String, type:CompilerType}>, result:CompilerType, statements:Array<TypedStatement>,
 			request:WireCodecRequest, kind:String, type:CompilerType):TypedFunction
 		return {
-			name: name,
+			name: name, role: ProviderFunction(type, ProviderOperation.detailed(jsonMode ? ProviderOperation.Json : ProviderOperation.Wire, kind)),
 			origin: request.origin,
 			originKind: compiler.types.TypedAst.FunctionOriginKind.Helper,
 			typeArguments: null,
 			owner: null,
 			isStatic: true,
 			isConstructor: false,
-			provides: Serves(type, ProviderOperation.detailed(jsonMode ? ProviderOperation.Json : ProviderOperation.Wire, kind)),
 			arguments: arguments,
 			result: result,
 			statements: statements,

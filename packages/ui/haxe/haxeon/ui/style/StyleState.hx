@@ -1,7 +1,7 @@
 package haxeon.ui.style;
 
 /** Typed pseudo-state flags used by style selectors. */
-enum abstract StyleState(Int) from Int to Int {
+enum abstract StyleState(Int) implements Flags {
 	var Hovered = 1 << 0;
 	var Pressed = 1 << 1;
 	var Focused = 1 << 2;

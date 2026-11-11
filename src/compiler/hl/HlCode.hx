@@ -34,7 +34,7 @@ typedef HlConstant = {final global:Int; final fields:Array<Int>;}
  * stored: `lazy` keeps only how to produce it, and `payload` encodes it on each access, so a module that is kept between builds does not
  * also keep tens of megabytes of encoded sections that the writer would encode again.
  */
-final class HlDebugSection {
+class HlDebugSection {
 	public final kind:Int;
 	public final version:Int;
 	public final flags:Int;
@@ -65,8 +65,14 @@ final class HlDebugSection {
 	function get_payload():haxeon.io.SegmentedBytes
 		return payloadFor(null);
 
-	public function payloadFor(cache:Null<HlWriterCache>):haxeon.io.SegmentedBytes
-		return stored != null ? stored : produce(cache);
+	public function payloadFor(cache:Null<HlWriterCache>):haxeon.io.SegmentedBytes {
+		if (stored != null)
+			return stored;
+		var encode = produce;
+		if (encode == null)
+			throw "Debug section has no payload";
+		return encode(cache);
+	}
 }
 
 /** UTF-8 source contents addressed by the hash carried in debug locations. */
@@ -91,6 +97,8 @@ typedef HlFunctionIdentity = {
 /** HashLink type-table entry whose references are indices into {@link HlCode.types}. */
 enum HlTypeDef {
 	Simple(kind:HlType);
+	/** Four-byte nominal enum tag; cache globals are ordinary GC roots. */
+	EnumTag(boxedType:Int, cacheGlobals:Array<Int>);
 	Parameterized(kind:HlType, parameter:Int);
 	Abstract(name:Int);
 	Function(arguments:Array<Int>, result:Int);

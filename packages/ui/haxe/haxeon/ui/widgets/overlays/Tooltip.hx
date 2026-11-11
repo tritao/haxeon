@@ -150,7 +150,7 @@ class Tooltip implements View {
 			});
 			anchorNode.on(UiEventKind.Focus, function(_) {
 				pointer.suppressed = false;
-				focused.update((context.interactionStates.get(anchorNode.id) & StyleState.Hovered) == 0 && (showWhen == null || showWhen()));
+				focused.update(!context.interactionStates.get(anchorNode.id).contains(StyleState.Hovered) && (showWhen == null || showWhen()));
 			});
 			anchorNode.on(UiEventKind.Blur, function(_) { focused.update(false); });
 			anchorNode.on(UiEventKind.FocusLost, function(_) { focused.update(false); });
@@ -259,7 +259,7 @@ class Tooltip implements View {
 			tip.hitTestBehavior = HitTestBehavior.None;
 			root.add(tip);
 			header.on(UiEventKind.Focus, function(_) {
-				focused.update((context.interactionStates.get(header.id) & StyleState.Hovered) == 0 && (showWhen == null || showWhen()));
+				focused.update(!context.interactionStates.get(header.id).contains(StyleState.Hovered) && (showWhen == null || showWhen()));
 			});
 			header.on(UiEventKind.Blur, function(_) { focused.update(false); });
 			header.on(UiEventKind.FocusLost, function(_) { focused.update(false); });

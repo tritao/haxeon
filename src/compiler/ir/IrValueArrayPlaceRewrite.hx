@@ -161,6 +161,6 @@ class IrValueArrayPlaceRewrite {
 			blocks.push(target);
 		}
 		var debug = [for (binding in fn.debugBindings) if (!aliases.exists(binding.value.id)) binding];
-		return fn.derive(blocks, null, null, debug);
+		return fn.withBlocks(blocks, debug);
 	}
 }

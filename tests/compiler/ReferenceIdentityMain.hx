@@ -18,7 +18,7 @@ class ReferenceIdentityMain {
  static function invalidIdentity(type:IrType):Void {
   var b=new IrBuilder(), a=b.argument("a",type), z=b.argument("z",type);
   b.returnValue(b.call(IrReferenceIdentity.NAME,[a,z],Bool));
-  var p=new IrProgram("main"); p.functions=[new IrFunction("main",b.arguments,Bool,b.blocks, None, [])];
+  var p=new IrProgram("main"); p.functions=[new IrFunction("main",b.arguments,Bool,b.blocks, Ordinary)];
   p.objects=[{name:"Value",isValue:true,base:null,interfaces:[],fields:[],methods:[]}];
   try { IrVerifier.verify(p); throw "reference identity accepted a value carrier"; }
   catch(error:Dynamic) if(Std.string(error).indexOf("Reference identity requires class or interface references")<0) throw error;

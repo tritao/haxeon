@@ -166,6 +166,9 @@ The path must be statically known; an unknown runtime path is rejected with a
 diagnostic requiring a known direct-field path. Inherited fields precede
 fields declared in the derived class. A nested path is rejected because the
 mask represents the outer field as a unit. The bit is not a byte offset.
+For field numbering, `Diff.bit` also accepts an accessor property with stored
+backing, such as `@:isVar`; this does not make that property a usable key-path
+value or bypass its accessor. Properties without stored backing are rejected.
 The previous field-name form has been removed and its callers ported.
 
 ## Implementation checkpoint and backend dependency

@@ -31,6 +31,8 @@ enum IrType {
 	TypeRef;
 	Array(element:IrType);
 	Enum(name:String);
+	/** Payload-free enum storage: constructor index + 1 in I32; zero is the null value. */
+	EnumTag(name:String);
 	Obj(name:String);
 	Abstract(name:String);
 	Virtual(name:String);
@@ -53,6 +55,14 @@ class IrValue {
 
 /** Value contributed by one predecessor to an SSA phi definition. */
 typedef IrPhiInput = {final block:Int; final value:IrValue;}
+
+/** Compiler operations whose operands include semantic data rather than encoded linkage names. */
+enum IrIntrinsic {
+	EnumDynamicBox(type:IrType);
+	EnumDynamicView(type:IrType);
+	EnumTagBox(type:IrType);
+	EnumTagUnbox(type:IrType);
+}
 
 /** Typed SSA operations independent of HashLink register and symbol indices. */
 enum IrInstruction {
@@ -116,6 +126,7 @@ enum IrInstruction {
 	MakeEnum(output:IrValue, typeName:String, constructor:Int, arguments:Array<IrValue>);
 	EnumIndex(output:IrValue, value:IrValue);
 	EnumField(output:IrValue, value:IrValue, constructor:Int, field:Int);
+	Intrinsic(output:IrValue, operation:IrIntrinsic, arguments:Array<IrValue>);
 }
 
 /** Mandatory control transfer ending an SSA basic block. */
