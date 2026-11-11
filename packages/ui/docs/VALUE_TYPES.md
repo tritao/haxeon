@@ -5393,3 +5393,42 @@ twenty-eight. Selection also saves 40 bytes across five `TabItem` objects and
 its semantic signature from nullable Int to IconName without changing its size.
 No other type total changes. Thus the upward KiB-counter movements are buffer
 refill granularity, not more allocated program objects or bytes.
+
+## Release code size after enum conversions (2026-11-11)
+
+The pre-enum control is `9180b6d8`, the source behind the previously recorded 12,041,570-byte development Wasm32 module. The first release candidate is `1d286898` (same compiler/UI source as `bb4072f8`). Both use the same frozen outer application source and required mechanical API ports. `--build-mode release` omits development metadata; allocation counters are disabled in these size modules.
+
+| Release module | Pre-enum control bytes | Initial enum candidate bytes | Growth |
+|---|---:|---:|---:|
+| web32 | 6,728,120 | 6,947,390 | +219,270 (3.26%) |
+| webgc | 3,922,261 | 4,008,481 | +86,220 (2.20%) |
+| editor | 28,562,565 | 28,899,137 | +336,572 (1.18%) |
+
+This growth is a regression to fix, not an accepted cost of nominal tags. The measured closure-adapter and checked-closure-dispatch families are identical on both Web targets. Wasm32 emits two copies of the finalized dynamic stringifier and regenerates its numeric formatting helpers; enum additions amplify that duplicate. Typed nullary-enum equality also emits per-case bodies despite having only an integer tag to compare.
+
+| Release section | Wasm32 delta bytes | Wasm GC delta bytes | HashLink delta bytes |
+|---|---:|---:|---:|
+| code | +177,639 | +66,134 | 0 |
+| constants | 0 | 0 | +2,438 |
+| custom: name | +12,972 | +5,930 | 0 |
+| data | +27,882 | +7,853 | 0 |
+| debugFiles | 0 | 0 | -8 |
+| debugSections | 0 | 0 | +100,179 |
+| function signatures | +217 | +232 | 0 |
+| functionDebug | 0 | 0 | +13,140 |
+| functions | 0 | 0 | +196,783 |
+| globals | +140 | +2,080 | +572 |
+| natives | 0 | 0 | +84 |
+| reflectionMembers | 0 | 0 | +1,149 |
+| scalarConstants | 0 | 0 | +52 |
+| strings | 0 | 0 | +13,891 |
+| table elements | +434 | +232 | 0 |
+| types | -14 | +3,759 | +8,292 |
+
+The first correction makes synthesized payload-free equality constant-size before
+source inlining, then lowers typed calls and extracted-index comparisons to one
+nominal-tag `Equal`. The 32-case fixture checks nullable tags and struct fields,
+inspects the scalar IR and executes on HashLink, Wasm32 and Wasm GC with inlining
+off/on. Tier 1: **858 passed, 0 failed**; self-hosting reaches identical stage-1
+and stage-2 modules. Module-size checkpoints below track the cumulative fixes;
+the release-growth target remains at most 0.5% for each module.

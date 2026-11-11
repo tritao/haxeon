@@ -100,6 +100,10 @@ class EnumEqualityGenerator {
 				var custom = reflective ? null : EnumConformanceMethods.method(session, type, "equals");
 				if (custom != null) {
 					statements.push(TReturn(new TypedExpression(TCall(EnumConformanceMethods.name(type, "equals"), [left, right]), TBool, span), span));
+				} else if (!Lambda.exists(declaration.cases, constructor -> constructor.params.length != 0)) {
+					// A nominal tag has no payload to inspect. Keep this constant-size even when
+					// a Dynamic/reflection adapter needs a callable equality implementation.
+					statements.push(TReturn(new TypedExpression(TEqual(left, right), TBool, span), span));
 				} else {
 					var leftIndex = new TypedExpression(TEnumIndex(left), TInt, span),
 						rightIndex = new TypedExpression(TEnumIndex(right), TInt, span);

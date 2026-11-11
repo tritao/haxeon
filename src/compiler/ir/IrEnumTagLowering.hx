@@ -41,6 +41,17 @@ class IrEnumTagLowering {
 			default:
 				type;
 		};
+		// Payload-free enums cannot override equality. Their synthesized calls are
+		// scalar comparisons even with source inlining disabled.
+		var tagEqualities:Map<String, Bool> = [];
+		for (fn in program.functions)
+			if (compiler.types.typing.EnumEqualityGenerator.isEqualityName(fn.name) && fn.arguments.length == 2)
+				switch mapped(fn.arguments[0].type) {
+					case EnumTag(name):
+						if (IrVerifier.sameType(mapped(fn.arguments[1].type), EnumTag(name)))
+							tagEqualities.set(fn.name, true);
+					default:
+				}
 		var nativeWrappers:Map<String, String> = [],
 			generated:Array<IrFunction> = [];
 		function nativeWrapper(name:String, arguments:Array<IrType>, result:IrType, cNative:Bool):Void {
@@ -128,6 +139,8 @@ class IrEnumTagLowering {
 		function valueChanges(value:IrValue):Bool return changes(value.type);
 		function nonOutputChanges(instruction:IrInstruction):Bool {
 			switch instruction {
+				case Call(_, name, _) if (tagEqualities.exists(name)):
+					return true;
 				case Call(_, name, _) | CNativeCall(_, name, _) if (nativeWrappers.exists(name)):
 					return true;
 				case TypeValue(_, type):
@@ -165,16 +178,36 @@ class IrEnumTagLowering {
 						values.set(value.id, new IrValue(value.id, value.name, mapped(value.type)));
 					return values.get(value.id);
 				}
+				var indexTags:Map<Int, IrValue> = [];
+				for (block in fn.blocks)
+					for (located in block.instructions)
+						switch located.value {
+							case EnumIndex(output, input):
+								switch use(input).type {
+									case EnumTag(_): indexTags.set(output.id, use(input));
+									default:
+								}
+							default:
+						}
 				var blocks = [
 					for (block in fn.blocks) {
 						var result = new IrBlock(block.id);
 						for (located in block.instructions) {
-							if (!instructionChanges(located.value)) {
+							var tagIndexEquality = switch located.value {
+								case Equal(_, left, right): indexTags.exists(left.id) && indexTags.exists(right.id);
+								default: false;
+							};
+							if (!tagIndexEquality && !instructionChanges(located.value)) {
 								result.instructions.push(located);
 								continue;
 							}
 							var instruction = IrInliner.remap(located.value, use, id -> id);
 							switch located.value {
+								case Call(output, name, arguments) if (tagEqualities.exists(name)):
+									instruction = Equal(use(output), use(arguments[0]), use(arguments[1]));
+								case Equal(output, left, right) if (indexTags.exists(left.id) && indexTags.exists(right.id)
+									&& IrVerifier.sameType(indexTags.get(left.id).type, indexTags.get(right.id).type)):
+									instruction = Equal(use(output), indexTags.get(left.id), indexTags.get(right.id));
 								case Call(output, name, arguments) | CNativeCall(output, name, arguments) if (nativeWrappers.exists(name)):
 									instruction = Call(use(output), nativeWrappers.get(name), [for (argument in arguments) use(argument)]);
 								case Call(output, name, arguments) if (StringTools.startsWith(name, IrEnumDynamicDispatch.UNBOX_PREFIX)):

@@ -37,6 +37,7 @@ class TestCatalog {
 		"FlagsMain",
 		"InterpreterInt32Main",
 		"EnumTagRewriteMain",
+		"EnumTagEqualityMain",
 		"SourceEnumTagMain",
 		"GeneratedDependencyCompletionMain",
 		"KeyPathTypingMain",
