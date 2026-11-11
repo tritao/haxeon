@@ -1253,6 +1253,10 @@ class FrontendCompilation {
 		for (pair in [["$lambda-env:", "$lambda:"], ["$function-adapter-env:", "$function-adapter:"]])
 			if (StringTools.startsWith(name, pair[0]))
 				return !functionNames.exists(pair[1] + name.substr(pair[0].length));
+		// The environment of a key path composition is named after its functions (`<name>:get` is always made) and, like a lambda's,
+		// by the place of the composition: an edit that moves it leaves the old environment with nothing to run.
+		if (StringTools.startsWith(name, "$keypath.compose:") && StringTools.endsWith(name, ":environment"))
+			return !functionNames.exists(name.substr(0, name.length - ":environment".length) + ":get");
 		return false;
 	}
 
