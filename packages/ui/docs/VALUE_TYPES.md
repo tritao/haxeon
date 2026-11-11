@@ -5719,3 +5719,9 @@ the complete independent budget/memory/retention/census runs above cover that
 change instead. An earlier browser launch failed before guest load because its
 Unix socket path under the long TMPDIR was too long; using a short DATA1 TMPDIR
 fixed that harness cause before the accepted browser measurements.
+
+### Stage 5 component batches
+
+| Batch | Allocation evidence (objects / bytes) |
+| --- | --- |
+| Native scope and text ownership | Standard 15 actions: fourteen identical; telemetry → console 1,710 / 93,752 → 1,708 / 93,680. CNC resume 1,479 / 77,304 → 1,462 / 76,384. Telemetry step 14,978 / 629,752 → 15,080 / 630,520: approved correctness exception because the control disposed all 18 live worker bindings early (ADR 0002 stage 5); native counts are the baseline for later batches. |

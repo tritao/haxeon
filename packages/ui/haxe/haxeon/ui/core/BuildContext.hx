@@ -1,5 +1,7 @@
 package haxeon.ui.core;
 
+import haxeon.ui.core.RenderScope.RenderScopeLifetime;
+
 import haxeon.reactive.Derived;
 import haxeon.reactive.ReactiveRuntime;
 
@@ -87,6 +89,12 @@ class BuildContext {
 	/** True while a patch runs: its IDs are claimed later, when the retained tree that holds them is claimed. */
 	var patching:Bool = false;
 	final patchPriors:Map<Int, RenderNode> = new Map();
+	final renderScopes:Array<RenderScope> = [];
+	final renderScopeById:Map<Int, RenderScope> = new Map();
+	var buildingRenderScope:Bool = false;
+	var activeRenderScope:Null<RenderScope>;
+	final scheduleRenderScope:Void->Void;
+	final changingRenderScope:RenderNode->Void;
 
 	public function new(stateStore:StateStore, ?fonts:FontCollection, ?textInput:TextInputBridge,
 			?clipboard:ClipboardService, ?theme:Theme, ?gestures:GestureArena,
@@ -95,6 +103,8 @@ class BuildContext {
 		if (stateStore == null)
 			throw "Build context requires a state store";
 		this.stateStore = stateStore;
+		scheduleRenderScope = requestBindingFrame;
+		changingRenderScope = beforeRenderScopeChange;
 		activeObserved = observed;
 		this.fonts = fonts;
 		platformSurface = null;
@@ -415,7 +425,7 @@ class BuildContext {
 			pathOrder.push(path);
 			cachedIdCount++;
 		}
-		if (!patching && !claimed.add(id.value))
+		if (!patching && !buildingRenderScope && !claimed.add(id.value))
 			throw 'Duplicate widget ID ${id.value}; existing=${stateStore.describe(id)} current=$path';
 		stateStore.rememberPath(id, path);
 		return id;
@@ -544,6 +554,18 @@ class BuildContext {
 		var current:Null<RenderNode> = node;
 		while (current != null) {
 			if (canPatch(current)) return current;
+			current = current.parent;
+		}
+		return null;
+	}
+
+	/** Native bodies own interaction reads until a more local independent widget takes ownership. */
+	public function interactionRenderScope(node:RenderNode):Null<RenderScope> {
+		var current:Null<RenderNode> = node;
+		while (current != null) {
+			var owner = renderScopeById.get(current.id.value);
+			if (owner != null && owner.root == current && !owner.disposed) return owner;
+			if (canPatch(current)) return null;
 			current = current.parent;
 		}
 		return null;
@@ -892,6 +914,7 @@ class BuildContext {
 
 	/** Drops the self-updating builders, which hold the build closures of the retained tree; the next frame builds afresh. */
 	public function releaseRetained():Void {
+		clearRenderScopes();
 		clearCommandFlags();
 		retainedEditCaches.clear();
 		retainedEditCacheIds.resize(0);
@@ -909,6 +932,7 @@ class BuildContext {
 
 	/** Releases builders and pending patches when the owning UI context is disposed. */
 	public function dispose():Void {
+		clearRenderScopes();
 		clearCommandFlags();
 		retainedEditCaches.clear();
 		retainedEditCacheIds.resize(0);
@@ -930,6 +954,162 @@ class BuildContext {
 	/** The scope widgets built now are keyed under; withScopeUnder keys a deeper subtree by it. */
 	public function currentScope():KeyScope
 		return scope;
+
+	/** Mounts a structural owner directly on its stable wrapper node. */
+	public function mountRenderScope(root:RenderNode, build:Void->RenderNode):RenderNode {
+		var owner = new RenderScope(root, build, scheduleRenderScope, changingRenderScope);
+		owner.build = captureBuild(function() return buildRenderScope(owner, build));
+		owner.resourceId = id("scope-resource");
+		var lifetime = resourceState(owner.resourceId, () -> new RenderScopeLifetime(), value -> value.dispose()).value;
+		owner.parentScope = activeRenderScope;
+		var previous = renderScopeById.get(root.id.value);
+		renderScopeById.set(root.id.value, owner);
+		renderScopes.push(owner);
+		try owner.refresh() catch (error:Dynamic) {
+			owner.dispose();
+			renderScopes.remove(owner);
+			if (previous == null) renderScopeById.remove(root.id.value);
+			else renderScopeById.set(root.id.value, previous);
+			throw error;
+		}
+		lifetime.replace(owner);
+		return root;
+	}
+
+	function beforeRenderScopeChange(root:RenderNode):Void {
+		// Descendants may be reused or rebuilt by other owners before frame comparison runs.
+		// The wrapper's own inputs are stable. Submitted topology already records its old child slots.
+		recordPriors(root, root, false);
+	}
+
+	function buildRenderScope(owner:RenderScope, build:Void->RenderNode):RenderNode {
+		var marker = stateStore.beginUsage();
+		var previous = activeRenderScope;
+		var previousUpdater = activeUpdatingBuild;
+		var previousObserved = activeObserved;
+		var capture = previousObserved == observed ? localObserved : previousObserved;
+		var dependencyMark = capture.dependencyMarker();
+		activeObserved = capture;
+		activeRenderScope = owner;
+		activeUpdatingBuild = null;
+		try {
+			var result = trackReads(build);
+			for (index in dependencyMark...capture.pendingCount())
+				owner.trackField(capture.pendingSourceAt(index), capture.pendingFieldBitAt(index));
+			owner.stateIds = stateStore.usageMarker() == marker ? null : stateStore.usedIdsSince(marker, owner.stateIds);
+			stateStore.setOwnedStates(owner.resourceId, owner.stateIds);
+			stateStore.finishUsage(marker);
+			stateStore.retain(owner.stateIds, false);
+			capture.truncate(dependencyMark);
+			activeObserved = previousObserved;
+			activeRenderScope = previous;
+			activeUpdatingBuild = previousUpdater;
+			return result;
+		} catch (error:Dynamic) {
+			stateStore.finishUsage(marker);
+			capture.truncate(dependencyMark);
+			activeObserved = previousObserved;
+			activeRenderScope = previous;
+			activeUpdatingBuild = previousUpdater;
+			throw error;
+		}
+	}
+
+	/** Resource liveness follows the current mounted tree, including bodies rerun outside a full build. */
+	public function retainRenderScopeState(mounted:Map<Int, RenderNode>):Void {
+		for (owner in renderScopes)
+			if (!owner.disposed && mounted.get(owner.root.id.value) == owner.root)
+				stateStore.touch(owner.resourceId);
+	}
+
+	/** Runs scheduled structural computations before submitting their changed trees. */
+	public function hasPendingRenderScopes():Bool {
+		for (owner in renderScopes) if (owner.mounted && !owner.disposed && owner.pending) return true;
+		return false;
+	}
+
+	public function flushRenderScopes():Void {
+		var previous = buildingRenderScope;
+		buildingRenderScope = true;
+		try {
+			var index = 0;
+			while (index < renderScopes.length) {
+				var owner = renderScopes[index++];
+				if (renderScopeById.get(owner.root.id.value) != owner) owner.dispose();
+				else if (owner.mounted && !owner.attached()) owner.dispose();
+				else if (owner.mounted && owner.pending && !hasPendingUpdatingAncestor(owner.root)) owner.refresh();
+			}
+			buildingRenderScope = previous;
+		} catch (error:Dynamic) {
+			buildingRenderScope = previous;
+			throw error;
+		}
+	}
+
+	function hasPendingUpdatingAncestor(root:RenderNode):Bool {
+		var ancestor = root.parent;
+		while (ancestor != null) {
+			var build = selfUpdatingBuilds.get(ancestor.id.value);
+			if (build != null && build.root == ancestor && build.pending) return true;
+			ancestor = ancestor.parent;
+		}
+		return false;
+	}
+
+	/** Releases subscriptions when the wrapper is absent from the mounted tree. */
+	public function pruneRenderScopes(mounted:Map<Int, RenderNode>):Void {
+		var index = 0;
+		while (index < renderScopes.length) {
+			var owner = renderScopes[index];
+			owner.mounted = mounted.get(owner.root.id.value) == owner.root;
+			if (!owner.disposed && stateStore.contains(owner.resourceId)) { index++; continue; }
+			owner.dispose();
+			if (renderScopeById.get(owner.root.id.value) == owner) renderScopeById.remove(owner.root.id.value);
+			renderScopes[index] = renderScopes[renderScopes.length - 1];
+			renderScopes.pop();
+		}
+	}
+
+	function clearRenderScopes():Void {
+		for (owner in renderScopes) owner.dispose();
+		renderScopes.resize(0);
+		renderScopeById.clear();
+	}
+
+	function adoptRenderScopes(node:RenderNode, parent:Null<RenderScope>):Void {
+		var owner = renderScopeById.get(node.id.value);
+		if (owner != null && owner.root == node && !owner.disposed) {
+			owner.mounted = true;
+			owner.parentScope = parent;
+			parent = owner;
+		}
+		for (child in node.children) adoptRenderScopes(child, parent);
+	}
+
+	/** Captures inherited build inputs for a render scope that reruns independently of its parent. */
+	public function captureBuild(build:Void->RenderNode):Void->RenderNode {
+		if (build == null) throw "A captured build requires a body";
+		var capturedScope = scope, capturedParent = styleParent;
+		var capturedText = textStyleStack.length == 1 ? textStyleStack : textStyleStack.copy();
+		return function() {
+			var previousScope = scope, previousParent = styleParent, previousText = textStyleStack;
+			scope = capturedScope;
+			styleParent = capturedParent;
+			textStyleStack = capturedText;
+			try {
+				var result = build();
+				scope = previousScope;
+				styleParent = previousParent;
+				textStyleStack = previousText;
+				return result;
+			} catch (error:Dynamic) {
+				scope = previousScope;
+				styleParent = previousParent;
+				textStyleStack = previousText;
+				throw error;
+			}
+		};
+	}
 
 	/**
 		Builds under `base`'s child `key` rather than the current scope's, so a subtree placed anywhere below `base`
@@ -1028,8 +1208,9 @@ class BuildContext {
 	public function claimRetainedTree(root:RenderNode):Void {
 		if (root == null)
 			throw "A retained render subtree is required";
-		// As for id(), a patch's IDs are claimed with its completed retained tree.
-		if (patching) return;
+		adoptRenderScopes(root, activeRenderScope);
+		// Independent builds claim their completed tree when it returns to the enclosing build.
+		if (patching || buildingRenderScope) return;
 		root.walk(function(node) {
 			if (!claimed.add(node.id.value))
 				throw 'Duplicate retained widget ID ${node.id.value}';

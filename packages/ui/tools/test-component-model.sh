@@ -8,13 +8,17 @@ tmp=$(mktemp -d "${TMPDIR:-/tmp}/haxeon-ui-component-model.XXXXXXXX")
 trap 'rm -rf -- "$tmp"' EXIT
 compiler=${HAXEON_COMPILER_HL:-"$tmp/compiler.hl"}
 if [[ ! -f "$compiler" ]]; then
-    "$root/.tools/haxe/haxe" -cp "$root/src" -hl "$compiler" -main compiler.tools.HaxeonCompiler
+    "$root/.tools/haxe/haxe" --cwd "$root" common.hxml -hl "$compiler" -main compiler.tools.HaxeonCompiler
 fi
 cat > "$tmp/memory.json" <<'JSON'
 {"name":"nativekit-haxeon-linear-memory","version":1,"address_model":"wasm32","page_size":65536,"host_base":0,"host_limit":134217728,"guest_base":134217728,"guest_limit":268435456,"memory_size":268435456}
 JSON
 export LD_LIBRARY_PATH="$root/out:$("$root/scripts/hashlink-path.sh")${LD_LIBRARY_PATH:+:$LD_LIBRARY_PATH}"
-for fixture in TrackedScopeMain EqualChildMain BoundTextMain BoundTextFailureMain; do
+fixtures=("$@")
+if [[ ${#fixtures[@]} == 0 ]]; then
+  fixtures=(RenderScopeMain TrackedScopeMain EqualChildMain BoundTextMain BoundTextFailureMain BindingLifetimeMain)
+fi
+for fixture in "${fixtures[@]}"; do
   for inline in 0 1; do
     for target in hl wasm32 wasm-gc; do
         options=()
@@ -29,7 +33,7 @@ for fixture in TrackedScopeMain EqualChildMain BoundTextMain BoundTextFailureMai
         fi
         artifact="$tmp/$inline-$target"
         if ! HAXEON_INLINE="$inline" "$hl" "$compiler" "${options[@]}" --output="$artifact" \
-                --entry=${fixture} --root="$ui/tests/haxeon" --root="$ui/haxe" \
+                --entry=${fixture} --root="$ui/tests/haxeon" --root="${HAXEON_UI_SOURCE:-"$ui/haxe"}" \
                 --root="$ui/bindings/haxe" --root="$root/packages/editor/src" --root="$root/packages/platform/src" \
                 --ffi-interface="$platform_hxi" --ffi-projection="$root/packages/platform/bindings/nativekit.hxmap" \
                 --ffi-interface="$net_hxi" --ffi-projection="$root/packages/platform/bindings/nativekit-net.hxmap" \

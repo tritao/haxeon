@@ -3,6 +3,13 @@ package haxeon.ui.core;
 /** Haxe-owned per-widget state retained while views are rebuilt. */
 class StateStore {
 	final handles:Map<Int, State<Dynamic>> = new Map();
+	/** Resource ownership follows the current body, rather than a cache's initial flattened ID list. */
+	final ownedStates:Map<Int, Array<Int>> = new Map();
+
+	public function setOwnedStates(owner:WidgetId, ids:Null<Array<Int>>):Void {
+		if (ids == null) ownedStates.remove(owner.value);
+		else ownedStates.set(owner.value, ids);
+	}
 	final disposers:Map<Int, Void->Void>;
 	final paths:Map<Int, String>;
 	/** The IDs in `paths`, oldest first, so a prune can walk them in place instead of snapshotting the map's keys. */
@@ -134,6 +141,8 @@ class StateStore {
 			if (handles.exists(id)) {
 				if (frameActive) frameUsed.add(id);
 				if (recordUsage && (frameActive || usageCaptures > 0)) frameUseOrder.push(id);
+				var children = ownedStates.get(id);
+				if (children != null) retain(children, false);
 			}
 	}
 
@@ -142,6 +151,8 @@ class StateStore {
 		if (id == null || !handles.exists(id.value))
 			throw "Widget state has not been initialized";
 		markUsed(id);
+		var children = ownedStates.get(id.value);
+		if (children != null) retain(children, false);
 	}
 
 	@:allow(haxeon.ui.core.State)
@@ -175,6 +186,7 @@ class StateStore {
 			disposers.remove(id);
 			managed.remove(id);
 			handles.remove(id);
+			ownedStates.remove(id);
 		}
 		if (stale.length > 0) {
 			var read = 0, write = 0;
@@ -248,6 +260,7 @@ class StateStore {
 		frameUsed.clear();
 		frameActive = false;
 		handles.clear();
+		ownedStates.clear();
 		paths.clear();
 		pathIds.resize(0);
 		if (failure != null)

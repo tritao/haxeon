@@ -155,9 +155,9 @@ values changes, and updates the existing nodes. This record makes that idea the 
    viewport and interaction state still match. `BoundText` mounts a text node once, schedules a frame on tracked changes,
    and updates its text and semantics. Requests coalesce, and a failed getter does not suppress a later frame request.
    Ordinary Haxe `if`, `switch`, comprehensions and functions describe structure.
-   The keyed run-once `BoundEach` experiment is deleted. `TrackedScope` currently runs on `BuildContext.selfUpdating`
-   and the retained reconciliation machinery. Stage 5 must reimplement the scope primitive natively before removing
-   that machinery; this decision does not assert that reconciliation can already be removed.
+   The keyed run-once `BoundEach` experiment is deleted. At the stage 3 checkpoint, `TrackedScope` ran on
+   `BuildContext.selfUpdating` and retained reconciliation. The stage 5 foundation below replaces that implementation
+   with a native render-tree owner; reconciliation remains until its widget and panel callers have been ported.
 
    Exact calibrated action windows are objects/bytes below. Each is the same warmed second action occurrence used by
    the allocation census, including the trigger through its submitted frame. The `cnc-progress` window is a tick which
@@ -297,7 +297,7 @@ no builder transform or lazy parameter is involved.
 | `observeInt/Bool/String`, model revision counters, `cacheKeyHash` | observable fields and tracked reads |
 | `State.updateQuietly` | removed: writes know their readers |
 | `RetainedView`, dock pane and panel caches | migrate incrementally to tracked scopes and bindings; remove caches when no longer needed |
-| `selfUpdating`, `reconcile`, `BuiltNode`, `RenderNode.latest` | native scopes and bindings, after stage 5 reimplements the scope foundation |
+| `selfUpdating`, `reconcile`, `BuiltNode`, `RenderNode.latest` | native scope foundation implemented in stage 5; delete these after the remaining widget and panel callers are ported |
 | `requestPatch`, patch frames | a frame where only bindings ran |
 | `bindingRevision` | a scope dirtied while hidden runs when shown |
 | `InteractionStateSnapshot`, `hoverRebuilds` | per-node interaction signals and derived style |
@@ -495,6 +495,50 @@ retention scenarios, budgets that may only go down, memory runs, compiler suites
    longer need it; reimplement `TrackedScope` natively before removing its `selfUpdating`/reconcile foundation, then
    remove obsolete paths rather than keeping compatibility layers. Interaction signals and derived
    style replace hover handling where measured.
+
+   Native scope ownership uses a stable wrapper node and one replaceable body child. The wrapper keeps caller-added
+   children and decorations; replacing its body updates the render and layout child slots together, without builder
+   snapshots or redirects from removed nodes. Each scope subscribes directly to its structural reads and restores its
+   captured key scope, inherited style and text style when rerunning. Parents run before their children; removed children
+   release subscriptions before pending work can run. Resource ownership follows each mounted scope's current body,
+   rather than a flattened parent snapshot. Failed bodies leave the installed child intact and remain invalidatable.
+   A native scope's resource handle owns its current state IDs through the state store. Retaining that handle keeps
+   the current body alive while a panel is hidden; hidden scopes pause until remounted. Releasing the handle disposes
+   the scope. This uses resource reachability instead of snapshot ownership counters: enclosing caches retain one
+   handle and need not learn a second scope API or copy changing descendant state lists. A focused hidden-panel
+   regression reproduced premature disposal before this ownership change. Pilot verification remains pending.
+   Interaction routing recognizes the nearest native scope and invalidates that scope directly for changes its body
+   renders. It does not route those changes through an enclosing legacy panel. An early experiment tracking every
+   interaction read added signals and dependency edges for text/layout nodes and regressed the pilot census; it was
+   removed. Per-node interaction signals and derived styles remain part of the later widget migration.
+   Bound text keeps its last submitted text on its own native leaf node. Text changes classify content, geometry and
+   semantics directly, instead of cloning an entire render/layout/style node for comparison. The measured native-scope
+   telemetry case spent six additional snapshots on live text (144 objects / 6,512 bytes overall). The leaf's submitted
+   fingerprint substitutes only its owned text/label, so verification still rejects unrelated unannounced edits.
+   A fresh control built after the allocator size-class update reproduces a legacy resource-lifetime defect:
+   after a scope reruns through an equal-child cache hit, the next retained frame can dispose a still-mounted bound
+   text effect. A focused reproduction loses its subscription and leaves text stale on HashLink, Wasm32 and Wasm GC,
+   with inlining both enabled and disabled; native ownership retains the subscription and updates the text on all six
+   configurations. Paired editor traces confirm that the control disposes all 18 worker bindings during the first
+   telemetry step and invokes none on the following eight steps; the native version invokes all 18 on every step
+   and releases them when the panel unmounts.
+   The portable `BindingLifetimeMain` regression fails against the pristine control (`hl`, inline off: return 5)
+   and passes against the native foundation on all three targets with inlining both on and off.
+
+   **Foundation correctness exception (lead decision, 2026-11-11).** For `telemetry-step`, the control measures
+   14,978 objects / 629,752 bytes and the native foundation 15,080 objects / 630,520 bytes: +102 objects / +768 bytes
+   (0.12%). The control disposed live bindings early, so its lower allocation count describes incorrect behaviour.
+   Keeping those bindings alive is a correctness fix; the lead explicitly accepts this difference. The native
+   foundation's 15,080 objects / 630,520 bytes become the correct baseline for later batches. This exception does
+   not relax other actions, verification, or budget ceilings. The standard 15-action census must still have no
+   increase: telemetry → console saves 2 objects / 72 bytes, and the other fourteen actions are identical.
+   A similar exception requires a demonstrated correctness fix; other unresolved allocation increases still stop
+   the affected family. Foundation gates and the remaining widget/panel migrations must complete before stage 5
+   is marked done. Evidence is retained under `/media/joao/DATA1/haxeon-stage5-gates/evidence/`:
+   `native-foundation-pilot-comparison.log`, `worker-binding-trace-comparison.json`, the paired
+   `current-*-all-census.json` and `current-*-pilot-census.json`, and the six-configuration
+   `*-resource-lifetime-parity.log` reproductions.
+
 6. **Local placement for independent feedback edits.** First exclude absolute overlays from content bounds. Then add the
    backend's independence check and local placement, with full-solve fallback, and verify-mode comparison against a full
    solve. Go: selection runs one Clay solve per frame with byte-identical geometry, and no scenario takes the fallback

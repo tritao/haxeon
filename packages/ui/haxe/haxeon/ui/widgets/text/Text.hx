@@ -7,6 +7,7 @@ import haxeon.ui.core.BuildContext;
 import haxeon.ui.core.RenderNode;
 import haxeon.ui.core.TextStyleOverride;
 import haxeon.ui.core.View;
+import haxeon.ui.core.WidgetId;
 import haxeon.ui.style.StyleTarget;
 import haxeon.ui.style.StyleProperty;
 import haxeon.ui.semantics.AccessibilityRole;
@@ -34,7 +35,7 @@ class Text implements View {
 		var id = context.id("text");
 		var computed = context.resolveStyle(new StyleTarget("text", null, null, null, ["text"],
 			context.interactionStates.get(id)), style, color);
-		var node = new RenderNode(id, LayoutVisualKind.Text, computed.toLayoutStyle());
+		var node = createNode(id, computed.toLayoutStyle());
 		node.setStyleIdentity("text", null, null, null, ["text"]);
 		node.states = context.interactionStates.get(id);
 		node.computedStyle = computed;
@@ -58,4 +59,7 @@ class Text implements View {
 		node.semantics = new Semantics(AccessibilityRole.Text, value);
 		return node;
 	}
+
+	function createNode(id:WidgetId, style:LayoutStyle):RenderNode
+		return new RenderNode(id, LayoutVisualKind.Text, style);
 }
