@@ -383,6 +383,50 @@ retention scenarios, budgets that may only go down, memory runs, compiler suites
    targets; Wasm GC must pass the linear-memory record to native without a per-frame managed-to-native copy.
    Borrowed views of managed flat arrays and optional flat values are not needed by this design yet.
 
+   **Stage 2 decision (2026-11-11): no-go.** Keep the incremental layout transaction and its verification.
+   The paint prototype increased allocation, frame times and module size, and introduced a native arena, generation
+   management and binding side tables without simplifying the mixed-channel bridge. Do not migrate the other channels.
+
+   The same calibrated harness measured each action once for exact allocation, and four alternating control/prototype
+   timing pairs for the `tab-matrix`, `interaction` and `selection-stress` scenarios. Frame times below are the median
+   of each run’s per-action median, in milliseconds. A matching native UI library was built for each module with the
+   same release flags. The 30/60/60 scenario cycles exclude setup and verification frames from timing.
+
+   | Action | Objects control | Objects prototype | Bytes control | Bytes prototype | ms control | ms prototype |
+   | --- | ---: | ---: | ---: | ---: | ---: | ---: |
+   | hierarchy->sensors | 1,676 | 1,920 | 117,208 | 131,264 | 1.5260 | 1.9474 |
+   | sensors->hierarchy | 1,149 | 1,258 | 79,656 | 86,432 | 1.1386 | 1.5681 |
+   | console->telemetry | 1,176 | 1,230 | 78,520 | 81,432 | 1.0350 | 1.2829 |
+   | telemetry->console | 1,712 | 1,772 | 93,176 | 96,424 | 1.0871 | 1.3350 |
+   | scroll-inspector | 227 | 233 | 23,072 | 23,184 | 0.7147 | 0.8747 |
+   | hover-enter | 33 | 33 | 1,296 | 1,296 | 0.0031 | 0.0031 |
+   | hover-inside | 33 | 33 | 1,296 | 1,296 | 0.0025 | 0.0029 |
+   | idle | 18 | 18 | 848 | 848 | 0.0072 | 0.0075 |
+   | idle-focused | 18 | 18 | 848 | 848 | 0.0070 | 0.0080 |
+   | hover-other | 187 | 193 | 9,712 | 9,936 | 0.4219 | 0.5535 |
+   | hover-field | 323 | 329 | 17,296 | 17,520 | 0.4338 | 0.5708 |
+   | hover-away | 257 | 264 | 12,512 | 12,792 | 0.4302 | 0.5630 |
+   | type-char | 417 | 423 | 16,360 | 16,584 | 0.4163 | 0.5475 |
+   | type-backspace | 432 | 438 | 16,992 | 17,216 | 0.4138 | 0.5460 |
+   | selection | 8,593 | 8,851 | 579,512 | 597,368 | 2.5010 | 3.3549 |
+
+   Across these actions, allocations rose from 16,251 objects / 1,048,304 bytes to 17,013 / 1,094,440. The HashLink
+   module rose from 102,434,594 to 102,561,106 bytes (+126,512); the four new paint-store classes and native record
+   header added 272 lines before changes to the existing bridge. Across the production bridge, store, native API and
+   inspector, the prototype added 640 lines and removed 133, excluding generated HXI and tests. The prototype retained
+   the bridge for the other channels and added linked binding tables for shared styles and nodes, so it did not provide
+   a net simplification.
+
+   The prototype’s inspector exposed live background, text color and radii, and its inspector fixture passed on
+   HashLink, Wasm32 and Wasm GC with inlining both on and off. Direct warmed paint updates allocated nothing in the
+   focused tests on those targets; the editor census nevertheless increased. Native incremental/full-tree verification
+   and the layout smoke test passed, including deliberate detection of a missing delta. This shows that the failure is
+   the measured editor tradeoff, not a failure to implement or inspect paint records.
+
+   The control module SHA-256 was `9a04479bb4165b46712e39e143eb3d14ddbe33b7a3c28dd9a5d7696105f691ca` and the prototype module was
+   `5a02f3dac4ccc56cb2479f8788e42d9271f3b5ead275beecb96e61f8d6ccf780`. The calibrated harness SHA-256 was `426e07eec67e6744c35eb60f355077ef9ceea6bef8dcbc1ac4eb906b95b941e1`.
+   The prototype is removed; the existing incremental bridge and verify mode remain in use.
+
 3. **Component model experiment.** Compare run-once bindings and small re-running scopes using the same builder-style
    panel code and tracked model. Measure allocation and frame time, decide decision 2, and amend this record; authors do
    not rewrite panels when the implementation changes.

@@ -18,7 +18,6 @@ import haxeon.ui.LayoutPositioning;
 import haxeon.ui.LayoutRenderableContent;
 import haxeon.ui.LayoutSession;
 import haxeon.ui.LayoutTransaction;
-import haxeon.ui.PaintStore;
 import haxeon.ui.LayoutWrapMode;
 import haxeon.ui.ParagraphStyle;
 import haxeon.ui.Rect;
@@ -32,9 +31,8 @@ import haxeon.ui.TextLayout.TextPosition;
 
 class LayoutSessionSmoke {
 	static function rejectsTransaction(node:LayoutNode):Bool {
-		scoped var paint = new PaintStore();
 		try {
-			new LayoutTransaction(paint).encodeInto(node);
+			LayoutTransaction.encode(node);
 			return false;
 		} catch (_:Dynamic) {
 			return true;

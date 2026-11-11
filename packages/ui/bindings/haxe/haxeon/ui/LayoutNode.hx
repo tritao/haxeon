@@ -6,7 +6,7 @@ class LayoutNode {
 	public var visualKind:LayoutVisualKind;
 	public final style:LayoutStyle;
 	public var text:String;
-	@:isVar public var textColor(get, set):Color;
+	public var textColor:Color;
 	/**
 	 * Most nodes never show text, so absent values use shared immutable defaults. Reading these properties allocates
 	 * nothing; assigning a complete style stores its value inline in the optional slot.
@@ -57,23 +57,6 @@ class LayoutNode {
 		compositeRevision = 0;
 		encodeStamp = 0;
 		children = NoChildren;
-	}
-
-	function get_textColor():Color {
-		var binding = PaintBindings.node(this);
-		if (binding == null) return textColor;
-		var slot = binding.store.at(binding.index, binding.generation);
-		return new Color(slot.ref.textRed, slot.ref.textGreen, slot.ref.textBlue, slot.ref.textAlpha);
-	}
-
-	function set_textColor(value:Color):Color {
-		var binding = PaintBindings.node(this);
-		if (binding == null) return textColor = value;
-		while (binding != null) {
-			binding.store.setTextColor(binding.index, binding.generation, value.red, value.green, value.blue, value.alpha);
-			binding = binding.nextNode;
-		}
-		return value;
 	}
 
 	function get_textStyle():TextStyle return peekTextStyle();

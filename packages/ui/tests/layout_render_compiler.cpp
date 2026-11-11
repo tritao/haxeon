@@ -1,5 +1,4 @@
 #include "layout/layout_engine.h"
-#include "layout_test_paint.h"
 #include "layout/layout_render_compiler.h"
 #include "render/render_plan_executor.h"
 #include "render/sealed_render_plan.h"
@@ -20,12 +19,9 @@ using namespace nkui;
 
 namespace {
 
-LayoutTestPaint paints;
-
 LayoutNode box(uint32_t id, int32_t parent) {
     LayoutNode node;
     node.id = id;
-    paints.bind(node);
     node.parent = parent;
     node.style.width = {LayoutSizing::Grow, 0.0f};
     node.style.height = {LayoutSizing::Fit, 0.0f};
@@ -227,9 +223,9 @@ int main() {
     root.style.padding_left = root.style.padding_right = 16;
     root.style.padding_top = root.style.padding_bottom = 12;
     root.style.child_gap = 8;
-    paints.background(root, {0.9f, 0.92f, 0.98f, 1.0f});
-    paints.record(root).radius_top_left = paints.record(root).radius_top_right = 12.0f;
-    paints.record(root).radius_bottom_left = paints.record(root).radius_bottom_right = 12.0f;
+    root.style.background = {0.9f, 0.92f, 0.98f, 1.0f};
+    root.style.radius_top_left = root.style.radius_top_right = 12.0f;
+    root.style.radius_bottom_left = root.style.radius_bottom_right = 12.0f;
     nodes.push_back(root);
 
     LayoutNode button = box(2, 0);
@@ -241,16 +237,16 @@ int main() {
     button.style.transform.ty = 6.0f;
     button.style.clip_horizontal = true;
     button.style.clip_vertical = true;
-    paints.background(button, {0.2f, 0.5f, 0.9f, 1.0f});
-    paints.record(button).radius_top_left = paints.record(button).radius_top_right = 8.0f;
-    paints.record(button).radius_bottom_left = paints.record(button).radius_bottom_right = 8.0f;
+    button.style.background = {0.2f, 0.5f, 0.9f, 1.0f};
+    button.style.radius_top_left = button.style.radius_top_right = 8.0f;
+    button.style.radius_bottom_left = button.style.radius_bottom_right = 8.0f;
     nodes.push_back(button);
 
     LayoutNode label = box(3, 1);
     label.visual_kind = LayoutVisualKind::Text;
     label.text = "Compile me";
     label.text_style.font_size = 18.0f;
-    paints.text(label, {0.1f, 0.15f, 0.25f, 1.0f});
+    label.text_color = {0.1f, 0.15f, 0.25f, 1.0f};
     nodes.push_back(label);
 
     LayoutSnapshot snapshot;

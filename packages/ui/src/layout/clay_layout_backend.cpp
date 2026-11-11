@@ -455,10 +455,9 @@ Clay_ElementDeclaration declaration_for(const LayoutNode &node, int32_t layer_z)
         declaration.floating.clipTo =
             node.style.clip_to_parent ? CLAY_CLIP_TO_ATTACHED_PARENT : CLAY_CLIP_TO_NONE;
     }
-    declaration.backgroundColor = clay_color(node.background());
-    const auto &paint = node.paint();
-    declaration.cornerRadius = {static_cast<float>(paint.radius_top_left), static_cast<float>(paint.radius_top_right),
-                                static_cast<float>(paint.radius_bottom_left), static_cast<float>(paint.radius_bottom_right)};
+    declaration.backgroundColor = clay_color(node.style.background);
+    declaration.cornerRadius = {node.style.radius_top_left, node.style.radius_top_right,
+                                node.style.radius_bottom_left, node.style.radius_bottom_right};
     if (node.visual_kind == LayoutVisualKind::Custom)
         declaration.custom.customData = const_cast<LayoutNode *>(&node);
     declaration.clip.horizontal = node.style.clip_horizontal;
@@ -477,7 +476,7 @@ template <typename LayoutState> void append_node(LayoutState &state, std::size_t
     if (node.visual_kind == LayoutVisualKind::Text) {
         Clay_TextElementConfig text_config{};
         text_config.userData = const_cast<LayoutNode *>(&node);
-        text_config.textColor = clay_color(node.text_color());
+        text_config.textColor = clay_color(node.text_color);
         text_config.fontId = static_cast<uint16_t>(node.text_style.family);
         text_config.fontSize = clay_text_value(node.text_style.font_size);
         text_config.letterSpacing = clay_text_value(node.text_style.letter_spacing, true);

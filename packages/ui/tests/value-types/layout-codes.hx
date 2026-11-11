@@ -4,7 +4,6 @@ import haxeon.ui.LayoutAxis;
 import haxeon.ui.LayoutStyle;
 import haxeon.ui.LayoutNode;
 import haxeon.ui.LayoutTransaction;
-import haxeon.ui.PaintStore;
 
 function main():Int {
     var sizes = [LayoutSizing.Fit, LayoutSizing.Grow, LayoutSizing.Fixed, LayoutSizing.Percent];
@@ -19,8 +18,7 @@ function main():Int {
     style.width = LayoutAxis.fixed(42);
     style.height = LayoutAxis.grow(3, 90, 2);
     if (style.width != LayoutAxis.fixed(42) || haxeon.Diff.mask(style, style.copy()) != 0) return 5;
-    scoped var paint = new PaintStore();
-    var bytes = new LayoutTransaction(paint).encodeInto(new LayoutNode(1, LayoutVisualKind.Image, style));
+    var bytes = LayoutTransaction.encode(new LayoutNode(1, LayoutVisualKind.Image, style));
     var record = NativeKitUIConstants.NKUI_LAYOUT_TRANSACTION_HEADER_BYTES;
     if (bytes.getInt32(record + NativeKitUIConstants.NKUI_LAYOUT_NODE_VISUAL_KIND_OFFSET) != 3
         || bytes.getInt32(record + NativeKitUIConstants.NKUI_LAYOUT_NODE_WIDTH_SIZING_OFFSET) != 2

@@ -83,11 +83,6 @@ static_assert(sizeof(nkui_custom_effect_descriptor) == sizeof(nkui::CustomEffect
 static_assert(sizeof(nkui_effect_op_command) == sizeof(nkui::EffectOpCommand));
 static_assert(sizeof(nkui_stroke_path_command) == sizeof(nkui::StrokePathCommand));
 static_assert(sizeof(nkui_layout_item) == NKUI_LAYOUT_RESOLVED_ITEM_BYTES);
-static_assert(sizeof(nkui_layout_paint_record) == 104);
-static_assert(alignof(nkui_layout_paint_record) == 8);
-static_assert(offsetof(nkui_layout_paint_record, text_red) == 64);
-static_assert(offsetof(nkui_layout_paint_record, generation) == 96);
-static_assert(offsetof(nkui_layout_paint_record, flags) == 100);
 
 namespace {
 
@@ -324,7 +319,6 @@ struct LayoutSessionState : std::enable_shared_from_this<LayoutSessionState> {
     std::vector<int32_t> pending_parents;
     uint64_t visit_epoch = 0;
     std::vector<nkui::LayoutNode> parsed_updates;
-    nkui::LayoutPaintSource paint_source;
     nkui::LayoutInputChanges input_changes;
     std::vector<nkui_layout_item> resolved_updates;
     bool resolved_updates_ready = false;
@@ -976,35 +970,7 @@ bool read_float(const uint8_t *bytes, size_t size, size_t offset, float &out) {
     return true;
 }
 
-bool valid_layout_paint(const nkui_layout_paint_record &paint, uint32_t generation) {
-    if (paint.generation <= 0 || static_cast<uint32_t>(paint.generation) != generation ||
-        paint.flags < 0 || (paint.flags & 1) == 0) return false;
-    const auto color = [](double value) {
-        const float converted = static_cast<float>(value);
-        return std::isfinite(converted) && converted >= 0.0f && converted <= 1.0f;
-    };
-    const auto radius = [](double value) {
-        const float converted = static_cast<float>(value);
-        return std::isfinite(converted) && converted >= 0.0f;
-    };
-    return color(paint.background_red) && color(paint.background_green) && color(paint.background_blue) &&
-           color(paint.background_alpha) && color(paint.text_red) && color(paint.text_green) &&
-           color(paint.text_blue) && color(paint.text_alpha) && radius(paint.radius_top_left) &&
-           radius(paint.radius_top_right) && radius(paint.radius_bottom_left) && radius(paint.radius_bottom_right);
-}
-
-/** Record addresses are borrowed only while a submit or verification call is running. */
-struct LayoutPaintBorrow {
-    nkui::LayoutPaintSource &source;
-    LayoutPaintBorrow(nkui::LayoutPaintSource &target, const uint8_t *bytes, uint32_t size) : source(target) {
-        source.records = reinterpret_cast<const nkui_layout_paint_record *>(bytes);
-        source.count = size / sizeof(nkui_layout_paint_record);
-    }
-    ~LayoutPaintBorrow() { source.records = nullptr; source.count = 0; }
-};
-
 bool read_layout_transaction(const uint8_t *bytes, uint32_t byte_count,
-                             const nkui::LayoutPaintSource &paint_source,
                              std::vector<nkui::LayoutNode> &nodes, bool allow_patch = false) {
     size_t header_bytes = NKUI_LAYOUT_TRANSACTION_HEADER_BYTES;
     constexpr size_t record_bytes = NKUI_LAYOUT_NODE_RECORD_BYTES;
@@ -1038,6 +1004,12 @@ bool read_layout_transaction(const uint8_t *bytes, uint32_t byte_count,
     };
     const auto read_node_float = [&](size_t record, size_t field, float &out) {
         return read_float(bytes, size, record + field, out);
+    };
+    const auto read_node_color = [&](size_t record, size_t field, nkui::LayoutColor &out) {
+        return read_node_float(record, field, out.red) &&
+               read_node_float(record, field + sizeof(float), out.green) &&
+               read_node_float(record, field + 2 * sizeof(float), out.blue) &&
+               read_node_float(record, field + 3 * sizeof(float), out.alpha);
     };
     {
         nodes.clear();
@@ -1104,12 +1076,21 @@ bool read_layout_transaction(const uint8_t *bytes, uint32_t byte_count,
                 !read_node_float(record, NKUI_LAYOUT_NODE_COLUMN_GAP_OFFSET,
                                  node.style.column_gap) ||
                 !read_node_u32(record, NKUI_LAYOUT_NODE_WRAP_MODE_OFFSET, wrap_mode) ||
-                !read_node_u32(record, NKUI_LAYOUT_NODE_PAINT_INDEX_OFFSET, node.paint_index) ||
-                !read_node_u32(record, NKUI_LAYOUT_NODE_PAINT_GENERATION_OFFSET, node.paint_generation) ||
+                !read_node_color(record, NKUI_LAYOUT_NODE_BACKGROUND_OFFSET,
+                                 node.style.background) ||
+                !read_node_float(record, NKUI_LAYOUT_NODE_RADIUS_TOP_LEFT_OFFSET,
+                                 node.style.radius_top_left) ||
+                !read_node_float(record, NKUI_LAYOUT_NODE_RADIUS_TOP_RIGHT_OFFSET,
+                                 node.style.radius_top_right) ||
+                !read_node_float(record, NKUI_LAYOUT_NODE_RADIUS_BOTTOM_LEFT_OFFSET,
+                                 node.style.radius_bottom_left) ||
+                !read_node_float(record, NKUI_LAYOUT_NODE_RADIUS_BOTTOM_RIGHT_OFFSET,
+                                 node.style.radius_bottom_right) ||
                 !read_node_u32(record, NKUI_LAYOUT_NODE_CLIP_FLAGS_OFFSET, clip) ||
                 clip > (NKUI_LAYOUT_CLIP_HORIZONTAL | NKUI_LAYOUT_CLIP_VERTICAL) ||
                 !read_node_u32(record, NKUI_LAYOUT_NODE_TEXT_OFFSET_OFFSET, text_offset) ||
                 !read_node_u32(record, NKUI_LAYOUT_NODE_TEXT_LENGTH_OFFSET, text_length) ||
+                !read_node_color(record, NKUI_LAYOUT_NODE_TEXT_COLOR_OFFSET, node.text_color) ||
                 !read_node_u32(record, NKUI_LAYOUT_NODE_FONT_FAMILY_OFFSET, font_family) ||
                 !read_node_float(record, NKUI_LAYOUT_NODE_FONT_SIZE_OFFSET,
                                  node.text_style.font_size) ||
@@ -1252,11 +1233,21 @@ bool read_layout_transaction(const uint8_t *bytes, uint32_t byte_count,
                     return false;
                 return axis.max == 0.0f || axis.max >= axis.min;
             };
-            if (node.paint_index >= paint_source.count) return false;
-            node.paint_source = &paint_source;
-            const auto &paint = node.paint();
+            const auto valid_color = [](const nkui::LayoutColor &color) {
+                const auto valid = [](float value) {
+                    return std::isfinite(value) && value >= 0.0f && value <= 1.0f;
+                };
+                return valid(color.red) && valid(color.green) && valid(color.blue) &&
+                       valid(color.alpha);
+            };
             if (!valid_axis(node.style.width) || !valid_axis(node.style.height) ||
-                !valid_layout_paint(paint, node.paint_generation))
+                !valid_color(node.style.background) || !valid_color(node.text_color) ||
+                !std::isfinite(node.style.radius_top_left) ||
+                !std::isfinite(node.style.radius_top_right) ||
+                !std::isfinite(node.style.radius_bottom_left) ||
+                !std::isfinite(node.style.radius_bottom_right) ||
+                node.style.radius_top_left < 0.0f || node.style.radius_top_right < 0.0f ||
+                node.style.radius_bottom_left < 0.0f || node.style.radius_bottom_right < 0.0f)
                 return false;
             if (!std::isfinite(node.style.aspect_ratio) || node.style.aspect_ratio < 0.0f)
                 return false;
@@ -2800,12 +2791,8 @@ struct LayoutMutation {
 extern "C" nkui_result nkui_layout_session_submit(nkui_layout_session session,
                                                   const uint8_t *transaction,
                                                   uint32_t transaction_bytes,
-                                                  const uint8_t *paint_records,
-                                                  uint32_t paint_bytes,
                                                   const nkui_layout_frame_input *frame) {
-    if (!frame || frame->struct_size < sizeof(*frame) ||
-        paint_bytes % sizeof(nkui_layout_paint_record) != 0 ||
-        (paint_bytes && (!paint_records || reinterpret_cast<uintptr_t>(paint_records) % alignof(nkui_layout_paint_record))))
+    if (!frame || frame->struct_size < sizeof(*frame))
         return NKUI_ERROR_INVALID_ARGUMENT;
     if (active_measure_session)
         return NKUI_ERROR_INVALID_ARGUMENT;
@@ -2820,27 +2807,17 @@ extern "C" nkui_result nkui_layout_session_submit(nkui_layout_session session,
     }
     auto *state = pinned_state.get();
     std::unique_lock<std::mutex> session_lock(state->mutex);
-    LayoutPaintBorrow paint_borrow(state->paint_source, paint_records, paint_bytes);
     const double parse_started = nkui::layout_cost_time();
     uint32_t version = 0;
     if (!read_u32(transaction, transaction_bytes, 0, version))
         return NKUI_ERROR_INVALID_TRANSACTION;
     const bool patch = version == NKUI_LAYOUT_PATCH_VERSION;
     auto &updates = state->parsed_updates;
-    if (!read_layout_transaction(transaction, transaction_bytes, state->paint_source, updates, patch))
+    if (!read_layout_transaction(transaction, transaction_bytes, updates, patch))
         return NKUI_ERROR_INVALID_TRANSACTION;
     LayoutMutation mutation(*state, !patch);
     if (!mutation.apply(transaction, transaction_bytes)) return NKUI_ERROR_INVALID_TRANSACTION;
     const auto nodes = mutation.view();
-    std::size_t paint_node_index = 0;
-    for (const auto &node : nodes) {
-        if (node.paint_index >= state->paint_source.count ||
-            !valid_layout_paint(state->paint_source.records[node.paint_index], node.paint_generation))
-            return NKUI_ERROR_INVALID_TRANSACTION;
-        if (!mutation.changes.topology && (node.paint().flags & 2) != 0)
-            mutation.changes.nodes.push_back(paint_node_index);
-        ++paint_node_index;
-    }
     const double parse_finished = nkui::layout_cost_time();
     bool has_text = false;
     for (const auto &node : nodes)
@@ -2856,8 +2833,6 @@ extern "C" nkui_result nkui_layout_session_submit(nkui_layout_session session,
                      error.message ? error.message : "unknown layout error");
         return NKUI_ERROR_INVALID_TRANSACTION;
     }
-    for (const auto &node : nodes)
-        if ((node.paint().flags & 2) != 0) state->frame.invalidate_node(node.id);
     const double index_started = nkui::layout_cost_time();
     mutation.publish();
     if (!patch) state->frame.clear_segments();
@@ -2944,19 +2919,14 @@ extern "C" nkui_result nkui_layout_session_get_resolved_items(nkui_layout_sessio
 
 
 extern "C" nkui_result nkui_layout_session_verify_tree(nkui_layout_session session,
-                                                       const uint8_t *transaction, uint32_t bytes,
-                                                       const uint8_t *paint_records, uint32_t paint_bytes) {
-    if (paint_bytes % sizeof(nkui_layout_paint_record) != 0 ||
-        (paint_bytes && (!paint_records || reinterpret_cast<uintptr_t>(paint_records) % alignof(nkui_layout_paint_record))))
-        return NKUI_ERROR_INVALID_ARGUMENT;
+                                                       const uint8_t *transaction, uint32_t bytes) {
     if (active_measure_session) return NKUI_ERROR_INVALID_ARGUMENT;
     std::lock_guard<std::mutex> lock(layout_sessions_mutex);
     auto *state = resolve(session);
     if (!state) return NKUI_ERROR_INVALID_HANDLE;
     std::lock_guard<std::mutex> session_lock(state->mutex);
-    LayoutPaintBorrow paint_borrow(state->paint_source, paint_records, paint_bytes);
     std::vector<nkui::LayoutNode> reference;
-    if (!state->submitted || !read_layout_transaction(transaction, bytes, state->paint_source, reference))
+    if (!state->submitted || !read_layout_transaction(transaction, bytes, reference))
         return NKUI_ERROR_INVALID_TRANSACTION;
     if (reference.size() != state->ordered_nodes.size()) return NKUI_ERROR_INVALID_TRANSACTION;
     for (std::size_t index = 0; index < reference.size(); ++index) {

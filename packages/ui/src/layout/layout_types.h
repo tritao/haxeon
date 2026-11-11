@@ -1,8 +1,6 @@
 #ifndef NATIVEKIT_UI_LAYOUT_TYPES_H
 #define NATIVEKIT_UI_LAYOUT_TYPES_H
 
-#include "../../include/nativekit_ui_paint_record.h"
-
 #include <algorithm>
 #include <cstdint>
 #include <cstddef>
@@ -179,6 +177,11 @@ struct LayoutStyle {
     int32_t z_index = 0;
     bool clip_to_parent = true;
     bool overlay = false;
+    LayoutColor background{};
+    float radius_top_left = 0.0f;
+    float radius_top_right = 0.0f;
+    float radius_bottom_left = 0.0f;
+    float radius_bottom_right = 0.0f;
     bool clip_horizontal = false;
     bool clip_vertical = false;
     bool visible = true;
@@ -187,22 +190,15 @@ struct LayoutStyle {
     float transform_origin_y = 0.5f;
 };
 
-/** A call-scoped view over the session owner's native paint records. */
-struct LayoutPaintSource {
-    const nkui_layout_paint_record *records = nullptr;
-    std::size_t count = 0;
-};
-
 /** A flat, frame-scoped render/layout tree. Parent indices refer to this array. */
 struct LayoutNode {
+    bool operator==(const LayoutNode &) const = default;
     uint32_t id = 0;
     int32_t parent = -1;
     LayoutVisualKind visual_kind = LayoutVisualKind::Box;
     LayoutStyle style{};
     std::string text;
-    const LayoutPaintSource *paint_source = nullptr;
-    uint32_t paint_index = 0;
-    uint32_t paint_generation = 0;
+    LayoutColor text_color{1.0f, 1.0f, 1.0f, 1.0f};
     TextStyle text_style{};
     ParagraphStyle paragraph_style{};
     /** Geometric hit policy supplied by the framework layer. */
@@ -216,31 +212,6 @@ struct LayoutNode {
     uint32_t geometry_revision = 0;
     /** Opacity/effects revision supplied by the retained scene owner. */
     uint32_t composite_revision = 0;
-
-    const nkui_layout_paint_record &paint() const { return paint_source->records[paint_index]; }
-    LayoutColor background() const {
-        const auto &p = paint();
-        return {static_cast<float>(p.background_red), static_cast<float>(p.background_green),
-                static_cast<float>(p.background_blue), static_cast<float>(p.background_alpha)};
-    }
-    LayoutColor text_color() const {
-        const auto &p = paint();
-        return {static_cast<float>(p.text_red), static_cast<float>(p.text_green),
-                static_cast<float>(p.text_blue), static_cast<float>(p.text_alpha)};
-    }
-    bool operator==(const LayoutNode &other) const {
-        const auto &a = paint(), &b = other.paint();
-        return id == other.id && parent == other.parent && visual_kind == other.visual_kind && style == other.style &&
-               text == other.text && text_style == other.text_style && paragraph_style == other.paragraph_style &&
-               hit_self == other.hit_self && hit_children == other.hit_children && measure_version == other.measure_version &&
-               content_revision == other.content_revision && geometry_revision == other.geometry_revision &&
-               composite_revision == other.composite_revision &&
-               a.background_red == b.background_red && a.background_green == b.background_green &&
-               a.background_blue == b.background_blue && a.background_alpha == b.background_alpha &&
-               a.radius_top_left == b.radius_top_left && a.radius_top_right == b.radius_top_right &&
-               a.radius_bottom_left == b.radius_bottom_left && a.radius_bottom_right == b.radius_bottom_right &&
-               a.text_red == b.text_red && a.text_green == b.text_green && a.text_blue == b.text_blue && a.text_alpha == b.text_alpha;
-    }
 };
 
 /** Borrowed ordered nodes and parent indices. Retained sessions keep node storage stable across topology edits. */

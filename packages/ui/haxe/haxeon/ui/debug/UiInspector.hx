@@ -59,9 +59,6 @@ class UiInspector {
 			var line = prefix + "#" + Std.string(record.id) + " " + visualName(record.visualKind) +
 				" [" + number(record.bounds.x) + "," + number(record.bounds.y) + " " +
 				number(record.bounds.width) + "x" + number(record.bounds.height) + "]";
-			line += " background=" + paintColor(record.background) + " text=" + paintColor(record.textColor) +
-				" radii=(" + paintNumber(record.radiusTopLeft) + "," + paintNumber(record.radiusTopRight) + "," +
-				paintNumber(record.radiusBottomLeft) + "," + paintNumber(record.radiusBottomRight) + ")";
 			if (!record.visible)
 				line += " hidden";
 			if (record.focused)
@@ -168,8 +165,6 @@ class UiInspector {
 			semantics == null ? null : semantics.label,
 			semantics == null ? null : semantics.value,
 			semantics == null ? haxeon.ui.semantics.AccessibilityAction.empty() : semantics.actions,
-			node.layout.style.background, node.layout.textColor, node.layout.style.radiusTopLeft,
-			node.layout.style.radiusTopRight, node.layout.style.radiusBottomLeft, node.layout.style.radiusBottomRight,
 			node.states, node.styleType, node.computedStyle,
 			styleEntries, matchingStyleRules, isolated, overflow, paintBounds,
 			effectPasses, estimatedBytes,
@@ -246,13 +241,6 @@ class UiInspector {
 
 	static function number(value:Float):String
 		return Std.string(Std.int(value * 100.0) / 100.0);
-
-	static function paintNumber(value:Float):String
-		return value == 0.0 && 1.0 / value < 0.0 ? "-0" : Std.string(value);
-
-	static function paintColor(value:haxeon.ui.Color):String
-		return "(" + paintNumber(value.red) + "," + paintNumber(value.green) + "," +
-			paintNumber(value.blue) + "," + paintNumber(value.alpha) + ")";
 
 	static function interactionStateNames(flags:StyleState):String {
 		var names:Array<String> = [];

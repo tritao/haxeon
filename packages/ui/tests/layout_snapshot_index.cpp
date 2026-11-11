@@ -14,17 +14,6 @@ namespace {
 
 std::vector<LayoutNode> fixture() {
     std::vector<LayoutNode> nodes(1201);
-    static std::vector<nkui_layout_paint_record> paints(1201);
-    static LayoutPaintSource source{paints.data(), paints.size()};
-    for (std::size_t index = 0; index < nodes.size(); ++index) {
-        paints[index] = {};
-        paints[index].generation = 1;
-        paints[index].flags = 1;
-        paints[index].text_red = paints[index].text_green = paints[index].text_blue = paints[index].text_alpha = 1;
-        nodes[index].paint_source = &source;
-        nodes[index].paint_index = static_cast<uint32_t>(index);
-        nodes[index].paint_generation = 1;
-    }
     auto &root = nodes[0];
     root.id = 1;
     root.style.width = {LayoutSizing::Fixed, 1200};
@@ -38,9 +27,7 @@ std::vector<LayoutNode> fixture() {
         box.parent = 0;
         box.style.width = {LayoutSizing::Fixed, 200};
         box.style.height = {LayoutSizing::Fixed, 22};
-        auto &paint = paints[1 + row * 2];
-        paint.background_red = 0.2f; paint.background_green = 0.3f;
-        paint.background_blue = 0.4f; paint.background_alpha = 1;
+        box.style.background = {0.2f, 0.3f, 0.4f, 1};
         box.style.transform.tx = static_cast<float>(row % 4);
         if (row % 11 == 0) {
             box.style.positioning = LayoutPositioning::Absolute;
@@ -54,6 +41,7 @@ std::vector<LayoutNode> fixture() {
         text.visual_kind = LayoutVisualKind::Text;
         text.text = "Snapshot label " + std::to_string(row);
         text.style.width = {LayoutSizing::Fixed, 180};
+        text.text_color = {1, 1, 1, 1};
         text.text_style.font_size = 12;
     }
     return nodes;

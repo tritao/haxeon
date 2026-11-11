@@ -6,7 +6,6 @@ import haxeon.ui.TextStyle;
 import haxeon.ui.ParagraphStyle;
 import haxeon.ui.LayoutNode;
 import haxeon.ui.LayoutTransaction;
-import haxeon.ui.PaintStore;
 function main():Int {
     var fonts = [FontFamily.Default, FontFamily.Emoji, FontFamily.Monospace];
     var fontCodes = [0, 1, 4];
@@ -26,8 +25,7 @@ function main():Int {
     var node = new LayoutNode(1);
     node.textStyle = new TextStyle(16, FontFamily.Monospace);
     node.paragraphStyle = new ParagraphStyle(TextWrap.WordCharacter, TextAlignment.Center, null, TextDirection.Rtl);
-    scoped var paint = new PaintStore();
-    var bytes = new LayoutTransaction(paint).encodeInto(node);
+    var bytes = LayoutTransaction.encode(node);
     var record = NativeKitUIConstants.NKUI_LAYOUT_TRANSACTION_HEADER_BYTES;
     if (bytes.getInt32(record + NativeKitUIConstants.NKUI_LAYOUT_NODE_FONT_FAMILY_OFFSET) != 4) return 4;
     if (bytes.getInt32(record + NativeKitUIConstants.NKUI_LAYOUT_NODE_TEXT_WRAP_OFFSET) != 2) return 4;

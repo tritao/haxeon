@@ -4,7 +4,6 @@
 #include "nativekit_time.h"
 #include "nativekit_ui.h"
 #include "nativekit_ui_layout.h"
-#include "layout_wire_paint.h"
 #include "nativekit_window.h"
 #include "adapter_internal.h"
 #include "core/executor.hpp"
@@ -30,8 +29,6 @@
 #endif
 
 namespace {
-
-LayoutWirePaint paints;
 
 bool check(bool result, const char *operation) {
     if (result)
@@ -321,7 +318,6 @@ bool check_cached_text_rows(nk_window window, nk_surface surface) {
         write(12, static_cast<uint32_t>(transaction.size()));
         const size_t node = NKUI_LAYOUT_TRANSACTION_HEADER_BYTES;
         write(node + NKUI_LAYOUT_NODE_ID_OFFSET, uint32_t{1});
-        write(node + NKUI_LAYOUT_NODE_PAINT_GENERATION_OFFSET, uint32_t{1});
         write(node + NKUI_LAYOUT_NODE_PARENT_OFFSET, int32_t{-1});
         write(node + NKUI_LAYOUT_NODE_VISUAL_KIND_OFFSET, uint32_t{NKUI_LAYOUT_VISUAL_CUSTOM});
         write(node + NKUI_LAYOUT_NODE_FLAGS_OFFSET, uint32_t{NKUI_LAYOUT_NODE_VISIBLE});
@@ -336,7 +332,7 @@ bool check_cached_text_rows(nk_window window, nk_surface surface) {
         write(node + NKUI_LAYOUT_NODE_HEIGHT_SIZING_OFFSET, uint32_t{NKUI_LAYOUT_SIZING_FIXED});
         write(node + NKUI_LAYOUT_NODE_HEIGHT_VALUE_OFFSET, 160.0f);
         const nkui_layout_frame_input layout_frame{sizeof(layout_frame), 256.0f, 192.0f, 0.0f};
-        if (!check(paints.submit(session, transaction.data(),
+        if (!check(nkui_layout_session_submit(session, transaction.data(),
                                               static_cast<uint32_t>(transaction.size()),
                                               &layout_frame) == NKUI_OK &&
                        nkui_layout_session_set_custom_paint(session, 1, list) == NKUI_OK,
@@ -521,7 +517,6 @@ bool check_plan_reuse(nk_window window, nk_surface surface) {
         write(12, static_cast<uint32_t>(transaction.size()));
         const size_t node = NKUI_LAYOUT_TRANSACTION_HEADER_BYTES;
         write(node + NKUI_LAYOUT_NODE_ID_OFFSET, uint32_t{1});
-        write(node + NKUI_LAYOUT_NODE_PAINT_GENERATION_OFFSET, uint32_t{1});
         write(node + NKUI_LAYOUT_NODE_PARENT_OFFSET, int32_t{-1});
         write(node + NKUI_LAYOUT_NODE_VISUAL_KIND_OFFSET, uint32_t{NKUI_LAYOUT_VISUAL_CUSTOM});
         write(node + NKUI_LAYOUT_NODE_FLAGS_OFFSET, uint32_t{NKUI_LAYOUT_NODE_VISIBLE});
@@ -537,7 +532,7 @@ bool check_plan_reuse(nk_window window, nk_surface surface) {
         write(node + NKUI_LAYOUT_NODE_HEIGHT_VALUE_OFFSET, 160.0f);
         const nkui_layout_frame_input layout_frame{sizeof(layout_frame), 256.0f, 192.0f, 0.0f};
         const auto submit_layout = [&]() {
-            return paints.submit(session, transaction.data(),
+            return nkui_layout_session_submit(session, transaction.data(),
                                               static_cast<uint32_t>(transaction.size()),
                                               &layout_frame) == NKUI_OK;
         };
