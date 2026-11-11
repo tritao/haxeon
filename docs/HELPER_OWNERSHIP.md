@@ -4,6 +4,8 @@ Status: proposal, 2026-11-11. Input: the warm-edit sweep (`Main --warm-edit`, ru
 `enum-generated-dependencies`, whose warm rebuild differs from a fresh build. It is listed by name in `driver.TestRunner.
 warmEditKnownFailures` with a reference to this note, and fails the day it starts passing.
 
+Scheduled with ADR 0003 M4: the invalidation key is a query dependency there, so it is not built here as a second hand-written `invalidated` extension.
+
 ## The failure
 
 `$hash$value$equality:<sha(T)>` is one function for a type `T`, however many functions need it. Each request is recorded in
@@ -77,3 +79,15 @@ as origin; the sweep of every family below decides which.
 - Stable function identities change for most generated helpers once, which invalidates anything keyed by them across a compiler upgrade
   (the hot-reload patch protocol): needs a protocol version note.
 - It belongs with ADR 0003 M3/M4 (ownership and invalidation), not with the warm-rebuild fixes.
+
+## Test set (written, passing today)
+
+`helper-ownership-struct-hash`, `-struct-equality`, `-enum-equality`, `-wire-codec` and `-generic-and-custom` are sweep programs: each has
+one shared helper with two requesters written in different functions (a struct hashed from a map and from `Hashing.hash`; struct
+equality from `==` and as a map key; enum equality from a generic method and a plain function; a MessagePack codec from two functions; a
+hash requested by a generic specialization and by a custom enum method). All pass the warm-edit sweep today, so they are not in the
+known-failure list: they document the shapes and will gate the mechanism. They do not reproduce `enum-generated-dependencies`, whose
+requesters differ in typing stage (a method typed after the ordinary bodies); a reduction of that is part of the work. The cases that need
+a change in another module (a field type edited elsewhere, a conformance added, a requester removed from a second module) cannot be
+written as sweep programs, whose edits are confined to the entry file; they need a multi-module warm test and belong with the M4 query
+tests.

@@ -99,6 +99,6 @@ and the `provides` row come from the generator and a change in either fails the 
 ## 6. Order I would do it in
 
 1. ~~Compilation server for named cases~~ (rejected, see section 3).
-2. The checked-suite split above, with the warm edit-rebuild addition.
+2. The checked-suite split above, with the warm edit-rebuild addition. Done in part: the checked suite builds every program a third time, edited and rebuilt warm (it adds about 1 minute to the program phase, 150 s to 210 s); the plain suite is unchanged, and the rest of the split (compile-only checked sweep in place of the live and plain runs) is not done. What the sweep found is in WARM_REBUILD_REUSE.md.
 3. HelperFixtures.
 4. -j8 behind the memory floor check.

@@ -539,3 +539,8 @@ inline-enum-reflection-reach	42
 closure-method-value-arguments	42
 map-null-string-keys	42
 value-interface-helper-reuse	42
+helper-ownership-struct-hash	42
+helper-ownership-enum-equality	42
+helper-ownership-struct-equality	42
+helper-ownership-wire-codec	42
+helper-ownership-generic-and-custom	42
