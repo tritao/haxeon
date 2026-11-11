@@ -3,46 +3,55 @@ package compiler.ir;
 import compiler.ir.Ir;
 import compiler.ir.IrValueLaneLayout.IrValueLaneShape;
 import compiler.ir.IrValueLaneLayout.IrValueLaneSlot;
-import compiler.ir.codec.IrTypeCodec;
+import compiler.ir.IrFunction.IrValueArraySlotOperation;
 
 typedef IrValueArraySlotCopy = {final source:Int; final target:Int; final type:IrType;}
 typedef IrValueArraySubslot = {final index:Int; final slot:IrValueLaneSlot;}
 
 /** Field accessors for an array place: each call keeps the array and index live, never a pointer into a lane. */
 class IrValueArraySlotHelpers {
-	static inline final PREFIX = "$value-array:slot:";
+	final namespace:Int;
 	final element:IrType;
 	final shape:IrValueLaneShape;
 	final access:IrValueArrayAccess;
-	final checks:Map<String, {path:Array<String>, includeSelf:Bool}> = [];
-	final optionalWrites:Map<String, {path:Array<String>, type:IrType}> = [];
-	final scalarChecks:Map<String, IrType> = [];
+	final reads:Array<Null<String>>;
+	final writes:Array<Null<String>>;
+	final checks:Array<{name:String, path:Array<String>, includeSelf:Bool}> = [];
+	final optionalWrites:Array<{name:String, path:Array<String>, type:IrType}> = [];
+	final scalarChecks:Array<{name:String, type:IrType}> = [];
+	var nextSymbol = 0;
 	var built = false;
 
-	public function new(element:IrType, shape:IrValueLaneShape) {
+	public function new(namespace:Int, element:IrType, shape:IrValueLaneShape) {
+		this.namespace = namespace;
 		this.element = element;
 		this.shape = shape;
 		this.access = new IrValueArrayAccess(shape.scalarWordBits);
+		this.reads = [for (_ in shape.slots) null];
+		this.writes = [for (_ in shape.slots) null];
 	}
+
+	function nextName():String return '$' + 'haxeon_value_array_slot_${namespace}_${nextSymbol++}';
 
 	public function getter(slot:Int):String {
 		checkSlot(slot);
-		return IrValueLaneReference.isCarrier(shape.slots[slot].type) ? carrierName(element, shape.slots[slot].path, false) : name(element, slot, false);
+		if (reads[slot] == null) reads[slot] = nextName();
+		return reads[slot];
 	}
 	public function setter(slot:Int):String {
 		checkSlot(slot);
-		return IrValueLaneReference.isCarrier(shape.slots[slot].type) ? carrierName(element, shape.slots[slot].path, true) : name(element, slot, true);
+		if (writes[slot] == null) writes[slot] = nextName();
+		return writes[slot];
 	}
 
 	/** Request a check before evaluating the rest of a place operation. */
 	public function checker(path:Array<String>, includeSelf:Bool):String {
-		var encoded = haxe.Json.stringify([path, includeSelf]), id = haxe.crypto.Base64.encode(haxe.io.Bytes.ofString(encoded));
-		var result = PREFIX + "check:" + haxe.crypto.Base64.encode(IrTypeCodec.encode(element)) + ":" + id;
-		if (!checks.exists(result)) {
-			if (built) throw "Value lane place checks must be requested before generating helpers";
-			checks.set(result, {path: path.copy(), includeSelf: includeSelf});
-		}
-		return result;
+		for (index in 0...checks.length)
+			if (checks[index].includeSelf == includeSelf && samePath(checks[index].path, path)) return checks[index].name;
+		if (built) throw "Value lane place checks must be requested before generating helpers";
+		var symbol = nextName();
+		checks.push({name: symbol, path: path.copy(), includeSelf: includeSelf});
+		return symbol;
 	}
 
 	/** Store an optional scalar from already-evaluated presence and payload components. */
@@ -50,25 +59,30 @@ class IrValueArraySlotHelpers {
 		var presence = slot(path, true), payload = slot(path, false, true);
 		if (!Type.enumEq(shape.slots[presence].type, Bool) || !Type.enumEq(shape.slots[payload].type, type))
 			throw 'Wrong optional scalar lane type for ${path.join(".")}';
-		var encoded = haxe.crypto.Base64.encode(haxe.io.Bytes.ofString(haxe.Json.stringify(path)));
-		var result = PREFIX + "optional-write:" + haxe.crypto.Base64.encode(IrTypeCodec.encode(element)) + ":" + encoded;
-		if (!optionalWrites.exists(result)) {
-			if (built) throw "Optional lane writes must be requested before generating helpers";
-			optionalWrites.set(result, {path: path.copy(), type: type});
-		}
-		return result;
+		for (index in 0...optionalWrites.length)
+			if (samePath(optionalWrites[index].path, path) && IrVerifier.sameType(optionalWrites[index].type, type))
+				return optionalWrites[index].name;
+		if (built) throw "Optional lane writes must be requested before generating helpers";
+		var symbol = nextName();
+		optionalWrites.push({name: symbol, path: path.copy(), type: type});
+		return symbol;
 	}
 
 	/** Unwrap a saved optional scalar without rereading its array place after intervening calls. */
 	public function requireScalar(type:IrType):String {
 		switch type { case I32, I64, F32, F64, Bool: default: throw 'Invalid optional scalar payload $type'; }
-		var result = PREFIX + "optional-require:" + haxe.crypto.Base64.encode(IrTypeCodec.encode(element)) + ":"
-			+ haxe.crypto.Base64.encode(IrTypeCodec.encode(type));
-		if (!scalarChecks.exists(result)) {
-			if (built) throw "Optional scalar checks must be requested before generating helpers";
-			scalarChecks.set(result, type);
-		}
-		return result;
+		for (index in 0...scalarChecks.length)
+			if (IrVerifier.sameType(scalarChecks[index].type, type)) return scalarChecks[index].name;
+		if (built) throw "Optional scalar checks must be requested before generating helpers";
+		var symbol = nextName();
+		scalarChecks.push({name: symbol, type: type});
+		return symbol;
+	}
+
+	static function samePath(left:Array<String>, right:Array<String>):Bool {
+		if (left.length != right.length) return false;
+		for (index in 0...left.length) if (left[index] != right[index]) return false;
+		return true;
 	}
 
 	/** Resolve a logical field projection without confusing an optional's flag with its payload. */
@@ -123,7 +137,7 @@ class IrValueArraySlotHelpers {
 			var slot = shape.slots[index];
 			var read = new IrBuilder(), readArray = read.argument("array", Array(element)), readIndex = read.argument("index", I32);
 			read.returnValue(access.read(read, readArray, readIndex, slot));
-			result.push(new IrFunction(getter(index), read.arguments, slot.type, read.blocks, GeneratedHelper));
+			result.push(new IrFunction(getter(index), read.arguments, slot.type, read.blocks, ValueArraySlot(namespace, element, Read(index, slot.path.copy(), IrValueLaneReference.isCarrier(slot.type)))));
 			var write = new IrBuilder(), writeArray = write.argument("array", Array(element)), writeIndex = write.argument("index", I32),
 				value = write.argument("value", slot.type);
 			if (slot.isPresence) {
@@ -141,12 +155,10 @@ class IrValueArraySlotHelpers {
 			} else
 				access.write(write, writeArray, writeIndex, slot, value);
 			write.returnValue(write.constVoid());
-			result.push(new IrFunction(setter(index), write.arguments, Void, write.blocks, GeneratedHelper));
+			result.push(new IrFunction(setter(index), write.arguments, Void, write.blocks, ValueArraySlot(namespace, element, Write(index, slot.path.copy(), IrValueLaneReference.isCarrier(slot.type)))));
 		}
-		var checkNames = [for (name in checks.keys()) name];
-		checkNames.sort(Reflect.compare);
-		for (name in checkNames) {
-			var request = checks.get(name), builder = new IrBuilder(), array = builder.argument("array", Array(element)),
+		for (requestIndex in 0...checks.length) {
+			var request = checks[requestIndex], builder = new IrBuilder(), array = builder.argument("array", Array(element)),
 				index = builder.argument("index", I32);
 			builder.call("__value_array_validate", [array, index], Void);
 			for (slot in shape.slots) if (slot.isPresence && isPrefix(slot.path, request.path, request.includeSelf)) {
@@ -157,12 +169,10 @@ class IrValueArraySlotHelpers {
 				builder.select(yes);
 			}
 			builder.returnValue(builder.constVoid());
-			result.push(new IrFunction(name, builder.arguments, Void, builder.blocks, GeneratedHelper));
+			result.push(new IrFunction(request.name, builder.arguments, Void, builder.blocks, ValueArraySlot(namespace, element, Check(request.path.copy(), request.includeSelf))));
 		}
-		var writeNames = [for (name in optionalWrites.keys()) name];
-		writeNames.sort(Reflect.compare);
-		for (name in writeNames) {
-			var request = optionalWrites.get(name), builder = new IrBuilder(), array = builder.argument("array", Array(element)),
+		for (requestIndex in 0...optionalWrites.length) {
+			var request = optionalWrites[requestIndex], builder = new IrBuilder(), array = builder.argument("array", Array(element)),
 				index = builder.argument("index", I32), present = builder.argument("present", Bool), payload = builder.argument("payload", request.type),
 				yes = builder.createBlock(), no = builder.createBlock(), done = builder.createBlock();
 			builder.branch(present, yes, no);
@@ -174,17 +184,15 @@ class IrValueArraySlotHelpers {
 			builder.call(setter(slot(request.path, true)), [array, index, builder.constBool(false)], Void);
 			builder.jump(done);
 			builder.select(done); builder.returnValue(builder.constVoid());
-			result.push(new IrFunction(name, builder.arguments, Void, builder.blocks, GeneratedHelper));
+			result.push(new IrFunction(request.name, builder.arguments, Void, builder.blocks, ValueArraySlot(namespace, element, OptionalWrite(request.path.copy(), request.type))));
 		}
-		var scalarNames = [for (name in scalarChecks.keys()) name];
-		scalarNames.sort(Reflect.compare);
-		for (name in scalarNames) {
-			var type = scalarChecks.get(name), builder = new IrBuilder(), present = builder.argument("present", Bool),
+		for (requestIndex in 0...scalarChecks.length) {
+			var request = scalarChecks[requestIndex], type = request.type, builder = new IrBuilder(), present = builder.argument("present", Bool),
 				payload = builder.argument("payload", type), yes = builder.createBlock(), no = builder.createBlock();
 			builder.branch(present, yes, no);
 			builder.select(yes); builder.returnValue(payload);
 			builder.select(no); builder.terminate(Throw(builder.toDyn(builder.constString("Null access"))));
-			result.push(new IrFunction(name, builder.arguments, type, builder.blocks, GeneratedHelper));
+			result.push(new IrFunction(request.name, builder.arguments, type, builder.blocks, ValueArraySlot(namespace, element, RequireScalar(type))));
 		}
 		return result;
 	}
@@ -193,7 +201,7 @@ class IrValueArraySlotHelpers {
 	public function natives():Array<IrNative> {
 		if (!built) throw "Value lane helpers must be generated before collecting natives";
 		var result = access.natives();
-		if (checks.keys().hasNext()) result.push({name: "__value_array_validate", library: "haxeon_runtime", symbol: "__value_array_validate",
+		if (checks.length > 0) result.push({name: "__value_array_validate", library: "haxeon_runtime", symbol: "__value_array_validate",
 			arguments: [Array(Dyn), I32], result: Void});
 		return result;
 	}
@@ -208,23 +216,4 @@ class IrValueArraySlotHelpers {
 		if (slot < 0 || slot >= shape.slots.length) throw 'Invalid value lane slot $slot';
 	}
 
-	/** Carrier helpers name their field path: optional scalar erasure can change ordinal slot indices. */
-	public static function carrierAccess(name:String):Null<{element:IrType, path:Array<String>, write:Bool}> {
-		if (!StringTools.startsWith(name, PREFIX)) return null;
-		var parts = name.substr(PREFIX.length).split(":");
-		if (parts.length != 4 || parts[2] != "carrier" || parts[0] != "read" && parts[0] != "write") return null;
-		var element = IrTypeCodec.decode(haxe.crypto.Base64.decode(parts[1])), write = parts[0] == "write";
-		var path:Array<String> = haxe.Json.parse(haxe.crypto.Base64.decode(parts[3]).toString());
-		if (name != carrierName(element, path, write)) throw "Noncanonical lane carrier accessor";
-		return {element: element, path: path, write: write};
-	}
-
-	static function carrierName(element:IrType, path:Array<String>, write:Bool):String
-		return PREFIX + (write ? "write:" : "read:") + haxe.crypto.Base64.encode(IrTypeCodec.encode(element)) + ":carrier:"
-			+ haxe.crypto.Base64.encode(haxe.io.Bytes.ofString(haxe.Json.stringify(path)));
-
-	static function name(element:IrType, slot:Int, write:Bool):String {
-		if (slot < 0) throw 'Invalid value lane slot $slot';
-		return PREFIX + (write ? "write:" : "read:") + haxe.crypto.Base64.encode(IrTypeCodec.encode(element)) + ":" + slot;
-	}
 }

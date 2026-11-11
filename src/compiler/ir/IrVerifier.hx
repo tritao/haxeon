@@ -242,7 +242,21 @@ class IrVerifier {
 		var carrierSlots:Map<String, Bool> = [];
 		var laneValues = new IrInlineValueLayout(objectTable);
 		for (fn in program.functions) {
-			var access = IrValueArraySlotHelpers.carrierAccess(fn.name);
+			switch fn.kind {
+				case ValueArraySlot(namespace, _, operation):
+					if (namespace < 0) throw "Invalid value-array slot namespace";
+					switch operation {
+						case Read(slot, _, _), Write(slot, _, _):
+							if (slot < 0) throw "Invalid value-array slot";
+						default:
+					}
+				default:
+			}
+			var access = switch fn.kind {
+				case ValueArraySlot(_, element, Read(_, path, true)): {element: element, path: path, write: false};
+				case ValueArraySlot(_, element, Write(_, path, true)): {element: element, path: path, write: true};
+				default: null;
+			};
 			if (access == null) continue;
 			var fieldFound = false;
 			var stored = switch access.element {

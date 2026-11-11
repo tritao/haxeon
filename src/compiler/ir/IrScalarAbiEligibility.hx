@@ -10,6 +10,6 @@ class IrScalarAbiEligibility {
 				InlineEnumAccess, TypedInterface, ValueUnbox, GenericMethodReference, OptionalScalar(_),
 				OptionalValueBoundary, ValueArrayElement, ClosureAdapter(_, _), ClosureCast(_), ClosureVarargs(_): true;
 			case NullableScalarArguments, WasmClosureRestore: wasm;
-			case GeneratedHelper, ScalarArguments: false;
+			case GeneratedHelper, ScalarArguments, ValueArraySlot(_, _, _): false;
 		};
 }

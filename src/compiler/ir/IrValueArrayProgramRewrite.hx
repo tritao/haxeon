@@ -164,21 +164,30 @@ class IrValueArrayProgramRewrite {
 		}
 		var keys = [for (key in elements.keys()) key];
 		keys.sort(Reflect.compare);
-		var index = new ValueArrayFunctionIndex([for (key in keys) elements.get(key)]);
+		var index = new ValueArrayFunctionIndex([for (key in keys) elements.get(key)]), slotNamespace = nextSlotNamespace(program);
 		for (key in keys)
-			rewriteIndexed(program, elements.get(key), pointerBits, target, index);
+			rewriteIndexed(program, elements.get(key), pointerBits, target, index, slotNamespace++);
 		IrArrayFactory.lower(program);
 		IrVerifier.verifyValueArraysLowered(program);
 	}
 
 	public static function rewrite(program:IrProgram, element:IrType, pointerBits:Int, target:IrValueLaneTarget):Void {
-		rewriteIndexed(program, element, pointerBits, target, new ValueArrayFunctionIndex([element]));
+		rewriteIndexed(program, element, pointerBits, target, new ValueArrayFunctionIndex([element]), nextSlotNamespace(program));
 	}
 
-	static function rewriteIndexed(program:IrProgram, element:IrType, pointerBits:Int, target:IrValueLaneTarget, index:ValueArrayFunctionIndex):Void {
+	static function nextSlotNamespace(program:IrProgram):Int {
+		var next = 0;
+		for (fn in program.functions) switch fn.kind {
+			case ValueArraySlot(namespace, _, _): if (namespace >= next) next = namespace + 1;
+			default:
+		}
+		return next;
+	}
+
+	static function rewriteIndexed(program:IrProgram, element:IrType, pointerBits:Int, target:IrValueLaneTarget, index:ValueArrayFunctionIndex, slotNamespace:Int):Void {
 		var declarations:Map<String, IrObject> = [for (object in program.objects) object.name => object],
 			objects = IrObjectTable.of(declarations),
-			factory = new IrValueArrayFactory(objects, element, pointerBits, target, program.enums),
+			factory = new IrValueArrayFactory(objects, element, pointerBits, target, slotNamespace, program.enums),
 			elements = new IrValueArrayElements(element, factory.helpers, factory.bridge),
 			methods = new IrValueArrayPlaceMethods(objects, element, factory.helpers),
 			originals = index.originalFunctions(program.functions),

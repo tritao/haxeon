@@ -1,5 +1,6 @@
 import compiler.ir.Ir;
 import compiler.ir.IrFunction;
+import compiler.ir.IrFunction.IrValueArraySlotOperation;
 import compiler.ir.SourceProvenance;
 import compiler.ir.SourceProvenance.Located;
 import compiler.ir.codec.IrFunctionStateCodec;
@@ -53,6 +54,19 @@ class IrStateEqualityMain {
 			if (!IrFunctionStateEquality.same(functionWithKind, IrFunctionStateCodec.decode(IrFunctionStateCodec.encode(functionWithKind))))
 				throw 'Function role failed to round-trip: $kind';
 		}
+		for (operation in [Read(2, ["a", "b"], true), Write(3, ["a"], false), Check(["a"], true),
+			OptionalWrite(["b"], I32), RequireScalar(F64)]) {
+			var slot = new IrFunction(body.name, body.arguments, body.result, body.blocks, ValueArraySlot(3, Obj("Element"), operation));
+			if (!IrFunctionStateEquality.same(slot, IrFunctionStateCodec.decode(IrFunctionStateCodec.encode(slot))))
+				throw 'Value-array slot operation failed to round-trip: $operation';
+		}
+		var slotA = new IrFunction(body.name, body.arguments, body.result, body.blocks, ValueArraySlot(3, Obj("Element"), Read(2, ["a"], true)));
+		var slotB = new IrFunction(body.name, body.arguments, body.result, body.blocks, ValueArraySlot(3, Obj("Element"), Read(2, ["b"], true)));
+		if (IrFunctionStateEquality.same(slotA, slotB)) throw "Distinct slot paths must differ";
+		compare(slotA, slotB);
+		var renamedSlot = new IrFunction(body.name, body.arguments, body.result, body.blocks, ValueArraySlot(4, Obj("Element"), Read(2, ["a"], true)));
+		if (IrFunctionStateCodec.codeFingerprint(slotA) != IrFunctionStateCodec.codeFingerprint(renamedSlot))
+			throw "Slot linkage IDs must not change code fingerprints";
 		var v = new IrValue(0, "v", I32), w = new IrValue(1, "w", I32);
 		var cases:Array<{original:IrInstruction, changed:Array<IrInstruction>}> = [
 			{

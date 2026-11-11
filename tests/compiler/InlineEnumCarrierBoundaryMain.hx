@@ -64,14 +64,21 @@ class InlineEnumCarrierBoundaryMain {
    var b=new IrBuilder();b.safeCast(b.constNull(Dyn),Obj("Packet"));b.returnValue(b.constInt(42));
    p.functions=[new IrFunction("main",b.arguments,I32,b.blocks, Ordinary)];
   }, "requires a logical cast adapter");
+  reject("negative slot namespace",function(p) {
+   var b=new IrBuilder();b.returnValue(b.constInt(42));
+   p.functions=[new IrFunction("main",b.arguments,I32,b.blocks,ValueArraySlot(-1,Obj("Packet"),Read(0,[],false)))];
+  },"Invalid value-array slot namespace");
+  reject("negative slot index",function(p) {
+   var b=new IrBuilder();b.returnValue(b.constInt(42));
+   p.functions=[new IrFunction("main",b.arguments,I32,b.blocks,ValueArraySlot(0,Obj("Packet"),Read(-1,[],false)))];
+  },"Invalid value-array slot");
   for(wrongPath in [false,true])reject(wrongPath?"forged lane field path":"wrong lane array signature",function(p) {
    var element:IrType=Obj("Packet");
    var packet:IrObject={name:"Packet",isValue:true,base:null,interfaces:[],methods:[],fields:[{name:"optional",type:Nullable(I32)},{name:"value",type:I32},{name:"owner",type:IrValueLaneReference.type()}]};
    var objects=compiler.ir.IrObjectTable.of([packet.name=>packet]),shape=new compiler.ir.IrValueLaneLayout(objects,64,HashLink).shape(element);
-   var helpers=new compiler.ir.IrValueArraySlotHelpers(element,shape),name=helpers.getter(helpers.slot(["owner"]));
-   if(wrongPath)name=name.substr(0,name.lastIndexOf(":")+1)+haxe.crypto.Base64.encode(haxe.io.Bytes.ofString(haxe.Json.stringify(["value"])));
+   var helpers=new compiler.ir.IrValueArraySlotHelpers(0,element,shape),slot=helpers.slot(["owner"]),name=helpers.getter(slot);
    var b=new IrBuilder();b.argument("array",Array(wrongPath?element:Dyn));b.argument("index",I32);b.returnValue(b.constNull(IrValueLaneReference.type()));
-   p.entryPoint=name;p.objects=[packet];p.functions=[new IrFunction(name,b.arguments,IrValueLaneReference.type(),b.blocks, Ordinary)];
+   p.entryPoint=name;p.objects=[packet];p.functions=[new IrFunction(name,b.arguments,IrValueLaneReference.type(),b.blocks, ValueArraySlot(0,element,Read(slot,wrongPath?["value"]:["owner"],true)))];
   },"Invalid lane carrier accessor signature");
  }
 }

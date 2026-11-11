@@ -2,6 +2,7 @@ package compiler.ir.codec;
 
 import compiler.ir.Ir;
 import compiler.ir.IrFunction;
+import compiler.ir.IrFunction.IrValueArraySlotOperation;
 import compiler.ir.IrVerifier;
 import compiler.ir.SourceProvenance;
 import compiler.ir.SourceProvenance.SourceOrigin;
@@ -66,12 +67,30 @@ class IrFunctionStateEquality {
 			case [OptionalValueBoundary, OptionalValueBoundary]: true;
 			case [NullableScalarArguments, NullableScalarArguments]: true;
 			case [ValueArrayElement, ValueArrayElement]: true;
+			case [ValueArraySlot(aNamespace, aElement, aOperation), ValueArraySlot(bNamespace, bElement, bOperation)]:
+				aNamespace == bNamespace && IrVerifier.sameType(aElement, bElement) && sameSlotOperation(aOperation, bOperation);
 			case [WasmClosureRestore, WasmClosureRestore]: true;
 			case [ScalarArguments, ScalarArguments]: true;
 			case [ClosureAdapter(aSource, aTarget), ClosureAdapter(bSource, bTarget)]:
 				IrVerifier.sameType(aSource, bSource) && IrVerifier.sameType(aTarget, bTarget);
 			case [ClosureCast(aTarget), ClosureCast(bTarget)]: IrVerifier.sameType(aTarget, bTarget);
 			case [ClosureVarargs(aTarget), ClosureVarargs(bTarget)]: IrVerifier.sameType(aTarget, bTarget);
+			default: false;
+		};
+
+	static function sameSlotPath(a:Array<String>, b:Array<String>):Bool {
+		if (a.length != b.length) return false;
+		for (i in 0...a.length) if (a[i] != b[i]) return false;
+		return true;
+	}
+
+	static function sameSlotOperation(a:IrValueArraySlotOperation, b:IrValueArraySlotOperation):Bool
+		return switch [a, b] {
+			case [Read(ai, ap, ac), Read(bi, bp, bc)], [Write(ai, ap, ac), Write(bi, bp, bc)]:
+				ai == bi && ac == bc && sameSlotPath(ap, bp);
+			case [Check(ap, ai), Check(bp, bi)]: ai == bi && sameSlotPath(ap, bp);
+			case [OptionalWrite(ap, at), OptionalWrite(bp, bt)]: sameSlotPath(ap, bp) && IrVerifier.sameType(at, bt);
+			case [RequireScalar(at), RequireScalar(bt)]: IrVerifier.sameType(at, bt);
 			default: false;
 		};
 

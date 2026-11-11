@@ -24,6 +24,15 @@ enum abstract IrRetention(Int) from Int to Int {
 	var Expose = 2;
 }
 
+/** A generated value-array place operation and its logical operands. */
+enum IrValueArraySlotOperation {
+	Read(slot:Int, path:Array<String>, carrier:Bool);
+	Write(slot:Int, path:Array<String>, carrier:Bool);
+	Check(path:Array<String>, includeSelf:Bool);
+	OptionalWrite(path:Array<String>, type:IrType);
+	RequireScalar(type:IrType);
+}
+
 /** Compiler-declared role and semantic signatures of generated closure boundary functions. */
 enum IrFunctionKind {
 	Ordinary;
@@ -48,6 +57,7 @@ enum IrFunctionKind {
 	ClosureAdapter(source:IrType, target:IrType);
 	ClosureCast(target:IrType);
 	ClosureVarargs(target:IrType);
+	ValueArraySlot(namespace:Int, element:IrType, operation:IrValueArraySlotOperation);
 }
 
 /** Verified SSA function with explicit arguments, blocks, and result type. */

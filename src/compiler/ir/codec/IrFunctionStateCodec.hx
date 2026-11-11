@@ -8,6 +8,7 @@ import haxe.io.Bytes;
 import haxe.io.BytesInput;
 import haxe.io.BytesOutput;
 import compiler.ir.IrFunction;
+import compiler.ir.IrFunction.IrValueArraySlotOperation;
 import compiler.ir.codec.IrInstructionCodec;
 import compiler.ir.codec.IrTerminatorCodec;
 import compiler.ir.codec.IrTypeCodec;
@@ -20,7 +21,7 @@ import compiler.ir.SourceProvenance.SourceOrigin;
 
 /** Deterministic framing for a complete SSA IR function. */
 class IrFunctionStateCodec {
-	static inline final VERSION = 15;
+	static inline final VERSION = 16;
 	static inline final MAX_BLOCKS = 0x100000;
 	static inline final MAX_INSTRUCTIONS = 0x1000000;
 
@@ -135,6 +136,12 @@ class IrFunctionStateCodec {
 			case ValueArrayElement: output.writeByte(18);
 			case WasmClosureRestore: output.writeByte(19);
 			case ScalarArguments: output.writeByte(20);
+			case ValueArraySlot(namespace, element, operation):
+				output.writeByte(22);
+				// The namespace is a linkage identifier, not part of the helper's behavior.
+				output.writeInt32(identified ? namespace : 0);
+				IrTypeCodec.writeType(output, element, 0, erase);
+				writeSlotOperation(output, operation, erase);
 		}
 		var debugBindings = identified ? fn.debugBindings : [];
 		output.writeInt32(debugBindings.length);
@@ -231,6 +238,10 @@ class IrFunctionStateCodec {
 				case 18: ValueArrayElement;
 				case 19: WasmClosureRestore;
 				case 20: ScalarArguments;
+				case 22:
+					var namespace = input.readInt32();
+					if (namespace < 0) throw "Invalid value-array slot namespace";
+					ValueArraySlot(namespace, IrTypeCodec.readType(input, bytes.length, 0), readSlotOperation(input, bytes.length));
 				default: throw "Invalid IR function kind";
 			};
 			if (version >= 3) {
@@ -429,6 +440,54 @@ class IrFunctionStateCodec {
 				throw "Conflicting IR value identity";
 		}
 		values.set(id, value);
+	}
+
+	static function writeSlotPath(output:BytesOutput, path:Array<String>):Void {
+		output.writeInt32(path.length);
+		for (part in path) IrTypeCodec.writeString(output, part);
+	}
+
+	static function readSlotPath(input:BytesInput, limit:Int):Array<String> {
+		var count = input.readInt32();
+		if (count < 0 || count > Std.int((limit - input.position) / 4)) throw "Invalid value-array slot path";
+		return [for (_ in 0...count) IrTypeCodec.readString(input, limit)];
+	}
+
+	static function writeSlotOperation(output:BytesOutput, operation:IrValueArraySlotOperation, erase:Bool):Void {
+		switch operation {
+			case Read(slot, path, carrier), Write(slot, path, carrier):
+				output.writeByte(switch operation { case Read(_, _, _): 0; default: 1; });
+				output.writeInt32(slot);
+				writeSlotPath(output, path);
+				output.writeByte(carrier ? 1 : 0);
+			case Check(path, includeSelf):
+				output.writeByte(2); writeSlotPath(output, path); output.writeByte(includeSelf ? 1 : 0);
+			case OptionalWrite(path, type):
+				output.writeByte(3); writeSlotPath(output, path); IrTypeCodec.writeType(output, type, 0, erase);
+			case RequireScalar(type):
+				output.writeByte(4); IrTypeCodec.writeType(output, type, 0, erase);
+		}
+	}
+
+	static function readSlotBool(input:BytesInput):Bool {
+		var value = input.readByte();
+		if (value != 0 && value != 1) throw "Invalid value-array slot flag";
+		return value == 1;
+	}
+
+	static function readSlotOperation(input:BytesInput, limit:Int):IrValueArraySlotOperation {
+		var tag = input.readByte();
+		return switch tag {
+			case 0, 1:
+				var slot = input.readInt32();
+				if (slot < 0) throw "Invalid value-array slot";
+				var path = readSlotPath(input, limit), carrier = readSlotBool(input);
+				tag == 0 ? Read(slot, path, carrier) : Write(slot, path, carrier);
+			case 2: Check(readSlotPath(input, limit), readSlotBool(input));
+			case 3: OptionalWrite(readSlotPath(input, limit), IrTypeCodec.readType(input, limit, 0));
+			case 4: RequireScalar(IrTypeCodec.readType(input, limit, 0));
+			default: throw "Invalid value-array slot operation";
+		};
 	}
 
 	static function writeBytes(output:BytesOutput, bytes:Bytes):Void {

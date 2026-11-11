@@ -104,7 +104,7 @@ class ValueArrayAccessMain {
 		}
 		if (markedRoots != 9 || ordinaryReads == 0) throw 'Frontend lost array place or copy distinction: $markedRoots places, $ordinaryReads reads';
 		var frontendObjects = IrObjectTable.of([for (object in frontend.objects) object.name => object]);
-		var frontendFactory = new IrValueArrayFactory(frontendObjects, Obj("PlaceRoot"), 64, HashLink);
+		var frontendFactory = new IrValueArrayFactory(frontendObjects, Obj("PlaceRoot"), 64, HashLink, 0);
 		var frontendMethods = new IrValueArrayPlaceMethods(frontendObjects, Obj("PlaceRoot"), frontendFactory.helpers);
 		var loweredFrontendPlace = compiler.ir.IrValueArrayPlaceRewrite.rewrite(frontendMain, Obj("PlaceRoot"), frontendObjects,
 			frontendFactory.helpers, frontendMethods, frontendRoots);
@@ -149,15 +149,15 @@ class ValueArrayAccessMain {
 			builder.constInt(1), builder.typeValue(element), builder.constInt(shape.scalarStrideBits),
 			builder.constInt(shape.references), builder.constInt(shape.scalarWordBits), builder.constBool(true)
 		], arrayType);
-		var helpers = new IrValueArraySlotHelpers(element, shape);
+		var helpers = new IrValueArraySlotHelpers(1, element, shape);
 		var pairType:IrType = Obj("LanePair"), pairArrayType:IrType = Array(pairType);
-		var pairFactory = new IrValueArrayFactory(IrObjectTable.of(objects), pairType, 64, HashLink),
+		var pairFactory = new IrValueArrayFactory(IrObjectTable.of(objects), pairType, 64, HashLink, 0),
 			pairHelpers = pairFactory.helpers, pairBridge = pairFactory.bridge;
 		var pairElements = new IrValueArrayElements(pairType, pairHelpers, pairBridge);
 		var pairBridgeFunctions = pairFactory.functions(), pairElementFunctions = pairElements.functions(), pairHelperFunctions = pairHelpers.functions();
 		var optionalPairType:IrType = Nullable(pairType), optionalPairArrayType:IrType = Array(optionalPairType);
 		var optionalPairShape = new IrValueLaneLayout(IrObjectTable.of(objects), 64, HashLink).shape(optionalPairType);
-		var optionalPairHelpers = new IrValueArraySlotHelpers(optionalPairType, optionalPairShape);
+		var optionalPairHelpers = new IrValueArraySlotHelpers(2, optionalPairType, optionalPairShape);
 		var optionalPairBridge = new IrValueArrayBridge(optionalPairType, optionalPairType, IrObjectTable.of(objects), optionalPairHelpers);
 		var optionalPairComponents = new compiler.ir.IrValueArrayOptionalComponents(IrObjectTable.of(objects), optionalPairType, optionalPairHelpers);
 		var optionalPairBridgeFunctions = optionalPairBridge.functions().concat(optionalPairComponents.functions()),
@@ -175,12 +175,12 @@ class ValueArrayAccessMain {
 			new IrFunction("array_optional_snapshot", optionalSnapshot.arguments, I32, optionalSnapshot.blocks, Ordinary), optionalPairType, optionalPairComponents);
 		var nestedPairType:IrType = Obj("LaneNestedPair"), nestedPairArrayType:IrType = Array(nestedPairType);
 		var nestedPairShape = new IrValueLaneLayout(IrObjectTable.of(objects), 64, HashLink).shape(nestedPairType);
-		var nestedPairHelpers = new IrValueArraySlotHelpers(nestedPairType, nestedPairShape);
+		var nestedPairHelpers = new IrValueArraySlotHelpers(3, nestedPairType, nestedPairShape);
 		var nestedPairBridge = new IrValueArrayBridge(nestedPairType, nestedPairType, IrObjectTable.of(objects), nestedPairHelpers);
 		var nestedPairBridgeFunctions = nestedPairBridge.functions(), nestedPairHelperFunctions = nestedPairHelpers.functions();
 		var outerType:IrType = Obj("LaneOuter"), outerArrayType:IrType = Array(outerType);
 		var outerShape = new IrValueLaneLayout(IrObjectTable.of(objects), 64, HashLink).shape(outerType);
-		var outerHelpers = new IrValueArraySlotHelpers(outerType, outerShape);
+		var outerHelpers = new IrValueArraySlotHelpers(4, outerType, outerShape);
 		var outerBridge = new IrValueArrayBridge(outerType, outerType, IrObjectTable.of(objects), outerHelpers);
 		var outerBridgeFunctions = outerBridge.functions(), outerHelperFunctions = outerHelpers.functions();
 		var bridgeArray = builder.call(pairFactory.allocateName(), [builder.constInt(1)], pairArrayType);

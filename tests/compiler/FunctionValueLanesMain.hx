@@ -15,7 +15,7 @@ class FunctionValueLanesMain {
 			var object:IrObject = {name:"CallbackValue", isValue:true, base:null, interfaces:[], methods:[],
 				fields:[{name:"first", type:Function([I32], I32)}, {name:"second", type:Function([I32], I32)}]};
 			var objects = IrObjectTable.of([object.name => object]);
-			var factory = new IrValueArrayFactory(objects, Obj(object.name), target == HashLink ? 64 : 32, target);
+			var factory = new IrValueArrayFactory(objects, Obj(object.name), target == HashLink ? 64 : 32, target, 0);
 			var copies = factory.helpers.copySlots(["first"], ["second"]);
 			if (copies.length != 1) throw "equal function fields must support value copies";
 			var builder = new IrBuilder(), index = builder.constInt(0), array = builder.call(factory.allocateName(), [builder.constInt(1)], Array(Obj(object.name)));

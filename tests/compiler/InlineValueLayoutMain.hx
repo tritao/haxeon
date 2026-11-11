@@ -44,7 +44,7 @@ class InlineValueLayoutMain {
 			|| lanes.slots[1].bitOffset != 8 || lanes.slots[2].index != 1 || lanes.slots[2].bitWidth != 32
 			|| !lanes.slots[3].isReference || lanes.slots[3].index != 0 || !lanes.slots[4].isReference || lanes.slots[4].index != 1)
 			throw "nested optional leaves must address their own packed scalar and reference slots";
-		var nestedHelpers = new IrValueArraySlotHelpers(Nullable(Obj("Value")), lanes);
+		var nestedHelpers = new IrValueArraySlotHelpers(0, Nullable(Obj("Value")), lanes);
 		var parentCheck = nestedHelpers.checker(["child"], false), childCheck = nestedHelpers.checker(["child"], true);
 		var checkCounts:Map<String, Int> = [];
 		var nestedFunctions = nestedHelpers.functions();
@@ -116,11 +116,14 @@ class InlineValueLayoutMain {
 		ordinaryPlan.addTo(ordinaryModule);
 		if (ordinaryPlan.valueArrayWrapperTypeIndex >= 0 || !ordinaryModule.typeAt(ordinaryPlan.arrayType(Obj("Mixed"))).finalType)
 			throw "Programs without inline value arrays must retain the ordinary array type plan";
-		var mixedHelpers = new IrValueArraySlotHelpers(Obj("Mixed"), mixed);
+		var mixedHelpers = new IrValueArraySlotHelpers(1, Obj("Mixed"), mixed);
 		if (mixedHelpers.slot(["optional"], true) != 2 || mixedHelpers.slot(["optional"], false, true) != 3
 			|| mixedHelpers.slot(["owner"]) != 5)
 			throw "a lane place must distinguish optional flags, payloads and reference fields";
 		var optionalCheck = mixedHelpers.checker(["optional"], true);
+		if (mixedHelpers.checker(["optional"], true) != optionalCheck
+			|| mixedHelpers.checker(["a.b"], true) == mixedHelpers.checker(["a", "b"], true))
+			throw "Slot check requests must use structural paths";
 		var checkProgram = new IrProgram(optionalCheck);
 		checkProgram.objects = [objects.get("Mixed")];
 		checkProgram.functions = mixedHelpers.functions();

@@ -16,7 +16,7 @@ class InlineEnumCarrierArrayMain {
   var owner:IrObject={name:"Owner",isValue:false,base:null,interfaces:[],methods:[],fields:[]};
   var packet:IrObject={name:"Packet",isValue:true,base:null,interfaces:[],methods:[],fields:[{name:"tag",type:I32},{name:"optional",type:Nullable(I32)},{name:"reference0",type:IrValueLaneReference.type()}]};
   var table=compiler.ir.IrObjectTable.of([owner.name=>owner,packet.name=>packet]),type:IrType=Obj(packet.name),arrayType:IrType=Array(type);
-  var factory=new compiler.ir.IrValueArrayFactory(table,type,target==HashLink?64:32,target),helpers=factory.helpers;
+  var factory=new compiler.ir.IrValueArrayFactory(table,type,target==HashLink?64:32,target,0),helpers=factory.helpers;
   var prepare=new IrBuilder(),reference=prepare.newObject("Owner"),shape=factory.layout.lanes;
   var array=prepare.call(factory.natives()[0].name,[prepare.constInt(1),prepare.typeValue(type),prepare.constInt(shape.scalarStrideBits),prepare.constInt(shape.references),prepare.constInt(shape.scalarWordBits),prepare.constBool(factory.layout.hasValidity)],arrayType);
   prepare.emit(GlobalSet("array",array));prepare.emit(GlobalSet("owner",reference));prepare.returnValue(prepare.constVoid());

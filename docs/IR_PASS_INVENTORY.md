@@ -14,7 +14,8 @@ interpolation are not markers.
   declared adapter, cast and varargs kinds and their semantic types instead of parsing hashes from names.
 - [x] Function origins and scalar ABI eligibility: typing and generated IR functions declare their roles, and one shared
   predicate selects the shared and Wasm ABIs, including their distinct nullable-scalar and closure-restoration boundaries.
-- [ ] Value-array slot markers (`$value-array:slot:`), including encoded type and path.
+- [x] Value-array slot markers: opaque linkage IDs identify helpers, while declared operations carry the element type,
+  slot, path, carrier status and optional-check operands; the verifier and IR codec use those declarations.
 - [ ] Other value-array element, factory, bridge and place-method names (`$value-array:`). Deferred: do when this code is next touched.
 - [ ] Scalar word and lane pack/unpack, lane runtime/storage and HL scalar references (`$word:`, `$lane:`, `$lane-runtime:`,
   `$lane-storage:`, `$hl:scalar-*`); receiver and reference checks. Deferred: do when this code is next touched.
@@ -32,6 +33,14 @@ interpolation are not markers.
 
 Canonical IR serialization must change version with the typed representation. Generated symbols may still need unique
 linkage names, but compiler decisions must use declared data rather than recover meaning from those names.
+
+The slot migration's self-hosted compiler has SHA-256
+`12df28aa6ac2103d009ffa69c4f7efc69f64e12806e17ba6a43279c9f9564a2c`, compared with
+`8dfd1ea68c163cb035fb6acfda615772a01038e7ab4ea0bc7e7d864e482c66e3` before the migration.
+The compiler changes are the typed operations, their verifier and codec, shifted helper-class field/method indexes,
+and generated enum equality for the new role and operation enum. Nine generated slot functions are renamed; their
+instruction bodies match. In `struct-array-places`, 11 caller bodies change only slot-call names, and the 31 old and
+31 new slot helper bodies match as a multiset. Source snapshots and source-derived debug sections change with the code.
 
 ## Outer gate control evidence (2026-11-10)
 

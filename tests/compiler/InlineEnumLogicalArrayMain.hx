@@ -18,7 +18,7 @@ class InlineEnumLogicalArrayMain {
   var planner=new compiler.ir.IrInlineEnumLayout([declaration],[owner],target==HashLink?64:32,target),packet=planner.shape("Element").valueObject;
   var declarations:Array<IrEnum>=[{name:declaration.name,cases:declaration.cases,inlineStorage:packet.name}];
   var table=compiler.ir.IrObjectTable.of([owner.name=>owner,packet.name=>packet]),type:IrType=Enum("Element"),arrayType:IrType=Array(type);
-  var factory=new compiler.ir.IrValueArrayFactory(table,type,target==HashLink?64:32,target,declarations),helpers=factory.helpers;
+  var factory=new compiler.ir.IrValueArrayFactory(table,type,target==HashLink?64:32,target,0,declarations),helpers=factory.helpers;
   var elements=new compiler.ir.IrValueArrayElements(type,helpers,factory.bridge);elements.useIterator();
   var prepare=new IrBuilder(),reference=prepare.newObject("Owner"),shape=factory.layout.lanes;
   prepare.fieldSet(reference,"code",prepare.constInt(42));
@@ -96,7 +96,10 @@ class InlineEnumLogicalArrayMain {
   var churn=new IrBuilder();for(_ in 0...128){var garbage=churn.newObject("Owner");churn.fieldSet(garbage,"code",churn.constInt(-1));}churn.returnValue(churn.constVoid());
   p.functions.push(new IrFunction("churn",churn.arguments,Void,churn.blocks, Ordinary,null,false,compiler.ir.IrFunction.IrRetention.Expose));
   p.functions=p.functions.concat(compiler.ir.IrInlineEnumEscapes.functions(declarations,table,planner));
+  // The manually built calls above own their helper definitions; the program rewrite creates its own helpers.
+  p.functions=p.functions.concat(helpers.functions());
   p.natives=compiler.ir.IrInlineEnumWordAccess.natives();p.natives.push({name:"__array_set_any",library:"haxeon_runtime",symbol:"__array_set_any",arguments:[Array(Dyn),I32,Dyn],result:Void});p.natives.push({name:"__array_get_any",library:"haxeon_runtime",symbol:"__array_get_any",arguments:[Array(Dyn),I32],result:Dyn});p.natives.push({name:"__array_alloc_typed_ref",library:"haxeon_runtime",symbol:"__array_alloc_typed_ref",arguments:[I32,TypeRef],result:arrayType});
+  p.natives=p.natives.concat(helpers.natives());
   compiler.ir.IrProgramAssembler.ensureArrayRuntime(p,false,false,false);
   compiler.ir.IrValueArrayProgramRewrite.rewriteAll(p,target==HashLink?64:32,target);
   var boxedStillUsesReferences=false;
