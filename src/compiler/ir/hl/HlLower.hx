@@ -737,8 +737,10 @@ class HlLower {
 			uses.set(value.id, (uses.exists(value.id) ? uses.get(value.id) : 0) + 1);
 		for (block in fn.blocks) {
 			for (instruction in block.instructions) {
-				for (input in compiler.ir.IrOperands.inputs(instruction.value))
+				for (inputIndex in 0...compiler.ir.IrOperands.count(instruction.value)) {
+					var input = compiler.ir.IrOperands.at(instruction.value, inputIndex);
 					countUse(input);
+				}
 				switch instruction.value {
 					case Phi(_, inputs):
 						for (input in inputs)

@@ -49,8 +49,10 @@ private class ValueArrayFunctionIndex {
 				var output = IrOperands.output(located.value);
 				if (output != null)
 					visit(output.type);
-				for (input in IrOperands.inputs(located.value))
+				for (inputIndex in 0...IrOperands.count(located.value)) {
+					var input = IrOperands.at(located.value, inputIndex);
 					visit(input.type);
+				}
 				switch located.value {
 					case TypeValue(_, type):
 						visit(type);
@@ -129,8 +131,10 @@ class IrValueArrayProgramRewrite {
 					var output = IrOperands.output(located.value);
 					if (output != null)
 						visit(output.type);
-					for (input in IrOperands.inputs(located.value))
+					for (inputIndex in 0...IrOperands.count(located.value)) {
+						var input = IrOperands.at(located.value, inputIndex);
 						visit(input.type);
+					}
 					switch located.value {
 						case TypeValue(_, type):
 							visit(type);
@@ -326,9 +330,11 @@ class IrValueArrayProgramRewrite {
 				var output = IrOperands.output(located.value);
 				if (output != null && output.id >= next)
 					next = output.id + 1;
-				for (input in IrOperands.inputs(located.value))
+				for (inputIndex in 0...IrOperands.count(located.value)) {
+					var input = IrOperands.at(located.value, inputIndex);
 					if (input.id >= next)
-						next = input.id + 1;
+							next = input.id + 1;
+				}
 			}
 		for (block in fn.blocks) {
 			var target = new IrBlock(block.id);
@@ -362,9 +368,11 @@ class IrValueArrayProgramRewrite {
 				var output = IrOperands.output(located.value);
 				if (output != null && output.id >= next)
 					next = output.id + 1;
-				for (input in IrOperands.inputs(located.value))
+				for (inputIndex in 0...IrOperands.count(located.value)) {
+					var input = IrOperands.at(located.value, inputIndex);
 					if (input.id >= next)
-						next = input.id + 1;
+							next = input.id + 1;
+				}
 			}
 		for (block in fn.blocks) {
 			var target = new IrBlock(block.id);
@@ -411,8 +419,10 @@ class IrValueArrayProgramRewrite {
 			uses.set(value.id, (uses.exists(value.id) ? uses.get(value.id) : 0) + 1);
 		for (block in fn.blocks) {
 			for (located in block.instructions) {
-				for (input in IrOperands.inputs(located.value))
+				for (inputIndex in 0...IrOperands.count(located.value)) {
+					var input = IrOperands.at(located.value, inputIndex);
 					use(input);
+				}
 				switch located.value {
 					case TypeValue(out, type):
 						typeValues.set(out.id, type);

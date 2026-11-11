@@ -115,9 +115,11 @@ class IrNullableScalarFlow {
 					out = IrOperands.output(instruction);
 				if (out != null && out.id >= next)
 					next = out.id + 1;
-				for (input in IrOperands.inputs(instruction))
+				for (inputIndex in 0...IrOperands.count(instruction)) {
+					var input = IrOperands.at(instruction, inputIndex);
 					if (input.id >= next)
-						next = input.id + 1;
+							next = input.id + 1;
+				}
 				if (out != null && inner(out.type) != null)
 					switch instruction {
 						case ConstNull(_):
@@ -171,19 +173,21 @@ class IrNullableScalarFlow {
 								for (arg in args)
 									reject(arg);
 						default:
-							for (value in IrOperands.inputs(instruction))
+							for (valueIndex in 0...IrOperands.count(instruction)) {
+								var value = IrOperands.at(instruction, valueIndex);
 								if (candidates.exists(value.id)) {
-									var allowed = switch instruction {
-										case SafeCast(out, input) if (input.id == value.id
-											&& Type.enumEq(out.type, inner(value.type))): true;
-										case Equal(_, left, right)
-											if ((left.id == value.id && nulls.exists(right.id))
-												|| (right.id == value.id && nulls.exists(left.id))): true;
-										default: false;
-									};
-									if (!allowed)
-										reject(value);
-								}
+										var allowed = switch instruction {
+											case SafeCast(out, input) if (input.id == value.id
+												&& Type.enumEq(out.type, inner(value.type))): true;
+											case Equal(_, left, right)
+												if ((left.id == value.id && nulls.exists(right.id))
+													|| (right.id == value.id && nulls.exists(left.id))): true;
+											default: false;
+										};
+										if (!allowed)
+											reject(value);
+									}
+							}
 					}
 				}
 				if (block.terminator != null)

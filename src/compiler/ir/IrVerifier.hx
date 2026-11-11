@@ -143,7 +143,8 @@ class IrVerifier {
 				for (located in block.instructions) {
 					var instruction = located.value, out = IrOperands.output(instruction);
 					if (out != null && fails(out.type)) check(out.type, 'instruction output ${fn.name}');
-					for (input in IrOperands.inputs(instruction)) {
+					for (inputIndex in 0...IrOperands.count(instruction)) {
+						var input = IrOperands.at(instruction, inputIndex);
 						if (fails(input.type)) check(input.type, 'instruction operand ${fn.name}');
 						if (anyDescriptors) descriptorUse(input, instruction);
 					}
@@ -421,8 +422,10 @@ class IrVerifier {
 			var block = graph.block(id);
 			for (position in 0...block.instructions.length) {
 				var instruction = block.instructions[position].value;
-				for (value in IrOperands.inputs(instruction))
+				for (valueIndex in 0...IrOperands.count(instruction)) {
+					var value = IrOperands.at(instruction, valueIndex);
 					verifyUse(value, id, position, values, graph);
+				}
 				switch instruction {
 					case Phi(out, inputs):
 						var expected = graph.predecessors.get(id);
@@ -563,26 +566,32 @@ class IrVerifier {
 			case Call(_, name, _) if (name == IrHlScalarRef.LOAD || carrierSlots.exists(name) && !carrierSlots.get(name)):
 			default: throw "Only a value lane operation can create a lane reference";
 		}
-		if (lanes) for (input in IrOperands.inputs(instruction)) if (IrValueLaneReference.isCarrier(input.type)) switch instruction {
-			case FieldSet(_, _, value) if (value.id == input.id):
-			case Phi(_, _):
-			case Call(_, name, _) if (scalarFunctions.exists(name) || carrierSlots.exists(name) && carrierSlots.get(name)):
-			case Call(_, name, args) if ((name == IrHlScalarRef.STORE && args.length == 2 && args[1].id == input.id)
-				|| (name == IrHlScalarRef.ADDRESS && args.length == 1 && args[0].id == input.id)):
-			case CallClosure(_, closure, args) if (IrScalarArguments.isPrivateClosureType(closure.type) && scalarClosureArgument(closure.type, args, input)):
-			case Call(_, name, args) if (name == IrValueLaneReference.UNPACK && args.length == 1 && args[0].id == input.id):
-			case Call(_, name, args) if (name == IrValueLaneReference.WRITE && args.length == 4 && args[3].id == input.id):
-			default: throw "A value lane reference cannot escape its operation";
+		if (lanes) for (inputIndex in 0...IrOperands.count(instruction)) {
+			var input = IrOperands.at(instruction, inputIndex);
+			if (IrValueLaneReference.isCarrier(input.type)) switch instruction {
+				case FieldSet(_, _, value) if (value.id == input.id):
+				case Phi(_, _):
+				case Call(_, name, _) if (scalarFunctions.exists(name) || carrierSlots.exists(name) && carrierSlots.get(name)):
+				case Call(_, name, args) if ((name == IrHlScalarRef.STORE && args.length == 2 && args[1].id == input.id)
+					|| (name == IrHlScalarRef.ADDRESS && args.length == 1 && args[0].id == input.id)):
+				case CallClosure(_, closure, args) if (IrScalarArguments.isPrivateClosureType(closure.type) && scalarClosureArgument(closure.type, args, input)):
+				case Call(_, name, args) if (name == IrValueLaneReference.UNPACK && args.length == 1 && args[0].id == input.id):
+				case Call(_, name, args) if (name == IrValueLaneReference.WRITE && args.length == 4 && args[3].id == input.id):
+				default: throw "A value lane reference cannot escape its operation";
+			}
 		}
 		if (output != null && IrHlScalarRef.element(output.type) != null) switch instruction {
 			case Call(_, name, _) if (name == IrHlScalarRef.ADDRESS):
 			default: throw "Only a scalar address operation can create a stack reference";
 		}
-		if (scalarRefs) for (input in IrOperands.inputs(instruction)) if (IrHlScalarRef.element(input.type) != null) switch instruction {
-			case Call(_, name, args) if ((name == IrHlScalarRef.LOAD || name == IrHlScalarRef.STORE) && args.length > 0 && args[0].id == input.id):
-			case Call(_, name, _) if (scalarFunctions.exists(name)):
-			case CallClosure(_, closure, args) if (scalarClosureArgument(closure.type, args, input)):
-			default: throw "A scalar stack reference cannot escape its call";
+		if (scalarRefs) for (inputIndex in 0...IrOperands.count(instruction)) {
+			var input = IrOperands.at(instruction, inputIndex);
+			if (IrHlScalarRef.element(input.type) != null) switch instruction {
+				case Call(_, name, args) if ((name == IrHlScalarRef.LOAD || name == IrHlScalarRef.STORE) && args.length > 0 && args[0].id == input.id):
+				case Call(_, name, _) if (scalarFunctions.exists(name)):
+				case CallClosure(_, closure, args) if (scalarClosureArgument(closure.type, args, input)):
+				default: throw "A scalar stack reference cannot escape its call";
+			}
 		}
 		switch instruction {
 			case Phi(_, inputs):

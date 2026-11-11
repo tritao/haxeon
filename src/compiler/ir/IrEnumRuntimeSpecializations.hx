@@ -22,7 +22,10 @@ class IrEnumRuntimeSpecializations {
 			for (block in fn.blocks) for (located in block.instructions) {
 				var instruction = located.value, output = IrOperands.output(instruction);
 				if (output != null) visit(output.type);
-				for (input in IrOperands.inputs(instruction)) visit(input.type);
+				for (inputIndex in 0...IrOperands.count(instruction)) {
+					var input = IrOperands.at(instruction, inputIndex);
+					visit(input.type);
+				}
 				switch instruction { case TypeValue(_, type): visit(type); default: }
 			}
 		}

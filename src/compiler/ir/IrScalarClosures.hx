@@ -54,8 +54,10 @@ class IrScalarClosures {
 				uses.set(input.id, (uses.exists(input.id) ? uses.get(input.id) : 0) + 1);
 			for (block in fn.blocks) {
 				for (located in block.instructions) {
-					for (input in IrOperands.inputs(located.value))
+					for (inputIndex in 0...IrOperands.count(located.value)) {
+						var input = IrOperands.at(located.value, inputIndex);
 						use(input);
+					}
 					switch located.value {
 						case Phi(_, inputs):
 							for (input in inputs)

@@ -23,7 +23,10 @@ class IrDeadPureValues {
 			}
 		}
 		function inputs(instruction:IrInstruction):Void {
-			for (value in IrOperands.inputs(instruction)) mark(value);
+			for (valueIndex in 0...IrOperands.count(instruction)) {
+				var value = IrOperands.at(instruction, valueIndex);
+				mark(value);
+			}
 			switch instruction {
 				case Phi(_, values): for (input in values) mark(input.value);
 				default:
