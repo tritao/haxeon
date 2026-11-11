@@ -30,6 +30,7 @@ class TypingContext {
 	public final scopedBindings:Map<String, String> = [];
 	public var enumInterfaceTemporary:Int = 0;
 	public var keyPathTemporary:Int = 0;
+	public var diffTemporary:Int = 0;
 
 	/** Binding ID to the enum abstract a parameter or local was declared as (the type itself lowers to the underlying one). */
 	public final declaredAbstracts:Map<String, String> = [];
