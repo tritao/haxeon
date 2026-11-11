@@ -78,6 +78,8 @@ committed; status is `done`, `active` or `queued`. The declaration model it rest
 | Warm-rebuild correctness: the edit sweep, the shared-helper origin (`docs/HELPER_OWNERSHIP.md`) | dev-c5 | `warm-rebuild-reuse` | active |
 | Cold-build performance and the measure and gate scripts (`scripts/measure-cold.sh`, `scripts/gate.sh`) | dev-c5 | `warm-rebuild-reuse` | active |
 | The provider model itself (`IrFunctionKind`, `ProviderOperation`, the provider table and its checks); a1 adds families to it, changes to the model go through dev-c5 | dev-c5 | `warm-rebuild-reuse` | active |
+| HashLink allocator refill path: word-at-a-time scan of the mark bitmap in `flush_free_list` (fixed-class pages), then the TLAB run size; both measured with `scripts/measure-cold.sh` | dev-c5 | `haxeon/flush-word-scan` in `vendor/hashlink` (off 875bc1d25) | active (claimed 2026-11-11) |
+| ADR 0003 section 13 step 3: design note for the type-aware reachability walk over typed operations and provider kinds (reviewed by dev-71 before code) | dev-c5 | `warm-rebuild-reuse` | active (claimed 2026-11-11) |
 | The text of ADR 0003 section 13 | dev-71 | `adr-compiler-architecture` | follows the model above |
 
 Rules both drivers follow:
