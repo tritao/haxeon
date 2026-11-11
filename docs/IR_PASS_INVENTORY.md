@@ -59,6 +59,34 @@ float and native counts are unchanged. Function identity, opcode span and source
 1,079,960/23,437,284/5,337,080 bytes to 1,078,070/23,484,210/5,348,579 bytes respectively, reflecting renamed helpers,
 changed instructions and the edited compiler sources.
 
+## Roadmap and ownership (2026-11-11)
+
+One list for the marker migration above and the work of ADR 0003 section 13. Owner is the driver; branch is where the work is
+committed; status is `done`, `active` or `queued`. The declaration model it rests on landed with the merge of `a1-internals` into
+`warm-rebuild-reuse`: one declaration per function (`IrFunction.kind`; a function that serves an operation on a type is
+`Provider(subject, operation)`), `provides` as a read-only view of it, one `withBlocks`, one scalar-ABI predicate
+(`IrScalarAbiEligibility`), and typed operations in instructions instead of request records or name-encoded calls.
+
+| Item | Owner | Branch | Status |
+| --- | --- | --- | --- |
+| Closure adapter and cast signatures; function origins and scalar-ABI roles; value-array slot declarations; enum box, view, unbox and tag operations | a1 (Codex, driver dev-18) | `a1-internals` | done (checked above) |
+| The five deferred marker families in the checklist above: other value-array names (`$value-array:`), scalar word/lane and HL scalar references, scalar arguments/closures and Wasm scalar markers, other enum/inline-enum/specialization markers, value dynamic/interface/typed-interface/checked-cast/generic-erasure markers; plus the optional, typing-generated and Wasm GC families | a1 | `a1-internals` | queued, each family when its code is next touched |
+| Value-array names and the runtime-array native registry | a1 | `a1-internals` | queued |
+| Enum-pass consolidation: a phase-order document first (reviewed by dev-71 before code), adapter escapes expressed as typed operations | a1 | `a1-internals` | queued |
+| Documentation cleanup into `docs/history/` | a1 | `a1-internals` | queued |
+| §13 reachability walk over declared providers, pruning before the passes, one frontend pass | dev-c5 | `warm-rebuild-reuse` | queued; waits on the §13 design decisions |
+| Warm-rebuild correctness: the edit sweep, the shared-helper origin (`docs/HELPER_OWNERSHIP.md`) | dev-c5 | `warm-rebuild-reuse` | active |
+| Cold-build performance and the measure and gate scripts (`scripts/measure-cold.sh`, `scripts/gate.sh`) | dev-c5 | `warm-rebuild-reuse` | active |
+| The provider model itself (`IrFunctionKind`, `ProviderOperation`, the provider table and its checks); a1 adds families to it, changes to the model go through dev-c5 | dev-c5 | `warm-rebuild-reuse` | active |
+| The text of ADR 0003 section 13 | dev-71 | `adr-compiler-architecture` | follows the model above |
+
+Rules both drivers follow:
+
+- Claim an item before starting it: a committed line in this table changing its status to `active` with the driver's name.
+- Merge `main` into the working branch daily.
+- Push only at green gates (`scripts/gate.sh`; the summary file it writes is what a report quotes).
+- Message the other driver before touching an area they own.
+
 ## Outer gate control evidence (2026-11-10)
 
 On outer `haxeon-a1-outer` commit `c78fa7163`, the app suite built with a1 fails in

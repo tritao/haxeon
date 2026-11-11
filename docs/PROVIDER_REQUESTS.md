@@ -1,5 +1,14 @@
 # ADR 0003 section 13, step 2: helper requests as records, not callee names (design note, no code)
 
+**Status (2026-11-11): superseded by typed operations; this note is kept for the reasoning.** The request is not a side field. A call
+to a helper that does not exist yet is a typed operation in the instruction stream (`Intrinsic(output, EnumDynamicBox(type), arguments)`
+and its siblings, from the a1 merge), carrying the type it needs, and the pass that makes the helper reads those instructions. The
+records described below (`HelperRequest`, `TRequestCall`, `IrFunction.requests`, the codec fields) were implemented for enum box and view
+and then deleted when the typed operations landed, because they carried the same information a second time. The §13 walk derives its
+provider edge from the typed operation. A request that still travels as a name-encoded call becomes a typed operation when its family
+is migrated (the marker roadmap in `IR_PASS_INVENTORY.md`); the rule is one declaration per function (`IrFunction.kind`) and one typed
+operation per request, never a name to parse. The original proposal follows.
+
 Status: proposal. Input: the provider table as it stands after the "Replace the hand-kept prefix lists" commit; dev-71's note that
 the walk meets a *request* for a helper that does not exist yet.
 
