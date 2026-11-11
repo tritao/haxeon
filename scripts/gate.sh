@@ -5,7 +5,9 @@
 #
 #   quick  the NUL guard and the driver in its default configuration (every program built live and plain, named cases, executables)
 #   wave   quick, then the driver again with HAXEON_CHECK_REUSE=1 (adds the warm-edit rebuilds and the reuse comparisons), then the Wasm
-#          backend script (scripts/test-wasm-backend.sh; a broken Wasm fixture once reached main because no gate ran it)
+#          backend script (scripts/test-wasm-backend.sh; a broken Wasm fixture once reached main because no gate ran it) and the
+#          self-hosting compile (tests/integration/test-compiler-embedding.sh: Haxeon compiles the compiler's own sources, which stock
+#          Haxe does not check)
 #   full   wave, then scripts/test.sh (the integration scripts CI runs)
 #
 # The compiler entry point and the build tool are built once, here, and handed to the driver; if either build fails the gate stops.
@@ -86,6 +88,7 @@ suite driver-default env -u HAXEON_CHECK_REUSE "$root/scripts/test-driver.sh" "$
 if [ "$mode" != quick ]; then
 	suite driver-checked env HAXEON_CHECK_REUSE=1 "$root/scripts/test-driver.sh" "$jobs"
 	suite wasm-backend "$root/scripts/test-wasm-backend.sh"
+	suite self-hosting bash "$root/tests/integration/test-compiler-embedding.sh"
 fi
 if [ "$mode" = full ]; then
 	suite full-test-sh "$root/scripts/test.sh"
