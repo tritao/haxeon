@@ -539,4 +539,6 @@ inline-enum-reflection-reach	42
 closure-method-value-arguments	42
 map-null-string-keys	42
 value-interface-helper-reuse	42
+arrow-assignment-body	42
+arrow-try-value	42
 abstract-from-float-int	42

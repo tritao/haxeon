@@ -1337,16 +1337,26 @@ class Parser {
 			var statements = parseStatementOrBlock();
 			// As in Haxe, the value of an arrow function's block is its last expression. A callback that is expected
 			// to return nothing discards it, as it does the value of an expression body.
-			if (statements.length > 0)
-				switch statements[statements.length - 1] {
-					case Expression(expression, span):
-						statements[statements.length - 1] = Return(expression, span);
-					default:
-				}
+			returnArrowValue(statements);
 			return statements;
 		}
 		var value = parseExpression();
 		return [Return(value, expressionSpan(value))];
+	}
+
+	/** A final try statement yields its branch value; throwing branches already terminate. */
+	static function returnArrowValue(statements:Array<AstStatement>):Void {
+		if (statements.length == 0)
+			return;
+		var index = statements.length - 1;
+		switch statements[index] {
+			case Expression(expression, span): statements[index] = Return(expression, span);
+			case Try(body, catches, _):
+				returnArrowValue(body);
+				for (clause in catches)
+					returnArrowValue(clause.statements);
+			default:
+		}
 	}
 
 	function parseStatements():Array<AstStatement> {
@@ -1414,6 +1424,34 @@ class Parser {
 				default: throw new CompileError(new Diagnostic("E0002", "Assignment expression target must be a variable or an array element",
 						expressionSpan(expression)));
 			};
+		}
+		var assignment = current().kind;
+		if (assignment == TokenKind.PlusAssign || assignment == TokenKind.MinusAssign || assignment == TokenKind.StarAssign
+			|| assignment == TokenKind.SlashAssign || assignment == TokenKind.PercentAssign || assignment == TokenKind.AndAssign
+			|| assignment == TokenKind.OrAssign || assignment == TokenKind.XorAssign) {
+			advance();
+			var value = parseExpression(), span = expressionSpan(expression).merge(expressionSpan(value)),
+				stable = AssignmentTarget.stabilize(expression, span, expressionSpan), target = stable.target;
+			var assigned = switch assignment {
+				case PlusAssign: Add(target, value, span);
+				case MinusAssign: Sub(target, value, span);
+				case StarAssign: Mul(target, value, span);
+				case SlashAssign: Div(target, value, span);
+				case PercentAssign: Mod(target, value, span);
+				case AndAssign: BitAnd(target, value, span);
+				case OrAssign: BitOr(target, value, span);
+				case XorAssign: BitXor(target, value, span);
+				default: value;
+			};
+			var resultName = '$' + 'assigned:${span.start}', result = Variable(resultName, span);
+			stable.bindings.push(VarDeclaration(resultName, null, assigned, span));
+			stable.bindings.push(switch target {
+				case Variable(name, _): Assignment(name, result, span);
+				case Index(array, offset, _): IndexAssignment(array, offset, result, span);
+				case Member(object, field, _): FieldAssignment(object, field, result, span);
+				default: throw new CompileError(new Diagnostic("E0002", "Assignment expression target must be a variable, field, or array element", expressionSpan(expression)));
+			});
+			expression = BlockExpression(stable.bindings, result, span);
 		}
 		return expression;
 	}
