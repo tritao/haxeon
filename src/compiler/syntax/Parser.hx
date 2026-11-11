@@ -1072,10 +1072,10 @@ class Parser {
 				var catchStart = consume(TokenKind.Catch).span;
 				consume(TokenKind.LeftParen);
 				var catchName = consume(TokenKind.Identifier).text;
-				consume(TokenKind.Colon);
-				var catchType = parseType();
+				var catchType = parseCatchType();
 				consume(TokenKind.RightParen);
-				var catchBranch = parseStatementOrBlock();
+				// Like the try body, an unbraced catch body needs no semicolon before the next `catch`.
+				var catchBranch = parseTryBody();
 				end = catchBranch.length == 0 ? previous().span : statementSpan(catchBranch[catchBranch.length - 1]);
 				catches.push({
 					name: catchName,
@@ -2243,8 +2243,7 @@ class Parser {
 			var catchStart = consume(TokenKind.Catch).span;
 			consume(TokenKind.LeftParen);
 			var name = consume(TokenKind.Identifier).text;
-			consume(TokenKind.Colon);
-			var type = parseType();
+			var type = parseCatchType();
 			consume(TokenKind.RightParen);
 			var caught = parseExpressionBranch();
 			end = expressionSpan(caught);
@@ -2390,6 +2389,10 @@ class Parser {
 		}
 		return expression;
 	}
+
+	/** The `:Type` of a catch clause; `catch (error)` without one catches any value, like `catch (error:Dynamic)`. */
+	function parseCatchType():AstType
+		return match(TokenKind.Colon) ? parseType() : NamedType("Dynamic");
 
 	function parseType():AstType {
 		if (match(TokenKind.LeftParen)) {

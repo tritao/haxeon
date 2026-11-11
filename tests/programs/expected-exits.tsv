@@ -29,6 +29,8 @@ anonymous-function	42
 enum-abstract	42
 enum-argument-string	42
 concise-try	42
+try-unbraced-catches	42
+try-untyped-catch	42
 switch-expression-block	42
 switch-expression-throw-arm	42
 member-range	42
