@@ -102,3 +102,14 @@ and the `provides` row come from the generator and a change in either fails the 
 2. The checked-suite split above, with the warm edit-rebuild addition. Done in part: the checked suite builds every program a third time, edited and rebuilt warm (it adds about 1 minute to the program phase, 150 s to 210 s); the plain suite is unchanged, and the rest of the split (compile-only checked sweep in place of the live and plain runs) is not done. What the sweep found is in WARM_REBUILD_REUSE.md.
 3. HelperFixtures.
 4. -j8 behind the memory floor check.
+
+## 7. Measuring a cold build
+
+`scripts/measure-cold.sh <label> [runs]` builds an app cold `runs` times (default 3) and prints, per run, the wall time, the compiler's own
+time, the compile-count, the worker's CPU seconds and its peak RSS. `MEASURE_APP` names the app project; `HAXEON_ROOT` the checkout whose
+compiler is measured, so one app can be built by two checkouts and the lines compared. It waits while the load average is at or above
+`MEASURE_MAX_LOAD` (default 6) and for earlier compiler workers to exit, because a build that finds a worker alive reuses it and is not cold.
+
+The worker is followed by pid, not picked by CPU: the first version took the busiest compiler process on the machine, and read a leftover
+worker's 91 s and 6.5 GB for a build that used 64 s and 5.5 GB. Quote medians of at least 3, interleave the sides, and never compare a
+number taken with a different app tree or at a different load.
