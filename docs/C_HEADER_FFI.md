@@ -610,6 +610,10 @@ address to native code for the call, with no copy; arrays of other values
 argument is its array's length, arrays sharing a count must have equal
 lengths, and a span whose owner is closed is refused. This passes memory one
 native library owns to another without marshalling it through Haxe.
+When a function has multiple eligible scalar arrays, `<Function>_<parameter>_span`
+also accepts just that parameter as a span and keeps the other arrays managed.
+This permits one call to combine, for example, a managed transaction buffer
+with native-owned records without copying the records.
 
 Use `scripts/haxeon-ffi-audit` to import one public header for multiple targets
 and compare its normalized declarations and layouts. The `portable-abi64`

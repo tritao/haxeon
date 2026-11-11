@@ -312,6 +312,11 @@ class HxiParserMain {
 		expectProfileError(function() functionCollisionCompiler.addFfiProjection("function-collision.hxmap",
 			'{"interface":"function_collision","functionPrefix":"lib_","functionCase":"camel"}'),
 			"both project to \"openFile\"");
+		var spanCollisionCompiler = newCompiler();
+		spanCollisionCompiler.addFfiInterface("span-collision.hxi",
+			'interface span_collision @target("x86_64-linux-gnu") @library("span_collision") { extern fn send(first: ptr<const<u8>> @in_array("a"), a: u32, second: ptr<const<u8>> @in_array("b"), b: u32) -> i32; extern fn send_first_span() -> i32; }');
+		expectProfileError(function() spanCollisionCompiler.addFfiProjection("span-collision.hxmap", '{"interface":"span_collision"}'),
+			"both project to \"send_first_span\"");
 		var typeCollisionCompiler = newCompiler();
 		typeCollisionCompiler.addFfiInterface("type-collision.hxi",
 			'interface type_collision @target("x86_64-linux-gnu") @library("type_collision") { handle lib_point : u32; handle lib__point : u32; }');

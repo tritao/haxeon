@@ -13,6 +13,8 @@ class HxiSpanMain {
 		var output = Sys.args()[0],
 			library = Sys.args()[1],
 			compiler = new Compiler();
+		if (Sys.args().length > 2)
+			compiler.configure("span-inline", "span-inline", ["haxeon-inline=" + Sys.args()[2]]);
 		CompilerIntrinsics.register(compiler);
 		compiler.addStandardLibrarySourceRoot(Sys.getCwd() + "/stdlib");
 		compiler.addFfiInterface("spans.hxi",
@@ -69,6 +71,10 @@ function main():Int {
 	var weights = values.slice(1, 3);
 	if (Spans.weightedSum_span(values.slice(0, 3), weights, 0.5) != 0.5 + 1.5 * 2.5 + 2.5 * 4.0 + 4.0 * -8.0)
 		return 5;
+	if (Spans.weightedSum_values_span(values.slice(0, 3), [2.5, 4.0, -8.0], 0.5) != 0.5 + 1.5 * 2.5 + 2.5 * 4.0 + 4.0 * -8.0 ||
+		Spans.weightedSum_weights_span([1.5, 2.5, 4.0], weights, 0.5) != 0.5 + 1.5 * 2.5 + 2.5 * 4.0 + 4.0 * -8.0)
+		return 13;
+	if (!throws(() -> Spans.weightedSum_values_span(values, [1.0], 0.0))) return 14;
 	if (Spans.weightedSum(values.toArray(), [1.0, 1.0, 1.0, 1.0], 0.0) != 0.0)
 		return 6;
 	if (!throws(() -> Spans.weightedSum_span(values, weights, 0.0)))
