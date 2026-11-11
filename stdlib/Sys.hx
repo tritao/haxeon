@@ -278,6 +278,9 @@ class Sys {
 	public static inline function getChar(echo:Bool):Int
 		return sysGetChar(echo);
 
+	public static inline function print(value:Dynamic):Void
+		sysPrint(Std.string(value));
+
 	public static inline function println(value:Dynamic):Void
 		sysPrint(Std.string(value) + "\n");
 

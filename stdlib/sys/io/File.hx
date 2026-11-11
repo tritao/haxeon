@@ -73,4 +73,8 @@ class File {
 
 	public static inline function saveBytes(path:String, bytes:Bytes):Void
 		fileSaveBytes(path, bytes);
+
+	/** Copies the bytes of `source` to `destination`, replacing it. */
+	public static function copy(source:String, destination:String):Void
+		fileSaveBytes(destination, fileGetBytes(source));
 }
