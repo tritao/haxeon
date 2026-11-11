@@ -2,6 +2,7 @@ package compiler.ir.cfg;
 
 import compiler.ir.cfg.Cfg;
 import compiler.ir.Ir.IrType;
+import compiler.ir.Ir.IrIntrinsic;
 import compiler.Source.SourceSpan;
 import compiler.ir.SourceProvenance;
 import compiler.ir.SourceProvenance.Located;
@@ -347,6 +348,12 @@ class CfgBuilder {
 	public function cNativeCall(name:String, args:Array<CfgValue>, result:IrType):CfgValue {
 		var out = temporary(result);
 		emit(CNativeCall(out, name, args));
+		return out;
+	}
+
+	public function intrinsic(operation:IrIntrinsic, args:Array<CfgValue>, result:IrType):CfgValue {
+		var out = temporary(result);
+		emit(Intrinsic(out, operation, args));
 		return out;
 	}
 

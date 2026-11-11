@@ -551,7 +551,7 @@ class WasmGcRepresentation implements WasmValueRepresentation implements WasmAgg
 	public function toDynamic(value:IrValue, destination:Int, valueLocal:Int):WasmLoweringResult {
 		switch value.type {
 			case EnumTag(name): return [LocalGet(valueLocal), Call(WasmModuleSupport.requiredFunctionIndex(gc.functions,
-				compiler.ir.IrEnumTagStorage.boxName(name))), LocalSet(destination)];
+				gc.enumTagAdapter(name, true))), LocalSet(destination)];
 			default:
 		}
 		var boxed = switch value.type {
@@ -582,7 +582,7 @@ class WasmGcRepresentation implements WasmValueRepresentation implements WasmAgg
 			case EnumTag(name):
 				if (compiler.ir.IrVerifier.sameType(output.type, value.type)) return [LocalGet(valueLocal), LocalSet(destination)];
 				return [LocalGet(valueLocal), Call(WasmModuleSupport.requiredFunctionIndex(gc.functions,
-					compiler.ir.IrEnumTagStorage.unboxName(name))), LocalSet(destination)];
+					gc.enumTagAdapter(name, false))), LocalSet(destination)];
 			default:
 		}
 		var boxType = switch output.type {

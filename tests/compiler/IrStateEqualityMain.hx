@@ -46,10 +46,11 @@ class IrStateEqualityMain {
 		compare(adapter, castFunction);
 		compare(adapter, otherAdapter);
 		compare(body, adapter);
-		for (kind in [GenericSpecialization, SourceLambda, Equality, ReflectiveEquality, Hash, KeyPath, IterationAdapter,
+		for (kind in [GenericSpecialization, SourceLambda, Equality, Hash, KeyPath, IterationAdapter,
 			GeneratedHelper, ScalarArguments, InlineEnumAccess, TypedInterface, ValueUnbox, GenericMethodReference,
 			OptionalScalar(null), OptionalScalar("owner.method"), OptionalValueBoundary, NullableScalarArguments,
-			ValueArrayElement, WasmClosureRestore]) {
+			ValueArrayElement, WasmClosureRestore, EnumEquality(true), EnumEquality(false), EnumDynamicUnbox(Enum("Example")),
+			EnumTagAdapter(EnumTag("Example"), true), EnumTagAdapter(EnumTag("Example"), false)]) {
 			var functionWithKind = new IrFunction(body.name, body.arguments, body.result, body.blocks, kind, body.debugBindings);
 			if (!IrFunctionStateEquality.same(functionWithKind, IrFunctionStateCodec.decode(IrFunctionStateCodec.encode(functionWithKind))))
 				throw 'Function role failed to round-trip: $kind';
@@ -68,6 +69,13 @@ class IrStateEqualityMain {
 		if (IrFunctionStateCodec.codeFingerprint(slotA) != IrFunctionStateCodec.codeFingerprint(renamedSlot))
 			throw "Slot linkage IDs must not change code fingerprints";
 		var v = new IrValue(0, "v", I32), w = new IrValue(1, "w", I32);
+		var intrinsic = fn(Intrinsic(v, EnumDynamicBox(Enum("First")), [w]));
+		compare(intrinsic, IrFunctionStateCodec.decode(IrFunctionStateCodec.encode(intrinsic)));
+		compare(intrinsic, fn(Intrinsic(v, EnumDynamicBox(Enum("Second")), [w])));
+		compare(intrinsic, fn(Intrinsic(v, EnumDynamicView(Enum("First")), [w])));
+		var tagIntrinsic = fn(Intrinsic(v, EnumTagBox(EnumTag("First")), [w]));
+		compare(tagIntrinsic, IrFunctionStateCodec.decode(IrFunctionStateCodec.encode(tagIntrinsic)));
+		compare(tagIntrinsic, fn(Intrinsic(v, EnumTagUnbox(EnumTag("First")), [w])));
 		var cases:Array<{original:IrInstruction, changed:Array<IrInstruction>}> = [
 			{
 				original: Phi(v, [{block: 0, value: v}]),

@@ -21,7 +21,7 @@ import compiler.ir.SourceProvenance.SourceOrigin;
 
 /** Deterministic framing for a complete SSA IR function. */
 class IrFunctionStateCodec {
-	static inline final VERSION = 16;
+	static inline final VERSION = 17;
 	static inline final MAX_BLOCKS = 0x100000;
 	static inline final MAX_INSTRUCTIONS = 0x1000000;
 
@@ -118,7 +118,6 @@ class IrFunctionStateCodec {
 			case GenericSpecialization: output.writeByte(4);
 			case SourceLambda: output.writeByte(5);
 			case Equality: output.writeByte(6);
-			case ReflectiveEquality: output.writeByte(21);
 			case Hash: output.writeByte(7);
 			case KeyPath: output.writeByte(8);
 			case IterationAdapter: output.writeByte(9);
@@ -142,6 +141,9 @@ class IrFunctionStateCodec {
 				output.writeInt32(identified ? namespace : 0);
 				IrTypeCodec.writeType(output, element, 0, erase);
 				writeSlotOperation(output, operation, erase);
+			case EnumEquality(reflective): output.writeByte(23); output.writeByte(reflective ? 1 : 0);
+			case EnumDynamicUnbox(type): output.writeByte(24); IrTypeCodec.writeType(output, type, 0, erase);
+			case EnumTagAdapter(type, box): output.writeByte(25); IrTypeCodec.writeType(output, type, 0, erase); output.writeByte(box ? 1 : 0);
 		}
 		var debugBindings = identified ? fn.debugBindings : [];
 		output.writeInt32(debugBindings.length);
@@ -220,7 +222,6 @@ class IrFunctionStateCodec {
 				case 4: GenericSpecialization;
 				case 5: SourceLambda;
 				case 6: Equality;
-				case 21: ReflectiveEquality;
 				case 7: Hash;
 				case 8: KeyPath;
 				case 9: IterationAdapter;
@@ -242,6 +243,15 @@ class IrFunctionStateCodec {
 					var namespace = input.readInt32();
 					if (namespace < 0) throw "Invalid value-array slot namespace";
 					ValueArraySlot(namespace, IrTypeCodec.readType(input, bytes.length, 0), readSlotOperation(input, bytes.length));
+				case 23:
+					var flag = input.readByte();
+					if (flag != 0 && flag != 1) throw "Invalid enum equality role";
+					EnumEquality(flag == 1);
+				case 24: EnumDynamicUnbox(IrTypeCodec.readType(input, bytes.length, 0));
+				case 25:
+					var type = IrTypeCodec.readType(input, bytes.length, 0), flag = input.readByte();
+					if (flag != 0 && flag != 1) throw "Invalid enum tag adapter role";
+					EnumTagAdapter(type, flag == 1);
 				default: throw "Invalid IR function kind";
 			};
 			if (version >= 3) {
@@ -395,7 +405,7 @@ class IrFunctionStateCodec {
 				collectValue(output, values);
 				collectValue(left, values);
 				collectValue(right, values);
-			case Call(output, _, arguments), CNativeCall(output, _, arguments), CallClosure(output, _, arguments), MethodCall(output, _, _, arguments, _),
+			case Call(output, _, arguments), CNativeCall(output, _, arguments), Intrinsic(output, _, arguments), CallClosure(output, _, arguments), MethodCall(output, _, _, arguments, _),
 				MakeEnum(output, _, _, arguments):
 				collectValue(output, values);
 				for (argument in arguments)

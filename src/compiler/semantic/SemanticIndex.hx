@@ -883,7 +883,7 @@ class SemanticIndex {
 				var token = referenceToken(tokens, expression.span, sourceLocalName(identity));
 				if (symbols.exists(id) && token != null)
 					bind(id, token.span);
-			case TCopy(value, _), TNullableWrap(value), TIntToFloat(value), TIntToInt64(value), TFloatToInt(value), TToDynamic(value), TNegate(value),
+			case TEnumDynamicBox(value, _), TEnumDynamicView(value, _), TCopy(value, _), TNullableWrap(value), TIntToFloat(value), TIntToInt64(value), TFloatToInt(value), TToDynamic(value), TNegate(value),
 				TNot(value), TThrowExpression(value), TNoReturn(value), TCast(value), TAbiCast(value), TToInterface(value, _), TArrayLength(value),
 				TStringLength(value):
 				indexExpression(fn, value, resolve, resolveEnumCase);

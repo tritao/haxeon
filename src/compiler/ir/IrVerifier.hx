@@ -243,6 +243,10 @@ class IrVerifier {
 		var laneValues = new IrInlineValueLayout(objectTable);
 		for (fn in program.functions) {
 			switch fn.kind {
+				case EnumTagAdapter(type, box):
+					switch type { case EnumTag(_): default: throw "Enum tag adapter requires a tag type"; }
+					if (fn.arguments.length != 1 || !sameType(fn.arguments[0].type, box ? type : Dyn)
+						|| !sameType(fn.result, box ? Dyn : type)) throw "Invalid enum tag adapter signature";
 				case ValueArraySlot(namespace, _, operation):
 					if (namespace < 0) throw "Invalid value-array slot namespace";
 					switch operation {
@@ -738,6 +742,23 @@ class IrVerifier {
 					|| (!sameType(a.type, I32) && !sameType(a.type, I64) && !sameType(a.type, F32) && !sameType(a.type, F64) && !sameType(a.type, Bool)
 						&& !isReference(a.type) && !(switch a.type { case EnumTag(_): true; default: false; })))
 					throw 'IR equality requires matching primitive or reference values';
+			case Intrinsic(out, operation, args):
+				if (args.length != 1) throw "IR enum Dynamic intrinsic requires one argument";
+				require(values, args[0]);
+				switch operation {
+					case EnumDynamicBox(type):
+						switch type { case Enum(_): default: throw "IR enum Dynamic box requires an enum type"; }
+						if (!sameType(args[0].type, type) || !sameType(out.type, Dyn)) throw "Invalid IR enum Dynamic box signature";
+					case EnumDynamicView(type):
+						switch type { case Enum(_): default: throw "IR enum Dynamic view requires an enum type"; }
+						if (!sameType(args[0].type, Array(Dyn)) || !sameType(out.type, Array(Dyn))) throw "Invalid IR enum Dynamic view signature";
+					case EnumTagBox(type):
+						switch type { case EnumTag(_): default: throw "IR enum tag box requires a tag type"; }
+						if (!sameType(args[0].type, type) || !sameType(out.type, Dyn)) throw "Invalid IR enum tag box signature";
+					case EnumTagUnbox(type):
+						switch type { case EnumTag(_): default: throw "IR enum tag unbox requires a tag type"; }
+						if (!sameType(args[0].type, Dyn) || !sameType(out.type, type)) throw "Invalid IR enum tag unbox signature";
+				}
 			case Call(out, name, args), CNativeCall(out, name, args):
 				if (name == IrArrayFactory.NAME) {
 					switch instruction { case CNativeCall(_, _, _): throw "Array factory is not a C native"; default: }

@@ -85,6 +85,8 @@ class IrClosedEnumTagAbi {
 					escape(target);
 				case ClosureCast(target), ClosureVarargs(target):
 					escape(target);
+				case EnumTagAdapter(type, _):
+					escape(type);
 				default:
 			}
 			if (fn.retention == Expose || fn.name == program.entryPoint) {
@@ -96,6 +98,10 @@ class IrClosedEnumTagAbi {
 			for (block in fn.blocks) {
 				for (located in block.instructions)
 					switch located.value {
+						case Intrinsic(_, operation, _):
+							switch operation {
+								case EnumDynamicBox(type), EnumDynamicView(type), EnumTagBox(type), EnumTagUnbox(type): escape(type);
+							}
 						case TypeValue(out, type):
 							escape(type);
 						case ToDyn(_, input):

@@ -489,6 +489,9 @@ class SsaBuilder {
 				case Call(out, name, args):
 					var result = define(out);
 					emit(target, Call(result, name, [for (arg in args) resolve(arg)]), provenance);
+				case Intrinsic(out, operation, args):
+					var result = define(out);
+					emit(target, Intrinsic(result, operation, [for (arg in args) resolve(arg)]), provenance);
 				case CNativeCall(out, name, args):
 					var result = define(out);
 					emit(target, CNativeCall(result, name, [for (arg in args) resolve(arg)]), provenance);

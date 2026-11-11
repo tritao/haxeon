@@ -73,6 +73,7 @@ class FlowAnalysis {
 					isPureCall) || mayHaveEffect(start, isPureCall) || (end != null && mayHaveEffect(end, isPureCall));
 			case TConditional(test, yes, no): mayHaveEffect(test, isPureCall) || mayHaveEffect(yes, isPureCall) || mayHaveEffect(no, isPureCall);
 			case TEnumConstruct(_, _, values), TArrayLiteral(values): anyEffect(values, isPureCall);
+			case TEnumDynamicBox(_, _), TEnumDynamicView(_, _): true;
 			case TCall(name, arguments): !isPureCall(name) || anyEffect(arguments, isPureCall);
 			case TMethodCall(object, name, arguments): !isPureCall(name) || mayHaveEffect(object, isPureCall) || anyEffect(arguments, isPureCall);
 			case TCollectionCall(receiver, operation, arguments):

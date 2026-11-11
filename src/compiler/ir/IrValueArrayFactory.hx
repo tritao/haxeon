@@ -12,11 +12,12 @@ class IrValueArrayFactory {
 	public final bridge:IrValueArrayBridge;
 	final suffix:String;
 
-	public function new(objects:IrObjectTable, element:IrType, pointerBits:Int, target:IrValueLaneTarget, slotNamespace:Int, ?enums:Array<IrEnum>) {
+	public function new(objects:IrObjectTable, element:IrType, pointerBits:Int, target:IrValueLaneTarget, slotNamespace:Int, ?enums:Array<IrEnum>,
+			?tagAdapter:{box:String, unbox:String}) {
 		this.element = element;
 		layout = new IrValueArrayLayout(objects, element, pointerBits, target, enums);
 		helpers = new IrValueArraySlotHelpers(slotNamespace, element, layout.lanes);
-		bridge = new IrValueArrayBridge(element, layout.storage, objects, helpers);
+		bridge = new IrValueArrayBridge(element, layout.storage, objects, helpers, tagAdapter);
 		suffix = haxe.crypto.Base64.encode(IrTypeCodec.encode(element));
 	}
 

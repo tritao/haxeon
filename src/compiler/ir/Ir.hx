@@ -56,6 +56,14 @@ class IrValue {
 /** Value contributed by one predecessor to an SSA phi definition. */
 typedef IrPhiInput = {final block:Int; final value:IrValue;}
 
+/** Compiler operations whose operands include semantic data rather than encoded linkage names. */
+enum IrIntrinsic {
+	EnumDynamicBox(type:IrType);
+	EnumDynamicView(type:IrType);
+	EnumTagBox(type:IrType);
+	EnumTagUnbox(type:IrType);
+}
+
 /** Typed SSA operations independent of HashLink register and symbol indices. */
 enum IrInstruction {
 	Phi(output:IrValue, inputs:Array<IrPhiInput>);
@@ -118,6 +126,7 @@ enum IrInstruction {
 	MakeEnum(output:IrValue, typeName:String, constructor:Int, arguments:Array<IrValue>);
 	EnumIndex(output:IrValue, value:IrValue);
 	EnumField(output:IrValue, value:IrValue, constructor:Int, field:Int);
+	Intrinsic(output:IrValue, operation:IrIntrinsic, arguments:Array<IrValue>);
 }
 
 /** Mandatory control transfer ending an SSA basic block. */

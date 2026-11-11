@@ -194,7 +194,7 @@ class CfgIteratorReplacement {
 				PointerOffset(_, a, b): [a, b];
 			case ArraySet(array, index, value): [array, index, value];
 			case MemoryStore(pointer, value, _): [pointer, value];
-			case Call(_, _, arguments), CNativeCall(_, _, arguments), MakeEnum(_, _, _, arguments): arguments;
+			case Call(_, _, arguments), CNativeCall(_, _, arguments), MakeEnum(_, _, _, arguments), Intrinsic(_, _, arguments): arguments;
 			case CallClosure(_, receiver, arguments), MethodCall(_, receiver, _, arguments, _): [receiver].concat(arguments);
 		};
 }

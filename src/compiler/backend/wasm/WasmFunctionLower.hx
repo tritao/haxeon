@@ -1358,6 +1358,7 @@ class WasmFunctionLower {
 				emit(body,
 					context.representation.values.equal(requiredLocal(values, output.id), left, right, requiredLocal(values, left.id),
 						requiredLocal(values, right.id)));
+			case Intrinsic(_, _, _): throw "Unlowered IR intrinsic reached Wasm";
 			case Call(output, name, arguments):
 				var gcRepresentation:Null<WasmGcRepresentation> = Std.isOfType(context.representation.values, WasmGcRepresentation) ?
 					cast(context.representation.values, WasmGcRepresentation) : null;
@@ -1974,7 +1975,7 @@ class WasmFunctionLower {
 			case Phi(output, _), ConstVoid(output), ConstInt(output, _), ConstFloat(output, _), ConstString(output, _), StaticDataAddress(output, _),
 				ConstBool(output, _), PointerOffset(output, _, _), MemoryLoad(output, _, _, _), ConstNull(output), TypeValue(output, _), ToDyn(output, _),
 				IntToFloat(output, _), IntToInt64(output, _), FloatToInt(output, _), FloatToFloat(output, _), SafeCast(output, _), Catch(output),
-				GlobalGet(output, _), Add(output, _, _), Sub(output, _, _), Mul(output, _, _), Div(output, _, _), Mod(output, _, _), BitAnd(output, _, _),
+				GlobalGet(output, _), Intrinsic(output, _, _), Add(output, _, _), Sub(output, _, _), Mul(output, _, _), Div(output, _, _), Mod(output, _, _), BitAnd(output, _, _),
 				BitXor(output, _, _), BitOr(output, _, _), ShiftLeft(output, _, _), ShiftRight(output, _, _), UnsignedShiftRight(output, _, _),
 				Less(output, _, _), LessEqual(output, _, _), Equal(output, _, _), Call(output, _, _), CNativeCall(output, _, _), StaticClosure(output, _),
 				InstanceClosure(output, _, _), CallClosure(output, _, _), ToVirtual(output, _), Upcast(output, _), MethodCall(output, _, _, _, _), NewObject(output, _),

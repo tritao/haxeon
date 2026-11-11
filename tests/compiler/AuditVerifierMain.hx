@@ -82,6 +82,43 @@ class AuditVerifierMain {
 
 	static function main():Void {
 		verifyLaneArrayInvariant();
+		var intrinsicBuilder = new IrBuilder(), invalidInput = intrinsicBuilder.argument("value", I32);
+		intrinsicBuilder.returnValue(intrinsicBuilder.intrinsic(EnumDynamicBox(Enum("Example")), [invalidInput], Dyn));
+		var intrinsicProgram = new IrProgram("main");
+		intrinsicProgram.functions.push(new IrFunction("main", intrinsicBuilder.arguments, Dyn, intrinsicBuilder.blocks, Ordinary));
+		rejected(intrinsicProgram, "Invalid IR enum Dynamic box signature");
+		var dispatchRejected = false;
+		try compiler.ir.IrEnumDynamicDispatch.rewrite(intrinsicProgram.functions) catch (error:String) {
+			if (error.indexOf("Invalid enum Dynamic box signature") < 0) throw error;
+			dispatchRejected = true;
+		}
+		if (!dispatchRejected) throw "Enum Dynamic dispatch accepted an invalid typed box";
+		var validBox = new IrBuilder(), enumInput = validBox.argument("value", Enum("Example"));
+		validBox.returnValue(validBox.intrinsic(EnumDynamicBox(Enum("Example")), [enumInput], Dyn));
+		var reserved = new IrBuilder(); reserved.returnValue(reserved.constVoid());
+		var collision = new IrProgram("main");
+		collision.enums = [{name: "Example", cases: [{name: "Only", params: []}]}];
+		collision.functions = compiler.ir.IrEnumDynamicDispatch.rewrite([
+			new IrFunction("main", validBox.arguments, Dyn, validBox.blocks, Ordinary),
+			new IrFunction("$haxeon_enum_dynamic_box_0", reserved.arguments, Void, reserved.blocks, Ordinary)
+		]);
+		IrVerifier.verify(collision);
+		var invalidAdapter = new IrProgram("main");
+		invalidAdapter.functions.push(new IrFunction("main", intrinsicBuilder.arguments, Dyn, intrinsicBuilder.blocks,
+			EnumTagAdapter(EnumTag("Example"), true)));
+		rejected(invalidAdapter, "Invalid enum tag adapter signature");
+		var invalidTagBuilder = new IrBuilder(), invalidTagInput = invalidTagBuilder.argument("value", I32);
+		invalidTagBuilder.returnValue(invalidTagBuilder.intrinsic(EnumTagBox(EnumTag("Example")), [invalidTagInput], Dyn));
+		var invalidTag = new IrProgram("main");
+		invalidTag.enums = [{name: "Example", cases: [{name: "Only", params: []}]}];
+		invalidTag.functions.push(new IrFunction("main", invalidTagBuilder.arguments, Dyn, invalidTagBuilder.blocks, Ordinary));
+		rejected(invalidTag, "Invalid IR enum tag box signature");
+		var tagLoweringRejected = false;
+		try compiler.ir.IrEnumTagLowering.escapes(invalidTag) catch (error:String) {
+			if (error.indexOf("Invalid enum tag box signature") < 0) throw error;
+			tagLoweringRejected = true;
+		}
+		if (!tagLoweringRejected) throw "Enum tag lowering accepted an invalid typed box";
 		var refBuilder = new IrBuilder(), initialValue = refBuilder.constInt(0),
 			stackRef = refBuilder.call(IrHlScalarRef.ADDRESS, [initialValue], IrHlScalarRef.type(I32));
 		refBuilder.returnValue(stackRef);

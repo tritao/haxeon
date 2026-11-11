@@ -1,6 +1,7 @@
 import compiler.ir.Ir;
 import compiler.ir.IrBuilder;
 import compiler.ir.IrEnumTagStorage;
+import compiler.ir.IrEnumTagLowering;
 import compiler.ir.IrFunction;
 import compiler.ir.IrScalarWordBits;
 import compiler.ir.IrVerifier;
@@ -28,8 +29,8 @@ class EnumTagStorageMain {
 			b.equal(b.call(IrScalarWordBits.PACK, [b.constNull(EnumTag("Mode"))], I32), b.constInt(0))
 		];
 		for (value in [first, second, b.constNull(EnumTag("Mode"))]) {
-			var boxed = b.call(IrEnumTagStorage.boxName("Mode"), [value], Dyn),
-				roundtrip = b.call(IrEnumTagStorage.unboxName("Mode"), [boxed], EnumTag("Mode"));
+			var boxed = b.intrinsic(EnumTagBox(EnumTag("Mode")), [value], Dyn),
+				roundtrip = b.intrinsic(EnumTagUnbox(EnumTag("Mode")), [boxed], EnumTag("Mode"));
 			checks.push(b.equal(value, roundtrip));
 		}
 		var failed = b.createBlock();
@@ -52,13 +53,17 @@ class EnumTagStorageMain {
 				result: Bool
 			}
 		];
-		p.functions = [new IrFunction("main", b.arguments, I32, b.blocks, Ordinary)].concat(IrEnumTagStorage.adapters(declaration()));
+		p.functions = [new IrFunction("main", b.arguments, I32, b.blocks, Ordinary)];
+		if (new compiler.ir.IrInterpreter(p).run() != 42) throw "Interpreter failed typed enum tag roundtrip";
+		IrEnumTagLowering.escapes(p);
 		return p;
 	}
 
 	static function arrayProgram(target:compiler.ir.IrValueLaneLayout.IrValueLaneTarget):IrProgram {
 		var p = program(), b = new IrBuilder(), array = b.call("__array_alloc_ref", [b.constInt(2)], Array(EnumTag("Mode"))),
 			value = b.temporary(EnumTag("Mode"));
+		// The bridge must request its own adapters even when no earlier escape did.
+		p.functions = [p.functions[0]];
 		b.emit(MakeEnum(value, "Mode", 1, []));
 		b.emit(ArraySet(array, b.constInt(0), value));
 		b.emit(ArraySet(array, b.constInt(1), b.constNull(EnumTag("Mode"))));
@@ -170,6 +175,19 @@ class EnumTagStorageMain {
 	}
 
 	static function main():Void {
+		var expanded = program(), original = IrEnumTagStorage.adapterNames(expanded).get("Mode");
+		expanded.enums.push({name: "Earlier", cases: [{name: "Only", params: []}]});
+		var occupied = IrEnumTagStorage.adapterNames(expanded).get("Earlier").box, main = expanded.functions[0];
+		expanded.functions.push(new IrFunction(occupied, main.arguments, main.result, main.blocks, Ordinary));
+		var additional = IrEnumTagStorage.request(expanded, "Earlier"), preserved = IrEnumTagStorage.adapterNames(expanded).get("Mode");
+		if (preserved.box != original.box || preserved.unbox != original.unbox || additional.box == original.box || additional.unbox == original.unbox
+			|| additional.box == occupied)
+			throw "Adding an enum must preserve existing tag adapter linkage";
+		IrEnumTagLowering.escapes(expanded);
+		var afterEscape = IrEnumTagStorage.adapterNames(expanded).get("Mode");
+		if (afterEscape.box != original.box || afterEscape.unbox != original.unbox)
+			throw "Finishing later escapes changed existing tag adapter linkage";
+		IrVerifier.verify(expanded);
 		var logical = new IrProgram("logical"),
 			body = new IrBuilder(),
 			nominal = body.temporary(Enum("Mode"));

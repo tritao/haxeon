@@ -258,6 +258,18 @@ class IrInterpreter {
 				var element = switch output.type { case Array(element): element; default: throw "Invalid array factory result"; },
 					length = Std.int(value(values, arguments[0]));
 				new InterpArray([for (_ in 0...length) defaultValue(element)], length + 8, element);
+			case Intrinsic(_, EnumDynamicBox(_), [input]) | Intrinsic(_, EnumDynamicView(_), [input]):
+				value(values, input);
+			case Intrinsic(_, EnumTagBox(EnumTag(name)), [input]):
+				var tag:Int = value(values, input), declaration = Lambda.find(program.enums, entry -> entry.name == name);
+				if (tag == 0) null;
+				else if (declaration == null || tag < 0 || tag > declaration.cases.length) throw "Invalid enum tag";
+				else new InterpEnum(name, tag - 1, []);
+			case Intrinsic(_, EnumTagUnbox(EnumTag(name)), [input]):
+				var actual = value(values, input);
+				if (actual == null) 0;
+				else if (!Std.isOfType(actual, InterpEnum) || cast(actual, InterpEnum).type != name) throw 'Invalid cast to $name';
+				else cast(actual, InterpEnum).constructor + 1;
 			case Call(output, name, arguments):
 				var args = [for (argument in arguments) value(values, argument)];
 				if (functions.exists(name)) execute(functions.get(name), args);
@@ -777,7 +789,7 @@ class IrInterpreter {
 				IntToFloat(output, _), IntToInt64(output, _), FloatToInt(output, _), FloatToFloat(output, _), SafeCast(output, _), Catch(output),
 				GlobalGet(output, _), Add(output, _, _), Sub(output, _, _), Mul(output, _, _), Div(output, _, _), Mod(output, _, _), BitAnd(output, _, _),
 				BitXor(output, _, _), BitOr(output, _, _), ShiftLeft(output, _, _), ShiftRight(output, _, _), UnsignedShiftRight(output, _, _),
-				Less(output, _, _), LessEqual(output, _, _), Equal(output, _, _), Call(output, _, _), CNativeCall(output, _, _), StaticClosure(output, _),
+				Less(output, _, _), LessEqual(output, _, _), Equal(output, _, _), Call(output, _, _), Intrinsic(output, _, _), CNativeCall(output, _, _), StaticClosure(output, _),
 				InstanceClosure(output, _, _), CallClosure(output, _, _), ToVirtual(output, _), Upcast(output, _), MethodCall(output, _, _, _, _), NewObject(output, _),
 				FieldGet(output, _, _), ArrayGet(output, _, _), ArraySize(output, _), IteratorNew(output, _), IteratorHasNext(output, _),
 				IteratorNext(output, _), MakeEnum(output, _, _, _), EnumIndex(output, _), EnumField(output, _, _, _): output;

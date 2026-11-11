@@ -970,6 +970,7 @@ class HlLower {
 					case Equal(output, left, right):
 						lowerComparison(output, left, right, 2, nullValues.exists(left.id), nullValues.exists(right.id), registers, registerTypes,
 							instructions);
+					case Intrinsic(_, _, _): throw "Unlowered IR intrinsic reached HashLink";
 					case Call(output, functionName, arguments):
 						if (functionName == compiler.ir.IrReceiverCheck.NAME && nonNull.has(block.id, instructionIndex)) {
 							// A previous successful dereference or check already proved this SSA receiver non-null.

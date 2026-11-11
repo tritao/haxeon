@@ -127,6 +127,8 @@ enum TypedExpressionKind {
 	TArrayUnshift(array:TypedExpression, value:TypedExpression);
 	TArrayPop(array:TypedExpression);
 	TArraySort(array:TypedExpression, comparator:TypedExpression);
+	TEnumDynamicBox(value:TypedExpression, enumType:CompilerType);
+	TEnumDynamicView(array:TypedExpression, enumType:CompilerType);
 }
 
 /** Resolved field initializer in a typed object literal. */
@@ -299,11 +301,12 @@ enum TypedFunctionRole {
 	GenericFunction;
 	LambdaFunction;
 	EqualityFunction;
-	ReflectiveEqualityFunction;
 	HashFunction;
 	KeyPathFunction;
 	IterationFunction;
 	OtherFunction;
+	EnumEqualityFunction;
+	EnumReflectiveEqualityFunction;
 }
 
 /**

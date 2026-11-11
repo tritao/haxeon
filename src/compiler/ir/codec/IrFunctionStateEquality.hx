@@ -54,7 +54,6 @@ class IrFunctionStateEquality {
 			case [GenericSpecialization, GenericSpecialization]: true;
 			case [SourceLambda, SourceLambda]: true;
 			case [Equality, Equality]: true;
-			case [ReflectiveEquality, ReflectiveEquality]: true;
 			case [Hash, Hash]: true;
 			case [KeyPath, KeyPath]: true;
 			case [IterationAdapter, IterationAdapter]: true;
@@ -67,6 +66,9 @@ class IrFunctionStateEquality {
 			case [OptionalValueBoundary, OptionalValueBoundary]: true;
 			case [NullableScalarArguments, NullableScalarArguments]: true;
 			case [ValueArrayElement, ValueArrayElement]: true;
+			case [EnumEquality(aReflective), EnumEquality(bReflective)]: aReflective == bReflective;
+			case [EnumDynamicUnbox(a), EnumDynamicUnbox(b)]: IrVerifier.sameType(a, b);
+			case [EnumTagAdapter(a, ab), EnumTagAdapter(b, bb)]: ab == bb && IrVerifier.sameType(a, b);
 			case [ValueArraySlot(aNamespace, aElement, aOperation), ValueArraySlot(bNamespace, bElement, bOperation)]:
 				aNamespace == bNamespace && IrVerifier.sameType(aElement, bElement) && sameSlotOperation(aOperation, bOperation);
 			case [WasmClosureRestore, WasmClosureRestore]: true;
@@ -267,6 +269,16 @@ class IrFunctionStateEquality {
 			};
 			case Call(output, name, arguments): switch b {
 				case Call(otherOutput, otherName, otherArguments): value(output, otherOutput) && name == otherName && values(arguments, otherArguments);
+				default: false;
+			};
+			case Intrinsic(output, operation, arguments): switch b {
+				case Intrinsic(otherOutput, otherOperation, otherArguments):
+					value(output, otherOutput) && values(arguments, otherArguments) && switch [operation, otherOperation] {
+						case [EnumDynamicBox(aType), EnumDynamicBox(bType)], [EnumDynamicView(aType), EnumDynamicView(bType)],
+							[EnumTagBox(aType), EnumTagBox(bType)], [EnumTagUnbox(aType), EnumTagUnbox(bType)]:
+							IrVerifier.sameType(aType, bType);
+						default: false;
+					};
 				default: false;
 			};
 			case CNativeCall(output, name, arguments): switch b {

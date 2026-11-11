@@ -109,7 +109,7 @@ class InlineEnumLogicalArrayMain {
    var invalid=new IrBuilder(),container=invalid.argument("container",iteratorRead?Iterator(type):arrayType),out=invalid.temporary(type);
    if(iteratorRead)invalid.emit(IteratorNext(out,container));else invalid.emit(ArrayGet(out,container,invalid.constInt(0)));
    invalid.returnValue(out);var rejected=false;
-   try compiler.ir.IrValueArrayElementRewrite.rewrite(new IrFunction("invalid",invalid.arguments,type,invalid.blocks, Ordinary),type,elements)
+   try compiler.ir.IrValueArrayElementRewrite.rewrite(new IrFunction("invalid",invalid.arguments,type,invalid.blocks, Ordinary),type,elements, [])
    catch(error:Dynamic){if(Std.string(error).indexOf("Wrong inline array")<0)throw error;rejected=true;}
    if(!rejected)throw "Logical enum used in place of physical element storage";
   }

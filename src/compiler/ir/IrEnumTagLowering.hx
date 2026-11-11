@@ -6,6 +6,11 @@ import compiler.ir.SourceProvenance.Located;
 /** Select nominal scalar storage independently of payload-enum escape eligibility. */
 class IrEnumTagLowering {
 	public static function run(program:IrProgram):IrProgram {
+		var dynamicUnboxes:Map<String, IrType> = [];
+		for (fn in program.functions) switch fn.kind {
+			case EnumDynamicUnbox(type): dynamicUnboxes.set(fn.name, type);
+			default:
+		}
 		var names:Map<String,
 			Bool> = [for (entry in program.enums) if (IrEnumTagStorage.eligible(entry)) entry.name => true];
 		if (!names.keys().hasNext()) return program;
@@ -45,7 +50,7 @@ class IrEnumTagLowering {
 		// scalar comparisons even with source inlining disabled.
 		var tagEqualities:Map<String, Bool> = [];
 		for (fn in program.functions)
-			if ((switch fn.kind { case Equality, ReflectiveEquality: true; default: false; }) && fn.arguments.length == 2)
+			if ((switch fn.kind { case Equality, EnumEquality(_): true; default: false; }) && fn.arguments.length == 2)
 				switch mapped(fn.arguments[0].type) {
 					case EnumTag(name):
 						if (IrVerifier.sameType(mapped(fn.arguments[1].type), EnumTag(name)))
@@ -70,13 +75,13 @@ class IrEnumTagLowering {
 					physical = mapped(logical),
 					value = b.argument('argument$index', physical);
 				converted.push(switch physical {
-					case EnumTag(enumName): b.safeCast(b.call(IrEnumTagStorage.boxName(enumName), [value], Dyn), logical);
+					case EnumTag(enumName): b.safeCast(b.intrinsic(EnumTagBox(EnumTag(enumName)), [value], Dyn), logical);
 					default: value;
 				});
 			}
 			var called = cNative ? b.cNativeCall(name, converted, result) : b.call(name, converted, result);
 			var returned = switch mapped(result) {
-				case EnumTag(enumName): b.call(IrEnumTagStorage.unboxName(enumName), [b.toDyn(called)], mapped(result));
+				case EnumTag(enumName): b.intrinsic(EnumTagUnbox(EnumTag(enumName)), [b.toDyn(called)], mapped(result));
 				default: called;
 			};
 			b.returnValue(returned);
@@ -212,11 +217,11 @@ class IrEnumTagLowering {
 									replacedIndices.set(right.id, true);
 								case Call(output, name, arguments) | CNativeCall(output, name, arguments) if (nativeWrappers.exists(name)):
 									instruction = Call(use(output), nativeWrappers.get(name), [for (argument in arguments) use(argument)]);
-								case Call(output, name, arguments) if (StringTools.startsWith(name, IrEnumDynamicDispatch.UNBOX_PREFIX)):
-									if (name != IrEnumDynamicDispatch.unboxName(output.type))
+								case Call(output, name, arguments) if (dynamicUnboxes.exists(name)):
+									if (!IrVerifier.sameType(dynamicUnboxes.get(name), output.type))
 										throw "Malformed enum unbox signature";
 									switch use(output).type {
-										case EnumTag(enumName): instruction = Call(use(output), IrEnumTagStorage.unboxName(enumName),
+										case EnumTag(enumName): instruction = Intrinsic(use(output), EnumTagUnbox(EnumTag(enumName)),
 												[for (argument in arguments) use(argument)]);
 										default:
 									}
@@ -308,12 +313,18 @@ class IrEnumTagLowering {
 	static function finishEscapes(program:IrProgram, changedFunctions:Array<IrFunction>):Void {
 		var required:Map<String, Bool> = [];
 		var existing = [for (fn in program.functions) fn.name => fn], adapterEnums:Map<String, String> = [];
-		for (entry in program.enums) if (IrEnumTagStorage.eligible(entry)) {
-			adapterEnums.set(IrEnumTagStorage.boxName(entry.name), entry.name);
-			adapterEnums.set(IrEnumTagStorage.unboxName(entry.name), entry.name);
+		var symbols = IrEnumTagStorage.adapterNames(program);
+		var boxNames:Map<String, String> = [], unboxNames:Map<String, String> = [];
+		for (name => pair in symbols) {
+			boxNames.set(name, pair.box);
+			unboxNames.set(name, pair.unbox);
 		}
-		if (!adapterEnums.keys().hasNext()) return;
-		rewriteEscapes(program, required, adapterEnums, existing, changedFunctions);
+		for (fn in program.functions) switch fn.kind {
+			case EnumTagAdapter(EnumTag(name), _): adapterEnums.set(fn.name, name);
+			default:
+		}
+		if (!symbols.keys().hasNext()) return;
+		rewriteEscapes(program, required, adapterEnums, existing, changedFunctions, boxNames, unboxNames);
 		var names = [for (name in required.keys()) name];
 		names.sort(Reflect.compare);
 		if (names.length > 0 && !Lambda.exists(program.natives, native -> native.name == "__std_is_exact_type"))
@@ -326,8 +337,8 @@ class IrEnumTagLowering {
 			});
 		var declarations = [for (entry in program.enums) entry.name => entry];
 		for (name in names)
-			if (!existing.exists(IrEnumTagStorage.boxName(name)) || !existing.exists(IrEnumTagStorage.unboxName(name)))
-				for (helper in IrEnumTagStorage.adapters(declarations.get(name)))
+			if (!existing.exists(boxNames.get(name)) || !existing.exists(unboxNames.get(name)))
+				for (helper in IrEnumTagStorage.adapters(declarations.get(name), boxNames.get(name), unboxNames.get(name)))
 					if (!existing.exists(helper.name)) {
 						existing.set(helper.name, helper);
 						program.functions.push(helper);
@@ -335,7 +346,8 @@ class IrEnumTagLowering {
 	}
 
 	static function rewriteEscapes(program:IrProgram,
-		required:Map<String, Bool>, adapterEnums:Map<String, String>, functions:Map<String, IrFunction>, selectedFunctions:Array<IrFunction>):Void {
+		required:Map<String, Bool>, adapterEnums:Map<String, String>, functions:Map<String, IrFunction>, selectedFunctions:Array<IrFunction>,
+		boxNames:Map<String, String>, unboxNames:Map<String, String>):Void {
 		var signatures:Map<String, Array<IrType>> = [],
 			objects = [for (object in program.objects) object.name => object],
 			globals = [for (field in program.staticFields) field.name => field.type],
@@ -491,7 +503,7 @@ class IrEnumTagLowering {
 					}
 					var boxed = new IrValue(next++, "$enum-tag:implicit-box", Dyn);
 					required.set(name, true);
-					rewritten.push(new Located(Call(boxed, IrEnumTagStorage.boxName(name), [value]),
+					rewritten.push(new Located(Call(boxed, boxNames.get(name), [value]),
 						currentBlock.instructions[position].provenance));
 					boxed;
 				default: value;
@@ -517,7 +529,7 @@ class IrEnumTagLowering {
 									throw "Expected tag";
 							};
 							required.set(name, true);
-							Call(output, IrEnumTagStorage.boxName(name), [value]);
+							Call(output, boxNames.get(name), [value]);
 						case SafeCast(output, value) if (isTag(output)):
 							markChanged();
 							changed = true;
@@ -528,7 +540,17 @@ class IrEnumTagLowering {
 									throw "Expected tag";
 							};
 							required.set(name, true);
-							Call(output, IrEnumTagStorage.unboxName(name), [value]);
+							Call(output, unboxNames.get(name), [value]);
+						case Intrinsic(output, EnumTagBox(EnumTag(name)), arguments):
+							if (!boxNames.exists(name) || arguments.length != 1 || !IrVerifier.sameType(arguments[0].type, EnumTag(name))
+								|| !IrVerifier.sameType(output.type, Dyn)) throw "Invalid enum tag box signature";
+							markChanged(); changed = true; required.set(name, true);
+							Call(output, boxNames.get(name), arguments);
+						case Intrinsic(output, EnumTagUnbox(EnumTag(name)), arguments):
+							if (!unboxNames.exists(name) || arguments.length != 1 || !IrVerifier.sameType(arguments[0].type, Dyn)
+								|| !IrVerifier.sameType(output.type, EnumTag(name))) throw "Invalid enum tag unbox signature";
+							markChanged(); changed = true; required.set(name, true);
+							Call(output, unboxNames.get(name), arguments);
 						case Call(output, name, arguments):
 							var tagArgument = hasTag(arguments);
 							if (!tagArgument && !isTag(output)) located.value else {

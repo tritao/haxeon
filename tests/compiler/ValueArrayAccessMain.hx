@@ -1172,7 +1172,7 @@ class ValueArrayAccessMain {
 		objects = [for (object in program.objects) object.name => object];
 		program.functions = new compiler.ir.IrNullableScalarFields(program.objects).rewrite(program.functions);
 		program.functions = [for (fn in program.functions) compiler.ir.IrValueArrayOptionalRewrite.rewrite(fn, optionalPairType, optionalPairComponents)];
-		program.functions = [for (fn in program.functions) compiler.ir.IrValueArrayElementRewrite.rewrite(fn, pairType, pairElements)];
+		program.functions = [for (fn in program.functions) compiler.ir.IrValueArrayElementRewrite.rewrite(fn, pairType, pairElements, [])];
 		compiler.ir.IrScalarArguments.rewrite(program);
 		program.functions = [for (fn in program.functions) IrScalarReplacement.rewrite(fn, IrObjectTable.of(objects), false, true)];
 		var scalarArgumentCall = false, scalarElementGet = false, scalarElementSet = false, scalarElementPush = false,

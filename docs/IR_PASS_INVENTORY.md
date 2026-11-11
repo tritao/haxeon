@@ -21,7 +21,9 @@ interpolation are not markers.
   `$lane-storage:`, `$hl:scalar-*`); receiver and reference checks. Deferred: do when this code is next touched.
 - [ ] Scalar arguments/closures and Wasm scalar return, result, rethrow, function and closure-restore markers.
   Deferred: do when this code is next touched.
-- [ ] Enum box/view/unbox/tag markers.
+- [x] Enum box/view/unbox/tag markers: typed operations carry the enum or tag type; checked adapter roles carry the
+  tag type and direction, and opaque linkage IDs replace the encoded descriptors. Array bridges request their tag
+  adapters when they are created.
 - [ ] Other enum test, equality/reflection, inline enum and specialization markers. Deferred: do when this code is next touched.
 - [ ] Value dynamic and interface box/unbox/type-test, typed interface dispatch, checked casts and generic erasure markers.
   Deferred: do when this code is next touched.
@@ -41,6 +43,21 @@ The compiler changes are the typed operations, their verifier and codec, shifted
 and generated enum equality for the new role and operation enum. Nine generated slot functions are renamed; their
 instruction bodies match. In `struct-array-places`, 11 caller bodies change only slot-call names, and the 31 old and
 31 new slot helper bodies match as a multiset. Source snapshots and source-derived debug sections change with the code.
+
+Before rebasing onto upstream's enum-size batch, the enum migration's self-hosted compiler had SHA-256
+`d91a7ed8ae62a2276c9b0184b2b0a2fae23ad57b25e323c7f80a4ecc36e53bc1`, compared with the slot migration above. This is the pre-rebase comparison.
+After matching the old and new helper symbols by their declared signatures, 6,793 normalized function bodies are
+identical. Of the changed functions, 321 differ only in 1,683 method-table indexes: 1,056 calls on `IrBuilder`, 623 on
+`CfgBuilder`, and four on `WasmGcContext` move by one when their new methods are added. Four codec functions change
+their version constants. The remaining 51 functions implement or consume the new operations and roles, generate or
+verify their helpers, or reflect the added payload-free typing roles; enum Dynamic dispatch and its type-test helper
+visit the same descriptors in type order instead of hash order. Fourteen old function signatures disappear and 19 new
+ones appear, including the removed name encoders, new typed builders and adapter request, and functions whose signatures
+carry the new data. Adapter ID planning preserves existing roles when new enum specializations appear and avoids occupied
+symbols. The string/type/global/function/constant tables change by +59/+13/+30/+5/+25 entries respectively; integer,
+float and native counts are unchanged. Function identity, opcode span and source snapshot sections change from
+1,079,960/23,437,284/5,337,080 bytes to 1,078,070/23,484,210/5,348,579 bytes respectively, reflecting renamed helpers,
+changed instructions and the edited compiler sources.
 
 ## Outer gate control evidence (2026-11-10)
 

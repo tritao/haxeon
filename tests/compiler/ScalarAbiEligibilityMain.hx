@@ -12,7 +12,7 @@ class ScalarAbiEligibilityMain {
 	}
 
 	static function main():Void {
-		for (kind in [Ordinary, GenericSpecialization, SourceLambda, Equality, ReflectiveEquality, Hash, KeyPath, IterationAdapter,
+		for (kind in [Ordinary, GenericSpecialization, SourceLambda, Equality, Hash, KeyPath, IterationAdapter,
 			InlineEnumAccess, TypedInterface, ValueUnbox, GenericMethodReference, OptionalScalar(null),
 			OptionalScalar("original"), OptionalValueBoundary, ValueArrayElement]) check(kind, true, true);
 		for (kind in [NullableScalarArguments, WasmClosureRestore]) check(kind, false, true);

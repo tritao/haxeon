@@ -245,7 +245,8 @@ class IrGenerator {
 				case GenericFunction: GenericSpecialization;
 				case LambdaFunction: SourceLambda;
 				case EqualityFunction: Equality;
-				case ReflectiveEqualityFunction: ReflectiveEquality;
+				case EnumEqualityFunction: EnumEquality(false);
+				case EnumReflectiveEqualityFunction: EnumEquality(true);
 				case HashFunction: Hash;
 				case KeyPathFunction: KeyPath;
 				case IterationFunction: IterationAdapter;
@@ -1809,6 +1810,10 @@ class IrGenerator {
 					case TNullLiteral: builder.constNull(Dyn);
 					default: builder.toDyn(lowerExpression(value, builder, localTypes));
 				}
+			case TEnumDynamicBox(value, enumType):
+				builder.intrinsic(compiler.ir.Ir.IrIntrinsic.EnumDynamicBox(lowerType(enumType)), [lowerExpression(value, builder, localTypes)], Dyn);
+			case TEnumDynamicView(array, enumType):
+				builder.intrinsic(compiler.ir.Ir.IrIntrinsic.EnumDynamicView(lowerType(enumType)), [lowerExpression(array, builder, localTypes)], lowerType(expression.type));
 			case TLocal(name):
 				var type = requireLocalType(localTypes, name, 'Missing typed local "$name"');
 				abiBoundaryCast(builder, builder.load(name, type), lowerType(expression.type));

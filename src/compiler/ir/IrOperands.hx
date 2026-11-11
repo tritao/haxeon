@@ -12,7 +12,7 @@ class IrOperands {
 				Div(out, _, _), Mod(out, _, _), BitAnd(out, _, _), BitXor(out, _, _), BitOr(out, _, _), ShiftLeft(out, _, _), ShiftRight(out, _, _),
 				UnsignedShiftRight(out, _, _), Less(out, _, _), LessEqual(out, _, _), Equal(out, _, _), Call(out, _, _), CNativeCall(out, _, _),
 				StaticClosure(out, _), InstanceClosure(out, _, _), CallClosure(out, _, _), ToVirtual(out, _), Upcast(out, _), MethodCall(out, _, _, _, _),
-				NewObject(out, _), FieldGet(out, _, _), ArrayGet(out, _, _), ArraySize(out, _), IteratorNew(out, _), IteratorHasNext(out, _),
+				NewObject(out, _), FieldGet(out, _, _), ArrayGet(out, _, _), ArraySize(out, _), IteratorNew(out, _), IteratorHasNext(out, _), Intrinsic(out, _, _),
 				IteratorNext(out, _), MakeEnum(out, _, _, _), EnumIndex(out, _), EnumField(out, _, _, _): out;
 			case BeginTry(_, _, _), EndTry(_, _), GlobalSet(_, _), FieldSet(_, _, _), ArraySet(_, _, _), MemoryStore(_, _, _): null;
 		};
@@ -58,7 +58,7 @@ class IrOperands {
 				test == null ? [a, b] : test(a) || test(b) ? matchedInputs : noInputs;
 			case ArraySet(array, index, value):
 				test == null ? [array, index, value] : test(array) || test(index) || test(value) ? matchedInputs : noInputs;
-			case Call(_, _, arguments), CNativeCall(_, _, arguments), MakeEnum(_, _, _, arguments):
+			case Call(_, _, arguments), CNativeCall(_, _, arguments), MakeEnum(_, _, _, arguments), Intrinsic(_, _, arguments):
 				if (test == null) arguments else {
 					var found = false;
 					for (argument in arguments)

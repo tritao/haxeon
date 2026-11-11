@@ -5,8 +5,8 @@ import compiler.ir.SourceProvenance.Located;
 
 /** Lower plain array element reads and writes after element-place operations have been separated. */
 class IrValueArrayElementRewrite {
-	public static function rewrite(fn:IrFunction, element:IrType, helpers:IrValueArrayElements):IrFunction {
-		fn = rewriteCheckedSplice(fn, element, helpers);
+	public static function rewrite(fn:IrFunction, element:IrType, helpers:IrValueArrayElements, tagUnboxes:Map<String, IrType>):IrFunction {
+		fn = rewriteCheckedSplice(fn, element, helpers, tagUnboxes);
 		var arrayType:IrType = Array(element), next = 0, changed = false;
 		for (argument in fn.arguments) if (argument.id >= next) next = argument.id + 1;
 		for (block in fn.blocks) for (located in block.instructions) {
@@ -66,7 +66,7 @@ class IrValueArrayElementRewrite {
 		return changed ? fn.withBlocks(blocks) : fn;
 	}
 
-	static function rewriteCheckedSplice(fn:IrFunction, element:IrType, helpers:IrValueArrayElements):IrFunction {
+	static function rewriteCheckedSplice(fn:IrFunction, element:IrType, helpers:IrValueArrayElements, tagUnboxes:Map<String, IrType>):IrFunction {
 		var arrayType:IrType = Array(element), uses:Map<Int, Int> = [], removed:Map<Int, Bool> = [], changed = false;
 		function use(value:IrValue):Void uses.set(value.id, (uses.exists(value.id) ? uses.get(value.id) : 0) + 1);
 		for (block in fn.blocks) {
@@ -95,7 +95,7 @@ class IrValueArrayElementRewrite {
 							case Call(out, conversion, [source]) if (source.id == raw.id && Type.enumEq(out.type, helpers.storage) && uses.get(raw.id) == 1
 									&& (StringTools.startsWith(conversion, IrCheckedDynamicCasts.PREFIX)
 										|| StringTools.startsWith(conversion, IrValueInterfaceBoxes.UNBOX_PREFIX)
-										|| (switch element { case EnumTag(enumName): conversion == IrEnumTagStorage.unboxName(enumName); default: false; }))):
+										|| (tagUnboxes.exists(conversion) && IrVerifier.sameType(element, tagUnboxes.get(conversion))))):
 								instruction = Call(out, name == "__array_pop_ref" ? helpers.popName() : helpers.shiftName(), args);
 								removed.set(raw.id, true); position++; changed = true;
 							default: throw 'Invalid checked value array removal conversion in ${fn.name}: ${block.instructions[position + 1].value}';

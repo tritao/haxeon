@@ -39,7 +39,6 @@ enum IrFunctionKind {
 	GenericSpecialization;
 	SourceLambda;
 	Equality;
-	ReflectiveEquality;
 	Hash;
 	KeyPath;
 	IterationAdapter;
@@ -58,6 +57,9 @@ enum IrFunctionKind {
 	ClosureCast(target:IrType);
 	ClosureVarargs(target:IrType);
 	ValueArraySlot(namespace:Int, element:IrType, operation:IrValueArraySlotOperation);
+	EnumEquality(reflective:Bool);
+	EnumDynamicUnbox(type:IrType);
+	EnumTagAdapter(type:IrType, box:Bool);
 }
 
 /** Verified SSA function with explicit arguments, blocks, and result type. */

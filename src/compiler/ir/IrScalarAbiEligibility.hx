@@ -6,10 +6,10 @@ import compiler.ir.IrFunction.IrFunctionKind;
 class IrScalarAbiEligibility {
 	public static function permits(kind:IrFunctionKind, wasm:Bool):Bool
 		return switch kind {
-			case Ordinary, GenericSpecialization, SourceLambda, Equality, ReflectiveEquality, Hash, KeyPath, IterationAdapter,
+			case Ordinary, GenericSpecialization, SourceLambda, Equality, Hash, KeyPath, IterationAdapter,
 				InlineEnumAccess, TypedInterface, ValueUnbox, GenericMethodReference, OptionalScalar(_),
-				OptionalValueBoundary, ValueArrayElement, ClosureAdapter(_, _), ClosureCast(_), ClosureVarargs(_): true;
+				OptionalValueBoundary, ValueArrayElement, EnumEquality(_), ClosureAdapter(_, _), ClosureCast(_), ClosureVarargs(_): true;
 			case NullableScalarArguments, WasmClosureRestore: wasm;
-			case GeneratedHelper, ScalarArguments, ValueArraySlot(_, _, _): false;
+			case GeneratedHelper, ScalarArguments, ValueArraySlot(_, _, _), EnumDynamicUnbox(_), EnumTagAdapter(_, _): false;
 		};
 }

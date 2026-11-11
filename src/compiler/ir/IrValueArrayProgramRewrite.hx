@@ -185,13 +185,20 @@ class IrValueArrayProgramRewrite {
 	}
 
 	static function rewriteIndexed(program:IrProgram, element:IrType, pointerBits:Int, target:IrValueLaneTarget, index:ValueArrayFunctionIndex, slotNamespace:Int):Void {
+		var tagAdapter = switch element { case EnumTag(name): IrEnumTagStorage.request(program, name); default: null; };
 		var declarations:Map<String, IrObject> = [for (object in program.objects) object.name => object],
+			tagUnboxes:Map<String, IrType> = [],
 			objects = IrObjectTable.of(declarations),
-			factory = new IrValueArrayFactory(objects, element, pointerBits, target, slotNamespace, program.enums),
+			factory = new IrValueArrayFactory(objects, element, pointerBits, target, slotNamespace, program.enums, tagAdapter),
 			elements = new IrValueArrayElements(element, factory.helpers, factory.bridge),
 			methods = new IrValueArrayPlaceMethods(objects, element, factory.helpers),
 			originals = index.originalFunctions(program.functions),
 			rewritten:Null<Array<IrFunction>> = null;
+		switch element {
+			case EnumTag(_):
+				for (fn in program.functions) switch fn.kind { case EnumTagAdapter(type, false): tagUnboxes.set(fn.name, type); default: }
+			default:
+		}
 		var optional:Null<IrValueArrayOptionalComponents> = switch element {
 			case Nullable(Obj(name)) if (declarations.exists(IrOptionalScalarFlow.wrapperName(name))):
 				new IrValueArrayOptionalComponents(objects, element, factory.helpers);
@@ -206,7 +213,7 @@ class IrValueArrayProgramRewrite {
 					current = IrValueArrayPlaceRewrite.rewrite(current, element, objects, factory.helpers, methods, roots);
 				if (optional != null)
 					current = IrValueArrayOptionalRewrite.rewrite(current, element, optional);
-				current = IrValueArrayElementRewrite.rewrite(current, element, elements);
+				current = IrValueArrayElementRewrite.rewrite(current, element, elements, tagUnboxes);
 			}
 			if (selected || index.needsDynamic(fn))
 				current = rewriteDynamicViews(current);

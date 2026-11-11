@@ -242,13 +242,13 @@ class WasmLinearClosureAdapters {
 	}
 
 	function toDynamic(builder:IrBuilder, value:IrValue):IrValue {
-		switch value.type { case EnumTag(name): return builder.call(compiler.ir.IrEnumTagStorage.boxName(name), [value], Dyn); default: }
+		switch value.type { case EnumTag(name): return builder.intrinsic(EnumTagBox(EnumTag(name)), [value], Dyn); default: }
 		var enumName = switch value.type { case Obj(name): inlineEnums.get(name); default: null; };
 		return enumName == null ? builder.toDyn(value) : builder.call(compiler.ir.IrInlineEnumEscapes.boxName(enumName), [value], Dyn);
 	}
 
 	function fromDynamic(builder:IrBuilder, value:IrValue, type:IrType):IrValue {
-		switch type { case EnumTag(name): return builder.call(compiler.ir.IrEnumTagStorage.unboxName(name), [value], type); default: }
+		switch type { case EnumTag(name): return builder.intrinsic(EnumTagUnbox(EnumTag(name)), [value], type); default: }
 		var enumName = switch type { case Obj(name): inlineEnums.get(name); default: null; };
 		return enumName == null ? builder.safeCast(value, type) : builder.call(compiler.ir.IrInlineEnumEscapes.unboxName(enumName), [value], type);
 	}
