@@ -178,7 +178,7 @@ class IrEnumTagLowering {
 						values.set(value.id, new IrValue(value.id, value.name, mapped(value.type)));
 					return values.get(value.id);
 				}
-				var indexTags:Map<Int, IrValue> = [];
+				var indexTags:Map<Int, IrValue> = [], replacedIndices:Map<Int, Bool> = [];
 				for (block in fn.blocks)
 					for (located in block.instructions)
 						switch located.value {
@@ -208,6 +208,8 @@ class IrEnumTagLowering {
 								case Equal(output, left, right) if (indexTags.exists(left.id) && indexTags.exists(right.id)
 									&& IrVerifier.sameType(indexTags.get(left.id).type, indexTags.get(right.id).type)):
 									instruction = Equal(use(output), indexTags.get(left.id), indexTags.get(right.id));
+									replacedIndices.set(left.id, true);
+									replacedIndices.set(right.id, true);
 								case Call(output, name, arguments) | CNativeCall(output, name, arguments) if (nativeWrappers.exists(name)):
 									instruction = Call(use(output), nativeWrappers.get(name), [for (argument in arguments) use(argument)]);
 								case Call(output, name, arguments) if (StringTools.startsWith(name, IrEnumDynamicDispatch.UNBOX_PREFIX)):
@@ -238,6 +240,31 @@ class IrEnumTagLowering {
 						result;
 					}
 				];
+				if (replacedIndices.keys().hasNext()) {
+					var used:Map<Int, Bool> = [];
+					for (block in blocks) {
+						for (located in block.instructions) {
+							for (input in IrOperands.inputs(located.value)) used.set(input.id, true);
+							switch located.value {
+								case Phi(_, inputs): for (input in inputs) used.set(input.value.id, true);
+								default:
+							}
+						}
+						if (block.terminator != null) switch block.terminator.value {
+							case Return(value), Throw(value), Rethrow(value), Branch(value, _, _): used.set(value.id, true);
+							case Jump(_):
+						}
+					}
+					for (binding in fn.debugBindings) used.set(binding.value.id, true);
+					for (block in blocks) {
+						var kept = [for (located in block.instructions) if (switch located.value {
+							case EnumIndex(output, _): !replacedIndices.exists(output.id) || used.exists(output.id);
+							default: true;
+						}) located];
+						block.instructions.splice(0, block.instructions.length);
+						for (located in kept) block.instructions.push(located);
+					}
+				}
 				var rewrittenFunction = new IrFunction(fn.name, [for (argument in fn.arguments) use(argument)], mapped(fn.result), blocks, fn.kind, [
 					for (binding in fn.debugBindings)
 						{
@@ -253,6 +280,19 @@ class IrEnumTagLowering {
 				rewrittenFunction;
 			}
 		];
+		var retained:Map<String, Bool> = [];
+		retained.set(program.entryPoint, true);
+		for (fn in program.functions.concat(generated)) {
+			if (fn.retention != Reachable) retained.set(fn.name, true);
+			for (block in fn.blocks) for (located in block.instructions) switch located.value {
+				case Call(_, name, _), StaticClosure(_, name), InstanceClosure(_, name, _): retained.set(name, true);
+				default:
+			}
+		}
+		for (object in program.objects) for (method in object.methods) retained.set(method.functionName, true);
+		for (native in program.natives) if (native.generatedFunctionDependencies != null)
+			for (name in native.generatedFunctionDependencies) retained.set(name, true);
+		program.functions = [for (fn in program.functions) if (!tagEqualities.exists(fn.name) || retained.exists(fn.name)) fn];
 		program.functions = program.functions.concat(generated);
 		// Only rewritten definitions can introduce tag escapes. Finish that representation transition
 		// here; the later helper pass checks code generated after this lowering.

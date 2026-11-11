@@ -279,6 +279,14 @@ class HlSymbolTable {
 		return index;
 	}
 
+	/** Release-only tags with no boxed use have exactly the ordinary I32 runtime type. */
+	public function internScalarEnumTag(name:String):Void {
+		var key = typeKey(EnumTag(name));
+		if (typeIndices.exists(key)) return;
+		ensureWritable();
+		typeIndices.set(key, internType(I32));
+	}
+
 	public function internType(type:IrType):Int {
 		var key = typeKey(type);
 		if (typeIndices.exists(key))

@@ -72,6 +72,8 @@ class WasmGcModuleBuilder {
 		}), inlineValueFields = true;
 		program = fieldLowering.rewrite();
 		scalarAbi.validate(program);
+		if (options.developmentMetadata == false)
+			program = compiler.ir.IrEnumRuntimeTypes.physical(program);
 		var preferredEntry = WasmModuleSupport.hasFunction(program,
 			"main") ? "main" : WasmModuleSupport.hasFunction(program, "Main.main") ? "Main.main" : program.entryPoint,
 			exportedFunctions = exports,

@@ -149,6 +149,10 @@ class WasmLinearModuleBuilder {
 			signature != null && signature.throwsReceiver ? fn : compiler.ir.IrScalarReplacement.rewrite(fn, physicalObjects, true);
 		}];
 		abi.validate(flattened);
+		if (options.developmentMetadata == false) {
+			flattened = compiler.ir.IrEnumRuntimeTypes.physical(flattened);
+			logical = compiler.ir.IrEnumRuntimeTypes.physical(logical);
+		}
 		var builder = new WasmLinearModuleBuilder(flattened, logical, options, patchChanged, target);
 		builder.boundaryExportNames = boundaryExports;
 		builder.boundaryExportAdapters = exportAdapters;

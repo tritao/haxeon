@@ -348,7 +348,11 @@ class HlLower {
 		}
 		// Patches cannot add object types, so every base module carries String.
 		internType(IrType.Bytes);
-		for (enumDecl in program.enums)
+		var runtimeEnums = developmentMetadata ? program.enums : compiler.ir.IrEnumRuntimeTypes.declarations(program);
+		var boxedEnums = [for (declaration in runtimeEnums) declaration.name => true];
+		for (declaration in program.enums)
+			if (!boxedEnums.exists(declaration.name)) symbols.internScalarEnumTag(declaration.name);
+		for (enumDecl in runtimeEnums)
 			symbols.reserveEnum(enumDecl);
 		for (interfaceDecl in program.interfaces) {
 			symbols.reserveInterface(interfaceDecl.name);
@@ -362,7 +366,7 @@ class HlLower {
 		for (object in program.objects)
 			if (object.isValue)
 				valueObjects.set(object.name, true);
-		for (enumDecl in program.enums)
+		for (enumDecl in runtimeEnums)
 			enumTypeIndices.set(enumDecl.name, symbols.internEnum(enumDecl));
 		var pendingInterfaces = program.interfaces.copy();
 		while (pendingInterfaces.length > 0) {

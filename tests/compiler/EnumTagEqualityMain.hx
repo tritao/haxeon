@@ -44,6 +44,8 @@ class EnumTagEqualityMain {
 								|| !compiler.ir.IrVerifier.sameType(right.type, left.type))
 								throw "Tag equality still compares extracted indices";
 							scalarComparisons++;
+						case EnumIndex(_, _) if (fn.name == "Compare.same"):
+							throw "Direct tag equality retained a dead index extraction";
 						case Call(_, _, _) if (fn.name == "Compare.same"):
 							throw "Tag comparison must make no allocating or equality calls";
 						default:

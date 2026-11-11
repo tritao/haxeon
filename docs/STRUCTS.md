@@ -499,6 +499,17 @@ no untracked cache allocation outlives it. Closure signatures retain this nomina
 Reflected class and anonymous-record fields use logical get/set adapters, so reflective writes cannot store an
 integer or a case of another enum in a tag field. Escaping closures use the same checked box/unbox boundary.
 
+Release modules omit boxed enum descriptors when no boxed carrier or reflective descriptor is reachable.
+After source typing, a closed tag that never crosses such a boundary uses the ordinary integer ABI,
+including integer array allocation, rather than generating lane-array bridges for an unobservable nominal
+descriptor. The escape proof follows class fields and methods, inherited interfaces, arrays, iterators and
+closure signatures transitively. Genuine Dynamic/reflection/native boundaries keep nominal checked adapters.
+Development/live-patch modules retain their descriptors, since subsequent patches can add reflective uses.
+A constant tag constructor is not an allocation safepoint and introduces no GC-root stores.
+`EnumTagReleaseSizeMain` pairs the same release program using a tag enum and an Int abstract (fields, calls,
+closures and arrays), checks that the tag version is no larger on all three targets with inlining off/on,
+and separately verifies nested reflection and erased-array get/set.
+
 `EnumTagStorageMain` checks the nominal IR carrier, its codec, lane layout and malformed-IR rejection.
 `SourceEnumTagMain` checks source-level fields, Flat sizes, nullable tags, arrays/iterators, reflection get/set,
 wrong-type casts, closures and generic fields on HashLink, Wasm32 and Wasm GC with inlining off and on.

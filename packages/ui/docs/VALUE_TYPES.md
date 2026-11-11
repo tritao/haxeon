@@ -5431,7 +5431,7 @@ nominal-tag `Equal`. The 32-case fixture checks nullable tags and struct fields,
 inspects the scalar IR and executes on HashLink, Wasm32 and Wasm GC with inlining
 off/on. Tier 1: **858 passed, 0 failed**; self-hosting reaches identical stage-1
 and stage-2 modules. Module-size checkpoints below track the cumulative fixes;
-the release-growth target remains at most 0.5% for each module.
+the final requirement is zero unexplained growth and zero tag representation overhead.
 
 
 | Release checkpoint | web32 bytes | webgc bytes | editor bytes |
@@ -5464,3 +5464,26 @@ closure field, on all three targets with inlining off/on. Tier 1: 862 passed,
 0 failed; self-hosting fixed point `8044e4d7f1608c185a8e51f0def6b9768788a2747116de8ec5ece3c725df663f`.
 Release size attribution follows after the remaining representation fixes; no
 new paired timing series is used for this closeout.
+
+
+The closed-tag release ABI checkpoint removes descriptors for enums with no boxed or reflective carrier,
+uses ordinary integer arrays when the nominal element descriptor cannot be observed, removes the now-unused
+array factory declaration and equality definitions, and deletes index extraction instructions made dead by
+tag equality lowering. The Wasm GC root planner no longer treats a constant tag constructor as allocating.
+The paired fixture uses the same fields, calls, closure and array operations in both versions:
+
+| Target | Inlining | Int abstract release bytes | Plain enum release bytes | Enum overhead |
+|---|---|---:|---:|---:|
+| HashLink | off | 5,450 | 5,423 | -27 |
+| HashLink | on | 5,443 | 5,419 | -24 |
+| Wasm32 | off | 234,916 | 234,916 | 0 |
+| Wasm32 | on | 234,811 | 234,811 | 0 |
+| Wasm GC | off | 1,904 | 1,904 | 0 |
+| Wasm GC | on | 1,839 | 1,839 | 0 |
+
+Every module executes the same result. Separate release executions cover nested reflective field get/set,
+field names and an erased array round trip, keeping checked nominal escapes intact. This is one small paired
+fixture; no new size-analysis framework or paired timing series is introduced.
+
+Tier 1 for the closed-tag release ABI: **863 passed, 0 failed**; self-hosting fixed point
+`3ac9d78bf737e77c3bfb7d1e1096f01a0b9a7022253646c73a5b08f0ade57c31`.

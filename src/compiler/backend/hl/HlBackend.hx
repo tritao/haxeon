@@ -16,7 +16,9 @@ class HlBackend implements Backend {
 		if (options.target != HashLink)
 			throw 'HashLink backend received target ${options.target}';
 		var indices = new Map<String, Int>(),
-			module = HlLower.lower(program, indices);
+			module = options.developmentMetadata == false
+				? HlLower.lowerStableMeasured(program, new compiler.hl.incremental.HlSymbolTable(), indices, null, null, null, null, 0, false).code
+				: HlLower.lower(program, indices);
 		return {target: HashLink, bytes: HlWriter.encode(module), functionIndices: indices};
 	}
 }
