@@ -70,7 +70,7 @@ class ConversionResolver {
 		}
 		// Preserve null while converting a present nullable element through the abstract's @:from.
 		switch [value.type, expected] {
-			case [TNullable(element), TNullable(target = TAbstract(_, _, _))] if ((switch (session.relations.conversion(element, target)) {
+			case [TNullable(element), TNullable(target)] if ((switch (target) { case TAbstract(_, _, _): true; default: false; }) && (switch (session.relations.conversion(element, target)) {
 				case AbstractCast: true;
 				default: false;
 			})):
