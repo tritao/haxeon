@@ -285,6 +285,8 @@ typedef AstSwitchCase = {
 
 /** Parsed function or method declaration with an unresolved signature and body. */
 typedef AstFunction = {
+	/** Explicit override modifier, checked against inherited instance methods. */
+	final ?isOverride:Bool;
 	final name:String;
 	final isStatic:Bool;
 

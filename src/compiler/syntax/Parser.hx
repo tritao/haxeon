@@ -274,7 +274,7 @@ class Parser {
 				toTypes.push(conversionType);
 		}
 		consume(TokenKind.LeftBrace);
-		var methods = [];
+		var methods:Array<AstFunction> = [];
 		while (!check(TokenKind.RightBrace)) {
 			var methodMetadata = parseMetadata();
 			var isStatic = false, isInline = false;
@@ -585,12 +585,12 @@ class Parser {
 	}
 
 	function parseFunctionBody(start:SourceSpan, name:String, allowMissingReturn:Bool, isStatic:Bool = false, isExtern:Bool = false,
-			?metadata:Array<compiler.syntax.Ast.AstMetadata>, isInline:Bool = false, ?isPublic:Bool):AstFunction {
+			?metadata:Array<compiler.syntax.Ast.AstMetadata>, isInline:Bool = false, ?isPublic:Bool, isOverride:Bool = false):AstFunction {
 		var outer = enterLambdaMember(name);
 		// Error recovery resumes outside this declaration, so the numbering is restored on errors too.
 		var parsed:AstFunction;
 		try {
-			parsed = parseFunctionDeclaration(start, name, allowMissingReturn, isStatic, isExtern, metadata, isInline, isPublic);
+			parsed = parseFunctionDeclaration(start, name, allowMissingReturn, isStatic, isExtern, metadata, isInline, isPublic, isOverride);
 		} catch (error:CompileError) {
 			leaveLambdaMember(outer);
 			throw error;
@@ -600,7 +600,7 @@ class Parser {
 	}
 
 	function parseFunctionDeclaration(start:SourceSpan, name:String, allowMissingReturn:Bool, isStatic:Bool, isExtern:Bool,
-			metadata:Null<Array<compiler.syntax.Ast.AstMetadata>>, isInline:Bool, isPublic:Null<Bool>):AstFunction {
+			metadata:Null<Array<compiler.syntax.Ast.AstMetadata>>, isInline:Bool, isPublic:Null<Bool>, isOverride:Bool):AstFunction {
 		var typeConstraints:Array<compiler.syntax.Ast.AstTypeConstraint> = [],
 			typeParameters = parseTypeParameters(typeConstraints);
 		consume(TokenKind.LeftParen);
@@ -653,6 +653,7 @@ class Parser {
 			name: name,
 			isStatic: isStatic,
 			isPublic: isPublic,
+			isOverride: isOverride,
 			isExtern: isExtern,
 			isInline: isInline,
 			metadata: metadata == null ? [] : metadata,
@@ -756,10 +757,11 @@ class Parser {
 					skipMacroFunction();
 					continue;
 				}
-				var isStatic = false, isInline = false, isFinal = false;
+				var isStatic = false, isInline = false, isFinal = false, isOverride = false;
 				var isPublic:Null<Bool> = null;
 				while (true) {
 					if (current().kind == TokenKind.Identifier && current().text == "override") {
+						isOverride = true;
 						advance();
 						continue;
 					}
@@ -783,7 +785,7 @@ class Parser {
 				if (match(TokenKind.Function)) {
 					var functionStart = previous().span,
 						methodName = check(TokenKind.New) ? advance().text : consume(TokenKind.Identifier).text;
-					methods.push(parseFunctionBody(functionStart, methodName, true, isStatic, isExtern, memberMetadata, isInline, isPublic));
+					methods.push(parseFunctionBody(functionStart, methodName, true, isStatic, isExtern, memberMetadata, isInline, isPublic, isOverride));
 				} else {
 					var fieldStart = current().span;
 					match(TokenKind.Var);
@@ -954,7 +956,7 @@ class Parser {
 				bases.push(parseType());
 		}
 		consume(TokenKind.LeftBrace);
-		var methods = [];
+		var methods:Array<AstFunction> = [];
 		while (!check(TokenKind.RightBrace)) {
 			var methodMetadata = parseMetadata();
 			while (check(TokenKind.Public) || check(TokenKind.Private) || check(TokenKind.Static) || check(TokenKind.Inline))

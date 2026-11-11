@@ -110,6 +110,7 @@ class SemanticSignature {
 		var definitions:Map<String, AstType> = [for (alias in aliases) alias.name => alias.type],
 			typeParameters = fn.typeParameters;
 		return fn.name
+			+ (fn.isOverride == true ? " override" : "")
 			+ (fn.isPublic == null ? "" : fn.isPublic ? " public" : " private")
 			+ (typeParameters == null
 				|| typeParameters.length == 0 ? "" : '<${[for (parameter in typeParameters) parameter + parsedConstraint(fn, parameter, definitions)].join(",")}>')
