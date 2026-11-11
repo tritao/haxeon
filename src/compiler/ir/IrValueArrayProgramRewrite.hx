@@ -167,6 +167,7 @@ class IrValueArrayProgramRewrite {
 		var index = new ValueArrayFunctionIndex([for (key in keys) elements.get(key)]);
 		for (key in keys)
 			rewriteIndexed(program, elements.get(key), pointerBits, target, index);
+		IrArrayFactory.lower(program);
 		IrVerifier.verifyValueArraysLowered(program);
 	}
 
@@ -435,65 +436,19 @@ class IrValueArrayProgramRewrite {
 	}
 
 	static function rewriteAllocations(fn:IrFunction, element:IrType, allocator:String):IrFunction {
-		var arrayType:IrType = Array(element),
-			changed = false,
-			blocks:Array<IrBlock> = [],
-			typeValues:Map<Int, IrType> = [],
-			uses:Map<Int, Int> = [];
-		function use(value:IrValue):Void
-			uses.set(value.id, (uses.exists(value.id) ? uses.get(value.id) : 0) + 1);
+		var arrayType:IrType = Array(element), changed = false, blocks:Array<IrBlock> = [];
 		for (block in fn.blocks) {
+			var target = new IrBlock(block.id);
 			for (located in block.instructions) {
-				for (input in IrOperands.inputs(located.value))
-					use(input);
-				switch located.value {
-					case TypeValue(out, type):
-						typeValues.set(out.id, type);
-					case Phi(_, inputs):
-						for (input in inputs)
-							use(input.value);
-					default:
-				}
-			}
-			if (block.terminator != null)
-				switch block.terminator.value {
-					case Return(value), Throw(value), Rethrow(value), Branch(value, _, _):
-						use(value);
-					default:
-				}
-		}
-		for (block in fn.blocks) {
-			var target = new IrBlock(block.id), position = 0;
-			while (position < block.instructions.length) {
-				var located = block.instructions[position];
-				var instruction = located.value;
-				switch instruction {
-					case Call(out, "__array_alloc_ref", arguments) if (Type.enumEq(out.type, arrayType)):
-						if (arguments.length != 1)
-							throw "Invalid array allocation";
-						instruction = Call(out, allocator, arguments);
+				var instruction = switch located.value {
+					case Call(out, name, arguments) if ((name == IrArrayFactory.NAME || name == "__array_alloc_ref")
+						&& IrVerifier.sameType(out.type, arrayType)):
+						if (arguments.length != 1) throw "Invalid array factory arguments";
 						changed = true;
-					case Call(raw, "__array_alloc_typed_ref", arguments) if (arguments.length == 2
-						&& position + 2 < block.instructions.length):
-						var conversion = block.instructions[position + 1].value,
-							castInstruction = block.instructions[position + 2].value;
-						switch [conversion, castInstruction] {
-							case [ToDyn(boxed, source), SafeCast(out, input)]
-								if (source.id == raw.id && input.id == boxed.id && Type.enumEq(out.type, arrayType)):
-								if (uses.get(raw.id) != 1
-									|| uses.get(boxed.id) != 1
-									|| !typeValues.exists(arguments[1].id)
-									|| !Type.enumEq(typeValues.get(arguments[1].id), switch element { case EnumTag(name): Enum(name); default: element; }))
-									throw "Typed array allocation escapes or has an incompatible element type";
-								instruction = Call(out, allocator, [arguments[0]]);
-								position += 2;
-								changed = true;
-							default:
-						}
-					default:
-				}
+						Call(out, allocator, arguments);
+					default: located.value;
+				};
 				target.instructions.push(new Located(instruction, located.provenance));
-				position++;
 			}
 			target.terminator = block.terminator;
 			blocks.push(target);

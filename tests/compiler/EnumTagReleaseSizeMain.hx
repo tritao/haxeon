@@ -34,8 +34,8 @@ class EnumTagReleaseSizeMain {
 			(nominal ? 'enum Mode implements Equatable { Off; On; Hot; }' : 'enum abstract Mode(Int) { var Off=1; var On=2; var Hot=3; }')
 			+ '\nclass Holder { public var mode:Mode; public function new(mode:Mode) this.mode=mode; }'
 			+ '\nfunction same(a:Mode,b:Mode):Bool return a==b;'
-			+ '\nfunction main():Int { var h=new Holder(On), a:Array<Mode>=[Off,On,Hot], f:Mode->Mode=function(v:Mode):Mode return v; '
-			+ 'a[0]=h.mode; return same(a[0],f(On)) && a[2]==Hot ? 42 : 1; }');
+			+ '\nfunction main():Int { var x:Dynamic=17, y:Dynamic=18; var h=new Holder(On), a:Array<Mode>=[Off,On,Hot], f:Mode->Mode=function(v:Mode):Mode return v; '
+			+ 'a[0]=h.mode; return x!=y && same(a[0],f(On)) && a[2]==Hot ? 42 : 1; }');
 		var program = session.compile("Main").ir;
 		if (nominal && compiler.ir.IrEnumRuntimeTypes.declarations(program).length != 0)
 			throw "Unobserved tag retained a boxed descriptor";
@@ -51,6 +51,9 @@ class EnumTagReleaseSizeMain {
 			+ '\nfunction main():Int { var owner=new Outer(), d:Dynamic=owner, inner=Reflect.field(d,"inner");'
 			+ '\nif(Reflect.fields(d).length!=1 || Reflect.fields(inner).length!=1 || Reflect.field(inner,"mode")!=On) return 1;'
 			+ '\nReflect.setField(inner,"mode",Hot); if(owner.inner.mode!=Hot) return 2;'
+			+ '\nvar record={nested:{mode:On}}, exposed:Dynamic=record, child=Reflect.field(exposed,"nested");'
+			+ '\nif(Reflect.fields(exposed).length!=1 || Reflect.fields(child).length!=1 || Reflect.field(child,"mode")!=On) return 5;'
+			+ '\nReflect.setField(child,"mode",Hot); if(record.nested.mode!=Hot) return 6;'
 			+ '\nvar values:Array<Mode>=[Off,On], erased:Dynamic=values, view:Array<Dynamic>=cast erased;'
 			+ '\nvar recovered:Mode=cast view[1]; if(Type.enumIndex(recovered)!=1) return 3; view[0]=Hot; return values[0]==Hot ? 42 : 4; }');
 		var program = session.compile("Main").ir;

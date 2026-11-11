@@ -45,7 +45,7 @@ class IrEnumTagLowering {
 		// scalar comparisons even with source inlining disabled.
 		var tagEqualities:Map<String, Bool> = [];
 		for (fn in program.functions)
-			if ((switch fn.kind { case Equality: true; default: false; }) && fn.arguments.length == 2)
+			if ((switch fn.kind { case Equality, ReflectiveEquality: true; default: false; }) && fn.arguments.length == 2)
 				switch mapped(fn.arguments[0].type) {
 					case EnumTag(name):
 						if (IrVerifier.sameType(mapped(fn.arguments[1].type), EnumTag(name)))
@@ -539,7 +539,7 @@ class IrEnumTagLowering {
 								} else if (!tagArgument) located.value else {
 									// Lane primitives consume tags directly in the subsequent array rewrite.
 									var lane = arguments.length > 0 && (switch arguments[0].type {
-										case Array(EnumTag(_)): StringTools.startsWith(name, "__array_");
+										case Array(EnumTag(_)): IrArrayRuntimeNatives.isStorage(name);
 										default: false;
 									});
 									var expected = lane ? null : signature(name);

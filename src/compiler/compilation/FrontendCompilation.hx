@@ -661,7 +661,7 @@ class FrontendCompilation {
 				ir.parameterDefaults = parameterDefaults(ir, semantic.signatures);
 			var valueArrayTarget = context.valueArrayTarget();
 			if (!context.developmentMetadata && !context.livePatching)
-				ir = compiler.ir.IrClosedEnumTagAbi.run(ir);
+				ir = compiler.ir.IrClosedEnumTagAbi.run(ir, generated.reflectable);
 			compiler.ir.IrValueArrayProgramRewrite.rewriteAll(ir, valueArrayTarget == HashLink ? 64 : 32, valueArrayTarget);
 			// Scalarize value joins before choosing the scalar call ABI. The HashLink call rewrite can introduce
 			// further value joins, so it needs a second pass after that rewrite.

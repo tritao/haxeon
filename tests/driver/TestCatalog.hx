@@ -219,6 +219,7 @@ class TestCatalog {
 		"WasmStringFinalizationMain",
 		"ReflectionTagProjectionMain",
 		"EnumTagReleaseSizeMain",
+		"EnumEscapeReachMain",
 		"WasmDeepStructureMain",
 		"CHeaderImporterMain",
 		"CxxHeaderImporterMain",

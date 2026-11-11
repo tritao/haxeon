@@ -11,91 +11,12 @@ class IrClosedEnumTagAbi {
 	function new(closed:Map<String, Bool>)
 		this.closed = closed;
 
-	public static function run(program:IrProgram):IrProgram {
-		var closed = select(program);
+	public static function run(program:IrProgram, ?reflectableObjects:Array<String>):IrProgram {
+		var closed = select(program, reflectableObjects);
 		if (!closed.keys().hasNext())
 			return program;
 		var pass = new IrClosedEnumTagAbi(closed);
-		program.functions = [for (fn in program.functions) pass.allocations(fn)];
-		var typedAllocationUsed = false;
-		for (fn in program.functions)
-			for (block in fn.blocks)
-				for (located in block.instructions)
-					switch located.value {
-						case Call(_, "__array_alloc_typed_ref", _):
-							typedAllocationUsed = true;
-						default:
-					}
-		if (!typedAllocationUsed)
-			program.natives = [
-				for (native in program.natives)
-					if (native.name != "__array_alloc_typed_ref") native
-			];
 		return pass.project(program);
-	}
-
-	/** Recognize the checked factory protocol once per function, with the same single-use proof as lane allocation. */
-	function allocations(fn:IrFunction):IrFunction {
-		var descriptors:Map<Int, IrType> = [],
-			uses:Map<Int, Int> = [],
-			changed = false,
-			blocks:Array<IrBlock> = [],
-			removed:Map<Int, Bool> = [];
-		function note(value:IrValue):Void
-			uses.set(value.id, (uses.exists(value.id) ? uses.get(value.id) : 0) + 1);
-		for (block in fn.blocks) {
-			for (located in block.instructions) {
-				for (input in IrOperands.inputs(located.value))
-					note(input);
-				switch located.value {
-					case TypeValue(out, type):
-						descriptors.set(out.id, type);
-					case Phi(_, inputs):
-						for (input in inputs)
-							note(input.value);
-					default:
-				}
-			}
-			if (block.terminator != null)
-				switch block.terminator.value {
-					case Return(value), Throw(value), Rethrow(value), Branch(value, _, _):
-						note(value);
-					case Jump(_):
-				}
-		}
-		for (block in fn.blocks) {
-			var copy = new IrBlock(block.id), index = 0;
-			while (index < block.instructions.length) {
-				var located = block.instructions[index],
-					instruction = located.value;
-				switch instruction {
-					case Call(raw, "__array_alloc_typed_ref", arguments) if (arguments.length == 2 && index + 2 < block.instructions.length):
-						switch [block.instructions[index + 1].value, block.instructions[index + 2].value] {
-							case [ToDyn(boxed, source), SafeCast(out, input)] if (source.id == raw.id && input.id == boxed.id):
-								switch out.type {
-									case Array(EnumTag(name)) if (closed.exists(name)):
-										if (uses.get(raw.id) != 1
-											|| uses.get(boxed.id) != 1
-											|| !IrVerifier.sameType(descriptors.get(arguments[1].id), Enum(name)))
-											throw "Closed enum array allocation escapes or has an incompatible descriptor";
-										instruction = Call(out, "__array_alloc_i32", [arguments[0]]);
-										removed.set(raw.id, true);
-										removed.set(boxed.id, true);
-										changed = true;
-										index += 2;
-									default:
-								}
-							default:
-						}
-					default:
-				}
-				copy.instructions.push(new Located(instruction, located.provenance));
-				index++;
-			}
-			copy.terminator = block.terminator;
-			blocks.push(copy);
-		}
-		return changed ? fn.withBlocks(blocks, [for (binding in fn.debugBindings) if (!removed.exists(binding.value.id)) binding]) : fn;
 	}
 
 	function changes(type:IrType):Bool
@@ -136,163 +57,59 @@ class IrClosedEnumTagAbi {
 		return false;
 	}
 
-	static function select(program:IrProgram):Map<String, Bool> {
+	static function select(program:IrProgram, ?reflectableObjects:Array<String>):Map<String, Bool> {
 		var closed = [for (e in program.enums) if (IrEnumTagStorage.eligible(e)) e.name => true],
-			objects = [for (o in program.objects) o.name => o],
-			enums = [for (e in program.enums) e.name => e],
-			seen:Map<String, Bool> = [],
 			functions = [for (fn in program.functions) fn.name => fn],
 			natives = [for (n in program.natives) n.name => n];
 		if (!closed.keys().hasNext())
 			return closed;
-		var interfaceUsers:Map<String, Array<String>> = [];
-		var interfaces = [for (entry in program.interfaces) entry.name => entry];
-		function register(name:String, objectName:String, visited:Map<String, Bool>):Void {
-			if (visited.exists(name))
-				return;
-			visited.set(name, true);
-			if (!interfaceUsers.exists(name))
-				interfaceUsers.set(name, []);
-			interfaceUsers.get(name).push(objectName);
-			var entry = interfaces.get(name);
-			if (entry != null)
-				for (base in entry.bases)
-					register(base, objectName, visited);
-		}
-		for (object in program.objects) {
-			var seenBases:Map<String, Bool> = [], current = object;
-			while (current != null && !seenBases.exists(current.name)) {
-				seenBases.set(current.name, true);
-				for (name in current.interfaces)
-					register(name, object.name, []);
-				current = current.base == null ? null : objects.get(current.base);
-			}
-		}
-		function escape(type:IrType):Void {
-			var key = Std.string(type);
-			if (seen.exists(key))
-				return;
-			seen.set(key, true);
-			switch type {
-				case Enum(name), EnumTag(name):
-					closed.remove(name);
-					var e = enums.get(name);
-					if (e != null)
-						for (c in e.cases)
-							for (t in c.params)
-								escape(t);
-				case Array(t), Iterator(t), Nullable(t):
-					escape(t);
-				case Function(args, result):
-					for (t in args)
-						escape(t);
-					escape(result);
-				case Obj(name):
-					var o = objects.get(name);
-					if (o != null) {
-						if (o.base != null)
-							escape(Obj(o.base));
-						for (f in o.fields)
-							escape(f.type);
-						for (m in o.methods) {
-							var fn = functions.get(m.functionName);
-							if (fn != null) {
-								for (a in fn.arguments)
-									escape(a.type);
-								escape(fn.result);
-							}
-						}
-					}
-				case Virtual(name):
-					var users = interfaceUsers.get(name);
-					if (users != null)
-						for (name in users)
-							escape(Obj(name));
-				default:
-			}
-		}
+		var roots:Array<IrType> = [];
+		function escape(type:IrType):Void
+			roots.push(type);
+
 		for (n in program.cNatives) {
 			for (a in n.arguments)
-				escape(a);
-			escape(n.result);
+				IrEnumEscapeReach.addNativeRoot(roots, a);
+			IrEnumEscapeReach.addNativeRoot(roots, n.result);
 		}
 		for (n in program.natives)
-			if (!StringTools.startsWith(n.name, "__array_")) {
+			if (!IrArrayRuntimeNatives.isStorage(n.name)) {
 				for (a in n.arguments)
-					escape(a);
-				escape(n.result);
+					IrEnumEscapeReach.addNativeRoot(roots, a);
+				IrEnumEscapeReach.addNativeRoot(roots, n.result);
 			}
 		for (fn in program.functions) {
+			switch fn.kind {
+				case ClosureAdapter(source, target):
+					escape(source);
+					escape(target);
+				case ClosureCast(target), ClosureVarargs(target):
+					escape(target);
+				default:
+			}
 			if (fn.retention == Expose || fn.name == program.entryPoint) {
 				for (a in fn.arguments)
 					escape(a.type);
 				escape(fn.result);
 			}
-			var factoryDescriptors:Map<Int, Bool> = [],
-				factoryCasts:Map<Int, Bool> = [],
-				descriptorUses:Map<Int, Int> = [];
-			for (block in fn.blocks)
-				for (i in 0...block.instructions.length)
-					switch block.instructions[i].value {
-						case Call(raw, "__array_alloc_typed_ref", args) if (args.length == 2 && i + 2 < block.instructions.length):
-							switch [block.instructions[i + 1].value, block.instructions[i + 2].value] {
-								case [ToDyn(boxed,
-									source), SafeCast(out, input)] if (source.id == raw.id && input.id == boxed.id): factoryCasts.set(out.id, true);
-								default:
-							}
-						default:
-					}
-			function noteDescriptor(v:IrValue):Void
-				descriptorUses.set(v.id, (descriptorUses.exists(v.id) ? descriptorUses.get(v.id) : 0) + 1);
-			for (block in fn.blocks) {
-				for (located in block.instructions) {
-					for (v in IrOperands.inputs(located.value))
-						noteDescriptor(v);
-					switch located.value {
-						case Phi(_, inputs):
-							for (input in inputs)
-								noteDescriptor(input.value);
-						default:
-					}
-					switch located.value {
-						case Call(_, "__array_alloc_typed_ref", args) if (args.length == 2):
-							factoryDescriptors.set(args[1].id, true);
-						default:
-					}
-				}
-				if (block.terminator != null)
-					switch block.terminator.value {
-						case Return(v), Throw(v), Rethrow(v), Branch(v, _, _):
-							noteDescriptor(v);
-						case Jump(_):
-					}
-			}
-			for (binding in fn.debugBindings)
-				noteDescriptor(binding.value);
+
 			for (block in fn.blocks) {
 				for (located in block.instructions)
 					switch located.value {
 						case TypeValue(out, type):
-							if (!factoryDescriptors.exists(out.id) || descriptorUses.get(out.id) != 1)
-								escape(type);
+							escape(type);
 						case ToDyn(_, input):
 							escape(input.type);
 						case SafeCast(out, input):
-							if (!factoryCasts.exists(out.id)) {
-								escape(out.type);
-								escape(input.type);
-							}
+							escape(out.type);
+							escape(input.type);
 						case ToVirtual(_, input):
 							escape(input.type);
 						case Call(_, name, args):
 							var native = natives.get(name);
 							if (native != null) {
-								if (StringTools.startsWith(name, "__array_") && name != "__array_alloc_typed_ref")
-									for (a in args)
-										escape(a.type);
-								else if (!StringTools.startsWith(name, "__array_"))
-									for (a in args)
-										escape(a.type);
+								for (argument in args)
+									escape(argument.type);
 							} else {
 								var target = functions.get(name);
 								if (target != null)
@@ -332,6 +149,19 @@ class IrClosedEnumTagAbi {
 					}
 			}
 		}
+		if (ObjectReflection.usesObjectLayouts(program.natives)) {
+			if (reflectableObjects != null)
+				for (name in reflectableObjects)
+					escape(Obj(name));
+			for (object in program.objects)
+				if (object.isValue
+					|| compiler.semantic.SemanticSignature.isAnonymousName(object.name)
+					|| StringTools.startsWith(object.name, IrValueInterfaceBoxes.BOX_PREFIX))
+					escape(Obj(object.name));
+		}
+		for (name in new IrEnumEscapeReach(program).collect(roots, _ -> false).keys())
+			closed.remove(name);
+
 		return closed;
 	}
 
@@ -430,11 +260,7 @@ class IrClosedEnumTagAbi {
 						instruction = TypeValue(output, physical(type));
 					default:
 				}
-				if (!(switch located.value {
-					case TypeValue(_, Enum(name)): closed.exists(name);
-					default: false;
-				}))
-					copy.instructions.push(new Located(instruction, located.provenance));
+				copy.instructions.push(new Located(instruction, located.provenance));
 			}
 			var terminator = block.terminator;
 			if (terminator != null)

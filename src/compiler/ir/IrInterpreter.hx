@@ -254,6 +254,10 @@ class IrInterpreter {
 				};
 			case Call(_, name, arguments) if (name == IrValueLaneReference.PACK || name == IrValueLaneReference.UNPACK):
 				value(values, arguments[0]);
+			case Call(output, IrArrayFactory.NAME, arguments):
+				var element = switch output.type { case Array(element): element; default: throw "Invalid array factory result"; },
+					length = Std.int(value(values, arguments[0]));
+				new InterpArray([for (_ in 0...length) defaultValue(element)], length + 8, element);
 			case Call(output, name, arguments):
 				var args = [for (argument in arguments) value(values, argument)];
 				if (functions.exists(name)) execute(functions.get(name), args);

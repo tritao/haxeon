@@ -299,6 +299,7 @@ enum TypedFunctionRole {
 	GenericFunction;
 	LambdaFunction;
 	EqualityFunction;
+	ReflectiveEqualityFunction;
 	HashFunction;
 	KeyPathFunction;
 	IterationFunction;

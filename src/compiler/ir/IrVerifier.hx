@@ -725,6 +725,13 @@ class IrVerifier {
 						&& !isReference(a.type) && !(switch a.type { case EnumTag(_): true; default: false; })))
 					throw 'IR equality requires matching primitive or reference values';
 			case Call(out, name, args), CNativeCall(out, name, args):
+				if (name == IrArrayFactory.NAME) {
+					switch instruction { case CNativeCall(_, _, _): throw "Array factory is not a C native"; default: }
+					if (args.length != 1 || !sameType(args[0].type, I32)
+						|| !(switch out.type { case Array(_): true; default: false; })) throw "Invalid typed array factory signature";
+					require(values, args[0]);
+					return;
+				}
 				if (IrScalarWordBits.matches(name)) {
 					switch instruction { case CNativeCall(_, _, _): throw "Scalar word transport is not a C native"; default: }
 					if (args.length != 1 || !IrScalarWordBits.valid(name,args[0].type,out.type)) throw "Invalid scalar word transport signature";

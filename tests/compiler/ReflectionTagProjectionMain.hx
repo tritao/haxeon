@@ -75,14 +75,10 @@ class ReflectionTagProjectionMain {
 		var functions:Array<IrFunction> = [],
 			remaining = compiler.ir.ObjectReflection.generate(compiler.ir.ProgramFacts.empty(), natives, objects, ["Holder"], functions);
 		var generated = [for (fn in functions) fn.name => true];
-		if (!generated.exists("read") || !generated.exists("write"))
-			throw "Missing tag box/unbox field projection";
-		if (!generated.exists("count") || !generated.exists("name"))
-			throw "Field listings must retain allocation-free constant names";
-		for (name in ["has", "delete", "copy"])
+		for (name in ["read", "write", "count", "name", "has", "delete", "copy"])
 			if (generated.exists(name) || !Lambda.exists(remaining, native -> native.name == name))
 				throw "Unnecessary tag layout adapter: " + name;
-		Sys.println("PASS: tag-only layouts retain field projections and allocation-free listing, sharing native presence/delete/copy");
+		Sys.println("PASS: tag-only layouts share native checked field operations and listing");
 	}
 
 	static function checkExecution(target:String, inlining:Bool):Void {

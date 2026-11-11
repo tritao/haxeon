@@ -20,7 +20,7 @@ import compiler.ir.SourceProvenance.SourceOrigin;
 
 /** Deterministic framing for a complete SSA IR function. */
 class IrFunctionStateCodec {
-	static inline final VERSION = 14;
+	static inline final VERSION = 15;
 	static inline final MAX_BLOCKS = 0x100000;
 	static inline final MAX_INSTRUCTIONS = 0x1000000;
 
@@ -117,6 +117,7 @@ class IrFunctionStateCodec {
 			case GenericSpecialization: output.writeByte(4);
 			case SourceLambda: output.writeByte(5);
 			case Equality: output.writeByte(6);
+			case ReflectiveEquality: output.writeByte(21);
 			case Hash: output.writeByte(7);
 			case KeyPath: output.writeByte(8);
 			case IterationAdapter: output.writeByte(9);
@@ -212,6 +213,7 @@ class IrFunctionStateCodec {
 				case 4: GenericSpecialization;
 				case 5: SourceLambda;
 				case 6: Equality;
+				case 21: ReflectiveEquality;
 				case 7: Hash;
 				case 8: KeyPath;
 				case 9: IterationAdapter;

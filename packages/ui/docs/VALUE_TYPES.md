@@ -5439,6 +5439,7 @@ the final requirement is zero unexplained growth and zero tag representation ove
 | Pre-enum `9180b6d8` | 6,728,120 | 3,922,261 | 28,562,565 |
 | Initial enum candidate `1d286898` | 6,947,390 | 4,008,481 | 28,899,137 |
 | Constant-size tag equality (`127db7b2`, rebased as `bd18d35a`) | 6,932,990 | 3,994,431 | 28,897,242 |
+| Shared stringifier, reflection and closed-tag ABI (`d2ca28aa`) | 6,631,066 | 3,983,236 | 28,303,948 |
 
 After rebasing onto `9baf8a31`, equality recognition uses the declared `Equality`
 function role, including in the IR fixture. It does not infer the role from a
@@ -5487,3 +5488,61 @@ fixture; no new size-analysis framework or paired timing series is introduced.
 
 Tier 1 for the closed-tag release ABI: **863 passed, 0 failed**; self-hosting fixed point
 `3ac9d78bf737e77c3bfb7d1e1096f01a0b9a7022253646c73a5b08f0ade57c31`.
+
+
+The structural follow-up to `d2ca28aa` shares `IrEnumEscapeReach` between payload
+eligibility, closed-tag ABI selection and reflected Dynamic descriptor
+registration. Both storage decisions reject the same class/interface/container
+and closure escape graph; registered layouts include anonymous records. Map
+writes and bound receiver environments are indexed once, and native opaque
+handles remain ABI leaves. The array factory carries `Array(element)` directly
+until storage selection and emits I32 allocation for a closed tag without an
+allocation/cast sequence matcher.
+
+The strengthened paired release fixture includes an unrelated Dynamic comparison
+alongside fields, calls, closures and arrays. Nested declared classes and anonymous
+records retain reflection get/set/listing and erased-array round trips. Results
+with inlining off/on:
+
+| Target | Int abstract bytes, off/on | Enum bytes, off/on | Representation growth |
+|---|---:|---:|---:|
+| HashLink | 5,509 / 5,502 | 5,483 / 5,478 | -26 / -24 |
+| Wasm32 | 235,164 / 235,039 | 235,164 / 235,039 | 0 / 0 |
+| Wasm GC | 2,514 / 2,449 | 2,514 / 2,449 | 0 / 0 |
+
+Reflective equality now has a declared function role. Requesting an unused helper
+cannot register its enum for Dynamic equality; reflected layouts and native
+signatures still register genuinely exposed values, including incremental
+compilations. The all-target fixtures retain custom declared equality through
+reflected fields and arrays. Tag-only fields use the native runtime projection,
+including field listing, rather than generated per-layout adapters.
+
+The shared reach query memoizes each value/reference shape and indexes static
+fields by owner. Its regression fixture includes a 32-level diamond of enum
+payloads, along with interface inheritance, derived class fields, static fields,
+erased map contents and bound closure receivers. Unknown array-native names
+fail closed, including a forged array-prefixed native with a Dynamic argument;
+a forged invalid typed factory is rejected by the IR verifier.
+
+Tier 1 for the structural follow-up: **864 passed, 0 failed** with eight workers.
+Self-hosting stages are identical at **36,695,628 bytes**, SHA-256
+`58b21dd4b1446a6a4c90b29ea58ff2a00058f4d6d0875126a4e83f86bdbf4e2d`.
+The focused release-size, transitive Dynamic/reflection, tag-field projection,
+array-place and incremental equality fixtures pass on all three targets with
+inlining off/on. No paired timing series is added for these size corrections.
+
+Release checkpoint after the shared reach/factory correction, against frozen
+pre-enum control `9180b6d8` (same app and Showcase inputs, counters off):
+
+| Module | Control bytes | Checkpoint bytes | Delta |
+|---|---:|---:|---:|
+| Showcase Wasm32 | 6,728,120 | 6,630,713 | -97,407 |
+| Showcase Wasm GC | 3,922,261 | 3,982,976 | +60,715 |
+| HashLink editor | 28,562,565 | 27,402,978 | -1,159,587 |
+
+This is an intermediate size receipt, not acceptance of the remaining growth.
+Attribution found a redundant Wasm32 native closure-receiver probe: its identical
+217-byte physical body is emitted 122 times, once per semantic native alias,
+versus 42 copies in the control. The semantic signatures must remain distinct
+for checked Dynamic closure restoration; their physical native implementation
+can be shared. That correction and the complete release ledger precede publication.

@@ -245,6 +245,7 @@ class IrGenerator {
 				case GenericFunction: GenericSpecialization;
 				case LambdaFunction: SourceLambda;
 				case EqualityFunction: Equality;
+				case ReflectiveEqualityFunction: ReflectiveEquality;
 				case HashFunction: Hash;
 				case KeyPathFunction: KeyPath;
 				case IterationFunction: IterationAdapter;
@@ -3644,7 +3645,7 @@ class IrGenerator {
 		var elementType = lowerType(element),
 			arrayType:IrType = Array(elementType);
 		if (profile.nativeArrayChecks && RuntimeType.requireArrayName(element) == "ref" && !IrTypeTools.isDynamic(elementType))
-			return builder.safeCast(builder.toDyn(builder.call("__array_alloc_typed_ref", [length, builder.typeValue(elementType)], Array(Dyn))), arrayType);
+			return builder.call(IrArrayFactory.NAME, [length], arrayType);
 		return builder.call(arrayAllocatorName(element), [length], arrayType);
 	}
 

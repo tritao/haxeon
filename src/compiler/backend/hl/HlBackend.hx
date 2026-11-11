@@ -15,6 +15,7 @@ class HlBackend implements Backend {
 	public function compile(program:IrProgram, options:BackendOptions):BackendResult {
 		if (options.target != HashLink)
 			throw 'HashLink backend received target ${options.target}';
+		program = compiler.ir.IrArrayFactory.physical(program);
 		var indices = new Map<String, Int>(),
 			module = options.developmentMetadata == false
 				? HlLower.lowerStableMeasured(program, new compiler.hl.incremental.HlSymbolTable(), indices, null, null, null, null, 0, false).code

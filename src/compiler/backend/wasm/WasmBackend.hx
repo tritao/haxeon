@@ -72,6 +72,7 @@ class WasmBackend implements Backend {
 		// Wasm currently uses dynamic boxes for all nullables; inline struct optionals must run before this erasure.
 		// Profiler probes record nothing on wasm yet.
 		var target = WasmTarget.forBackend(options.target, options.debugNames);
+		program = compiler.ir.IrArrayFactory.physical(program);
 		program = compiler.ir.IrInstrumentation.strip(program);
 		// Capture lane shapes while nullable element/field types still retain their logical layout.
 		var scalarAccessors = target.referenceModel == Gc ? new compiler.backend.wasm.gc.WasmGcValueArrayAccessors(program) : null;

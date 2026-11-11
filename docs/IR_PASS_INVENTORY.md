@@ -268,3 +268,35 @@ By edit cost, with what must come first:
 - The inliner span: how much of its 31.2M is per-build setup that scales with the program, not with the edit?
 - `IrStaticNullChecks` keeps its own `__init` reachability fixpoint (`IrInitializationCalls`); is that a (c) pass or a (b) pass over a
   call-graph summary? Its cost (0.4M) does not decide the order, but the interface does.
+
+## Enum escape reach and array factories
+
+`IrEnumEscapeReach` owns the transitive storage reach used by
+`IrInlineEnumEligibility`, `IrClosedEnumTagAbi` and reflected Dynamic descriptor
+registration. It follows class and anonymous record fields, inherited interfaces and fields, registered reflection layouts,
+static fields, containers, erased map contents and closure environments. The
+callers supply their escape roots and whether a verified callable adapter covers
+a value boundary; none maintains a second reference-reach traversal. Opaque
+native handles are reference leaves at the native ABI; a reflective root reaching an erased map
+through a field follows the indexed contents and captured receiver types.
+
+`IrArrayFactory.NAME` is a typed logical allocation intrinsic. Its output carries
+`Array(element)` directly; it has no Dynamic temporary or descriptor. After
+storage selection, lane factories consume requests for their shapes and the
+ordinary factory emits the physical allocator. Closed tags therefore request an
+I32 allocation at emission, without matching an allocation/cast instruction
+sequence. Ordinary checked reference allocations acquire their descriptors only
+when that physical factory is emitted. The interpreter executes the typed
+intrinsic directly; standalone backends use the same physical factory on an
+immutable program view if no frontend lane pipeline has run.
+
+The reach query memoizes value and reference shapes independently, indexes static
+fields by owner and map writes/captured receivers by their semantic carrier, and
+shares inherited-interface indexes across queries. A 32-level diamond value graph
+checks that shared children are visited once rather than expanded per path.
+
+**a1 debt:** runtime array natives still lack declared operation roles.
+`IrArrayRuntimeNatives` is the single exact-name registry used by enum escape
+classification and tag escape adaptation; unknown names are never exempted by
+a prefix. Replace this registry with native roles when the runtime-surface
+migration reaches arrays.

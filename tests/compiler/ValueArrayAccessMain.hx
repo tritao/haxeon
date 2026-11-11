@@ -91,7 +91,7 @@ class ValueArrayAccessMain {
 		var typedFrontend = compiler.ir.IrProgramAssembler.generate(compiler.types.Typer.type(typedAst), compiler.ir.TargetProfile.portable.withNativeArrayChecks(true));
 		var hasTypedAllocation = false;
 		for (fn in typedFrontend.functions) if (fn.name == "main") for (block in fn.blocks) for (located in block.instructions) switch located.value {
-			case Call(_, "__array_alloc_typed_ref", _): hasTypedAllocation = true;
+			case Call(_, compiler.ir.IrArrayFactory.NAME, _): hasTypedAllocation = true;
 			default:
 		}
 		if (!hasTypedAllocation) throw "Checked frontend did not generate a typed array allocation";

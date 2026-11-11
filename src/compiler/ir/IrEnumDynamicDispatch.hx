@@ -11,7 +11,7 @@ class IrEnumDynamicDispatch {
 	public static inline final EQUAL = "$enum-dynamic-equal";
 	public static inline final REFLECT = "$enum-dynamic-reflect";
 
-	public static function rewrite(functions:Array<IrFunction>):Array<IrFunction> {
+	public static function rewrite(functions:Array<IrFunction>, ?reflectionProgram:IrProgram, ?reflectableObjects:Array<String>):Array<IrFunction> {
 		var requests:Map<String, IrType> = [], boxes:Map<String, Bool> = [], views:Map<String, Bool> = [],
 			functionNames:Map<String, Bool> = [for (fn in functions) fn.name => true], needsEqual = false, needsReflect = false;
 		function register(name:String, type:IrType):Void {
@@ -20,12 +20,6 @@ class IrEnumDynamicDispatch {
 			requests.set(name, type);
 		}
 		for (fn in functions) {
-			var prefix = StringTools.startsWith(fn.name, "$enum-equals:") ? "$enum-equals:"
-				: StringTools.startsWith(fn.name, "$enum-reflect-equals:") ? "$enum-reflect-equals:" : null;
-			if (prefix != null && fn.arguments.length == 2) switch fn.arguments[0].type {
-				case Enum(_): register(EnumDynamicBox.PREFIX + fn.name.substr(prefix.length), fn.arguments[0].type);
-				default:
-			}
 			for (block in fn.blocks) for (located in block.instructions) switch located.value {
 				case Call(output, name, arguments) if (StringTools.startsWith(name, EnumDynamicBox.PREFIX)):
 					if (arguments.length != 1 || !IrVerifier.sameType(output.type, Dyn)) throw 'Invalid enum Dynamic escape "$name"';
@@ -44,10 +38,48 @@ class IrEnumDynamicDispatch {
 				default:
 			}
 		}
+		if (reflectionProgram != null) {
+			var roots:Array<IrType> = [];
+			if (ObjectReflection.usesObjectLayouts(reflectionProgram.natives)) {
+				if (reflectableObjects != null) for (name in reflectableObjects) roots.push(Obj(name));
+				for (object in reflectionProgram.objects)
+					if (compiler.semantic.SemanticSignature.isAnonymousName(object.name)) roots.push(Obj(object.name));
+			}
+			for (native in reflectionProgram.natives) if (!IrArrayRuntimeNatives.isStorage(native.name)) {
+				for (argument in native.arguments) IrEnumEscapeReach.addNativeRoot(roots, argument);
+				IrEnumEscapeReach.addNativeRoot(roots, native.result);
+			}
+			for (native in reflectionProgram.cNatives) {
+				for (argument in native.arguments) IrEnumEscapeReach.addNativeRoot(roots, argument);
+				IrEnumEscapeReach.addNativeRoot(roots, native.result);
+			}
+			var observed = new IrEnumEscapeReach(reflectionProgram).collect(roots, _ -> false);
+			for (fn in functions) switch fn.kind {
+				case Equality, ReflectiveEquality:
+					if (fn.arguments.length == 2) switch fn.arguments[0].type {
+						case Enum(name) if (observed.exists(name)):
+							register(EnumDynamicBox.PREFIX + fn.name.substr(fn.name.length - EnumRuntimeType.HASH_LENGTH), fn.arguments[0].type);
+						default:
+					}
+				default:
+			}
+		}
+
+		var reflectiveRoots = needsReflect ? [for (name in requests.keys())
+			"$enum-reflect-equals:" + name.substr(EnumDynamicBox.PREFIX.length)] : [];
+		functions = pruneReflectiveHelpers(functions, reflectiveRoots);
+		// A requested helper is not an escape. Register only helpers retained by real calls,
+		// or by reflective dispatch for a value that actually crosses a boxed boundary.
+		for (fn in functions) switch fn.kind {
+			case ReflectiveEquality:
+				if (fn.arguments.length == 2) switch fn.arguments[0].type {
+					case Enum(_): register(EnumDynamicBox.PREFIX + fn.name.substr("$enum-reflect-equals:".length), fn.arguments[0].type);
+					default:
+				}
+			default:
+		}
 		var names = [for (name in requests.keys()) name]; names.sort(Reflect.compare);
-		// Descriptor discovery above still needs every concrete reflected enum. Its structural
-		// equality body is needed only when a reachable Type.enumEq operation can call it.
-		if (!needsReflect) functions = pruneReflectiveHelpers(functions);
+
 		var boxNames = [for (name in boxes.keys()) name]; boxNames.sort(Reflect.compare);
 		for (name in boxNames) if (!functionNames.exists(name)) {
 			var builder = new IrBuilder(), value = builder.argument("value", requests.get(name));
@@ -96,12 +128,13 @@ class IrEnumDynamicDispatch {
 	}
 
 	/** Keep typed reflective equality roots and their nested enum dependencies. */
-	static function pruneReflectiveHelpers(functions:Array<IrFunction>):Array<IrFunction> {
-		var prefix = "$enum-reflect-equals:", helpers:Map<String, IrFunction> = [], live:Map<String, Bool> = [], pending:Array<String> = [];
-		for (fn in functions) if (StringTools.startsWith(fn.name, prefix)) helpers.set(fn.name, fn);
+	static function pruneReflectiveHelpers(functions:Array<IrFunction>, roots:Array<String>):Array<IrFunction> {
+		var helpers:Map<String, IrFunction> = [], live:Map<String, Bool> = [], pending:Array<String> = [];
+		for (fn in functions) switch fn.kind { case ReflectiveEquality: helpers.set(fn.name, fn); default: }
 		function mark(name:String):Void {
 			if (helpers.exists(name) && !live.exists(name)) { live.set(name, true); pending.push(name); }
 		}
+		for (name in roots) mark(name);
 		function scan(fn:IrFunction):Void {
 			for (block in fn.blocks) for (located in block.instructions) switch located.value {
 				case Call(_, name, _), StaticClosure(_, name), InstanceClosure(_, name, _): mark(name);
@@ -109,11 +142,11 @@ class IrEnumDynamicDispatch {
 			}
 		}
 		for (fn in functions)
-			if (!StringTools.startsWith(fn.name, prefix)) scan(fn);
+			if (!helpers.exists(fn.name)) scan(fn);
 			else if (fn.retention != compiler.ir.IrFunction.IrRetention.Reachable) mark(fn.name);
 		var index = 0;
 		while (index < pending.length) scan(helpers.get(pending[index++]));
-		return [for (fn in functions) if (!StringTools.startsWith(fn.name, prefix) || live.exists(fn.name)) fn];
+		return [for (fn in functions) if (!helpers.exists(fn.name) || live.exists(fn.name)) fn];
 	}
 
 	static function isEnum(type:IrType):Bool return switch type { case Enum(_): true; default: false; };

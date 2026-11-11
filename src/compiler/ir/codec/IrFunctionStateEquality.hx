@@ -53,6 +53,7 @@ class IrFunctionStateEquality {
 			case [GenericSpecialization, GenericSpecialization]: true;
 			case [SourceLambda, SourceLambda]: true;
 			case [Equality, Equality]: true;
+			case [ReflectiveEquality, ReflectiveEquality]: true;
 			case [Hash, Hash]: true;
 			case [KeyPath, KeyPath]: true;
 			case [IterationAdapter, IterationAdapter]: true;

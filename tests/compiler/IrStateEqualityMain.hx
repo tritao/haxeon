@@ -45,7 +45,7 @@ class IrStateEqualityMain {
 		compare(adapter, castFunction);
 		compare(adapter, otherAdapter);
 		compare(body, adapter);
-		for (kind in [GenericSpecialization, SourceLambda, Equality, Hash, KeyPath, IterationAdapter,
+		for (kind in [GenericSpecialization, SourceLambda, Equality, ReflectiveEquality, Hash, KeyPath, IterationAdapter,
 			GeneratedHelper, ScalarArguments, InlineEnumAccess, TypedInterface, ValueUnbox, GenericMethodReference,
 			OptionalScalar(null), OptionalScalar("owner.method"), OptionalValueBoundary, NullableScalarArguments,
 			ValueArrayElement, WasmClosureRestore]) {

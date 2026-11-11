@@ -528,8 +528,17 @@ class IrProgramAssembler {
 				builder.returnValue(builder.constInt(count));
 				allFunctions.push(new IrFunction(object.name + ".$haxeonObservableFieldCount", builder.arguments, I32, builder.blocks, Ordinary));
 			}
-		if (objects != null)
-			allFunctions = IrEnumDynamicDispatch.rewrite(allFunctions);
+		if (objects != null) {
+			var reflectionInput = new IrProgram(entryPoint == null ? "main" : entryPoint);
+			reflectionInput.objects = objects;
+			reflectionInput.interfaces = interfaces == null ? [] : interfaces;
+			reflectionInput.enums = enums == null ? [] : enums;
+			reflectionInput.staticFields = staticFields == null ? [] : staticFields;
+			reflectionInput.functions = allFunctions;
+			reflectionInput.natives = natives == null ? [] : natives;
+			reflectionInput.cNatives = cNatives == null ? [] : cNatives;
+			allFunctions = IrEnumDynamicDispatch.rewrite(allFunctions, reflectionInput, reflectableObjects);
+		}
 		if (objects != null)
 			allFunctions = IrValueDynamicDispatch.rewrite(allFunctions, objects);
 		if (objects != null)
@@ -644,7 +653,7 @@ class IrProgramAssembler {
 								needsExactTypeTestRuntime = true;
 							if (name == "__reflect_dynamic_object" || name == "__reflect_set_field")
 								needsDynamicObjectRuntime = true;
-							if (StringTools.startsWith(name, "__array_"))
+							if (name == IrArrayFactory.NAME || StringTools.startsWith(name, "__array_"))
 								needsArrayRuntime = true;
 							if (name == "__array_alloc_typed_ref")
 								needsTypedRefArrayRuntime = true;

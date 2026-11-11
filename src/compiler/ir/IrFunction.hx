@@ -30,6 +30,7 @@ enum IrFunctionKind {
 	GenericSpecialization;
 	SourceLambda;
 	Equality;
+	ReflectiveEquality;
 	Hash;
 	KeyPath;
 	IterationAdapter;

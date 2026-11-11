@@ -131,7 +131,7 @@ class EnumEqualityGenerator {
 		}
 		return {
 			name: reflective ? reflectiveName(type) : equalsName(type),
-			role: EqualityFunction,
+			role: reflective ? ReflectiveEqualityFunction : EqualityFunction,
 			origin: req.origin,
 			originKind: Helper,
 			typeArguments: null,
