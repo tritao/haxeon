@@ -1,5 +1,47 @@
 #!/usr/bin/env bash
+# Runs the FFI audit (FfiAuditMain) as HashLink bytecode built by the checked-in haxeon compiler,
+# rebuilding out/haxeon-ffi-audit.hl when it is missing or older than the compiler or its sources.
+#
+# Recovery: HAXEON_STOCK_HAXE_TOOLS=1 runs it under the pinned stock Haxe interpreter instead
+# (NATIVEKIT_HAXE_BIN, if set, names that Haxe binary).
 set -euo pipefail
 root_dir=$(cd "$(dirname "$0")/.." && pwd)
-haxe_bin=${NATIVEKIT_HAXE_BIN:-"$root_dir/.tools/haxe/haxe"}
-exec "$haxe_bin" -cp "$root_dir/src" --run FfiAuditMain "$@"
+
+if [[ ${HAXEON_STOCK_HAXE_TOOLS:-} == 1 ]]; then
+	haxe_bin=${NATIVEKIT_HAXE_BIN:-"$root_dir/.tools/haxe/haxe"}
+	exec "$haxe_bin" -cp "$root_dir/src" --run FfiAuditMain "$@"
+fi
+
+hl="$root_dir/.tools/hashlink/hl"
+compiler="$root_dir/bootstrap/compiler.hl"
+tool="$root_dir/out/haxeon-ffi-audit.hl"
+library_path="$root_dir/out:$root_dir/.tools/hashlink"
+case "$(uname -s)" in
+Darwin) export DYLD_LIBRARY_PATH="$library_path${DYLD_LIBRARY_PATH:+:$DYLD_LIBRARY_PATH}" ;;
+MINGW* | MSYS* | CYGWIN*) export PATH="$root_dir/out:$root_dir/.tools/hashlink:$PATH" ;;
+*) export LD_LIBRARY_PATH="$library_path${LD_LIBRARY_PATH:+:$LD_LIBRARY_PATH}" ;;
+esac
+
+stale=0
+if [[ ! -f $tool || $compiler -nt $tool ]]; then
+	stale=1
+elif [[ -n $(cd "$root_dir" && find src stdlib -name '*.hx' -newer "$tool" -print -quit) ]]; then
+	stale=1
+fi
+if ((stale)); then
+	mkdir -p "$root_dir/out"
+	work=$(mktemp -d "$root_dir/out/haxeon-ffi-audit.XXXXXX")
+	trap 'rm -rf -- "$work"' EXIT
+	(cd "$root_dir" && find src stdlib -name '*.hx' | LC_ALL=C sort) >"$work/sources.txt"
+	if ! (cd "$root_dir" && "$hl" "$compiler" "--output=$work/haxeon-ffi-audit.hl" --entry=FfiAuditMain --root=src \
+		--root=stdlib "--sources-file=$work/sources.txt") >"$work/build.log" 2>&1; then
+		tail -n 20 "$work/build.log" >&2
+		echo "haxeon-ffi-audit: could not build FfiAuditMain with $compiler" >&2
+		echo "(HAXEON_STOCK_HAXE_TOOLS=1 runs it under the pinned Haxe instead)" >&2
+		exit 1
+	fi
+	mv -f "$work/haxeon-ffi-audit.hl" "$tool"
+	rm -rf -- "$work"
+	trap - EXIT
+fi
+exec "$hl" "$tool" "$@"
