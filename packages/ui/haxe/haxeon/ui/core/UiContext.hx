@@ -87,6 +87,7 @@ class UiContext {
 	var submittedInteractionRevision:Int;
 	var submittedRetainedEditRevision:Int = 0;
 	var submittedPatchRequestRevision:Int = 0;
+	var submittedBindingRequestRevision:Int = 0;
 	var submittedStyleRevision:Int;
 	var submittedAnimationRevision:Int;
 	var submittedGestureRevision:Int;
@@ -214,6 +215,9 @@ class UiContext {
 		animations.onFrameRequested = function() {
 			if (!disposed && onAnimationFrameRequested != null)
 				onAnimationFrameRequested();
+		};
+		buildContext.onBindingFrameRequested = function() {
+			if (!disposed && onAnimationFrameRequested != null) onAnimationFrameRequested();
 		};
 		lastFrameMetrics = null;
 		frameNumber = 0;
@@ -457,6 +461,8 @@ class UiContext {
 		if (frame == null || build == null)
 			throw "A UI frame requires a view and layout frame";
 		@:privateAccess buildContext.buildFeedbackPass = buildFeedbackPass;
+		// Consume the request before running user getters so a failed effect can schedule a later retry.
+		var bindingAppliedRevision = buildContext.consumeBindingFrameRequest();
 		ReactiveRuntime.flushEffects();
 		var styleResolutionsBefore = buildContext.styleResolver.resolutions;
 		var styleCacheHitsBefore = buildContext.styleResolver.cacheHits;
@@ -478,7 +484,13 @@ class UiContext {
 			reuse = hoverPaintNodes >= 0;
 		}
 		var localPatchPending = buildContext.hasPendingPatches && !rootReactiveDirty;
-		var patchOnly = !reuse && localPatchPending && (!reconcileNewFocus || cacheKey != null);
+		var bindingOnly = cacheKey != null && root != null && submittedBuildKey == cacheKey && !rootReactiveDirty &&
+			buildContext.bindingRequestRevision != submittedBindingRequestRevision &&
+			interactionStates.revision == submittedInteractionRevision && buildContext.styleRevision == submittedStyleRevision &&
+			submittedFrameWidth == frame.width && submittedFrameHeight == frame.height &&
+			animations.revision == submittedAnimationRevision && gestures.revision == submittedGestureRevision &&
+			buildContext.theme == submittedTheme && buildContext.styleSheet == submittedStyleSheet;
+		var patchOnly = !reuse && (localPatchPending || bindingOnly) && (!reconcileNewFocus || cacheKey != null);
 		if (!patchOnly && !reuse && reconcileNewFocus && cacheKey != null && buildFeedbackPass == 0)
 			patchOnly = planInteractionPatches(cacheKey, frame);
 		if (reuse) {
@@ -729,6 +741,7 @@ class UiContext {
 		submittedAnimationRevision = animations.revision;
 		submittedRetainedEditRevision = buildContext.retainedEditRevision;
 		submittedPatchRequestRevision = buildContext.patchRequestRevision;
+		submittedBindingRequestRevision = bindingAppliedRevision;
 		submittedGestureRevision = gestures.revision;
 		submittedNodeCount = nodeCount;
 		submittedFrameWidth = frame.width;
@@ -1415,6 +1428,8 @@ class UiContext {
 		if (buildContext.retainedEditRevision != submittedRetainedEditRevision)
 			result |= UiDirtyFlag.NeedsStyle | UiDirtyFlag.NeedsLayout | UiDirtyFlag.NeedsPaint |
 				UiDirtyFlag.NeedsComposite | UiDirtyFlag.NeedsHitGeometry;
+		if (buildContext.bindingRequestRevision != submittedBindingRequestRevision)
+			result |= UiDirtyFlag.NeedsTextLayout | UiDirtyFlag.NeedsLayout | UiDirtyFlag.NeedsPaint | UiDirtyFlag.NeedsSemantics;
 		return result;
 	}
 

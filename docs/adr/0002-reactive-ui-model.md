@@ -12,13 +12,11 @@ The decisions do not carry the same confidence, and the migration treats them di
 - **Committed:** tracked values (1), interaction state as signals (5), retained rendering with layers (7), semantics and
   input from the same model (8), verification (9). Mature UI frameworks have converged on each, and each removes
   mechanisms we have today.
-- **Pending an experiment:** the run-once or re-running implementation of components (2). Stage 3 decides; the
-  author-facing builder syntax is the same for either implementation.
-- **Options that must prove themselves:** the shared native store (4) and an incremental layout engine (6). After the
-  incremental bridge, the interaction bridge costs 0.036 ms and Clay's full solve about 0.14 ms, so neither is justified by
-  speed alone. Each gets a prototype and a measured go/no-go before any migration. Local placement of independent
-  feedback edits (also decision 6) is committed: it is small, lives in our backend and removes the selection frame's
-  second solve.
+- **Committed by stage 3:** re-running structural scopes with explicit live text bindings (2); the measurements and
+  decision are recorded below.
+- **Rejected by stage 2:** the shared native node store (4). An incremental layout engine (6) remains conditional on a
+  measured need. Local placement of independent feedback edits (also decision 6) is committed: it is small, lives in
+  our backend and removes the selection frame's second solve.
 
 The rationale for this record is mostly simplicity, and making near-zero allocation a property of the design rather than
 an optimization target: the current model is already fast (hover and typing about 0.4 ms). The expensive parts have to
@@ -146,32 +144,78 @@ values changes, and updates the existing nodes. This record makes that idea the 
    Per-field signal objects allocate and require `.get()`/`.set()`; revision counters invalidate unrelated readers and a
    missed increment leaves stale UI. Precedents include Swift Observation, MobX observable objects, Vue `reactive()`,
    Svelte 5 class fields and Solid stores.
-2. **Option: components run once; changes flow through bindings.** A component function runs at mount, creates nodes and binds
-   signals to node properties. A change re-runs only the binding, which writes one field. Structural change goes through
-   keyed primitives that own child scopes: `Show`, `For` (by key), `Switch`. Only they create or destroy nodes. Scopes own
-   their children and cleanup, so unmounting disposes everything under it. This replaces retained caches, `selfUpdating`,
-   `reconcile`, `BuiltNode`, `RenderNode.latest`, `requestPatch`, patch frames and binding revisions.
-3. **General language features support component syntax; the compiler does not know UI concepts.** A result builder
-   declared by a library combines sequential statements, `if` with or without `else`, `switch` and `for` by rewriting
-   each form into builder calls. An interface can attach the builder to a method, and implementations inherit it:
-   `interface View { @:builder(ViewBuilder) function body():View; }`. Helpers opt in with `@:builder(ViewBuilder)`.
-   The library's signature supplies list keys, for example `forEach<T:Identifiable>`, so an unkeyed list is an ordinary
-   bound error. Each form has one fixed lowering signature, with no overload resolution across builder methods; errors
-   point at the user's control flow and type checking stays fast, avoiding Swift result builders' diagnostic and cost
-   problems.
+2. **Decision (2026-11-11): re-running structure and explicit text bindings.** Stage 3 compared re-running scopes (R),
+   run-once keyed iteration and text bindings (B), and their hybrid on both the CNC and telemetry panels. R's telemetry
+   step allocated 11.83% more bytes than B after scoped skipping, so it misses the 10% rule. B did not beat R by more
+   than 10% on both panels: R used fewer bytes on every changed CNC action. The hybrid closes the telemetry gap and
+   does not increase any measured action, so it wins without result builders, lazy parameters, or a new language feature.
 
-   A general lazy parameter such as `function label(text:Lazy<String>):View` lets a caller write
-   `label(cup.phase.toString())`; the compiler passes the expression unevaluated and the library turns it into a binding.
-   Lazy parameters also serve logging, assertions and defaults. `Observable` supplies tracked reads. The library, not
-   the compiler, chooses run-once bindings or re-running scopes, with identical author code either way. Reads outside a
-   tracking scope are a runtime debug check (decision 9); builder control flow prevents the usual untracked plain `if`
-   in a run-once component.
+   The kept library surface is `haxeon.ui.component.TrackedScope`, `EqualChild<T:Equatable>` and `BoundText`. A scope tracks
+   its reads and re-runs its own body; an equal child is reused only when its declared inputs, own dependencies, style,
+   viewport and interaction state still match. `BoundText` mounts a text node once, schedules a frame on tracked changes,
+   and updates its text and semantics. Requests coalesce, and a failed getter does not suppress a later frame request.
+   Ordinary Haxe `if`, `switch`, comprehensions and functions describe structure.
+   The keyed run-once `BoundEach` experiment is deleted. `TrackedScope` currently runs on `BuildContext.selfUpdating`
+   and the retained reconciliation machinery. Stage 5 must reimplement the scope primitive natively before removing
+   that machinery; this decision does not assert that reconciliation can already be removed.
 
-   Stateful components are classes `implements View` with `body()`, their own tracked `var` state, and cached derived
-   getters when purity inference proves eligibility. Stateless composition uses plain functions returning `View`,
-   explicitly builder-annotated when they use control flow. Props are constructor arguments and final fields, using
-   `Lazy<T>` where they must remain live; public mutable prop fields are not used. UI-specific compiler intrinsics are
-   added only if profiling finds a gap the general optimizer cannot close.
+   Exact calibrated action windows are objects/bytes below. Each is the same warmed second action occurrence used by
+   the allocation census, including the trigger through its submitted frame. The `cnc-progress` window is a tick which
+   actually advances the line. The control uses the current model; R and B were crossed over on both panels; H is the
+   hybrid. The four binaries were built from the same compiler and outer baseline, before the public scope was renamed
+   from `RScope` to `TrackedScope`; the rename changed only the identifier. The calibration marker is one object,
+   16 bytes and 17 sampled stack bytes and is excluded; type and stack byte totals were checked before subtraction.
+
+   | Action | Control | R | B | H |
+   |---|---:|---:|---:|---:|
+   | CNC unchanged | 19/640 | 19/640 | 19/640 | 19/640 |
+   | CNC select | 2,334/134,176 | 2,248/127,016 | 2,315/131,824 | 2,248/127,016 |
+   | CNC source | 4,761/278,688 | 4,706/273,152 | 4,723/273,984 | 4,706/273,152 |
+   | CNC progress | 5,926/316,928 | 5,539/283,000 | 5,792/295,664 | 5,519/281,024 |
+   | CNC hold | 3,280/184,032 | 1,011/46,512 | 1,015/46,736 | 1,011/46,512 |
+   | CNC resume | 3,547/199,616 | 1,505/79,864 | 1,917/108,520 | 1,479/77,008 |
+   | Telemetry step | 19,676/827,904 | 16,228/706,192 | 15,075/631,512 | 14,978/627,128 |
+
+   Frame times below are milliseconds: each cell is the median control / variant frame time from seven alternating
+   pairs. Each column is a separate paired series, so compare the two numbers in a cell rather than across columns.
+   The full pairs, including direct R-versus-B and B-versus-H comparisons, are in the evidence file. The short unchanged
+   frame is especially sensitive to timing noise.
+
+   | Action | Control / R | Control / B | Control / H |
+   |---|---:|---:|---:|
+   | CNC unchanged | 0.015 / 0.018 | 0.017 / 0.021 | 0.011 / 0.010 |
+   | CNC select | 0.542 / 0.624 | 0.484 / 0.588 | 0.447 / 0.467 |
+   | CNC source | 1.516 / 1.206 | 1.225 / 1.447 | 1.121 / 1.158 |
+   | CNC progress | 1.108 / 1.042 | 1.147 / 1.261 | 0.998 / 0.940 |
+   | CNC hold | 0.782 / 0.454 | 0.709 / 0.536 | 0.649 / 0.407 |
+   | CNC resume | 0.903 / 0.833 | 0.861 / 1.182 | 0.638 / 0.499 |
+   | Telemetry step | 3.453 / 4.230 | 3.862 / 2.740 | 3.102 / 2.422 |
+
+   In the direct telemetry series, B's median was 2.774 ms and H's was 2.500 ms; the median of the seven paired
+   H/B changes was -8.28%. The corresponding allocation windows were 631,512 and 627,128 bytes.
+
+   All 15 budgeted editor actions were also checked: neither pure pairing nor H increased objects or bytes against the
+   control. The control includes the shared retained-child correctness and deferred idle-metrics fixes; compared with
+   the original control, unchanged CNC changed from 20/904 to 19/640 and the other six panel windows were identical.
+   Four budgeted reused-frame windows each lost one object/264 bytes; the other eleven were identical. The full
+   per-action counts, allocation sites, module hashes, and seven alternating timing pairs are in
+   `/media/joao/DATA1/haxeon-component-gates/evidence/0002-stage3-evidence.json` (SHA-256
+   `ac98dafceb628f74bcceb1a52d023606aee4d02e6c102a45dc1e2cfa82d05d8a`). Frame times measure the submitted frame;
+   the triggering simulation or input work is included in the census, not that timer. The control's existing
+   `panel-flows` failure, `Headless editor profile failed: Inspection camera ignored its view label`, reproduces before
+   telemetry and is recorded separately; the focused CNC and telemetry flow passed with retention verification on.
+   The outer app suite also reports the existing `appearance edit rebuilds the child's material` assertion; it reproduced
+   with the original panels and current-model UI. The viewport metrics test passes after its direct internal-field read
+   was ported to the public metrics accessor.
+
+   R reads like ordinary Haxe and localizes control flow, though explicit scopes and equality props add some scaffolding.
+   B requires the structure to be expressed as keys and row dispatch, and live leaves require closures whose scheduling
+   and captures must be followed when debugging. The hybrid keeps the ordinary structural code and uses those explicit
+   closures only for live text. Mounted R, B and hybrid idle submissions allocate zero objects on HashLink, Wasm32 and
+   Wasm GC with inlining both enabled and disabled; tests also cover equal-child skipping, stable bindings and updates.
+3. **Conditional language work.** Result builders and lazy parameters are not required by the selected model. They
+   remain separate general-language proposals only if later measured evidence establishes a need; neither is part of
+   this stage or a prerequisite for stage 5. The compiler has no UI-specific syntax or intrinsics.
 4. **Option: nodes are records in a flat store shared with native code.** Stable handles (index and generation); one record per
    node, with dirty bits per channel: layout, paint, text, semantics, transform. Bindings write fields and set bits;
    native layout and rendering read the same memory. There is no encode, parse or decode. Record layout, change masks and
@@ -229,32 +273,21 @@ values changes, and updates the existing nodes. This record makes that idea the 
    readers. Unobserved state may still be prepared on a worker. These checks run with the other tracked-write guards in
    debug builds and gates; they do not make shared graphs thread-safe.
 
-For example, a panel reads its model directly and constructs keyed children explicitly:
+For example, a panel uses ordinary Haxe to describe structure and binds its live text explicitly:
 
 ```haxe
 function build(context:BuildContext):View {
-	var children = [new KeyedView("phase", label(model.phase.toString()))];
-	if (model.ready) children.push(new KeyedView("ready", readyBadge()));
-	for (item in model.items) children.push(new KeyedView(item.id, itemView(item)));
-	return new Column("panel", children);
+  return new TrackedScope("panel", () -> {
+    var children = [new KeyedView("phase", new BoundText("phase", () -> model.phase.toString()))];
+    if (model.ready) children.push(new KeyedView("ready", readyBadge()));
+    for (item in model.items) children.push(new KeyedView(item.id, itemView(item)));
+    return new Column("panel", children);
+  });
 }
 ```
 
-With the planned general features, the same component can be written schematically as:
-
-```haxe
-class Panel implements View {
-	final model:Model;
-	public function body():View {
-		label(model.phase.toString()); // label takes Lazy<String>
-		if (model.ready) readyBadge();
-		for (item in model.items) itemView(item); // item is Identifiable
-	}
-}
-```
-
-`View` supplies the builder, `Observable` tracks `model` fields, and the library decides whether these bindings run once
-or the scope re-runs. Panels do not need rewriting when the stage 3 experiment chooses between those implementations.
+The structural scope tracks the fields its body reads. The text binding tracks its own getter and schedules its update;
+no builder transform or lazy parameter is involved.
 
 ## Mapping from today
 
@@ -263,8 +296,8 @@ or the scope re-runs. Panels do not need rewriting when the stage 3 experiment c
 | `context.state`, `State.update` | tracked component fields or standalone `Signal` |
 | `observeInt/Bool/String`, model revision counters, `cacheKeyHash` | observable fields and tracked reads |
 | `State.updateQuietly` | removed: writes know their readers |
-| `RetainedView`, dock pane and panel caches | removed: components run once |
-| `selfUpdating`, `reconcile`, `BuiltNode`, `RenderNode.latest` | bindings |
+| `RetainedView`, dock pane and panel caches | migrate incrementally to tracked scopes and bindings; remove caches when no longer needed |
+| `selfUpdating`, `reconcile`, `BuiltNode`, `RenderNode.latest` | native scopes and bindings, after stage 5 reimplements the scope foundation |
 | `requestPatch`, patch frames | a frame where only bindings ran |
 | `bindingRevision` | a scope dirtied while hidden runs when shown |
 | `InteractionStateSnapshot`, `hoverRebuilds` | per-node interaction signals and derived style |
@@ -427,7 +460,7 @@ retention scenarios, budgets that may only go down, memory runs, compiler suites
    `5a02f3dac4ccc56cb2479f8788e42d9271f3b5ead275beecb96e61f8d6ccf780`. The calibrated harness SHA-256 was `426e07eec67e6744c35eb60f355077ef9ceea6bef8dcbc1ac4eb906b95b941e1`.
    The prototype is removed; the existing incremental bridge and verify mode remain in use.
 
-3. **Component model experiment.** Test plain Haxe, without builders, lazy parameters or other language features.
+3. **Component model experiment (completed 2026-11-11).** Test plain Haxe, without builders, lazy parameters or other language features.
    Start with re-running scopes (R) on `CncPanel` and run-once bindings (B) on `TelemetryPanel`. CNC currently samples
    an `Equatable` presentation and patches its whole description; telemetry builds a plot and keyed worker, zone and
    separation rows from the current snapshot. R needs tracked scopes with owned cleanup and an equality-gated child
@@ -455,12 +488,13 @@ retention scenarios, budgets that may only go down, memory runs, compiler suites
    and byte-sum checks described in `ALLOCATION_CENSUS.md`; exclude only that marker. A panel-flow baseline failure
    must be reproduced on control before it is classified as the known failure, and must not stand in for live-update
    measurements.
-4. **General compiler support.** Implement result builders and lazy parameters, with separate designs and target tests;
-   runtime debug checks enforce tracked reads.
-5. **Widgets, then panels.** Convert leaf widgets and panels to the builder API; delete `selfUpdating`/`reconcile`,
-   `SelfUpdatingBuild` (including its ownership counter), `RetainedVariants`, `InteractionStateSnapshot`, `BuiltNode`,
-   retained caches, patch frames and binding revisions. Until then, change this machinery only for tested correctness
-   fixes and the required no-regression work. Interaction signals and derived style replace hover handling.
+4. **Conditional compiler support.** Result builders and lazy parameters need separate designs and target tests only
+   if later measurements justify them. Runtime debug checks continue to enforce tracked reads.
+5. **Widgets, then panels.** Convert the remaining leaf widgets and panels incrementally to scoped structure and explicit
+   text bindings, measuring each conversion. Keep the existing retained and patch machinery until the converted uses no
+   longer need it; reimplement `TrackedScope` natively before removing its `selfUpdating`/reconcile foundation, then
+   remove obsolete paths rather than keeping compatibility layers. Interaction signals and derived
+   style replace hover handling where measured.
 6. **Local placement for independent feedback edits.** First exclude absolute overlays from content bounds. Then add the
    backend's independence check and local placement, with full-solve fallback, and verify-mode comparison against a full
    solve. Go: selection runs one Clay solve per frame with byte-identical geometry, and no scenario takes the fallback
@@ -543,17 +577,16 @@ No `observe*` polling remains.
 
 ## Consequences
 
-- Authors use tracked state, ordinary builder control flow, lazy props and effects. Most mechanisms listed under Context
-  are deleted.
-- Steady-state updates write fields; allocation happens on mount and unmount, not per interaction.
-- Layout-dependent geometry of independent nodes costs one solve plus a local placement. The layout bridge disappears only if the shared store passes its prototype.
-- Builder control flow stays reactive under either component implementation; reads outside tracking scopes are runtime
-  debug errors.
-- Debugging moves from "why did this rebuild" to "why did this binding not run". Signal dependency inspection becomes a
-  required tool.
-- Add an adapter only if a real external model appears; deeply nested models need more work.
-- The committed work (reactive core, retained display lists) is moderate. Compiler support, a shared store and a layout
-  engine are large, which is why they are gated on experiments and measurements.
+- Authors use tracked state, ordinary Haxe control flow inside scopes, and explicit closures for live text. The remaining
+  widgets and panels keep the current model until stage 5 converts them.
+- An unchanged cached submission allocates no managed objects; changed actions still allocate, as the stage 3 census
+  shows. Scope and binding work is measured rather than assumed free.
+- Layout-dependent geometry of independent nodes costs one solve plus local placement. The measured stage 2 result keeps
+  the existing native bridge.
+- Runtime tracking checks and retention verification remain in force. Debugging may involve both scope invalidation and
+  binding scheduling; dependency inspection remains useful.
+- Add an adapter only if a real external model appears; deeply nested models need more work. Further language or layout
+  mechanisms require separate evidence and decisions.
 
 ## Alternatives considered
 
@@ -567,7 +600,7 @@ No `observe*` polling remains.
   allocation is what we cannot make free on a non-generational GC, and it still needs comparison and transfer to native.
   The engine decisions (1, 4, 6, 7) apply to it too; only decision 2 differs.
 - **Re-running scopes (Compose).** Plain control flow with automatic dependencies; allocation per re-run, kept small by
-  small scopes. The stage 3 experiment compares it directly with bindings.
+  small scopes. The stage 3 measurements selected a hybrid with leaf text bindings.
 - **A per-frame arena allocator.** Most of what a frame allocates outlives it in the retained tree, so an arena would need
   escape proofs to be safe, and GC cost is already low. Escape analysis in the compiler is the safe form, and is independent
   of this record.
