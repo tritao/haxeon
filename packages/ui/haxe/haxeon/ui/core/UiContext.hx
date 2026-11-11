@@ -87,6 +87,7 @@ class UiContext {
 	var submittedInteractionRevision:Int;
 	var submittedRetainedEditRevision:Int = 0;
 	var submittedPatchRequestRevision:Int = 0;
+	var submittedBindingRequestRevision:Int = 0;
 	var submittedStyleRevision:Int;
 	var submittedAnimationRevision:Int;
 	var submittedGestureRevision:Int;
@@ -140,6 +141,10 @@ class UiContext {
 	var cursorHandler:Null<UiCursorShape->Void>;
 	var currentCursor:UiCursorShape;
 	var lastFrameMetrics:Null<UiFrameMetrics>;
+	var pendingReusedMetrics:Bool = false;
+	var reusedMetricsSeconds:Float = 0.0;
+	var reusedMetricsCachedStyles:Int = 0;
+	var reusedMetricsHoverNodes:Int = -1;
 	var frameNumber:Int;
 	var diagnosticStage:Int = 0;
 	public final textInput:TextInputBridge;
@@ -210,6 +215,9 @@ class UiContext {
 		animations.onFrameRequested = function() {
 			if (!disposed && onAnimationFrameRequested != null)
 				onAnimationFrameRequested();
+		};
+		buildContext.onBindingFrameRequested = function() {
+			if (!disposed && onAnimationFrameRequested != null) onAnimationFrameRequested();
 		};
 		lastFrameMetrics = null;
 		frameNumber = 0;
@@ -309,6 +317,7 @@ class UiContext {
 	function maybeVerifyRetention(build:Void->View, frame:LayoutFrame, result:RenderNode):RenderNode {
 		if (verifyRetentionEvery <= 0 || verifying)
 			return result;
+		if (pendingReusedMetrics) return result;
 		var metrics = lastFrameMetrics;
 		if (metrics != null && metrics.reusedSubmission)
 			return result;
@@ -452,6 +461,8 @@ class UiContext {
 		if (frame == null || build == null)
 			throw "A UI frame requires a view and layout frame";
 		@:privateAccess buildContext.buildFeedbackPass = buildFeedbackPass;
+		// Consume the request before running user getters so a failed effect can schedule a later retry.
+		var bindingAppliedRevision = buildContext.consumeBindingFrameRequest();
 		ReactiveRuntime.flushEffects();
 		var styleResolutionsBefore = buildContext.styleResolver.resolutions;
 		var styleCacheHitsBefore = buildContext.styleResolver.cacheHits;
@@ -473,17 +484,22 @@ class UiContext {
 			reuse = hoverPaintNodes >= 0;
 		}
 		var localPatchPending = buildContext.hasPendingPatches && !rootReactiveDirty;
-		var patchOnly = !reuse && localPatchPending && (!reconcileNewFocus || cacheKey != null);
+		var bindingOnly = cacheKey != null && root != null && submittedBuildKey == cacheKey && !rootReactiveDirty &&
+			buildContext.bindingRequestRevision != submittedBindingRequestRevision &&
+			interactionStates.revision == submittedInteractionRevision && buildContext.styleRevision == submittedStyleRevision &&
+			submittedFrameWidth == frame.width && submittedFrameHeight == frame.height &&
+			animations.revision == submittedAnimationRevision && gestures.revision == submittedGestureRevision &&
+			buildContext.theme == submittedTheme && buildContext.styleSheet == submittedStyleSheet;
+		var patchOnly = !reuse && (localPatchPending || bindingOnly) && (!reconcileNewFocus || cacheKey != null);
 		if (!patchOnly && !reuse && reconcileNewFocus && cacheKey != null && buildFeedbackPass == 0)
 			patchOnly = planInteractionPatches(cacheKey, frame);
 		if (reuse) {
 			frameNumber++;
-			lastFrameMetrics = new UiFrameMetrics(frameNumber, submittedNodeCount, 0, 0, 0,
-				buildContext.styleResolver.cachedStyleCount, 0, submittedNodeCount, UiDirtyFlag.None,
-				0, 0, 0, 0, 0, 0, Sys.time() - submitStartedAt, false, true, 0,
-				submittedNodeCount);
-			lastFrameMetrics.markReusedSubmission();
-			if (hoverPaintNodes >= 0) lastFrameMetrics.hoverPaintUpdatedNodes = hoverPaintNodes;
+			lastFrameMetrics = null;
+			pendingReusedMetrics = true;
+			reusedMetricsSeconds = Sys.time() - submitStartedAt;
+			reusedMetricsCachedStyles = buildContext.styleResolver.cachedStyleCount;
+			reusedMetricsHoverNodes = hoverPaintNodes;
 			diagnosticStage = 0;
 			return cast root;
 		}
@@ -725,6 +741,7 @@ class UiContext {
 		submittedAnimationRevision = animations.revision;
 		submittedRetainedEditRevision = buildContext.retainedEditRevision;
 		submittedPatchRequestRevision = buildContext.patchRequestRevision;
+		submittedBindingRequestRevision = bindingAppliedRevision;
 		submittedGestureRevision = gestures.revision;
 		submittedNodeCount = nodeCount;
 		submittedFrameWidth = frame.width;
@@ -759,6 +776,7 @@ class UiContext {
 		frameNumber++;
 		var submitEndedAt = Sys.time();
 		var submitEndAllocatedAt = AllocationProbe.now();
+		pendingReusedMetrics = false;
 		lastFrameMetrics = new UiFrameMetrics(frameNumber, nodeCount,
 			buildContext.styleResolver.resolutions - styleResolutionsBefore,
 			buildContext.styleResolver.cacheHits - styleCacheHitsBefore,
@@ -1000,14 +1018,15 @@ class UiContext {
 		var nativeRenderStartedAt = Sys.time();
 		var nativeRenderStartAllocatedAt = AllocationProbe.now();
 		session.render(renderer, surface, frame);
-		if (lastFrameMetrics != null) {
+		var renderMetrics = frameMetrics;
+		if (renderMetrics != null) {
 			var renderEndedAt = Sys.time();
-			lastFrameMetrics.completeRender(renderEndedAt - renderStartedAt, paintedNodes,
+			renderMetrics.completeRender(renderEndedAt - renderStartedAt, paintedNodes,
 				paintSkippedNodes, emptyPaintNodes);
-			lastFrameMetrics.setRenderPhases(nativeRenderStartedAt - renderStartedAt,
+			renderMetrics.setRenderPhases(nativeRenderStartedAt - renderStartedAt,
 				renderEndedAt - nativeRenderStartedAt);
 			var renderEndAllocatedAt = AllocationProbe.now();
-			lastFrameMetrics.setRenderAllocations(nativeRenderStartAllocatedAt - renderStartAllocatedAt,
+			renderMetrics.setRenderAllocations(nativeRenderStartAllocatedAt - renderStartAllocatedAt,
 				renderEndAllocatedAt - nativeRenderStartAllocatedAt);
 		}
 		if (RenderCost.enabled) RenderCost.render(renderStartedAt, nativeRenderStartedAt, Sys.time(), submittedNodeCount);
@@ -1409,6 +1428,8 @@ class UiContext {
 		if (buildContext.retainedEditRevision != submittedRetainedEditRevision)
 			result |= UiDirtyFlag.NeedsStyle | UiDirtyFlag.NeedsLayout | UiDirtyFlag.NeedsPaint |
 				UiDirtyFlag.NeedsComposite | UiDirtyFlag.NeedsHitGeometry;
+		if (buildContext.bindingRequestRevision != submittedBindingRequestRevision)
+			result |= UiDirtyFlag.NeedsTextLayout | UiDirtyFlag.NeedsLayout | UiDirtyFlag.NeedsPaint | UiDirtyFlag.NeedsSemantics;
 		return result;
 	}
 
@@ -1455,8 +1476,17 @@ class UiContext {
 
 	/** Timing and style-cache counters captured during the latest submit/render. */
 	public var frameMetrics(get, never):Null<UiFrameMetrics>;
-	function get_frameMetrics():Null<UiFrameMetrics>
+	function get_frameMetrics():Null<UiFrameMetrics> {
+		if (pendingReusedMetrics) {
+			lastFrameMetrics = new UiFrameMetrics(frameNumber, submittedNodeCount, 0, 0, 0,
+				reusedMetricsCachedStyles, 0, submittedNodeCount, UiDirtyFlag.None,
+				0, 0, 0, 0, 0, 0, reusedMetricsSeconds, false, true, 0, submittedNodeCount);
+			lastFrameMetrics.markReusedSubmission();
+			if (reusedMetricsHoverNodes >= 0) lastFrameMetrics.hoverPaintUpdatedNodes = reusedMetricsHoverNodes;
+			pendingReusedMetrics = false;
+		}
 		return lastFrameMetrics;
+	}
 
 	/** Returns cumulative native geometric hit-test diagnostics. */
 	public var hitTestMetrics(get, never):LayoutHitTestStats;

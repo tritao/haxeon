@@ -147,6 +147,7 @@ class TypeRelations {
 						}
 					default: false;
 				}
+			case TAnonymous(_, _): anonymousReadOnlyWidening(actual, expected);
 			case TNullable(expectedElement):
 				switch actual {
 					case TNull: true;
@@ -154,7 +155,7 @@ class TypeRelations {
 				}
 			case TArray(expectedElement):
 				switch actual {
-					case TArray(actualElement): equals(actualElement, expectedElement);
+					case TArray(actualElement): equals(actualElement, expectedElement) || anonymousReadOnlyWidening(actualElement, expectedElement);
 					default: false;
 				}
 			case TIterator(expectedElement):
@@ -174,6 +175,27 @@ class TypeRelations {
 							compatible;
 						}
 					default: false;
+				}
+			default: false;
+		};
+	}
+
+	/** A mutable structural field can be viewed through the same read-only field. */
+	static function anonymousReadOnlyWidening(actual:CompilerType, expected:CompilerType):Bool {
+		return switch [actual, expected] {
+			case [TAnonymous(_, actualFields), TAnonymous(_, expectedFields)]:
+				if (actualFields.length != expectedFields.length) false; else {
+					var matches = true;
+					for (target in expectedFields) {
+						var found = false;
+						for (source in actualFields) if (source.name == target.name) {
+							found = source.optional == target.optional && (!source.isFinal || target.isFinal)
+								&& equals(source.type, target.type);
+							break;
+						}
+						if (!found) { matches = false; break; }
+					}
+					matches;
 				}
 			default: false;
 		};

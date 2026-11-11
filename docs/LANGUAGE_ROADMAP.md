@@ -27,8 +27,8 @@ The rules for every entry:
 | Key paths | Typed field references, readable/writable capabilities, composition and `Diff.bit` paths. Escaped nullable-struct values await scalar callable ABI support. | [KEY_PATHS.md](KEY_PATHS.md) |
 | Signals core | `Signal<T>`, `Derived<T>` and `Effect`, with push invalidation, pull recomputation and per-frame batching. | [ADR 0002](adr/0002-reactive-ui-model.md) |
 | `Observable` | Classes whose fields are tracked individually by the compiler; replaces per-field signals and revision counters. | [ADR 0002](adr/0002-reactive-ui-model.md) |
-| Result builders | A library-declared builder lowers `if`, `switch` and `for` in a body; attached to an interface method and inherited by implementers. | [UI_LANGUAGE_FEATURES.md](UI_LANGUAGE_FEATURES.md) |
-| Lazy parameters | `Lazy<T>` parameters receive the caller's expression unevaluated. | [UI_LANGUAGE_FEATURES.md](UI_LANGUAGE_FEATURES.md) |
+| Result builders | Conditional proposal: a library-declared builder lowers `if`, `switch` and `for`; stage 3 did not require it. | [UI_LANGUAGE_FEATURES.md](UI_LANGUAGE_FEATURES.md) |
+| Lazy parameters | Conditional proposal: `Lazy<T>` parameters receive the caller's expression unevaluated; stage 3 did not require it. | [UI_LANGUAGE_FEATURES.md](UI_LANGUAGE_FEATURES.md) |
 
 ### RawRepresentable (implemented)
 
@@ -228,10 +228,8 @@ Check each against what Haxeon already supports before designing it.
 1. `Equatable`, `Hashable` and `Diffable`, replacing the former structural metadata; key paths specified alongside.
 2. Signals core (ADR 0002 stage 1).
 3. `Observable` (ADR 0002 stage 1b).
-4. Result builders and lazy parameters, only if the ADR 0002 stage 3 component experiment needs them. The experiment
-   runs first with plain Haxe expressions (re-running scopes) against explicit library primitives (run-once
-   bindings); plain code is preferred when it is within 10% on allocation and frame time, because it keeps code
-   meaning what it looks like.
+4. Result builders and lazy parameters are deferred. ADR 0002 stage 3 selected plain Haxe structural scopes and a
+   minimal explicit text binding; revisit these features only if later measurements establish a need.
 5. Flat structs, arrays of structs and generic specialization for structs, with inline enums. Struct arrays and
    struct-specialized generic storage are implemented across HashLink, Wasm32 and Wasm GC; payload enums use declared
    value equality. The closed source subset uses inline lanes; wider enum transport and the UI conversion remain in progress. See [STRUCTS.md](STRUCTS.md) and

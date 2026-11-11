@@ -1717,7 +1717,34 @@ class ExpressionTyper {
 		if (targetType == null)
 			fail("E1003", "Untyped cast requires an expected type", span);
 		// An explicit type ascription guides its operand; an untyped cast separates source inference from its destination.
-		return conversionResolver.adaptFunction(typeExpressionCallback(value, scope, target == null ? null : targetType, false), targetType, span);
+		var typedValue = typeExpressionCallback(value, scope, target == null ? null : targetType, false);
+		// Lowering requires a typed null. Preserve nullable targets directly; use the normal Dynamic cast for scalars.
+		if ((switch typedValue.type { case TNull: true; default: false; })) {
+			if (session.relations.isAssignable(typedValue.type, targetType))
+				return coerceCastNull(typedValue, targetType);
+			typedValue = coerceCastNull(typedValue, TDynamic);
+		}
+		return conversionResolver.adaptFunction(typedValue, targetType, span);
+	}
+
+
+	/** Give each null-producing arm a concrete type without discarding its evaluation. */
+	function coerceCastNull(value:TypedExpression, expected:CompilerType):TypedExpression {
+		return switch value.expression {
+			case TBlockExpression(statements, result):
+				new TypedExpression(TBlockExpression(statements, coerceCastNull(result, expected)), expected, value.span);
+			case TConditional(condition, whenTrue, whenFalse):
+				new TypedExpression(TConditional(condition, coerceCastNull(whenTrue, expected), coerceCastNull(whenFalse, expected)), expected, value.span);
+			case TSwitchExpression(subject, cases, defaultExpression):
+				var converted:Array<TypedSwitchExpressionCase> = [for (item in cases) {
+					value: item.value, subjectBinding: item.subjectBinding, arrayPattern: item.arrayPattern, span: item.span,
+					isCatchAll: item.isCatchAll, guard: item.guard, result: coerceCastNull(item.result, expected),
+					enumName: item.enumName, constructorIndex: item.constructorIndex, bindings: item.bindings, predicates: item.predicates
+				}];
+				new TypedExpression(TSwitchExpression(subject, converted,
+					defaultExpression == null ? null : coerceCastNull(defaultExpression, expected)), expected, value.span);
+			default: coerce(value, expected, "cast", "E1003");
+		};
 	}
 
 	/**
