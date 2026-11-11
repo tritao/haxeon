@@ -41,8 +41,8 @@ class Main {
 	}
 
 	/**
-	 * Warm-rebuild coverage for every program: build it, add a function nothing reaches, rebuild in the same session, then add a kept
-	 * function (so the module changes) and rebuild again. Each rebuild must be the bytes of a fresh compiler's build of the same text;
+	 * Warm-rebuild coverage for every program: build it, add a function nothing reaches, rebuild in the same session, add a kept
+	 * function (so the module changes) and rebuild, then put both inside the file and rebuild again. Each rebuild must be the bytes of a fresh compiler's build of the same text;
 	 * with HAXEON_CHECK_REUSE=1 the compiler also compares what it reused with what it would have built, and throws on a difference.
 	 */
 	static function warmEditBuild(sourcePath:String, outputPath:String, directory:String, module:String):Void {
@@ -51,7 +51,11 @@ class Main {
 		compiler.compile(module);
 		var unused = "\nfunction __warmEditUnused():Int return 1;\n";
 		var last:Null<haxe.io.Bytes> = null;
-		var edits = [original + unused, original + unused + "@:keep function __warmEditKept():Int return 424242;\n"];
+		// The third edit lands inside the file, after the last top-level closing brace before the middle of the file, so the declarations before it keep their ranges and the ones
+		// after it move: both kinds of function must come out as a fresh build has them.
+		var kept = "@:keep function __warmEditKept():Int return 424242;\n", cut = original.lastIndexOf("\n}\n", Std.int(original.length / 2));
+		var inside = cut < 0 ? original + unused + kept : original.substr(0, cut + 3) + unused + kept + original.substr(cut + 3);
+		var edits = [original + unused, original + unused + kept, inside];
 		for (editIndex in 0...edits.length) {
 			var edited = edits[editIndex];
 			compiler.update(sourcePath, edited, module);
@@ -62,7 +66,7 @@ class Main {
 			var fresh = newCompiler(true, directory);
 			fresh.update(sourcePath, edited, module);
 			if (warm.compare(HlWriter.encode(fresh.compile(module).module).flatten()) != 0)
-				throw 'a warm rebuild of $sourcePath differs from a fresh build of the same text (edit ${editIndex + 1}: ${editIndex == 0 ? "a function nothing reaches" : "a kept function"})';
+				throw 'a warm rebuild of $sourcePath differs from a fresh build of the same text (edit ${editIndex + 1}: ${["a function nothing reaches, appended", "a kept function, appended", "functions inside the file"][editIndex]})';
 			last = warm;
 		}
 		File.saveBytes(outputPath, last);
