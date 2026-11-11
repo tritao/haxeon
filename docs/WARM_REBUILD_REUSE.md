@@ -516,3 +516,32 @@ origin/main (090589e5 fails 23), so the warm path was wrong before this branch. 
 
 The audit rule that came out of it: a shared generated artifact's attributes are a function of its subject, never of its uses; and no
 name may contain a counter that a process keeps across builds.
+
+## Cold build findings, continued (2026-11-11)
+
+Profile of the cold app build after the method-resolution table (coldprof9 to 11 in the scratch directory, 199 Hz, shares load-independent):
+
+- **SsaBuilder.run** was 5.9% of cold CPU, mostly string hashing of local names; locals are numbered once and indexed by slot: 4.5%.
+- **IrInliner** was 10.9% (`calleeOf` hashed a callee name five or six times per call): functions are numbered once and the per-function
+  state is indexed by the number: 9.6%.
+- **Map iteration** is 3% of cold CPU in dynamic calls (`hl_dyn_call_obj`): in the stock-Haxe worker an iterator is a structural type, so
+  every `for (x in map)` and `for (k => v in map)` call is dynamic. `Scope`, the declaration lifecycle, the declaration index, the
+  object list of `IrInitializationCalls`, and the iterator-replacement pre-check were fixed by holding the data in the shape it is
+  iterated in, next to the map. Sites under 0.1% each were left.
+- **Not worth doing:** Name ids inside `IrProgramIndex` and `IrMethodResolution` (0.01% and 0.12%; see INTERNED_NAMES.md).
+
+### Typing: the four whole-function binding walks do not fuse (decision, 2026-11-11)
+
+`BodyTyper.typeFunction` runs `ScopedEscapeChecker`, `LexicalStorageAnalysis`, `AssignedDeclarations` and `MapEscapeAnalysis` over every
+function body, each as its own `BindingWalker` (together `walkFunction` is 2.4% of cold CPU). They are not four consumers of one walk:
+
+- `ScopedEscapeChecker.rejectDirect` walks sub-expressions itself (`scoped(...)`, `this.statement(...)`), which in a shared traversal
+  would run every other consumer's `statement` override a second time over the same statements.
+- `MapEscapeAnalysis.receiver` decides whether a variable that is a collection receiver is reported as a use at all (it is not, the
+  other three do report it), so the hooks carry different traversal semantics, not only different observations.
+
+Fusing them means events with a context ("at a receiver") and turning `rejectDirect` into a check on the main traversal: a change to
+analyses that decide escape and capture and so what code is generated. The realistic partial win is fusing `LexicalStorageAnalysis`,
+`AssignedDeclarations` and `MapEscapeAnalysis`, about 1% of cold CPU, with the risk that a map stops being treated as private somewhere
+the gates do not see. Decision: not done; revisit with the typing rework (ADR 0003 M2 pass framework), where the walk is one pass by
+construction.

@@ -112,3 +112,15 @@ linked function is compared with a fresh lowering, the final IR is verified in f
 function is lowered again (`HlFunctionEquality`: type, slot, registers, opcodes with labels compared one to one, debug data). Functions
 frozen on purpose (retired by a signature change, or dropped from the program) are skipped. The full driver suite and `test-hot-reload` pass
 with it. It is a test aid, never a fallback.
+
+
+## Performance rules for compiler code
+
+- **Iterating a Map goes through dynamic calls in the stock-Haxe worker.** An iterator is a structural type, so `for (x in map)`,
+  `for (k => v in map)` and `map.keys()` make a dynamic call per element (about 3% of a cold build before the hot sites were fixed). On a
+  hot path keep an array next to the map, filled where entries are added, and iterate that. The Haxeon-built worker (ADR 0003 section 12)
+  may make this moot; until then it is measured, not folklore.
+- **Hash a name once.** A name used for several lookups in a pass (a callee, a local) is looked up once to get a dense number, and the
+  per-name state after that is an array indexed by it (see `SsaBuilder`, `IrInliner`).
+- **A new map keyed by a string that a pass fills and a hot loop reads is a candidate for the two rules above**; check a profile share before
+  and after (`hlprof-live`, folded stacks), not the wall time of a loaded machine.
