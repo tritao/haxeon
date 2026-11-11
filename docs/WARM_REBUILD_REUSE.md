@@ -545,3 +545,10 @@ analyses that decide escape and capture and so what code is generated. The reali
 `AssignedDeclarations` and `MapEscapeAnalysis`, about 1% of cold CPU, with the risk that a map stops being treated as private somewhere
 the gates do not see. Decision: not done; revisit with the typing rework (ADR 0003 M2 pass framework), where the walk is one pass by
 construction.
+
+## Recorded option: value-array shape passes that skip unrelated functions
+
+`IrValueArrayProgramRewrite.rewriteIndexed` runs once per element shape and still visits every function of the program to learn that most of them are
+not selected, and fills one slot of the result for each: about 95 bytes per function per shape (`ValueArrayLoweringSelectionMain` asserts the slope with a
+128-byte bound). The zero-cost version indexes functions by the element shapes they mention once, and a shape's pass walks only that list; it changes how
+`rewriteAll` and the per-shape result are assembled,; its cost on the app has not been measured separately.

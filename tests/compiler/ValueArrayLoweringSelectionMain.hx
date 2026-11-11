@@ -6,15 +6,29 @@ import compiler.compilation.AllocationMeter;
 
 /** Adding element shapes must not multiply allocation for bodies with no array operations. */
 class ValueArrayLoweringSelectionMain {
+	/**
+	 * Bytes one more element shape may cost per unrelated function (one with no array operation). A shape's pass still visits every function
+	 * once, to find out it is not selected, and fills one slot of the result: today that is about 95 bytes. The bound sits just above, so a
+	 * per-function, per-shape allocation of any size (a key string, a map, a copy of the function array) fails here. The true-zero version
+	 * is a pass that never visits unrelated functions per shape; it is a recorded option (docs/WARM_REBUILD_REUSE.md), not a requirement.
+	 */
+	static inline final MAX_BYTES_PER_FUNCTION_PER_SHAPE = 128.0;
+
+	static inline final FUNCTIONS = 128;
+
 	static function main():Void {
 		var one = overhead(1), eight = overhead(8);
+		// The ratio alone passed while a per-shape cost sat behind a constant part (the operand arrays of the bodies): the slope is the measure.
+		var slope = (eight - one) / 7 / FUNCTIONS;
 		if (one <= 0 || eight > one * 3)
 			throw 'Unrelated bodies were rebuilt per element shape: one=$one eight=$eight';
-		Sys.println('PASS: unrelated body allocation stays bounded across element shapes ($one / $eight bytes)');
+		if (slope > MAX_BYTES_PER_FUNCTION_PER_SHAPE)
+			throw 'An element shape costs $slope bytes per unrelated function, above ${MAX_BYTES_PER_FUNCTION_PER_SHAPE}: one=$one eight=$eight';
+		Sys.println('PASS: unrelated body allocation stays bounded across element shapes ($one / $eight bytes, ${Math.round(slope)} bytes per function per shape)');
 	}
 
 	static function overhead(shapes:Int):Float
-		return measure(shapes, 128) - measure(shapes, 0);
+		return measure(shapes, FUNCTIONS) - measure(shapes, 0);
 
 	static function measure(shapes:Int, functions:Int):Float {
 		var program = new IrProgram("main"), entry = new IrBuilder();
