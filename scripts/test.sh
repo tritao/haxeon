@@ -82,7 +82,8 @@ run_isolated_integration_group() {
 }
 
 if [[ ${SKIP_FORMAT_CHECK:-0} != 1 ]]; then
-	run_timed format-check "$root_dir/scripts/format.sh" --check
+	# Only the changed files are checked for now (a one-shot reformat of the whole tree follows after the branches merge).
+	run_timed format-check "$root_dir/scripts/format.sh" --check --changed
 fi
 
 run_timed native-build build_native_quietly
