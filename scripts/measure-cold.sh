@@ -46,19 +46,28 @@ unset HL_GC_MARK_THRESHOLD
 pattern="[h]ashlink-runtime/hl .*cache/haxeon/compiler/.*json"
 ticks=$(getconf CLK_TCK)
 
-# GC time the compiler reports for a build, in ms: the stages of each frontend pass that do not overlap (graph, semantic-assembly,
-# signature-inference, typing, ir-generation: their `Ngc(Tms)` figures) plus the IR assembly and backend assembly phases. Empty when the log has none.
+# GC time the compiler reports for a build, in ms, in two parts that are never added together because older compilers print only the first:
+#   gc-ms           the IR assembly and backend assembly phases (the `allocation phases` line), present in every compiler's log
+#   gc-frontend-ms  the stages of each frontend pass that do not overlap (graph, semantic-assembly, signature-inference, typing, ir-generation:
+#                   their `Ngc(Tms)` figures); empty when the log has no `frontend pass` lines
+# Compare gc-ms across compilers; compare gc-frontend-ms only between logs that both have it.
 gc_ms() {
+	awk '
+		/allocation phases/ {
+			for (i = 1; i <= NF; i++)
+				if ($i ~ /^(ir-assembly|backend-assembly)-gc-ms=/) { split($i, parts, "="); total += parts[2]; seen = 1 }
+		}
+		END { if (seen) printf "%.0f", total }
+	' "$1"
+}
+
+gc_frontend_ms() {
 	awk '
 		/^frontend pass/ {
 			for (i = 1; i <= NF; i++)
 				if ($i ~ /^(graph|semantic-assembly|signature-inference|typing|ir-generation)=/ && match($i, /gc\([0-9.]+ms\)/)) {
 					value = substr($i, RSTART + 3, RLENGTH - 6); total += value; seen = 1
 				}
-		}
-		/allocation phases/ {
-			for (i = 1; i <= NF; i++)
-				if ($i ~ /^(ir-assembly|backend-assembly)-gc-ms=/) { split($i, parts, "="); total += parts[2]; seen = 1 }
 		}
 		END { if (seen) printf "%.0f", total }
 	' "$1"
@@ -116,5 +125,5 @@ for run in $(seq "$runs"); do
 	[ -s "$out/$name.others" ] && flags="$flags other-checkout-worker-ran"
 	polluted=""
 	[ -n "$flags" ] && polluted=" polluted=${flags# }"
-	echo "$name exit=$status load=$load $(grep -o 'compile-count=[0-9]*' "$out/$name.log" | head -1) $(grep '^compiler:' "$out/$name.log") wall=$(echo "$end - $start" | bc | cut -c1-6)s cpu=$(cat "$out/$name.cpu")s peak-rss=$(awk '{printf "%.2f GB", $1 / 1048576}' "$out/$name.peak") gc-ms=$(gc_ms "$out/$name.log")$polluted"
+	echo "$name exit=$status load=$load $(grep -o 'compile-count=[0-9]*' "$out/$name.log" | head -1) $(grep '^compiler:' "$out/$name.log") wall=$(echo "$end - $start" | bc | cut -c1-6)s cpu=$(cat "$out/$name.cpu")s peak-rss=$(awk '{printf "%.2f GB", $1 / 1048576}' "$out/$name.peak") gc-ms=$(gc_ms "$out/$name.log") gc-frontend-ms=$(gc_frontend_ms "$out/$name.log")$polluted"
 done
