@@ -398,6 +398,13 @@ private class IrTypeAwareWalkState {
 	/** Re-derives the edges that depend on which types are created. */
 	function expand():Void {
 		for (site in sites) {
+			// The receiver's own class keeps the method it names even when no instance is created: the verifier resolves a method call
+			// against that class's table (a base class nothing constructs, a type only native code makes).
+			if (!site.isInterface) {
+				var declared = index.findMethod(site.typeName, site.method);
+				if (declared != null)
+					reach(declared, false);
+			}
 			var candidates = site.isInterface ? index.implementorsOf(site.typeName) : index.subtypesOf(site.typeName);
 			for (candidate in candidates)
 				if (createdClasses.exists(candidate.name)) {
