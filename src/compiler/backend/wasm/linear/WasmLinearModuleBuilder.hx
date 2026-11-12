@@ -10,6 +10,7 @@ import compiler.backend.wasm.WasmFunctionLower;
 import compiler.backend.wasm.WasmEncoder;
 import compiler.backend.wasm.gc.WasmGcRoots;
 import compiler.backend.wasm.WasmLayout;
+import compiler.backend.wasm.EnumStringDescriptors;
 import compiler.backend.wasm.WasmModule.WasmFunction;
 import compiler.backend.wasm.WasmModule.WasmModule;
 import compiler.backend.wasm.WasmPatch;
@@ -294,6 +295,7 @@ class WasmLinearModuleBuilder {
 		usedNatives = IrReachability.natives(program, reachable);
 		compiler.backend.wasm.WasmValueLaneRuntime.attach(program, reachable, usedNatives);
 		stringifiableEnums = usedNatives.exists("__std_string") ? WasmModuleSupport.stringifiableEnums(program, reachable) : [];
+		var enumStringDescriptors = new EnumStringDescriptors(program, stringifiableEnums, enumDeclarations);
 		layout = new WasmLayout(program, logicalProgram, module.runtimeTypeIds);
 		strings = [];
 		var nextData = memoryBase + WasmLayout.STRING_DATA_OFFSET;
@@ -311,7 +313,7 @@ class WasmLinearModuleBuilder {
 							}
 						default:
 					}
-		for (value in ["null", "true", "false", "Object"].concat(WasmLinearRuntime.dynamicStringConstants(program, stringifiableEnums, enumDeclarations))
+		for (value in ["null", "true", "false", "Object"].concat(WasmLinearRuntime.dynamicStringConstants(program, enumStringDescriptors))
 			.concat(WasmLinearDynamicArrays.runtimeStrings(program)))
 			if (!strings.exists(value)) {
 				var bytes = WasmModuleSupport.stringBytes(value, module.runtimeTypeIds),
@@ -320,7 +322,7 @@ class WasmLinearModuleBuilder {
 				strings.set(value, offset);
 				nextData = WasmModuleSupport.align(offset + bytes.length, 8);
 			}
-		var enumStrings = WasmLinearEnumStringTable.place(module, program, layout, strings, stringifiableEnums, enumDeclarations, nextData);
+		var enumStrings = WasmLinearEnumStringTable.place(module, enumStringDescriptors, layout, strings, nextData);
 		nextData = enumStrings.end;
 		var staticData = WasmModuleSupport.placeStaticData(program, module, nextData, reachable);
 		nextData = staticData.end;
@@ -419,7 +421,7 @@ class WasmLinearModuleBuilder {
 			reflectionBytes: reflectionBytes
 		};
 		linear = new WasmLinearContext(module, program, layout, options, linearState);
-		linear.stringifiableEnums = stringifiableEnums;
+		linear.enumStringDescriptors = enumStringDescriptors;
 		linear.enumStringTable = enumStrings.address;
 		linear.enumStringRows = enumStrings.count;
 		linear.pendingExceptionFlag = pendingExceptionFlag;

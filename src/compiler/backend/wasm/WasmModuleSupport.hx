@@ -96,15 +96,6 @@ class WasmModuleSupport {
 		return result;
 	}
 
-	public static function hasStringifiablePayload(program:IrProgram, names:Map<String, Bool>):Bool {
-		for (entry in program.enums)
-			if (names.exists(entry.name))
-				for (constructor in entry.cases)
-					if (constructor.params.length > 0)
-						return true;
-		return false;
-	}
-
 	/** Linear GC needs every cached enum root before its collector is generated. */
 	public static function nullaryEnumKeys(program:IrProgram, reachable:Map<String, Bool>):Array<String> {
 		var used:Map<String, Bool> = [];

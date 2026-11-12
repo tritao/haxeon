@@ -11,6 +11,7 @@ import compiler.ir.IrFunction;
 import compiler.backend.wasm.WasmTypes.WasmInstruction;
 import compiler.backend.wasm.WasmTypes.WasmValueType;
 import compiler.backend.wasm.WasmModuleSupport;
+import compiler.backend.wasm.EnumStringDescriptors;
 import compiler.backend.wasm.WasmDynamicCalls;
 import compiler.backend.wasm.WasmRepresentation.WasmAggregateRepresentation;
 import compiler.backend.wasm.WasmRepresentation.WasmCallRepresentation;
@@ -1474,7 +1475,7 @@ class WasmGcRepresentation implements WasmValueRepresentation implements WasmAgg
 			Call(name),
 			LocalSet(outputLocal)
 		]);
-		if (WasmModuleSupport.hasStringifiablePayload(plan.program, gc.stringifiableEnums)) {
+		if ((gc.enumStringDescriptors != null && gc.enumStringDescriptors.hasPayload)) {
 			var concat = WasmModuleSupport.requiredFunctionIndex(gc.functions, "__haxeon_enum_string_concat"),
 				recursive = WasmModuleSupport.requiredFunctionIndex(gc.functions, "__std_string"),
 				accessorType = gc.module.typeIndex(plan.wasmFunctionType([Dyn, I32], Dyn));
@@ -1531,7 +1532,7 @@ class WasmGcRepresentation implements WasmValueRepresentation implements WasmAgg
 				getData,
 				LocalSet(kind),
 				LocalGet(kind),
-				I32Const(WasmGcEnumStringTable.TAG),
+				I32Const(EnumStringDescriptors.TAG),
 				I32Eq,
 				If(null)
 			]);

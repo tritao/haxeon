@@ -1,7 +1,7 @@
 package compiler.backend.wasm.gc;
 
 import compiler.backend.wasm.gc.WasmGcTypePlan;
-import compiler.ir.Ir.IrEnum;
+import compiler.backend.wasm.EnumStringDescriptors;
 import compiler.backend.wasm.WasmModule.WasmModule;
 import compiler.backend.wasm.WasmTypes.WasmInstruction;
 import compiler.backend.wasm.WasmTypes.WasmValueType;
@@ -16,7 +16,7 @@ class WasmGcContext {
 	public final globals:Map<String, Int>;
 	public final methods:Map<String, String>;
 	public var tableSlots:Map<String, Int> = [];
-	public var stringifiableEnums:Map<String, Bool> = [];
+	public var enumStringDescriptors:Null<EnumStringDescriptors>;
 	public var enumStringTable:Null<{
 		segment:Int,
 		words:Int,
@@ -27,9 +27,6 @@ class WasmGcContext {
 		cacheTypeIndex:Int,
 		narrow:Bool
 	}>;
-
-	/** Logical declarations remain available when release mode drops a tag's boxed descriptor. */
-	public var enumDeclarations:Array<IrEnum> = [];
 
 	/** Generated adapter targets whose static closures are only receiver-query markers. */
 	public final closureProbeTargets:Map<String, Bool> = [];

@@ -1,21 +1,9 @@
 package compiler.backend.wasm.gc;
 
-import compiler.ir.Ir.IrEnum;
-import compiler.ir.Ir.IrProgram;
-import compiler.ir.Ir.IrType;
+import compiler.backend.wasm.EnumStringDescriptors;
 
-/** Passive data for the shared GC enum formatter; offsets in metadata are i32-array indices. */
+/** Passive data for the shared GC enum formatter; offsets in metadata are array indices. */
 class WasmGcEnumStringTable {
-	public static inline final REFERENCE = 0;
-	public static inline final INTEGER = 1;
-	public static inline final BOOLEAN = 2;
-	public static inline final INTEGER64 = 3;
-	public static inline final FLOAT = 4;
-	public static inline final TAG = 5;
-	public static inline final RAW_POINTER = 6;
-	public static inline final TYPE_REFERENCE = 7;
-	public static inline final NATIVE_CALLBACK = 8;
-
 	public final bytes:haxe.io.Bytes;
 	public final words:Int;
 	public final names:Int;
@@ -23,8 +11,7 @@ class WasmGcEnumStringTable {
 	/** Use packed 16-bit metadata when all offsets and slots fit; larger modules use 32-bit words. */
 	public final narrow:Bool;
 
-	public function new(program:IrProgram, selected:Map<String, Bool>, declarations:Array<IrEnum>, accessors:Map<String, Array<Int>>,
-			matchers:Map<String, Int>) {
+	public function new(model:EnumStringDescriptors, accessors:Map<String, Array<Int>>, matchers:Map<String, Int>) {
 		var data:Array<Int> = [0, 0, 0, 0],
 			nameBytes:Array<haxe.io.Bytes> = [],
 			nameIds:Map<String, Int> = [];
@@ -37,8 +24,8 @@ class WasmGcEnumStringTable {
 			nameIds.set(value, result);
 			return result;
 		}
-		var groups:Array<IrEnum> = [for (entry in program.enums) if (selected.exists(entry.name)) entry];
-		var descriptors:Map<String, Int> = [];
+		var groups = model.groups;
+		var descriptors:Map<Int, Int> = [];
 		data[0] = groups.length;
 		data[1] = data.length;
 		for (_ in groups) {
@@ -63,49 +50,37 @@ class WasmGcEnumStringTable {
 			for (caseIndex in 0...group.cases.length) {
 				var item = group.cases[caseIndex],
 					itemAt = casesAt + caseIndex * 3;
-				data[itemAt] = nameId(item.params.length == 0 ? item.name : item.name + "(");
-				if (item.params.length == 0)
+				data[itemAt] = nameId(item.name);
+				if (item.descriptor < 0)
 					continue;
 				var groupAccessors = accessors.get(group.name);
 				if (groupAccessors == null || groupAccessors[caseIndex] < 0)
 					throw 'Missing enum string accessor for ${group.name} case $caseIndex';
 				data[itemAt + 2] = groupAccessors[caseIndex];
-				var key = fieldKey(item.params),
-					existing = descriptors.get(key);
+				var existing = descriptors.get(item.descriptor);
 				if (existing != null) {
 					data[itemAt + 1] = existing;
 					continue;
 				}
-				descriptors.set(key, data.length);
+				descriptors.set(item.descriptor, data.length);
 				data[itemAt + 1] = data.length;
-				data.push(item.params.length);
+				var fields = model.descriptors[item.descriptor];
+				data.push(fields.length);
 				var fieldsAt = data.length;
-				for (_ in item.params) {
+				for (_ in fields) {
 					data.push(0);
 					data.push(0);
 					data.push(0);
 				}
-				for (field in 0...item.params.length) {
-					var at = fieldsAt + field * 3;
-					data[at] = switch item.params[field] {
-						case I32: INTEGER;
-						case Bool: BOOLEAN;
-						case I64: INTEGER64;
-						case F32 | F64: FLOAT;
-						case RawPtr: RAW_POINTER;
-						case TypeRef: TYPE_REFERENCE;
-						case Abstract("native_callback"): NATIVE_CALLBACK;
-						case EnumTag(name):
-							var tagged = Lambda.find(declarations, entry -> entry.name == name);
-							if (tagged == null)
-								throw 'Missing enum declaration "$name"';
-							data[at + 1] = tagged.cases.length;
-							data[at + 2] = data.length;
-							for (tag in tagged.cases)
-								data.push(nameId(tag.name));
-							TAG;
-						default: REFERENCE;
-					};
+				for (field in 0...fields.length) {
+					var at = fieldsAt + field * 3, entry = fields[field];
+					data[at] = EnumStringDescriptors.code(entry.kind);
+					if (data[at] == EnumStringDescriptors.TAG) {
+						data[at + 1] = entry.tagNames.length;
+						data[at + 2] = data.length;
+						for (name in entry.tagNames)
+							data.push(nameId(name));
+					}
 				}
 			}
 		}
@@ -141,23 +116,5 @@ class WasmGcEnumStringTable {
 			} else
 				bytes.setInt32(index * 4, data[index]);
 		}
-	}
-
-	/** Deduplicate equal kind sequences; enum tags retain their distinct name tables. */
-	static function fieldKey(fields:Array<IrType>):String {
-		var parts:Array<String> = [];
-		for (field in fields)
-			parts.push(switch field {
-				case I32: "i";
-				case Bool: "b";
-				case I64: "l";
-				case F32 | F64: "f";
-				case RawPtr: "p";
-				case TypeRef: "t";
-				case Abstract("native_callback"): "c";
-				case EnumTag(name): "e" + name.length + ":" + name;
-				default: "r";
-			});
-		return parts.join(";");
 	}
 }

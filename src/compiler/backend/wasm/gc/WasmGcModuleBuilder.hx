@@ -18,6 +18,7 @@ import compiler.ir.IrVerifier;
 import compiler.ir.IrObjectTable;
 import compiler.ir.IrScalarReplacement;
 import compiler.backend.wasm.WasmModuleSupport.WasmClosureTypes;
+import compiler.backend.wasm.EnumStringDescriptors;
 import compiler.backend.wasm.WasmFunctionLower;
 import compiler.backend.wasm.WasmEncoder;
 import compiler.backend.wasm.WasmExceptionLowering;
@@ -152,8 +153,7 @@ class WasmGcModuleBuilder {
 			methods:Map<String, String> = [],
 			gcContext = new WasmGcContext(module, plan, functions, globals, methods),
 			gcRepresentation = new WasmGcRepresentation(gcContext);
-		gcContext.enumDeclarations = enumDeclarations;
-		gcContext.stringifiableEnums = stringifiableEnums;
+		gcContext.enumStringDescriptors = new EnumStringDescriptors(program, stringifiableEnums, enumDeclarations);
 		module.runtimeTypeIds = plan.runtimeTypeIds;
 		plan.addTo(module);
 		module.importMemory = importMemory;
@@ -566,40 +566,40 @@ class WasmGcModuleBuilder {
 
 	/** Add typed field readers without changing the constructor structs or their allocation. */
 	static function addGcEnumStringTable(module:WasmModule, plan:WasmGcTypePlan, context:WasmGcContext, representation:WasmGcRepresentation):Void {
-		if (!Lambda.exists(plan.program.enums, entry -> context.stringifiableEnums.exists(entry.name)))
+		var model = context.enumStringDescriptors;
+		if (model == null || model.groups.length == 0)
 			return;
 		// These short names are only debug labels; dispatch uses table indices.
 		var accessors:Map<String, Array<Int>> = [], matchers:Map<String, Int> = [], serial = 0;
-		for (entry in plan.program.enums)
-			if (context.stringifiableEnums.exists(entry.name)) {
-				var matcher = module.addFunction(new WasmFunction('esm${serial++}', plan.wasmFunctionType([Dyn], Bool), [], [
-					LocalGet(0),
-					RefTest({nullable: false, heap: Type(plan.enumType(entry.name))}),
-					Return
-				]));
-				matchers.set(entry.name, module.tableElements.length);
-				module.tableElements.push(matcher);
-				var slots:Array<Int> = [];
-				for (index in 0...entry.cases.length) {
-					var fields = entry.cases[index].params;
-					if (fields.length == 0) {
-						slots.push(-1);
-						continue;
-					}
-					var locals:Array<WasmLocal> = [], next = 2, allocate:WasmValueType->Int = function(type) {
-						locals.push({type: type});
-						return next++;
-					};
-					var body = representation.forFunction({allocateLocal: allocate, exceptionTag: null, irFunction: null})
-						.enumStringAccessorBody(entry.name, index, fields);
-					var fn = module.addFunction(new WasmFunction('esf${serial++}', plan.wasmFunctionType([Dyn, I32], Dyn), locals, body));
-					slots.push(module.tableElements.length);
-					module.tableElements.push(fn);
+		for (entry in model.groups) {
+			var matcher = module.addFunction(new WasmFunction('esm${serial++}', plan.wasmFunctionType([Dyn], Bool), [], [
+				LocalGet(0),
+				RefTest({nullable: false, heap: Type(plan.enumType(entry.name))}),
+				Return
+			]));
+			matchers.set(entry.name, module.tableElements.length);
+			module.tableElements.push(matcher);
+			var slots:Array<Int> = [];
+			for (index in 0...entry.cases.length) {
+				var fields = entry.cases[index].parameters;
+				if (fields.length == 0) {
+					slots.push(-1);
+					continue;
 				}
-				accessors.set(entry.name, slots);
+				var locals:Array<WasmLocal> = [], next = 2, allocate:WasmValueType->Int = function(type) {
+					locals.push({type: type});
+					return next++;
+				};
+				var body = representation.forFunction({allocateLocal: allocate, exceptionTag: null, irFunction: null})
+					.enumStringAccessorBody(entry.name, index, fields);
+				var fn = module.addFunction(new WasmFunction('esf${serial++}', plan.wasmFunctionType([Dyn, I32], Dyn), locals, body));
+				slots.push(module.tableElements.length);
+				module.tableElements.push(fn);
 			}
+			accessors.set(entry.name, slots);
+		}
 		module.tableMin = module.tableElements.length;
-		var table = new WasmGcEnumStringTable(plan.program, context.stringifiableEnums, context.enumDeclarations, accessors, matchers),
+		var table = new WasmGcEnumStringTable(model, accessors, matchers),
 			segment = module.data.length;
 		module.data.push({
 			offset: 0,
@@ -661,7 +661,7 @@ class WasmGcModuleBuilder {
 			functions.set("__haxeon_enum_string_name",
 				module.addFunction(new WasmFunction("__haxeon_enum_string_name", plan.wasmFunctionType([I32], Bytes), nameLocals, nameBody)));
 		}
-		if (WasmModuleSupport.hasStringifiablePayload(plan.program, context.stringifiableEnums)) {
+		if ((context.enumStringDescriptors != null && context.enumStringDescriptors.hasPayload)) {
 			var concatLocals:Array<WasmLocal> = [],
 				concatNext = 2,
 				allocateConcat:WasmValueType->Int = function(type) {

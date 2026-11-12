@@ -1,6 +1,7 @@
 import compiler.ir.Ir;
 import compiler.backend.Backend.BackendTarget;
 import compiler.backend.wasm.WasmLayout;
+import compiler.backend.wasm.EnumStringDescriptors;
 import compiler.backend.wasm.WasmModule;
 import compiler.backend.wasm.WasmTypes;
 import compiler.backend.wasm.WasmTypeIdPlan;
@@ -16,6 +17,7 @@ class WasmStringFinalizationMain {
 		checkSharedLinearFormatter();
 		checkSharedGcFormatter();
 		checkGcPayloadLayout();
+		checkSharedEnumDescriptors();
 		checkGcDescriptorWidths();
 		checkGcDescriptorKeys();
 		checkGcWideDescriptorExecution();
@@ -67,7 +69,7 @@ class WasmStringFinalizationMain {
 				reflectionBytes: null
 			});
 			context.allocatorFunction = allocator;
-			context.stringifiableEnums = ["Sample" => true];
+			context.enumStringDescriptors = new EnumStringDescriptors(program, ["Sample" => true], program.enums);
 			context.enumStringTable = 256;
 			context.enumStringRows = 1;
 			WasmLinearRuntime.register(context);
@@ -97,7 +99,7 @@ class WasmStringFinalizationMain {
 				"__haxeon_enum_string_concat" => 2
 			];
 			var context = new compiler.backend.wasm.gc.WasmGcContext(module, plan, functions, [], []);
-			context.stringifiableEnums = selected;
+			context.enumStringDescriptors = new EnumStringDescriptors(program, selected, program.enums);
 			context.enumStringTable = {
 				segment: 0,
 				words: 1,
@@ -137,8 +139,7 @@ class WasmStringFinalizationMain {
 		}
 		var originalGroup = encodeGroup(), originalCount = module.types.length;
 		var context = new compiler.backend.wasm.gc.WasmGcContext(module, plan, [], [], []);
-		context.enumDeclarations = program.enums;
-		context.stringifiableEnums = ["Payload" => true];
+		context.enumStringDescriptors = new EnumStringDescriptors(program, ["Payload" => true], program.enums);
 		var representation = new compiler.backend.wasm.gc.WasmGcRepresentation(context);
 		compiler.backend.wasm.gc.WasmGcModuleBuilder.addGcEnumStringTable(module, plan, context, representation);
 		if (originalGroup.compare(encodeGroup()) != 0 || module.types.length <= originalCount)
@@ -151,12 +152,45 @@ class WasmStringFinalizationMain {
 		Sys.println("PASS: enum stringification preserves the Wasm GC recursive type group and payload fields");
 	}
 
+	/** Both backends consume one logical selection and intern equal kind/tag sequences. */
+	static function checkSharedEnumDescriptors():Void {
+		var program = new IrProgram("main");
+		program.enums = [
+			{
+				name: "Carrier",
+				cases: [
+					{name: "First", params: [I32, EnumTag("TagA")]},
+					{name: "Second", params: [I32, EnumTag("TagB")]},
+					{name: "Other", params: [EnumTag("TagA"), I32]},
+					{name: "Empty", params: []}
+				]
+			},
+			{name: "Unused", cases: [{name: "Hidden", params: [I32]}]}
+		];
+		var declarations = program.enums.concat([
+			{name: "TagA", cases: [{name: "Same", params: []}]},
+			{name: "TagB", cases: [{name: "Same", params: []}]}
+		]);
+		var model = new EnumStringDescriptors(program, ["Carrier" => true], declarations),
+			cases = model.groups[0].cases;
+		if (model.groups.length != 1
+			|| !model.hasPayload
+			|| cases[0].descriptor != cases[1].descriptor
+			|| cases[0].descriptor == cases[2].descriptor
+			|| cases[3].descriptor != -1)
+			throw "Enum string descriptor selection or interning is inconsistent";
+		if (model.names().join("|") != "First(|Second(|Other(|Empty|Same|Same|Same")
+			throw "Enum string descriptor names or tags are inconsistent";
+		Sys.println("PASS: shared enum string descriptors select names and intern matching field kinds");
+	}
+
 	/** The compact table must also support modules exceeding 16-bit offsets or table slots. */
 	static function checkGcDescriptorWidths():Void {
 		function make(name:String, matcher:Int):compiler.backend.wasm.gc.WasmGcEnumStringTable {
 			var program = new IrProgram("main");
 			program.enums = [{name: "E", cases: [{name: name, params: []}]}];
-			return new compiler.backend.wasm.gc.WasmGcEnumStringTable(program, ["E" => true], program.enums, ["E" => [-1]], ["E" => matcher]);
+			return new compiler.backend.wasm.gc.WasmGcEnumStringTable(new EnumStringDescriptors(program, ["E" => true], program.enums), ["E" => [-1]],
+				["E" => matcher]);
 		}
 		var small = make("Short", 17),
 			bigName = make(StringTools.lpad("X", "x", 70000), 17),
@@ -185,7 +219,8 @@ class WasmStringFinalizationMain {
 			{name: "B", cases: [{name: "B1", params: []}]},
 			{name: "A;e:B", cases: [{name: "Combined", params: []}]}
 		]);
-		var table = new compiler.backend.wasm.gc.WasmGcEnumStringTable(program, ["Carrier" => true], declarations, ["Carrier" => [1, 2]], ["Carrier" => 0]);
+		var table = new compiler.backend.wasm.gc.WasmGcEnumStringTable(new EnumStringDescriptors(program, ["Carrier" => true], declarations),
+			["Carrier" => [1, 2]], ["Carrier" => 0]);
 		if (!table.narrow)
 			throw "Expected compact descriptors";
 		var casesAt = table.bytes.getUInt16(6 * 2),

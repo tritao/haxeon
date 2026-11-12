@@ -13,6 +13,7 @@ import compiler.backend.wasm.WasmModule.WasmModule;
 import compiler.backend.wasm.WasmFunctionBuilder.WasmFunctionBuilder;
 import compiler.backend.wasm.WasmFunctionBuilder.WasmLocalRef;
 import compiler.backend.wasm.WasmModuleSupport;
+import compiler.backend.wasm.EnumStringDescriptors;
 
 class WasmLinearRuntime {
 	/** Whether runtime errors throw a catchable Haxe exception; set per module by `register`. */
@@ -177,7 +178,7 @@ class WasmLinearRuntime {
 						case "__reflect_is_object":
 							functions.set(native.name, addDynamicIsObject(module, native.name, program));
 						case "__std_string":
-							if (WasmModuleSupport.hasStringifiablePayload(program, context.stringifiableEnums)
+							if ((context.enumStringDescriptors != null && context.enumStringDescriptors.hasPayload)
 								&& !functions.exists("__string_concat"))
 								functions.set("__string_concat", addStringConcat(module, "__string_concat", allocator, requiredStringOffset(strings, "null")));
 							var integerString = addIntToString(module, "__haxeon_i32_to_string", allocator),
@@ -4267,7 +4268,7 @@ class WasmLinearRuntime {
 					b.emit(I32Load(4));
 					b.localSet(kind);
 					b.localGet(kind);
-					b.i32Const(WasmLinearEnumStringTable.REFERENCE);
+					b.i32Const(EnumStringDescriptors.REFERENCE);
 					b.emit(I32Eq);
 					b.if_(b -> {
 						b.localGet(address);
@@ -4276,7 +4277,7 @@ class WasmLinearRuntime {
 						b.localSet(part);
 					});
 					b.localGet(kind);
-					b.i32Const(WasmLinearEnumStringTable.INTEGER);
+					b.i32Const(EnumStringDescriptors.INTEGER);
 					b.emit(I32Eq);
 					b.if_(b -> {
 						b.localGet(address);
@@ -4285,7 +4286,7 @@ class WasmLinearRuntime {
 						b.localSet(part);
 					});
 					b.localGet(kind);
-					b.i32Const(WasmLinearEnumStringTable.BOOLEAN);
+					b.i32Const(EnumStringDescriptors.BOOLEAN);
 					b.emit(I32Eq);
 					b.if_(b -> {
 						b.localGet(address);
@@ -4294,7 +4295,7 @@ class WasmLinearRuntime {
 						b.localSet(part);
 					});
 					b.localGet(kind);
-					b.i32Const(WasmLinearEnumStringTable.INTEGER64);
+					b.i32Const(EnumStringDescriptors.INTEGER64);
 					b.emit(I32Eq);
 					b.if_(b -> {
 						b.localGet(address);
@@ -4303,7 +4304,7 @@ class WasmLinearRuntime {
 						b.localSet(part);
 					});
 					b.localGet(kind);
-					b.i32Const(WasmLinearEnumStringTable.FLOAT);
+					b.i32Const(EnumStringDescriptors.FLOAT);
 					b.emit(I32Eq);
 					b.if_(b -> {
 						if (floatString == null)
@@ -4316,7 +4317,7 @@ class WasmLinearRuntime {
 						}
 					});
 					b.localGet(kind);
-					b.i32Const(WasmLinearEnumStringTable.TAG);
+					b.i32Const(EnumStringDescriptors.TAG);
 					b.emit(I32Eq);
 					b.if_(b -> {
 						b.i32Const(requiredStringOffset(strings, "null"));
@@ -4376,37 +4377,14 @@ class WasmLinearRuntime {
 		}));
 	}
 
-	/** Static strings dynamic stringification returns: class names and parameterless enum constructor names. */
-	public static function dynamicStringConstants(program:IrProgram, stringifiable:Map<String, Bool>,
-			enumDeclarations:Array<compiler.ir.Ir.IrEnum>):Array<String> {
+	/** Static strings used by object and enum dynamic stringification. */
+	public static function dynamicStringConstants(program:IrProgram, descriptors:EnumStringDescriptors):Array<String> {
 		var result:Array<String> = [for (object in program.objects) object.name];
-		if (WasmModuleSupport.hasStringifiablePayload(program, stringifiable)) {
+		if (descriptors.hasPayload) {
 			result.push(",");
 			result.push(")");
 		}
-		for (enumDecl in program.enums)
-			if (stringifiable.exists(enumDecl.name))
-				for (constructor in enumDecl.cases)
-					if (constructor.params.length == 0)
-						result.push(constructor.name);
-					else
-						result.push(constructor.name + "(");
-		// Tag-only enums may have no physical descriptor in release modules, but their names
-		// remain observable when a selected payload stores the scalar tag.
-		for (enumDecl in program.enums)
-			if (stringifiable.exists(enumDecl.name))
-				for (constructor in enumDecl.cases)
-					for (parameter in constructor.params)
-						switch parameter {
-							case EnumTag(name):
-								var declaration = Lambda.find(enumDeclarations, entry -> entry.name == name);
-								if (declaration == null)
-									throw 'Missing enum declaration "$name"';
-								for (item in declaration.cases)
-									result.push(item.name);
-							default:
-						}
-		return result;
+		return result.concat(descriptors.names());
 	}
 
 	public static function finalizeDynamicString(context:WasmLinearContext):Void {
@@ -4421,7 +4399,7 @@ class WasmLinearRuntime {
 		context.module.setFunction(dynamicString,
 			WasmLinearRuntime.dynamicString(context.module, "__std_string", context.strings, context.program, integerString, int64String, floatString,
 				context.functions, context.enumStringTable, context.enumStringRows,
-				WasmModuleSupport.hasStringifiablePayload(context.program, context.stringifiableEnums)));
+				(context.enumStringDescriptors != null && context.enumStringDescriptors.hasPayload)));
 	}
 
 	public static function addStringEqual(module:WasmModule, name:String):Int {
