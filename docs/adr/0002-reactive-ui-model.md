@@ -561,6 +561,16 @@ retention scenarios, budgets that may only go down, memory runs, compiler suites
    Against the pushed text/icon head, telemetry step falls from 15,078 objects / 630,336 bytes to
    14,983 / 624,712; the fifteen standard actions and six CNC pilot actions are identical. No exception is used.
 
+   **Focus capture before widget ports.** Focus, blur and focus-lost follow capture from root through the target,
+   followed by target dispatch, with no ancestor bubbling. Each registered target listener runs in its selected phase
+   exactly once. Stable component wrappers can therefore observe focus without attaching callbacks to replaceable
+   body nodes or adding Button-specific callback props. Recursive traversal fixes the ancestor path before handlers
+   run without allocating an array. Dispatch of a prepared event allocates zero; construction of the existing
+   `UiEvent` remains outside that interval. The portable routing and allocation fixtures cover all three targets.
+   The event phases are documented in `packages/ui/docs/EVENTS.md`. The exact fifteen standard and seven pilot actions
+   are unchanged against `835a2bbc8` / outer `7eff0a036`; pilot fresh-mount verification passes. The routing regression
+   fails against the old control on HashLink (exit 1), and passes on all three targets with inlining off/on.
+
    Foundation evidence is retained under `/media/joao/DATA1/haxeon-stage5-gates/evidence/`:
    `native-foundation-pilot-comparison.log`, `worker-binding-trace-comparison.json`, the paired
    `current-*-all-census.json` and `current-*-pilot-census.json`, and the six-configuration

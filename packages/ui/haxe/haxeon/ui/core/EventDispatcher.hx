@@ -5,7 +5,8 @@ import nativekit.ffi.NativeKit;
 import haxeon.ui.core.CursorShape as UiCursorShape;
 import haxeon.ui.style.StyleState;
 
-/** Capture/target/bubble dispatch with per-pointer hover and pointer capture. */
+/** Capture/target/bubble dispatch with per-pointer hover and pointer capture.
+ * Focus, blur and focus-lost capture root to target, then dispatch once at the target without bubbling. */
 class EventDispatcher {
 	var root:Null<RenderNode>;
 	var nodesById:Null<Map<Int, RenderNode>>;
@@ -637,8 +638,25 @@ class EventDispatcher {
 			node = root.find(id);
 		if (node == null)
 			return;
-		var event = new UiEvent(kind, id);
+		dispatchPreparedDirect(node, new UiEvent(kind, id));
+	}
+
+	/** Dispatch an existing non-bubbling event without allocating traversal storage. */
+	function dispatchPreparedDirect(node:RenderNode, event:UiEvent):Void {
+		captureDirect(node, event);
+		if (event.propagationStopped) return;
 		event.phase = "target";
+		event.setCurrentTarget(node);
+		node.invoke(event);
+	}
+
+	/** Focus does not bubble, but stable component ancestors can observe its capture phase.
+	 * Recursion fixes the ancestor path before handlers run without allocating a path array. */
+	function captureDirect(node:RenderNode, event:UiEvent):Void {
+		var parent = node.parent;
+		if (parent != null) captureDirect(parent, event);
+		if (event.propagationStopped) return;
+		event.phase = "capture";
 		event.setCurrentTarget(node);
 		node.invoke(event);
 	}

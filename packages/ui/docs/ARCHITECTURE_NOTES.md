@@ -21,6 +21,12 @@ with two layout passes. Allocation per action: tab switch 112–165 KiB (from 30
 typing 17.8 KiB, idle 0.2 KiB. The layout bridge (encode, parse, prepare, decode) fell 88% on interaction and 55% on tab
 switches. Details: `RETAINED_SUBTREES.md`, `LAYOUT_COST.md`.
 
+## Input event phases
+
+Focus, blur and focus-lost capture from root through the target, then deliver at the target without bubbling.
+Stable component wrappers observe focus in capture, while each target listener runs exactly once in its phase.
+See [Event phases](EVENTS.md) for routing, propagation and allocation rules.
+
 ## Declared value conformances
 
 `Hashable` and `Diffable` declarations use one generated equality/hash and declaration-order field masks

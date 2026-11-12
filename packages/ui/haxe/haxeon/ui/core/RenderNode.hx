@@ -574,6 +574,8 @@ class RenderNode {
 		return this;
 	}
 
+	/** Capture listeners run before target delivery. Non-bubbling focus events still capture root to target;
+	 * a target's default listener runs once, and an ancestor's default listener does not run for them. */
 	public function on(kind:String, handler:UiEvent->Void, phase:String = "bubble"):RenderNode {
 		if (phase != "capture" && phase != "target" && phase != "bubble")
 			throw "Event handlers require a kind and callback";
