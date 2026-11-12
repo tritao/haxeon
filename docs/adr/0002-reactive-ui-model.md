@@ -534,7 +534,18 @@ retention scenarios, budgets that may only go down, memory runs, compiler suites
    increase: telemetry → console saves 2 objects / 72 bytes, and the other fourteen actions are identical.
    A similar exception requires a demonstrated correctness fix; other unresolved allocation increases still stop
    the affected family. Foundation gates and the remaining widget/panel migrations must complete before stage 5
-   is marked done. Evidence is retained under `/media/joao/DATA1/haxeon-stage5-gates/evidence/`:
+   is marked done.
+
+   **Native text and icon leaves.** `Text` and `Icon` have constructor inputs in final fields and emit their terminal
+   render nodes directly. Structural ownership belongs to their enclosing `TrackedScope` / `EqualChild`; changing
+   leaf text uses `BoundText`. These leaves have no component-owned state and need no additional structural owner.
+   Text applies an authored typography override only when at least one font-size, letter-spacing or color value
+   is present; explicit zero spacing and transparent color remain authored values. Icon painting uses the existing
+   canvas save/restore operations with `defer`, preserving restoration on failure without a nested paint lambda.
+   No binding primitive or compatibility API is added. `TextIconMain` covers inherited, stylesheet and local
+   typography precedence and icon semantics on HashLink, Wasm32 and Wasm GC with both inline settings.
+
+   Foundation evidence is retained under `/media/joao/DATA1/haxeon-stage5-gates/evidence/`:
    `native-foundation-pilot-comparison.log`, `worker-binding-trace-comparison.json`, the paired
    `current-*-all-census.json` and `current-*-pilot-census.json`, and the six-configuration
    `*-resource-lifetime-parity.log` reproductions.

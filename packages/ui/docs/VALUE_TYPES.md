@@ -5725,3 +5725,4 @@ fixed that harness cause before the accepted browser measurements.
 | Batch | Allocation evidence (objects / bytes) |
 | --- | --- |
 | Native scope and text ownership | Standard 15 actions: fourteen identical; telemetry → console 1,710 / 93,752 → 1,708 / 93,680. CNC resume 1,479 / 77,304 → 1,462 / 76,384. Telemetry step 14,978 / 629,752 → 15,080 / 630,520: approved correctness exception because the control disposed all 18 live worker bindings early (ADR 0002 stage 5); native counts are the baseline for later batches. |
+| Immutable Text / Icon leaves | Selection 8,589 / 583,816 → 8,565 / 581,608; the other fourteen standard actions are identical. CNC source 4,705 / 276,616 → 4,615 / 268,336; telemetry step 15,080 / 630,520 → 15,078 / 630,336. No action increases. |

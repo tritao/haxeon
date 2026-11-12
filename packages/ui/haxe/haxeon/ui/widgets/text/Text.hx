@@ -16,9 +16,9 @@ import haxeon.ui.theme.TextRole;
 
 /** Text view backed by the NativeUI/Skribidi text layout primitive. */
 class Text implements View {
-	public var value:String;
+	public final value:String;
 	public final style:LayoutStyle;
-	public var color:Null<Color>;
+	public final color:Null<Color>;
 	public final textStyle:Null<TextStyleOverride>;
 	public final role:TextRole;
 
@@ -44,15 +44,15 @@ class Text implements View {
 		var colorSource = computed.source(StyleProperty.TextColor);
 		var fontSource = computed.source(StyleProperty.FontSize);
 		var letterSource = computed.source(StyleProperty.LetterSpacing);
-		var computedOverride = new TextStyleOverride(null,
-			(textStyle == null || textStyle.fontSize == null) && fontSource != null && fontSource.layer != "framework"
-				? computed.getNumber(StyleProperty.FontSize) : null,
-			(textStyle == null || textStyle.letterSpacing == null) && letterSource != null && letterSource.layer != "framework"
-				? computed.getNumber(StyleProperty.LetterSpacing) : null,
-			null, null, null, null,
-			color == null && colorSource != null && colorSource.layer != "framework"
-				? computed.getColor(StyleProperty.TextColor) : null);
-		resolved = resolved.merge(computedOverride);
+		var computedFontSize:Null<Float> = (textStyle == null || textStyle.fontSize == null) && fontSource != null && fontSource.layer != "framework"
+			? computed.getNumber(StyleProperty.FontSize) : null;
+		var computedLetterSpacing:Null<Float> = (textStyle == null || textStyle.letterSpacing == null) && letterSource != null && letterSource.layer != "framework"
+			? computed.getNumber(StyleProperty.LetterSpacing) : null;
+		var computedColor:Null<Color> = color == null && colorSource != null && colorSource.layer != "framework"
+			? computed.getColor(StyleProperty.TextColor) : null;
+		if (computedFontSize != null || computedLetterSpacing != null || computedColor != null)
+			resolved = resolved.merge(new TextStyleOverride(null, computedFontSize,
+				computedLetterSpacing, null, null, null, null, computedColor));
 		if (color != null)
 			resolved = resolved.withTextColor(color);
 		node.applyTextStyle(resolved);
