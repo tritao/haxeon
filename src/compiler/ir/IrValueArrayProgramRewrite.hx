@@ -185,11 +185,11 @@ class IrValueArrayProgramRewrite {
 	}
 
 	static function rewriteIndexed(program:IrProgram, element:IrType, pointerBits:Int, target:IrValueLaneTarget, index:ValueArrayFunctionIndex, slotNamespace:Int):Void {
-		var tagAdapter = switch element { case EnumTag(name): IrEnumTagStorage.request(program, name); default: null; };
+		switch element { case EnumTag(name): IrEnumTagStorage.request(program, name); default: }
 		var declarations:Map<String, IrObject> = [for (object in program.objects) object.name => object],
 			tagUnboxes:Map<String, IrType> = [],
 			objects = IrObjectTable.of(declarations),
-			factory = new IrValueArrayFactory(objects, element, pointerBits, target, slotNamespace, program.enums, tagAdapter),
+			factory = new IrValueArrayFactory(objects, element, pointerBits, target, slotNamespace, program.enums),
 			elements = new IrValueArrayElements(element, factory.helpers, factory.bridge),
 			methods = new IrValueArrayPlaceMethods(objects, element, factory.helpers),
 			originals = index.originalFunctions(program.functions),
@@ -234,8 +234,15 @@ class IrValueArrayProgramRewrite {
 			generatedOptional = optional == null ? [] : optional.functions(),
 			generatedSlots = factory.helpers.functions();
 		if (rewritten != null) program.functions = rewritten;
+		var generatedStart = program.functions.length, generatedFunctions:Array<IrFunction> = [];
 		for (generated in [generatedMethods, generatedFactories, generatedElements, generatedOptional, generatedSlots])
-			for (fn in generated) program.functions.push(fn);
+			for (fn in generated) {
+				program.functions.push(fn);
+				generatedFunctions.push(fn);
+			}
+		// Resolve only these late producers. Place methods can clone an existing body containing typed requests.
+		IrEnumTagLowering.resolveGenerated(program, generatedFunctions);
+		IrVerifier.verifyResolvedEnumOperations(program.functions.slice(generatedStart));
 		var nullableScalars = false;
 		for (slot in factory.layout.lanes.slots)
 			if (slot.nullablePayload)

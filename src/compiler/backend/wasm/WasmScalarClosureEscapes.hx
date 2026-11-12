@@ -120,13 +120,13 @@ class WasmScalarClosureEscapes {
 	function toDynamic(builder:IrBuilder, value:IrValue, type:IrType):IrValue {
 		switch type { case EnumTag(name): return builder.intrinsic(EnumTagBox(EnumTag(name)), [value], Dyn); default: }
 		var enumName = switch type { case Obj(name): inlineEnums.get(name); default: null; };
-		return enumName == null ? builder.toDyn(value) : builder.call(compiler.ir.IrInlineEnumEscapes.boxName(enumName), [value], Dyn);
+		return enumName == null ? builder.toDyn(value) : builder.intrinsic(InlineEnumBox(Enum(enumName)), [value], Dyn);
 	}
 
 	function fromDynamic(builder:IrBuilder, value:IrValue, type:IrType):IrValue {
 		switch type { case EnumTag(name): return builder.intrinsic(EnumTagUnbox(EnumTag(name)), [value], type); default: }
 		var enumName = switch type { case Obj(name): inlineEnums.get(name); default: null; };
-		return enumName == null ? builder.safeCast(value, type) : builder.call(compiler.ir.IrInlineEnumEscapes.unboxName(enumName), [value], type);
+		return enumName == null ? builder.safeCast(value, type) : builder.intrinsic(InlineEnumUnbox(Enum(enumName)), [value], type);
 	}
 
 	function rewriteFunction(fn:IrFunction):IrFunction {

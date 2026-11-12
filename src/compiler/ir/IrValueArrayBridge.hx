@@ -14,14 +14,12 @@ class IrValueArrayBridge {
 	final objects:IrObjectTable;
 	final helpers:IrValueArraySlotHelpers;
 	final name:String;
-	final tagAdapter:Null<{box:String, unbox:String}>;
 
-	public function new(element:IrType, storage:IrType, objects:IrObjectTable, helpers:IrValueArraySlotHelpers, ?tagAdapter:{box:String, unbox:String}) {
+	public function new(element:IrType, storage:IrType, objects:IrObjectTable, helpers:IrValueArraySlotHelpers) {
 		this.element = element;
 		this.storage = storage;
 		this.objects = objects;
 		this.helpers = helpers;
-		this.tagAdapter = tagAdapter;
 		this.name = "$value-array:bridge:" + haxe.crypto.Base64.encode(IrTypeCodec.encode(element));
 	}
 
@@ -34,19 +32,15 @@ class IrValueArrayBridge {
 			readIndex = read.argument("index", I32);
 		var loaded = readValue(read, readArray, readIndex, storage, []);
 		read.returnValue(switch valueType(element) {
-			case EnumTag(_):
-				if (tagAdapter == null) throw "Missing enum tag array bridge adapter";
-				read.call(tagAdapter.box, [loaded], Dyn);
-			case Enum(name): read.call(IrInlineEnumEscapes.boxName(name), [loaded], Dyn);
+			case EnumTag(name): read.intrinsic(EnumTagBox(EnumTag(name)), [loaded], Dyn);
+			case Enum(name): read.intrinsic(InlineEnumBox(Enum(name)), [loaded], Dyn);
 			default: read.toDyn(loaded);
 		});
 		var write = new IrBuilder(), writeArray = write.argument("array", arrayType), writeIndex = write.argument("index", I32),
 			input = write.argument("value", Dyn), inserting = write.argument("insert", Bool);
 		var converted = switch valueType(element) {
-			case EnumTag(_):
-				if (tagAdapter == null) throw "Missing enum tag array bridge adapter";
-				write.call(tagAdapter.unbox, [input], storage);
-			case Enum(name): write.call(IrInlineEnumEscapes.unboxName(name), [input], storage);
+			case EnumTag(name): write.intrinsic(EnumTagUnbox(EnumTag(name)), [input], storage);
+			case Enum(name): write.intrinsic(InlineEnumUnbox(Enum(name)), [input], storage);
 			default: write.safeCast(input, element);
 		};
 		var leaves = snapshot(write, converted, storage, []), references = write.constBool(false);

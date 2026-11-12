@@ -255,7 +255,7 @@ class IrScalarClosures {
 			default:
 		}
 		var enumName = inlineEnum(type);
-		return enumName == null ? builder.toDyn(value) : builder.call(IrInlineEnumEscapes.boxName(enumName), [value], Dyn);
+		return enumName == null ? builder.toDyn(value) : builder.intrinsic(InlineEnumBox(Enum(enumName)), [value], Dyn);
 	}
 
 	function fromDynamic(builder:IrBuilder, value:IrValue, type:IrType):IrValue {
@@ -264,7 +264,7 @@ class IrScalarClosures {
 			default:
 		}
 		var enumName = inlineEnum(type);
-		return enumName == null ? builder.safeCast(value, type) : builder.call(IrInlineEnumEscapes.unboxName(enumName), [value], type);
+		return enumName == null ? builder.safeCast(value, type) : builder.intrinsic(InlineEnumUnbox(Enum(enumName)), [value], type);
 	}
 
 	function mapType(type:IrType):IrType

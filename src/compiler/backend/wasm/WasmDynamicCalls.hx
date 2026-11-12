@@ -184,13 +184,13 @@ class WasmDynamicCalls {
 	function toDynamic(value:IrValue):IrValue return switch value.type {
 		case EnumTag(name): b.intrinsic(EnumTagBox(EnumTag(name)), [value], Dyn);
 		case Obj(storage) if (inlineEnums.exists(storage)):
-			b.call(compiler.ir.IrInlineEnumEscapes.boxName(inlineEnums.get(storage)), [value], Dyn);
+			b.intrinsic(InlineEnumBox(Enum(inlineEnums.get(storage))), [value], Dyn);
 		default: b.toDyn(value);
 	};
 	function fromDynamic(value:IrValue, target:IrType):IrValue return switch target {
 		case EnumTag(name): b.intrinsic(EnumTagUnbox(EnumTag(name)), [value], target);
 		case Obj(storage) if (inlineEnums.exists(storage)):
-			b.call(compiler.ir.IrInlineEnumEscapes.unboxName(inlineEnums.get(storage)), [value], target);
+			b.intrinsic(InlineEnumUnbox(Enum(inlineEnums.get(storage))), [value], target);
 		default: b.safeCast(value, target);
 	};
 		switch type {

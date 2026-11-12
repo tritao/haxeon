@@ -311,7 +311,19 @@ class IrEnumTagLowering {
 		finishEscapes(program, program.functions);
 	}
 
+	/** Resolve only the operations a late producer has just added, without rescanning earlier functions. */
+	public static function resolveGenerated(program:IrProgram, generated:Array<IrFunction>):Void {
+		for (fn in generated) for (block in fn.blocks) for (located in block.instructions)
+			switch located.value {
+				case Intrinsic(_, InlineEnumBox(_) | InlineEnumUnbox(_) | EnumTagBox(_) | EnumTagUnbox(_), _):
+					finishEscapes(program, generated);
+					return;
+				default:
+			}
+	}
+
 	static function finishEscapes(program:IrProgram, changedFunctions:Array<IrFunction>):Void {
+		changedFunctions = IrInlineEnumRequests.resolve(program, changedFunctions);
 		var required:Map<String, Bool> = [];
 		var existing = new IrFunctionIndex("enum-tag-lowering", program.functions), adapterEnums:Map<String, String> = [];
 		var symbols = IrEnumTagStorage.adapterNames(program);

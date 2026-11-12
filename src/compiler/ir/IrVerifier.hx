@@ -34,6 +34,16 @@ class IrVerifier {
 		}
 	}
 
+	/** A producer boundary must not pass typed enum conversions to a backend without resolution. */
+	public static function verifyResolvedEnumOperations(functions:Array<IrFunction>):Void {
+		for (fn in functions) for (block in fn.blocks) for (located in block.instructions)
+			switch located.value {
+				case Intrinsic(_, InlineEnumBox(_) | InlineEnumUnbox(_) | EnumTagBox(_) | EnumTagUnbox(_), _):
+					throw 'IR verification failed for ${fn.name}: unresolved typed enum conversion';
+				default:
+			}
+	}
+
 	/** Physical values must not retain an inline enum's nominal boxed carrier. */
 	public static function verifyInlineEnumsLowered(program:IrProgram, ?memo:IrVerifyMemo):Void {
 		var selected:Map<String, IrEnum> = [for (declaration in program.enums) if (declaration.inlineStorage != null) declaration.name => declaration];
@@ -61,14 +71,20 @@ class IrVerifier {
 		function fails(type:IrType):Bool return forbidden(type) != null;
 		var escapes:Map<String, Bool> = [], functions = [for (fn in program.functions) fn.name => fn],
 			nativeSymbols = [for (native in program.natives) native.name => native.symbol];
-		for (name => declaration in selected) {
-			var storage:IrType = Obj(declaration.inlineStorage);
-			for (box in [true, false]) {
-				var entry = box ? IrInlineEnumEscapes.boxName(name) : IrInlineEnumEscapes.unboxName(name), fn = functions.get(entry);
-				if (fn != null && fn.arguments.length == 1 && sameType(fn.arguments[0].type, box ? storage : Dyn)
-					&& sameType(fn.result, box ? Dyn : storage)) escapes.set(entry, true);
-			}
+		var selectedTypes = [for (name => declaration in selected) TypeKey.of(Enum(name)).toString() => declaration];
+		for (fn in program.functions) switch fn.kind {
+			case Provider(subject, operation):
+				var declaration = selectedTypes.get(subject.toString());
+				if (declaration != null) {
+					var box = operation == compiler.Provides.ProviderOperations.detailed(compiler.Provides.ProviderOperation.InlineEnumHelper, "box"),
+						unbox = operation == compiler.Provides.ProviderOperations.detailed(compiler.Provides.ProviderOperation.InlineEnumHelper, "unbox"),
+						storage:IrType = Obj(declaration.inlineStorage);
+					if ((box || unbox) && fn.arguments.length == 1 && sameType(fn.arguments[0].type, box ? storage : Dyn)
+						&& sameType(fn.result, box ? Dyn : storage)) escapes.set(fn.name, true);
+				}
+			default:
 		}
+
 		for (object in program.objects) for (field in object.fields) check(field.type, 'field ${object.name}.${field.name}');
 		for (field in program.staticFields) check(field.type, 'static field ${field.name}');
 		for (contract in program.interfaces) for (method in contract.methods) {
