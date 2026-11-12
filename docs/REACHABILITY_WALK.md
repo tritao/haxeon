@@ -188,3 +188,22 @@ and the erasure's own devirtualization silently did not happen. Erased-owner nam
 - **3b: a closure field's ABI from its type.** The scalar-argument pass chooses the ABI of a closure field (the `$get` / `$set` fields of key-path classes)
   from which closures exist, so an unreachable key path's field ABI changes with the prune (`key-path-semantics`). It is benign (deterministic,
   and no reachable code reads the field), but the field's ABI should follow from the field's type, not from the presence of functions.
+
+### Prerequisites for generating helpers only on demand, and what reads `result.ir`
+
+Reflection helpers (`ObjectReflection.generate`) are written for every class whenever a reflection native is declared, not on demand. Two places
+where the walk sees less than the program uses stop that today:
+
+1. **Dynamic field access** (`raw.x` on a Dynamic) becomes the reflection natives only at lowering, so no call names them and the walk never sees
+   the use. A filter on "natives something calls" dropped the helpers of a program that used them (`wasm-value-interface-reflection`, exit 3).
+   It belongs to a1's typed dynamic sites: the access must be a typed operation in the IR before the walk.
+2. **Interface box classes** (`$value-interface-box:<Value>`) are created after the prune, so they are never in the walk's created set (a filter
+   on created classes dropped their helpers). They must exist, or be declared as a provider for (type, box), before the walk: a 3b item with the
+   provider generation on demand.
+
+Once both exist, the helpers can be generated only on demand, from the walk's result.
+
+`CompileResult.ir` of a plain HashLink build is the emitted program (pruned); a live or Wasm build's is complete. Readers checked: the
+Android build looks only for `main`; `CompilerDriver --ir-output` writes the emitted program; the reachability report's "final program" counts
+start from the already pruned program; the tests that read `ir.functions` run in the gate (`ReachabilityPruneMain` and
+`GeneratedEqualityProvenanceMain` follow the contract above).

@@ -100,6 +100,10 @@ typedef NativeFunction = NativeDefinition;
 
 /** Artifacts, invalidation details, and publication metadata from a successful build. */
 typedef CompileResult = {
+	/**
+	 * The program the backends were given: for a plain HashLink build that is the emitted program, already pruned at the prune point of the
+	 * pipeline (`IrEntryPrune`), so it has no function nothing reaches; a live or Wasm build's program is complete.
+	 */
 	final ir:IrProgram;
 	final module:HlCode;
 	final retyped:Array<String>;
