@@ -169,7 +169,9 @@ class FrontendCompilation {
 		var allocationAfterAnalysis = allocationAfterSemantic;
 		var analysisDoneAt = frontendDoneAt, typingDoneAt = frontendDoneAt;
 		var allocationAfterProgramTyping = allocationAfterSemantic;
-		var typedNew:TypedProgram, typerMetrics:TyperPhaseMetrics, generator:IrGenerator;
+		var typedNew:TypedProgram,
+			typerMetrics:TyperPhaseMetrics,
+			generator:IrGenerator;
 		var runtimeDependencies:Array<{var functionName:String; var target:String;}> = [];
 		var purityQueries:Map<String, Map<String, Bool>>,
 			noReturnQueries:Map<String, Map<String, Bool>>,
@@ -534,14 +536,21 @@ class FrontendCompilation {
 				}
 			}
 		regenerated = uniqueSorted(regenerated);
-		context.frontendPassReports.push(passReport(context.frontendPassReports.length + 1, [
-			stage("graph", frontendGraphDoneAt - passStartedAt, AllocationMeter.delta("graph", allocationAtStart, allocationAfterGraph)),
-			stage("semantic-assembly", frontendDoneAt - frontendGraphDoneAt, AllocationMeter.delta("semantic", allocationAfterGraph, allocationAfterSemantic)),
-			stage("signature-inference", analysisDoneAt - frontendDoneAt, AllocationMeter.delta("analysis", allocationAfterSemantic, allocationAfterAnalysis)),
-			stage("typing", typingDoneAt - analysisDoneAt, AllocationMeter.delta("typing", allocationAfterAnalysis, allocationAfterProgramTyping)),
-			stage("ir-generation", Sys.time() * 1000.0 - typingDoneAt,
-				AllocationMeter.delta("ir-generation", allocationAfterProgramTyping, AllocationMeter.sample()))
-		], context.parseMs - parseMsAtStart, context.parseBytes - parseBytesAtStart, context.parseCount - parseCountAtStart));
+		context.frontendPassReports.push(passReport(context.frontendPassReports.length
+			+ 1, [
+				stage("graph", frontendGraphDoneAt - passStartedAt, AllocationMeter.delta("graph", allocationAtStart, allocationAfterGraph)),
+				stage("semantic-assembly", frontendDoneAt - frontendGraphDoneAt,
+					AllocationMeter.delta("semantic", allocationAfterGraph, allocationAfterSemantic)),
+				stage("signature-inference", analysisDoneAt - frontendDoneAt,
+					AllocationMeter.delta("analysis", allocationAfterSemantic, allocationAfterAnalysis)),
+				stage("typing", typingDoneAt - analysisDoneAt, AllocationMeter.delta("typing", allocationAfterAnalysis, allocationAfterProgramTyping)),
+				stage("ir-generation", Sys.time() * 1000.0 - typingDoneAt,
+					AllocationMeter.delta("ir-generation", allocationAfterProgramTyping, AllocationMeter.sample()))
+			], context.parseMs
+			- parseMsAtStart,
+			context.parseBytes
+			- parseBytesAtStart, context.parseCount
+			- parseCountAtStart));
 		// A runtime helper found while typing joins the program after this pass. What was typed so far is published, so the next
 		// pass is an incremental one over it: it has the newly reachable modules to type, and the work of this pass carries over.
 		if (includeTypedRuntimeDependencies(context, runtimeDependencies, typedNew.functions, owners, names, rollbackModules)) {
@@ -691,13 +700,16 @@ class FrontendCompilation {
 			interfaces: IrProgramAssembler.interfacesFrom(generator, typedNew),
 			enums: IrProgramAssembler.enumsFrom(generator, typedNew),
 			staticFields: IrProgramAssembler.staticFieldsFrom(generator, typedNew),
-			initializers: [for (fn in IrProgramAssembler.staticInitializersFrom(generator, typedNew, initializationClasses, cached)) compiler.ir.IrSourceRehash.of(fn, currentHashes)].concat(liveInitializers),
+			initializers: [
+				for (fn in IrProgramAssembler.staticInitializersFrom(generator, typedNew, initializationClasses, cached))
+					compiler.ir.IrSourceRehash.of(fn, currentHashes)
+			].concat(liveInitializers),
 			reflectable: IrProgramAssembler.reflectableObjectsFrom(typedNew)
 		};
 		// A plain build whose pipeline inputs equal the last build's gets that build's final IR: no pass runs. With HAXEON_CHECK_REUSE=1
 		// the passes run anyway and the result is compared with the reused one.
-		var inputs = pipelineInputs(context, generator, instrumentScope, cached, generated.initializers, irNatives, irCNatives, generated.objects, generated.interfaces,
-			generated.enums, generated.staticFields, entryPoint, generated.reflectable),
+		var inputs = pipelineInputs(context, generator, instrumentScope, cached, generated.initializers, irNatives, irCNatives, generated.objects,
+			generated.interfaces, generated.enums, generated.staticFields, entryPoint, generated.reflectable),
 			previousPipeline = context.pipelineSnapshot,
 			reuseMiss = context.livePatching ? "live patching" : previousPipeline == null ? "no earlier build" : previousPipeline.mismatch(inputs),
 			matchesPrevious = reuseMiss == null, checkingReuse = Sys.getEnv("HAXEON_CHECK_REUSE") == "1",
@@ -707,9 +719,9 @@ class FrontendCompilation {
 			inlinerChanged = [];
 		} else {
 			compiler.compilation.IrPassMeter.reset();
-			ir = IrProgramAssembler.assemble(generator, cached, irNatives, generated.objects, generated.interfaces, generated.enums,
-				generated.staticFields, generated.initializers, entryPoint, irCNatives, generated.reflectable, context.inlineCache().staticChecks,
-				context.valueArrayTarget(), context.exportedFunctions(), !context.livePatching && !context.isWasmTarget() && compiler.ir.IrEntryPrune.enabled());
+			ir = IrProgramAssembler.assemble(generator, cached, irNatives, generated.objects, generated.interfaces, generated.enums, generated.staticFields,
+				generated.initializers, entryPoint, irCNatives, generated.reflectable, context.inlineCache().staticChecks, context.valueArrayTarget(),
+				context.exportedFunctions(), !context.livePatching && !context.isWasmTarget() && compiler.ir.IrEntryPrune.enabled());
 			var cNativeNames = [for (native in irCNatives) native.name].join(","),
 				ownPrints:Map<String, String> = [];
 			for (fn in cached)
@@ -735,7 +747,8 @@ class FrontendCompilation {
 			var valueArrayTarget = context.valueArrayTarget();
 			if (!context.developmentMetadata && !context.livePatching)
 				ir = compiler.ir.IrClosedEnumTagAbi.run(ir, generated.reflectable);
-			compiler.compilation.IrPassMeter.measureVoid("value-array-rewrite", () -> compiler.ir.IrValueArrayProgramRewrite.rewriteAll(ir, valueArrayTarget == HashLink ? 64 : 32, valueArrayTarget));
+			compiler.compilation.IrPassMeter.measureVoid("value-array-rewrite",
+				() -> compiler.ir.IrValueArrayProgramRewrite.rewriteAll(ir, valueArrayTarget == HashLink ? 64 : 32, valueArrayTarget));
 			// Scalarize value joins before choosing the scalar call ABI. The HashLink call rewrite can introduce
 			// further value joins, so it needs a second pass after that rewrite.
 			if (context.isWasmTarget()) {
@@ -761,7 +774,8 @@ class FrontendCompilation {
 			compiler.compilation.IrPassMeter.measureVoid("nullable-scalar-flow", () -> compiler.ir.IrNullableScalarFlow.rewrite(ir));
 			compiler.ir.IrEnumTagLowering.escapes(ir);
 			// Compare and publish the final IR even when only load/store forwarding is enabled.
-			inlinerChanged = compiler.compilation.IrPassMeter.measure("inliner", () -> IrInliner.run(ir, context.inlineCache(), context.targetProfile(), context.inlineEnabled(), instrumentScope));
+			inlinerChanged = compiler.compilation.IrPassMeter.measure("inliner",
+				() -> IrInliner.run(ir, context.inlineCache(), context.targetProfile(), context.inlineEnabled(), instrumentScope));
 			// HashLink has its scalar closure ABI here. Wasm verifies after its target-specific closure escape adapters exist.
 			if (!context.livePatching && !context.isWasmTarget()) {
 				compiler.compilation.IrPassMeter.measureVoid("verifier", () -> IrVerifier.verifyReusing(ir, context.verifyMemo));
@@ -827,7 +841,7 @@ class FrontendCompilation {
 			graphInitializationMs: graphInitializationMs,
 			frontendRestarts: context.frontendRestarts,
 			frontendPassFunctions: context.frontendPassFunctions,
-				frontendPassReports: context.frontendPassReports,
+			frontendPassReports: context.frontendPassReports,
 			frontendDoneAt: frontendDoneAt,
 			typingLoweringDoneAt: typingLoweringDoneAt,
 			irAssemblyDoneAt: irAssemblyDoneAt,
@@ -838,10 +852,11 @@ class FrontendCompilation {
 		}
 
 	/** Everything the IR pipeline reads for this build (see `PipelineInputs`). */
-	static function pipelineInputs(context:CompilationContext, generator:IrGenerator, instrumentScope:Null<compiler.ir.IrInstrumentation.IrInstrumentationScope>,
-			functions:Array<IrFunction>, initializers:Array<IrFunction>, natives:Array<compiler.ir.Ir.IrNative>, cNatives:Array<compiler.ir.Ir.IrCNative>,
-			objects:Array<IrObject>, interfaces:Array<compiler.ir.Ir.IrInterface>, enums:Array<compiler.ir.Ir.IrEnum>,
-			staticFields:Array<compiler.ir.Ir.IrStaticField>, entryPoint:Null<String>, reflectable:Null<Array<String>>):PipelineInputs {
+	static function pipelineInputs(context:CompilationContext, generator:IrGenerator,
+			instrumentScope:Null<compiler.ir.IrInstrumentation.IrInstrumentationScope>, functions:Array<IrFunction>, initializers:Array<IrFunction>,
+			natives:Array<compiler.ir.Ir.IrNative>, cNatives:Array<compiler.ir.Ir.IrCNative>, objects:Array<IrObject>,
+			interfaces:Array<compiler.ir.Ir.IrInterface>, enums:Array<compiler.ir.Ir.IrEnum>, staticFields:Array<compiler.ir.Ir.IrStaticField>,
+			entryPoint:Null<String>, reflectable:Null<Array<String>>):PipelineInputs {
 		var objectNames:Map<String, Bool> = [for (object in objects) object.name => true];
 		var tables = new IrProgram(entryPoint == null ? "" : entryPoint);
 		tables.natives = natives;

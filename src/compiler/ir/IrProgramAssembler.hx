@@ -31,7 +31,9 @@ import compiler.semantic.SemanticSignature;
 /** Builds complete IR programs and selects their required runtime surface. */
 class IrProgramAssembler {
 	public static function generate(typed:TypedProgram, profile:TargetProfile):IrProgram {
-		var bare = new IrGenerator(ProgramFacts.of(typed), profile), objects = objectsFrom(bare, typed), generator = bare.withObjects(objects);
+		var bare = new IrGenerator(ProgramFacts.of(typed), profile),
+			objects = objectsFrom(bare, typed),
+			generator = bare.withObjects(objects);
 		var functions = [for (fn in typed.functions) generator.generateFunction(fn)];
 		return assemble(generator, functions, nativesFrom(generator, typed), objects, interfacesFrom(generator, typed), enumsFrom(generator, typed),
 			staticFieldsFrom(generator, typed), staticInitializersFrom(generator, typed, null, functions), null, cNativesFrom(generator, typed),
@@ -52,7 +54,10 @@ class IrProgramAssembler {
 	public static function nativesFrom(generator:IrGenerator, typed:TypedProgram):Array<IrNative>
 		return [
 			for (native in typed.natives)
-				if ((switch (native.convention) { case HashLinkNative: true; default: false; })) {
+				if ((switch (native.convention) {
+					case HashLinkNative: true;
+					default: false;
+				})) {
 					name: native.name,
 					library: native.library,
 					symbol: native.symbol,
@@ -89,7 +94,8 @@ class IrProgramAssembler {
 	 * order (classes in module dependency order), except that a field whose initializer reads another static
 	 * field, directly or through the functions it calls, runs after that field when `program` is given.
 	 */
-	public static function staticInitializersFrom(generator:IrGenerator, typed:TypedProgram, ?classOrder:Array<String>, ?program:Array<IrFunction>):Array<IrFunction> {
+	public static function staticInitializersFrom(generator:IrGenerator, typed:TypedProgram, ?classOrder:Array<String>,
+			?program:Array<IrFunction>):Array<IrFunction> {
 		var statements:Array<TypedStatement> = [],
 			spans:Array<compiler.Source.SourceSpan> = [],
 			globals:Array<String> = [];
@@ -132,8 +138,10 @@ class IrProgramAssembler {
 	 * a field a constructor assigns keeps its zero value. `published(class)` tells whether the running module has the class,
 	 * `publishedField(class, field)` whether it has the field; a class it lacks needs no migration.
 	 */
-	public static function liveInitializersFrom(generator:IrGenerator, typed:TypedProgram, published:String->Bool, publishedField:(String, String)->Bool):Array<IrFunction> {
-		var functions:Array<IrFunction> = [], values:Map<String, Bool> = [for (entry in typed.classes) if (entry.isValue) entry.name => true];
+	public static function liveInitializersFrom(generator:IrGenerator, typed:TypedProgram, published:String->Bool,
+			publishedField:(String, String) -> Bool):Array<IrFunction> {
+		var functions:Array<IrFunction> = [],
+			values:Map<String, Bool> = [for (entry in typed.classes) if (entry.isValue) entry.name => true];
 		for (classDecl in typed.classes) {
 			if (classDecl.isValue || classDecl.isNativeValue || !published(classDecl.name))
 				continue;
@@ -142,7 +150,12 @@ class IrProgramAssembler {
 				var initializer = field.initializer;
 				var publishedName = switch generator.lowerType(field.type) {
 					case Nullable(Obj(name)) if (values.exists(name)):
-						IrInlineValueLayout.slotName(field.name, {path: [], type: Bool, isPresence: true, nativeLayout: null});
+						IrInlineValueLayout.slotName(field.name, {
+							path: [],
+							type: Bool,
+							isPresence: true,
+							nativeLayout: null
+						});
 					default: field.name;
 				};
 				if (field.isStatic || initializer == null || !hasPhysicalStorage(field) || publishedField(classDecl.name, publishedName))
@@ -152,7 +165,8 @@ class IrProgramAssembler {
 			}
 			if (statements.length > 0)
 				functions.push(generator.generateFunction({
-					name: classDecl.name + "." + compiler.hl.incremental.HlModuleAssembler.LIVE_INITIALIZER, role: UserFunction,
+					name: classDecl.name + "." + compiler.hl.incremental.HlModuleAssembler.LIVE_INITIALIZER,
+					role: UserFunction,
 					owner: classDecl.name,
 					isStatic: false,
 					// Gives it a receiver without a prototype slot, as a constructor has.
@@ -170,7 +184,8 @@ class IrProgramAssembler {
 
 	static function initializerFunction(generator:IrGenerator, name:String, statements:Array<TypedStatement>, span:compiler.Source.SourceSpan):IrFunction
 		return generator.generateFunction({
-			name: name, role: UserFunction,
+			name: name,
+			role: UserFunction,
 			owner: null,
 			isStatic: true,
 			isConstructor: false,
@@ -187,8 +202,8 @@ class IrProgramAssembler {
 	 * reads. The order is a stable depth-first topological sort, so independent fields keep their declaration
 	 * order. Cycles are diagnosed rather than executing an invalid order.
 	 */
-	static function initializationOrder(generator:IrGenerator, statements:Array<TypedStatement>, spans:Array<compiler.Source.SourceSpan>, globals:Array<String>,
-			program:Array<IrFunction>, objects:Array<IrObject>):Array<Int> {
+	static function initializationOrder(generator:IrGenerator, statements:Array<TypedStatement>, spans:Array<compiler.Source.SourceSpan>,
+			globals:Array<String>, program:Array<IrFunction>, objects:Array<IrObject>):Array<Int> {
 		var initializerIndex:Map<String, Int> = [for (index in 0...globals.length) globals[index] => index],
 			byName:Map<String, IrFunction> = [for (fn in program) fn.name => fn],
 			references:Map<String, StaticReferences> = [];
@@ -337,7 +352,9 @@ class IrProgramAssembler {
 								inlineRecord: isFlatRecordField(field.type, classesByName, typed.nativeAbiTarget)
 							};
 						fields.push({
-							name: field.name, type: generator.lowerType(field.type), nativeLayout: fieldLayout,
+							name: field.name,
+							type: generator.lowerType(field.type),
+							nativeLayout: fieldLayout,
 							scalarStorage: fieldLayout == null ? narrowScalarStorage(field.type, typed.nativeAbiTarget) : null,
 							nullableScalarStorage: nullableScalarStorage(field.type, typed.nativeAbiTarget)
 						});
@@ -356,7 +373,10 @@ class IrProgramAssembler {
 						methods.push({name: methodName, functionName: functionName});
 						// HashLink string conversion calls a proto method named `__string`; the runtime reads the
 						// String object it returns.
-						if (methodName == "toString" && methodDecl.arguments.length == 0 && (switch (methodDecl.result) { case TString: true; default: false; }))
+						if (methodName == "toString" && methodDecl.arguments.length == 0 && (switch (methodDecl.result) {
+							case TString: true;
+							default: false;
+						}))
 							methods.push({name: "__string", functionName: functionName});
 					}
 				if (generator.facts.observableClassFieldCount(classDecl.name) != null)
@@ -456,26 +476,31 @@ class IrProgramAssembler {
 		};
 
 	/** Preserve native scalar widths even when a managed reference prevents a whole-record C layout. */
-	static function narrowScalarStorage(type:CompilerType, target:String):Null<compiler.ir.Ir.IrScalarStorage> return switch type {
-		case TNativeScalar("i8" | "c_schar"): {size: 1, signed: true};
-		case TNativeScalar("u8" | "c_uchar" | "c_char"): {size: 1, signed: false};
-		case TNativeScalar("i16" | "c_short"): {size: 2, signed: true};
-		case TNativeScalar("u16" | "c_ushort"): {size: 2, signed: false};
-		case TNativeScalar("c_long" | "c_ulong" | "c_size" | "c_wchar"):
-			var abi = compiler.ffi.HxiAbi.forTarget(target);
-			var name = switch type { case TNativeScalar(value): value; default: ""; };
-			var bits = name == "c_size" ? abi.pointerBits : name == "c_wchar" ? abi.wcharBits : abi.longBits;
-			var registerBits = name == "c_wchar" ? 32 : 64;
-			bits < registerBits ? {size: Std.int(bits / 8), signed: name == "c_long" || (name == "c_wchar" && bits == 32)} : null;
-		case TAbstract(_, _, representation): narrowScalarStorage(representation, target);
-		default: null;
-	};
+	static function narrowScalarStorage(type:CompilerType, target:String):Null<compiler.ir.Ir.IrScalarStorage>
+		return switch type {
+			case TNativeScalar("i8" | "c_schar"): {size: 1, signed: true};
+			case TNativeScalar("u8" | "c_uchar" | "c_char"): {size: 1, signed: false};
+			case TNativeScalar("i16" | "c_short"): {size: 2, signed: true};
+			case TNativeScalar("u16" | "c_ushort"): {size: 2, signed: false};
+			case TNativeScalar("c_long" | "c_ulong" | "c_size" | "c_wchar"):
+				var abi = compiler.ffi.HxiAbi.forTarget(target);
+				var name = switch type {
+					case TNativeScalar(value): value;
+					default: "";
+				};
+				var bits = name == "c_size" ? abi.pointerBits : name == "c_wchar" ? abi.wcharBits : abi.longBits;
+				var registerBits = name == "c_wchar" ? 32 : 64;
+				bits < registerBits ? {size: Std.int(bits / 8), signed: name == "c_long" || (name == "c_wchar" && bits == 32)} : null;
+			case TAbstract(_, _, representation): narrowScalarStorage(representation, target);
+			default: null;
+		};
 
-	static function nullableScalarStorage(type:CompilerType, target:String):Null<compiler.ir.Ir.IrScalarStorage> return switch type {
-		case TNullable(element): narrowScalarStorage(element, target);
-		case TAbstract(_, _, representation): nullableScalarStorage(representation, target);
-		default: null;
-	};
+	static function nullableScalarStorage(type:CompilerType, target:String):Null<compiler.ir.Ir.IrScalarStorage>
+		return switch type {
+			case TNullable(element): narrowScalarStorage(element, target);
+			case TAbstract(_, _, representation): nullableScalarStorage(representation, target);
+			default: null;
+		};
 
 	/** A property is stored when either side accesses it directly, or when `@:isVar` asks accessors to keep a backing field. */
 	public static function hasPhysicalStorage(field:compiler.types.TypedAst.TypedField):Bool {
@@ -515,9 +540,9 @@ class IrProgramAssembler {
 		return result;
 	}
 
-	public static function assemble(generator:IrGenerator, functions:Array<IrFunction>, ?natives:Array<IrNative>, ?objects:Array<IrObject>, ?interfaces:Array<IrInterface>,
-			?enums:Array<IrEnum>, ?staticFields:Array<IrStaticField>, ?staticInitializers:Array<IrFunction>, ?entryPoint:String, ?cNatives:Array<IrCNative>,
-			?reflectableObjects:Array<String>, ?staticChecks:IrStaticCheckCache,
+	public static function assemble(generator:IrGenerator, functions:Array<IrFunction>, ?natives:Array<IrNative>, ?objects:Array<IrObject>,
+			?interfaces:Array<IrInterface>, ?enums:Array<IrEnum>, ?staticFields:Array<IrStaticField>, ?staticInitializers:Array<IrFunction>,
+			?entryPoint:String, ?cNatives:Array<IrCNative>, ?reflectableObjects:Array<String>, ?staticChecks:IrStaticCheckCache,
 			?valueTarget:compiler.ir.IrValueLaneLayout.IrValueLaneTarget, ?exportedFunctions:Array<String>, pruneFromEntry = false):IrProgram {
 		var program = new IrProgram("__entry");
 		var allFunctions:Array<IrFunction> = [];
@@ -529,7 +554,8 @@ class IrProgramAssembler {
 		if (objects != null)
 			for (object in objects) {
 				var count = generator.facts.observableClassFieldCount(object.name);
-				if (count == null) continue;
+				if (count == null)
+					continue;
 				var builder = new IrBuilder();
 				builder.argument("this", Obj(object.name));
 				builder.returnValue(builder.constInt(count));
@@ -545,7 +571,8 @@ class IrProgramAssembler {
 			reflectionInput.functions = allFunctions;
 			reflectionInput.natives = natives == null ? [] : natives;
 			reflectionInput.cNatives = cNatives == null ? [] : cNatives;
-			allFunctions = compiler.compilation.IrPassMeter.measure("enum-dynamic-dispatch", () -> IrEnumDynamicDispatch.rewrite(allFunctions, reflectionInput, reflectableObjects));
+			allFunctions = compiler.compilation.IrPassMeter.measure("enum-dynamic-dispatch",
+				() -> IrEnumDynamicDispatch.rewrite(allFunctions, reflectionInput, reflectableObjects));
 			if (IrReachabilityReport.enabled()) {
 				reflectionInput.functions = allFunctions;
 				IrReachabilityReport.report("after enum dispatch (the 3a prune point)", reflectionInput);
@@ -593,12 +620,15 @@ class IrProgramAssembler {
 			if (checkPrune)
 				IrEntryPrune.checkRemoved(pass, allFunctions, removedByPrune);
 		if (objects != null && interfaces != null)
-			allFunctions = compiler.compilation.IrPassMeter.measure("value-interface-boxes", () -> IrValueInterfaceBoxes.rewrite(allFunctions, objects, interfaces));
+			allFunctions = compiler.compilation.IrPassMeter.measure("value-interface-boxes",
+				() -> IrValueInterfaceBoxes.rewrite(allFunctions, objects, interfaces));
 		verify("value-interface-boxes");
 		if (objects != null && interfaces != null) {
-			allFunctions = compiler.compilation.IrPassMeter.measure("typed-interface-calls", () -> IrTypedInterfaceDispatch.rewriteValueCalls(allFunctions, objects, interfaces));
+			allFunctions = compiler.compilation.IrPassMeter.measure("typed-interface-calls",
+				() -> IrTypedInterfaceDispatch.rewriteValueCalls(allFunctions, objects, interfaces));
 			var beforeTypedInterfaces = allFunctions.length;
-			compiler.compilation.IrPassMeter.measureVoid("typed-interface-generate", () -> IrTypedInterfaceDispatch.generate(allFunctions, objects, interfaces));
+			compiler.compilation.IrPassMeter.measureVoid("typed-interface-generate",
+				() -> IrTypedInterfaceDispatch.generate(allFunctions, objects, interfaces));
 			if (allFunctions.length > beforeTypedInterfaces) {
 				var existing = allFunctions.slice(0, beforeTypedInterfaces);
 				allFunctions = existing.concat(IrValueInterfaceBoxes.rewrite(allFunctions.slice(beforeTypedInterfaces), objects, interfaces, existing));
@@ -606,13 +636,15 @@ class IrProgramAssembler {
 		}
 		// HashLink checks object casts itself, but interface casts need checks on every target.
 		if (objects != null)
-			allFunctions = compiler.compilation.IrPassMeter.measure("checked-dynamic-casts", () -> IrCheckedDynamicCasts.rewrite(allFunctions, objects, generator.profile.nativeReflectionDispatch));
+			allFunctions = compiler.compilation.IrPassMeter.measure("checked-dynamic-casts",
+				() -> IrCheckedDynamicCasts.rewrite(allFunctions, objects, generator.profile.nativeReflectionDispatch));
 		verify("checked-dynamic-casts");
 		if (exportedFunctions != null && exportedFunctions.length > 0) {
 			var exported = [for (name in exportedFunctions) name => true];
 			allFunctions = [
 				for (fn in allFunctions)
-					exported.exists(fn.name) ? new IrFunction(fn.name, fn.arguments, fn.result, fn.blocks, fn.kind, fn.debugBindings, fn.inlineHint, Expose) : fn
+					exported.exists(fn.name) ? new IrFunction(fn.name, fn.arguments, fn.result, fn.blocks, fn.kind, fn.debugBindings, fn.inlineHint,
+						Expose) : fn
 			];
 		}
 		if (valueTarget != null) {
@@ -627,7 +659,8 @@ class IrProgramAssembler {
 			enumInput.enums = IrEnumRuntimeSpecializations.materialize(enums == null ? [] : enums, allFunctions, enumInput.objects, enumInput.staticFields,
 				enumInput.natives, enumInput.interfaces, enumInput.cNatives);
 			IrEnumTagLowering.run(enumInput);
-			var enumOutput = compiler.compilation.IrPassMeter.measure("inline-enum-lowering", () -> IrInlineEnumLowering.run(enumInput, valueTarget, reflectableObjects));
+			var enumOutput = compiler.compilation.IrPassMeter.measure("inline-enum-lowering",
+				() -> IrInlineEnumLowering.run(enumInput, valueTarget, reflectableObjects));
 			allFunctions = enumOutput.functions;
 			objects = enumOutput.objects;
 			interfaces = enumOutput.interfaces;
@@ -637,7 +670,8 @@ class IrProgramAssembler {
 		}
 		verify("inline-enum-lowering");
 		if (objects != null) {
-			allFunctions = compiler.compilation.IrPassMeter.measure("optional-scalar-flow", () -> new IrOptionalScalarFlow(objects).rewrite(objects, allFunctions));
+			allFunctions = compiler.compilation.IrPassMeter.measure("optional-scalar-flow",
+				() -> new IrOptionalScalarFlow(objects).rewrite(objects, allFunctions));
 			allFunctions = IrOptionalValueFlow.addHelpers(allFunctions, objects);
 		}
 		verify("optional-scalar-flow");
@@ -647,9 +681,11 @@ class IrProgramAssembler {
 			reflectableObjects = reflectableObjects.copy();
 			var known:Map<String, Bool> = [for (name in reflectableObjects) name => true];
 			for (object in objects)
-				if ((object.isValue || StringTools.startsWith(object.name, IrValueInterfaceBoxes.BOX_PREFIX)
+				if ((object.isValue
+					|| StringTools.startsWith(object.name, IrValueInterfaceBoxes.BOX_PREFIX)
 					|| SemanticSignature.isAnonymousName(object.name))
-					&& !StringTools.startsWith(object.name, IrInlineEnumLayout.VALUE_PREFIX) && !known.exists(object.name)) {
+					&& !StringTools.startsWith(object.name, IrInlineEnumLayout.VALUE_PREFIX)
+					&& !known.exists(object.name)) {
 					reflectableObjects.push(object.name);
 					known.set(object.name, true);
 				}
@@ -742,7 +778,8 @@ class IrProgramAssembler {
 			for (block in fn.blocks)
 				if (block.terminator != null)
 					switch block.terminator.value {
-						case Unreachable: needsUnreachable = true;
+						case Unreachable:
+							needsUnreachable = true;
 						default:
 					}
 		program.objects = objects == null ? [] : objects;
@@ -757,9 +794,8 @@ class IrProgramAssembler {
 						case _:
 					}
 		program.interfaces = interfaces == null ? [] : interfaces;
-		program.enums = IrEnumRuntimeSpecializations.materialize(enums == null ? [] : enums, allFunctions,
-			objects == null ? [] : objects, staticFields == null ? [] : staticFields, natives == null ? [] : natives,
-			interfaces == null ? [] : interfaces, cNatives == null ? [] : cNatives);
+		program.enums = IrEnumRuntimeSpecializations.materialize(enums == null ? [] : enums, allFunctions, objects == null ? [] : objects,
+			staticFields == null ? [] : staticFields, natives == null ? [] : natives, interfaces == null ? [] : interfaces, cNatives == null ? [] : cNatives);
 		program.staticFields = staticFields == null ? [] : staticFields;
 		program.natives.push({
 			name: "__exit",
@@ -769,11 +805,29 @@ class IrProgramAssembler {
 			result: Void
 		});
 		if (needsUnreachable && !hasNative(natives, "__unreachable"))
-			program.natives.push({name: "__unreachable", library: "haxeon_runtime", symbol: "__unreachable", arguments: [], result: Void});
+			program.natives.push({
+				name: "__unreachable",
+				library: "haxeon_runtime",
+				symbol: "__unreachable",
+				arguments: [],
+				result: Void
+			});
 		if (needsDynamicEquality && !hasNative(natives, "__dynamic_equal"))
-			program.natives.push({name: "__dynamic_equal", library: "haxeon_runtime", symbol: "__dynamic_equal", arguments: [Dyn, Dyn], result: Bool});
+			program.natives.push({
+				name: "__dynamic_equal",
+				library: "haxeon_runtime",
+				symbol: "__dynamic_equal",
+				arguments: [Dyn, Dyn],
+				result: Bool
+			});
 		if (needsDynamicObjectTypeId && !hasNative(natives, "__dynamic_object_type_id"))
-			program.natives.push({name: "__dynamic_object_type_id", library: "haxeon_runtime", symbol: "__dynamic_object_type_id", arguments: [Dyn], result: I32});
+			program.natives.push({
+				name: "__dynamic_object_type_id",
+				library: "haxeon_runtime",
+				symbol: "__dynamic_object_type_id",
+				arguments: [Dyn],
+				result: I32
+			});
 		if (needsInt64ToInt && !hasNative(natives, "haxe.Int64.toInt"))
 			program.natives.push({
 				name: "haxe.Int64.toInt",
@@ -830,7 +884,8 @@ class IrProgramAssembler {
 				arguments: [Dyn, TypeRef],
 				result: Bool
 			});
-		if (needsArrayRuntime) ensureArrayRuntime(program, needsTypedRefArrayRuntime, needsArrayCastRuntime, needsAnyArrayRuntime);
+		if (needsArrayRuntime)
+			ensureArrayRuntime(program, needsTypedRefArrayRuntime, needsArrayCastRuntime, needsAnyArrayRuntime);
 		var fastPathNames = [for (name in stringFastPathNames.keys()) name];
 		fastPathNames.sort(Reflect.compare);
 		for (name in fastPathNames)
@@ -1028,7 +1083,10 @@ class IrProgramAssembler {
 		if (staticInitializers != null && staticInitializers.length > 0)
 			entry.call("__init", [], Void);
 		var result = entry.call(mainFunction.name, [], mainFunction.result);
-		if ((switch (mainFunction.result) { case I32: true; default: false; }))
+		if ((switch (mainFunction.result) {
+			case I32: true;
+			default: false;
+		}))
 			result = entry.call("__exit", [result], Void);
 		entry.returnValue(result);
 		program.functions.push(new IrFunction("__entry", [], Void, entry.blocks, Ordinary));
@@ -1039,7 +1097,8 @@ class IrProgramAssembler {
 
 	/** Add the concrete storage operations required by dynamic array views. */
 	public static function ensureArrayRuntime(program:IrProgram, needsTypedRefArrayRuntime:Bool, needsArrayCastRuntime:Bool, needsAnyArrayRuntime:Bool):Void {
-		var existing:Map<String, Bool> = [for (native in program.natives) native.name => true], before = program.natives.length;
+		var existing:Map<String, Bool> = [for (native in program.natives) native.name => true],
+			before = program.natives.length;
 		program.natives.push({
 			name: "__array_alloc_i32",
 			library: "haxeon_runtime",
@@ -1116,7 +1175,13 @@ class IrProgramAssembler {
 				arguments: [Array(Dyn), I32],
 				result: Dyn
 			});
-			program.natives.push({name: "__array_remove_at_any", library: "haxeon_runtime", symbol: "__array_remove_at_any", arguments: [Array(Dyn), I32], result: Void});
+			program.natives.push({
+				name: "__array_remove_at_any",
+				library: "haxeon_runtime",
+				symbol: "__array_remove_at_any",
+				arguments: [Array(Dyn), I32],
+				result: Void
+			});
 			program.natives.push({
 				name: "__array_set_any",
 				library: "haxeon_runtime",
@@ -1163,13 +1228,14 @@ class IrProgramAssembler {
 				arguments: [arrayType, I32, I32],
 				result: arrayType
 			});
-			if (entry.name != "any") program.natives.push({
-				name: '__array_index_of_${entry.name}',
-				library: "haxeon_runtime",
-				symbol: '__array_index_of_${entry.name}',
-				arguments: [arrayType, entry.type],
-				result: I32
-			});
+			if (entry.name != "any")
+				program.natives.push({
+					name: '__array_index_of_${entry.name}',
+					library: "haxeon_runtime",
+					symbol: '__array_index_of_${entry.name}',
+					arguments: [arrayType, entry.type],
+					result: I32
+				});
 			program.natives.push({
 				name: '__array_push_${entry.name}',
 				library: "haxeon_runtime",
@@ -1212,13 +1278,14 @@ class IrProgramAssembler {
 				arguments: [arrayType, I32],
 				result: Void
 			});
-			if (entry.name != "any") program.natives.push({
-				name: '__array_remove_${entry.name}',
-				library: "haxeon_runtime",
-				symbol: '__array_remove_${entry.name}',
-				arguments: [arrayType, entry.type],
-				result: Bool
-			});
+			if (entry.name != "any")
+				program.natives.push({
+					name: '__array_remove_${entry.name}',
+					library: "haxeon_runtime",
+					symbol: '__array_remove_${entry.name}',
+					arguments: [arrayType, entry.type],
+					result: Bool
+				});
 			program.natives.push({
 				name: '__array_reverse_${entry.name}',
 				library: "haxeon_runtime",
@@ -1228,7 +1295,11 @@ class IrProgramAssembler {
 			});
 		}
 		var added = program.natives.splice(before, program.natives.length - before);
-		for (native in added) if (!existing.exists(native.name)) { existing.set(native.name, true); program.natives.push(native); }
+		for (native in added)
+			if (!existing.exists(native.name)) {
+				existing.set(native.name, true);
+				program.natives.push(native);
+			}
 	}
 
 	static function hasNative(natives:Null<Array<IrNative>>, name:String):Bool {
