@@ -174,8 +174,10 @@ class UiContext {
 		submittedStyleSheet = null;
 		hitTestIds = [];
 		disposed = false;
-		buildContext.setFocusRequester(function(id) { return focusWidget(id); });
-		buildContext.setDeferredFocusRequester(function(id) { ensureLive(); pendingFocus = id; pendingFocusLabel = buildContext.deferredFocusLabel; commands.refresh(); });
+		// The verification build lays out a throwaway copy of the tree: focus it asks for there (a widget that takes focus when
+		// first laid out) must not move the real focus, or the compared trees differ by something no frame did.
+		buildContext.setFocusRequester(function(id) { return !verifying && focusWidget(id); });
+		buildContext.setDeferredFocusRequester(function(id) { if (verifying) return; ensureLive(); pendingFocus = id; pendingFocusLabel = buildContext.deferredFocusLabel; commands.refresh(); });
 		customCanvases = new Map();
 		customLists = new Map();
 		customGeometries = new Map();
