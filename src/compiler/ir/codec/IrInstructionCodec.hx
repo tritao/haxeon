@@ -61,6 +61,7 @@ class IrInstructionCodec {
 		"CallClosure" => true,
 		"ToVirtual" => true,
 		"Upcast" => true,
+		"ClassId" => true,
 		"MethodCall" => true,
 		"TerminalMethodCall" => true,
 		"NewObject" => true,
@@ -271,6 +272,8 @@ class IrInstructionCodec {
 				writeTwoValues(output, "ToVirtual", outputValue, value);
 			case Upcast(outputValue, value):
 				writeTwoValues(output, "Upcast", outputValue, value);
+			case ClassId(outputValue, value):
+				writeTwoValues(output, "ClassId", outputValue, value);
 			case MethodCall(value, object, name, arguments, terminalReceiver):
 				begin(output, terminalReceiver == true ? "TerminalMethodCall" : "MethodCall", 4);
 				writeValue(output, value);
@@ -482,6 +485,9 @@ class IrInstructionCodec {
 			case "Upcast":
 				arity(2);
 				Upcast(readValue(input, values), readValue(input, values));
+			case "ClassId":
+				arity(2);
+				ClassId(readValue(input, values), readValue(input, values));
 			case "MethodCall":
 				arity(4);
 				MethodCall(readValue(input, values), readValue(input, values), readText(input, totalLength), readValues(input, values), false);

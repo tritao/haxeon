@@ -120,6 +120,11 @@ enum IrInstruction {
 	ToVirtual(output:IrValue, value:IrValue);
 	/** The same object as an instance of one of its base classes: a reinterpretation, never checked or copied. */
 	Upcast(output:IrValue, value:IrValue);
+	/**
+	 * The dense class id of the object's class (`IrProgram.classIds`): an I32 that indexes the dispatch tables of interface calls. The object's class
+	 * must be one that has an id (a constructed class); each backend reads it as it likes (a class method, the struct's runtime type, a field).
+	 */
+	ClassId(output:IrValue, object:IrValue);
 	/** Terminal receiver means this compiler-owned value place is dead after this call, including on its exception edge. */
 	MethodCall(output:IrValue, object:IrValue, methodName:String, arguments:Array<IrValue>, terminalReceiver:Bool);
 	NewObject(output:IrValue, typeName:String);
@@ -322,6 +327,12 @@ class IrProgram {
 
 	public var positionalSources:Map<String, String> = [];
 
+	/**
+	 * The dense class id of every class that has one (`ClassId`), assigned by `IrClassIds`: a class keeps its id for a whole live session, a new class
+	 * takes the next one, and the id of a removed class is never reused.
+	 */
+	public var classIds:Map<String, Int> = [];
+
 	/** The functions the early prune (`IrEntryPrune`) removed, for its check mode: no later pass may call one. Empty without the prune. */
 	public var prunedFunctions:Map<String, Bool> = [];
 
@@ -347,6 +358,7 @@ class IrProgram {
 		result.positionalPlaces = positionalPlaces;
 		result.positionalSources = positionalSources;
 		result.prunedFunctions = prunedFunctions;
+		result.classIds = classIds;
 		return result;
 	}
 }

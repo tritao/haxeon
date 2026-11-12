@@ -141,3 +141,15 @@ cores), so read the ratios, not the digits. HashLink, Haxeon plain build.
   generation is.
 - Whether the selector offsets are packed (Dart's coloring) or one block per interface at first; start with one block per interface and measure
   the table size on the Materia app.
+
+## Implementation log
+
+1. **IR (this step, no behavior change).** `ClassId(output, object)`: an I32, verified (object or interface value in, I32 out), in the canonical
+   codec and state equality, interpreted from `IrProgram.classIds`; no backend lowers it yet (they fail loudly). `IrClassIds` is the persistent
+   assignment: a class keeps its id, new classes take the next ids in name order, a removed class's id is never reused, a cold build assigns by name
+   order whatever the order the classes arrive in. How the warm = cold check accounts for a live session's ids: the state carries them, so the cold
+   side of the check starts from the same `IrClassIdState` (the ids are an input, like the cached IR); a state-free cold build is compared with
+   another cold build for determinism. `MethodCall` on a `Virtual` receiver stays the IR form of an interface call; the dispatch entry that lowers
+   it is generated IR (`ClassId`, a table get, `CallClosure`), so no separate `InterfaceCall` instruction is needed. `ToVirtual` from an object to
+   an interface stays an instruction and becomes a retype in the HashLink lowering (step 2).
+

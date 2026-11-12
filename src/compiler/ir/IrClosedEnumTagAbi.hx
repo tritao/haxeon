@@ -143,7 +143,7 @@ class IrClosedEnumTagAbi {
 							FloatToFloat(_, _), BeginTry(_, _, _), EndTry(_, _), Catch(_), GlobalGet(_, _), GlobalSet(_, _), Add(_, _, _), Sub(_, _, _),
 							Mul(_, _, _), Div(_, _, _), Mod(_, _, _), BitAnd(_, _, _), BitXor(_, _, _), BitOr(_, _, _), ShiftLeft(_, _, _),
 							ShiftRight(_, _, _), UnsignedShiftRight(_, _, _), Less(_, _, _), LessEqual(_, _, _), Equal(_, _, _), StaticClosure(_, _),
-							InstanceClosure(_, _, _), Upcast(_, _), MethodCall(_, _, _, _, _), NewObject(_, _), FieldGet(_, _, _), FieldSet(_, _, _),
+							InstanceClosure(_, _, _), Upcast(_, _), ClassId(_, _), MethodCall(_, _, _, _, _), NewObject(_, _), FieldGet(_, _, _), FieldSet(_, _, _),
 							ArrayGet(_, _, _), ArraySet(_, _, _), ArraySize(_, _), IteratorNew(_, _), IteratorHasNext(_, _), IteratorNext(_, _),
 							MakeEnum(_, _, _, _), EnumField(_, _, _, _):
 					}

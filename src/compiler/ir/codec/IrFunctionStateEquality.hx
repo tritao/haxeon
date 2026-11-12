@@ -294,6 +294,10 @@ class IrFunctionStateEquality {
 				case ToVirtual(otherOutput, otherInput): value(output, otherOutput) && value(input, otherInput);
 				default: false;
 			};
+			case ClassId(output, input): switch b {
+				case ClassId(otherOutput, otherInput): value(output, otherOutput) && value(input, otherInput);
+				default: false;
+			};
 			case Upcast(output, input): switch b {
 				case Upcast(otherOutput, otherInput): value(output, otherOutput) && value(input, otherInput);
 				default: false;

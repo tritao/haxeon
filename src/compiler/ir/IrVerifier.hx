@@ -927,6 +927,14 @@ class IrVerifier {
 					case Obj(_) if (compatible(value.type, out.type, objects, interfaces) && !sameType(value.type, out.type)):
 					default: throw 'IR upcast from ${value.type} to ${out.type} is not to a base class';
 				}
+			case ClassId(out, value):
+				require(values, value);
+				if (!sameType(out.type, I32))
+					throw 'IR class id must be an I32, not ${out.type}';
+				switch value.type {
+					case Obj(_), Virtual(_):
+					default: throw 'IR class id of ${value.type} is not of an object or an interface value';
+				}
 			case ToVirtual(out, value):
 				require(values, value);
 				switch out.type {

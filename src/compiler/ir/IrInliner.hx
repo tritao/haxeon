@@ -1198,6 +1198,7 @@ class IrInliner {
 			case CallClosure(out, closure, arguments): CallClosure(use(out), use(closure), [for (argument in arguments) use(argument)]);
 			case ToVirtual(out, value): ToVirtual(use(out), use(value));
 			case Upcast(out, value): Upcast(use(out), use(value));
+			case ClassId(out, value): ClassId(use(out), use(value));
 			case MethodCall(out, object, name, arguments,
 				terminalReceiver): MethodCall(use(out), use(object), name, [for (argument in arguments) use(argument)], terminalReceiver);
 			case NewObject(out, typeName): NewObject(use(out), typeName);

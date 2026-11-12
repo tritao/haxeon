@@ -181,6 +181,7 @@ class TestCatalog {
 		"FunctionTypeSyntaxMain",
 		"FunctionValueLanesMain",
 		"UnreachableTerminatorMain",
+		"ClassIdMain",
 		"GenericDelimiterMain",
 		"LoopNarrowingMain",
 		"MapEntryFactsMain",

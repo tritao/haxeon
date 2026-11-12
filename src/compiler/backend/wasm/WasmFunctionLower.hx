@@ -610,6 +610,8 @@ class WasmFunctionLower {
 		var exceptionState = context.exceptionState;
 		switch instruction {
 			case Phi(_, _):
+			case ClassId(_, _):
+				throw 'internal error: ClassId is lowered by the interface dispatch (docs/INTERFACE_VALUES.md), which Wasm does not have yet';
 			case PointerOffset(output, pointer, byteOffset):
 				emit(body, [
 					LocalGet(requiredLocal(values, pointer.id)),
@@ -1985,7 +1987,7 @@ class WasmFunctionLower {
 				GlobalGet(output, _), Intrinsic(output, _, _), Add(output, _, _), Sub(output, _, _), Mul(output, _, _), Div(output, _, _), Mod(output, _, _), BitAnd(output, _, _),
 				BitXor(output, _, _), BitOr(output, _, _), ShiftLeft(output, _, _), ShiftRight(output, _, _), UnsignedShiftRight(output, _, _),
 				Less(output, _, _), LessEqual(output, _, _), Equal(output, _, _), Call(output, _, _), CNativeCall(output, _, _), StaticClosure(output, _),
-				InstanceClosure(output, _, _), CallClosure(output, _, _), ToVirtual(output, _), Upcast(output, _), MethodCall(output, _, _, _, _), NewObject(output, _),
+				InstanceClosure(output, _, _), CallClosure(output, _, _), ToVirtual(output, _), Upcast(output, _), ClassId(output, _), MethodCall(output, _, _, _, _), NewObject(output, _),
 				FieldGet(output, _, _), ArrayGet(output, _, _), ArraySize(output, _), IteratorNew(output, _), IteratorHasNext(output, _),
 				IteratorNext(output, _), MakeEnum(output, _, _, _), EnumIndex(output, _), EnumField(output, _, _, _): output;
 			case BeginTry(_, _, _), EndTry(_, _), GlobalSet(_, _), FieldSet(_, _, _), ArraySet(_, _, _), MemoryStore(_, _, _): null;

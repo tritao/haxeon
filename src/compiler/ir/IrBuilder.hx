@@ -186,6 +186,20 @@ class IrBuilder {
 		return out;
 	}
 
+	/** The dense class id of the object's class (`ClassId`), an I32. */
+	public function classId(object:IrValue):IrValue {
+		var out = temporary(I32);
+		emit(ClassId(out, object));
+		return out;
+	}
+
+	/** A class id typed as `type`, which the verifier must refuse unless it is an I32 (for tests). */
+	public function classIdAs(object:IrValue, type:IrType):IrValue {
+		var out = temporary(type);
+		emit(ClassId(out, object));
+		return out;
+	}
+
 	public function constVoid():IrValue {
 		var out = temporary(Void);
 		emit(ConstVoid(out));
