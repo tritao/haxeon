@@ -46,6 +46,24 @@ unset HL_GC_MARK_THRESHOLD
 pattern="[h]ashlink-runtime/hl .*cache/haxeon/compiler/.*json"
 ticks=$(getconf CLK_TCK)
 
+# GC time the compiler reports for a build, in ms: the stages of each frontend pass that do not overlap (graph, semantic-assembly,
+# signature-inference, typing, ir-generation: their `Ngc(Tms)` figures) plus the IR assembly and backend assembly phases. Empty when the log has none.
+gc_ms() {
+	awk '
+		/^frontend pass/ {
+			for (i = 1; i <= NF; i++)
+				if ($i ~ /^(graph|semantic-assembly|signature-inference|typing|ir-generation)=/ && match($i, /gc\([0-9.]+ms\)/)) {
+					value = substr($i, RSTART + 3, RLENGTH - 6); total += value; seen = 1
+				}
+		}
+		/allocation phases/ {
+			for (i = 1; i <= NF; i++)
+				if ($i ~ /^(ir-assembly|backend-assembly)-gc-ms=/) { split($i, parts, "="); total += parts[2]; seen = 1 }
+		}
+		END { if (seen) printf "%.0f", total }
+	' "$1"
+}
+
 # Pids of the workers whose runtime lives under this root (own) or elsewhere (others).
 workers() { # own|others
 	local pid cmd
@@ -98,5 +116,5 @@ for run in $(seq "$runs"); do
 	[ -s "$out/$name.others" ] && flags="$flags other-checkout-worker-ran"
 	polluted=""
 	[ -n "$flags" ] && polluted=" polluted=${flags# }"
-	echo "$name exit=$status load=$load $(grep -o 'compile-count=[0-9]*' "$out/$name.log" | head -1) $(grep '^compiler:' "$out/$name.log") wall=$(echo "$end - $start" | bc | cut -c1-6)s cpu=$(cat "$out/$name.cpu")s peak-rss=$(awk '{printf "%.2f GB", $1 / 1048576}' "$out/$name.peak")$polluted"
+	echo "$name exit=$status load=$load $(grep -o 'compile-count=[0-9]*' "$out/$name.log" | head -1) $(grep '^compiler:' "$out/$name.log") wall=$(echo "$end - $start" | bc | cut -c1-6)s cpu=$(cat "$out/$name.cpu")s peak-rss=$(awk '{printf "%.2f GB", $1 / 1048576}' "$out/$name.peak") gc-ms=$(gc_ms "$out/$name.log")$polluted"
 done
