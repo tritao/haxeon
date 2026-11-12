@@ -77,7 +77,7 @@ class StateStore {
 			var id = pathIds[read++];
 			if (!paths.exists(id))
 				continue;
-			if (!mounted.exists(id) && !handles.exists(id) && !scopes.exists(id))
+			if (!mounted.exists(id) && !handles.exists(id) && !scopes.exists(-id))
 				paths.remove(id);
 			else
 				pathIds[write++] = id;
@@ -96,7 +96,7 @@ class StateStore {
 
 	/** Mark the logical scope resource before its body captures descendant resource usage. */
 	public function beginScope(id:Int):Void {
-		if (id <= 0 || handles.exists(id)) throw "Native scope resource has a different owner type";
+		if (id >= 0 || handles.exists(id)) throw "Native scope resource has a different owner type";
 		markUsedValue(id);
 	}
 

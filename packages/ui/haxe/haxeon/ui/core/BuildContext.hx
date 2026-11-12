@@ -1005,20 +1005,25 @@ class BuildContext {
 		var previousScope = scope;
 		scope = scope.child(new Key(component.scopeKey()));
 		try {
-			var resourceId = resolveId("scope");
-			var rootId = pendingScopeRootId == null ? resourceId : pendingScopeRootId;
+			// Widget IDs occupy the positive 31-bit namespace. Native owners use the
+			// negative half, so a stateful body can use its own root ID independently.
+			var identity = resolveId("scope");
+			var resourceId = -identity.value;
+			var rootId = pendingScopeRootId == null ? identity : pendingScopeRootId;
 			pendingScopeRootId = null;
-			stateStore.beginScope(resourceId.value);
+			stateStore.beginScope(resourceId);
 			var text = textStyleStack.length == 1 ? textStyleStack : textStyleStack.copy();
-			var owner = new RenderScope(resourceId.value, this, component, scope, styleParent, text);
+			var owner = new RenderScope(resourceId, this, component, scope, styleParent, text);
 			owner.parentScope = activeRenderScope;
 			renderScopes.push(owner);
-			try owner.mount(rootId) catch (error:Dynamic) {
+			try {
+				owner.mount(rootId);
+				stateStore.installScope(owner);
+			} catch (error:Dynamic) {
 				owner.dispose();
 				renderScopes.remove(owner);
 				throw error;
 			}
-			stateStore.installScope(owner);
 			scope = previousScope;
 			return owner.root;
 		} catch (error:Dynamic) {

@@ -25,7 +25,7 @@ class RenderScope extends ReactiveDependencySet {
 	public function new(resourceId:Int, context:BuildContext, component:ScopeView, scope:KeyScope,
 			parent:Null<ComputedStyle>, text:Array<ResolvedTextStyle>) {
 		super();
-		if (resourceId <= 0 || context == null || component == null)
+		if (resourceId >= 0 || context == null || component == null)
 			throw "A render scope requires an identity, lifetime, context and component";
 		this.resourceId = resourceId;
 		this.context = context;
