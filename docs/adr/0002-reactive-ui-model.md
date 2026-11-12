@@ -844,6 +844,29 @@ retention scenarios, budgets that may only go down, memory runs, compiler suites
    continue with the closed event-phase enum and subsequent leaf widgets. Compiler fixes remain owned by dev-c5
    (HashLink interface adapters) and a1 (value-constructor destination); no UI workaround is authorized.
 
+   **Independent review corrections (local, before renewed gates).** The body-root batch `0892af06d` had four
+   reproduced correctness defects. `ScopeRootStateMain` overflowed recursive `StateStore.retain` for a Checkbox
+   with `onChange`; the actual TextField fixture with loaded fonts threw "Native scope resource has a different
+   owner type". Native owners now use negative scalar resource IDs, disjoint from positive widget-state IDs, with
+   no extra identity allocation. Injected installation failure also reproduced a subscribed owner left in the
+   pending list; installation is now inside mount rollback. `SelectionFocusMain` failed with "Selection requested
+   focus on a non-focusable label or icon"; Select, ComboBox and SelectionPopup now request the Button root ID.
+   `ScopeVariantRootMain` failed with "Returning to A returned B"; variant caches record their nested root owner
+   and exclude the enclosing scope currently building the alternative. `ScopeNodeFieldsMain` failed with "Caller
+   node fields lost on body replacement"; cursor, tab index, command scope, window-decoration region/cursor,
+   hit-test policy, focus trap and self hit testing now have authored baselines and persistent caller override bits.
+   Forwarding rebases those baselines. The new node-field baseline increases owner/boundary size and must be
+   remeasured; the earlier twenty-mount counts describe the unreviewed snapshot only.
+
+   All four regressions pass focused HashLink checks after correction, including repeated stateful mounts,
+   installation cleanup, A/B/A leaves and nested scopes, focus return/navigation, and repeated field transfer with
+   a coinciding authored default. The Menu measurement concern did not reproduce: the old default Button style
+   contributes row gap/direction/alignment, while width calculation consumes padding and typography only.
+   `MenuMeasurementMain` confirms equal horizontal padding, font size and letter spacing on the default theme;
+   the measurement code retains its null inline style with this dependency documented. These fixtures join the
+   three-target suite. The real TextField fixture additionally requires native fonts. All interrupted gate outputs
+   are rejected; full gates and the exact 22-action census restart after these fixes.
+
    Foundation evidence is retained under `/media/joao/DATA1/haxeon-stage5-gates/evidence/`:
    `native-foundation-pilot-comparison.log`, `worker-binding-trace-comparison.json`, the paired
    `current-*-all-census.json` and `current-*-pilot-census.json`, and the six-configuration

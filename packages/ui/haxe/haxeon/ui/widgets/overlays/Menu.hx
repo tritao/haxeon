@@ -75,6 +75,8 @@ class Menu implements View {
 					context.theme.tokens.textSecondary, TextStyleOverride.text(11.0))));
 				continue;
 			}
+			// Measurement consumes only padding and typography. Button row gap/direction/alignment do not
+			// contribute here; the final Button supplies those defaults when its body is built.
 			var computed = context.resolveStyle(new StyleTarget("button", item.key, item.key,
 				["menu-item", "navigation"], ["button"], haxeon.ui.style.StyleState.empty()), null);
 			var itemStyle = computed.toLayoutStyle();
