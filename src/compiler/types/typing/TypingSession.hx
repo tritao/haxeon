@@ -14,6 +14,8 @@ import compiler.Source.SourceSpan;
 import compiler.types.analysis.Scope;
 
 typedef ResolvedInlineConstant = {
+	/** Constants and enum abstract types read while resolving this value, including cached aliases. */
+	final dependencies:Array<String>;
 	final initializer:TypedExpression;
 	final value:TypedExpression;
 }

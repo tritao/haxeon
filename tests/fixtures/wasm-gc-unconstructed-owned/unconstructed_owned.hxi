@@ -1,0 +1,9 @@
+interface UnconstructedOwned @target("portable-abi32") @library("unconstructed_owned") {
+	struct uo_value @layout(8, 4) {
+		a: i32 @offset(0);
+		b: i32 @offset(4);
+	}
+	handle uo_handle : u32 @destroy("uo_destroy");
+	extern fn uo_destroy(handle: uo_handle) -> void;
+	extern fn uo_open(out_handle: ptr<uo_handle> @out @owned) -> i32;
+}

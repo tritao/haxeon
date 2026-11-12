@@ -45,6 +45,7 @@ class EnumAbstractValues {
 	}
 
 	public static function typed(typer:BodyTyper, declaration:AstEnumAbstract, value:AstEnumAbstractValue):TypedExpression {
+		typer.recordInlineConstantDependency(declaration.name);
 		var expression = raw(typer, declaration, value);
 		return typer.session.enumAbstractConstantOwner == declaration.name ? expression : new TypedExpression(TAbiCast(expression),
 			TAbstract(declaration.name, [], expression.type), expression.span);

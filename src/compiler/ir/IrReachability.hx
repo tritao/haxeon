@@ -9,8 +9,9 @@ import compiler.ir.Ir.IrType;
  *
  * The one walker: the Wasm builders use it to emit only what is reachable, and HashLink prunes with it too. Roots are the entry,
  * the functions declared `@:keep` or `@:expose` (`IrFunction.retention`), the toString implementations a dynamic stringification
- * calls, and the functions native declarations generate calls to; edges are calls, closures and method calls over every class (or
- * implementor) that could receive them.
+ * calls, and the functions native declarations generate calls to; edges are calls, closures and dispatch. Dispatch (a method call
+ * through a class or interface type, or reflection by field name) reaches a class's methods only once a reached function constructs
+ * that class (rapid type analysis): a class nothing constructs has no instance to receive the call.
  */
 class IrReachability {
 	/** The functions reachable from `entry` and `additionalRoots` by calls, closures and method calls. */
@@ -55,11 +56,12 @@ class IrReachability {
 							walk.visit(method);
 					}
 				}
-				if (native.generatedFunctionDependencies != null && !dependenciesDone.exists(native.name)) {
-					dependenciesDone.set(native.name, true);
+				if (native.generatedFunctionDependencies != null)
 					for (dependency in native.generatedFunctionDependencies)
-						walk.visit(dependency);
-				}
+						if (!dependenciesDone.exists(dependency) && walk.layoutMayHaveInstances(native.name, dependency)) {
+							dependenciesDone.set(dependency, true);
+							walk.visit(dependency);
+						}
 			}
 			if (walk.count == before)
 				return walk.reachable;
@@ -110,6 +112,18 @@ class IrReachabilityWalk {
 	final liveClasses:Map<String, Bool> = [];
 
 	/**
+	 * Classes that can have instances: those a reached function constructs (`NewObject`) or a reached native returns. Value classes,
+	 * anonymous records and interface boxes are created in other ways (copies, literals, boxing), so they always count.
+	 */
+	final instantiated:Map<String, Bool> = [];
+
+	/** The method calls reached so far, by receiver type, so a class constructed later receives them too. */
+	final dispatches:Array<{type:String, isInterface:Bool, method:String}> = [];
+
+	/** The class each native's result is an instance of, for natives that return objects. */
+	final nativeResults:Map<String, String> = [];
+
+	/**
 	 * With `keepLiveClasses`, every class that a reachable function mentions by type is live, and a live class keeps all its methods
 	 * and those of the classes it extends: its method table is built from them, and anything holding an instance can call them by name
 	 * (`Reflect.field`). A class nothing mentions has no instance, so its methods go. Every value a function uses is defined by an
@@ -120,7 +134,24 @@ class IrReachabilityWalk {
 		this.keepLiveClasses = keepLiveClasses;
 		for (fn in program.functions)
 			byName.set(fn.name, fn);
+		for (native in program.natives) {
+			var result = objectName(native.result);
+			if (result != null)
+				nativeResults.set(native.name, result);
+		}
+		for (native in program.cNatives) {
+			var result = objectName(native.result);
+			if (result != null)
+				nativeResults.set(native.name, result);
+		}
 	}
+
+	static function objectName(type:IrType):Null<String>
+		return switch type {
+			case Obj(name): name;
+			case Nullable(inner): objectName(inner);
+			default: null;
+		};
 
 	public function visit(root:String):Void {
 		var pending = [root];
@@ -146,9 +177,14 @@ class IrReachabilityWalk {
 							mention(output.type, pending);
 					}
 					switch located.value {
+						case NewObject(_, typeName):
+							construct(typeName, pending);
 						case Call(_, target, _):
 							used.set(target, true);
 							pending.push(target);
+							var result = nativeResults.get(target);
+							if (result != null)
+								construct(result, pending);
 						case StaticClosure(_, target):
 							used.set(target, true);
 							pending.push(target);
@@ -163,26 +199,67 @@ class IrReachabilityWalk {
 						// With live classes a method call needs no edge: whatever it can reach belongs to a class with an instance, and that class
 						// is mentioned by the function that makes the instance, so it keeps all its methods.
 						case MethodCall(_, object, method, _, _) if (!keepLiveClasses):
-							// Every call of a method on a type reaches the same candidates, so each pair is expanded once.
+							// Every call of a method on a type reaches the same candidates, so each pair is expanded once; classes constructed
+							// later are matched against the recorded calls in `construct`.
 							switch object.type {
-								case Obj(objectName):
-									if (!dispatched.exists(objectName + "\u0001" + method)) {
-										dispatched.set(objectName + "\u0001" + method, true);
-										for (candidate in index.subtypesOf(objectName))
-											enqueue(index.findMethod(candidate.name, method), pending);
-									}
+								case Obj(typeName):
+									dispatch(typeName, false, method, pending);
 								case Virtual(interfaceName):
-									if (!dispatched.exists(interfaceName + "\u0002" + method)) {
-										dispatched.set(interfaceName + "\u0002" + method, true);
-										for (candidate in index.implementorsOf(interfaceName))
-											enqueue(index.findMethod(candidate.name, method), pending);
-									}
+									dispatch(interfaceName, true, method, pending);
 								default:
 							}
 						default:
 					}
 				}
 		}
+	}
+
+	function dispatch(typeName:String, isInterface:Bool, method:String, pending:Array<String>):Void {
+		var key = typeName + (isInterface ? "\u0002" : "\u0001") + method;
+		if (dispatched.exists(key))
+			return;
+		dispatched.set(key, true);
+		dispatches.push({type: typeName, isInterface: isInterface, method: method});
+		var candidates = isInterface ? index.implementorsOf(typeName) : index.subtypesOf(typeName);
+		for (candidate in candidates)
+			if (hasInstances(candidate.name))
+				enqueue(index.findMethod(candidate.name, method), pending);
+	}
+
+	/** Records that `typeName` has instances, and reaches the methods of it that the calls seen so far dispatch to. */
+	function construct(typeName:String, pending:Array<String>):Void {
+		if (instantiated.exists(typeName))
+			return;
+		instantiated.set(typeName, true);
+		for (call in dispatches)
+			if (call.isInterface ? index.implementsInterface(typeName, call.type) : index.isObjectSubtype(typeName, call.type))
+				enqueue(index.findMethod(typeName, call.method), pending);
+	}
+
+	function hasInstances(typeName:String):Bool {
+		if (instantiated.exists(typeName))
+			return true;
+		var object = index.object(typeName);
+		return object == null || object.isValue || StringTools.startsWith(typeName, IrValueInterfaceBoxes.BOX_PREFIX)
+			|| compiler.semantic.SemanticSignature.isAnonymousName(typeName);
+	}
+
+	/**
+	 * Whether the per-layout function `dependency` that the reflection native `native` dispatches to (named `native.Layout`) can be
+	 * given a value: a layout reflects instances of its class and of the classes extending it that have no layout of their own, so it
+	 * is needed once any of those has instances. A name not of that shape stays.
+	 */
+	public function layoutMayHaveInstances(native:String, dependency:String):Bool {
+		var prefix = native + ".";
+		if (!StringTools.startsWith(dependency, prefix))
+			return true;
+		var layout = index.object(dependency.substr(prefix.length));
+		if (layout == null)
+			return true;
+		for (candidate in index.subtypesOf(layout.name))
+			if (hasInstances(candidate.name))
+				return true;
+		return false;
 	}
 
 	function mention(type:IrType, pending:Array<String>):Void
