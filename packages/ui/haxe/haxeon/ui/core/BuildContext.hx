@@ -942,7 +942,7 @@ class BuildContext {
 			var id = idsByPath.get(path);
 			if (id == null)
 				continue;
-			if (!mounted.exists(id.value) && !stateStore.contains(id)) {
+			if (!mounted.exists(id.value) && !stateStore.contains(id) && !stateStore.hasScopeIdentity(id.value)) {
 				idsByPath.remove(path);
 				cachedIdCount--;
 			} else
@@ -1003,7 +1003,13 @@ class BuildContext {
 	/** A variant owns nested completed scopes, never the enclosing scope currently producing that variant. */
 	public function retainedRootScope(node:RenderNode):Null<RenderScope> {
 		var owner = node.scopeOwner();
-		return owner == activeRenderScope ? null : owner;
+		if (owner == activeRenderScope) return null;
+		while (owner != null) {
+			var parent = owner.parentScope;
+			if (parent == null || parent == activeRenderScope || parent.disposed || parent.root != node) break;
+			owner = parent;
+		}
+		return owner;
 	}
 
 	/** Capture inherited values on the native owner, with no mount-path build closures or layout wrapper. */
@@ -1014,12 +1020,11 @@ class BuildContext {
 			// Widget IDs occupy the positive 31-bit namespace. Native owners use the
 			// negative half, so a stateful body can use its own root ID independently.
 			var identity = resolveId("scope");
-			var resourceId = -identity.value;
+			var resourceId = stateStore.beginScope();
 			var rootId = pendingScopeRootId == null ? identity : pendingScopeRootId;
 			pendingScopeRootId = null;
-			stateStore.beginScope(resourceId);
 			var text = textStyleStack.length == 1 ? textStyleStack : textStyleStack.copy();
-			var owner = new RenderScope(resourceId, this, component, scope, styleParent, text);
+			var owner = new RenderScope(resourceId, identity.value, this, component, scope, styleParent, text);
 			owner.parentScope = activeRenderScope;
 			renderScopes.push(owner);
 			try {
@@ -1146,8 +1151,12 @@ class BuildContext {
 				while (index < renderScopes.length) {
 					var owner = renderScopes[index++];
 					if (owner.disposed) continue;
-					if (stateStore.scopeOwner(owner.resourceId) != owner || owner.mounted && !owner.attached()) {
+					if (stateStore.scopeOwner(owner.resourceId) != owner) {
 						owner.dispose();
+						progressed = true;
+					} else if (owner.mounted && !owner.attached()) {
+						if (owner.retainedByParent()) owner.mounted = false;
+						else owner.dispose();
 						progressed = true;
 					} else if (owner.mounted && owner.pending && !hasPendingScopeAncestor(owner) && !hasPendingUpdatingAncestor(owner.root)) {
 						owner.refresh();

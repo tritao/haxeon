@@ -5,6 +5,11 @@ class StateStore {
 	final handles:Map<Int, State<Dynamic>> = new Map();
 	/** A native scope is its own lifetime record, rather than a signal-valued state wrapper. */
 	final scopes:Map<Int, RenderScope> = new Map();
+	// A cached alternative owns its component instances even when their widget IDs match the visible alternative.
+	var nextScopeId:Int = -1;
+	final scopeIdentities:IdSet = new IdSet(256);
+	var scopeIdentitiesDirty:Bool = true;
+
 	/** Resource ownership follows the current body, rather than a cache's initial flattened ID list. */
 	final ownedStates:Map<Int, Array<Int>> = new Map();
 
@@ -13,6 +18,12 @@ class StateStore {
 		else ownedStates.set(owner, ids);
 	}
 	public function ownedStateIds(owner:Int):Null<Array<Int>> return ownedStates.get(owner);
+	public function ownsResource(owner:Int, child:Int):Bool {
+		var ids = ownedStates.get(owner);
+		if (ids != null) for (index in 0...ids.length) if (ids[index] == child) return true;
+		return false;
+	}
+
 	final disposers:Map<Int, Void->Void>;
 	final paths:Map<Int, String>;
 	/** The IDs in `paths`, oldest first, so a prune can walk them in place instead of snapshotting the map's keys. */
@@ -77,7 +88,7 @@ class StateStore {
 			var id = pathIds[read++];
 			if (!paths.exists(id))
 				continue;
-			if (!mounted.exists(id) && !handles.exists(id) && !scopes.exists(-id))
+			if (!mounted.exists(id) && !handles.exists(id) && !hasScopeIdentity(id))
 				paths.remove(id);
 			else
 				pathIds[write++] = id;
@@ -94,25 +105,63 @@ class StateStore {
 		markUsed(id);
 	}
 
-	/** Mark the logical scope resource before its body captures descendant resource usage. */
-	public function beginScope(id:Int):Void {
-		if (id >= 0 || handles.exists(id)) throw "Native scope resource has a different owner type";
+	/** Reserve one native instance lifetime before its body captures descendant resource usage. */
+	public function beginScope():Int {
+		var id = nextScopeId;
+		while (scopes.exists(id) || frameUsed.has(id)) id = id == -0x7fffffff ? -1 : id - 1;
+		nextScopeId = id == -0x7fffffff ? -1 : id - 1;
 		markUsedValue(id);
+		return id;
+	}
+
+	/** Resource identity is per instance; this flat membership keeps its stable widget paths alive. */
+	public function hasScopeIdentity(id:Int):Bool {
+		if (scopeIdentitiesDirty) {
+			scopeIdentities.clear();
+			for (index in 0...managedCount) {
+				var owner = scopes.get(managedIds[index]);
+				if (owner != null && !owner.disposed) scopeIdentities.add(owner.identityId);
+			}
+			scopeIdentitiesDirty = false;
+		}
+		return scopeIdentities.has(id);
 	}
 
 	public function scopeOwner(id:Int):Null<RenderScope> return scopes.get(id);
 
-	/** A successful body installs one native owner and releases its previous computation. */
+	/** Install one instance owner; cached instances with the same widget identity remain independent. */
 	public function installScope(owner:RenderScope):Void {
 		var id = owner.resourceId;
 		if (handles.exists(id)) throw "Native scope resource has a different owner type";
 		var previous = scopes.get(id);
-		if (previous != null && previous != owner) previous.dispose();
+		if (previous != null && previous != owner) throw "Native scope resource already has an owner";
 		scopes.set(id, owner);
+		scopeIdentitiesDirty = true;
 		if (!managed.has(id)) {
 			managed.add(id);
 			appendManaged(id);
 		}
+	}
+
+	/** Release a native record immediately, including independent updates outside a full-frame sweep. */
+	public function releaseScope(owner:RenderScope):Void {
+		var id = owner.resourceId, current = scopes.get(id);
+		if (current != null && current != owner) return;
+		scopes.remove(id);
+		ownedStates.remove(id);
+		managed.remove(id);
+		scopeIdentitiesDirty = true;
+		if (!sweeping && managedCount > 256 && managedCount > managed.count() * 2) compactManaged();
+	}
+
+	function compactManaged():Void {
+		var read = 0, write = 0;
+		seenScratch.clear();
+		while (read < managedCount) {
+			var id = managedIds[read++];
+			if (managed.has(id) && seenScratch.add(id)) managedIds[write++] = id;
+		}
+		managedCount = write;
 	}
 
 	/** Starts liveness tracking for resource-backed widget state. */
@@ -223,18 +272,10 @@ class StateStore {
 			managed.remove(id);
 			handles.remove(id);
 			scopes.remove(id);
+			scopeIdentitiesDirty = true;
 			ownedStates.remove(id);
 		}
-		if (stale.length > 0) {
-			var read = 0, write = 0;
-			seenScratch.clear();
-			while (read < managedCount) {
-				var id = managedIds[read++];
-				// A later disposer can recreate an earlier ID while this sweep is in progress.
-				if (managed.has(id) && seenScratch.add(id)) managedIds[write++] = id;
-			}
-			managedCount = write;
-		}
+		if (stale.length > 0) compactManaged();
 		stale.resize(0);
 		sweeping = nested;
 		frameUsed.clear();
@@ -245,7 +286,7 @@ class StateStore {
 	}
 
 	public function contains(id:WidgetId):Bool
-		return id != null && (handles.exists(id.value) || scopes.exists(id.value));
+		return id != null && handles.exists(id.value);
 
 	/** Bounded-run diagnostics for detecting retained widget state growth. */
 	public function diagnosticCounts():{values:Int, paths:Int, resources:Int} {
@@ -282,6 +323,8 @@ class StateStore {
 
 	/** Releases registered widget resources and clears the store. */
 	public function dispose():Void {
+		var nested = sweeping;
+		sweeping = true;
 		var failure:Dynamic = null;
 		for (index in 0...managedCount) {
 			var id = managedIds[index];
@@ -308,14 +351,17 @@ class StateStore {
 		frameActive = false;
 		handles.clear();
 		scopes.clear();
+		scopeIdentitiesDirty = true;
 		ownedStates.clear();
 		paths.clear();
 		pathIds.resize(0);
+		sweeping = nested;
 		if (failure != null)
 			throw failure;
 	}
 
 	function appendManaged(id:Int):Void {
+		if (!sweeping && managedCount == managedIds.length && managedCount > managed.count()) compactManaged();
 		if (managedCount == managedIds.length) managedIds.resize(managedIds.length * 2);
 		managedIds[managedCount++] = id;
 	}

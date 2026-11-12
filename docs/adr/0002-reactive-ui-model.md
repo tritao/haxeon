@@ -867,6 +867,34 @@ retention scenarios, budgets that may only go down, memory runs, compiler suites
    three-target suite. The real TextField fixture additionally requires native fonts. All interrupted gate outputs
    are rejected; full gates and the exact 22-action census restart after these fixes.
 
+   **Native instance lifetimes (gate correction).** The full dock gate and an isolated reproduction found that
+   a component's widget identity cannot also identify its lifetime: mounting cached pane B disposed A's Button
+   owners even though the pane cache retained A. Native owners now receive distinct scalar instance IDs; stable
+   widget identity still addresses focus, capture, layout and key paths. The same native record holds both scalar
+   identities, without an allocated identity holder. A flat set retains the widget paths of live instances. Retained
+   caches resolve their own completed root scope rather than a forwarding ancestor displaying another alternative.
+   A detached child stays subscribed when its parent's existing ownership table still retains it; actual removals
+   still unsubscribe. Disposal unregisters the native record immediately, including patch-only frames, and compacts
+   reusable managed-ID storage before tombstones cause unnecessary growth. No retained-update path, ownership
+   counter, compiler change, budget change or verify exception is introduced.
+
+   The new failures were reproduced before correction: "Cached pane native owner disposed by another variant",
+   "A cached native component's lifetime was overwritten by another instance", "Inactive cached nested component
+   was disposed", and "Native patch updates retained obsolete component owners". Focused HashLink checks now pass,
+   including original dock A/B/A reuse, moved panels and model callback replacement. The reviewed twenty-mount
+   Button result remains 2,612 objects / 201,968 bytes against control 2,672 / 198,296. The two compiler-gap items
+   account for 40 objects / 3,040 bytes; subtracting them is attribution only and leaves 632 bytes above control.
+   The caller-property baseline adds 32 bytes per owner and 40 per boundary temporary relative to the earlier
+   compact-owner result. Actual action counts, rather than this mount probe, decide publication.
+
+   Full restyle tests also required two assertion ports: selector classes live on the Button body root, and caller
+   decorations follow its native current root under the same widget ID. Listener, style, overlay and fresh-build
+   comparisons remain required. Outer gates use `60d9d4c36`; the existing OCCT prefix is an explicit read-only input
+   (the source difference is Vcpkg configuration unused by Linux Ninja), and the fresh worktree needs its standard
+   root `build/` output directory. The app control reproduces the missing-directory failure and passes after that
+   setup correction. The initial failed setup results are rejected. Full gates and all 22 action windows must run
+   again on the corrected native ownership implementation.
+
    Foundation evidence is retained under `/media/joao/DATA1/haxeon-stage5-gates/evidence/`:
    `native-foundation-pilot-comparison.log`, `worker-binding-trace-comparison.json`, the paired
    `current-*-all-census.json` and `current-*-pilot-census.json`, and the six-configuration

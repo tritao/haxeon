@@ -16,18 +16,20 @@ class RenderScope extends ReactiveDependencySet {
 	public final capturedText:Array<ResolvedTextStyle>;
 	final context:BuildContext;
 	public final resourceId:Int;
+	public final identityId:Int;
 	@:allow(haxeon.ui.core.BuildContext)
 	var mounted:Bool = true;
 	public var disposed(default, null):Bool = false;
 	public var pending(default, null):Bool = false;
 	var validating:Bool = false;
 
-	public function new(resourceId:Int, context:BuildContext, component:ScopeView, scope:KeyScope,
+	public function new(resourceId:Int, identityId:Int, context:BuildContext, component:ScopeView, scope:KeyScope,
 			parent:Null<ComputedStyle>, text:Array<ResolvedTextStyle>) {
 		super();
-		if (resourceId >= 0 || context == null || component == null)
+		if (resourceId >= 0 || identityId <= 0 || context == null || component == null)
 			throw "A render scope requires an identity, lifetime, context and component";
 		this.resourceId = resourceId;
+		this.identityId = identityId;
 		this.context = context;
 		this.component = component;
 		capturedScope = scope;
@@ -40,7 +42,7 @@ class RenderScope extends ReactiveDependencySet {
 
 	/** Logical identity belongs to the store and scoped ID, without a separate identity-holder object. */
 	public function sameSlot(other:RenderScope):Bool
-		return context.stateStore == other.context.stateStore && resourceId == other.resourceId;
+		return context.stateStore == other.context.stateStore && identityId == other.identityId;
 
 	/** Old body references resolve through their logical native owners, never a global numeric-ID redirect. */
 	public function currentRoot(previous:RenderNode):RenderNode {
@@ -49,7 +51,7 @@ class RenderScope extends ReactiveDependencySet {
 		while (owner != null) {
 			if (owner.root == null) break;
 			var current = owner.context.stateStore.scopeOwner(owner.resourceId);
-			if (current != null && current.root != null && current.root != previous) return current.root;
+			if (current != null && current == owner && current.root != null && current.root != previous) return current.root;
 			if (owner.root != null && owner.root != previous) return owner.root;
 			owner = owner.parentScope;
 			// Only forwarding scopes share this identity. An unchanged child must not resolve
@@ -137,7 +139,18 @@ class RenderScope extends ReactiveDependencySet {
 		if (disposed) return;
 		disposed = true;
 		pending = false;
+		context.stateStore.releaseScope(this);
 		clearDependencies();
+	}
+
+	/** Cached alternatives remain resources of their parent while temporarily absent from its visible root. */
+	public function retainedByParent():Bool {
+		var ancestor = parentScope;
+		while (ancestor != null) {
+			if (!ancestor.disposed && context.stateStore.ownsResource(ancestor.resourceId, resourceId)) return true;
+			ancestor = ancestor.parentScope;
+		}
+		return false;
 	}
 
 	/** A parent rerun may remove this body before its pending work is visited. */

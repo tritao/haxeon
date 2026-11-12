@@ -165,20 +165,20 @@ private class RetainedVariantEntry {
 	}
 
 	public function currentRoot():RenderNode
-		return rootScope == null ? root : rootScope.currentRoot(root);
+		return rootScope == null ? root : rootScope.root;
 
 	function topologyMatches():Bool {
 		if (RenderNode.latest(root) != root) return false;
 		var rootOwner = rootScope;
 		if (rootOwner != null) {
-			var current = rootOwner.currentRoot(root);
+			var current = rootOwner.root;
 			if (!current.id.equals(root.id)) return false;
 			root = current;
 		}
 		for (index in 0...nodes.length) {
 			var oldNode = nodes[index], native = index == 0 ? rootScope : oldNode.scopeOwner();
 			if (native != null) {
-				var current = native.currentRoot(oldNode);
+				var current = index == 0 ? native.root : native.currentRoot(oldNode);
 				if (!current.id.equals(oldNode.id)) return false;
 				nodes[index] = current;
 			}
