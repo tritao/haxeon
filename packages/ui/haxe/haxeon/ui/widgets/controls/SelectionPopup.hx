@@ -291,7 +291,7 @@ class SelectionPopup {
 				ensure(next);
 				var nextPosition = visiblePosition(next);
 				if (nextPosition >= 0 && nextPosition < optionNodes.length)
-					context.requestFocus(optionNodes[nextPosition].children[0].id);
+					context.requestFocus(optionNodes[nextPosition].id);
 				event.preventDefault();
 			});
 		}

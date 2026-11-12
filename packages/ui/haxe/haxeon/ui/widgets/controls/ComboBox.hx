@@ -164,7 +164,7 @@ class ComboBox<T> implements View {
 			};
 			var focusOption = function(index:Int) {
 				if (index >= 0 && index < optionNodes.length)
-					context.requestFocus(optionNodes[index].children[0].id);
+					context.requestFocus(optionNodes[index].id);
 			};
 			var selectOption = function(index:Int) {
 				if (!enabled || !isEnabledIndex(index))

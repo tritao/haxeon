@@ -122,7 +122,7 @@ class Select<T> implements View {
 				if (openState.value == true)
 					openState.update(false);
 				if (triggerNode != null)
-					context.requestFocus(triggerNode.children[0].id);
+					context.requestFocus(triggerNode.id);
 			};
 			var setActive = function(index:Int, reveal:Bool = true) {
 				var current:Int = activeState.value;
@@ -136,7 +136,7 @@ class Select<T> implements View {
 			};
 			var focusOption = function(index:Int) {
 				if (index >= 0 && index < optionNodes.length)
-					context.requestFocus(optionNodes[index].children[0].id);
+					context.requestFocus(optionNodes[index].id);
 			};
 			var nextEnabled = function(index:Int, direction:Int) {
 				if (options.length == 0)
