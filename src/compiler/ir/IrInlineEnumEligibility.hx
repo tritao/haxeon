@@ -118,7 +118,7 @@ class IrInlineEnumEligibility {
 				escape(native.result, "native signature");
 			}
 		// Reflection helpers are generated after storage selection and can expose every registered layout.
-		if (ObjectReflection.usesObjectLayouts(program.natives)) {
+		if (ObjectReflection.usedByProgram(program)) {
 			var reflectedNames = reflectableObjects == null ? [] : reflectableObjects,
 				reflected = [for (name in reflectedNames) name => true];
 			for (object in program.objects) {

@@ -336,6 +336,12 @@ class IrProgram {
 	/** The functions the early prune (`IrEntryPrune`) removed, for its check mode: no later pass may call one. Empty without the prune. */
 	public var prunedFunctions:Map<String, Bool> = [];
 
+	/**
+	 * Names of the natives that reached code calls, once the early prune ran (`IrEntryPrune`); null when it did not, and every declared native then
+	 * counts. A decision about what the program does at run time (does it reflect?) reads this, not the declared natives of every loaded module.
+	 */
+	public var reachedNatives:Null<Map<String, Bool>> = null;
+
 	/** The generated helpers of this program, by what each serves (`IrProviders`); an index over `functions`, built when asked. */
 	public function providers():Map<String, String>
 		return IrProviders.rows(functions);
@@ -358,6 +364,7 @@ class IrProgram {
 		result.positionalPlaces = positionalPlaces;
 		result.positionalSources = positionalSources;
 		result.prunedFunctions = prunedFunctions;
+		result.reachedNatives = reachedNatives;
 		result.classIds = classIds;
 		return result;
 	}

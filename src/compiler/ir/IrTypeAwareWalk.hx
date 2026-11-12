@@ -37,6 +37,9 @@ typedef IrWalkResult = {
 	 * entry the verifier resolves the call against, and the body is not needed. Not in `reached`.
 	 */
 	final declarationOnly:Map<String, Bool>;
+
+	/** Names of the natives (`IrNative` and `IrCNative`) that reached code calls or takes as a closure. */
+	final calledNatives:Map<String, Bool>;
 }
 
 /**
@@ -195,6 +198,7 @@ private class IrTypeAwareWalkState {
 	var stringUsed:Bool = false;
 	var providersReached:Int = 0;
 	final declarationOnly:Map<String, Bool> = [];
+	final calledNatives:Map<String, Bool> = [];
 
 	public function new(program:IrProgram, roots:IrWalkRoots, dynamicSites:Map<String, Array<String>>, requireProviders:Bool,
 			keepCreatedClassMethods:Bool, classDependencies:Null<IrClassDependencies>) {
@@ -257,7 +261,8 @@ private class IrTypeAwareWalkState {
 			demanded: demanded,
 			missingProviders: missing,
 			providersReached: providersReached,
-			declarationOnly: declarationOnly
+			declarationOnly: declarationOnly,
+			calledNatives: calledNatives
 		};
 	}
 
@@ -370,6 +375,8 @@ private class IrTypeAwareWalkState {
 				reach(requested, false);
 			// A native constructs exactly the class its declaration returns (`IrConstructed`); an argument was constructed by the caller, which the
 			// walk already sees. A C native's call becomes `CNativeCall` only at the end of assembly, so it is a call by name here, like any native.
+			if (natives.exists(target) || cNatives.exists(target))
+				calledNatives.set(target, true);
 			var cNative = cNatives.get(target);
 			if (cNative != null && !nativesDone.exists(target)) {
 				nativesDone.set(target, true);

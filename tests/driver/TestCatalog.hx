@@ -182,6 +182,7 @@ class TestCatalog {
 		"FunctionValueLanesMain",
 		"UnreachableTerminatorMain",
 		"ClassIdMain",
+		"UnusedModuleInvarianceMain",
 		"GenericDelimiterMain",
 		"LoopNarrowingMain",
 		"MapEntryFactsMain",

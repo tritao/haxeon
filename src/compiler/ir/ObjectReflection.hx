@@ -114,6 +114,15 @@ class ObjectReflection {
 		return [RECORD_CREATION];
 	}
 
+	/**
+	 * Whether the program reflects over object layouts: a reflection native that reached code calls once the early prune ran (the declared natives
+	 * of every loaded module otherwise). A program that merely has `Reflect` loaded, because an unused module calls it, does not.
+	 */
+	public static function usedByProgram(program:IrProgram):Bool {
+		var reached = program.reachedNatives;
+		return usesObjectLayouts(reached == null ? program.natives : [for (native in program.natives) if (reached.exists(native.name)) native]);
+	}
+
 	/** Whether assembly will generate object-layout reflection helpers from this native surface. */
 	public static function usesObjectLayouts(natives:Array<IrNative>):Bool {
 		for (native in natives)

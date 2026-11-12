@@ -155,7 +155,7 @@ class IrClosedEnumTagAbi {
 					}
 			}
 		}
-		if (ObjectReflection.usesObjectLayouts(program.natives)) {
+		if (ObjectReflection.usedByProgram(program)) {
 			if (reflectableObjects != null)
 				for (name in reflectableObjects)
 					escape(Obj(name));

@@ -88,3 +88,39 @@ So the continuation must be made cheap. The remaining blockers, verified in the 
 Do A first: it is bounded, independent of the classification question, and takes the largest share (the semantic assembly) out of pass 2 for the
 only module the app requests. Run the classification-input diff in parallel; if its answer is small, B becomes the cheapest total removal and A's
 extension work is no longer needed for these modules. C stays the direction; A and B are steps toward it, and neither stands in its way.
+
+## The leak, named and fixed (2026-11-12)
+
+Seeding `haxeon.DynamicOps` flipped `CallbackValue` from inline to boxed storage. The eligibility reasons of the seeded and unseeded builds of
+`closure-method-value-arguments.hx` differ in exactly one line, `CallbackValue: registered reflection layout`. The rule is
+`IrInlineEnumEligibility`: when the program reflects over object layouts, every enum reachable by type from a registered layout (every class of the
+typed program, plus anonymous, value and box classes) is blocked from inline storage, because the per-layout reflection helpers read and write the raw
+packet and never box it. "The program reflects" was `ObjectReflection.usesObjectLayouts(program.natives)`, and `program.natives` is the declared native
+surface of every loaded module: seeding `DynamicOps` loads `Reflect` (it calls `Reflect.compare`), whose module declares the `__reflect_object_*`
+natives. Two inputs computed from what is loaded, not from what is reached: the declared reflection natives, and the list of all typed classes. Pruning
+unreachable functions earlier (even before the enum dispatch, even for Wasm) changed nothing, which is how it was told apart from a function-level
+leak.
+
+Fix (plain builds): reflection is used when a reflection native is among the natives the walk reached (`IrTypeAwareWalk` returns `calledNatives`; the
+early prune records them as `IrProgram.reachedNatives`; `ObjectReflection.usedByProgram` reads them where the program has been pruned and the declared
+natives where it has not). Dynamic member access needs no special case: `raw.x`, `raw.x = v` and `raw.m()` compile to ordinary calls of
+`Reflect.field` / `Reflect.setField` and a closure call, so they are calls of reflection natives in the reached IR.
+`tests/compiler/UnusedModuleInvarianceMain` builds a program with and without an unused root module that itself calls `Reflect`, and asserts the same
+enum storage and the same IR function for every function of the program; it fails when the detector is disabled (`CallbackValue=true` against
+`CallbackValue=false`). The HashLink module does not become byte-identical yet: it lists the natives, classes and globals of every loaded module
+(+17 natives, +14 types, +6 globals, same 18 functions in the test), so trimming those tables to what the program reaches is the remaining step for
+"the output depends only on what it reaches".
+
+Why not option D (box on reflective read, unbox on write, drop the rule): direct enum fields would work (the box/unbox helpers of
+`IrInlineEnumEscapes` exist and the per-layout and Wasm table dispatchers share their bodies), but this leak is an enum that appears only in function
+types (a static function field and method signatures with `CallbackValue->Int` parameters), which reflection exposes as closures; `supportsCallableEscape`
+refuses an enum inside a nested function type, and arrays, maps and iterators of enums cannot be adapted on read (the reader must see the same storage).
+D therefore needs closure adapters and still leaves container-reached enums blocked.
+
+Live builds: they do not prune, so they keep the declared natives. This is edit-independent once the runtime modules are seeded for the target
+(`Reflect` is then always loaded, so reflection is always "used" in live mode) and equals today's behavior until then. Representation may therefore
+differ between a plain and a live build for these enums (inline in plain when nothing reflects, boxed in live); programs must not observe it, and
+the corpus runs both modes.
+
+`IrEnumDynamicDispatch` runs before the prune and still reads the declared natives (`usesObjectLayouts(reflectionProgram.natives)`); the
+invariance test does not show it leaking, so the walk -> dispatch -> walk reorder stays a separate commit.

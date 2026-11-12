@@ -536,6 +536,7 @@ class IrProgramAssembler {
 				allFunctions.push(new IrFunction(object.name + ".$haxeonObservableFieldCount", builder.arguments, I32, builder.blocks, Ordinary));
 			}
 		var removedByPrune:Map<String, Bool> = [];
+		var reachedNativesAfterPrune:Null<Map<String, Bool>> = null;
 		if (objects != null) {
 			var reflectionInput = new IrProgram(entryPoint == null ? "main" : entryPoint);
 			reflectionInput.objects = objects;
@@ -579,10 +580,12 @@ class IrProgramAssembler {
 			// The reflection helpers are generated after the walk: a copy of an observable class will call the creation hook.
 			var objectTable:Map<String, IrObject> = [for (object in objects) object.name => object],
 				present:Map<String, Bool> = [for (fn in allFunctions) fn.name => true];
-			removedByPrune = IrEntryPrune.run(pruneInput, roots, {
+			var pruned = IrEntryPrune.run(pruneInput, roots, {
 				symbols: ObjectReflection.copySymbols(),
 				of: className -> ObjectReflection.copyDependencies(objectTable, className, name -> present.exists(name))
 			});
+			removedByPrune = pruned.removed;
+			reachedNativesAfterPrune = pruned.calledNatives;
 			allFunctions = pruneInput.functions;
 			objects = pruneInput.objects;
 		}
@@ -619,6 +622,7 @@ class IrProgramAssembler {
 			// Choose source enum storage before optional-flow and reflection helpers choose their ABI.
 			var enumInput = new IrProgram(entryPoint == null ? "main" : entryPoint);
 			enumInput.functions = allFunctions;
+			enumInput.reachedNatives = reachedNativesAfterPrune;
 			enumInput.objects = objects == null ? [] : objects;
 			enumInput.interfaces = interfaces == null ? [] : interfaces;
 			enumInput.staticFields = staticFields == null ? [] : staticFields;
@@ -737,6 +741,7 @@ class IrProgramAssembler {
 						default:
 					}
 		program.prunedFunctions = removedByPrune;
+		program.reachedNatives = reachedNativesAfterPrune;
 		var needsUnreachable = false;
 		for (fn in allFunctions)
 			for (block in fn.blocks)
