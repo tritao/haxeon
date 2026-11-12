@@ -3,7 +3,7 @@ package haxeon.ui.widgets.controls;
 import haxeon.ui.LayoutStyle;
 import haxeon.ui.LayoutVisualKind;
 import haxeon.ui.core.BuildContext;
-import haxeon.ui.core.Key;
+import haxeon.ui.component.TrackedScope;
 import haxeon.ui.core.RenderNode;
 import haxeon.ui.core.UiEvent;
 import haxeon.ui.core.View;
@@ -22,11 +22,11 @@ class IconButton implements View {
 	public final icon:IconName;
 	public final label:String;
 	public final style:LayoutStyle;
-	public var enabled:Bool;
-	public var onClick:Void->Void;
+	public final enabled:Bool;
+	public final onClick:Void->Void;
 
 	public function new(key:String, icon:IconName, label:String,
-			?onClick:Void->Void, ?style:LayoutStyle) {
+			?onClick:Void->Void, ?style:LayoutStyle, enabled:Bool = true) {
 		if (key == null || key.length == 0 || label == null || label.length == 0)
 			throw "Icon buttons require a stable key and accessible label";
 		this.key = key;
@@ -34,16 +34,14 @@ class IconButton implements View {
 		this.label = label;
 		this.onClick = onClick;
 		this.style = style == null ? new LayoutStyle() : style.copy();
-		enabled = true;
+		this.enabled = enabled;
 	}
 
-	public function build(context:BuildContext):RenderNode {
-		return context.withScope(new Key(key), function() {
-			var id = context.id("icon-button");
-			// Hover and press change only how the button looks, so it updates itself and the panel around it stays cached.
-			return context.selfUpdating(id, function() return buildButton(context, id));
-		});
-	}
+	/** The structural body is independent from caller-owned listeners and overlays. */
+	public function body():View return new IconButtonBody(this);
+
+	public function build(context:BuildContext):RenderNode
+		return new TrackedScope(key, body).build(context);
 
 	function buildButton(context:BuildContext, id:haxeon.ui.core.WidgetId):RenderNode {
 		var flags = context.interactionStates.get(id);
@@ -73,4 +71,13 @@ class IconButton implements View {
 		node.add(new Icon("glyph", icon, 16.0, foreground).build(context));
 		return node;
 	}
+}
+
+/** Terminal styled control node inside the component's structural scope. */
+@:access(haxeon.ui.widgets.controls.IconButton)
+private class IconButtonBody implements View {
+	final button:IconButton;
+	public function new(button:IconButton) this.button = button;
+	public function build(context:BuildContext):RenderNode
+		return button.buildButton(context, context.id("icon-button"));
 }

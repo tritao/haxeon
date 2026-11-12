@@ -45,6 +45,7 @@ import haxeon.ui.widgets.scroll.ScrollView;
 /** A control the way a container uses one: built, then given a listener, a style change and an overlay child by its caller. */
 private class DecoratedControl implements View {
   public var presses = 0;
+  public var builtNode(default, null):Null<RenderNode> = null;
   public final key:String;
   final make:BuildContext->RenderNode;
 
@@ -55,6 +56,7 @@ private class DecoratedControl implements View {
 
   public function build(context:BuildContext):RenderNode {
     var node = make(context);
+    builtNode = node;
     node.on(UiEventKind.PointerDown, function(_) presses++);
     node.layout.style.zIndex = 3;
     // As DockWorkspace does with tab buttons: an overlay child added by the caller.
@@ -793,7 +795,14 @@ class RestyleInPlaceTests {
       var key = patched.decorated[index].key;
       check(patched.decorated[index].presses == reference.decorated[index].presses,
         "A listener added after build was lost on " + key + ": " + patched.decorated[index].presses + " vs " + reference.decorated[index].presses);
-      var decoratedNode = control(patchedRoot, key);
+      // Decorations belong to the node returned to the caller, which may own a scoped control body.
+      // The activation target located by control() can be a replaceable descendant of that node.
+      var built = patched.decorated[index].builtNode;
+      check(built != null, "The decorated control was never built: " + key);
+      var decoratedNode:RenderNode = cast built;
+      var attached = false;
+      patchedRoot.walk(function(node) { if (node == decoratedNode) attached = true; });
+      check(attached, "The node decorated by the caller was removed on " + key);
       check(decoratedNode.layout.style.zIndex == 3, "A style change made after build was lost on " + key);
       var overlays = 0;
       decoratedNode.walk(function(node) { if (node.layout.style.width.value == 5.5 && node.layout.style.height.value == 7.5) overlays++; });

@@ -545,6 +545,22 @@ retention scenarios, budgets that may only go down, memory runs, compiler suites
    No binding primitive or compatibility API is added. `TextIconMain` covers inherited, stylesheet and local
    typography precedence and icon semantics on HashLink, Wasm32 and Wasm GC with both inline settings.
 
+   **Native icon-button structure.** `IconButton.body()` describes its styled control node inside a native
+   `TrackedScope`. The scope wrapper owns structural replacement and keeps caller-added listeners and overlay
+   children separate from that replaceable body. The button's semantic/focus target retains its existing widget ID
+   inside the scope. Enabled state and the activation callback are constructor inputs in final fields, including
+   PropertyEditor's reset action. This is the same structural primitive as panels use, with no widget-specific
+   updater or adapter. The terminal body remains an internal native render primitive; interaction changes rerun
+   its enclosing scope using the foundation's existing interaction routing. Per-node interaction signals remain
+   the later stage-5 interaction migration, rather than introducing a second binding mechanism for this control.
+   BIM's undo/redo children are final descriptions behind `EqualChild`, with editor identity and action as their
+   declared inputs. Their callbacks are made only when those inputs change. The input value implements equality
+   explicitly using class identity, so replacing an editor with the same visible key also replaces its actions.
+   This avoids repeatedly mounting native owners for unchanged controls during telemetry updates. The portable
+   control fixture checks both equal-input retention and replacement-owner callback routing on all three targets.
+   Against the pushed text/icon head, telemetry step falls from 15,078 objects / 630,336 bytes to
+   14,983 / 624,712; the fifteen standard actions and six CNC pilot actions are identical. No exception is used.
+
    Foundation evidence is retained under `/media/joao/DATA1/haxeon-stage5-gates/evidence/`:
    `native-foundation-pilot-comparison.log`, `worker-binding-trace-comparison.json`, the paired
    `current-*-all-census.json` and `current-*-pilot-census.json`, and the six-configuration

@@ -456,8 +456,8 @@ private class PropertyEditorRowContent implements View {
 		if (descriptor.defaultValue != null && !descriptor.readOnly
 			&& modified) {
 			var reset = new IconButton("reset", IconName.Reset, "Reset " + descriptor.label + " to default",
-				function() owner.resetValue(context, descriptor));
-			reset.enabled = owner.options.enabled && !owner.pending.exists(descriptor.id);
+				function() owner.resetValue(context, descriptor), null,
+				owner.options.enabled && !owner.pending.exists(descriptor.id));
 			children.push(new KeyedView("reset", reset));
 		}
 		var error = owner.errorFor(descriptor.id);
