@@ -1183,6 +1183,8 @@ class TestMain {
 			'Cannot mutate temporary struct copy produced by "make()"; bind it to a local first');
 		expectCompileError('class Thing { public function new() {} } function main():Int return haxeon.Hashing.hash(new Thing());',
 			'Type "Thing" does not conform to Hashable');
+		expectCompileError('interface Equatable {} interface Hashable extends Equatable {} enum Key implements Hashable { Item(value:Int); } function main():Int { var erased:Dynamic = Key.Item(7); return haxeon.Hashing.hash(erased); }',
+			'Type "Dynamic" does not conform to Hashable');
 		expectCompileError('interface Equatable {} interface Hashable extends Equatable {} class MutableKey implements Hashable { public var value:Int; public function new() value = 1; } function main():Int return 42;',
 			'Class "MutableKey" cannot conform to Hashable; use a struct for value equality');
 		expectCompileError('interface Equatable {} interface Hashable extends Equatable {} class Base { public var value:Int; public function new() value = 1; } class Derived extends Base implements Hashable { public function new() super(); } function main():Int return 42;',
