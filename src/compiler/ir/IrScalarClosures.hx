@@ -251,7 +251,8 @@ class IrScalarClosures {
 
 	function toDynamic(builder:IrBuilder, value:IrValue, type:IrType):IrValue {
 		switch type {
-			case EnumTag(name): return builder.intrinsic(EnumTagBox(EnumTag(name)), [value], Dyn);
+			case EnumTag(name):
+				return builder.intrinsic(EnumTagBox(EnumTag(name)), [value], Dyn);
 			default:
 		}
 		var enumName = inlineEnum(type);
@@ -260,7 +261,8 @@ class IrScalarClosures {
 
 	function fromDynamic(builder:IrBuilder, value:IrValue, type:IrType):IrValue {
 		switch type {
-			case EnumTag(name): return builder.intrinsic(EnumTagUnbox(EnumTag(name)), [value], type);
+			case EnumTag(name):
+				return builder.intrinsic(EnumTagUnbox(EnumTag(name)), [value], type);
 			default:
 		}
 		var enumName = inlineEnum(type);

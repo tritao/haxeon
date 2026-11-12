@@ -11,7 +11,9 @@ private class ValueArrayFunctionIndex {
 	var originals:Map<String, IrFunction> = [];
 
 	public function originalFunctions(functions:Array<IrFunction>):Map<String, IrFunction> {
-		for (fn in functions) if (originals.get(fn.name) != fn) originals.set(fn.name, fn);
+		for (fn in functions)
+			if (originals.get(fn.name) != fn)
+				originals.set(fn.name, fn);
 		return originals;
 	}
 
@@ -21,13 +23,18 @@ private class ValueArrayFunctionIndex {
 	final tagKeys:Map<String, String> = [];
 
 	public function new(elements:Array<IrType>) {
-		for (element in elements) switch element {
-			case Obj(name): objectKeys.set(name, "value:" + name);
-			case Nullable(Obj(name)): optionalKeys.set(name, "nullable:" + name);
-			case Enum(name): enumKeys.set(name, "enum:" + name);
-			case EnumTag(name): tagKeys.set(name, "enum-tag:" + name);
-			default:
-		}
+		for (element in elements)
+			switch element {
+				case Obj(name):
+					objectKeys.set(name, "value:" + name);
+				case Nullable(Obj(name)):
+					optionalKeys.set(name, "nullable:" + name);
+				case Enum(name):
+					enumKeys.set(name, "enum:" + name);
+				case EnumTag(name):
+					tagKeys.set(name, "enum-tag:" + name);
+				default:
+			}
 	}
 
 	function key(type:IrType):Null<String>
@@ -68,7 +75,8 @@ private class ValueArrayFunctionIndex {
 				if (output != null)
 					visit(output.type);
 				// Valid SSA uses share their definition's type. Discover each carrier once.
-				if (IrValueArrayProgramRewrite.dynamicViewKind(located.value) != 0) dynamicViews = true;
+				if (IrValueArrayProgramRewrite.dynamicViewKind(located.value) != 0)
+					dynamicViews = true;
 				switch located.value {
 					case TypeValue(_, type):
 						visit(type);
@@ -99,10 +107,13 @@ class IrValueArrayProgramRewrite {
 		var values:Map<String, Bool> = [for (object in program.objects) if (object.isValue) object.name => true],
 			inlineEnums:Map<String, Bool> = [for (entry in program.enums) if (entry.inlineStorage != null) entry.name => true],
 			elements:Map<String, IrType> = [];
-		var seenTags:Map<String, Bool> = [], seenEnums:Map<String, Bool> = [],
-			seenValues:Map<String, Bool> = [], seenOptionalValues:Map<String, Bool> = [];
+		var seenTags:Map<String, Bool> = [],
+			seenEnums:Map<String, Bool> = [],
+			seenValues:Map<String, Bool> = [],
+			seenOptionalValues:Map<String, Bool> = [];
 		function register(element:IrType, seen:Map<String, Bool>, name:String):Void {
-			if (seen.exists(name)) return;
+			if (seen.exists(name))
+				return;
 			seen.set(name, true);
 			elements.set(haxe.crypto.Base64.encode(compiler.ir.codec.IrTypeCodec.encode(element)), element);
 		}
@@ -164,7 +175,8 @@ class IrValueArrayProgramRewrite {
 		}
 		var keys = [for (key in elements.keys()) key];
 		keys.sort(Reflect.compare);
-		var index = new ValueArrayFunctionIndex([for (key in keys) elements.get(key)]), slotNamespace = nextSlotNamespace(program);
+		var index = new ValueArrayFunctionIndex([for (key in keys) elements.get(key)]),
+			slotNamespace = nextSlotNamespace(program);
 		for (key in keys)
 			rewriteIndexed(program, elements.get(key), pointerBits, target, index, slotNamespace++);
 		IrArrayFactory.lower(program);
@@ -177,15 +189,23 @@ class IrValueArrayProgramRewrite {
 
 	static function nextSlotNamespace(program:IrProgram):Int {
 		var next = 0;
-		for (fn in program.functions) switch fn.kind {
-			case ValueArraySlot(namespace, _, _): if (namespace >= next) next = namespace + 1;
-			default:
-		}
+		for (fn in program.functions)
+			switch fn.kind {
+				case ValueArraySlot(namespace, _, _):
+					if (namespace >= next)
+						next = namespace + 1;
+				default:
+			}
 		return next;
 	}
 
-	static function rewriteIndexed(program:IrProgram, element:IrType, pointerBits:Int, target:IrValueLaneTarget, index:ValueArrayFunctionIndex, slotNamespace:Int):Void {
-		switch element { case EnumTag(name): IrEnumTagStorage.request(program, name); default: }
+	static function rewriteIndexed(program:IrProgram, element:IrType, pointerBits:Int, target:IrValueLaneTarget, index:ValueArrayFunctionIndex,
+			slotNamespace:Int):Void {
+		switch element {
+			case EnumTag(name):
+				IrEnumTagStorage.request(program, name);
+			default:
+		}
 		var declarations:Map<String, IrObject> = [for (object in program.objects) object.name => object],
 			tagUnboxes:Map<String, IrType> = [],
 			objects = IrObjectTable.of(declarations),
@@ -196,7 +216,11 @@ class IrValueArrayProgramRewrite {
 			rewritten:Null<Array<IrFunction>> = null;
 		switch element {
 			case EnumTag(_):
-				for (fn in program.functions) switch fn.kind { case EnumTagAdapter(type, false): tagUnboxes.set(fn.name, type); default: }
+				for (fn in program.functions)
+					switch fn.kind {
+						case EnumTagAdapter(type, false): tagUnboxes.set(fn.name, type);
+						default:
+					}
 			default:
 		}
 		var optional:Null<IrValueArrayOptionalComponents> = switch element {
@@ -222,7 +246,8 @@ class IrValueArrayProgramRewrite {
 				current = rewriteCasts(current, element, factory.retypeName());
 			}
 			index.finish(current);
-			if (rewritten != null) rewritten.push(current);
+			if (rewritten != null)
+				rewritten.push(current);
 			else if (current != fn) {
 				rewritten = program.functions.slice(0, functionIndex);
 				rewritten.push(current);
@@ -233,9 +258,17 @@ class IrValueArrayProgramRewrite {
 			generatedElements = elements.functions(),
 			generatedOptional = optional == null ? [] : optional.functions(),
 			generatedSlots = factory.helpers.functions();
-		if (rewritten != null) program.functions = rewritten;
-		var generatedStart = program.functions.length, generatedFunctions:Array<IrFunction> = [];
-		for (generated in [generatedMethods, generatedFactories, generatedElements, generatedOptional, generatedSlots])
+		if (rewritten != null)
+			program.functions = rewritten;
+		var generatedStart = program.functions.length,
+			generatedFunctions:Array<IrFunction> = [];
+		for (generated in [
+			generatedMethods,
+			generatedFactories,
+			generatedElements,
+			generatedOptional,
+			generatedSlots
+		])
 			for (fn in generated) {
 				program.functions.push(fn);
 				generatedFunctions.push(fn);
@@ -404,15 +437,27 @@ class IrValueArrayProgramRewrite {
 	/** A shared classifier keeps the immutable index and actual rewrite in agreement. */
 	public static function dynamicViewKind(instruction:IrInstruction):Int {
 		return switch instruction {
-			case ArrayGet(out, array, _) if ((switch array.type { case Array(Dyn): true; default: false; })
-				&& (switch out.type { case Dyn: true; default: false; })): 1;
-			case ArraySet(array, _, value) if ((switch array.type { case Array(Dyn): true; default: false; })
-				&& (switch value.type { case Dyn: true; default: false; })): 2;
-			case Call(_, name, args) if (args.length > 0 && (switch args[0].type { case Array(Dyn): true; default: false; })
-				&& (name == "__array_push_ref" || name == "__array_unshift_ref" || name == "__array_insert_ref" || name == "__array_reverse_ref"
-					|| name == "__array_resize_ref" || name == "__array_copy_ref" || name == "__array_slice_ref" || name == "__array_splice_ref"
-					|| name == "__array_concat_ref" || name == "__array_pop_ref" || name == "__array_shift_ref" || name == "__array_index_of_ref"
-					|| name == "__array_remove_ref")): 3;
+			case ArrayGet(out, array, _) if ((switch array.type {
+				case Array(Dyn): true;
+				default: false;
+			}) && (switch out.type {
+				case Dyn: true;
+				default: false;
+			})): 1;
+			case ArraySet(array, _, value) if ((switch array.type {
+				case Array(Dyn): true;
+				default: false;
+			}) && (switch value.type {
+				case Dyn: true;
+				default: false;
+			})): 2;
+			case Call(_, name, args) if (args.length > 0 && (switch args[0].type {
+				case Array(Dyn): true;
+				default: false;
+			}) && (name == "__array_push_ref" || name == "__array_unshift_ref" || name == "__array_insert_ref" || name == "__array_reverse_ref"
+				|| name == "__array_resize_ref" || name == "__array_copy_ref" || name == "__array_slice_ref" || name == "__array_splice_ref"
+				|| name == "__array_concat_ref" || name == "__array_pop_ref" || name == "__array_shift_ref" || name == "__array_index_of_ref"
+				|| name == "__array_remove_ref")): 3;
 			default: 0;
 		};
 	}
@@ -423,14 +468,17 @@ class IrValueArrayProgramRewrite {
 		for (blockIndex in 0...fn.blocks.length) {
 			var block = fn.blocks[blockIndex], target:Null<IrBlock> = null;
 			for (position in 0...block.instructions.length) {
-				var located = block.instructions[position], kind = dynamicViewKind(located.value);
+				var located = block.instructions[position],
+					kind = dynamicViewKind(located.value);
 				if (kind == 0) {
-					if (target != null) target.instructions.push(located);
+					if (target != null)
+						target.instructions.push(located);
 					continue;
 				}
 				if (target == null) {
 					target = new IrBlock(block.id);
-					for (previous in 0...position) target.instructions.push(block.instructions[previous]);
+					for (previous in 0...position)
+						target.instructions.push(block.instructions[previous]);
 					target.terminator = block.terminator;
 				}
 				var instruction = switch located.value {
@@ -438,11 +486,15 @@ class IrValueArrayProgramRewrite {
 					case ArraySet(array, index, value):
 						if (next < 0) {
 							next = 0;
-							for (argument in fn.arguments) if (argument.id >= next) next = argument.id + 1;
-							for (body in fn.blocks) for (entry in body.instructions) {
-								var output = IrOperands.output(entry.value);
-								if (output != null && output.id >= next) next = output.id + 1;
-							}
+							for (argument in fn.arguments)
+								if (argument.id >= next)
+									next = argument.id + 1;
+							for (body in fn.blocks)
+								for (entry in body.instructions) {
+									var output = IrOperands.output(entry.value);
+									if (output != null && output.id >= next)
+										next = output.id + 1;
+								}
 						}
 						Call(new IrValue(next++, "$dynamic-array-write", Void), "__array_set_any", [array, index, value]);
 					case Call(out, name, args): Call(out, name.substr(0, name.length - 3) + "any", args);
@@ -451,22 +503,27 @@ class IrValueArrayProgramRewrite {
 				target.instructions.push(new Located(instruction, located.provenance));
 			}
 			if (target != null) {
-				if (blocks == null) blocks = fn.blocks.slice(0, blockIndex);
+				if (blocks == null)
+					blocks = fn.blocks.slice(0, blockIndex);
 				blocks.push(target);
-			} else if (blocks != null) blocks.push(block);
+			} else if (blocks != null)
+				blocks.push(block);
 		}
 		return blocks == null ? fn : fn.withBlocks(blocks);
 	}
 
 	static function rewriteAllocations(fn:IrFunction, element:IrType, allocator:String):IrFunction {
-		var arrayType:IrType = Array(element), changed = false, blocks:Array<IrBlock> = [];
+		var arrayType:IrType = Array(element),
+			changed = false,
+			blocks:Array<IrBlock> = [];
 		for (block in fn.blocks) {
 			var target = new IrBlock(block.id);
 			for (located in block.instructions) {
 				var instruction = switch located.value {
-					case Call(out, name, arguments) if ((name == IrArrayFactory.NAME || name == "__array_alloc_ref")
-						&& IrVerifier.sameType(out.type, arrayType)):
-						if (arguments.length != 1) throw "Invalid array factory arguments";
+					case Call(out, name, arguments)
+						if ((name == IrArrayFactory.NAME || name == "__array_alloc_ref") && IrVerifier.sameType(out.type, arrayType)):
+						if (arguments.length != 1)
+							throw "Invalid array factory arguments";
 						changed = true;
 						Call(out, allocator, arguments);
 					default: located.value;
