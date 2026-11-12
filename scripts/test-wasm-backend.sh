@@ -176,6 +176,11 @@ haxeon_compile_async \
 	--target=wasm-gc --output=out/wasm-cli-gc-dynamic.wasm --entry=wasm-gc-dynamic \
 	--root=tests/programs tests/programs/wasm-gc-dynamic.hx
 haxeon_compile_async \
+	--target=wasm-gc --output=out/wasm-cli-gc-unconstructed-owned.wasm --entry=Main \
+	--root=tests/fixtures/wasm-gc-unconstructed-owned \
+	--ffi-interface=tests/fixtures/wasm-gc-unconstructed-owned/unconstructed_owned.hxi \
+	tests/fixtures/wasm-gc-unconstructed-owned/Main.hx
+haxeon_compile_async \
 	--target=wasm-gc --output=out/wasm-cli-gc-exceptions.wasm --entry=wasm-gc-exceptions \
 	--root=tests/programs tests/programs/wasm-gc-exceptions.hx
 haxeon_compile_async \
@@ -301,6 +306,8 @@ const cases = [
 	["out/wasm-gc-dynamic.wasm", 42],
 	["out/wasm-cli-gc-dynamic.wasm", 42],
 	["out/wasm-gc-native-pointer-reflect.wasm", 42],
+	// A dynamic call keeps only constructed classes' methods: the module must import no native destroy function (no imports at all).
+	["out/wasm-cli-gc-unconstructed-owned.wasm", 42],
 	["out/wasm-gc-exceptions.wasm", 42],
 	["out/wasm-cli-gc-exceptions.wasm", 42],
 	["out/wasm-gc-strings.wasm", 42],
