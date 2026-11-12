@@ -121,7 +121,7 @@ class IrReachabilityWalk {
 	final dispatches:Array<{type:String, isInterface:Bool, method:String}> = [];
 
 	/** The class each native's result is an instance of, for natives that return objects. */
-	final nativeResults:Map<String, String> = [];
+	final nativeResults:Map<String, String>;
 
 	/**
 	 * With `keepLiveClasses`, every class that a reachable function mentions by type is live, and a live class keeps all its methods
@@ -134,24 +134,8 @@ class IrReachabilityWalk {
 		this.keepLiveClasses = keepLiveClasses;
 		for (fn in program.functions)
 			byName.set(fn.name, fn);
-		for (native in program.natives) {
-			var result = objectName(native.result);
-			if (result != null)
-				nativeResults.set(native.name, result);
-		}
-		for (native in program.cNatives) {
-			var result = objectName(native.result);
-			if (result != null)
-				nativeResults.set(native.name, result);
-		}
+		nativeResults = IrConstructed.nativeResults(program);
 	}
-
-	static function objectName(type:IrType):Null<String>
-		return switch type {
-			case Obj(name): name;
-			case Nullable(inner): objectName(inner);
-			default: null;
-		};
 
 	public function visit(root:String):Void {
 		var pending = [root];
@@ -176,15 +160,13 @@ class IrReachabilityWalk {
 						if (output != null)
 							mention(output.type, pending);
 					}
+					var made = IrConstructed.constructedBy(located.value, nativeResults);
+					if (made != null)
+						construct(made, pending);
 					switch located.value {
-						case NewObject(_, typeName):
-							construct(typeName, pending);
 						case Call(_, target, _):
 							used.set(target, true);
 							pending.push(target);
-							var result = nativeResults.get(target);
-							if (result != null)
-								construct(result, pending);
 						case StaticClosure(_, target):
 							used.set(target, true);
 							pending.push(target);
@@ -239,9 +221,7 @@ class IrReachabilityWalk {
 	function hasInstances(typeName:String):Bool {
 		if (instantiated.exists(typeName))
 			return true;
-		var object = index.object(typeName);
-		return object == null || object.isValue || StringTools.startsWith(typeName, IrValueInterfaceBoxes.BOX_PREFIX)
-			|| compiler.semantic.SemanticSignature.isAnonymousName(typeName);
+		return IrConstructed.withoutConstruction(typeName, index.object(typeName));
 	}
 
 	/**

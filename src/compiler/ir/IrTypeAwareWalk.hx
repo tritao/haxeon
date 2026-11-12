@@ -171,6 +171,7 @@ private class IrTypeAwareWalkState {
 	final byName:Map<String, IrFunction> = [];
 	final natives:Map<String, IrNative> = [];
 	final cNatives:Map<String, IrCNative> = [];
+	final nativeResults:Map<String, String>;
 	final staticTypes:Map<String, IrType> = [];
 	/** `operation\nTypeKey` (operation without detail) to the names of the functions serving it. */
 	final providers:Map<String, Array<String>> = [];
@@ -217,6 +218,7 @@ private class IrTypeAwareWalkState {
 			natives.set(native.name, native);
 		for (native in program.cNatives)
 			cNatives.set(native.name, native);
+		nativeResults = IrConstructed.nativeResults(program);
 		for (field in program.staticFields)
 			staticTypes.set(field.name, field.type);
 	}
@@ -285,7 +287,7 @@ private class IrTypeAwareWalkState {
 						switch output.type {
 							case Obj(objectName):
 								var object = index.object(objectName);
-								if (object != null && object.isValue)
+								if (object != null && IrConstructed.withoutConstruction(objectName, object))
 									create(output.type);
 							default:
 						}
@@ -294,7 +296,14 @@ private class IrTypeAwareWalkState {
 		}
 	}
 
-	function visit(fn:IrFunction, instruction:IrInstruction):Void
+	function visit(fn:IrFunction, instruction:IrInstruction):Void {
+		// What the instruction constructs is the shared definition (`IrConstructed`); a native's result may be any subclass of its declared class.
+		var made = IrConstructed.constructedBy(instruction, nativeResults);
+		if (made != null)
+			switch instruction {
+				case NewObject(_, _): create(Obj(made));
+				default: createFromNative(Obj(made));
+			}
 		switch instruction {
 			case Call(_, target, _):
 				callTarget(target);
@@ -302,8 +311,6 @@ private class IrTypeAwareWalkState {
 				callTarget(target);
 			case InstanceClosure(_, target, _):
 				reach(target, false);
-			case NewObject(_, typeName):
-				create(Obj(typeName));
 			case MakeEnum(_, typeName, _, _):
 				create(Enum(typeName));
 			case ToDyn(_, value):
@@ -340,6 +347,7 @@ private class IrTypeAwareWalkState {
 				}
 			default:
 		}
+	}
 
 	static function typeOfKey(operation:IrIntrinsic):IrType
 		return switch operation {
