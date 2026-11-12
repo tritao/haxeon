@@ -35,8 +35,10 @@ class WasmModuleSupport {
 				for (block in fn.blocks)
 					for (located in block.instructions)
 						switch located.value {
-							case MakeEnum(output, name, constructor, arguments) if (arguments.length == 0
-								&& (switch output.type { case Enum(_): true; default: false; })):
+							case MakeEnum(output, name, constructor, arguments) if (arguments.length == 0 && (switch output.type {
+								case Enum(_): true;
+								default: false;
+							})):
 								used.set(enumCaseKey(name, constructor), true);
 							case _:
 						}
@@ -168,7 +170,10 @@ class WasmModuleSupport {
 		};
 
 	public static function resultTypes(type:IrType):Array<WasmValueType>
-		return (switch (type) { case Void: true; default: false; }) ? [] : [requireValueType(type)];
+		return (switch (type) {
+			case Void: true;
+			default: false;
+		}) ? [] : [requireValueType(type)];
 
 	public static function mapNativeParts(name:String):Null<{mapName:String, operation:String}> {
 		if (!StringTools.startsWith(name, "__map_"))
@@ -217,7 +222,8 @@ class WasmModuleSupport {
 								default: Void;
 							};
 							var closureSignature = closureFunctionType(output.type, closureArguments, resultType, abi),
-								staticType = module.typeIndex(closureSignature), instanceType = module.typeIndex({
+								staticType = module.typeIndex(closureSignature),
+								instanceType = module.typeIndex({
 									parameters: [requireValueType(target.arguments[0].type)].concat(closureSignature.parameters),
 									results: closureSignature.results
 								});
@@ -235,9 +241,17 @@ class WasmModuleSupport {
 	static function closureFunctionType(type:IrType, arguments:Array<IrType>, result:IrType, abi:Null<WasmScalarAbi>):WasmFunctionType {
 		if (abi == null || !abi.scalarClosures.exists(Std.string(type)))
 			return {parameters: [for (argument in arguments) requireValueType(argument)], results: resultTypes(result)};
-		var parameters:Array<WasmValueType> = [], results:Array<WasmValueType> = [];
-		for (argument in arguments) for (part in abi.valueTypes(argument)) parameters.push(requireValueType(part));
-		if ((switch (result) { case Void: false; default: true; })) for (part in abi.valueTypes(result)) results.push(requireValueType(part));
+		var parameters:Array<WasmValueType> = [],
+			results:Array<WasmValueType> = [];
+		for (argument in arguments)
+			for (part in abi.valueTypes(argument))
+				parameters.push(requireValueType(part));
+		if ((switch (result) {
+			case Void: false;
+			default: true;
+		}))
+			for (part in abi.valueTypes(result))
+				results.push(requireValueType(part));
 		return {parameters: parameters, results: results};
 	}
 

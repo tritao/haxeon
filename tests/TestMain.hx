@@ -698,7 +698,8 @@ class TestMain {
 			throw "Missing function annotations were not preserved for semantic inference";
 		var mutableSource = 'function main():Int { var outer = 0; while (outer < 2) { var inner = 0; while (inner < 2) { inner = inner + 1; } outer = outer + inner; } return outer; }';
 		var ast = new Parser(new Lexer(new SourceFile("ssa.hx", mutableSource)).tokenize()).parseProgram();
-		var typed = Typer.type(ast), cfg = IrGenerator.forProgram(typed, compiler.ir.TargetProfile.portable).generateCfg(typed.functions[0]), loads = 0, stores = 0;
+		var typed = Typer.type(ast), cfg = IrGenerator.forProgram(typed, compiler.ir.TargetProfile.portable).generateCfg(typed.functions[0]), loads = 0,
+			stores = 0;
 		for (block in cfg.blocks)
 			for (instruction in block.instructions)
 				switch instruction.value {
@@ -1164,10 +1165,17 @@ class TestMain {
 		expectCompileError('struct Fixed { public final x:Int; public function new(x:Int) this.x = x; } class Holder { public var value:Null<Fixed>; public function new() value = new Fixed(1); } function main():Int { var h = new Holder(); if (h.value != null) h.value.x = 2; return 0; }',
 			'Final field "Fixed.x" can only be assigned through this in the constructor of "Fixed"');
 		var observablePlace = 'interface Observable {} struct Point { public var x:Int; public function new(x:Int) this.x = x; public function move():Void x++; } class Model implements Observable { public var pos:Point; public function new() pos = new Point(1); } ';
-		for (operation in ['m.pos.x = 2;', 'm.pos.x += 1;', 'm.pos.x++;', 'm.pos.move();', 'var move = m.pos.move; move();'])
+		for (operation in [
+			'm.pos.x = 2;',
+			'm.pos.x += 1;',
+			'm.pos.x++;',
+			'm.pos.move();',
+			'var move = m.pos.move; move();'
+		])
 			expectCompileError(observablePlace + 'function main():Int { var m = new Model(); $operation return 42; }',
 				'Cannot mutate a struct inside Observable field "pos"; copy the value, mutate it, and assign it back');
-		expectCompileError(observablePlace + 'class Child extends Model { public function new() super(); } function main():Int { var m = new Child(); m.pos.x = 2; return 42; }',
+		expectCompileError(observablePlace
+			+ 'class Child extends Model { public function new() super(); } function main():Int { var m = new Child(); m.pos.x = 2; return 42; }',
 			'Cannot mutate a struct inside Observable field "pos"; copy the value, mutate it, and assign it back');
 		expectCompileError('interface Observable {} struct Point { public var x:Int; public function new() x = 1; } class Model implements Observable { public var pos:Null<Point>; public function new() pos = new Point(); } function main():Int { var m = new Model(); if (m.pos != null) m.pos.x = 2; return 42; }',
 			'Cannot mutate a struct inside Observable field "pos"; copy the value, mutate it, and assign it back');
@@ -1323,8 +1331,7 @@ class TestMain {
 		var defaultGcAllocationCount = CompilerArguments.parse(["--target=wasm-gc", "source/Main.hx"]);
 		if (defaultGcAllocationCount.wasmGcAllocationCount)
 			throw "Wasm GC allocation counting must be disabled by default";
-		var gcAllocationCountRequest = CompilerArguments.parse([
-			"--target=wasm-gc", "--wasm-gc-allocation-count", "source/Main.hx"]);
+		var gcAllocationCountRequest = CompilerArguments.parse(["--target=wasm-gc", "--wasm-gc-allocation-count", "source/Main.hx"]);
 		if (!gcAllocationCountRequest.wasmGcAllocationCount)
 			throw "Compiler CLI did not enable Wasm GC allocation counting";
 		var gcAllocationCountRejectedForWasm32 = false;
