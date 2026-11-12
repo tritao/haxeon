@@ -52,10 +52,7 @@ class BuildContext {
   var focusRequester:WidgetId -> Bool;
   var deferredFocusRequester:WidgetId -> Void;
   final claimed:IdSet;
-  final idsByPath:Map<String, WidgetId>;
-  /** The paths in `idsByPath`, oldest first, so a prune can walk them in place instead of snapshotting the map's keys. */
-  final pathOrder:Array<String> = [];
-  var cachedIdCount:Int;
+  final idsByPath:WidgetIdCache;
   static inline var SCOPE_GROWTH_PRUNE = 256;
 
   // What pruneKeyCaches last saw, so it can tell when nothing could have gone stale.
@@ -132,8 +129,7 @@ class BuildContext {
     deferredFocusRequester = function(_) {
     };
     claimed = new IdSet();
-    idsByPath = new Map();
-    cachedIdCount = 0;
+    idsByPath = new WidgetIdCache();
     prunedMountedHash = 0;
     prunedIdCount = -1;
     prunedScopeEntries = -1;
@@ -370,7 +366,7 @@ class BuildContext {
 
   /** Bounded-run diagnostics for retained key path caches. */
   public function diagnosticKeyCounts(): {ids: Int, paths: Int} return {
-    ids: cachedIdCount,
+    ids: idsByPath.count,
     paths: rootScope.cachedEntries()
   };
 
@@ -466,15 +462,11 @@ class BuildContext {
     var path = scope.widgetPath(localKey);
     var id = idsByPath.get(path);
     if (id == null) {
-      if (cachedIdCount >= 8192) {
+      if (idsByPath.count >= 8192) {
         idsByPath.clear();
-        pathOrder.resize(0);
-        cachedIdCount = 0;
       }
       id = stateStore.resolveWidgetId(path);
       idsByPath.set(path, id);
-      pathOrder.push(path);
-      cachedIdCount++;
     }
     stateStore.rememberPath(id, path);
     return id;
@@ -944,31 +936,21 @@ class BuildContext {
   /**
 	 * Drops the cached IDs and key paths of widgets that are no longer mounted. `mountedHash` summarizes which nodes are
 	 * mounted (any hash of their IDs in tree order will do). A cache entry only becomes stale when the mounted nodes change,
-	 * so with the same hash and the same cached IDs since the last walk there is nothing to find, and the walk, which hashes
-	 * the path of every cached key, is skipped. Scopes that hold no widget are created and dropped again by a build, a few
+	 * so with the same hash and the same cached IDs since the last walk there is nothing to find, and the walk over cached
+	 * keys is skipped. Scopes that hold no widget are created and dropped again by a build, a few
 	 * every frame, and are left until `SCOPE_GROWTH_PRUNE` of them have collected: they only cache path strings. A change that
 	 * goes unnoticed (a hash collision, or state released for a widget that stays unmounted) only leaves an entry cached until
 	 * the next change.
 	 */
   public function pruneKeyCaches(mounted:Map<Int, RenderNode>, mountedHash:Int):Void {
     var scopeEntries = rootScope.cachedEntries();
-    if (mountedHash == prunedMountedHash && cachedIdCount == prunedIdCount
+    if (mountedHash == prunedMountedHash && idsByPath.count == prunedIdCount
       && scopeEntries >= prunedScopeEntries && scopeEntries - prunedScopeEntries < SCOPE_GROWTH_PRUNE) return;
     keyCachePrunes++;
-    var read = 0, write = 0;
-    while (read < pathOrder.length) {
-      var path = pathOrder[read++];
-      var id = idsByPath.get(path);
-      if (id == null) continue;
-      if (!mounted.exists(id.value) && !stateStore.contains(id) && !stateStore.hasScopeIdentity(id.value)) {
-        idsByPath.remove(path);
-        cachedIdCount--;
-      } else pathOrder[write++] = path;
-    }
-    pathOrder.resize(write);
+    idsByPath.prune(mounted, stateStore);
     rootScope.prune(function(path) return idsByPath.exists(path));
     prunedMountedHash = mountedHash;
-    prunedIdCount = cachedIdCount;
+    prunedIdCount = idsByPath.count;
     prunedScopeEntries = rootScope.cachedEntries();
   }
 

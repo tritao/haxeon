@@ -932,11 +932,31 @@ retention scenarios, budgets that may only go down, memory runs, compiler suites
    `BuildContext.pruneKeyCaches` (`idsByPath.remove` at the captured line 946). The debugger run reproduces the
    same exact 5,467 objects / 278,736 bytes. HashLink map removal grows its fragmented-slot freelist; this is a
    separate runtime allocation, not the interface-adapter or constructor-temporary limitation and not a correctness
-   exception. No HashLink edit or UI workaround has been made. Stop and report this new cause before changing
-   direction. Telemetry also remains a hard steady-state byte failure until the owned compiler gaps are fixed.
+   exception. No HashLink edit was made. After the attribution report, the lead assigned this to UI cache
+   maintenance and requested the stable-capacity fix below. Telemetry remains unpublished while the lead asks
+   whether to record a temporary steady-state exception or wait for the two owned compiler fixes. No exception
+   is assumed before that answer.
    Evidence: DATA1 `evidence/instance-body-root-exact-22-comparison.json`,
    `native-child-ownership-*-type-delta.json`, `instance-body-root-structural-byte-attribution.json`,
    `cnc-progress-freelist-confirmed-gdb.log` and its calibrated census JSON.
+
+   **Lead-directed UI cache fix (implemented; batch gates unfinished, based on `065e0de61`).** The follow-up trace identifies
+   nineteen stale paths ending in `slot:N/row/item:line-N/text`: CNC auto-follow moves a fixed-size virtualized
+   window. The slot roots remain, but each recycled slot changes its keyed text child. Removing those old IDs
+   is correct; retaining dead IDs or dropping the item key would change identity semantics. Repeated removal and
+   insertion fragments the global string map's free-slot ranges and grows its freelist during a steady action.
+   Replace that map and its separate traversal list with `WidgetIdCache`: sorted parallel path/WidgetId arrays,
+   binary lookup, in-place pruning and retained high-water storage. It starts empty and grows only for actual
+   insertions; no capacity pre-sizing is used. The cache preserves WidgetId references, path hashing, collision
+   resolution, liveness checks and the existing 8,192-ID bound. Stale references are cleared without trimming the
+   backing arrays. The cache fix changes neither HashLink nor the compiler and adds no per-widget entry object.
+   On the freshly built `065e0de61` compiler base and pinned HashLink `7d33c19fb`, the minimal original-map path
+   fails after eight warm cycles with "Steady key-cache pruning allocated backing storage: 2736". The new
+   alternating-window regression passes on HashLink, Wasm32 and Wasm GC, with inlining off/on: 1,024 frames
+   allocate nothing, retain exactly the live IDs and keep stable backing storage. These focused tests do not
+   establish the editor-action result: the fresh 22-action census and full batch gates remain pending. Evidence is
+   DATA1 `evidence/cache-old-path-new-base.json` and `evidence/cache-new-base-three-target.log`. Telemetry
+   publication still waits for the lead's answer on its two compiler-gap items; no temporary exception is assumed.
 
    **Independent review corrections (local, before renewed gates).** The body-root batch `0892af06d` had four
    reproduced correctness defects. `ScopeRootStateMain` overflowed recursive `StateStore.retain` for a Checkbox

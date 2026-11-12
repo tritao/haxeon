@@ -16,7 +16,7 @@ JSON
 export LD_LIBRARY_PATH="$root/out:$("$root/scripts/hashlink-path.sh")${LD_LIBRARY_PATH:+:$LD_LIBRARY_PATH}"
 fixtures=("$@")
 if [[ ${#fixtures[@]} == 0 ]]; then
-  fixtures=(ScopeFullFrameOwnershipMain ScopeLegacyCacheLifetimeMain ScopeLegacyReplacementMain ScopeInstanceLifetimeMain ScopeCachedNestedLifetimeMain ScopeRootStateMain ScopeVariantRootMain ScopeNodeFieldsMain SelectionFocusMain MenuMeasurementMain IdSetMain StateStoreFlatMain ScopeRootBoundaryMain RenderScopeMain TrackedScopeMain EqualChildMain BoundTextMain BoundTextFailureMain BindingLifetimeMain TextIconMain IconButtonMain ButtonMain ScopeInputsMain FocusCaptureMain FocusDispatchAllocations)
+  fixtures=(WidgetIdCacheMain ScopeFullFrameOwnershipMain ScopeLegacyCacheLifetimeMain ScopeLegacyReplacementMain ScopeInstanceLifetimeMain ScopeCachedNestedLifetimeMain ScopeRootStateMain ScopeVariantRootMain ScopeNodeFieldsMain SelectionFocusMain MenuMeasurementMain IdSetMain StateStoreFlatMain ScopeRootBoundaryMain RenderScopeMain TrackedScopeMain EqualChildMain BoundTextMain BoundTextFailureMain BindingLifetimeMain TextIconMain IconButtonMain ButtonMain ScopeInputsMain FocusCaptureMain FocusDispatchAllocations)
 fi
 for fixture in "${fixtures[@]}"; do
   for inline in 0 1; do
@@ -31,8 +31,13 @@ for fixture in "${fixtures[@]}"; do
             net_hxi="$root/packages/platform/bindings/nativekit-net-wasm.hxi"
             ui_hxi="$ui/bindings/nativekit-ui-wasm.hxi"
         fi
-        if [[ $fixture == FocusDispatchAllocations && $target != hl ]]; then
-            options+=(--export=FocusDispatchCensus.prepare --export=FocusDispatchCensus.perform)
+        census_class=""
+        case "$fixture" in
+            FocusDispatchAllocations) census_class=FocusDispatchCensus ;;
+            WidgetIdCacheMain) census_class=WidgetIdCacheCensus ;;
+        esac
+        if [[ -n $census_class && $target != hl ]]; then
+            options+=("--export=$census_class.prepare" "--export=$census_class.perform")
             if [[ $target == wasm32 ]]; then options+=(--wasm-memory-stats);
             else options+=(--wasm-gc-allocation-count); fi
         fi
@@ -81,18 +86,20 @@ const fs = require("fs");
   try { result = instance.exports.main(); }
   catch (error) { if (error instanceof ExitSignal) result = error.code; else throw error; }
   if (result !== 42) throw new Error(`${target} inline=${inline} returned ${result}`);
-  if (fixture === "FocusDispatchAllocations") {
+  if (fixture === "FocusDispatchAllocations" || fixture === "WidgetIdCacheMain") {
     const exports = instance.exports;
-    exports["FocusDispatchCensus.prepare"]();
-    exports["FocusDispatchCensus.perform"](8);
+    const census = fixture === "FocusDispatchAllocations" ? "FocusDispatchCensus" : "WidgetIdCacheCensus";
+    const perIteration = fixture === "FocusDispatchAllocations" ? 6 : 1;
+    exports[`${census}.prepare`]();
+    exports[`${census}.perform`](8);
     const count = target === "wasm32" ? exports["haxeon.memory.allocation_count"] : exports.__allocation_count;
     for (const n of [8, 1024]) {
       const before = count();
-      const delivered = exports["FocusDispatchCensus.perform"](n);
+      const delivered = exports[`${census}.perform`](n);
       const allocations = count() - before;
-      if (delivered !== n * 6 || allocations !== 0)
-        throw new Error(`focus/blur dispatch ${target} inline=${inline}: delivered=${delivered}, allocations=${allocations}`);
-      console.log(`PASS: focus/blur dispatch on ${target}, inline=${inline}, n=${n}, allocations=0`);
+      if (delivered !== n * perIteration || allocations !== 0)
+        throw new Error(`${fixture} ${target} inline=${inline}: delivered=${delivered}, allocations=${allocations}`);
+      console.log(`PASS: ${fixture} on ${target}, inline=${inline}, n=${n}, allocations=0`);
     }
   }
 })().catch(error => { console.error(error); process.exit(1); });
