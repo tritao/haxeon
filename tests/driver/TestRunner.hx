@@ -26,8 +26,8 @@ private typedef ProgramRun = {
 	var test:ProgramCase;
 	var plain:Bool;
 
-	/** A plain build that prunes at the prune point of the pipeline (`Main --early-prune`, `IrEntryPrune`), so each program runs pruned and unpruned. */
-	var pruned:Bool;
+	/** A plain build without the early prune (`Main --no-early-prune`, `IrEntryPrune`): the reference, so each program runs pruned (the default) and unpruned. */
+	var unpruned:Bool;
 
 	/** Built, edited twice and rebuilt in one compiler session (`Main --warm-edit`), each rebuild compared with a fresh build. */
 	var warm:Bool;
@@ -79,7 +79,7 @@ class TestRunner {
 
 	/** Compile a program to HashLink: with the prebuilt compiler when available, else `haxe --run Main`. */
 	function compileProgram(source:String, output:String, run:ProgramRun):Process {
-		var arguments = [source, output].concat((run.warm ? ["--warm-edit"] : run.plain ? ["--plain"] : []).concat(run.pruned ? ["--early-prune"] : []));
+		var arguments = [source, output].concat((run.warm ? ["--warm-edit"] : run.plain ? ["--plain"] : []).concat(run.unpruned ? ["--no-early-prune"] : []));
 		return prebuiltMain != null ? new Process(hl,
 			[prebuiltMain].concat(arguments)) : new Process(haxe, ["--cwd", root, "common.hxml", "--run", "Main"].concat(arguments));
 	}
@@ -136,13 +136,13 @@ class TestRunner {
 		return File.getContent(source).indexOf(root) >= 0;
 
 	static function runName(run:ProgramRun):String
-		return run.test.name + (run.warm ? " (warm edit rebuilds" : run.plain ? " (plain build" : "") + (run.pruned ? ", early prune" : "") + (run.warm || run.plain ? ")" : "");
+		return run.test.name + (run.warm ? " (warm edit rebuilds" : run.plain ? " (plain build" : "") + (run.unpruned ? ", no early prune" : "") + (run.warm || run.plain ? ")" : "");
 
 	static function runOutput(root:String, run:ProgramRun):String
 		return Path.join([
 			root,
 			"out",
-			run.test.name + (run.warm ? ".warm" : run.plain ? ".plain" : "") + (run.pruned ? ".pruned" : "") + ".hl"
+			run.test.name + (run.warm ? ".warm" : run.plain ? ".plain" : "") + (run.unpruned ? ".unpruned" : "") + ".hl"
 		]);
 
 	/**
@@ -257,18 +257,18 @@ class TestRunner {
 	 */
 	static function runsOf(test:ProgramCase):Array<ProgramRun> {
 		var runs:Array<ProgramRun> = [
-			{test: test, plain: false, pruned: false, warm: false},
-			{test: test, plain: true, pruned: false, warm: false},
-			{test: test, plain: true, pruned: true, warm: false}
+			{test: test, plain: false, unpruned: false, warm: false},
+			{test: test, plain: true, unpruned: false, warm: false},
+			{test: test, plain: true, unpruned: true, warm: false}
 		];
 		if (Sys.getEnv("HAXEON_CHECK_REUSE") == "1") {
-			runs.push({test: test, plain: true, pruned: false, warm: true});
-			runs.push({test: test, plain: true, pruned: true, warm: true});
+			runs.push({test: test, plain: true, unpruned: false, warm: true});
+			runs.push({test: test, plain: true, unpruned: true, warm: true});
 		}
 		return runs;
 	}
 
-	/** Every program is built and run three times, live, plain and plain with the early prune, so a difference between the modes (what a plain build prunes, and when) fails a case. */
+	/** Every program is built and run three times, live, plain (pruned early, the default) and plain without the early prune, so a difference between the modes fails a case. */
 	public function runPrograms(tests:Array<ProgramCase>, jobs:Int):Int {
 		if (tests.length == 0)
 			return 0;

@@ -147,7 +147,7 @@ What the numbers say about the walk itself:
 - No `$` function without a kind in any of the three (kindless helpers: 0), so the prerequisite "no target-only helper without a kind" holds on these.
 - Not measured: the effect of the prune on pass time, which is step 3's evidence (`measure-cold.sh` before and after).
 
-## Step 3a, first cut (HAXEON_EARLY_PRUNE=1, off by default)
+## Step 3a, first cut (on by default for plain HashLink builds; HAXEON_EARLY_PRUNE=0 turns it off)
 
 `IrEntryPrune` prunes a plain HashLink build inside `IrProgramAssembler.assemble`, **after generic owner erasure** and before every later
 pass (value interface boxes, typed interface calls, checked casts, enum lowering, optional flows, reflection and, after `assemble`, the passes
@@ -171,7 +171,7 @@ and the erasure's own devirtualization silently did not happen. Erased-owner nam
     throws, naming the pass and the function. A pass that needs a function the prune would remove must ask for it by (type, operation).
   - Method-table lookups (`IrProgramIndex.findMethod`, the erasure's and the typed interface dispatch's `findMethod`) throw when they visit a
     class whose entry for the method the prune removed. Other readers of `IrObject.methods` (about 30 files) are not covered yet.
-- **Evidence.** `tests/programs` is built plain, unpruned and pruned, with the driver's third run (`Main --early-prune`) and the warm-edit sweep
+- **Evidence.** `tests/programs` is built plain, unpruned and pruned, with the driver's third run (`Main --no-early-prune`, the reference) and the warm-edit sweep
   under HAXEON_CHECK_REUSE=1 (545 programs pruned warm: each rebuild equals a fresh build). On the 582 programs that build as HashLink: 0
   differences in exit code, 0 invariant or lookup hits. Bytes differ in 64: in 51 only the runtime natives imported differ (a native only
   unreachable code needed is gone); in 10 the four `StringBuf` methods are gone (class mentioned, never created); in 3

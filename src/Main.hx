@@ -11,15 +11,15 @@ class Main {
 		var arguments = Sys.args();
 		// `--plain` builds as `haxeon build` does: not for live patching, so what nothing reaches is not in the module.
 		var plain = arguments.indexOf("--plain") >= 0;
-		// `--early-prune` also prunes at the prune point of the pipeline (`IrEntryPrune`), which a plain build does not do by default yet.
-		if (arguments.indexOf("--early-prune") >= 0)
-			Sys.putEnv("HAXEON_EARLY_PRUNE", "1");
+		// `--no-early-prune` keeps every function through the passes (`IrEntryPrune`), as before the prune: the reference the driver compares with.
+		if (arguments.indexOf("--no-early-prune") >= 0)
+			Sys.putEnv("HAXEON_EARLY_PRUNE", "0");
 		// `--warm-edit` builds the program, edits it twice in the same session and rebuilds, and checks each rebuild against a fresh
 		// compiler's build of the edited source; the output is the last rebuild. It implies a plain build, the only kind that reuses.
 		var warmEdit = arguments.indexOf("--warm-edit") >= 0;
 		arguments = [
 			for (argument in arguments)
-				if (argument != "--plain" && argument != "--warm-edit" && argument != "--early-prune") argument
+				if (argument != "--plain" && argument != "--warm-edit" && argument != "--no-early-prune") argument
 		];
 		var sourcePath = arguments.length > 0 ? arguments[0] : "tests/programs/add.hx";
 		var outputPath = arguments.length > 1 ? arguments[1] : "out/program.hl";

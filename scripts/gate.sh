@@ -65,10 +65,10 @@ coverage() {
 	live=$(grep -c '^PASS: .* source compiled and executed' "$log" || true)
 	plain=$(grep -c '^PASS: .* (plain build) source compiled and executed' "$log" || true)
 	warm=$(grep -c '^PASS: .* (warm edit rebuilds) source compiled and executed' "$log" || true)
-	pruned=$(grep -c '^PASS: .* (plain build, early prune) source compiled and executed' "$log" || true)
-	prunedWarm=$(grep -c '^PASS: .* (warm edit rebuilds, early prune) source compiled and executed' "$log" || true)
+	pruned=$(grep -c '^PASS: .* (plain build, no early prune) source compiled and executed' "$log" || true)
+	prunedWarm=$(grep -c '^PASS: .* (warm edit rebuilds, no early prune) source compiled and executed' "$log" || true)
 	live=$((live - plain - warm - pruned - prunedWarm))
-	echo "programs: $live live, $plain plain, $pruned plain+early-prune, warm-edit: $([ "$warm" -gt 0 ] && echo "yes ($warm)" || echo no), warm-edit+early-prune: $([ "$prunedWarm" -gt 0 ] && echo "yes ($prunedWarm)" || echo no)"
+	echo "programs: $live live, $plain plain, $pruned plain+no-early-prune, warm-edit: $([ "$warm" -gt 0 ] && echo "yes ($warm)" || echo no), warm-edit+no-early-prune: $([ "$prunedWarm" -gt 0 ] && echo "yes ($prunedWarm)" || echo no)"
 }
 
 # suite <name> <command...>: runs it, logs it, and records its result line.
