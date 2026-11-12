@@ -1412,13 +1412,13 @@ class RestyleInPlaceTests {
     callerClasses[0] = "caller-change";
     var column = new Column("identity-test", [new KeyedView("left", left), new KeyedView("right", right)]);
     var frame = new LayoutFrame(300, 100), root = ui.submit(column, frame);
-    check(root.children[0].children[0].styleClasses[0] == "owned-class", "Button did not snapshot its constructor classes");
+    check(root.children[0].styleClasses[0] == "owned-class", "Button did not snapshot its constructor classes");
     root.children[0].styleClasses[0] = "node-change";
     check(root.children[1].styleClasses[0] == "owned-class", "Buttons shared a mutable class list");
     var replacement = new Button("Left", null, null, null, null, haxeon.ui.widgets.controls.ButtonVariant.Navigation
     , null, callerClasses);
     root = ui.submit(new Column("identity-test", [new KeyedView("left", replacement), new KeyedView("right", right)]), frame);
-    check(root.children[0].children[0].styleClasses[0] == "caller-change", "Replacement Button reused an obsolete selector snapshot");
+    check(root.children[0].styleClasses[0] == "caller-change", "Replacement Button reused an obsolete selector snapshot");
     ui.dispose();
   }
 
