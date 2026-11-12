@@ -87,10 +87,9 @@ suite() {
 
 suite nul-guard bash "$root/tests/integration/test-no-nul-literals.sh"
 # Every module of the compiler and the build tool type-checks, not only the ones the entry point reaches: a switch over an IR enum in a module only
-# tests compile (IrInterpreter) once broke the wave. src/compiler/types/typing/EnumAbstractHints.hx is orphaned and does not compile; it is excluded
-# until it is deleted or fixed.
+# tests compile (IrInterpreter) once broke the wave.
 suite type-check-all "$root/.tools/haxe/haxe" --cwd "$root" common.hxml -cp tests/compiler \
-	--macro "include('compiler', true, ['compiler.types.typing.EnumAbstractHints'])" --macro "include('build')" \
+	--macro "include('compiler')" --macro "include('build')" \
 	-hl "$work/type-check-all.hl" --no-output -main Main
 suite driver-default env -u HAXEON_CHECK_REUSE "$root/scripts/test-driver.sh" "$jobs"
 if [ "$mode" != quick ]; then
