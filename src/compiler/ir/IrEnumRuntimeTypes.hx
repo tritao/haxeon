@@ -95,7 +95,7 @@ class IrEnumRuntimeTypes {
 							visit(output.type);
 						case Branch(condition, _, _):
 							visit(condition.type);
-						case Jump(_):
+						case Jump(_), Unreachable:
 					}
 			}
 		}

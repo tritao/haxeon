@@ -139,6 +139,11 @@ enum IrInstruction {
 
 /** Mandatory control transfer ending an SSA basic block. */
 enum IrTerminator {
+	/**
+	 * Control cannot reach here by construction (a method of a class nothing constructs, an unreceivable call): no value, no successors. It is
+	 * not an exception: Haxe code cannot catch it. Wasm lowers it to `unreachable`; HashLink to the fatal runtime native `__unreachable`.
+	 */
+	Unreachable;
 	Return(value:IrValue);
 	Throw(value:IrValue);
 	Rethrow(value:IrValue);

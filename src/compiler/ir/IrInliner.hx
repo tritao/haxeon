@@ -980,6 +980,7 @@ class IrInliner {
 			var terminator = block.terminator;
 			if (terminator != null)
 				block.terminator = new Located(switch terminator.value {
+					case Unreachable: Unreachable;
 					case Return(value): Return(use(value));
 					case Throw(value): Throw(use(value));
 					case Rethrow(value): Rethrow(use(value));
@@ -1065,6 +1066,8 @@ class IrInliner {
 			if (terminator == null)
 				throw "Inliner found a callee block without a terminator";
 			switch terminator.value {
+				case Unreachable:
+					copy.terminator = new Located(Unreachable, terminator.provenance);
 				case Return(value):
 					returned.push({block: copy.id, value: use(value)});
 					copy.terminator = new Located(Jump(continuation.id), terminator.provenance);

@@ -143,7 +143,7 @@ class IrCopyElision {
 				case Branch(condition, _, _):
 					if (condition.id == copy.id)
 						return false;
-				case Jump(_):
+				case Jump(_), Unreachable:
 			}
 		}
 		if (source == null || callPosition < 0 || argument < 0)
@@ -261,7 +261,7 @@ class IrCopyElision {
 				case Return(value), Throw(value), Rethrow(value):
 					if (tainted.exists(value.id)) depends = true;
 				case Branch(condition, _, _):
-				case Jump(_):
+				case Jump(_), Unreachable:
 			}
 		}
 		visiting.pop();
@@ -408,7 +408,7 @@ class IrCopyElision {
 					case Branch(condition, _, _):
 						if (condition.id == parameter.id)
 							ok = false;
-					case Jump(_):
+					case Jump(_), Unreachable:
 				}
 		}
 		visiting.pop();

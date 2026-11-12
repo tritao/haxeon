@@ -354,6 +354,10 @@ class IrFunctionStateEquality {
 
 	static function terminator(a:IrTerminator, b:IrTerminator):Bool
 		return switch a {
+			case Unreachable: switch b {
+				case Unreachable: true;
+				default: false;
+			};
 			case Return(input): switch b {
 				case Return(other): value(input, other);
 				default: false;

@@ -65,7 +65,7 @@ class IrEntryPrune {
 		var builder = new IrBuilder();
 		for (argument in fn.arguments)
 			builder.argument(argument.name, argument.type);
-		builder.throwValue(builder.toDyn(builder.constString("method of a class that has no instance: " + fn.name)));
+		builder.unreachable();
 		return new IrFunction(fn.name, builder.arguments, fn.result, builder.blocks, fn.kind);
 	}
 

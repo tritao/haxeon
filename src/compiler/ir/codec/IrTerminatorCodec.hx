@@ -9,6 +9,8 @@ import haxe.io.BytesOutput;
 class IrTerminatorCodec {
 	public static function write(output:BytesOutput, terminator:IrTerminator):Void
 		switch terminator {
+			case Unreachable:
+				output.writeByte(5);
 			case Return(value):
 				output.writeByte(0);
 				IrValueTableCodec.writeReference(output, value);
@@ -34,6 +36,7 @@ class IrTerminatorCodec {
 			case 1: Throw(IrValueTableCodec.readReference(input, values));
 			case 2: Rethrow(IrValueTableCodec.readReference(input, values));
 			case 3: Jump(readBlock(input, blocks));
+			case 5: Unreachable;
 			case 4: Branch(IrValueTableCodec.readReference(input, values), readBlock(input, blocks), readBlock(input, blocks));
 			default: throw "Unknown IR terminator tag";
 		};

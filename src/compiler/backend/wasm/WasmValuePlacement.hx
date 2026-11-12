@@ -128,7 +128,7 @@ class WasmValuePlacement {
 	static function terminatorInputs(terminator:IrTerminator):Array<compiler.ir.Ir.IrValue>
 		return switch terminator {
 			case Return(value), Throw(value), Rethrow(value): [value];
-			case Jump(_): [];
+			case Jump(_), Unreachable: [];
 			case Branch(condition, _, _): [condition];
 		};
 

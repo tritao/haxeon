@@ -40,7 +40,7 @@ class IrDeadPureValues {
 			}
 			if (block.terminator != null) switch block.terminator.value {
 				case Return(value), Throw(value), Rethrow(value), Branch(value, _, _): mark(value);
-				case Jump(_):
+				case Jump(_), Unreachable:
 			}
 		}
 		for (binding in fn.debugBindings) mark(binding.value);

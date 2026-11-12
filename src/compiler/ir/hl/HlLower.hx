@@ -758,7 +758,7 @@ class HlLower {
 				switch block.terminator.value {
 					case Return(value), Throw(value), Rethrow(value), Branch(value, _, _):
 						countUse(value);
-					case Jump(_):
+					case Jump(_), Unreachable:
 				}
 		}
 		var edges:Map<Int, Map<Int, Array<{destination:IrValue, source:IrValue}>>> = [];
@@ -1248,6 +1248,13 @@ class HlLower {
 				throw 'Reachable IR block ${block.id} has no terminator';
 			var terminatorStart = instructions.length;
 			switch terminator.value {
+				case Unreachable:
+					// The fatal runtime native aborts the process and is not an exception, so no Haxe code can catch it. The block still needs an
+					// ending the bytecode accepts: a throw of null that is never reached.
+					instructions.push(HlInstruction.Call0(temporaryRegister(IrType.Void, registerTypes), requireFunction("__unreachable")));
+					var neverThrown = temporaryRegister(IrType.Dyn, registerTypes);
+					instructions.push(HlInstruction.LoadNull(neverThrown));
+					instructions.push(HlInstruction.Throw(neverThrown));
 				case Return(value):
 					instructions.push(HlInstruction.Return(requireRegister(value, registers)));
 				case Throw(value):
@@ -1470,7 +1477,7 @@ class HlLower {
 			var successors:Array<Int> = switch terminator.value {
 				case Jump(target): [target];
 				case Branch(_, yes, no): [yes, no];
-				case Return(_), Throw(_), Rethrow(_): [];
+				case Return(_), Throw(_), Rethrow(_), Unreachable: [];
 			};
 			var successorIndex = successors.length;
 			while (successorIndex > 0) {

@@ -482,6 +482,8 @@ class IrVerifier {
 			if (terminator == null)
 				throw 'Reachable IR block $id has no terminator';
 			switch terminator.value {
+				case Unreachable:
+					// No value and no successor: nothing to check beyond the block ending here.
 				case Return(value):
 					verifyUse(value, id, block.instructions.length, values, graph);
 					if (!sameType(value.type, fn.result))

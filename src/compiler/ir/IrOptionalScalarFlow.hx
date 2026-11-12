@@ -693,7 +693,7 @@ class IrOptionalScalarFlow {
 			}
 			if (block.terminator != null) switch block.terminator.value {
 				case Return(v), Throw(v), Rethrow(v), Branch(v, _, _): used.set(v.id, true);
-				case Jump(_):
+				case Jump(_), Unreachable:
 			}
 		}
 		for (block in blocks) {

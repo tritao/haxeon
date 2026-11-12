@@ -286,6 +286,7 @@ class WasmFunctionLower {
 						state.strings, state.methods, state.closureTypes);
 					if (block.terminator == null) throw 'Reachable block $blockId has no terminator';
 					switch block.terminator.value {
+						case Unreachable: body.push(Unreachable);
 						case Return(value):
 							restoreRoots(body);
 							if ((switch (value.type) { case Void: false; default: true; })) body.push(LocalGet(requiredLocal(state.values, value.id)));
@@ -505,6 +506,7 @@ class WasmFunctionLower {
 		if (block.terminator == null)
 			throw 'Missing terminator in Wasm block ${block.id}';
 		switch block.terminator.value {
+			case Unreachable: body.push(Unreachable);
 			case Return(value):
 				restoreRoots(body);
 				if ((switch (value.type) { case Void: false; default: true; }))

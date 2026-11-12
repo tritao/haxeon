@@ -86,6 +86,9 @@ class IrInterpreter {
 				if (block.terminator == null)
 					throw 'IR interpreter reached unterminated block $current';
 				switch block.terminator.value {
+					case Unreachable:
+						// A trap, not a Haxe exception: nothing in the interpreted program may catch it.
+						throw new IrInterpreterTrap("reached an Unreachable terminator in block " + current);
 					case Return(result):
 						return value(values, result);
 					case Throw(result), Rethrow(result):
@@ -98,7 +101,8 @@ class IrInterpreter {
 						current = value(values, condition) ? yes : no;
 				}
 			} catch (failure:Dynamic) {
-				if (activeCatch == null)
+				// A trap is no exception of the interpreted program: its own try blocks do not see it.
+				if (activeCatch == null || Std.isOfType(failure, IrInterpreterTrap))
 					throw failure;
 				thrown = failure;
 				predecessor = current;
@@ -874,4 +878,15 @@ private class InterpStringMap {
 		for (index in 0...entries.length) if (entries[index].key == key) return index;
 		return -1;
 	}
+}
+
+/** The interpreter reached an `Unreachable` terminator: a trap, as on the backends. */
+class IrInterpreterTrap {
+	public final message:String;
+
+	public function new(message:String)
+		this.message = message;
+
+	public function toString():String
+		return message;
 }

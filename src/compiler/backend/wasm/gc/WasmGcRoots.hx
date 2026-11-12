@@ -173,7 +173,7 @@ class WasmGcRoots {
 	static function addTerminatorReferences(set:Array<Int>, terminator:IrTerminator, indices:Map<Int, Int>):Void {
 		var value:IrValue = switch terminator {
 			case Return(value), Throw(value), Rethrow(value): value;
-			case Jump(_): null;
+			case Jump(_), Unreachable: null;
 			case Branch(condition, _, _): condition;
 		};
 		if (value != null && WasmTarget.isReference(value.type))

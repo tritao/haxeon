@@ -329,6 +329,7 @@ class IrInlineEnumLowering {
 				}
 				if (block.terminator != null)
 					copy.terminator = new Located(switch block.terminator.value {
+						case Unreachable: Unreachable;
 						case Return(value): Return(use(value));
 						case Throw(value):
 							if (containsMapped(value.type))

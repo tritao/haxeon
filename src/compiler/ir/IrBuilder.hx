@@ -270,6 +270,10 @@ class IrBuilder {
 	public function throwValue(value:IrValue):Void
 		terminate(Throw(value));
 
+	/** Ends the block where control cannot arrive by construction; it is not an exception, so no Haxe code can catch it. */
+	public function unreachable():Void
+		terminate(Unreachable);
+
 	public function jump(target:IrBlock):Void
 		terminate(Jump(target.id));
 

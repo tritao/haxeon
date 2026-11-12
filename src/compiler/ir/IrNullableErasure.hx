@@ -167,6 +167,7 @@ class IrNullableErasure {
 			var terminator = block.terminator;
 			if (terminator != null)
 				copy.terminator = new Located(switch terminator.value {
+					case Unreachable: Unreachable;
 					case Return(value): Return(use(value));
 					case Throw(value): Throw(use(value));
 					case Rethrow(value): Rethrow(use(value));

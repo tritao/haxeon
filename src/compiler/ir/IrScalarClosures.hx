@@ -419,6 +419,7 @@ class IrScalarClosures {
 			var terminator = block.terminator;
 			if (terminator != null)
 				rewritten.terminator = new Located(switch terminator.value {
+					case Unreachable: Unreachable;
 					case Return(value): Return(map(value));
 					case Throw(value): Throw(map(value));
 					case Rethrow(value): Rethrow(map(value));

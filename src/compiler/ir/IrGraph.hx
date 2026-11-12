@@ -100,7 +100,7 @@ class IrGraph {
 				next.push(yes);
 				if (yes != no)
 					next.push(no);
-			case Return(_), Throw(_), Rethrow(_):
+			case Return(_), Throw(_), Rethrow(_), Unreachable:
 		}
 		for (instruction in block.instructions)
 			switch instruction.value {

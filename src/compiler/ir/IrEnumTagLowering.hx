@@ -236,6 +236,7 @@ class IrEnumTagLowering {
 							result.instructions.push(new Located(instruction, located.provenance));
 						}
 						if (block.terminator != null) result.terminator = new Located(switch block.terminator.value {
+							case Unreachable: Unreachable;
 							case Return(value): Return(use(value));
 							case Throw(value): Throw(use(value));
 							case Rethrow(value): Rethrow(use(value));
@@ -257,7 +258,7 @@ class IrEnumTagLowering {
 						}
 						if (block.terminator != null) switch block.terminator.value {
 							case Return(value), Throw(value), Rethrow(value), Branch(value, _, _): used.set(value.id, true);
-							case Jump(_):
+							case Jump(_), Unreachable:
 						}
 					}
 					for (binding in fn.debugBindings) used.set(binding.value.id, true);

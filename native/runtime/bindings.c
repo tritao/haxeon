@@ -660,6 +660,7 @@ DEFINE_PRIM(_VOID,__string_buffer_add,_ABSTRACT(realtime_string_buffer) _STRING)
 DEFINE_PRIM(_I32,__string_buffer_length,_ABSTRACT(realtime_string_buffer));
 DEFINE_PRIM(_STRING,__string_buffer_to_string,_ABSTRACT(realtime_string_buffer));
 DEFINE_PRIM(_BOOL,__exception_matches,_DYN _TYPE);
+DEFINE_PRIM(_VOID,__unreachable,_NO_ARG);
 DEFINE_PRIM(_DYN,__closure_receiver_if_match,_DYN _DYN);
 DEFINE_PRIM(_BOOL,__std_is_of_type,_DYN _TYPE);
 DEFINE_PRIM(_BOOL,__closure_is_of_type,_DYN _TYPE);

@@ -215,7 +215,7 @@ class IrScalarReplacement {
 				case Branch(condition, _, _):
 					if (condition.id == object.id)
 						return null;
-				case Jump(_):
+				case Jump(_), Unreachable:
 			}
 		}
 		if (found == null)
@@ -389,7 +389,7 @@ class IrScalarReplacement {
 				case Branch(condition, _, _):
 					if (condition.id == object.id)
 						return false;
-				case Jump(_):
+				case Jump(_), Unreachable:
 			}
 		}
 		return true;

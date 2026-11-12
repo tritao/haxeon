@@ -231,8 +231,14 @@ run-time check in the native's library, which this compiler does not own.
 The verifier resolves a method call against the receiver class's table, so a reachable call on a class that nothing constructs (a base class) needs that
 class's table entry. The first rule kept the whole method for it (4bbb1e754), which also kept whatever the body calls: on Wasm that would bring back
 the owned-handle wrappers 9d57e32e8 removed. Now the walk records such a method as `declarationOnly` (not in `reached`) and `IrEntryPrune` keeps the
-entry with a stub: same name, signature and kind, and a body that throws, as an interface method without an implementation does. Nothing can receive
-the call, so the throw is never run; the body's callees are not reached. If a class later turns out to be created, its method is reached with its body.
+entry with a stub: same name, signature and kind, and a body that is a single `Unreachable` terminator. `Unreachable` is the one IR terminator for
+"control cannot arrive here by construction" (no value, no successors, verified, in the canonical codec); it is not an exception, so Haxe code cannot
+catch it (an earlier version threw a Dynamic string, which `catch (e:Dynamic)` could have swallowed, and cost a string and a conversion per stub).
+Wasm lowers it to `unreachable`, HashLink to the fatal runtime native `__unreachable` (`hl_fatal`: an abort with a message, since HashLink's own
+`OAssert` raises a catchable error). The Wasm lowering of an unreceivable call (9d57e32e8) and of an interface method without an implementation
+already emit that `unreachable` instruction. Nothing can receive the call, so the trap is never run; the body's callees are not reached. If a class
+later turns out to be created, its method is reached with its body. `UnreachableTerminatorMain` checks the abort on HashLink and the trap on both
+Wasm backends, and the codec round trip.
 The Wasm builders do not prune at this point; when they use the shared walk, the same stub is what they lower (a throw lowers to a catchable
 exception on both backends).
 

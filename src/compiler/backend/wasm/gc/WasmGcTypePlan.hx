@@ -541,7 +541,7 @@ class WasmGcTypePlan {
 						collectType(value.type);
 					case Branch(condition, _, _):
 						collectType(condition.type);
-					case Jump(_):
+					case Jump(_), Unreachable:
 				}
 		}
 	}

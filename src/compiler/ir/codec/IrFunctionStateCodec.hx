@@ -427,7 +427,7 @@ class IrFunctionStateCodec {
 		switch terminator {
 			case Return(value), Throw(value), Rethrow(value), Branch(value, _, _):
 				collectValue(value, values);
-			case Jump(_):
+			case Jump(_), Unreachable:
 		}
 	}
 

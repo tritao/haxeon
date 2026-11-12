@@ -29,7 +29,7 @@ class IrReceiverCheckElision {
 			}
 			if (block.terminator != null) switch block.terminator.value {
 				case Return(value), Throw(value), Rethrow(value), Branch(value, _, _): uses.set(value.id, true);
-				case Jump(_):
+				case Jump(_), Unreachable:
 			}
 		}
 		for (binding in fn.debugBindings) uses.set(binding.value.id, true);

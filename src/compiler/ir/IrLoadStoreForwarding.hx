@@ -136,6 +136,7 @@ class IrLoadStoreForwarding {
 			var term = block.terminator;
 			if (term != null)
 				block.terminator = new Located(switch term.value {
+					case Unreachable: Unreachable;
 					case Return(value): Return(use(value));
 					case Throw(value): Throw(use(value));
 					case Rethrow(value): Rethrow(use(value));

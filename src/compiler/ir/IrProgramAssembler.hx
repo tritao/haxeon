@@ -737,6 +737,14 @@ class IrProgramAssembler {
 						default:
 					}
 		program.prunedFunctions = removedByPrune;
+		var needsUnreachable = false;
+		for (fn in allFunctions)
+			for (block in fn.blocks)
+				if (block.terminator != null)
+					switch block.terminator.value {
+						case Unreachable: needsUnreachable = true;
+						default:
+					}
 		program.objects = objects == null ? [] : objects;
 		program.cNatives = cNatives == null ? [] : cNatives;
 		var cNativeNames:Map<String, Bool> = [for (native in program.cNatives) native.name => true];
@@ -760,6 +768,8 @@ class IrProgramAssembler {
 			arguments: [I32],
 			result: Void
 		});
+		if (needsUnreachable && !hasNative(natives, "__unreachable"))
+			program.natives.push({name: "__unreachable", library: "haxeon_runtime", symbol: "__unreachable", arguments: [], result: Void});
 		if (needsDynamicEquality && !hasNative(natives, "__dynamic_equal"))
 			program.natives.push({name: "__dynamic_equal", library: "haxeon_runtime", symbol: "__dynamic_equal", arguments: [Dyn, Dyn], result: Bool});
 		if (needsDynamicObjectTypeId && !hasNative(natives, "__dynamic_object_type_id"))
