@@ -12,7 +12,10 @@ import compiler.ir.Ir;
  * with HAXEON_CHECK_REUSE=1 `checkRemoved` runs after the passes and names the pass, the caller and the removed function.
  */
 class IrEntryPrune {
-	/** On for plain HashLink builds; HAXEON_EARLY_PRUNE=0 turns it off (the driver builds every program both ways). */
+	/**
+	 * On for plain HashLink builds. HAXEON_EARLY_PRUNE=0 is a migration reference, not a product option: it exists so the driver can build
+	 * every program both ways while the prune is new, and it is deleted with the driver's unpruned run (docs/REACHABILITY_WALK.md, "Removal").
+	 */
 	public static function enabled():Bool
 		return Sys.getEnv("HAXEON_EARLY_PRUNE") != "0";
 

@@ -26,7 +26,7 @@ private typedef ProgramRun = {
 	var test:ProgramCase;
 	var plain:Bool;
 
-	/** A plain build without the early prune (`Main --no-early-prune`, `IrEntryPrune`): the reference, so each program runs pruned (the default) and unpruned. */
+	/** A plain build without the early prune (`Main --no-early-prune`, `IrEntryPrune`): a migration reference, removed with the switch, so each program runs pruned (the default) and unpruned. */
 	var unpruned:Bool;
 
 	/** Built, edited twice and rebuilt in one compiler session (`Main --warm-edit`), each rebuild compared with a fresh build. */

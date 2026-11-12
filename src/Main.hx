@@ -11,7 +11,8 @@ class Main {
 		var arguments = Sys.args();
 		// `--plain` builds as `haxeon build` does: not for live patching, so what nothing reaches is not in the module.
 		var plain = arguments.indexOf("--plain") >= 0;
-		// `--no-early-prune` keeps every function through the passes (`IrEntryPrune`), as before the prune: the reference the driver compares with.
+		// `--no-early-prune` is a migration reference, not a product option: it keeps every function through the passes (`IrEntryPrune`), as
+		// before the prune, so the driver can compare. It goes when the driver's unpruned run does (docs/REACHABILITY_WALK.md, "Removal").
 		if (arguments.indexOf("--no-early-prune") >= 0)
 			Sys.putEnv("HAXEON_EARLY_PRUNE", "0");
 		// `--warm-edit` builds the program, edits it twice in the same session and rebuilds, and checks each rebuild against a fresh

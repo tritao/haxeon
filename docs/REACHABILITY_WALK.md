@@ -179,3 +179,12 @@ and the erasure's own devirtualization silently did not happen. Erased-owner nam
   (`$get` is `fun(owner,ref<i32>,ref<i32>)->void` unpruned and `fun(owner)->struct SpecPoint` pruned). The scalar-argument pass rewrites a
   closure field's signature only when the closures stored in it are present, so an ABI choice depends on which functions are present;
   a pruned build is deterministic (built twice, equal bytes) and a warm build equals a cold one, so it does not break warm = cold.
+
+### Removal and 3b items of step 3a
+
+- **Removal.** `HAXEON_EARLY_PRUNE=0`, `Main --no-early-prune` and the driver's unpruned reference run are a migration reference, not a product option, and
+  there is no user-facing fallback. Delete the switch, the flag and the unpruned run (and the gate.sh coverage field for it) when 3b lands, or after
+  the pruned path has been the default through two pushes, whichever comes first.
+- **3b: a closure field's ABI from its type.** The scalar-argument pass chooses the ABI of a closure field (the `$get` / `$set` fields of key-path classes)
+  from which closures exist, so an unreachable key path's field ABI changes with the prune (`key-path-semantics`). It is benign (deterministic,
+  and no reachable code reads the field), but the field's ABI should follow from the field's type, not from the presence of functions.
