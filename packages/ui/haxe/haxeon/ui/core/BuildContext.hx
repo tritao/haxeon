@@ -1000,6 +1000,12 @@ class BuildContext {
 	public function currentScope():KeyScope
 		return scope;
 
+	/** A variant owns nested completed scopes, never the enclosing scope currently producing that variant. */
+	public function retainedRootScope(node:RenderNode):Null<RenderScope> {
+		var owner = node.scopeOwner();
+		return owner == activeRenderScope ? null : owner;
+	}
+
 	/** Capture inherited values on the native owner, with no mount-path build closures or layout wrapper. */
 	public function mountComponent(component:haxeon.ui.component.ScopeView):RenderNode {
 		var previousScope = scope;

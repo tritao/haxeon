@@ -40,7 +40,7 @@ class RetainedVariants implements View {
 				returning && resetChangedOnReturn)) {
 			cache.active = variant;
 			context.retainStateIds(entry.refreshStateIds());
-			var retained = context.currentRoot(entry.root);
+			var retained = entry.currentRoot();
 			context.retainDependencies(entry.observed);
 			entry.root = retained;
 			context.claimRetainedTree(retained);
@@ -126,6 +126,7 @@ private class RetainedVariantEntry {
 	public final interactions:InteractionStateSnapshot;
 	public final observed:Dependencies;
 	public final dirty:Bool;
+	final rootScope:Null<RenderScope>;
 	final nodes:Array<RenderNode> = [];
 	final parents:Array<Null<RenderNode>> = [];
 	final positions:Array<Int> = [];
@@ -135,6 +136,7 @@ private class RetainedVariantEntry {
 			interactions:InteractionStateSnapshot, observed:Dependencies, context:BuildContext, dirty:Bool,
 			previousStateIds:Null<Array<Int>>) {
 		this.keyA = keyA; this.keyB = keyB; this.scope = scope; this.root = root;
+		rootScope = context.retainedRootScope(root);
 		usedStateIds = ids == null ? [] : ids.copy();
 		this.interactions = interactions; this.observed = observed; this.dirty = dirty;
 		stateIds = interactions.appendStateIds(usedStateIds, previousStateIds);
@@ -162,16 +164,19 @@ private class RetainedVariantEntry {
 		}
 	}
 
+	public function currentRoot():RenderNode
+		return rootScope == null ? root : rootScope.currentRoot(root);
+
 	function topologyMatches():Bool {
 		if (RenderNode.latest(root) != root) return false;
-		var rootOwner = root.scopeOwner();
+		var rootOwner = rootScope;
 		if (rootOwner != null) {
 			var current = rootOwner.currentRoot(root);
 			if (!current.id.equals(root.id)) return false;
 			root = current;
 		}
 		for (index in 0...nodes.length) {
-			var oldNode = nodes[index], native = oldNode.scopeOwner();
+			var oldNode = nodes[index], native = index == 0 ? rootScope : oldNode.scopeOwner();
 			if (native != null) {
 				var current = native.currentRoot(oldNode);
 				if (!current.id.equals(oldNode.id)) return false;
