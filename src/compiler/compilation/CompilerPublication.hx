@@ -14,6 +14,7 @@ typedef CompilerSnapshot = {
 	final modules:Map<String, ModuleState>;
 	final types:TypeRegistry;
 	final objectCache:Map<String, IrObject>;
+	final canonicalObjectCache:Map<String, IrObject>;
 	final lastTypedProgram:Null<TypedProgram>;
 	final publishedAbi:Null<RuntimeAbiDescriptor>;
 	final compiledOnce:Bool;

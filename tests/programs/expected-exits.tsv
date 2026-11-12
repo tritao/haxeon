@@ -565,3 +565,4 @@ q3-enum-observers	42
 q3-nullary-enum-string	42
 q3-dynamic-array-boundaries	42
 q3-dynamic-equality-fallbacks	42
+inline-enum-canonical-flat	42

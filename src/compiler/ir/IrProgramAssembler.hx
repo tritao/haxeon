@@ -332,14 +332,19 @@ class IrProgramAssembler {
 		];
 	}
 
-	public static function objectsFrom(generator:IrGenerator, typed:TypedProgram):Array<IrObject> {
+	public static function objectsFrom(generator:IrGenerator, typed:TypedProgram, ?layoutTarget:String, canonicalValuesOnly:Bool = false):Array<IrObject> {
+		var abiTarget = layoutTarget == null ? typed.nativeAbiTarget : layoutTarget;
 		var objects:Array<IrObject> = [],
 			classesByName:Map<String, compiler.types.TypedAst.TypedClass> = [];
 		for (classDecl in typed.classes)
 			classesByName.set(classDecl.name, classDecl);
 		for (classDecl in typed.classes)
-			if (!classDecl.isNativeValue) {
-				var nativeLayout = selectedNativeLayout(classDecl.nativeLayouts, typed.nativeAbiTarget),
+			if (!classDecl.isNativeValue
+				&& (!canonicalValuesOnly
+					|| classDecl.isValue
+					&& selectedNativeLayout(classDecl.nativeLayouts, typed.nativeAbiTarget) != null
+					&& !matchesCanonicalLayout(classDecl, typed.nativeAbiTarget))) {
+				var nativeLayout = selectedNativeLayout(classDecl.nativeLayouts, abiTarget),
 					fields:Array<IrObjectField> = [];
 				for (field in classDecl.fields)
 					if (!field.isStatic && hasPhysicalStorage(field)) {
@@ -348,15 +353,15 @@ class IrProgramAssembler {
 								offset: layout.offset,
 								size: layout.size,
 								alignment: layout.alignment,
-								signed: isSignedField(field.type, typed.nativeAbiTarget),
-								inlineRecord: isFlatRecordField(field.type, classesByName, typed.nativeAbiTarget)
+								signed: isSignedField(field.type, abiTarget),
+								inlineRecord: isFlatRecordField(field.type, classesByName, abiTarget)
 							};
 						fields.push({
 							name: field.name,
 							type: generator.lowerType(field.type),
 							nativeLayout: fieldLayout,
-							scalarStorage: fieldLayout == null ? narrowScalarStorage(field.type, typed.nativeAbiTarget) : null,
-							nullableScalarStorage: nullableScalarStorage(field.type, typed.nativeAbiTarget)
+							scalarStorage: fieldLayout == null ? narrowScalarStorage(field.type, abiTarget) : null,
+							nullableScalarStorage: nullableScalarStorage(field.type, abiTarget)
 						});
 					}
 				if (generator.facts.observableStateOwner(classDecl.name) == classDecl.name)
@@ -391,6 +396,8 @@ class IrProgramAssembler {
 					methods: methods
 				});
 			}
+		if (canonicalValuesOnly)
+			return objects;
 		for (cell in typed.closurePlan.storage)
 			objects.push({
 				name: cell.name,
@@ -432,6 +439,29 @@ class IrProgramAssembler {
 				methods: []
 			});
 		return objects;
+	}
+
+	/** Reuse field data when the target and canonical layouts have the same physical representation. */
+	public static function matchesCanonicalLayout(classDecl:compiler.types.TypedAst.TypedClass, target:String):Bool {
+		var current = selectedNativeLayout(classDecl.nativeLayouts, target),
+			canonical = selectedNativeLayout(classDecl.nativeLayouts, IrInlineEnumLayout.CANONICAL_ABI);
+		if (current == null
+			|| canonical == null
+			|| current.size != canonical.size
+			|| current.alignment != canonical.alignment
+			|| current.fields.length != canonical.fields.length)
+			return false;
+		for (i in 0...current.fields.length) {
+			var left = current.fields[i], right = canonical.fields[i];
+			if (left.name != right.name || left.offset != right.offset || left.size != right.size || left.alignment != right.alignment)
+				return false;
+		}
+		for (field in classDecl.fields)
+			if (!field.isStatic
+				&& hasPhysicalStorage(field)
+				&& isSignedField(field.type, target) != isSignedField(field.type, IrInlineEnumLayout.CANONICAL_ABI))
+				return false;
+		return true;
 	}
 
 	static function selectedNativeLayout(layouts:Array<TypedNativeLayout>, target:String):Null<TypedNativeLayout> {
@@ -543,7 +573,8 @@ class IrProgramAssembler {
 	public static function assemble(generator:IrGenerator, functions:Array<IrFunction>, ?natives:Array<IrNative>, ?objects:Array<IrObject>,
 			?interfaces:Array<IrInterface>, ?enums:Array<IrEnum>, ?staticFields:Array<IrStaticField>, ?staticInitializers:Array<IrFunction>,
 			?entryPoint:String, ?cNatives:Array<IrCNative>, ?reflectableObjects:Array<String>, ?staticChecks:IrStaticCheckCache,
-			?valueTarget:compiler.ir.IrValueLaneLayout.IrValueLaneTarget, ?exportedFunctions:Array<String>, pruneFromEntry = false):IrProgram {
+			?valueTarget:compiler.ir.IrValueLaneLayout.IrValueLaneTarget, ?exportedFunctions:Array<String>, pruneFromEntry = false,
+			?canonicalObjects:Array<IrObject>):IrProgram {
 		var program = new IrProgram("__entry");
 		var allFunctions:Array<IrFunction> = [];
 		if (staticInitializers != null)
@@ -648,6 +679,8 @@ class IrProgramAssembler {
 			];
 		}
 		if (valueTarget != null) {
+			if (canonicalObjects == null)
+				throw "Inline enum lowering requires canonical objects";
 			// Choose source enum storage before optional-flow and reflection helpers choose their ABI.
 			var enumInput = new IrProgram(entryPoint == null ? "main" : entryPoint);
 			enumInput.functions = allFunctions;
@@ -660,7 +693,7 @@ class IrProgramAssembler {
 				enumInput.natives, enumInput.interfaces, enumInput.cNatives);
 			IrEnumTagLowering.run(enumInput);
 			var enumOutput = compiler.compilation.IrPassMeter.measure("inline-enum-lowering",
-				() -> IrInlineEnumLowering.run(enumInput, valueTarget, reflectableObjects));
+				() -> IrInlineEnumLowering.run(enumInput, valueTarget, canonicalObjects, reflectableObjects));
 			allFunctions = enumOutput.functions;
 			objects = enumOutput.objects;
 			interfaces = enumOutput.interfaces;

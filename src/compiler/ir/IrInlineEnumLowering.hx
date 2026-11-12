@@ -9,12 +9,12 @@ import compiler.ir.IrValueLaneLayout.IrValueLaneTarget;
 
 /** Select one program-wide representation, then lower eligible enum values to their lane packets. */
 class IrInlineEnumLowering {
-	public static function run(program:IrProgram, target:IrValueLaneTarget, ?reflectableObjects:Array<String>):IrProgram {
-		var planner = new IrInlineEnumLayout(program.enums, program.objects, target == HashLink ? 64 : 32, target);
+	public static function run(program:IrProgram, target:IrValueLaneTarget, canonicalObjects:Array<IrObject>, ?reflectableObjects:Array<String>):IrProgram {
+		var planner = new IrInlineEnumLayout(program.enums, program.objects, target == HashLink ? 64 : 32, target, canonicalObjects);
 		var eligibility = new IrInlineEnumEligibility(program, planner, reflectableObjects);
 		if (!eligibility.allowed.keys().hasNext())
 			return program;
-		planner = new IrInlineEnumLayout(program.enums, program.objects, target == HashLink ? 64 : 32, target, null, false, eligibility.allowed);
+		planner = new IrInlineEnumLayout(program.enums, program.objects, target == HashLink ? 64 : 32, target, canonicalObjects, false, eligibility.allowed);
 		function storage(name:String):compiler.ir.IrInlineEnumLayout.IrInlineEnumShape {
 			var shape = planner.shape(name);
 			if (shape == null)

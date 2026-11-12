@@ -87,6 +87,7 @@ class FrontendCompilation {
 		var modules = context.modules,
 			graph = context.graph,
 			objectCache = context.objectCache,
+			canonicalObjectCache = context.canonicalObjectCache,
 			genericSpecializations = context.genericSpecializations;
 		if (token != null)
 			token.check();
@@ -259,16 +260,51 @@ class FrontendCompilation {
 		if (previousTyped != null) {
 			var currentClasses = [for (classDecl in typedNew.classes) classDecl.name => true];
 			for (classDecl in previousTyped.classes)
-				if (!currentClasses.exists(classDecl.name))
+				if (!currentClasses.exists(classDecl.name)) {
 					objectCache.remove(classDecl.name);
+					canonicalObjectCache.remove(classDecl.name);
+				}
 		}
 		// The objects a function makes for its closures and captured variables are named by source offsets. When the function
 		// is typed again they are made again under their new names, and the old ones must not stay behind.
 		var retypedNames:Map<String, Bool> = [for (fn in typedNew.functions) fn.name => true];
 		for (name in [for (name in objectCache.keys()) name])
-			if (isGeneratedObjectOfRetypedFunction(name, retypedNames))
+			if (isGeneratedObjectOfRetypedFunction(name, retypedNames)) {
 				objectCache.remove(name);
+				canonicalObjectCache.remove(name);
+			}
+		for (classDecl in typedNew.classes)
+			canonicalObjectCache.remove(classDecl.name);
 		var typedObjects = IrProgramAssembler.objectsFrom(generator, typedNew);
+		var canonicalAbi = compiler.ir.IrInlineEnumLayout.CANONICAL_ABI;
+		if (typedNew.nativeAbiTarget == canonicalAbi) {
+			for (object in typedObjects)
+				if (object.isValue && object.nativeLayout != null)
+					canonicalObjectCache.set(object.name, object);
+		} else {
+			var sameLayout:Map<String, Bool> = [
+				for (classDecl in typedNew.classes)
+					if (classDecl.isValue
+						&& IrProgramAssembler.matchesCanonicalLayout(classDecl, typedNew.nativeAbiTarget)) classDecl.name => true
+			];
+			for (object in typedObjects)
+				if (object.isValue && object.nativeLayout != null && sameLayout.exists(object.name))
+					canonicalObjectCache.set(object.name, {
+						name: object.name,
+						isValue: object.isValue,
+						base: object.base,
+						interfaces: object.interfaces,
+						fields: object.fields,
+						methods: object.methods,
+						nativeLayout: {
+							target: canonicalAbi,
+							size: object.nativeLayout.size,
+							alignment: object.nativeLayout.alignment
+						}
+					});
+			for (object in IrProgramAssembler.objectsFrom(generator, typedNew, canonicalAbi, true))
+				canonicalObjectCache.set(object.name, object);
+		}
 		for (object in typedObjects)
 			objectCache.set(object.name, object);
 		var currentObjects:Array<IrObject> = [for (name in objectCache.keys()) objectCache.get(name)];
@@ -721,7 +757,16 @@ class FrontendCompilation {
 			compiler.compilation.IrPassMeter.reset();
 			ir = IrProgramAssembler.assemble(generator, cached, irNatives, generated.objects, generated.interfaces, generated.enums, generated.staticFields,
 				generated.initializers, entryPoint, irCNatives, generated.reflectable, context.inlineCache().staticChecks, context.valueArrayTarget(),
-				context.exportedFunctions(), !context.livePatching && !context.isWasmTarget() && compiler.ir.IrEntryPrune.enabled());
+				context.exportedFunctions(), !context.livePatching && !context.isWasmTarget() && compiler.ir.IrEntryPrune.enabled(), [
+					for (object in generated.objects) {
+						if (object.isValue && object.nativeLayout != null) {
+							var canonical = canonicalObjectCache.get(object.name);
+							if (canonical == null)
+								throw 'Missing canonical layout for "${object.name}"';
+							canonical;
+						} else object;
+					}
+				]);
 			var cNativeNames = [for (native in irCNatives) native.name].join(","),
 				ownPrints:Map<String, String> = [];
 			for (fn in cached)

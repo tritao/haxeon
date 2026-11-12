@@ -292,6 +292,7 @@ class Compiler {
 	final ffiCompositionCache:Map<String, FfiComposition> = [];
 	final ffiAbiCache:Map<String, HxiAbi> = [];
 	var objectCache:Map<String, IrObject> = [];
+	var canonicalObjectCache:Map<String, IrObject> = [];
 	var publishedAbi:Null<RuntimeAbiDescriptor>;
 	var compiledOnce = false;
 	final publication = new CompilerPublication();
@@ -952,6 +953,7 @@ class Compiler {
 			modules: moduleCopies,
 			types: types.copy(),
 			objectCache: objectCopies,
+			canonicalObjectCache: [for (name => object in canonicalObjectCache) name => object],
 			lastTypedProgram: lastTypedProgram,
 			publishedAbi: publishedAbi,
 			compiledOnce: compiledOnce,
@@ -977,6 +979,7 @@ class Compiler {
 			candidate.modules.set(name, state);
 		candidate.types = snapshot.types;
 		candidate.objectCache = [for (name => object in snapshot.objectCache) name => object];
+		candidate.canonicalObjectCache = [for (name => object in snapshot.canonicalObjectCache) name => object];
 		candidate.lastTypedProgram = snapshot.lastTypedProgram;
 		// Shared, not copied: an acceptance holds only while the IR and everything it read are equal, so a build that fails leaves nothing wrong behind.
 		candidate.verifyMemo = verifyMemo;
@@ -1000,6 +1003,7 @@ class Compiler {
 			modules.set(name, state);
 		types = candidate.types;
 		objectCache = candidate.objectCache;
+		canonicalObjectCache = candidate.canonicalObjectCache;
 		lastTypedProgram = candidate.lastTypedProgram;
 		inlineCache = candidate.inlineCache;
 		pipelineSnapshot = candidate.pipelineSnapshot;
@@ -1031,6 +1035,7 @@ class Compiler {
 			modules.set(name, state);
 		types = snapshot.types;
 		objectCache = snapshot.objectCache;
+		canonicalObjectCache = snapshot.canonicalObjectCache;
 		lastTypedProgram = snapshot.lastTypedProgram;
 		publishedAbi = snapshot.publishedAbi;
 		compiledOnce = snapshot.compiledOnce;
