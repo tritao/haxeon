@@ -44,7 +44,10 @@ class GeneratedEqualityProvenanceMain {
 					var warmResult = c.compile("Main");
 					if (valueType.indexOf("height") >= 0) {
 						var generatedOps = 0;
-						for (fn in warmResult.ir.functions)
+						// A live build keeps every function; a plain one prunes the generated helpers nothing calls, which this check needs to see.
+						var inspected = create(edited);
+						inspected.livePatching = true;
+						for (fn in inspected.compile("Main").ir.functions)
 							for (block in fn.blocks)
 								for (located in block.instructions)
 									switch located.provenance.origin {

@@ -19,9 +19,10 @@ class ReachabilityPruneMain {
 		compiler.addStandardLibrarySourceRoot("stdlib");
 		compiler.update("Main.hx", source);
 		var result = compiler.compile("Main", null, false);
-		// The program in the result keeps everything; the module is what is pruned.
+		// A plain build prunes at the prune point of the pipeline (`IrEntryPrune`), so its program in the result is already pruned; a live build
+		// (the default of a `Compiler`) keeps every function, and its program in the result is complete.
 		var irNames:Map<String, Bool> = [for (fn in result.ir.functions) fn.name => true];
-		expect(irNames.exists("Main.unusedFree") && irNames.exists("Dead.never"), "the program in the result is complete");
+		expect(!irNames.exists("Main.unusedFree") && !irNames.exists("Dead.never"), "the program of a plain build is pruned");
 		var names = result.functionIndices;
 		expect(names.exists("main"), "main stays");
 		expect(!names.exists("Main.unusedFree") && !names.exists("unusedFree"), "a function nothing calls is not in the module");
@@ -29,6 +30,12 @@ class ReachabilityPruneMain {
 		expect(names.exists("Live.hidden"), "a mentioned class keeps its methods");
 		expect(names.exists("Live.spare"), "a mentioned class keeps the methods nothing calls too: they can be reached by name");
 		expect(GeneratedProgramRunner.exitCode(result) == 42, "a method reached only by name through Reflect.field runs");
+		var liveCompiler = new Compiler();
+		CompilerIntrinsics.register(liveCompiler);
+		liveCompiler.addStandardLibrarySourceRoot("stdlib");
+		liveCompiler.update("Main.hx", source);
+		var liveNames:Map<String, Bool> = [for (fn in liveCompiler.compile("Main", null, false).ir.functions) fn.name => true];
+		expect(liveNames.exists("Main.unusedFree") && liveNames.exists("Dead.never"), "the program of a live build is complete");
 		Sys.println("PASS: unreachable functions and the methods of unmentioned classes are dropped, reflection on a live class still works");
 	}
 
