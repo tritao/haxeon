@@ -3,6 +3,12 @@
 #
 #   scripts/measure-cold.sh <label> [runs]
 #
+# Baseline for cold-build comparisons from 2026-11-12 on (so that no scaffold is needed again): haxeon 7b97c092e (origin/main) with the Materia app of
+# outer repository commit e9173b977, run as `MEASURE_APP=<outer worktree>/app HAXEON_ROOT=<haxeon worktree at 7b97c092e>`. The outer worktree is a
+# detached `git worktree add` of that commit with its submodule directories linked read-only from the shared checkout and `haxeon` linked to the root
+# under test (this script relinks it). Compilers older than 2026-11-11's base cannot build this app, and the base (0405feb5) cannot either: compare
+# like with like by building the same app with the two compilers being compared. Numbers: docs/TEST_SUITE_COST.md.
+#
 # Environment:
 #   HAXEON_ROOT         the Haxeon checkout whose compiler is measured (default: this checkout)
 #   MEASURE_APP         the app project directory, holding haxeon.json (required), or `self-hosting`: the project of
