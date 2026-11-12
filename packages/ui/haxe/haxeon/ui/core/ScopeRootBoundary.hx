@@ -10,6 +10,17 @@ struct ScopeRootBoundary {
   final style:LayoutStyle;
   final children:Array<RenderNode>;
   var semantics:Null<Semantics>;
+  /** Authored node-property baseline; persistent bits distinguish caller overrides from later body defaults. */
+  var nodeOverrides:Int = 0;
+  var authored_cursor:Null<CursorShape>;
+  var authored_tabIndex:Int;
+  var authored_commandScope:Null<String>;
+  var authored_windowDecoration:Null<nativekit.ffi.NativeKitTypes.WindowDecorationRegionKind>;
+  var authored_windowDecorationCursor:Null<CursorShape>;
+  var authored_hitTestBehavior:HitTestBehavior;
+  var authored_focusTrap:Bool;
+  var authored_hitTestSelf:Bool;
+
   var styleOverrides:Int = 0;
   var semanticsOverride:Bool = false;
   var handlers:Int;
@@ -22,6 +33,15 @@ struct ScopeRootBoundary {
     style = root.layout.style.copy();
     children = root.children.length == 0 ? [] : root.children.copy();
     semantics = root.semantics;
+    authored_cursor = root.cursor;
+    authored_tabIndex = root.tabIndex;
+    authored_commandScope = root.commandScope;
+    authored_windowDecoration = root.windowDecoration;
+    authored_windowDecorationCursor = root.windowDecorationCursor;
+    authored_hitTestBehavior = root.hitTestBehavior;
+    authored_focusTrap = root.focusTrap;
+    authored_hitTestSelf = root.hitTestSelf;
+
     handlers = root.handlers == null ? 0 : root.handlers.length;
     outside = root.outsidePointerDownHandlers == null ? 0 : root.outsidePointerDownHandlers.length;
     resolved = root.resolvedHandlers == null ? 0 : root.resolvedHandlers.length;
@@ -40,6 +60,7 @@ struct ScopeRootBoundary {
     var nextSemantics = next.semantics;
     var nextChildren = next.children.length;
     transferStyle(previous.layout.style, next.layout.style);
+    transferNodeFields(previous, next);
     if (previous.semantics != semantics) semanticsOverride = true;
     if (semanticsOverride) next.semantics = previous.semantics;
     semantics = nextSemantics;
@@ -110,6 +131,14 @@ struct ScopeRootBoundary {
     if (haxeon.Equality.equals(style.transform, inner.style.transform)) style.transform = after.transform;
     if (haxeon.Equality.equals(style.transformOriginX, inner.style.transformOriginX)) style.transformOriginX = after.transformOriginX;
     if (haxeon.Equality.equals(style.transformOriginY, inner.style.transformOriginY)) style.transformOriginY = after.transformOriginY;
+    if (authored_cursor == inner.authored_cursor) authored_cursor = next.cursor;
+    if (authored_tabIndex == inner.authored_tabIndex) authored_tabIndex = next.tabIndex;
+    if (authored_commandScope == inner.authored_commandScope) authored_commandScope = next.commandScope;
+    if (authored_windowDecoration == inner.authored_windowDecoration) authored_windowDecoration = next.windowDecoration;
+    if (authored_windowDecorationCursor == inner.authored_windowDecorationCursor) authored_windowDecorationCursor = next.windowDecorationCursor;
+    if (authored_hitTestBehavior == inner.authored_hitTestBehavior) authored_hitTestBehavior = next.hitTestBehavior;
+    if (authored_focusTrap == inner.authored_focusTrap) authored_focusTrap = next.focusTrap;
+    if (authored_hitTestSelf == inner.authored_hitTestSelf) authored_hitTestSelf = next.hitTestSelf;
     if (semantics == inner.semantics) semantics = next.semantics;
     handlers += (next.handlers == null ? 0 : next.handlers.length) - inner.handlers;
     outside += (next.outsidePointerDownHandlers == null ? 0 : next.outsidePointerDownHandlers.length) - inner.outside;
@@ -123,6 +152,41 @@ struct ScopeRootBoundary {
   /** Caller overrides belong to the scope until its caller builds it again.
    * Preserve their ownership when a later authored default happens to equal their value.
    * Per-field locals advance the baseline without an intermediate style allocation. */
+  function transferNodeFields(previous:RenderNode, next:RenderNode):Void {
+    if (previous.cursor != authored_cursor) nodeOverrides |= 1;
+    var next_cursor = next.cursor;
+    if ((nodeOverrides & 1) != 0) next.cursor = previous.cursor;
+    authored_cursor = next_cursor;
+    if (previous.tabIndex != authored_tabIndex) nodeOverrides |= 2;
+    var next_tabIndex = next.tabIndex;
+    if ((nodeOverrides & 2) != 0) next.tabIndex = previous.tabIndex;
+    authored_tabIndex = next_tabIndex;
+    if (previous.commandScope != authored_commandScope) nodeOverrides |= 4;
+    var next_commandScope = next.commandScope;
+    if ((nodeOverrides & 4) != 0) next.commandScope = previous.commandScope;
+    authored_commandScope = next_commandScope;
+    if (previous.windowDecoration != authored_windowDecoration) nodeOverrides |= 8;
+    var next_windowDecoration = next.windowDecoration;
+    if ((nodeOverrides & 8) != 0) next.windowDecoration = previous.windowDecoration;
+    authored_windowDecoration = next_windowDecoration;
+    if (previous.windowDecorationCursor != authored_windowDecorationCursor) nodeOverrides |= 16;
+    var next_windowDecorationCursor = next.windowDecorationCursor;
+    if ((nodeOverrides & 16) != 0) next.windowDecorationCursor = previous.windowDecorationCursor;
+    authored_windowDecorationCursor = next_windowDecorationCursor;
+    if (previous.hitTestBehavior != authored_hitTestBehavior) nodeOverrides |= 32;
+    var next_hitTestBehavior = next.hitTestBehavior;
+    if ((nodeOverrides & 32) != 0) next.hitTestBehavior = previous.hitTestBehavior;
+    authored_hitTestBehavior = next_hitTestBehavior;
+    if (previous.focusTrap != authored_focusTrap) nodeOverrides |= 64;
+    var next_focusTrap = next.focusTrap;
+    if ((nodeOverrides & 64) != 0) next.focusTrap = previous.focusTrap;
+    authored_focusTrap = next_focusTrap;
+    if (previous.hitTestSelf != authored_hitTestSelf) nodeOverrides |= 128;
+    var next_hitTestSelf = next.hitTestSelf;
+    if ((nodeOverrides & 128) != 0) next.hitTestSelf = previous.hitTestSelf;
+    authored_hitTestSelf = next_hitTestSelf;
+  }
+
   function transferStyle(previous:LayoutStyle, next:LayoutStyle):Void {
     styleOverrides |= haxeon.Diff.mask(style, previous);
     var authored_width = next.width;
