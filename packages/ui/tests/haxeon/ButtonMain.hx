@@ -59,7 +59,7 @@ class ButtonMain {
     root.layout.style.zIndex = 9;
     context.interactionStates.set(control.id, StyleState.Hovered);
     owner.markDirty();
-    context.flushRenderScopes();
+    context.flushRenderScopes(root);
     root = context.currentRoot(root);
     var refreshed = root;
     var refreshedSemantics = refreshed.semantics;
@@ -90,7 +90,7 @@ class ButtonMain {
     if (cachedOwner == null) return 9;
     context.interactionStates.set(cachedControl.id, StyleState.Hovered);
     cachedOwner.markDirty();
-    context.flushRenderScopes();
+    context.flushRenderScopes(cachedRoot);
     context.beginFrame();
     var reusedRoot = context.trackReads(function() return parent.build(context));
     store.endFrame();
@@ -99,7 +99,7 @@ class ButtonMain {
         reusedRoot.layout.style.width.value != 150) return 8;
     context.interactionStates.set(cachedControl.id, StyleState.Focused);
     cachedOwner.markDirty();
-    context.flushRenderScopes();
+    context.flushRenderScopes(reusedRoot);
     context.beginFrame();
     reusedRoot = context.trackReads(function() return parent.build(context));
     store.endFrame();
@@ -125,7 +125,7 @@ class ButtonMain {
     if (variantOwner == null || context.interactionRenderScope(outside) != null) return 14;
     context.interactionStates.set(variantBody.id, StyleState.Hovered);
     variantOwner.markDirty();
-    context.flushRenderScopes();
+    context.flushRenderScopes(variantRoot);
     context.beginFrame();
     var keptVariant = context.trackReads(function() return variant.build(context));
     store.endFrame();

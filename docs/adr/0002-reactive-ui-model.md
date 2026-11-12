@@ -839,10 +839,104 @@ retention scenarios, budgets that may only go down, memory runs, compiler suites
 
    **Updated lead acceptance direction.** Preserve the Button batch locally and run full three-target,
    dock/framework and exact 22-action gates despite the twenty-mount residue. Publication is decided per measured
-   action: every action must remain at or below its correct control on both objects and bytes. If an action exceeds
-   control solely through the two compiler-gap items, retain the unpublished branch and record its attribution;
-   continue with the closed event-phase enum and subsequent leaf widgets. Compiler fixes remain owned by dev-c5
-   (HashLink interface adapters) and a1 (value-constructor destination); no UI workaround is authorized.
+   action, under the user's 2026-11-12 refined acceptance rule. Steady-state actions (`idle`, `idle-focused`,
+   `hover-*`, `scroll-inspector`, `type-*`, `telemetry-step`, `cnc-unchanged`, `cnc-progress`) must not increase
+   objects or bytes against the correct control. Structural actions (tab switches, selection, `cnc-select`,
+   `cnc-source`, `cnc-hold`, `cnc-resume`) must not increase objects; additional bytes require measured,
+   per-action attribution recorded here. The two owned compiler gaps qualify only when their contribution is
+   demonstrated: dev-c5 owns HashLink interface adapters and a1 owns value-constructor destination construction.
+   No UI workaround is authorized. Report frame-time and GC-pause percentiles alongside allocations. The
+   twenty-mount microbenchmark is attribution, not the per-action publication decision. A failing correctness
+   gate still prevents publication; neither fresh-build verification nor budget ceilings may be weakened.
+   If the batch cannot be published, preserve its named branch and continue the approved independent queue.
+
+   Stage 5 additionally requires a collections checkpoint at the composites stage: keyed row scopes,
+   zero-allocation scrolling and correct reorder for ListView, TreeView, TableView and VirtualGrid, with
+   measurements. Before removing old update machinery, test live patches that change inputs and structure while
+   preserving component identity and state. Finish with a short `packages/ui/docs` guide, "Writing a Haxeon UI
+   component", separate from this decision history. The decorations-as-input inventory and proposal follows the
+   Button batch's publication or parking; implementation waits for the lead's decision on that proposal.
+
+   **Nested scope ownership regression (unpublished).** A native body replacement detached the physical child
+   stored in its legacy parent's authored `BuiltNode.children` snapshot. Rebuilding that parent then inserted the
+   new child without removing the current one; a focused regression failed with "Layout node IDs must be unique".
+   Reconciliation now resolves each native authored child through its own owner before comparing or replacing it.
+   With that corrected, a simultaneous parent and child invalidation exposed a second failure: "A removed native
+   body ran after its legacy parent replaced it: 2". Native scheduling had treated every owner without a native
+   parent as attached. `flushRenderScopes` now requires the submitted root, and attachment follows the actual
+   parent chain to that tree's current root. Every producer and test caller is ported; no zero-argument fallback
+   remains. This adds no per-component storage or mount allocation. The native reproduction passes both fixes
+   and a fresh-build comparison. The additional lifetime regressions and allocation checkpoint below extend
+   this evidence; final family gates still require a fresh post-rebase run.
+   The existing failed-replacement test also failed at check 21 on an isolated `93e399bca` source snapshot:
+   the original mounted scope lost its subscription when the replacement threw and the frame swept unused
+   resources. Distinct instance tickets had stopped a failed mount from touching the previous live ticket.
+   Mount rollback now retains the mounted owner of the same logical slot on the failure path only. This adds
+   no successful-mount allocation or per-owner field. The regression and six existing ownership/control checks
+   pass on HashLink after correction. `ScopeLegacyReplacementMain` also passes all three targets with
+   inlining off/on, and the full native framework/dock/input gate passes. The fresh editor now passes the former
+   `cnc-source` revision mismatch, but fails later at `cnc-returned` with "Widget state has not been initialized
+   for 954415806". A focused hidden-variant test reproduced premature native-owner disposal while full-frame
+   retention was still in progress. Detached scopes now stop scheduling immediately, while an active or requested
+   full-frame resource sweep decides whether cached owners remain live. Patch-only removals without such a sweep
+   still release obsolete owners immediately. The focused test checks stable widget IDs and that returning cached
+   variants do not recreate their retained widget state; it and four existing ownership checks pass on HashLink.
+   The cache and replacement regressions pass all twelve target/inlining configurations. The fresh editor
+   passes all three pilot cycles, as recorded below; no final stage-3 census or publication is claimed.
+
+   **Button allocation checkpoint (unpublished, 2026-11-12).** Both control and native pilot panels pass
+   fresh-build verification for three complete CNC/telemetry cycles, including source replacement and hidden-panel
+   return. The correct control is the previous published UI head `835a2bbc8`, rebuilt against outer `60d9d4c36`
+   and the same compiler/runtime as the candidate. These are the exact 15 census actions plus seven pilot actions;
+   this is an allocation checkpoint, not the final stage-3 comparison or a passing batch. Frame-time and GC-pause
+   percentiles, final formatting/rebase and the renewed full gates remain unfinished.
+
+   | Action | Control objects | Native objects | Control bytes | Native bytes | Objects delta | Bytes delta |
+   | --- | ---: | ---: | ---: | ---: | ---: | ---: |
+   | `hierarchy->sensors` | 1,672 | 1,660 | 121,720 | 120,200 | -12 | -1,520 |
+   | `sensors->hierarchy` | 1,145 | 1,142 | 80,904 | 80,664 | -3 | -240 |
+   | `console->telemetry` | 1,174 | 1,162 | 79,288 | 78,272 | -12 | -1,016 |
+   | `telemetry->console` | 1,708 | 1,700 | 93,680 | 93,056 | -8 | -624 |
+   | `scroll-inspector` | 227 | 226 | 25,784 | 25,592 | -1 | -192 |
+   | `hover-enter` | 32 | 32 | 1,032 | 1,032 | +0 | +0 |
+   | `hover-inside` | 32 | 32 | 1,032 | 1,032 | +0 | +0 |
+   | `idle` | 17 | 17 | 584 | 584 | +0 | +0 |
+   | `idle-focused` | 17 | 17 | 584 | 584 | +0 | +0 |
+   | `hover-other` | 187 | 182 | 9,760 | 9,520 | -5 | -240 |
+   | `hover-field` | 323 | 313 | 17,432 | 16,472 | -10 | -960 |
+   | `hover-away` | 257 | 249 | 12,576 | 12,104 | -8 | -472 |
+   | `type-char` | 417 | 417 | 16,456 | 16,456 | +0 | +0 |
+   | `type-backspace` | 432 | 432 | 17,088 | 17,088 | +0 | +0 |
+   | `selection` | 8,649 | 8,564 | 585,416 | 590,912 | -85 | +5,496 |
+   | `cnc-unchanged` | 19 | 19 | 640 | 640 | +0 | +0 |
+   | `cnc-select` | 2,193 | 2,193 | 123,272 | 123,272 | +0 | +0 |
+   | `cnc-source` | 4,615 | 4,595 | 268,336 | 267,448 | -20 | -888 |
+   | `cnc-progress` | 5,466 | 5,467 | 278,240 | 278,736 | +1 | +496 |
+   | `cnc-hold` | 1,011 | 1,001 | 46,736 | 45,648 | -10 | -1,088 |
+   | `cnc-resume` | 1,462 | 1,455 | 76,384 | 76,968 | -7 | +584 |
+   | `telemetry-step` | 14,983 | 14,851 | 624,712 | 625,032 | -132 | +320 |
+
+   Selection and resume meet the structural object rule; their byte increases are measured representation costs.
+   Selection includes thirteen additional `LayoutStyle` instances / 4,472 bytes from constructing immutable style
+   inputs and copying them in Button. Its forty compiler-gap items contribute 3,040 bytes; the remaining net UI
+   residue is 2,456 bytes. Resume has six compiler-gap items / 456 bytes and 128 net bytes from node/owner, Button
+   fields and array storage. Complete per-type sums and caller sites are in the DATA1 attribution files.
+   Telemetry removes 132 objects but adds 320 bytes: its fourteen interface adapters / 784 bytes and fourteen
+   boundary temporaries / 1,344 bytes account for the excess. Arithmetic removal of those compiler items gives
+   minus 160 objects / minus 1,808 bytes; this is attribution, not a patched-compiler measurement.
+
+   **New cause requiring a lead report; no publication.** `cnc-progress` adds one object / 496 bytes. The exact
+   byte-site delta is `BuildContext.pruneKeyCaches`, not either compiler gap. A census-window-only native debugger
+   breakpoint confirms `hl_freelist_resize`: old capacity 41, head 41, new capacity 62, payload 496 bytes.
+   Its backtrace is `hl_freelist_resize` → `hl_freelist_add_range` → `hl_hbremove` →
+   `BuildContext.pruneKeyCaches` (`idsByPath.remove` at the captured line 946). The debugger run reproduces the
+   same exact 5,467 objects / 278,736 bytes. HashLink map removal grows its fragmented-slot freelist; this is a
+   separate runtime allocation, not the interface-adapter or constructor-temporary limitation and not a correctness
+   exception. No HashLink edit or UI workaround has been made. Stop and report this new cause before changing
+   direction. Telemetry also remains a hard steady-state byte failure until the owned compiler gaps are fixed.
+   Evidence: DATA1 `evidence/instance-body-root-exact-22-comparison.json`,
+   `native-child-ownership-*-type-delta.json`, `instance-body-root-structural-byte-attribution.json`,
+   `cnc-progress-freelist-confirmed-gdb.log` and its calibrated census JSON.
 
    **Independent review corrections (local, before renewed gates).** The body-root batch `0892af06d` had four
    reproduced correctness defects. `ScopeRootStateMain` overflowed recursive `StateStore.retain` for a Checkbox

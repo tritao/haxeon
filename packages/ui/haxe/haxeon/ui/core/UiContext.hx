@@ -520,9 +520,9 @@ class UiContext {
 		}
 		// Announced edits precede patches: a composite rebuild must not replace their original priors with edited children.
 		buildContext.takeRetainedEdits(currentNodesById);
-		buildContext.flushRenderScopes();
+		buildContext.flushRenderScopes(root);
 		buildContext.applyPatches(submittedTopology);
-		buildContext.flushRenderScopes();
+		buildContext.flushRenderScopes(root);
 		diagnosticStage = 4;
 		var viewStartedAt = Sys.time();
 		var viewAllocatedAt = AllocationProbe.now();

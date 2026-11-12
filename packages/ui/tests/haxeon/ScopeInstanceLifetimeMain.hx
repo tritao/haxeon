@@ -32,10 +32,10 @@ class ScopeInstanceLifetimeMain {
     context.pruneRenderScopes(mounted);store.endFrame();
     source.value = 2;
     if (context.hasPendingRenderScopes()) throw "An inactive scope scheduled a mounted rebuild";
-    context.flushRenderScopes();
+    context.flushRenderScopes(rootB);
     if (ownerA.disposed || !source.hasFieldReaders(0)) throw "An inactive retained scope lost its subscriptions";
     context.beginFrame();context.retainStateIds(idsA);context.retainStateIds(idsB);
-    context.claimRetainedTree(rootA);context.flushRenderScopes();
+    context.claimRetainedTree(rootA);context.flushRenderScopes(rootA);
     var returned = context.currentRoot(rootA);
     if (returned.layout.text != "A2" || context.currentRoot(rootB).layout.text != "B")
       throw "Returning to a cached instance used another component's body";

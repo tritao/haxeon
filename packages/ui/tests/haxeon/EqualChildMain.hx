@@ -103,7 +103,7 @@ class EqualChildMain {
     store.endFrame();
     revision.value = 1;
     context.beginFrame();
-    context.flushRenderScopes();
+    context.flushRenderScopes(root);
     var mounted:Map<Int, RenderNode> = new Map();
     root.walk(node -> mounted.set(node.id.value, node));
     context.retainRenderScopeState(mounted);
@@ -133,20 +133,20 @@ class EqualChildMain {
     store.endFrame();
     var count = Leaf.builds;
     revision.value = 1;
-    context.flushRenderScopes();
+    context.flushRenderScopes(host);
     if (Leaf.builds != count || context.rootDependenciesDirty()) { Sys.println("Native read boundary cache refresh: builds=" + Leaf.builds + " expected=" + count + " rootDirty=" + context.rootDependenciesDirty()); return false; }
     source.value = 1;
-    context.flushRenderScopes();
+    context.flushRenderScopes(host);
     var valid = Leaf.builds == count + 1 && !context.rootDependenciesDirty() && !context.hasPendingPatches;
     if (!valid) Sys.println("Native read boundary source refresh: builds=" + Leaf.builds + " expected=" + (count + 1) + " rootDirty=" + context.rootDependenciesDirty() + " patches=" + context.hasPendingPatches);
     // An ancestor already queued to rebuild must supersede its pending native child body.
     source.value = 2;
     context.requestPatch(host.id);
-    context.flushRenderScopes();
+    context.flushRenderScopes(host);
     valid = valid && Leaf.builds == count + 1;
     if (!valid) Sys.println("Native read boundary parent suppression: builds=" + Leaf.builds + " expected=" + (count + 1));
     context.applyPatches();
-    context.flushRenderScopes();
+    context.flushRenderScopes(host);
     valid = valid && Leaf.builds == count + 2 && !context.hasPendingRenderScopes();
     if (!valid) Sys.println("Native read boundary parent commit: builds=" + Leaf.builds + " expected=" + (count + 2) + " pending=" + context.hasPendingRenderScopes() + " children=" + host.children.length);
     context.dispose();
@@ -182,10 +182,10 @@ class EqualChildMain {
     var second = mount();
     if (Leaf.builds != count || first != second || second.children.length != 1) { Sys.println("Reparent remount: builds=" + Leaf.builds + " expected=" + count + " same=" + (first == second) + " children=" + second.children.length); return false; }
     outerRevision.value = 1;
-    context.flushRenderScopes();
+    context.flushRenderScopes(second);
     if (Leaf.builds != count || context.currentRoot(second).children.length != 1) { Sys.println("Reparent retained refresh: builds=" + Leaf.builds + " expected=" + count); return false; }
     source.value = 1;
-    context.flushRenderScopes();
+    context.flushRenderScopes(second);
     var valid = Leaf.builds == count + 1 && source.hasFieldReaders(0);
     valid = valid && context.currentRoot(innerRoot) != innerRoot &&
       context.currentRoot(innerRoot) == context.currentRoot(second).children[0];
@@ -194,7 +194,7 @@ class EqualChildMain {
     context.renderScopes.reverse();
     outerRevision.value = 2;
     source.value = 2;
-    context.flushRenderScopes();
+    context.flushRenderScopes(second);
     valid = valid && Leaf.builds == count + 1 && !source.hasFieldReaders(0);
     if (!valid) Sys.println("Reparent child removal: builds=" + Leaf.builds + " expected=" + (count + 1) + " readers=" + source.hasFieldReaders(0));
     context.dispose();

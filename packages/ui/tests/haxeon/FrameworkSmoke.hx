@@ -4032,7 +4032,7 @@ class FrameworkSmoke {
 			themedSnapshot[1].pressed)
 			return 83;
 		context.pointerUp(themedX, themedY, 0);
-		if (themedClicks != 1 || context.inspect()[1].pressed)
+		if (themedClicks != 1 || context.inspect()[0].pressed)
 			return 84;
 		themedButton = new Button("Themed", null, function() { themedClicks++;}, "theme-key", false, ButtonVariant.Primary);
 		themedRoot = context.submit(themedButton, themedFrame);
@@ -4057,7 +4057,7 @@ class FrameworkSmoke {
 		context.setStyleSheet(inspectorEffects);
 		context.submit(new Button("Inspector effects", null, function() {}, "inspector-effects"),
 			new LayoutFrame(256.0, 192.0));
-		var effectSnapshot = context.inspect()[1];
+		var effectSnapshot = context.inspect()[0];
 		if (!effectSnapshot.causesIsolation || effectSnapshot.effectPasses != 3 ||
 			effectSnapshot.backdropEffectPasses != 1 || effectSnapshot.maskPasses != 1 ||
 			effectSnapshot.effectDescriptions.length != 1 ||

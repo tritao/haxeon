@@ -398,6 +398,13 @@ class RenderNode {
 	public function reconcile(fresh:RenderNode, built:BuiltNode, ?topology:RenderTreeTopology):RenderNode {
 		if (fresh == this || fresh.replacedBy != null)
 			throw "A reconcile requires a fresh render node";
+		// Native scopes replace their body root independently. The authored child remains the
+		// same child of this build, even when its original physical node has been detached.
+		for (index in 0...built.children.length) {
+			var child = built.children[index];
+			var owner = child.scopeOwner();
+			if (owner != null) built.children[index] = owner.currentRoot(child);
+		}
 		// A rebuild that changed nothing the frame comparison reads (typing in a field whose appearance stays) is compared with the node itself.
 		var styleChanged = haxeon.Diff.mask(built.style, fresh.layout.style) != 0;
 		// The layout is only shared with the stand-in when the rebuild leaves the style as it is.

@@ -40,10 +40,10 @@ class ScopeVariantRootMain {
     var first = view.build(context);
     var outer = context.renderScopeAt(first);
     // The shared physical root carries the inner owner; the native scheduler refreshes its outer reader.
-    choice.value = false;context.flushRenderScopes();
+    choice.value = false;context.flushRenderScopes(first);
     var second = context.currentRoot(first);
     if (second.layout.text != "B") throw "Nested variant did not select B";
-    choice.value = true;context.flushRenderScopes();
+    choice.value = true;context.flushRenderScopes(first);
     var again = context.currentRoot(second);
     if (again.layout.text != "A") throw "Cached nested variant A resolved to enclosing variant B";
     context.dispose();context.stateStore.dispose();

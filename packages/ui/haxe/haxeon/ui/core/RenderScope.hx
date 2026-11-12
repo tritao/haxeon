@@ -154,17 +154,10 @@ class RenderScope extends ReactiveDependencySet {
 	}
 
 	/** A parent rerun may remove this body before its pending work is visited. */
-	public function attached():Bool {
-		if (disposed) return false;
-		var owner = parentScope;
-		if (owner == null) return true;
-		if (!owner.attached()) return false;
-		if (root == owner.root) return true;
-		var ancestor = root.parent;
-		while (ancestor != null) {
-			if (ancestor == owner.root) return true;
-			ancestor = ancestor.parent;
-		}
-		return false;
+	public function attached(submittedRoot:Null<RenderNode>):Bool {
+		if (disposed || submittedRoot == null) return false;
+		var node = root;
+		while (node.parent != null) node = node.parent;
+		return node == context.currentRoot(submittedRoot);
 	}
 }

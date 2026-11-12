@@ -17,12 +17,12 @@ class ScopeCachedNestedLifetimeMain {
     });
     var first = view.build(context), owner = context.renderScopeAt(first);
     if (owner == null) throw "Nested scope has no owner";
-    choice.value = false;context.flushRenderScopes();
+    choice.value = false;context.flushRenderScopes(first);
     var second = context.currentRoot(first);
     if (second.layout.text != "B1") throw "Did not switch to nested B";
     if (owner.disposed) throw "Inactive cached nested component was disposed";
-    value.value = 2;context.flushRenderScopes();
-    choice.value = true;context.flushRenderScopes();
+    value.value = 2;context.flushRenderScopes(first);
+    choice.value = true;context.flushRenderScopes(first);
     var returned = context.currentRoot(first);
     if (returned.layout.text != "A2") throw "Returning nested A lost its independent live updates";
     context.dispose();context.stateStore.dispose();

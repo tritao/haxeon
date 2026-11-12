@@ -46,17 +46,17 @@ class TrackedScopeMain {
     read.value = 2;
     if (!context.hasPendingRenderScopes()) return 3;
     var previousChild = root;
-    context.flushRenderScopes();
+    context.flushRenderScopes(root);
     root = context.currentRoot(root);
     if (context.patchedPriors().get(previousChild.id.value) != previousChild) return 13;
     if (runs != 2 || context.hasPendingRenderScopes() || root.children.length != 1 || decoration.parent != root) return 4;
     primary.value = false;
-    context.flushRenderScopes();
+    context.flushRenderScopes(root);
     if (runs != 3 || read.hasFieldReaders(0) || !alternate.hasFieldReaders(0)) return 6;
     read.value = 3;
     if (context.hasPendingRenderScopes() || runs != 3) return 7;
     alternate.value = 11;
-    context.flushRenderScopes();
+    context.flushRenderScopes(root);
     root = context.currentRoot(root);
     if (runs != 4 || decoration.parent != root || root.children.length != 1) return 8;
     var mounted:Map<Int, RenderNode> = new Map();
@@ -74,12 +74,12 @@ class TrackedScopeMain {
         return new ScopeLeaf();
       });
     });
-    context.trackReads(() -> nested.build(context));
+    var nestedRoot = context.trackReads(() -> nested.build(context));
     store.endFrame();
     if (childRuns != 1 || !childSource.hasFieldReaders(0)) return 9;
     childSource.value = 1;
     visible.value = false;
-    context.flushRenderScopes();
+    context.flushRenderScopes(nestedRoot);
     if (childRuns != 1 || childSource.hasFieldReaders(0) || context.hasPendingRenderScopes()) return 10;
     var resourceChoice = new Signal<Bool>(true);
     context.beginFrame();
@@ -87,7 +87,7 @@ class TrackedScopeMain {
     var resourceRoot = context.trackReads(() -> resources.build(context));
     store.endFrame();
     resourceChoice.value = false;
-    context.flushRenderScopes();
+    context.flushRenderScopes(resourceRoot);
     context.beginFrame();
     resourceRoot = context.currentRoot(resourceRoot);
     var resourceNodes:Map<Int, RenderNode> = new Map();
@@ -107,7 +107,7 @@ class TrackedScopeMain {
       return new ScopeLeaf();
     });
     context.beginFrame();
-    context.trackReads(() -> replacement.build(context));
+    var replacementRoot = context.trackReads(() -> replacement.build(context));
     store.endFrame();
     context.beginFrame();
     rejectReplacement = true;
@@ -117,13 +117,13 @@ class TrackedScopeMain {
     rejectReplacement = false;
     if (!failedReplacement || !replacementSource.hasFieldReaders(0)) return 21;
     replacementSource.value = 1;
-    context.flushRenderScopes();
+    context.flushRenderScopes(replacementRoot);
     if (replacementRuns != 2) return 22;
     context.beginFrame();
-    context.trackReads(() -> replacement.build(context));
+    replacementRoot = context.trackReads(() -> replacement.build(context));
     store.endFrame();
     replacementSource.value = 2;
-    context.flushRenderScopes();
+    context.flushRenderScopes(replacementRoot);
     if (replacementRuns != 4) return 14;
     // A dock cache retains the enclosing build's state IDs while its panel is hidden.
     // The scope's current resources must remain reachable through that retained owner.
@@ -145,12 +145,12 @@ class TrackedScopeMain {
     context.pruneRenderScopes(new Map());
     if (ScopeResourceLeaf.released != releasedBeforeHide) return 15;
     cachedSource.value = 1;
-    context.flushRenderScopes();
+    context.flushRenderScopes(null);
     if (cachedRuns != 1 || context.hasPendingRenderScopes()) return 16;
     context.beginFrame();
     context.retainStateIds(cachedIds, true);
     context.claimRetainedTree(cachedRoot);
-    context.flushRenderScopes();
+    context.flushRenderScopes(cachedRoot);
     store.endFrame();
     if (cachedRuns != 2 || !cachedSource.hasFieldReaders(0)) return 17;
     context.beginFrame();

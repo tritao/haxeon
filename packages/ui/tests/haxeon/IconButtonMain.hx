@@ -43,7 +43,7 @@ class IconButtonMain {
     root.layout.style.zIndex = 3;
     context.interactionStates.set(button.id, StyleState.Pressed);
     scopeOwner.markDirty();
-    context.flushRenderScopes();
+    context.flushRenderScopes(root);
     root = context.currentRoot(root);
     var pressed = root;
     if (pressed == button || !pressed.id.equals(button.id)

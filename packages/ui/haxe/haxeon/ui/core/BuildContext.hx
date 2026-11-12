@@ -1033,6 +1033,11 @@ class BuildContext {
 			} catch (error:Dynamic) {
 				owner.dispose();
 				renderScopes.remove(owner);
+				// A failed description did not replace the mounted instance. Its distinct
+				// lifetime ticket must still be touched before the frame's resource sweep.
+				for (previous in renderScopes)
+					if (!previous.disposed && previous.mounted && previous.sameSlot(owner))
+						stateStore.touchScope(previous.resourceId);
 				throw error;
 			}
 			scope = previousScope;
@@ -1140,7 +1145,7 @@ class BuildContext {
 		return false;
 	}
 
-	public function flushRenderScopes():Void {
+	public function flushRenderScopes(submittedRoot:Null<RenderNode>):Void {
 		var previous = buildingRenderScope;
 		buildingRenderScope = true;
 		try {
@@ -1154,8 +1159,10 @@ class BuildContext {
 					if (stateStore.scopeOwner(owner.resourceId) != owner) {
 						owner.dispose();
 						progressed = true;
-					} else if (owner.mounted && !owner.attached()) {
-						if (owner.retainedByParent()) owner.mounted = false;
+					} else if (owner.mounted && !owner.attached(submittedRoot)) {
+						// Full-frame retention has not run yet. A detached cached variant can
+						// still retain this ticket and its latest descendant resources.
+						if (stateStore.frameActive || buildFeedbackRequested || owner.retainedByParent()) owner.mounted = false;
 						else owner.dispose();
 						progressed = true;
 					} else if (owner.mounted && owner.pending && !hasPendingScopeAncestor(owner) && !hasPendingUpdatingAncestor(owner.root)) {
