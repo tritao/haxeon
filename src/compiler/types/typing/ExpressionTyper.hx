@@ -1308,8 +1308,14 @@ class ExpressionTyper {
 			fail("E1004", "Array comprehension condition must be Bool", span);
 		// The value is only computed where the condition holds, so it sees what the condition proves.
 		var valueScope = typedCondition == null ? loopScope : FlowAnalysis.narrowedScope(loopScope, typedCondition, true, session.isPureCall);
+		// A flattened inner comprehension (`for (x in a) for (y in b) v`) builds the arrays whose items become this array's, so
+		// it is typed to the same element type: an inner array of a subtype would be read back as the wider one.
 		var expectedElement = arrayElementExpectation(expectedType),
-			typedValue = typeExpressionCallback(value, valueScope, expectedElement, false),
+			valueExpectation = expectedElement != null && (switch value {
+				case ArrayComprehension(_, _, _, _, _, true, _): true;
+				case _: false;
+			}) ? TArray(expectedElement) : expectedElement,
+			typedValue = typeExpressionCallback(value, valueScope, valueExpectation, false),
 			flattenedElement = switch typedValue.expression {
 				case TArrayComprehension(_, _, _, _, _, true): arrayElementType(typedValue.type, span);
 				case _: switch value {
