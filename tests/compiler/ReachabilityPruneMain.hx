@@ -36,6 +36,21 @@ class ReachabilityPruneMain {
 		liveCompiler.update("Main.hx", source);
 		var liveNames:Map<String, Bool> = [for (fn in liveCompiler.compile("Main", null, false).ir.functions) fn.name => true];
 		expect(liveNames.exists("Main.unusedFree") && liveNames.exists("Dead.never"), "the program of a live build is complete");
+		// A call on a class nothing constructs keeps the method's slot, as a stub that throws; what the body called is gone.
+		var stubCompiler = new Compiler();
+		stubCompiler.livePatching = false;
+		CompilerIntrinsics.register(stubCompiler);
+		stubCompiler.addStandardLibrarySourceRoot("stdlib");
+		stubCompiler.update("Main.hx",
+			"class Base { public function new() {} public function update():Int return fromBodyOnly(); } "
+			+ "function fromBodyOnly():Int return 9; "
+			+ "function viaReceiver(b:Null<Base>):Int return b == null ? 0 : b.update(); "
+			+ "function main():Int { var none:Null<Base> = null; return viaReceiver(none) == 0 ? 42 : 1; }");
+		var stubbed = stubCompiler.compile("Main", null, false);
+		expect(stubbed.functionIndices.exists("Base.update"), "the method named by a call on an uncreated class keeps its slot");
+		expect(!stubbed.functionIndices.exists("fromBodyOnly") && !stubbed.functionIndices.exists("Main.fromBodyOnly"),
+			"what the body of such a method calls is not in the module");
+		expect(GeneratedProgramRunner.exitCode(stubbed) == 42, "the program with a declaration-only method runs");
 		Sys.println("PASS: unreachable functions and the methods of unmentioned classes are dropped, reflection on a live class still works");
 	}
 

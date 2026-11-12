@@ -31,6 +31,12 @@ typedef IrWalkResult = {
 
 	/** How many reached functions are provider rows. */
 	final providersReached:Int;
+
+	/**
+	 * Methods a reached call names on a class whose own implementation nothing reaches (a base class nothing constructs): the class table keeps the
+	 * entry the verifier resolves the call against, and the body is not needed. Not in `reached`.
+	 */
+	final declarationOnly:Map<String, Bool>;
 }
 
 /**
@@ -188,6 +194,7 @@ private class IrTypeAwareWalkState {
 	final nativesDone:Map<String, Bool> = [];
 	var stringUsed:Bool = false;
 	var providersReached:Int = 0;
+	final declarationOnly:Map<String, Bool> = [];
 
 	public function new(program:IrProgram, roots:IrWalkRoots, dynamicSites:Map<String, Array<String>>, requireProviders:Bool,
 			keepCreatedClassMethods:Bool, classDependencies:Null<IrClassDependencies>) {
@@ -249,7 +256,8 @@ private class IrTypeAwareWalkState {
 			createdClasses: createdClasses,
 			demanded: demanded,
 			missingProviders: missing,
-			providersReached: providersReached
+			providersReached: providersReached,
+			declarationOnly: declarationOnly
 		};
 	}
 
@@ -430,12 +438,12 @@ private class IrTypeAwareWalkState {
 	/** Re-derives the edges that depend on which types are created. */
 	function expand():Void {
 		for (site in sites) {
-			// The receiver's own class keeps the method it names even when no instance is created: the verifier resolves a method call
-			// against that class's table (a base class nothing constructs, a type only native code makes).
+			// The verifier resolves a method call against the receiver class's table, so the class keeps the entry even when no instance can
+			// exist (a base class nothing constructs); only the declaration is needed, the body is not (see `declarationOnly`).
 			if (!site.isInterface) {
 				var declared = index.findMethod(site.typeName, site.method);
-				if (declared != null)
-					reach(declared, false);
+				if (declared != null && !reached.exists(declared))
+					declarationOnly.set(declared, true);
 			}
 			var candidates = site.isInterface ? index.implementorsOf(site.typeName) : index.subtypesOf(site.typeName);
 			for (candidate in candidates)

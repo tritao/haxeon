@@ -225,3 +225,14 @@ return abstract pointers, closures or Dynamic values handed in earlier. The Hash
 `libs/directx`) are not bound by the project. FFI natives are C functions on the C ABI and build no Haxe object. No native was found that allocates a
 class its declaration does not name. There is no cheap check-mode assertion that a returned object is an instance of the declared class: it would be a
 run-time check in the native's library, which this compiler does not own.
+
+### The declaration-only slot (replaces the receiver-own-method rule)
+
+The verifier resolves a method call against the receiver class's table, so a reachable call on a class that nothing constructs (a base class) needs that
+class's table entry. The first rule kept the whole method for it (4bbb1e754), which also kept whatever the body calls: on Wasm that would bring back
+the owned-handle wrappers 9d57e32e8 removed. Now the walk records such a method as `declarationOnly` (not in `reached`) and `IrEntryPrune` keeps the
+entry with a stub: same name, signature and kind, and a body that throws, as an interface method without an implementation does. Nothing can receive
+the call, so the throw is never run; the body's callees are not reached. If a class later turns out to be created, its method is reached with its body.
+The Wasm builders do not prune at this point; when they use the shared walk, the same stub is what they lower (a throw lowers to a catchable
+exception on both backends).
+

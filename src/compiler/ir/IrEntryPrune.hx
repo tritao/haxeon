@@ -33,7 +33,20 @@ class IrEntryPrune {
 		for (fn in program.functions)
 			if (fn.retention != Reachable)
 				entries.push(fn.name);
-		var reachable = IrTypeAwareWalk.run(program, {functions: entries, types: []}, null, false, true, classDependencies).reached;
+		var walked = IrTypeAwareWalk.run(program, {functions: entries, types: []}, null, false, true, classDependencies);
+		var reachable = walked.reached;
+		// A method named by a reachable call on a class that cannot have an instance keeps its class-table entry and loses its body: the
+		// verifier resolves the call against the table, but nothing can receive it, so the body is a stub that throws (the way an interface
+		// method without an implementation is). A body that calls natives or other functions no longer keeps them.
+		var stubbed = 0;
+		for (index in 0...program.functions.length) {
+			var fn = program.functions[index];
+			if (walked.declarationOnly.exists(fn.name) && !reachable.exists(fn.name)) {
+				program.functions[index] = declarationStub(fn);
+				reachable.set(fn.name, true);
+				stubbed++;
+			}
+		}
 		var removed:Map<String, Bool> = [];
 		for (fn in program.functions)
 			if (!reachable.exists(fn.name))
@@ -45,6 +58,15 @@ class IrEntryPrune {
 		IrReachability.prune(program, reachable);
 		prunedMethods = removedMethods;
 		return removed;
+	}
+
+	/** The function with the same name and signature and a body that throws: the declaration of a method nothing can call. */
+	static function declarationStub(fn:IrFunction):IrFunction {
+		var builder = new IrBuilder();
+		for (argument in fn.arguments)
+			builder.argument(argument.name, argument.type);
+		builder.throwValue(builder.toDyn(builder.constString("method of a class that has no instance: " + fn.name)));
+		return new IrFunction(fn.name, builder.arguments, fn.result, builder.blocks, fn.kind);
 	}
 
 	static var watched:Null<Map<String, Bool>> = null;

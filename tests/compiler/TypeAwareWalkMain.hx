@@ -15,6 +15,7 @@ class TypeAwareWalkMain {
 		typedOperation();
 		inlineEnumOperations();
 		nativeCreatedClass();
+		declarationOnly();
 		Sys.println("PASS: type-aware walk: dynamic sites over created types, interface calls over created implementors, typed operations need a provider");
 	}
 
@@ -160,6 +161,32 @@ class TypeAwareWalkMain {
 			expect(!IrTypeAwareWalk.run(program, {functions: ["main"], types: []}).createdClasses.exists("Derived"),
 				kind + ": a native nothing calls creates nothing");
 		}
+	}
+
+	/** A call on a class nothing can construct keeps the method's declaration, not its body: the callee of the body is not reached. */
+	static function declarationOnly():Void {
+		var builder = new IrBuilder();
+		var receiver = builder.constNull(Obj("Base"));
+		builder.methodCall(receiver, "update", [], I32);
+		builder.returnValue(builder.constInt(0));
+		var body = new IrBuilder();
+		body.argument("this", Obj("Base"));
+		body.call("onlyFromBase", [], Void);
+		body.returnValue(body.constInt(1));
+		var program = new IrProgram("main");
+		program.objects = [object("Base", [], ["update"])];
+		program.functions = [
+			new IrFunction("main", builder.arguments, I32, builder.blocks, Ordinary),
+			new IrFunction("Base.update", body.arguments, I32, body.blocks, Ordinary),
+			empty("onlyFromBase", Ordinary)
+		];
+		var result = IrTypeAwareWalk.run(program, {functions: ["main"], types: []});
+		expect(!result.reached.exists("Base.update"), "the method of a class nothing constructs is not reached");
+		expect(result.declarationOnly.exists("Base.update"), "it is kept as a declaration for the call that names it");
+		expect(!result.reached.exists("onlyFromBase"), "what its body calls is not reached");
+		// Once something constructs the class the method is reached, with its body.
+		var grown = IrTypeAwareWalk.run(program, {functions: ["main"], types: [Obj("Base")]});
+		expect(grown.reached.exists("Base.update") && grown.reached.exists("onlyFromBase"), "a created class's method is reached with its body");
 	}
 
 	static function interfaceCall():Void {
