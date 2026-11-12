@@ -19,7 +19,9 @@ import compiler.semantic.SemanticSignature;
 class IrConstructed {
 	/** Whether the class has instances without any function constructing them. `object` is its table entry, or null when there is none. */
 	public static function withoutConstruction(typeName:String, object:Null<IrObject>):Bool
-		return object == null || object.isValue || StringTools.startsWith(typeName, IrValueInterfaceBoxes.BOX_PREFIX)
+		return object == null
+			|| object.isValue
+			|| StringTools.startsWith(typeName, IrValueInterfaceBoxes.BOX_PREFIX)
 			|| SemanticSignature.isAnonymousName(typeName);
 
 	/** The class a native's result type names (an optional one too), or null when the result is not an object. */

@@ -34,7 +34,10 @@ class ReachabilityPruneMain {
 		CompilerIntrinsics.register(liveCompiler);
 		liveCompiler.addStandardLibrarySourceRoot("stdlib");
 		liveCompiler.update("Main.hx", source);
-		var liveNames:Map<String, Bool> = [for (fn in liveCompiler.compile("Main", null, false).ir.functions) fn.name => true];
+		var liveNames:Map<String, Bool> = [
+			for (fn in liveCompiler.compile("Main", null, false).ir.functions)
+				fn.name => true
+		];
 		expect(liveNames.exists("Main.unusedFree") && liveNames.exists("Dead.never"), "the program of a live build is complete");
 		// A call on a class nothing constructs keeps the method's slot, as a stub that throws; what the body called is gone.
 		var stubCompiler = new Compiler();

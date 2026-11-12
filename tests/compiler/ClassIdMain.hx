@@ -19,7 +19,8 @@ class ClassIdMain {
 
 	static function ids():Void {
 		// Cold: by name, whatever order the classes arrive in.
-		var first = IrClassIds.assign(null, ["Gamma", "Alpha", "Beta"]), second = IrClassIds.assign(null, ["Beta", "Gamma", "Alpha"]);
+		var first = IrClassIds.assign(null, ["Gamma", "Alpha", "Beta"]),
+			second = IrClassIds.assign(null, ["Beta", "Gamma", "Alpha"]);
 		for (name in ["Alpha", "Beta", "Gamma"])
 			expect(first.ids.get(name) == second.ids.get(name), "a cold build assigns the same ids whatever the order of the classes");
 		expect(first.ids.get("Alpha") == 0 && first.ids.get("Beta") == 1 && first.ids.get("Gamma") == 2, "ids follow the name order");
@@ -42,7 +43,16 @@ class ClassIdMain {
 		var id = builder.classId(object);
 		builder.returnValue(id);
 		var program = new IrProgram("main");
-		program.objects = [{name: "Widget", isValue: false, base: null, interfaces: [], fields: [], methods: []}];
+		program.objects = [
+			{
+				name: "Widget",
+				isValue: false,
+				base: null,
+				interfaces: [],
+				fields: [],
+				methods: []
+			}
+		];
 		program.functions = [new IrFunction("main", builder.arguments, I32, builder.blocks, Ordinary)];
 		program.classIds = ["Widget" => 7];
 		return program;

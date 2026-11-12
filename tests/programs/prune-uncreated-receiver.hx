@@ -2,8 +2,12 @@
 // call against that class's table) even though no instance can exist.
 class Base {
 	public function new() {}
-	public function update():Int return 1;
-	public function untouched():Int return 2;
+
+	public function update():Int
+		return 1;
+
+	public function untouched():Int
+		return 2;
 }
 
 function callThrough(receiver:Null<Base>):Int

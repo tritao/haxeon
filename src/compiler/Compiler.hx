@@ -105,6 +105,7 @@ typedef CompileResult = {
 	 * pipeline (`IrEntryPrune`), so it has no function nothing reaches; a live or Wasm build's program is complete.
 	 */
 	final ir:IrProgram;
+
 	final module:HlCode;
 	final retyped:Array<String>;
 	final invalidations:Array<compiler.semantic.Invalidation.InvalidatedArtifact>;

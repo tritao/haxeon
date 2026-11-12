@@ -136,7 +136,10 @@ class TestRunner {
 		return File.getContent(source).indexOf(root) >= 0;
 
 	static function runName(run:ProgramRun):String
-		return run.test.name + (run.warm ? " (warm edit rebuilds" : run.plain ? " (plain build" : "") + (run.unpruned ? ", no early prune" : "") + (run.warm || run.plain ? ")" : "");
+		return run.test.name
+			+ (run.warm ? " (warm edit rebuilds" : run.plain ? " (plain build" : "")
+			+ (run.unpruned ? ", no early prune" : "")
+			+ (run.warm || run.plain ? ")" : "");
 
 	static function runOutput(root:String, run:ProgramRun):String
 		return Path.join([
@@ -257,13 +260,38 @@ class TestRunner {
 	 */
 	static function runsOf(test:ProgramCase):Array<ProgramRun> {
 		var runs:Array<ProgramRun> = [
-			{test: test, plain: false, unpruned: false, warm: false},
-			{test: test, plain: true, unpruned: false, warm: false},
-			{test: test, plain: true, unpruned: true, warm: false}
+			{
+				test: test,
+				plain: false,
+				unpruned: false,
+				warm: false
+			},
+			{
+				test: test,
+				plain: true,
+				unpruned: false,
+				warm: false
+			},
+			{
+				test: test,
+				plain: true,
+				unpruned: true,
+				warm: false
+			}
 		];
 		if (Sys.getEnv("HAXEON_CHECK_REUSE") == "1") {
-			runs.push({test: test, plain: true, unpruned: false, warm: true});
-			runs.push({test: test, plain: true, unpruned: true, warm: true});
+			runs.push({
+				test: test,
+				plain: true,
+				unpruned: false,
+				warm: true
+			});
+			runs.push({
+				test: test,
+				plain: true,
+				unpruned: true,
+				warm: true
+			});
 		}
 		return runs;
 	}
