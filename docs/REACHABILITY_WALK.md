@@ -155,8 +155,10 @@ of `FrontendCompilation`). The point is not the one measured in step 1 (right af
 the erased owner of a generic class (`Derived<Payload>` is the class `Derived` only once erasure has renamed it), so `Derived.get` was pruned
 and the erasure's own devirtualization silently did not happen. Erased-owner naming in the walk is **3b**; the prune point moves earlier then.
 
-- **Walk.** Today's walk (`IrReachability.withGeneratedRuntimeRoots`, mentioned classes keep their methods) united with `IrTypeAwareWalk`
-  (whole created classes). The union is **temporary**: it stays until the type-aware walk alone passes the corpus and the driver.
+- **Walk.** `IrTypeAwareWalk` alone (whole created classes): a class that is only mentioned and never created keeps none of its methods. A first
+  cut united it with today's walk (`IrReachability.withGeneratedRuntimeRoots`, mentioned classes keep their methods); the corpus and the
+  driver pass without the union, so it is gone. On ten corpus programs the only extra thing dropped is `StringBuf`'s four methods
+  (`addChar`, `addSub`, `get_length`, `toString`): the class is mentioned and never created.
 - **Roots.** `main` (or the entry), the static initializers and `__init`, the exported functions, and every `@:keep` / `@:expose` function. The
   callbacks of natives and the toString methods come from the existing walk.
 - **Typed demands the walk reads** (what a later pass asks for without a call edge): a struct's equality row (a `__dynamic_equal` site reaches
@@ -170,8 +172,10 @@ and the erasure's own devirtualization silently did not happen. Erased-owner nam
   - Method-table lookups (`IrProgramIndex.findMethod`, the erasure's and the typed interface dispatch's `findMethod`) throw when they visit a
     class whose entry for the method the prune removed. Other readers of `IrObject.methods` (about 30 files) are not covered yet.
 - **Evidence.** `tests/programs` is built plain, unpruned and pruned, with the driver's third run (`Main --early-prune`) and the warm-edit sweep
-  under HAXEON_CHECK_REUSE=1. On the 582 programs that build as HashLink: 0 differences in exit code, 0 invariant or lookup hits. Bytes differ in
-  55: in 52 only the runtime natives imported differ (a native only unreachable code needed is gone), in `scoped-cleanup` two types, and in
-  `key-path-semantics` and `enum-generated-dependencies` the scalar ABI of key-path accessors (`$get` is `fun(i32)->i32` unpruned and
-  `fun(struct Key)->i32` pruned). The last two show that an ABI choice depends on which functions are present; it is deterministic for a
-  given program, so a warm build still equals a cold one (the warm-edit sweep runs with the prune on).
+  under HAXEON_CHECK_REUSE=1 (545 programs pruned warm: each rebuild equals a fresh build). On the 582 programs that build as HashLink: 0
+  differences in exit code, 0 invariant or lookup hits. Bytes differ in 64: in 51 only the runtime natives imported differ (a native only
+  unreachable code needed is gone); in 10 the four `StringBuf` methods are gone (class mentioned, never created); in 3
+  (`scoped-cleanup`, `key-path-semantics`, `enum-generated-dependencies`) types differ: the scalar ABI of key-path closure fields
+  (`$get` is `fun(owner,ref<i32>,ref<i32>)->void` unpruned and `fun(owner)->struct SpecPoint` pruned). The scalar-argument pass rewrites a
+  closure field's signature only when the closures stored in it are present, so an ABI choice depends on which functions are present;
+  a pruned build is deterministic (built twice, equal bytes) and a warm build equals a cold one, so it does not break warm = cold.

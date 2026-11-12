@@ -5,8 +5,8 @@ import compiler.ir.Ir;
 /**
  * The prune of ADR 0003 §13 at the 3a point of `IrProgramAssembler.assemble` (docs/REACHABILITY_WALK.md): after the enum providers are
  * synthesized and before every later pass, a plain HashLink build drops the functions nothing reaches from the entry, so the passes
- * run on the reachable program. It is the walk the backend runs after assembly (`IrReachability.withGeneratedRuntimeRoots`), applied
- * earlier; the type-aware walk replaces it later.
+ * run on the reachable program. The walk is `IrTypeAwareWalk` (whole created classes); the backend's own prune after assembly
+ * (`IrReachability.withGeneratedRuntimeRoots`) still runs and keeps a mentioned class's methods, so it removes nothing more of what this one kept.
  *
  * A later pass that calls a function this prune removed would produce a program that does not link (the failure of 2026-11-10), so
  * with HAXEON_CHECK_REUSE=1 `checkRemoved` runs after the passes and names the pass, the caller and the removed function.
@@ -22,17 +22,14 @@ class IrEntryPrune {
 	/** Prunes `program` to what `roots` (the entry's function, the static initializers, the exported functions) and `@:keep` reach. */
 	public static function run(program:IrProgram, roots:Array<String>):Map<String, Bool> {
 		var removedMethods:Map<String, Bool> = [];
-		// TEMPORARY: the union of the two walks, until the type-aware walk alone passes the corpus and the driver (docs/REACHABILITY_WALK.md).
-		// What the backend's prune keeps, and what the type-aware walk adds: the provider rows a dynamic site reaches over the created types
-		// (the equality helper of a struct that only `__dynamic_equal` uses), which nothing calls by name until a later pass writes the call.
-		var reachable = IrReachability.withGeneratedRuntimeRoots(program, roots[0], roots.slice(1), true);
+		// The type-aware walk alone: a class that is only mentioned, never created, keeps none of its methods. Its reach beyond what the old walk
+		// keeps are the provider rows a dynamic site reaches over the created types (the equality helper of a struct that only `__dynamic_equal`
+		// uses), which nothing calls by name until a later pass writes the call.
 		var entries = roots.copy();
 		for (fn in program.functions)
 			if (fn.retention != Reachable)
 				entries.push(fn.name);
-		var aware = IrTypeAwareWalk.run(program, {functions: entries, types: []}, null, false, true);
-		for (name in aware.reached.keys())
-			reachable.set(name, true);
+		var reachable = IrTypeAwareWalk.run(program, {functions: entries, types: []}, null, false, true).reached;
 		var removed:Map<String, Bool> = [];
 		for (fn in program.functions)
 			if (!reachable.exists(fn.name))
