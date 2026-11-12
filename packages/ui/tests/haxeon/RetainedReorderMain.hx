@@ -5,6 +5,15 @@ import haxeon.ui.core.WidgetId;
 class RetainedReorderMain {
   static function node(id:Int):RenderNode return new RenderNode(new WidgetId(id), LayoutVisualKind.Box);
   static function main():Int {
+    var scope = node(30), body = node(31), decoration = node(32), updated = node(33);
+    scope.add(body); scope.add(decoration);
+    scope.replaceChild(body, updated);
+    if (scope.children.length != 2 || scope.children[0] != updated || scope.children[1] != decoration
+        || scope.layout.children[0] != updated.layout || scope.layout.children[1] != decoration.layout
+        || body.parent != null || body.replacedBy != null || updated.parent != scope) return 6;
+    var cycleRejected = false;
+    try scope.replaceChild(updated, scope) catch (_:Dynamic) cycleRejected = true;
+    if (!cycleRejected || scope.children[0] != updated || updated.parent != scope) return 7;
     var old = node(1), a = node(2), b = node(3);
     old.add(a); old.add(b);
     var built = old.snapshotBuilt();

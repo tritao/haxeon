@@ -5,7 +5,7 @@ ui="$root/packages/ui"
 native=${NATIVEKIT_BUILD_DIR:-"$root/out/packages/ui/native"}
 hl="$("$root/scripts/hashlink-path.sh")/hl"
 work=$(mktemp -d "${TMPDIR:-$root/out}/haxeon-idle-metrics.XXXXXXXX")
-capture=$(mktemp -d /dev/shm/haxeon-idle-metrics.XXXXXXXX)
+capture=$(mktemp -d "${TMPDIR:-/tmp}/haxeon-idle-metrics.XXXXXXXX")
 trap 'rm -rf -- "$work" "$capture"' EXIT
 cmake --build "$native" --target nativekit_ui
 compiler=${HAXEON_COMPILER_HL:-"$work/compiler.hl"}

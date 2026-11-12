@@ -211,6 +211,24 @@ class RenderNode {
 		return child;
 	}
 
+	/** Inserts an unparented child at a stable slot in both render and layout trees. */
+	public function insertChild(index:Int, child:RenderNode):RenderNode {
+		if (index < 0 || index > children.length)
+			throw "A child insertion requires a valid slot";
+		if (child == null || child == this || child.parent != null)
+			throw "A render node must have one parent and cannot contain itself";
+		var ancestor:Null<RenderNode> = this;
+		while (ancestor != null) {
+			if (ancestor == child) throw "Render tree contains a cycle";
+			ancestor = ancestor.parent;
+		}
+		if (children == NoChildren) children = [];
+		children.insert(index, child);
+		layout.children.insert(index, child.layout);
+		child.parent = this;
+		return child;
+	}
+
 	/** Detaches this node from its current parent so a retained subtree can move. */
 	public function detach():RenderNode {
 		if (parent == null)
@@ -238,19 +256,32 @@ class RenderNode {
 
 	/** Puts `next` where this node is in its parent, in the render tree and the layout tree, and detaches this node. */
 	public function replaceWith(next:RenderNode):RenderNode {
-		if (next == null || next == this || next.parent != null)
-			throw "A replacement render node must be a fresh, unparented node";
 		var owner = parent;
 		if (owner == null)
 			throw "Only a node with a parent can be replaced in place";
-		var index = owner.children.indexOf(this);
+		owner.replaceChild(this, next);
+		replacedBy = next;
+		return next;
+	}
+
+	/** Replaces one child without redirecting references to the removed node. */
+	public function replaceChild(previous:RenderNode, next:RenderNode):RenderNode {
+		if (previous == null || previous.parent != this)
+			throw "A replaced child must belong to this render node";
+		if (next == null || next == this || next.parent != null)
+			throw "A replacement render node must be a fresh, unparented node";
+		var ancestor:Null<RenderNode> = this;
+		while (ancestor != null) {
+			if (ancestor == next) throw "Render tree contains a cycle";
+			ancestor = ancestor.parent;
+		}
+		var index = children.indexOf(previous);
 		if (index < 0)
 			throw "Render tree is inconsistent: node is missing from its parent";
-		owner.children[index] = next;
-		owner.layout.children[index] = next.layout;
-		next.parent = owner;
-		parent = null;
-		replacedBy = next;
+		children[index] = next;
+		layout.children[index] = next.layout;
+		next.parent = this;
+		previous.parent = null;
 		return next;
 	}
 
@@ -261,12 +292,19 @@ class RenderNode {
 	 * across frames to find changes to the submitted tree that nobody announced (UiContext.verifyRetentionEvery).
 	 */
 	public function fingerprint():Int {
+		return fingerprintText(layout.text, semantics == null ? null : semantics.label);
+	}
+
+	/** Inputs before a leaf's explicitly owned live updates; other inputs remain fully checked. */
+	public function submittedFingerprint():Int return fingerprint();
+
+	function fingerprintText(text:Null<String>, label:Null<String>):Int {
 		var hash = fingerprintHash.reset();
-		hash.addInt(haxeon.Diff.fingerprint(layout.style)).addInt(Type.enumIndex(layout.visualKind)).addString(layout.text)
+		hash.addInt(haxeon.Diff.fingerprint(layout.style)).addInt(Type.enumIndex(layout.visualKind)).addString(text)
 			.addInt(layout.measureVersion).addBool(hitTestSelf).addBool(focusable).addBool(enabled)
-			.addString(semantics == null ? null : semantics.label);
-		var text = layout.textColor;
-		if (text != null) hash.addInt(haxeon.Hashing.hash(text));
+			.addString(label);
+		var color = layout.textColor;
+		if (color != null) hash.addInt(haxeon.Hashing.hash(color));
 		hash.addInt(children.length);
 		return hash.a ^ (hash.b * 31);
 	}

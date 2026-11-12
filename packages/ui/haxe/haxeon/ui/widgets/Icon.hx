@@ -37,8 +37,8 @@ class Icon implements View {
 	public final key:String;
 	public final name:IconName;
 	public final style:LayoutStyle;
-	public var color:Null<Color>;
-	public var label:Null<String>;
+	public final color:Null<Color>;
+	public final label:Null<String>;
 
 	public function new(key:String, name:IconName, size:Float = 16.0,
 			?color:Color, ?label:String) {
@@ -86,11 +86,11 @@ class Icon implements View {
 			node.onPaint(function(canvas, geometry:ResolvedLayoutItem) {
 				if (geometry.width <= 0.0 || geometry.height <= 0.0)
 					return;
-				canvas.withState(function(target) {
-					target.scale(geometry.width / 24.0, geometry.height / 24.0);
-					target.strokeTransient(IconData.build(name), paintColor, 2.0,
-						LineCap.Round, LineJoin.Round);
-				});
+				canvas.save();
+				defer canvas.restore();
+				canvas.scale(geometry.width / 24.0, geometry.height / 24.0);
+				canvas.strokeTransient(IconData.build(name), paintColor, 2.0,
+					LineCap.Round, LineJoin.Round);
 			}, paintKey);
 			if (label != null)
 				node.semantics = new Semantics(AccessibilityRole.Image, label);

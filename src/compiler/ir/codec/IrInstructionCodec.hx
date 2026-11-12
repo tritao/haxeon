@@ -240,6 +240,12 @@ class IrInstructionCodec {
 					case EnumTagUnbox(type):
 						writeInt(output, 3);
 						writeType(output, type, erase);
+					case InlineEnumBox(type):
+						writeInt(output, 4);
+						writeType(output, type, erase);
+					case InlineEnumUnbox(type):
+						writeInt(output, 5);
+						writeType(output, type, erase);
 				}
 				writeValues(output, arguments);
 			case CNativeCall(value, name, arguments):
@@ -453,6 +459,8 @@ class IrInstructionCodec {
 					case 1: EnumDynamicView(type);
 					case 2: EnumTagBox(type);
 					case 3: EnumTagUnbox(type);
+					case 4: InlineEnumBox(type);
+					case 5: InlineEnumUnbox(type);
 					default: throw "Invalid IR intrinsic";
 				};
 				Intrinsic(value, operation, readValues(input, values));
