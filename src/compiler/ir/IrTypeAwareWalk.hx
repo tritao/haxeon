@@ -34,6 +34,18 @@ typedef IrWalkResult = {
 }
 
 /**
+ * Functions that code generated after the walk will call for a created class, when one of the natives that is replaced by such code is
+ * called: the typed form of a dependency that has no call edge yet (a reflection copy of an observable class).
+ */
+typedef IrClassDependencies = {
+	/** The `IrNative.symbol`s that, when declared, make generated code call the dependencies (for every class: nothing needs to call the native). */
+	final symbols:Array<String>;
+
+	/** The functions the generated code for this class calls; throws when one that must exist does not. */
+	final of:String->Array<String>;
+}
+
+/**
  * A reachability walk that knows what a class or enum can be created, and follows typed operations to provider rows (ADR 0003 section 13,
  * `docs/REACHABILITY_WALK.md`). It is a pure function of a program and its roots: it reads the IR and returns sets, and nothing in the
  * enum code or the passes calls it, so the roots, the created set and the used operations are all explicit.
@@ -55,9 +67,9 @@ class IrTypeAwareWalk {
 	 * (a method can be reached by name through reflection); off, only called methods are.
 	 */
 	public static function run(program:IrProgram, roots:IrWalkRoots, ?dynamicSites:Map<String, Array<String>>, requireProviders = false,
-			keepCreatedClassMethods = false):IrWalkResult {
+			keepCreatedClassMethods = false, ?classDependencies:IrClassDependencies):IrWalkResult {
 		var walk = new IrTypeAwareWalkState(program, roots, dynamicSites == null ? defaultDynamicSites() : dynamicSites, requireProviders,
-			keepCreatedClassMethods);
+			keepCreatedClassMethods, classDependencies);
 		return walk.run();
 	}
 
@@ -153,6 +165,8 @@ private class IrTypeAwareWalkState {
 	final dynamicSites:Map<String, Array<String>>;
 	final requireProviders:Bool;
 	final keepCreatedClassMethods:Bool;
+	final classDependencies:Null<IrClassDependencies>;
+	var classDependenciesNeeded = false;
 	final index:IrProgramIndex;
 	final byName:Map<String, IrFunction> = [];
 	final natives:Map<String, IrNative> = [];
@@ -174,7 +188,12 @@ private class IrTypeAwareWalkState {
 	var providersReached:Int = 0;
 
 	public function new(program:IrProgram, roots:IrWalkRoots, dynamicSites:Map<String, Array<String>>, requireProviders:Bool,
-			keepCreatedClassMethods:Bool) {
+			keepCreatedClassMethods:Bool, classDependencies:Null<IrClassDependencies>) {
+		this.classDependencies = classDependencies;
+		if (classDependencies != null)
+			for (native in program.natives)
+				if (classDependencies.symbols.indexOf(native.symbol) >= 0)
+					classDependenciesNeeded = true;
 		this.program = program;
 		this.roots = roots;
 		this.dynamicSites = dynamicSites;
@@ -420,6 +439,11 @@ private class IrTypeAwareWalkState {
 					for (name in names)
 						reach(name, false);
 			}
+		// Generated code is written for every declared native of those symbols and every class, whether or not anything calls it.
+		if (classDependenciesNeeded && classDependencies != null)
+			for (object in program.objects)
+				for (dependency in classDependencies.of(object.name))
+					reach(dependency, false);
 		if (stringUsed)
 			for (name in createdClasses.keys()) {
 				var method = index.findMethod(name, "__string");

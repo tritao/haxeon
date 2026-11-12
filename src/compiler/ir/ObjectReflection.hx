@@ -83,6 +83,37 @@ class ObjectReflection {
 		return remaining;
 	}
 
+	/** What the copy helper of an observable layout calls (`recordObservableCreation`): the one definition, for the helper and for the walks. */
+	static inline final RECORD_CREATION = "haxeon.reactive.ReactiveRuntime.recordObservableCreation";
+
+	/** The natives whose helpers copy an object: each copy helper of an observable class calls `RECORD_CREATION`. */
+	public static function copySymbols():Array<String>
+		return ["__reflect_copy", "__reflect_object_copy"];
+
+	/** Whether the class, or one it extends, has the observable-state field that makes its layout observable. */
+	public static function isObservableClass(objects:Map<String, IrObject>, className:String):Bool {
+		var current = objects.get(className);
+		while (current != null) {
+			for (field in current.fields)
+				if (field.name == "$haxeonObservableState")
+					return true;
+			current = current.base == null ? null : objects.get(current.base);
+		}
+		return false;
+	}
+
+	/**
+	 * The functions the copy helper of `className` will call, for a reachability walk that runs before `generate`. A missing
+	 * function is an internal error: the helper would not link, and nothing may skip the call silently.
+	 */
+	public static function copyDependencies(objects:Map<String, IrObject>, className:String, hasFunction:String->Bool):Array<String> {
+		if (!isObservableClass(objects, className))
+			return [];
+		if (!hasFunction(RECORD_CREATION))
+			throw 'internal error: the copy helper of observable class "$className" needs $RECORD_CREATION, which is not in the program';
+		return [RECORD_CREATION];
+	}
+
 	/** Whether assembly will generate object-layout reflection helpers from this native surface. */
 	public static function usesObjectLayouts(natives:Array<IrNative>):Bool {
 		for (native in natives)
@@ -248,7 +279,7 @@ class ObjectReflection {
 		}, builder -> builder.constNull(Dyn));
 
 	static function recordObservableCreation(builder:IrBuilder, object:IrValue):Void
-		builder.call("haxeon.reactive.ReactiveRuntime.recordObservableCreation", [builder.toDyn(object)], Void);
+		builder.call(RECORD_CREATION, [builder.toDyn(object)], Void);
 
 	static function field(name:String, layouts:Array<ReflectedLayout>, functions:Array<IrFunction>):IrFunction
 		return perLayout(name, layouts, functions, Dyn, [{name: "field", type: Bytes}], fieldBody, builder -> builder.constNull(Dyn));

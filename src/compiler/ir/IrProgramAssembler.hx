@@ -576,7 +576,13 @@ class IrProgramAssembler {
 			if (exportedFunctions != null)
 				for (name in exportedFunctions)
 					roots.push(name);
-			removedByPrune = IrEntryPrune.run(pruneInput, roots);
+			// The reflection helpers are generated after the walk: a copy of an observable class will call the creation hook.
+			var objectTable:Map<String, IrObject> = [for (object in objects) object.name => object],
+				present:Map<String, Bool> = [for (fn in allFunctions) fn.name => true];
+			removedByPrune = IrEntryPrune.run(pruneInput, roots, {
+				symbols: ObjectReflection.copySymbols(),
+				of: className -> ObjectReflection.copyDependencies(objectTable, className, name -> present.exists(name))
+			});
 			allFunctions = pruneInput.functions;
 			objects = pruneInput.objects;
 		}

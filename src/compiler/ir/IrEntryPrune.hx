@@ -1,6 +1,7 @@
 package compiler.ir;
 
 import compiler.ir.Ir;
+import compiler.ir.IrTypeAwareWalk.IrClassDependencies;
 
 /**
  * The prune of ADR 0003 §13 at the 3a point of `IrProgramAssembler.assemble` (docs/REACHABILITY_WALK.md): after the enum providers are
@@ -23,7 +24,7 @@ class IrEntryPrune {
 		return Sys.getEnv("HAXEON_CHECK_REUSE") == "1";
 
 	/** Prunes `program` to what `roots` (the entry's function, the static initializers, the exported functions) and `@:keep` reach. */
-	public static function run(program:IrProgram, roots:Array<String>):Map<String, Bool> {
+	public static function run(program:IrProgram, roots:Array<String>, ?classDependencies:IrClassDependencies):Map<String, Bool> {
 		var removedMethods:Map<String, Bool> = [];
 		// The type-aware walk alone: a class that is only mentioned, never created, keeps none of its methods. Its reach beyond what the old walk
 		// keeps are the provider rows a dynamic site reaches over the created types (the equality helper of a struct that only `__dynamic_equal`
@@ -32,7 +33,7 @@ class IrEntryPrune {
 		for (fn in program.functions)
 			if (fn.retention != Reachable)
 				entries.push(fn.name);
-		var reachable = IrTypeAwareWalk.run(program, {functions: entries, types: []}, null, false, true).reached;
+		var reachable = IrTypeAwareWalk.run(program, {functions: entries, types: []}, null, false, true, classDependencies).reached;
 		var removed:Map<String, Bool> = [];
 		for (fn in program.functions)
 			if (!reachable.exists(fn.name))
