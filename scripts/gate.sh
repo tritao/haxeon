@@ -3,7 +3,7 @@
 #
 #   scripts/gate.sh quick|wave|full [jobs]
 #
-#   quick  the NUL guard and the driver in its default configuration (every program built live and plain, named cases, executables)
+#   quick  the NUL guard, the whole-tree type check and the driver in its default configuration (every program built live and plain, named cases, executables)
 #   wave   quick, then the driver again with HAXEON_CHECK_REUSE=1 (adds the warm-edit rebuilds and the reuse comparisons), then the Wasm
 #          backend script (scripts/test-wasm-backend.sh; a broken Wasm fixture once reached main because no gate ran it) and the
 #          self-hosting compile (tests/integration/test-compiler-embedding.sh: Haxeon compiles the compiler's own sources, which stock
@@ -86,6 +86,12 @@ suite() {
 }
 
 suite nul-guard bash "$root/tests/integration/test-no-nul-literals.sh"
+# Every module of the compiler and the build tool type-checks, not only the ones the entry point reaches: a switch over an IR enum in a module only
+# tests compile (IrInterpreter) once broke the wave. src/compiler/types/typing/EnumAbstractHints.hx is orphaned and does not compile; it is excluded
+# until it is deleted or fixed.
+suite type-check-all "$root/.tools/haxe/haxe" --cwd "$root" common.hxml -cp tests/compiler \
+	--macro "include('compiler', true, ['compiler.types.typing.EnumAbstractHints'])" --macro "include('build')" \
+	-hl "$work/type-check-all.hl" --no-output -main Main
 suite driver-default env -u HAXEON_CHECK_REUSE "$root/scripts/test-driver.sh" "$jobs"
 if [ "$mode" != quick ]; then
 	suite driver-checked env HAXEON_CHECK_REUSE=1 "$root/scripts/test-driver.sh" "$jobs"

@@ -242,3 +242,12 @@ Wasm backends, and the codec round trip.
 The Wasm builders do not prune at this point; when they use the shared walk, the same stub is what they lower (a throw lowers to a catchable
 exception on both backends).
 
+
+### Follow-ups after the Unreachable terminator
+
+- **One representation of "unreachable".** The Wasm call-site traps (an interface method with no implementation, and the unreceivable class call of
+  9d57e32e8) are emitted as the `unreachable` instruction by `WasmFunctionLower` at the call site. They should become IR `Unreachable`, lowered once,
+  so the IR says it and HashLink gets the same behavior for those cases (today HL has no equivalent for them). Not urgent.
+- **Whole-tree type check in the gate.** `gate.sh` runs `type-check-all` (every module of `compiler` and `build`) from `quick` up, so a switch over
+  an IR enum in a module that only tests compile cannot break a wave again. `EnumAbstractHints.hx` is orphaned and does not compile; the stage
+  excludes it until it is deleted or fixed (decision for the owner of the raw-value enum conversions).
