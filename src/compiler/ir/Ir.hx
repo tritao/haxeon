@@ -317,6 +317,9 @@ class IrProgram {
 
 	public var positionalSources:Map<String, String> = [];
 
+	/** The functions the early prune (`IrEntryPrune`) removed, for its check mode: no later pass may call one. Empty without the prune. */
+	public var prunedFunctions:Map<String, Bool> = [];
+
 	/** The generated helpers of this program, by what each serves (`IrProviders`); an index over `functions`, built when asked. */
 	public function providers():Map<String, String>
 		return IrProviders.rows(functions);
@@ -338,6 +341,7 @@ class IrProgram {
 		result.parameterDefaults = parameterDefaults;
 		result.positionalPlaces = positionalPlaces;
 		result.positionalSources = positionalSources;
+		result.prunedFunctions = prunedFunctions;
 		return result;
 	}
 }

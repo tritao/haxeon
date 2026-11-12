@@ -709,7 +709,7 @@ class FrontendCompilation {
 			compiler.compilation.IrPassMeter.reset();
 			ir = IrProgramAssembler.assemble(generator, cached, irNatives, generated.objects, generated.interfaces, generated.enums,
 				generated.staticFields, generated.initializers, entryPoint, irCNatives, generated.reflectable, context.inlineCache().staticChecks,
-				context.valueArrayTarget(), context.exportedFunctions());
+				context.valueArrayTarget(), context.exportedFunctions(), !context.livePatching && !context.isWasmTarget() && compiler.ir.IrEntryPrune.enabled());
 			var cNativeNames = [for (native in irCNatives) native.name].join(","),
 				ownPrints:Map<String, String> = [];
 			for (fn in cached)
@@ -780,6 +780,9 @@ class FrontendCompilation {
 				if (difference != null)
 					throw 'HAXEON_CHECK_REUSE: the final IR reused for equal pipeline inputs differs from a fresh run ($difference)';
 			}
+			// The prune ran early (HAXEON_EARLY_PRUNE): after the last pass nothing may call what it removed (`IrEntryPrune`).
+			if (compiler.ir.IrEntryPrune.checking())
+				compiler.ir.IrEntryPrune.checkRemoved("the pipeline", ir.functions, ir.prunedFunctions);
 			context.pipelineSnapshot = context.livePatching ? null : new PipelineSnapshot(inputs, ir);
 		}
 		// Regenerating a function's IR does not change it when the typed function is the same: a semantic invalidation

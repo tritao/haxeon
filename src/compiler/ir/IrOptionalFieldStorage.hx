@@ -114,7 +114,7 @@ class IrOptionalFieldStorage {
 			all.push(new IrFunction(placeGetterName(plan.owner, plan.field, []), rootReader.arguments, Obj(element), rootReader.blocks, Provider(TypeKey.of(Obj(plan.owner)), ProviderOperations.detailed(ProviderOperation.OptionalFieldHelper, placeGetterName(plan.owner, plan.field, [])))));
 			appendPlaceSetters(all, plan, Obj(element), []);
 		}
-		var originals:Map<String, IrFunction> = [for (fn in functions) fn.name => fn],
+		var originals = new IrFunctionIndex("optional-field-storage", functions),
 			generated:Map<String, Bool> = [];
 		var index = 0;
 		while (index < all.length) {
@@ -629,6 +629,12 @@ class IrOptionalFieldStorage {
 
 	public static function placeMethodName(owner:String, field:String, path:Array<String>, method:String):String
 		return METHOD_PREFIX + haxe.Json.stringify([owner, field, method].concat(path));
+
+	/** The value method a call to `name` asks this pass to specialize, or null when `name` is no such request: the typed demand a reachability walk reads. */
+	public static function requestedMethod(name:String):Null<String> {
+		var request = methodRequest(name);
+		return request == null ? null : request.method;
+	}
 
 	static function methodRequest(name:String):Null<OptionalMethodRequest> {
 		if (!StringTools.startsWith(name, METHOD_PREFIX))

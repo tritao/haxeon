@@ -184,7 +184,7 @@ class ObjectReflection {
 
 	/** Reflectable layouts with inherited fields first, ordered so subclasses are tested before their bases. */
 	static function layoutsOf(facts:ProgramFacts, objects:Array<IrObject>, reflectable:Array<String>, functions:Array<IrFunction>):Array<ReflectedLayout> {
-		var functionsByName = [for (fn in functions) fn.name => fn];
+		var functionsByName = new IrFunctionIndex("object-reflection", functions);
 		var byName:Map<String, IrObject> = [for (object in objects) object.name => object],
 			result:Array<{layout:ReflectedLayout, depth:Int}> = [];
 		for (name in reflectable) {

@@ -13,7 +13,7 @@ class IrValueInterfaceBoxes {
 
 	public static function rewrite(functions:Array<IrFunction>, objects:Array<IrObject>, interfaces:Array<IrInterface>, ?existingFunctions:Array<IrFunction>):Array<IrFunction> {
 		var objectMap:Map<String, IrObject> = [for (object in objects) object.name => object],
-			functionMap:Map<String, IrFunction> = [for (fn in (existingFunctions == null ? functions : existingFunctions.concat(functions))) fn.name => fn],
+			functionMap = new IrFunctionIndex("value-interface-boxes", existingFunctions == null ? functions : existingFunctions.concat(functions)),
 			interfaceMap:Map<String, IrInterface> = [for (entry in interfaces) entry.name => entry],
 			boxes:Map<String, String> = [], unboxes:Map<String, String> = [], typeTests:Map<String, String> = [],
 			interfaceCasts:Map<String, String> = [], generated:Array<IrFunction> = [];

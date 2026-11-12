@@ -11,7 +11,7 @@ class IrCheckedDynamicCasts {
 			checkValueObjects:Bool = false, checkFunctionCasts:Bool = false):Array<IrFunction> {
 		var declarations:Map<String, IrObject> = [for (object in objects) object.name => object],
 			helpers:Map<String, String> = [], generated:Array<IrFunction> = [],
-			known:Map<String, Bool> = [for (fn in (existingFunctions == null ? functions : existingFunctions.concat(functions))) fn.name => true];
+			known = new IrFunctionIndex("checked-dynamic-casts", existingFunctions == null ? functions : existingFunctions.concat(functions));
 		function helperFor(type:IrType, checkedType:IrType, typeName:String, allowNull:Bool):String {
 			var key = Std.string(type), existing = helpers.get(key);
 			if (existing != null) return existing;

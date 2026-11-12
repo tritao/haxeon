@@ -31,7 +31,7 @@ class IrStaticNullChecks {
 			store.valueShape = valueShape;
 		}
 		var result:Array<IrFunction> = [];
-		var byName = [for (fn in functions) fn.name => fn],
+		var byName = new IrFunctionIndex("static-null-checks", functions),
 			reachable:Map<String, Bool> = [],
 			pending = ["__init"];
 		var execution = new IrInitializationCalls(functions, objects);

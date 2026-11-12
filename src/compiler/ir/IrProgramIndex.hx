@@ -117,6 +117,7 @@ class IrProgramIndex {
 			for (method in object.methods)
 				if (method.name == methodName)
 					return method.functionName;
+			IrEntryPrune.noteMethodLookup(current, methodName);
 			current = object.base;
 		}
 		return null;

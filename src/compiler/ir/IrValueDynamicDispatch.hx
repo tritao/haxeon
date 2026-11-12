@@ -18,7 +18,18 @@ class IrValueDynamicDispatch {
 
 	public static function rewrite(functions:Array<IrFunction>, objects:Array<IrObject>):Array<IrFunction> {
 		var values:Map<String, Bool> = [for (object in objects) if (object.isValue) object.name => true];
-		var names:Map<String, Bool> = [for (fn in functions) fn.name => true];
+		var names = new IrFunctionIndex("value-dynamic-dispatch", functions);
+		var objectsByName:Map<String, IrObject> = [for (object in objects) object.name => object];
+		// A struct that declares Equatable has an equality provider; one that does not must still throw at run time when compared.
+		function declaredEquatable(type:IrType):Bool {
+			var current = switch type { case Obj(name): objectsByName.get(name); default: null; };
+			while (current != null) {
+				if (current.interfaces.indexOf("Equatable") >= 0)
+					return true;
+				current = current.base == null ? null : objectsByName.get(current.base);
+			}
+			return false;
+		}
 		var requests:Map<String, IrType> = [], registeredValues:Map<String, Bool> = [], needsEqual = false;
 		function valueType(type:IrType):Null<IrType> return switch type {
 			case Nullable(inner): valueType(inner);
@@ -53,11 +64,11 @@ class IrValueDynamicDispatch {
 				default: null;
 			};
 		var rewritten:Array<IrFunction> = [for (fn in functions) IrFunctionRewrite.instructions(fn, replacement)];
-		if (needsEqual && suffixes.length > 0) rewritten.push(dispatcher(suffixes, requests, names));
+		if (needsEqual && suffixes.length > 0) rewritten.push(dispatcher(suffixes, requests, names, declaredEquatable));
 		return rewritten;
 	}
 
-	static function dispatcher(suffixes:Array<String>, requests:Map<String, IrType>, names:Map<String, Bool>):IrFunction {
+	static function dispatcher(suffixes:Array<String>, requests:Map<String, IrType>, names:IrFunctionIndex, declaredEquatable:IrType->Bool):IrFunction {
 		var builder = new IrBuilder(), left = builder.argument("left", Dyn), right = builder.argument("right", Dyn);
 		var byId:Map<Int, Array<String>> = [];
 		for (suffix in suffixes) {
@@ -77,6 +88,7 @@ class IrValueDynamicDispatch {
 				builder.select(different); builder.returnValue(builder.constBool(false));
 				builder.select(same);
 				if (names.exists(equality)) builder.returnValue(builder.call(equality, [builder.safeCast(left, type), builder.safeCast(right, type)], Bool));
+				else if (declaredEquatable(type)) throw 'internal error: struct "${Std.string(type)}" declares Equatable but has no equality provider ($equality)';
 				else builder.throwValue(builder.toDyn(builder.constString("Struct value does not conform to Equatable")));
 				builder.select(next);
 			}

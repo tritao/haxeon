@@ -38,7 +38,7 @@ class GenericOwnerErasure {
 				requests.set(name, signature);
 			default:
 		}
-		var byName = [for (object in objects) object.name => object], byFunction = [for (fn in functions) fn.name => fn];
+		var byName = [for (object in objects) object.name => object], byFunction = new IrFunctionIndex("generic-owner-erasure", functions);
 		var names = [for (name in requests.keys()) name];
 		names.sort(Reflect.compare);
 		for (name in names) {
@@ -116,7 +116,7 @@ class GenericOwnerErasure {
 				requests.set(name, {receiver: receiver.type, closure: output.type});
 			default:
 		}
-		var byName = [for (object in objects) object.name => object], byFunction = [for (fn in functions) fn.name => fn],
+		var byName = [for (object in objects) object.name => object], byFunction = new IrFunctionIndex("generic-owner-erasure", functions),
 			names = [for (name in requests.keys()) name];
 		names.sort(Reflect.compare);
 		for (name in names) {
@@ -229,10 +229,11 @@ class GenericOwnerErasure {
 		return null;
 	}
 
-	static function findMethod(object:IrObject, name:String, objects:Map<String, IrObject>, functions:Map<String, IrFunction>):Null<IrFunction> {
+	static function findMethod(object:IrObject, name:String, objects:Map<String, IrObject>, functions:IrFunctionIndex):Null<IrFunction> {
 		var current:Null<IrObject> = object;
 		while (current != null) {
 			for (method in current.methods) if (method.name == name) return functions.get(method.functionName);
+			IrEntryPrune.noteMethodLookup(current.name, name);
 			current = current.base == null ? null : objects.get(current.base);
 		}
 		return null;

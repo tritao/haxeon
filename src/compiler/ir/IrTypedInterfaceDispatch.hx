@@ -90,7 +90,7 @@ class IrTypedInterfaceDispatch {
 		}
 		var byName:Map<String, IrObject> = [for (object in objects) object.name => object],
 			byInterface:Map<String, IrInterface> = [for (entry in interfaces) entry.name => entry],
-			byFunction:Map<String, IrFunction> = [for (fn in functions) fn.name => fn],
+			byFunction = new IrFunctionIndex("typed-interface-dispatch", functions),
 			functionIndices:Map<String, Int> = [for (index in 0...functions.length) functions[index].name => index];
 		function extendsInterface(actual:String, expected:String, visited:Map<String, Bool>):Bool {
 			if (actual == expected) return true;
@@ -117,6 +117,7 @@ class IrTypedInterfaceDispatch {
 			var current:Null<IrObject> = object;
 			while (current != null) {
 				for (entry in current.methods) if (entry.name == method) return byFunction.get(entry.functionName);
+				IrEntryPrune.noteMethodLookup(current.name, method);
 				current = current.base == null ? null : byName.get(current.base);
 			}
 			return null;

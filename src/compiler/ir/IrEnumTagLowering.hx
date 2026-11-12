@@ -312,7 +312,7 @@ class IrEnumTagLowering {
 
 	static function finishEscapes(program:IrProgram, changedFunctions:Array<IrFunction>):Void {
 		var required:Map<String, Bool> = [];
-		var existing = [for (fn in program.functions) fn.name => fn], adapterEnums:Map<String, String> = [];
+		var existing = new IrFunctionIndex("enum-tag-lowering", program.functions), adapterEnums:Map<String, String> = [];
 		var symbols = IrEnumTagStorage.adapterNames(program);
 		var boxNames:Map<String, String> = [], unboxNames:Map<String, String> = [];
 		for (name => pair in symbols) {
@@ -346,7 +346,7 @@ class IrEnumTagLowering {
 	}
 
 	static function rewriteEscapes(program:IrProgram,
-		required:Map<String, Bool>, adapterEnums:Map<String, String>, functions:Map<String, IrFunction>, selectedFunctions:Array<IrFunction>,
+		required:Map<String, Bool>, adapterEnums:Map<String, String>, functions:IrFunctionIndex, selectedFunctions:Array<IrFunction>,
 		boxNames:Map<String, String>, unboxNames:Map<String, String>):Void {
 		var signatures:Map<String, Array<IrType>> = [],
 			objects = [for (object in program.objects) object.name => object],

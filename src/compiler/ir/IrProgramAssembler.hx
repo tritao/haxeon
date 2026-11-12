@@ -518,7 +518,7 @@ class IrProgramAssembler {
 	public static function assemble(generator:IrGenerator, functions:Array<IrFunction>, ?natives:Array<IrNative>, ?objects:Array<IrObject>, ?interfaces:Array<IrInterface>,
 			?enums:Array<IrEnum>, ?staticFields:Array<IrStaticField>, ?staticInitializers:Array<IrFunction>, ?entryPoint:String, ?cNatives:Array<IrCNative>,
 			?reflectableObjects:Array<String>, ?staticChecks:IrStaticCheckCache,
-			?valueTarget:compiler.ir.IrValueLaneLayout.IrValueLaneTarget, ?exportedFunctions:Array<String>):IrProgram {
+			?valueTarget:compiler.ir.IrValueLaneLayout.IrValueLaneTarget, ?exportedFunctions:Array<String>, pruneFromEntry = false):IrProgram {
 		var program = new IrProgram("__entry");
 		var allFunctions:Array<IrFunction> = [];
 		if (staticInitializers != null)
@@ -535,6 +535,7 @@ class IrProgramAssembler {
 				builder.returnValue(builder.constInt(count));
 				allFunctions.push(new IrFunction(object.name + ".$haxeonObservableFieldCount", builder.arguments, I32, builder.blocks, Ordinary));
 			}
+		var removedByPrune:Map<String, Bool> = [];
 		if (objects != null) {
 			var reflectionInput = new IrProgram(entryPoint == null ? "main" : entryPoint);
 			reflectionInput.objects = objects;
@@ -554,8 +555,40 @@ class IrProgramAssembler {
 			allFunctions = compiler.compilation.IrPassMeter.measure("value-dynamic-dispatch", () -> IrValueDynamicDispatch.rewrite(allFunctions, objects));
 		if (objects != null)
 			compiler.compilation.IrPassMeter.measureVoid("generic-owner-erasure", () -> GenericOwnerErasure.generate(generator.facts, allFunctions, objects));
+		// The prune point (docs/REACHABILITY_WALK.md): after the enum providers and generic owner erasure, which settle the class names and
+		// the helpers, and before every later pass. The entry function is created last, so the roots are what it calls: main, and the
+		// initializers `__init` runs.
+		if (pruneFromEntry && objects != null) {
+			var pruneInput = new IrProgram(entryPoint == null ? "main" : entryPoint);
+			pruneInput.objects = objects;
+			pruneInput.interfaces = interfaces == null ? [] : interfaces;
+			pruneInput.enums = enums == null ? [] : enums;
+			pruneInput.staticFields = staticFields == null ? [] : staticFields;
+			pruneInput.functions = allFunctions;
+			pruneInput.natives = natives == null ? [] : natives;
+			pruneInput.cNatives = cNatives == null ? [] : cNatives;
+			var roots = entryPoint == null ? ["main", "Main.main"] : [entryPoint];
+			if (staticInitializers != null && staticInitializers.length > 0) {
+				roots.push("__init");
+				for (initializer in staticInitializers)
+					roots.push(initializer.name);
+			}
+			if (exportedFunctions != null)
+				for (name in exportedFunctions)
+					roots.push(name);
+			removedByPrune = IrEntryPrune.run(pruneInput, roots);
+			allFunctions = pruneInput.functions;
+			objects = pruneInput.objects;
+		}
+		// HAXEON_CHECK_REUSE=1: after each later pass, nothing may call a function the prune removed (the failure of 2026-11-10).
+		var checkPrune = pruneFromEntry && IrEntryPrune.checking();
+		IrEntryPrune.watch(checkPrune ? removedByPrune : null);
+		function verify(pass:String):Void
+			if (checkPrune)
+				IrEntryPrune.checkRemoved(pass, allFunctions, removedByPrune);
 		if (objects != null && interfaces != null)
 			allFunctions = compiler.compilation.IrPassMeter.measure("value-interface-boxes", () -> IrValueInterfaceBoxes.rewrite(allFunctions, objects, interfaces));
+		verify("value-interface-boxes");
 		if (objects != null && interfaces != null) {
 			allFunctions = compiler.compilation.IrPassMeter.measure("typed-interface-calls", () -> IrTypedInterfaceDispatch.rewriteValueCalls(allFunctions, objects, interfaces));
 			var beforeTypedInterfaces = allFunctions.length;
@@ -568,6 +601,7 @@ class IrProgramAssembler {
 		// HashLink checks object casts itself, but interface casts need checks on every target.
 		if (objects != null)
 			allFunctions = compiler.compilation.IrPassMeter.measure("checked-dynamic-casts", () -> IrCheckedDynamicCasts.rewrite(allFunctions, objects, generator.profile.nativeReflectionDispatch));
+		verify("checked-dynamic-casts");
 		if (exportedFunctions != null && exportedFunctions.length > 0) {
 			var exported = [for (name in exportedFunctions) name => true];
 			allFunctions = [
@@ -595,11 +629,14 @@ class IrProgramAssembler {
 			natives = enumOutput.natives;
 			enums = enumOutput.enums;
 		}
+		verify("inline-enum-lowering");
 		if (objects != null) {
 			allFunctions = compiler.compilation.IrPassMeter.measure("optional-scalar-flow", () -> new IrOptionalScalarFlow(objects).rewrite(objects, allFunctions));
 			allFunctions = IrOptionalValueFlow.addHelpers(allFunctions, objects);
 		}
+		verify("optional-scalar-flow");
 		allFunctions = compiler.compilation.IrPassMeter.measure("static-null-checks", () -> IrStaticNullChecks.run(allFunctions, objects, staticChecks));
+		verify("static-null-checks");
 		if (objects != null && reflectableObjects != null) {
 			reflectableObjects = reflectableObjects.copy();
 			var known:Map<String, Bool> = [for (name in reflectableObjects) name => true];
@@ -628,6 +665,7 @@ class IrProgramAssembler {
 			}
 			allFunctions = compiler.compilation.IrPassMeter.measure("nullable-scalar-fields", () -> new IrNullableScalarFields(objects).rewrite(allFunctions));
 		}
+		verify("object-reflection and nullable-scalar-fields");
 		var needsArrayRuntime = false,
 			needsTypedRefArrayRuntime = false,
 			needsArrayCastRuntime = false,
@@ -692,6 +730,7 @@ class IrProgramAssembler {
 							needsAnyArrayRuntime = true;
 						default:
 					}
+		program.prunedFunctions = removedByPrune;
 		program.objects = objects == null ? [] : objects;
 		program.cNatives = cNatives == null ? [] : cNatives;
 		var cNativeNames:Map<String, Bool> = [for (native in program.cNatives) native.name => true];
@@ -978,6 +1017,7 @@ class IrProgramAssembler {
 		entry.returnValue(result);
 		program.functions.push(new IrFunction("__entry", [], Void, entry.blocks, Ordinary));
 		IrEnumTagLowering.escapes(program);
+		IrEntryPrune.watch(null);
 		return program;
 	}
 

@@ -329,6 +329,10 @@ private class IrTypeAwareWalkState {
 		if (byName.exists(target))
 			reach(target, false);
 		else {
+			// A call to an optional-field method request names the value method the storage pass will specialize.
+			var requested = IrOptionalFieldStorage.requestedMethod(target);
+			if (requested != null)
+				reach(requested, false);
 			var native = natives.get(target);
 			if (native != null && !nativesDone.exists(target)) {
 				nativesDone.set(target, true);
