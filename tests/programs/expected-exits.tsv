@@ -560,3 +560,4 @@ bare-block-assignment	42
 bare-block-exit	42
 prune-uncreated-receiver	42
 inline-enum-abstract-constant	42
+flattened-subtype-comprehension	42
