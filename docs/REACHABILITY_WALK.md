@@ -207,3 +207,21 @@ Once both exist, the helpers can be generated only on demand, from the walk's re
 Android build looks only for `main`; `CompilerDriver --ir-output` writes the emitted program; the reachability report's "final program" counts
 start from the already pruned program; the tests that read `ir.functions` run in the gate (`ReachabilityPruneMain` and
 `GeneratedEqualityProvenanceMain` follow the contract above).
+
+### The native contract (what a native constructs)
+
+Both walks use one rule (`IrConstructed`): **a native constructs exactly the class its declaration returns**, an `IrNative` or an `IrCNative` alike, and
+no other. Not a subclass of the declared class, and not an argument's class: an argument was constructed by its caller, which a walk sees, and a native
+that hands an argument back returns a value that already existed. A callback into Haxe is about a method being reachable, not a class being
+constructed: a closure given to a native is built by a `StaticClosure` / `InstanceClosure` the walk follows, and the functions a native's lowering
+calls are its `generatedFunctionDependencies`. Native code that builds an instance of a class chosen at run time has to be given that class, as a
+`Class<T>` or a type argument, which is a typed reference a walk counts as created; subclass expansion would only over-approximate and would keep the
+owned-handle wrappers that 9d57e32e8 removed from Wasm modules.
+
+Audit (2026-11-12), natives allocating a Haxe object: `native/runtime/reflection.c` `__reflect_copy` allocates an instance of its argument's own class
+(`hl_alloc_obj(object->t)`: a copy of something the caller constructed), `hl_alloc_dynobj` makes an anonymous dynamic object, and the others allocate
+boxes of primitives (`hl_alloc_dynamic`). The std natives the stdlib binds (`thread_create`, `make_var_args`, `tls_*`, `hoalloc`, `mutex_alloc`, ...)
+return abstract pointers, closures or Dynamic values handed in earlier. The HashLink libraries that allocate objects (`libs/sdl`, `libs/mysql`,
+`libs/directx`) are not bound by the project. FFI natives are C functions on the C ABI and build no Haxe object. No native was found that allocates a
+class its declaration does not name. There is no cheap check-mode assertion that a returned object is an instance of the declared class: it would be a
+run-time check in the native's library, which this compiler does not own.

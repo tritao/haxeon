@@ -78,13 +78,14 @@ class TypeAwareWalkMain {
 
 	/** An interface call reaches the implementations of created implementors only. */
 	/**
-	 * A class only native code makes: the result type of a called native (an `IrNative`, or an `IrCNative` that becomes a `CNativeCall` at the end of
-	 * assembly) is created, so the override of a method on a subclass the native returns is reached, and a native nothing calls creates nothing.
+	 * A class only native code makes: a native constructs exactly the class its declaration returns (`IrConstructed`), for an `IrNative` and for an
+	 * `IrCNative` (whose call becomes a `CNativeCall` at the end of assembly). A native declared to return the subclass reaches the override on it;
+	 * one declared to return the base class does not create the subclass; an argument's class is not created; a native nothing calls creates nothing.
 	 */
 	static function nativeCreatedClass():Void {
 		for (kind in ["native", "cnative"]) {
 			var builder = new IrBuilder();
-			var handle = builder.call("makeHandle", [], Obj("Base"));
+			var handle = builder.call("makeHandle", [builder.constNull(Obj("Unrelated"))], Obj("Base"));
 			builder.methodCall(handle, "update", [], I32);
 			builder.returnValue(builder.constInt(0));
 			var base = object("Base", [], ["update"]), derived = object("Derived", [], ["update"]);
@@ -107,10 +108,9 @@ class TypeAwareWalkMain {
 				empty("Derived.update", Ordinary, [Obj("Derived")], I32),
 				empty("Unrelated.update", Ordinary, [Obj("Unrelated")], I32)
 			];
-			// The native is declared to return the base class, and native code may return any subclass of it: the base and its subclasses are
-			// created, so the override on `Derived` is reached; an unrelated class is not.
+			// The native is declared to return the base class: exactly that class is created, not a subclass and not an unrelated class.
 			if (kind == "native")
-				program.natives = [{name: "makeHandle", library: "lib", symbol: "make", arguments: [], result: Obj("Base")}];
+				program.natives = [{name: "makeHandle", library: "lib", symbol: "make", arguments: [Obj("Unrelated")], result: Obj("Base")}];
 			else
 				program.cNatives = [
 					{
@@ -122,18 +122,19 @@ class TypeAwareWalkMain {
 						pointerRelease: null,
 						pointerLength: null,
 						pointerNullable: false,
-						arguments: [],
-						argumentModes: [],
+						arguments: [Obj("Unrelated")],
+						argumentModes: [Value],
 						result: Obj("Base")
 					}
 				];
 			var result = IrTypeAwareWalk.run(program, {functions: ["main"], types: []});
 			expect(result.createdClasses.exists("Base"), kind + ": the result type of a called native is created");
 			expect(result.reached.exists("Base.update"), kind + ": the method of the class a native returns is reached");
-			expect(result.reached.exists("Derived.update"), kind + ": the override on a subclass of the declared result is reached");
-			expect(!result.reached.exists("Unrelated.update"), kind + ": an unrelated class is not reached");
+			expect(!result.reached.exists("Derived.update"), kind + ": a subclass of the declared result is not created: the contract is the declared class");
+			expect(!result.reached.exists("Unrelated.update") && !result.createdClasses.exists("Unrelated"),
+				kind + ": the class of an argument is not created by the native");
 			// A native declared to return the subclass creates it.
-			program.natives = [for (native in program.natives) {name: native.name, library: native.library, symbol: native.symbol, arguments: [], result: Obj("Derived")}];
+			program.natives = [for (native in program.natives) {name: native.name, library: native.library, symbol: native.symbol, arguments: native.arguments, result: Obj("Derived")}];
 			program.cNatives = [
 				for (native in program.cNatives) {
 					name: native.name,
@@ -144,8 +145,8 @@ class TypeAwareWalkMain {
 					pointerRelease: null,
 					pointerLength: null,
 					pointerNullable: false,
-					arguments: [],
-					argumentModes: [],
+					arguments: native.arguments,
+					argumentModes: native.argumentModes,
 					result: Obj("Derived")
 				}
 			];

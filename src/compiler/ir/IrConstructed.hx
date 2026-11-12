@@ -8,7 +8,13 @@ import compiler.semantic.SemanticSignature;
  * the Wasm builders run, and `IrTypeAwareWalk`, the prune). A class has instances once a reached function constructs it (`NewObject`) or a
  * reached native returns it; value classes, anonymous records and interface boxes are made in other ways (copies, literals, boxing), so they
  * always have; a name in no object table is a type only native code knows, which has instances too. `IrTypeAwareWalk` adds over-approximations
- * on top (a class it converts to Dynamic, a class in a signature), and expands a native's result to the subclasses native code may return.
+ * on top (a class it converts to Dynamic, a class in a signature).
+ *
+ * **The native contract.** A native constructs exactly the class its declaration returns, and no other: not a subclass of it, and not an argument's
+ * class (an argument was constructed by its caller, which a walk sees). Native code that builds an instance of a class chosen at run time has to
+ * be given that class, as a `Class<T>` or a type argument, which is a typed reference a walk counts as created. Audited on 2026-11-12: no runtime
+ * native, std native or FFI native bound by the project allocates an object of a class its declaration does not name (`__reflect_copy` copies an
+ * instance of its argument's own class, which its caller already constructed).
  */
 class IrConstructed {
 	/** Whether the class has instances without any function constructing them. `object` is its table entry, or null when there is none. */

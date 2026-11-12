@@ -297,13 +297,10 @@ private class IrTypeAwareWalkState {
 	}
 
 	function visit(fn:IrFunction, instruction:IrInstruction):Void {
-		// What the instruction constructs is the shared definition (`IrConstructed`); a native's result may be any subclass of its declared class.
+		// What the instruction constructs is the shared definition (`IrConstructed`).
 		var made = IrConstructed.constructedBy(instruction, nativeResults);
 		if (made != null)
-			switch instruction {
-				case NewObject(_, _): create(Obj(made));
-				default: createFromNative(Obj(made));
-			}
+			create(Obj(made));
 		switch instruction {
 			case Call(_, target, _):
 				callTarget(target);
@@ -363,21 +360,17 @@ private class IrTypeAwareWalkState {
 			var requested = IrOptionalFieldStorage.requestedMethod(target);
 			if (requested != null)
 				reach(requested, false);
-			// The types a native takes and returns can hold instances only native code made (a window handle's class): they are created. A C
-			// native's call becomes `CNativeCall` only at the end of assembly, so it is a call by name here, like any native.
+			// A native constructs exactly the class its declaration returns (`IrConstructed`); an argument was constructed by the caller, which the
+			// walk already sees. A C native's call becomes `CNativeCall` only at the end of assembly, so it is a call by name here, like any native.
 			var cNative = cNatives.get(target);
 			if (cNative != null && !nativesDone.exists(target)) {
 				nativesDone.set(target, true);
-				for (argument in cNative.arguments)
-					createFromNative(argument);
-				createFromNative(cNative.result);
+				create(cNative.result);
 			}
 			var native = natives.get(target);
 			if (native != null && !nativesDone.exists(target)) {
 				nativesDone.set(target, true);
-				for (argument in native.arguments)
-					createFromNative(argument);
-				createFromNative(native.result);
+				create(native.result);
 				if (native.generatedFunctionDependencies != null)
 					for (dependency in native.generatedFunctionDependencies)
 						reach(dependency, false);
@@ -398,26 +391,6 @@ private class IrTypeAwareWalkState {
 			sites.push({typeName: typeName, method: method, isInterface: isInterface});
 		}
 	}
-
-	/**
-	 * A type that crosses a native's signature: native code may hand back any subclass of a declared class, so the class and all its subclasses are
-	 * created (the class a native is declared to return is not necessarily the class it makes).
-	 */
-	function createFromNative(type:IrType):Void
-		switch type {
-			case Obj(name):
-				for (candidate in index.subtypesOf(name))
-					create(Obj(candidate.name));
-				create(type);
-			case Array(element), Nullable(element), Iterator(element):
-				createFromNative(element);
-			case Function(arguments, result):
-				for (argument in arguments)
-					createFromNative(argument);
-				createFromNative(result);
-			default:
-				create(type);
-		}
 
 	/** Makes a type created, with the classes it extends and the types its fields hold. */
 	function create(type:IrType):Void
