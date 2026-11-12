@@ -4,7 +4,13 @@ set -euo pipefail
 root_dir=$(cd "$(dirname "$0")/../.." && pwd)
 output="$root_dir/out/process-output-capture-test.hl"
 runtime="$("$root_dir/scripts/hashlink-path.sh")/hl"
-compiler=${HAXEON_COMPILER:-"$root_dir/bootstrap/compiler.hl"}
+# The checked-in bootstrap/compiler.hl predates the runtime's current natives (it emits haxeon_runtime@__array_index_of_any), so the compiler under
+# test is this checkout's: the one the caller prebuilt, or one built here.
+compiler=${HAXEON_COMPILER:-${HAXEON_COMPILER_HL:-}}
+if [[ -z $compiler ]]; then
+	compiler="$root_dir/out/process-output-capture-compiler.hl"
+	"$root_dir/.tools/haxe/haxe" --cwd "$root_dir" common.hxml -hl "$compiler" -main compiler.tools.HaxeonCompiler
+fi
 
 sources=()
 while IFS= read -r source; do
