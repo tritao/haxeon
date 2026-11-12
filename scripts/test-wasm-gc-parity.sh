@@ -563,9 +563,8 @@ async function run(name, target) {
     return {failure: `imports ${missing.map(entry => `${entry.module}.${entry.name}`).join(", ")}`};
   if (target === "wasm-gc") {
     const hasMemory = WebAssembly.Module.exports(module).some(entry => entry.name === "memory" && entry.kind === "memory");
-    // The Observable fixture exercises wire encoding, whose UTF-8 buffer uses GC scratch memory.
-    const expectsMemory = modes.get(name) === "gc-linear-memory"
-      || name.startsWith("observable-tracking-inline-");
+    // Only cases that declare the gc-linear-memory mode use scratch memory.
+    const expectsMemory = modes.get(name) === "gc-linear-memory";
     if (hasMemory !== expectsMemory)
       return {failure: expectsMemory ? "GC C-native module is missing scratch memory" : "GC module contains undeclared linear memory"};
     if (WebAssembly.Module.customSections(module, "haxeon.gc.roots").length !== 0)
