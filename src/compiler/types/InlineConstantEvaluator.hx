@@ -73,6 +73,19 @@ class InlineConstantEvaluator {
 	}
 
 	static function literal(value:InlineConstantValue, span:compiler.Source.SourceSpan, type:CompilerType):TypedExpression {
+		// Folding changes the expression, not its checked type. Rebuild representation boundaries rather than
+		// asking assignability to convert a raw literal back into a closed abstract.
+		switch type {
+			case TAbstract(_, _, representation):
+				return new TypedExpression(TAbiCast(literal(value, span, representation)), type, span);
+			case TNullable(element):
+				var inner = switch value {
+					case NullValue: new TypedExpression(TNullLiteral, TNull, span);
+					default: literal(value, span, element);
+				};
+				return new TypedExpression(TNullableWrap(inner), type, span);
+			default:
+		}
 		return switch value {
 			case InlineConstantValue.Integer(number): new TypedExpression(TIntLiteral(number), (switch (type) { case TInt64: true; default: false; }) ? TInt64 : TInt, span);
 			case InlineConstantValue.Floating(number): new TypedExpression(TFloatLiteral(number), TFloat, span);

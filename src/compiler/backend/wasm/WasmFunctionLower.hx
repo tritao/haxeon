@@ -892,14 +892,18 @@ class WasmFunctionLower {
 						if (emitIfHandled(body, represented)) {} else if (targets.length == 0) {
 							var functionName = findMethod(context.program, objectName, methodName),
 								functionIndex = functionName == null ? null : functions.get(functionName);
-							if (functionIndex == null)
-								throw 'Wasm method target "$objectName.$methodName" is not emitted';
-							body.push(LocalGet(requiredLocal(values, object.id)));
-							for (argument in arguments)
-								body.push(LocalGet(requiredLocal(values, argument.id)));
-							body.push(Call(functionIndex));
-							if ((switch (output.type) { case Void: false; default: true; }))
-								body.push(LocalSet(requiredLocal(values, output.id)));
+							if (functionIndex == null) {
+								// Dispatch reaches the methods of constructed classes only (IrReachability): no class that could receive
+								// this call has an instance, so like an interface method without an implementation it traps.
+								body.push(Unreachable);
+							} else {
+								body.push(LocalGet(requiredLocal(values, object.id)));
+								for (argument in arguments)
+									body.push(LocalGet(requiredLocal(values, argument.id)));
+								body.push(Call(functionIndex));
+								if ((switch (output.type) { case Void: false; default: true; }))
+									body.push(LocalSet(requiredLocal(values, output.id)));
+							}
 						} else {
 							for (index in 0...targets.length) {
 								var target = targets[index];

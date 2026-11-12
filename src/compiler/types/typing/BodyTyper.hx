@@ -2054,15 +2054,23 @@ class BodyTyper {
 	function inlineStaticFieldExpression(owner:String, name:String, span:SourceSpan):Null<TypedExpression> {
 		var resolved = resolveInlineConstant(owner, name, span);
 		if (resolved != null) {
-			var caller = defaultArgumentCaller == null ? context.name : defaultArgumentCaller,
-				dependencies = session.inlineConstantDependencies.get(caller);
-			if (dependencies == null) {
-				dependencies = [];
-				session.inlineConstantDependencies.set(caller, dependencies);
-			}
-			dependencies.set(owner + "." + name, true);
+			recordInlineConstantDependency(owner + "." + name);
+			for (target in resolved.dependencies)
+				recordInlineConstantDependency(target);
 		}
 		return resolved == null ? null : new TypedExpression(resolved.value.expression, resolved.value.type, span, false, null, null, owner + "." + name);
+	}
+
+	/** Substitution must retain the dependencies erased by constant folding, including inside default arguments. */
+	function recordInlineConstantDependency(target:String):Void {
+		inlineConstantResolver.recordDependency(target);
+		var caller = defaultArgumentCaller == null ? context.name : defaultArgumentCaller,
+			dependencies = session.inlineConstantDependencies.get(caller);
+		if (dependencies == null) {
+			dependencies = [];
+			session.inlineConstantDependencies.set(caller, dependencies);
+		}
+		dependencies.set(target, true);
 	}
 
 	function typedMember(typedObject:TypedExpression, name:String, span:SourceSpan):TypedExpression {
