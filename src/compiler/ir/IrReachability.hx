@@ -1,5 +1,6 @@
 package compiler.ir;
 
+import compiler.ir.Ir.IrObject;
 import compiler.ir.Ir.IrObjectTools;
 import compiler.ir.Ir.IrProgram;
 import compiler.ir.Ir.IrType;
@@ -30,8 +31,12 @@ class IrReachability {
 	 * the core runtime ABI; keep the expansion centralized so the linear and GC backends cannot drift apart. The walk continues
 	 * from what it has reached whenever a new root appears, so it visits every function once.
 	 */
-	public static function withGeneratedRuntimeRoots(program:IrProgram, entry:String, ?additionalRoots:Array<String>,
-			keepLiveClasses = false):Map<String, Bool> {
+	public static function withGeneratedRuntimeRoots(program:IrProgram, entry:String, ?additionalRoots:Array<String>, keepLiveClasses = false):Map<String, Bool>
+		return walkWithGeneratedRuntimeRoots(program, entry, additionalRoots, keepLiveClasses).reachable;
+
+	/** `withGeneratedRuntimeRoots`, with the finished walk: what it reached, the natives it calls and the classes it mentions. */
+	public static function walkWithGeneratedRuntimeRoots(program:IrProgram, entry:String, ?additionalRoots:Array<String>,
+			keepLiveClasses = false):IrReachabilityWalk {
 		var walk = new IrReachabilityWalk(program, keepLiveClasses);
 		walk.visit(entry);
 		if (additionalRoots != null)
@@ -64,7 +69,7 @@ class IrReachability {
 						}
 			}
 			if (walk.count == before)
-				return walk.reachable;
+				return walk;
 		}
 	}
 
@@ -80,6 +85,70 @@ class IrReachability {
 				kept.length == object.methods.length ? object : IrObjectTools.withMethods(object, kept);
 			}
 		];
+	}
+
+	/**
+	 * Removes from `program` the natives no reached function calls, the classes no reached function, kept declaration or kept class mentions,
+	 * and the globals no reached function reads or writes, so a module is written from the reached program alone (an unused module that
+	 * declares natives, classes and globals leaves no trace in it). `walk` is a walk made with `keepLiveClasses`. The enums and interfaces
+	 * stay, and so does every class their types mention.
+	 */
+	public static function trimTables(program:IrProgram, walk:IrReachabilityWalk):Void {
+		program.natives = [for (native in program.natives) if (walk.used.exists(native.name)) native];
+		var globals:Map<String, Bool> = [];
+		for (fn in program.functions)
+			for (block in fn.blocks)
+				for (located in block.instructions)
+					switch located.value {
+						case GlobalGet(_, name), GlobalSet(name, _):
+							globals.set(name, true);
+						default:
+					}
+		program.staticFields = [for (field in program.staticFields) if (globals.exists(field.name)) field];
+		var kept:Map<String, Bool> = walk.liveClassNames();
+		var objects:Map<String, IrObject> = [for (object in program.objects) object.name => object];
+		var pending:Array<IrType> = [];
+		for (field in program.staticFields)
+			pending.push(field.type);
+		for (declaration in program.enums)
+			for (enumCase in declaration.cases)
+				for (type in enumCase.params)
+					pending.push(type);
+		for (interfaceDecl in program.interfaces)
+			for (method in interfaceDecl.methods) {
+				pending.push(method.result);
+				for (argument in method.arguments)
+					pending.push(argument);
+			}
+		var classes = [for (name in kept.keys()) name];
+		function mention(type:IrType):Void
+			switch type {
+				case Obj(name):
+					if (!kept.exists(name)) {
+						kept.set(name, true);
+						classes.push(name);
+					}
+				case Array(element), Nullable(element), Iterator(element):
+					mention(element);
+				case Function(arguments, result):
+					for (argument in arguments)
+						mention(argument);
+					mention(result);
+				default:
+			}
+		for (type in pending)
+			mention(type);
+		var index = 0;
+		while (index < classes.length) {
+			var object = objects.get(classes[index++]);
+			if (object == null)
+				continue;
+			if (object.base != null)
+				mention(Obj(object.base));
+			for (field in object.fields)
+				mention(field.type);
+		}
+		program.objects = [for (object in program.objects) if (kept.exists(object.name)) object];
 	}
 
 	/** The toString implementation an object of exactly this class uses, if any. */
@@ -104,6 +173,10 @@ class IrReachabilityWalk {
 	public final used:Map<String, Bool> = [];
 
 	public var count(default, null) = 0;
+
+	/** The classes some reached function mentions by type (only with `keepLiveClasses`). */
+	public function liveClassNames():Map<String, Bool>
+		return liveClasses.copy();
 
 	final index:IrProgramIndex;
 	final byName:Map<String, IrFunction> = [];

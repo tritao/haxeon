@@ -95,7 +95,9 @@ class BackendAssembly {
 			token:Null<CancellationToken>):BackendAssemblyResult {
 		var allocationAtStart = AllocationMeter.sample();
 		compiler.ir.IrReachabilityReport.report("final program", ir);
-		var nextAbi = RuntimeAbi.describe(ir), previousAbi = context.publishedAbi, baseAssembler = context.assembler;
+		var nextAbi = RuntimeAbi.describe(ir),
+			previousAbi = context.publishedAbi,
+			baseAssembler = context.assembler;
 		// Compilation sessions retain a HashLink assembly even when the requested
 		// artifact is Wasm. Keep its closure ABI adaptation local to that assembly;
 		// the Wasm backend receives the original logical program and builds its own
@@ -112,8 +114,10 @@ class BackendAssembly {
 			// (other backends and tools read it), and a live module keeps every function too, because its host can call any of
 			// them by id and a reachability change must not move its layout.
 			assemblyIr = ir.copy();
-			var reachable = compiler.ir.IrReachability.withGeneratedRuntimeRoots(ir, ir.entryPoint, null, true);
+			var walk = compiler.ir.IrReachability.walkWithGeneratedRuntimeRoots(ir, ir.entryPoint, null, true),
+				reachable = walk.reachable;
 			compiler.ir.IrReachability.prune(assemblyIr, reachable);
+			compiler.ir.IrReachability.trimTables(assemblyIr, walk);
 			regenerated = [for (name in regenerated) if (reachable.exists(name)) name];
 			relocated = [for (name in relocated) if (reachable.exists(name)) name];
 		}

@@ -24,7 +24,10 @@ class UnusedModuleInvarianceMain {
 	}
 
 	static function storage(result:compiler.Compiler.CompileResult):String
-		return [for (declaration in result.ir.enums) declaration.name + "=" + (declaration.inlineStorage != null)].join(",");
+		return [
+			for (declaration in result.ir.enums)
+				declaration.name + "=" + (declaration.inlineStorage != null)
+		].join(",");
 
 	static function main():Void {
 		var without = build(false), with = build(true);
@@ -32,9 +35,9 @@ class UnusedModuleInvarianceMain {
 			throw 'An unused module changed the enum storage: [${storage(without)}] against [${storage(with)}]';
 		if (storage(without).indexOf("CallbackValue=true") < 0)
 			throw 'The program no longer has an inline CallbackValue (${storage(without)}); the test needs one that an unused module could flip';
-		// The program: the same functions, each with the same IR. (The HashLink module also lists the natives, classes and globals of every loaded module,
-		// so its bytes differ by those tables; trimming them is a separate item.)
-		var left = [for (fn in without.ir.functions) fn.name => fn], right = [for (fn in with.ir.functions) fn.name => fn];
+		// The program: the same functions, each with the same IR.
+		var left = [for (fn in without.ir.functions) fn.name => fn],
+			right = [for (fn in with.ir.functions) fn.name => fn];
 		for (name => fn in left) {
 			var other = right.get(name);
 			if (other == null)
@@ -45,6 +48,15 @@ class UnusedModuleInvarianceMain {
 		for (name in right.keys())
 			if (!left.exists(name))
 				throw 'The function "$name" appears only when an unused module is present';
-		Sys.println("PASS: an unused module that calls Reflect changes neither the enum storage nor any function of the program");
+		// The HashLink module: a plain build writes the natives, classes and globals the reached program uses, so it is the same bytes.
+		var bytesWithout = compiler.hl.HlWriter.encode(without.module).flatten(),
+			bytesWith = compiler.hl.HlWriter.encode(with.module).flatten();
+		if (bytesWithout.compare(bytesWith) != 0) {
+			var at = 0, limit = Std.int(Math.min(bytesWithout.length, bytesWith.length));
+			while (at < limit && bytesWithout.get(at) == bytesWith.get(at))
+				at++;
+			throw 'An unused module changed the HashLink module: ${bytesWithout.length} against ${bytesWith.length} bytes, first difference at $at';
+		}
+		Sys.println("PASS: an unused module that calls Reflect changes neither the enum storage, nor any function, nor the bytes of the HashLink module");
 	}
 }
