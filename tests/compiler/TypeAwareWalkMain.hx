@@ -14,6 +14,7 @@ class TypeAwareWalkMain {
 		interfaceCall();
 		typedOperation();
 		inlineEnumOperations();
+		nativeCreatedClass();
 		Sys.println("PASS: type-aware walk: dynamic sites over created types, interface calls over created implementors, typed operations need a provider");
 	}
 
@@ -76,6 +77,90 @@ class TypeAwareWalkMain {
 	}
 
 	/** An interface call reaches the implementations of created implementors only. */
+	/**
+	 * A class only native code makes: the result type of a called native (an `IrNative`, or an `IrCNative` that becomes a `CNativeCall` at the end of
+	 * assembly) is created, so the override of a method on a subclass the native returns is reached, and a native nothing calls creates nothing.
+	 */
+	static function nativeCreatedClass():Void {
+		for (kind in ["native", "cnative"]) {
+			var builder = new IrBuilder();
+			var handle = builder.call("makeHandle", [], Obj("Base"));
+			builder.methodCall(handle, "update", [], I32);
+			builder.returnValue(builder.constInt(0));
+			var base = object("Base", [], ["update"]), derived = object("Derived", [], ["update"]);
+			var program = new IrProgram("main");
+			program.objects = [
+				base,
+				{
+					name: "Derived",
+					isValue: false,
+					base: "Base",
+					interfaces: [],
+					fields: [],
+					methods: derived.methods
+				},
+				object("Unrelated", [], ["update"])
+			];
+			program.functions = [
+				new IrFunction("main", builder.arguments, I32, builder.blocks, Ordinary),
+				empty("Base.update", Ordinary, [Obj("Base")], I32),
+				empty("Derived.update", Ordinary, [Obj("Derived")], I32),
+				empty("Unrelated.update", Ordinary, [Obj("Unrelated")], I32)
+			];
+			// The native is declared to return the base class, and native code may return any subclass of it: the base and its subclasses are
+			// created, so the override on `Derived` is reached; an unrelated class is not.
+			if (kind == "native")
+				program.natives = [{name: "makeHandle", library: "lib", symbol: "make", arguments: [], result: Obj("Base")}];
+			else
+				program.cNatives = [
+					{
+						name: "makeHandle",
+						library: "lib",
+						symbol: "make",
+						signature: "",
+						pointerOwnership: "none",
+						pointerRelease: null,
+						pointerLength: null,
+						pointerNullable: false,
+						arguments: [],
+						argumentModes: [],
+						result: Obj("Base")
+					}
+				];
+			var result = IrTypeAwareWalk.run(program, {functions: ["main"], types: []});
+			expect(result.createdClasses.exists("Base"), kind + ": the result type of a called native is created");
+			expect(result.reached.exists("Base.update"), kind + ": the method of the class a native returns is reached");
+			expect(result.reached.exists("Derived.update"), kind + ": the override on a subclass of the declared result is reached");
+			expect(!result.reached.exists("Unrelated.update"), kind + ": an unrelated class is not reached");
+			// A native declared to return the subclass creates it.
+			program.natives = [for (native in program.natives) {name: native.name, library: native.library, symbol: native.symbol, arguments: [], result: Obj("Derived")}];
+			program.cNatives = [
+				for (native in program.cNatives) {
+					name: native.name,
+					library: native.library,
+					symbol: native.symbol,
+					signature: "",
+					pointerOwnership: "none",
+					pointerRelease: null,
+					pointerLength: null,
+					pointerNullable: false,
+					arguments: [],
+					argumentModes: [],
+					result: Obj("Derived")
+				}
+			];
+			var subclass = IrTypeAwareWalk.run(program, {functions: ["main"], types: []});
+			expect(subclass.createdClasses.exists("Derived"), kind + ": a native's subclass result is created");
+			expect(subclass.reached.exists("Derived.update"), kind + ": the override on a class only native code makes is reached");
+			// No call, no creation.
+			var idle = new IrBuilder();
+			idle.returnValue(idle.constInt(0));
+			program.functions[0] = new IrFunction("main", idle.arguments, I32, idle.blocks, Ordinary);
+			expect(!IrTypeAwareWalk.run(program, {functions: ["main"], types: []}).createdClasses.exists("Derived"),
+				kind + ": a native nothing calls creates nothing");
+		}
+	}
+
 	static function interfaceCall():Void {
 		var builder = new IrBuilder();
 		var instance = builder.newObject("Used");

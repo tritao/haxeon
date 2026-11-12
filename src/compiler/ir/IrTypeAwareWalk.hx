@@ -170,6 +170,7 @@ private class IrTypeAwareWalkState {
 	final index:IrProgramIndex;
 	final byName:Map<String, IrFunction> = [];
 	final natives:Map<String, IrNative> = [];
+	final cNatives:Map<String, IrCNative> = [];
 	final staticTypes:Map<String, IrType> = [];
 	/** `operation\nTypeKey` (operation without detail) to the names of the functions serving it. */
 	final providers:Map<String, Array<String>> = [];
@@ -214,6 +215,8 @@ private class IrTypeAwareWalkState {
 		}
 		for (native in program.natives)
 			natives.set(native.name, native);
+		for (native in program.cNatives)
+			cNatives.set(native.name, native);
 		for (field in program.staticFields)
 			staticTypes.set(field.name, field.type);
 	}
@@ -352,12 +355,21 @@ private class IrTypeAwareWalkState {
 			var requested = IrOptionalFieldStorage.requestedMethod(target);
 			if (requested != null)
 				reach(requested, false);
+			// The types a native takes and returns can hold instances only native code made (a window handle's class): they are created. A C
+			// native's call becomes `CNativeCall` only at the end of assembly, so it is a call by name here, like any native.
+			var cNative = cNatives.get(target);
+			if (cNative != null && !nativesDone.exists(target)) {
+				nativesDone.set(target, true);
+				for (argument in cNative.arguments)
+					createFromNative(argument);
+				createFromNative(cNative.result);
+			}
 			var native = natives.get(target);
 			if (native != null && !nativesDone.exists(target)) {
 				nativesDone.set(target, true);
 				for (argument in native.arguments)
-					create(argument);
-				create(native.result);
+					createFromNative(argument);
+				createFromNative(native.result);
 				if (native.generatedFunctionDependencies != null)
 					for (dependency in native.generatedFunctionDependencies)
 						reach(dependency, false);
@@ -378,6 +390,26 @@ private class IrTypeAwareWalkState {
 			sites.push({typeName: typeName, method: method, isInterface: isInterface});
 		}
 	}
+
+	/**
+	 * A type that crosses a native's signature: native code may hand back any subclass of a declared class, so the class and all its subclasses are
+	 * created (the class a native is declared to return is not necessarily the class it makes).
+	 */
+	function createFromNative(type:IrType):Void
+		switch type {
+			case Obj(name):
+				for (candidate in index.subtypesOf(name))
+					create(Obj(candidate.name));
+				create(type);
+			case Array(element), Nullable(element), Iterator(element):
+				createFromNative(element);
+			case Function(arguments, result):
+				for (argument in arguments)
+					createFromNative(argument);
+				createFromNative(result);
+			default:
+				create(type);
+		}
 
 	/** Makes a type created, with the classes it extends and the types its fields hold. */
 	function create(type:IrType):Void
