@@ -135,6 +135,9 @@ most of those 17M before any pass is ported.
   the summary.
 - **(c) global**: the rewrite needs other functions' bodies, or the summary is a fixpoint over a call-dependency graph.
 
+`IrInlineEnumRequests` is transitional: delete it together with the whole-program enum rescans when enum operations are
+resolved at the reviewed backend boundaries in [the phase-order plan](ENUM_PASS_PHASE_ORDER.md).
+
 ## Per pass
 
 Edit cost is allocations in the edit build; share is of the 123.1M. Order is by that cost, which is also the order of ports below.
