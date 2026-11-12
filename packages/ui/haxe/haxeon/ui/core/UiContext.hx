@@ -271,7 +271,12 @@ class UiContext {
 	/** Builds a fresh view tree, resolves native layout, and reconnects geometry by stable ID. */
 	public function submit(view:View, frame:LayoutFrame):RenderNode {
 		var build = function() return view;
+		var focusBefore = focus.focusedId;
 		var result = submitInternal(frame, null, build);
+		// Focus moved during this frame: the nodes take on their focused state in the next one, so this frame's tree is
+		// not yet what a rebuild would give. The check waits for the following frame.
+		if (focus.focusedId != focusBefore)
+			return result;
 		return maybeVerifyRetention(build, frame, result);
 	}
 
