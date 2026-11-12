@@ -70,6 +70,44 @@ receiver is lowered by selecting the implementation from the receiver's class:
    threshold. A per-class table in the runtime (an HL VM change) would be O(1) but is not proposed: HashLink changes go on `haxeon/main` only
    when necessary.
 
+## Dispatch options, measured
+
+`benchmarks/interface-dispatch/generate.py N out.hx` generates the benchmark for N implementors (1, 4, 32, 128). Each figure is the best of 3 runs of
+10M calls over 1,024 objects of N classes, in ns per call; two full series agreed to within about 10%. The machine was loaded (load about 10 on 20
+cores), so read the ratios, not the digits. HashLink, Haxeon plain build.
+
+| implementors | today (virtual) | linear chain | `switch` | binary search | selector table, id in a field | selector table, id by class method |
+|---|---|---|---|---|---|---|
+| 1 | 23.5 to 24.3 | 2.4 | 2.4 | 2.4 | 3.3 | 3.7 to 4.1 |
+| 4 | 22.6 to 23.8 | 4.6 | 4.1 | 4.7 | 3.9 to 4.0 | 4.5 |
+| 32 | 23.4 to 23.6 | 11.3 to 11.7 | 7.8 to 8.0 | 6.0 | 4.0 to 4.2 | 4.5 |
+| 128 | 26.6 to 27.1 | 39 to 41 | 21 | 7.3 | 4.7 to 4.8 | 5.1 to 5.8 |
+
+- **Selector table** (dev-71's option c): one global function array; the call is `table[classId + selectorOffset(I.m)](receiver)`: an array
+  get and a closure call, O(1) with no VM change. It is flat from 1 to 128 implementors. A `switch` on the id is not a jump table in the HL
+  lowering today (it is 21 ns at 128, close to the linear chain half-way), and the binary search grows slowly (2.4 to 7.3).
+- **Where the class id comes from.** A field costs 8 bytes per object (the same 8 bytes the removed interface cache field takes, per interface
+  implemented; a net saving only for classes that implement two or more interfaces). Reading it through a class method (`cid()`, a method-table
+  call, 1.5 ns) needs no per-object storage and costs about 0.5 to 1 ns over the field at every size. HashLink has no dense class id on `hl_type`
+  to read, so the method is the choice that needs no VM change.
+- **Recommendation: one mechanism, the selector table with the class id read through a method.** It is at most about 1.5 ns slower than the best
+  alternative at 1 to 4 implementors and the fastest or equal from 32 up, with no size threshold. Inlining a dispatch entry that has one arm is an
+  optimization of it, not a second mechanism. Wasm has the same shape natively: a table of functions and `call_indirect` (in the same series, below).
+- **What it needs.** Dense class ids (assigned by the compiler, in a deterministic order, stable across the edits of a live session: a class keeps
+  its id and a new class takes the next free one); a `selectorOffset` per (interface, method) so the rows do not overlap (an offset assignment
+  over the class-id ranges of each interface's implementors, as in Dart); the table is a generated function array of `Unreachable` entries for
+  every slot no constructed class fills. The table and the offsets belong to the provider row, not to the backend.
+
+## Visible changes
+
+- Reflection on an interface-typed value held as Dynamic shows the **object's** members, not only the interface's (`Reflect.fields`,
+  `Reflect.field`, `Reflect.hasField`). It matches Haxe on other targets; keeping a narrower view would bring back an allocation and a second
+  representation (decision of 2026-11-12). A corpus program pins it when the change lands: `Reflect.fields` of an interface-typed Dynamic lists the
+  object's fields. (It cannot go into the corpus before, because it fails today.)
+- Instances of classes that implement interfaces get smaller by the interface cache fields (8 bytes each).
+- `Dynamic` casts to an interface type become a class check on the object. HashLink's runtime cast paths (`hl_dyn_cast*` to an `HVIRTUAL` of an
+  interface type) must never be reached for interface types afterwards; if one is, it needs a typed replacement, not a fallback.
+
 ## How it fits the providers and the reachability walk
 
 - The dispatch entry is a provider row `(Interface I, call m)` of kind `Provider`, found through `IrProviders` like the enum helpers. A
@@ -85,16 +123,21 @@ receiver is lowered by selecting the implementation from the receiver's class:
 
 ## Plan
 
-1. Microbenchmark at several implementor counts, on a quiet machine (this note's table is preliminary).
-2. IR: `ToVirtual` object to interface becomes a retype; `HlLower` stops emitting `OToVirtual` for interface types; interface `MethodCall`
-   lowers to the dispatch entry on HashLink (Wasm keeps its inline switch until it can use the entry).
-3. Remove the interface cache fields (`interfaceSlotsFor`) and check object sizes.
-4. Reflection on an interface-typed Dynamic (decision 3), the native audit (5), and the live-patch case for an added implementor (4), each with a test.
-5. Gate: `InterfaceMountRepro` allocates 0 on HL, Wasm32 and Wasm GC; the 889 driver cases pass in both prune modes; the live regression
-   (retained object and interface view through edits, added implementors) passes.
+0. Done: the call-cost benchmark (HashLink), the dispatch options at 1, 4, 32 and 128 implementors (above). To repeat on a quiet machine.
+1. IR: `ToVirtual` from an object to its interface is a retype; `HlLower` stops emitting `OToVirtual` for interface types; an interface `MethodCall`
+   becomes a call of the dispatch entry, whose body is the selector-table call; class ids and selector offsets are assigned by the compiler (a
+   provider row `(Interface, call)` whose fingerprint includes the constructed set, so that adding an implementor invalidates it, warm and cold alike).
+2. Remove the interface cache fields (`interfaceSlotsFor`) and check the object sizes.
+3. Wasm moves to the same entry in the same series, as its own commit inside the same push, so no release has two dispatch codegens. Gate:
+   Wasm module sizes and the wasm-parity corpus do not get worse.
+4. Tests: the reflection view (above), the native audit (the 11 `HVIRTUAL` sites in `native/runtime`), a warm-edit test that adds an implementor and
+   must equal a cold build under `HAXEON_CHECK_REUSE=1`, the live patch of an added implementor, and the `hl_dyn_cast*` check above.
+5. Gate: `InterfaceMountRepro` allocates 0 bytes on HashLink, Wasm32 and Wasm GC; the driver passes in both prune modes; the live regression
+   (a retained object and its interface view through edits and added implementors) passes.
 
 ## Open decisions
 
-- Reflection view of an interface-typed value (3): the object's, or keep the narrower view by wrapping only when converting to Dynamic.
-- Dispatch for many implementors (6): jump table / binary search threshold from measurements.
-- Whether the Wasm backends move to the shared entry in the same change or later.
+- Dense class ids: where the compiler keeps the numbering so a live session keeps it stable, and what the id of a class reloaded under a new
+  generation is.
+- Whether the selector offsets are packed (Dart's coloring) or one block per interface at first; start with one block per interface and measure
+  the table size on the Materia app.
