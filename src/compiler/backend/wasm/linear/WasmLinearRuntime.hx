@@ -140,7 +140,8 @@ class WasmLinearRuntime {
 						case "__string_char_code_at":
 							functions.set(native.name, addStringCharCodeAt(module, native.name));
 						case "__string_concat":
-							functions.set(native.name, addStringConcat(module, native.name, allocator, requiredStringOffset(strings, "null")));
+							if (!functions.exists(native.name))
+								functions.set(native.name, addStringConcat(module, native.name, allocator, requiredStringOffset(strings, "null")));
 						case "__string_to_lower_case":
 							functions.set(native.name, addStringCase(module, native.name, allocator, true));
 						case "__string_to_upper_case":
@@ -176,6 +177,9 @@ class WasmLinearRuntime {
 						case "__reflect_is_object":
 							functions.set(native.name, addDynamicIsObject(module, native.name, program));
 						case "__std_string":
+							if (WasmModuleSupport.hasStringifiablePayload(program, context.stringifiableEnums)
+								&& !functions.exists("__string_concat"))
+								functions.set("__string_concat", addStringConcat(module, "__string_concat", allocator, requiredStringOffset(strings, "null")));
 							var integerString = addIntToString(module, "__haxeon_i32_to_string", allocator),
 								int64String = addInt64ToString(module, "__haxeon_i64_to_string", allocator);
 							functions.set("__haxeon_i32_to_string", integerString);
@@ -4069,7 +4073,7 @@ class WasmLinearRuntime {
 	}
 
 	static function dynamicString(module:WasmModule, name:String, strings:Map<String, Int>, program:IrProgram, integerString:Int, int64String:Int,
-			?floatString:Int, ?functions:Map<String, Int>):WasmFunction {
+			?floatString:Int, ?functions:Map<String, Int>, ?enumTable:Int = 0, ?enumRows:Int = 0, ?enumPayloads:Bool = false):WasmFunction {
 		var nullString = requiredStringOffset(strings, "null"),
 			objectString = requiredStringOffset(strings, "Object"),
 			trueString = requiredStringOffset(strings, "true"),
@@ -4109,6 +4113,19 @@ class WasmLinearRuntime {
 				builder.return_();
 			});
 		}
+		// Enum payload recursion must retain Std.string's array behavior too.
+		var arrayString = functions == null ? null : functions.get("Std.arrayString");
+		if (arrayString != null) {
+			builder.localGet(value);
+			builder.emit(I32Load(0));
+			builder.i32Const(module.runtimeTypeId(Array(Dyn)));
+			builder.emit(I32Eq);
+			builder.if_(function(builder) {
+				builder.localGet(value);
+				builder.call(builder.functionRef(arrayString));
+				builder.return_();
+			});
+		}
 		// Objects print through their class's toString, or their class name without one, as on HL.
 		// Method indices exist only after user functions are declared (finalizeDynamicString).
 		for (object in program.objects) {
@@ -4141,26 +4158,8 @@ class WasmLinearRuntime {
 			}, I32);
 			builder.return_();
 		});
-		// Parameterless enum constructors print their name, as on HL and Wasm GC.
-		for (enumDecl in program.enums) {
-			builder.localGet(value);
-			builder.emit(I32Load(0));
-			builder.i32Const(module.runtimeTypeId(Enum(enumDecl.name)));
-			builder.emit(I32Eq);
-			builder.if_(function(builder) {
-				for (index in 0...enumDecl.cases.length)
-					if (enumDecl.cases[index].params.length == 0) {
-						builder.localGet(value);
-						builder.emit(I32Load(WasmLayout.HEADER_SIZE));
-						builder.i32Const(index);
-						builder.emit(I32Eq);
-						builder.if_(function(builder) {
-							builder.i32Const(requiredStringOffset(strings, enumDecl.cases[index].name));
-							builder.return_();
-						});
-					}
-			});
-		}
+		if (enumRows > 0 && functions != null)
+			emitEnumString(builder, value, enumTable, enumRows, strings, integerString, int64String, floatString, functions, enumPayloads);
 		// Keep dynamic object stringification total. Some objects can arrive
 		// through generated/native boundaries without appearing in the program's
 		// concrete object table; they still follow the standard "Object" fallback.
@@ -4173,13 +4172,240 @@ class WasmLinearRuntime {
 	 * Complete dynamic stringification after user functions have been assigned
 	 * Wasm indices, allowing the runtime helper to call the shared Ryu formatter.
 	 */
+	/** Scan static constructor and field descriptors using one formatter for every enum. */
+	static function emitEnumString(builder:WasmFunctionBuilder, value:WasmLocalRef, table:Int, rows:Int, strings:Map<String, Int>, integerString:Int,
+			int64String:Int, floatString:Null<Int>, functions:Map<String, Int>, hasPayloads:Bool):Void {
+		var concat = functions.get("__string_concat"),
+			recursive = functions.get("__std_string");
+		var row = builder.local("enumRow", I32),
+			cursor = builder.local("enumCursor", I32),
+			field = builder.local("enumField", I32),
+			count = builder.local("enumCount", I32),
+			kind = builder.local("enumKind", I32),
+			address = builder.local("enumAddress", I32),
+			result = builder.local("enumResult", I32),
+			part = builder.local("enumPart", I32),
+			tag = builder.local("enumTag", I32);
+		builder.i32Const(table);
+		builder.localSet(row);
+		builder.i32Const(rows);
+		builder.localSet(count);
+		builder.block(b -> b.loop(b -> {
+			b.localGet(count);
+			b.i32Eqz();
+			b.emit(BrIf(1));
+			b.localGet(row);
+			b.emit(I32Load(0));
+			b.localGet(value);
+			b.emit(I32Load(0));
+			b.emit(I32Eq);
+			b.localGet(value);
+			b.emit(I32Load(WasmLayout.HEADER_SIZE));
+			b.localSet(tag);
+			b.localGet(tag);
+			b.i32Const(0);
+			b.emit(I32LtS);
+			b.i32Eqz();
+			b.emit(I32And);
+			b.localGet(tag);
+			b.localGet(row);
+			b.emit(I32Load(4));
+			b.emit(I32LtS);
+			b.emit(I32And);
+			b.if_(b -> {
+				b.localGet(row);
+				b.emit(I32Load(8));
+				b.localGet(tag);
+				b.i32Const(8);
+				b.emit(I32Mul);
+				b.i32Add();
+				b.localSet(cursor);
+				b.localGet(cursor);
+				b.emit(I32Load(0));
+				b.localSet(result);
+				b.localGet(cursor);
+				b.emit(I32Load(4));
+				b.localSet(cursor);
+				b.localGet(cursor);
+				b.i32Eqz();
+				b.if_(b -> {
+					b.localGet(result);
+					b.return_();
+				});
+				if (!hasPayloads || concat == null || recursive == null) {
+					b.emit(Unreachable);
+					return;
+				}
+				b.localGet(cursor);
+				b.emit(I32Load(0));
+				b.localSet(count);
+				b.localGet(cursor);
+				b.i32Const(4);
+				b.i32Add();
+				b.localSet(cursor);
+				b.i32Const(0);
+				b.localSet(field);
+				b.block(b -> b.loop(b -> {
+					b.localGet(field);
+					b.localGet(count);
+					b.emit(I32LtS);
+					b.i32Eqz();
+					b.emit(BrIf(1));
+					b.localGet(field);
+					b.if_(b -> {
+						b.localGet(result);
+						b.i32Const(requiredStringOffset(strings, ","));
+						b.call(b.functionRef(concat));
+						b.localSet(result);
+					});
+					b.localGet(cursor);
+					b.emit(I32Load(0));
+					b.localGet(value);
+					b.i32Add();
+					b.localSet(address);
+					b.localGet(cursor);
+					b.emit(I32Load(4));
+					b.localSet(kind);
+					b.localGet(kind);
+					b.i32Const(WasmLinearEnumStringTable.REFERENCE);
+					b.emit(I32Eq);
+					b.if_(b -> {
+						b.localGet(address);
+						b.emit(I32Load(0));
+						b.call(b.functionRef(recursive));
+						b.localSet(part);
+					});
+					b.localGet(kind);
+					b.i32Const(WasmLinearEnumStringTable.INTEGER);
+					b.emit(I32Eq);
+					b.if_(b -> {
+						b.localGet(address);
+						b.emit(I32Load(0));
+						b.call(b.functionRef(integerString));
+						b.localSet(part);
+					});
+					b.localGet(kind);
+					b.i32Const(WasmLinearEnumStringTable.BOOLEAN);
+					b.emit(I32Eq);
+					b.if_(b -> {
+						b.localGet(address);
+						b.emit(I32Load(0));
+						b.ifElse(b -> b.i32Const(requiredStringOffset(strings, "true")), b -> b.i32Const(requiredStringOffset(strings, "false")), I32);
+						b.localSet(part);
+					});
+					b.localGet(kind);
+					b.i32Const(WasmLinearEnumStringTable.INTEGER64);
+					b.emit(I32Eq);
+					b.if_(b -> {
+						b.localGet(address);
+						b.emit(I64Load(0));
+						b.call(b.functionRef(int64String));
+						b.localSet(part);
+					});
+					b.localGet(kind);
+					b.i32Const(WasmLinearEnumStringTable.FLOAT);
+					b.emit(I32Eq);
+					b.if_(b -> {
+						if (floatString == null)
+							b.emit(Unreachable);
+						else {
+							b.localGet(address);
+							b.emit(F64Load(0));
+							b.call(b.functionRef(floatString));
+							b.localSet(part);
+						}
+					});
+					b.localGet(kind);
+					b.i32Const(WasmLinearEnumStringTable.TAG);
+					b.emit(I32Eq);
+					b.if_(b -> {
+						b.i32Const(requiredStringOffset(strings, "null"));
+						b.localSet(part);
+						b.localGet(address);
+						b.emit(I32Load(0));
+						b.localSet(tag);
+						b.localGet(tag);
+						b.i32Const(1);
+						b.emit(I32LtS);
+						b.i32Eqz();
+						b.localGet(tag);
+						b.localGet(cursor);
+						b.emit(I32Load(8));
+						b.emit(I32Load(0));
+						b.emit(I32LeS);
+						b.emit(I32And);
+						b.if_(b -> {
+							b.localGet(cursor);
+							b.emit(I32Load(8));
+							b.localGet(tag);
+							b.i32Const(4);
+							b.emit(I32Mul);
+							b.i32Add();
+							b.emit(I32Load(0));
+							b.localSet(part);
+						});
+					});
+					b.localGet(result);
+					b.localGet(part);
+					b.call(b.functionRef(concat));
+					b.localSet(result);
+					b.localGet(cursor);
+					b.i32Const(12);
+					b.i32Add();
+					b.localSet(cursor);
+					b.localGet(field);
+					b.i32Const(1);
+					b.i32Add();
+					b.localSet(field);
+					b.emit(Br(0));
+				}));
+				b.localGet(result);
+				b.i32Const(requiredStringOffset(strings, ")"));
+				b.call(b.functionRef(concat));
+				b.return_();
+			});
+			b.localGet(row);
+			b.i32Const(12);
+			b.i32Add();
+			b.localSet(row);
+			b.localGet(count);
+			b.i32Const(1);
+			b.i32Sub();
+			b.localSet(count);
+			b.emit(Br(0));
+		}));
+	}
+
 	/** Static strings dynamic stringification returns: class names and parameterless enum constructor names. */
-	public static function dynamicStringConstants(program:IrProgram):Array<String> {
+	public static function dynamicStringConstants(program:IrProgram, stringifiable:Map<String, Bool>,
+			enumDeclarations:Array<compiler.ir.Ir.IrEnum>):Array<String> {
 		var result:Array<String> = [for (object in program.objects) object.name];
+		if (WasmModuleSupport.hasStringifiablePayload(program, stringifiable)) {
+			result.push(",");
+			result.push(")");
+		}
 		for (enumDecl in program.enums)
-			for (constructor in enumDecl.cases)
-				if (constructor.params.length == 0)
-					result.push(constructor.name);
+			if (stringifiable.exists(enumDecl.name))
+				for (constructor in enumDecl.cases)
+					if (constructor.params.length == 0)
+						result.push(constructor.name);
+					else
+						result.push(constructor.name + "(");
+		// Tag-only enums may have no physical descriptor in release modules, but their names
+		// remain observable when a selected payload stores the scalar tag.
+		for (enumDecl in program.enums)
+			if (stringifiable.exists(enumDecl.name))
+				for (constructor in enumDecl.cases)
+					for (parameter in constructor.params)
+						switch parameter {
+							case EnumTag(name):
+								var declaration = Lambda.find(enumDeclarations, entry -> entry.name == name);
+								if (declaration == null)
+									throw 'Missing enum declaration "$name"';
+								for (item in declaration.cases)
+									result.push(item.name);
+							default:
+						}
 		return result;
 	}
 
@@ -4194,7 +4420,8 @@ class WasmLinearRuntime {
 			throw "Dynamic string numeric formatters were not registered";
 		context.module.setFunction(dynamicString,
 			WasmLinearRuntime.dynamicString(context.module, "__std_string", context.strings, context.program, integerString, int64String, floatString,
-				context.functions));
+				context.functions, context.enumStringTable, context.enumStringRows,
+				WasmModuleSupport.hasStringifiablePayload(context.program, context.stringifiableEnums)));
 	}
 
 	public static function addStringEqual(module:WasmModule, name:String):Int {

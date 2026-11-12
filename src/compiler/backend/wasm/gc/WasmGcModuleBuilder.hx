@@ -76,6 +76,7 @@ class WasmGcModuleBuilder {
 		}), inlineValueFields = true;
 		program = fieldLowering.rewrite();
 		scalarAbi.validate(program);
+		var enumDeclarations = program.enums;
 		if (options.developmentMetadata == false)
 			program = compiler.ir.IrEnumRuntimeTypes.physical(program);
 		var preferredEntry = WasmModuleSupport.hasFunction(program,
@@ -143,6 +144,7 @@ class WasmGcModuleBuilder {
 
 		compiler.backend.wasm.WasmValueLaneRuntime.attach(program, reachable, usedNatives);
 
+		var stringifiableEnums:Map<String, Bool> = usedNatives.exists("__std_string") ? WasmModuleSupport.stringifiableEnums(program, reachable) : [];
 		var plan = new WasmGcTypePlan(program, inlineValueFields, scalarAbi.signatures, scalarAbi.scalarClosures, scalarAbi.scalarVirtuals),
 			module = new WasmModule(options.debugNames ? "haxeon" : null),
 			globals:Map<String, Int> = [],
@@ -150,6 +152,8 @@ class WasmGcModuleBuilder {
 			methods:Map<String, String> = [],
 			gcContext = new WasmGcContext(module, plan, functions, globals, methods),
 			gcRepresentation = new WasmGcRepresentation(gcContext);
+		gcContext.enumDeclarations = enumDeclarations;
+		gcContext.stringifiableEnums = stringifiableEnums;
 		module.runtimeTypeIds = plan.runtimeTypeIds;
 		plan.addTo(module);
 		module.importMemory = importMemory;
@@ -243,13 +247,15 @@ class WasmGcModuleBuilder {
 					fn.result) : plan.scalarSignatureType(scalarSignature);
 			functions.set(fn.name, module.addFunction(new WasmFunction(fn.name, type)));
 		}
-		if (usedNatives.exists("__std_string"))
-			defineGcStdString(module, functions, plan, gcRepresentation);
 		var closureTypes = collectGcClosureTypes(module, plan, program);
 		addGcClosureThunks(module, plan, functions, program, reachable);
 		var closureAdapters = WasmGcClosureAdapters.reserve(module, plan, functions, program, reachable);
 		var tableSlots = WasmModuleSupport.buildTableSlots(module, functions);
 		gcContext.tableSlots = tableSlots;
+		if (usedNatives.exists("__std_string")) {
+			addGcEnumStringTable(module, plan, gcContext, gcRepresentation);
+			defineGcStdString(module, functions, plan, gcRepresentation, gcContext);
+		}
 		// The generated query consumes a static-closure marker solely to identify its target. Resolve it after scalar ABI rewriting.
 		for (fn in program.functions) {
 			var markers:Map<Int, String> = [];
@@ -558,12 +564,121 @@ class WasmGcModuleBuilder {
 		functions.set(name, module.addFunction(new WasmFunction(name, plan.wasmFunctionType([Dyn, TypeRef], Bool), locals, body)));
 	}
 
+	/** Add typed field readers without changing the constructor structs or their allocation. */
+	static function addGcEnumStringTable(module:WasmModule, plan:WasmGcTypePlan, context:WasmGcContext, representation:WasmGcRepresentation):Void {
+		if (!Lambda.exists(plan.program.enums, entry -> context.stringifiableEnums.exists(entry.name)))
+			return;
+		// These short names are only debug labels; dispatch uses table indices.
+		var accessors:Map<String, Array<Int>> = [], matchers:Map<String, Int> = [], serial = 0;
+		for (entry in plan.program.enums)
+			if (context.stringifiableEnums.exists(entry.name)) {
+				var matcher = module.addFunction(new WasmFunction('esm${serial++}', plan.wasmFunctionType([Dyn], Bool), [], [
+					LocalGet(0),
+					RefTest({nullable: false, heap: Type(plan.enumType(entry.name))}),
+					Return
+				]));
+				matchers.set(entry.name, module.tableElements.length);
+				module.tableElements.push(matcher);
+				var slots:Array<Int> = [];
+				for (index in 0...entry.cases.length) {
+					var fields = entry.cases[index].params;
+					if (fields.length == 0) {
+						slots.push(-1);
+						continue;
+					}
+					var locals:Array<WasmLocal> = [], next = 2, allocate:WasmValueType->Int = function(type) {
+						locals.push({type: type});
+						return next++;
+					};
+					var body = representation.forFunction({allocateLocal: allocate, exceptionTag: null, irFunction: null})
+						.enumStringAccessorBody(entry.name, index, fields);
+					var fn = module.addFunction(new WasmFunction('esf${serial++}', plan.wasmFunctionType([Dyn, I32], Dyn), locals, body));
+					slots.push(module.tableElements.length);
+					module.tableElements.push(fn);
+				}
+				accessors.set(entry.name, slots);
+			}
+		module.tableMin = module.tableElements.length;
+		var table = new WasmGcEnumStringTable(plan.program, context.stringifiableEnums, context.enumDeclarations, accessors, matchers),
+			segment = module.data.length;
+		module.data.push({
+			offset: 0,
+			bytes: table.bytes,
+			passive: true,
+			censusCategory: "enum string descriptors"
+		});
+		// Keep formatter-only types outside the program's recursive group so enum type identity is unchanged.
+		var dataTypeIndex = module.addType({finalType: true, supertypes: [], composite: Array({type: table.narrow ? I16 : Value(I32), mutable: false})});
+		var cacheTypeIndex = module.addType({
+			finalType: true,
+			supertypes: [],
+			composite: Array({type: Value(Ref({nullable: true, heap: Type(plan.bytesTypeIndex)})), mutable: true})
+		});
+		var dataGlobal = module.globals.length;
+		module.globals.push({
+			type: Ref({nullable: true, heap: Type(dataTypeIndex)}),
+			mutable: true,
+			init: [RefNull(Type(dataTypeIndex))]
+		});
+		var cacheGlobal = module.globals.length;
+		module.globals.push({
+			type: Ref({nullable: true, heap: Type(cacheTypeIndex)}),
+			mutable: true,
+			init: [RefNull(Type(cacheTypeIndex))]
+		});
+		context.enumStringTable = {
+			segment: segment,
+			words: table.words,
+			names: table.names,
+			dataGlobal: dataGlobal,
+			cacheGlobal: cacheGlobal,
+			dataTypeIndex: dataTypeIndex,
+			cacheTypeIndex: cacheTypeIndex,
+			narrow: table.narrow
+		};
+	}
+
 	/**
 	 * Std.string of a Dynamic value tests the value against every class in the program, so its call sites, runtime
 	 * helpers included, share one function instead of each carrying that dispatch. Its index is reserved early and
 	 * its body defined here, once every class's toString has an index.
 	 */
-	static function defineGcStdString(module:WasmModule, functions:Map<String, Int>, plan:WasmGcTypePlan, representation:WasmGcRepresentation):Void {
+	static function defineGcStdString(module:WasmModule, functions:Map<String, Int>, plan:WasmGcTypePlan, representation:WasmGcRepresentation,
+			context:WasmGcContext):Void {
+		if (context.enumStringTable != null) {
+			var nameLocals:Array<WasmLocal> = [], nextName = 1, allocateName:WasmValueType->Int = function(type) {
+				nameLocals.push({type: type});
+				return nextName++;
+			};
+			var nameResult = allocateName(plan.valueType(Bytes)),
+				nameBody = representation.forFunction({
+					allocateLocal: allocateName,
+					exceptionTag: null,
+					irFunction: null
+				}).enumStringNameBody(0, nameResult);
+			nameBody.push(LocalGet(nameResult));
+			nameBody.push(Return);
+			functions.set("__haxeon_enum_string_name",
+				module.addFunction(new WasmFunction("__haxeon_enum_string_name", plan.wasmFunctionType([I32], Bytes), nameLocals, nameBody)));
+		}
+		if (WasmModuleSupport.hasStringifiablePayload(plan.program, context.stringifiableEnums)) {
+			var concatLocals:Array<WasmLocal> = [],
+				concatNext = 2,
+				allocateConcat:WasmValueType->Int = function(type) {
+					concatLocals.push({type: type});
+					return concatNext++;
+				};
+			var concatResult = allocateConcat(plan.valueType(Bytes)),
+				concatBody = representation.forFunction({
+					allocateLocal: allocateConcat,
+					exceptionTag: null,
+					irFunction: null
+				}).enumStringConcatBody(0, 1, concatResult);
+			concatBody.push(LocalGet(concatResult));
+			concatBody.push(Return);
+			functions.set("__haxeon_enum_string_concat",
+				module.addFunction(new WasmFunction("__haxeon_enum_string_concat", plan.wasmFunctionType([Bytes, Bytes], Bytes), concatLocals, concatBody)));
+		}
 		var locals:Array<WasmLocal> = [], nextLocal = 1, allocateLocal:WasmValueType->Int = function(type) {
 			locals.push({type: type});
 			return nextLocal++;

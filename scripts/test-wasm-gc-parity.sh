@@ -18,6 +18,7 @@ cases=(objects arrays enums closures dynamic exceptions strings)
 # One list drives compilation and execution for every target and inline setting.
 inline_cases=(
 	q3-enum-observers
+	q3-nullary-enum-string
 	q3-dynamic-array-boundaries
 	q3-dynamic-equality-fallbacks
 	generic-map-read-view

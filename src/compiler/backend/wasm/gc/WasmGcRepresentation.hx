@@ -1217,6 +1217,97 @@ class WasmGcRepresentation implements WasmValueRepresentation implements WasmAgg
 		return body;
 	}
 
+	/** Shared concatenation for enum stringification, kept outside each constructor arm. */
+	public function enumStringConcatBody(left:Int, right:Int, destination:Int):Array<WasmInstruction>
+		return concatStrings(left, right, destination);
+
+	/** Read a field through its existing constructor type; formatting stays in the shared helper. */
+	public function enumStringAccessorBody(typeName:String, constructor:Int, fields:Array<IrType>):Array<WasmInstruction> {
+		var constructorType = plan.enumConstructorType(typeName, constructor),
+			result = allocateLocal(plan.valueType(Dyn));
+		var body:Array<WasmInstruction> = [];
+		for (index in 0...fields.length) {
+			var type = fields[index],
+				field = allocateLocal(plan.valueType(type));
+			body = body.concat([
+				LocalGet(1),
+				I32Const(index),
+				I32Eq,
+				If(null),
+				LocalGet(0),
+				RefCast({nullable: false, heap: Type(constructorType)}),
+				StructGet(constructorType, plan.enumFieldIndex(typeName, constructor, index)),
+				LocalSet(field)
+			]);
+			switch type {
+				case EnumTag(_):
+					body = body.concat([LocalGet(field), StructNew(plan.boxedPrimitiveType(I32)), LocalSet(result)]);
+				case Nullable(_):
+					body = body.concat([LocalGet(field), LocalSet(result)]);
+				default:
+					switch toDynamic(new IrValue(-1, "enumField", type), result, field) {
+						case Handled(instructions): body = body.concat(instructions);
+						case UseDefault: throw 'Cannot read enum string field $type';
+					}
+			}
+			body = body.concat([LocalGet(result), Return, End]);
+		}
+		body = body.concat([RefNull(Any), Return]);
+		return body;
+	}
+
+	function enumStringDataGet():WasmInstruction {
+		var table = gc.enumStringTable;
+		if (table == null)
+			throw "Missing GC enum string table";
+		return table.narrow ? ArrayGetUnsigned(table.dataTypeIndex) : ArrayGet(table.dataTypeIndex);
+	}
+
+	/** Lazily materialize and cache one name from the shared passive enum string table. */
+	public function enumStringNameBody(name:Int, result:Int):Array<WasmInstruction> {
+		var table = gc.enumStringTable;
+		if (table == null)
+			throw "Missing GC enum string table";
+		var position = allocateLocal(I32),
+			length = allocateLocal(I32),
+			getData = enumStringDataGet();
+		return [
+			GlobalGet(table.cacheGlobal),
+			LocalGet(name),
+			ArrayGet(table.cacheTypeIndex),
+			LocalTee(result),
+			RefIsNull,
+			If(null),
+			GlobalGet(table.dataGlobal),
+			I32Const(3),
+			getData,
+			LocalGet(name),
+			I32Const(2),
+			I32Mul,
+			I32Add,
+			LocalSet(position),
+			GlobalGet(table.dataGlobal),
+			LocalGet(position),
+			getData,
+			GlobalGet(table.dataGlobal),
+			LocalGet(position),
+			I32Const(1),
+			I32Add,
+			getData,
+			LocalTee(length),
+			ArrayNewData(plan.byteArrayTypeIndex, table.segment),
+			I32Const(0),
+			LocalGet(length),
+			StructNew(plan.bytesTypeIndex),
+			LocalSet(result),
+			GlobalGet(table.cacheGlobal),
+			LocalGet(name),
+			LocalGet(result),
+			ArraySet(table.cacheTypeIndex),
+			End
+		];
+	}
+
 	/** The body of the module's shared Std.string(Dynamic) function. */
 	public function stdStringBody(valueLocal:Int, outputLocal:Int):Array<WasmInstruction>
 		return dynamicString(valueLocal, outputLocal);
@@ -1248,21 +1339,259 @@ class WasmGcRepresentation implements WasmValueRepresentation implements WasmAgg
 		body = body.concat(dynamicInt64String(valueLocal, outputLocal));
 		body = body.concat(dynamicFloatString(valueLocal, outputLocal));
 		body = body.concat(dynamicBooleanString(valueLocal, outputLocal));
-		for (enumDecl in plan.program.enums)
-			for (index in 0...enumDecl.cases.length) {
-				var constructor = enumDecl.cases[index];
-				if (constructor.params.length == 0) {
-					body = body.concat([
-						LocalGet(valueLocal),
-						RefTest({nullable: false, heap: Type(plan.enumConstructorType(enumDecl.name, index))}),
-						If(null)
-					]);
-					body = body.concat(stringLiteral(constructor.name, outputLocal));
-					body.push(End);
-				}
-			}
+		// Std.string handles arrays in shared Haxeon source; use the same path for nested payloads.
+		var arrayString = gc.functions.get("Std.arrayString"),
+			elements = plan.arrayElementTypes();
+		if (arrayString != null && elements.length > 0) {
+			var arrayType = plan.arrayType(elements[0]);
+			body = body.concat([
+				LocalGet(valueLocal),
+				RefTest({nullable: false, heap: Type(arrayType)}),
+				If(null),
+				LocalGet(valueLocal),
+				RefCast({nullable: false, heap: Type(arrayType)}),
+				Call(arrayString),
+				LocalSet(outputLocal),
+				End
+			]);
+		}
+		body = body.concat(dynamicEnumString(valueLocal, outputLocal));
 		body = body.concat([End, End]);
 		return body;
+	}
+
+	/** One formatter reads constructor metadata and calls a typed field accessor. */
+	function dynamicEnumString(valueLocal:Int, outputLocal:Int):Array<WasmInstruction> {
+		var table = gc.enumStringTable;
+		if (table == null)
+			return [];
+		var data = table.dataTypeIndex,
+			getData = enumStringDataGet(),
+			name = WasmModuleSupport.requiredFunctionIndex(gc.functions, "__haxeon_enum_string_name"),
+			row = allocateLocal(I32),
+			remaining = allocateLocal(I32),
+			caseIndex = allocateLocal(I32),
+			cursor = allocateLocal(I32),
+			accessor = allocateLocal(I32),
+			field = allocateLocal(I32),
+			count = allocateLocal(I32),
+			kind = allocateLocal(I32),
+			tag = allocateLocal(I32),
+			dynamicValue = allocateLocal(plan.valueType(Dyn)),
+			part = allocateLocal(plan.valueType(Bytes));
+		var matcherType = gc.module.typeIndex(plan.wasmFunctionType([Dyn], Bool));
+		var body:Array<WasmInstruction> = [
+			LocalGet(valueLocal),
+			RefTest({nullable: false, heap: Type(plan.enumRootTypeIndex)}),
+			If(null),
+			GlobalGet(table.dataGlobal),
+			RefIsNull,
+			If(null),
+			I32Const(0),
+			I32Const(table.words),
+			ArrayNewData(data, table.segment),
+			GlobalSet(table.dataGlobal),
+			End,
+			GlobalGet(table.dataGlobal),
+			I32Const(0),
+			getData,
+			LocalSet(remaining),
+			I32Const(4),
+			LocalSet(row),
+			Block(null),
+			Loop(null),
+			LocalGet(remaining),
+			I32Eqz,
+			If(null),
+			I32Const(-1),
+			LocalSet(row),
+			Br(2),
+			End,
+			LocalGet(valueLocal),
+			GlobalGet(table.dataGlobal),
+			LocalGet(row),
+			getData,
+			CallIndirect(matcherType),
+			BrIf(1),
+			LocalGet(row),
+			I32Const(3),
+			I32Add,
+			LocalSet(row),
+			LocalGet(remaining),
+			I32Const(1),
+			I32Sub,
+			LocalSet(remaining),
+			Br(0),
+			End,
+			End
+		];
+		body = body.concat([
+			LocalGet(row),
+			I32Const(0),
+			I32LtS,
+			I32Eqz,
+			If(null),
+			GlobalGet(table.cacheGlobal),
+			RefIsNull,
+			If(null),
+			I32Const(table.names),
+			ArrayNewDefault(table.cacheTypeIndex),
+			GlobalSet(table.cacheGlobal),
+			End,
+			LocalGet(valueLocal),
+			RefCast({
+				nullable: false,
+				heap: Type(plan.enumRootTypeIndex)
+			}),
+			StructGet(plan.enumRootTypeIndex, 0),
+			LocalSet(caseIndex),
+			LocalGet(caseIndex),
+			I32Const(0),
+			I32LtS,
+			I32Eqz,
+			LocalGet(caseIndex),
+			GlobalGet(table.dataGlobal),
+			LocalGet(row),
+			I32Const(1),
+			I32Add,
+			getData,
+			I32LtS,
+			I32And,
+			If(null),
+			GlobalGet(table.dataGlobal),
+			LocalGet(row),
+			I32Const(2),
+			I32Add,
+			getData,
+			LocalGet(caseIndex),
+			I32Const(3),
+			I32Mul,
+			I32Add,
+			LocalSet(cursor),
+			GlobalGet(table.dataGlobal),
+			LocalGet(cursor),
+			getData,
+			Call(name),
+			LocalSet(outputLocal)
+		]);
+		if (WasmModuleSupport.hasStringifiablePayload(plan.program, gc.stringifiableEnums)) {
+			var concat = WasmModuleSupport.requiredFunctionIndex(gc.functions, "__haxeon_enum_string_concat"),
+				recursive = WasmModuleSupport.requiredFunctionIndex(gc.functions, "__std_string"),
+				accessorType = gc.module.typeIndex(plan.wasmFunctionType([Dyn, I32], Dyn));
+			body = body.concat([
+				GlobalGet(table.dataGlobal),
+				LocalGet(cursor),
+				I32Const(2),
+				I32Add,
+				getData,
+				LocalSet(accessor),
+				GlobalGet(table.dataGlobal),
+				LocalGet(cursor),
+				I32Const(1),
+				I32Add,
+				getData,
+				LocalTee(cursor),
+				I32Eqz,
+				I32Eqz,
+				If(null),
+				GlobalGet(table.dataGlobal),
+				LocalGet(cursor),
+				getData,
+				LocalSet(count),
+				LocalGet(cursor),
+				I32Const(1),
+				I32Add,
+				LocalSet(cursor),
+				I32Const(0),
+				LocalSet(field),
+				Block(null),
+				Loop(null),
+				LocalGet(field),
+				LocalGet(count),
+				I32LtS,
+				I32Eqz,
+				BrIf(1),
+				LocalGet(field),
+				If(null)
+			]);
+			body = body.concat(stringLiteral(",", part));
+			body = body.concat([
+				LocalGet(outputLocal),
+				LocalGet(part),
+				Call(concat),
+				LocalSet(outputLocal),
+				End,
+				LocalGet(valueLocal),
+				LocalGet(field),
+				LocalGet(accessor),
+				CallIndirect(accessorType),
+				LocalSet(dynamicValue),
+				GlobalGet(table.dataGlobal),
+				LocalGet(cursor),
+				getData,
+				LocalSet(kind),
+				LocalGet(kind),
+				I32Const(WasmGcEnumStringTable.TAG),
+				I32Eq,
+				If(null)
+			]);
+			body = body.concat(stringLiteral("null", part));
+			body = body.concat([
+				LocalGet(dynamicValue),
+				RefCast({nullable: false, heap: Type(plan.boxedPrimitiveType(I32))}),
+				StructGet(plan.boxedPrimitiveType(I32), 0),
+				LocalSet(tag),
+				I32Const(0),
+				LocalGet(tag),
+				I32LtS,
+				LocalGet(tag),
+				GlobalGet(table.dataGlobal),
+				LocalGet(cursor),
+				I32Const(1),
+				I32Add,
+				getData,
+				I32LeS,
+				I32And,
+				If(null),
+				GlobalGet(table.dataGlobal),
+				GlobalGet(table.dataGlobal),
+				LocalGet(cursor),
+				I32Const(2),
+				I32Add,
+				getData,
+				LocalGet(tag),
+				I32Const(1),
+				I32Sub,
+				I32Add,
+				getData,
+				Call(name),
+				LocalSet(part),
+				End,
+				Else,
+				LocalGet(dynamicValue),
+				Call(recursive),
+				LocalSet(part),
+				End,
+				LocalGet(outputLocal),
+				LocalGet(part),
+				Call(concat),
+				LocalSet(outputLocal),
+				LocalGet(cursor),
+				I32Const(3),
+				I32Add,
+				LocalSet(cursor),
+				LocalGet(field),
+				I32Const(1),
+				I32Add,
+				LocalSet(field),
+				Br(0),
+				End,
+				End
+			]);
+			body = body.concat(stringLiteral(")", part));
+			body = body.concat([LocalGet(outputLocal), LocalGet(part), Call(concat), LocalSet(outputLocal), End]);
+		}
+		return body.concat([End, End, End]);
 	}
 
 	/**
@@ -1590,7 +1919,7 @@ class WasmGcRepresentation implements WasmValueRepresentation implements WasmAgg
 		]);
 	}
 
-	function integerValueString(value:Int, outputLocal:Int):Array<WasmInstruction> {
+	public function integerValueString(value:Int, outputLocal:Int):Array<WasmInstruction> {
 		var negative = allocateLocal(I32),
 			position = allocateLocal(I32),
 			digit = allocateLocal(I32),

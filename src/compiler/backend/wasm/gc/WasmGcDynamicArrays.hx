@@ -105,6 +105,12 @@ class WasmGcDynamicArrays {
 			helper.literal(" to "),
 			helper.typeName(1)
 		]));
+		if (Lambda.exists(operations, native -> native.name == "__array_check_cast"))
+			shared("__haxeon_array_index_string", [I32], helper -> {
+				var result = helper.allocateLocal(plan.valueType(Bytes));
+				helper.push(helper.representation.integerValueString(0, result));
+				return result;
+			});
 		// Retyping dynamic storage converts every element, so each element type gets its own function and
 		// __array_check_cast only dispatches to them; inline, its arms made one function too large to optimize.
 		for (native in operations)
@@ -658,10 +664,12 @@ class WasmGcDynamicArrays {
 		eachValue(function() {
 			accepts(element, valueLocal, ok);
 			push([LocalGet(ok), I32Eqz, If(null)]);
-			var indexText = allocateLocal(plan.valueType(Bytes)),
-				boxedIndex = allocateLocal(plan.valueType(Dyn));
-			push(handled(representation.toDynamic(value(I32), boxedIndex, index)));
-			lower("__std_string", value(Bytes), [value(Dyn)], indexText, [boxedIndex]);
+			var indexText = allocateLocal(plan.valueType(Bytes));
+			push([
+				LocalGet(index),
+				Call(WasmModuleSupport.requiredFunctionIndex(functions, "__haxeon_array_index_string")),
+				LocalSet(indexText)
+			]);
 			raise(concatenate([
 				literal("Array element type mismatch: Dynamic -> "),
 				typeName(target),

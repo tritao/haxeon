@@ -1,6 +1,8 @@
 package compiler.backend.wasm;
 
 import compiler.ir.IrProgramIndex;
+import compiler.ir.IrReachability;
+import compiler.ir.IrEnumEscapeReach;
 import compiler.ir.Ir.IrProgram;
 import compiler.ir.Ir.IrType;
 import compiler.ir.Ir.IrValue;
@@ -26,6 +28,82 @@ typedef WasmClosureTypes = {
 class WasmModuleSupport {
 	public static function enumCaseKey(name:String, constructor:Int):String
 		return "$enum-case:" + name.length + ":" + name + ":" + constructor;
+
+	/** Enum values that can escape from already-reached code or enter through a host boundary.
+	 * Dynamic stringification is an any-subject operation, so any such value may reach it.
+	 */
+	public static function stringifiableEnums(program:IrProgram, reachable:Map<String, Bool>):Map<String, Bool> {
+		var roots:Array<IrType> = [],
+			result:Map<String, Bool> = [],
+			arbitraryDynamic = false;
+		function hasDynamic(type:IrType):Bool
+			return switch type {
+				case Dyn: true;
+				case Array(element), Iterator(element), Nullable(element): hasDynamic(element);
+				case Function(arguments, result): Lambda.exists(arguments, hasDynamic) || hasDynamic(result);
+				default: false;
+			};
+		function boundary(type:IrType):Void {
+			if (hasDynamic(type))
+				arbitraryDynamic = true;
+			IrEnumEscapeReach.addNativeRoot(roots, type);
+		}
+		for (fn in program.functions)
+			if (reachable.exists(fn.name)) {
+				var sourceFunction = switch fn.kind {
+					case Ordinary, GenericSpecialization, SourceLambda: true;
+					default: false;
+				};
+				if (fn.retention != Reachable && sourceFunction) {
+					for (argument in fn.arguments)
+						boundary(argument.type);
+					boundary(fn.result);
+				}
+				for (block in fn.blocks)
+					for (located in block.instructions)
+						switch located.value {
+							case ToDyn(_, value):
+								roots.push(value.type);
+							default:
+						}
+			}
+		var used = IrReachability.natives(program, reachable);
+		for (native in program.natives)
+			if (used.exists(native.name) && native.library != "haxeon_runtime") {
+				boundary(native.result);
+				for (argument in native.arguments)
+					switch argument {
+						case Function(_, _):
+							boundary(argument);
+						default:
+					}
+			}
+		for (native in program.cNatives)
+			if (used.exists(native.name)) {
+				boundary(native.result);
+				for (argument in native.arguments)
+					switch argument {
+						case Function(_, _):
+							boundary(argument);
+						default:
+					}
+			}
+		if (arbitraryDynamic)
+			for (entry in program.enums)
+				result.set(entry.name, true);
+		for (name in new IrEnumEscapeReach(program).collect(roots, _ -> false).keys())
+			result.set(name, true);
+		return result;
+	}
+
+	public static function hasStringifiablePayload(program:IrProgram, names:Map<String, Bool>):Bool {
+		for (entry in program.enums)
+			if (names.exists(entry.name))
+				for (constructor in entry.cases)
+					if (constructor.params.length > 0)
+						return true;
+		return false;
+	}
 
 	/** Linear GC needs every cached enum root before its collector is generated. */
 	public static function nullaryEnumKeys(program:IrProgram, reachable:Map<String, Bool>):Array<String> {

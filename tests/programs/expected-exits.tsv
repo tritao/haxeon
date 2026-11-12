@@ -562,5 +562,6 @@ prune-uncreated-receiver	42
 inline-enum-abstract-constant	42
 flattened-subtype-comprehension	42
 q3-enum-observers	42
+q3-nullary-enum-string	42
 q3-dynamic-array-boundaries	42
 q3-dynamic-equality-fallbacks	42

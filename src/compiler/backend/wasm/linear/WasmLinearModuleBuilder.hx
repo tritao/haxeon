@@ -28,6 +28,7 @@ import compiler.backend.wasm.linear.WasmLinearContext.WasmLinearContextState;
 import compiler.backend.wasm.linear.WasmLinearGc;
 import compiler.backend.wasm.linear.WasmLinearRuntime;
 import compiler.ir.Ir.IrProgram;
+import compiler.ir.Ir.IrEnum;
 import compiler.ir.IrVerifier;
 import compiler.backend.wasm.WasmFlattenValueFields;
 import compiler.backend.wasm.WasmValueLayout;
@@ -36,6 +37,7 @@ import compiler.backend.wasm.WasmValueLayout;
 class WasmLinearModuleBuilder {
 	final program:IrProgram;
 	final logicalProgram:IrProgram;
+	final enumDeclarations:Array<IrEnum>;
 	final options:BackendOptions;
 	final patchChanged:Null<Array<String>>;
 	final target:WasmTargetConfig;
@@ -48,6 +50,7 @@ class WasmLinearModuleBuilder {
 	var boundaryExportAdapters:Map<String, String>;
 	var preferredEntry:String;
 	var reachable:Map<String, Bool>;
+	var stringifiableEnums:Map<String, Bool>;
 	var usedCNatives:Map<String, Bool>;
 	var usedNatives:Map<String, Bool>;
 	var layout:WasmLayout;
@@ -85,9 +88,11 @@ class WasmLinearModuleBuilder {
 	var scalarAbi:compiler.backend.wasm.WasmScalarAbi;
 	var fieldLowering:compiler.backend.wasm.WasmFlattenValueFields;
 
-	public function new(program:IrProgram, logicalProgram:IrProgram, options:BackendOptions, patchChanged:Null<Array<String>>, target:WasmTargetConfig) {
+	public function new(program:IrProgram, logicalProgram:IrProgram, enumDeclarations:Array<IrEnum>, options:BackendOptions, patchChanged:Null<Array<String>>,
+			target:WasmTargetConfig) {
 		this.program = program;
 		this.logicalProgram = logicalProgram;
+		this.enumDeclarations = enumDeclarations;
 		this.options = options;
 		this.patchChanged = patchChanged;
 		this.target = target;
@@ -194,11 +199,12 @@ class WasmLinearModuleBuilder {
 			}
 		];
 		abi.validate(flattened);
+		var enumDeclarations = logical.enums;
 		if (options.developmentMetadata == false) {
 			flattened = compiler.ir.IrEnumRuntimeTypes.physical(flattened);
 			logical = compiler.ir.IrEnumRuntimeTypes.physical(logical);
 		}
-		var builder = new WasmLinearModuleBuilder(flattened, logical, options, patchChanged, target);
+		var builder = new WasmLinearModuleBuilder(flattened, logical, enumDeclarations, options, patchChanged, target);
 		builder.boundaryExportNames = boundaryExports;
 		builder.boundaryExportAdapters = exportAdapters;
 		builder.closureAdapters = adapters;
@@ -287,6 +293,7 @@ class WasmLinearModuleBuilder {
 		usedCNatives = WasmModuleSupport.reachableCNatives(program, reachable);
 		usedNatives = IrReachability.natives(program, reachable);
 		compiler.backend.wasm.WasmValueLaneRuntime.attach(program, reachable, usedNatives);
+		stringifiableEnums = usedNatives.exists("__std_string") ? WasmModuleSupport.stringifiableEnums(program, reachable) : [];
 		layout = new WasmLayout(program, logicalProgram, module.runtimeTypeIds);
 		strings = [];
 		var nextData = memoryBase + WasmLayout.STRING_DATA_OFFSET;
@@ -304,7 +311,7 @@ class WasmLinearModuleBuilder {
 							}
 						default:
 					}
-		for (value in ["null", "true", "false", "Object"].concat(WasmLinearRuntime.dynamicStringConstants(program))
+		for (value in ["null", "true", "false", "Object"].concat(WasmLinearRuntime.dynamicStringConstants(program, stringifiableEnums, enumDeclarations))
 			.concat(WasmLinearDynamicArrays.runtimeStrings(program)))
 			if (!strings.exists(value)) {
 				var bytes = WasmModuleSupport.stringBytes(value, module.runtimeTypeIds),
@@ -313,6 +320,8 @@ class WasmLinearModuleBuilder {
 				strings.set(value, offset);
 				nextData = WasmModuleSupport.align(offset + bytes.length, 8);
 			}
+		var enumStrings = WasmLinearEnumStringTable.place(module, program, layout, strings, stringifiableEnums, enumDeclarations, nextData);
+		nextData = enumStrings.end;
 		var staticData = WasmModuleSupport.placeStaticData(program, module, nextData, reachable);
 		nextData = staticData.end;
 		staticDataAddresses = staticData.addresses;
@@ -410,6 +419,9 @@ class WasmLinearModuleBuilder {
 			reflectionBytes: reflectionBytes
 		};
 		linear = new WasmLinearContext(module, program, layout, options, linearState);
+		linear.stringifiableEnums = stringifiableEnums;
+		linear.enumStringTable = enumStrings.address;
+		linear.enumStringRows = enumStrings.count;
 		linear.pendingExceptionFlag = pendingExceptionFlag;
 		linear.pendingExceptionValue = pendingExceptionValue;
 	}

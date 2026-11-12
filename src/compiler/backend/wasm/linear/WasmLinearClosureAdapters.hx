@@ -230,7 +230,7 @@ class WasmLinearClosureAdapters {
 		var builder = new IrBuilder();
 		builder.argument("closure", Dyn);
 		builder.returnValue(builder.constInt(0));
-		return new IrFunction(SIGNATURE_FUNCTION, builder.arguments, I32, builder.blocks, Ordinary, null, false, Keep);
+		return new IrFunction(SIGNATURE_FUNCTION, builder.arguments, I32, builder.blocks, GeneratedHelper, null, false, Keep);
 	}
 
 	public function defineSignatureQuery(module:WasmModule, functions:Map<String, Int>):Void {

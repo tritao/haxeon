@@ -52,6 +52,9 @@ class WasmLinearContext {
 	public final reflectionCount:Int;
 	public final reflectionBytes:Null<haxe.io.Bytes>;
 
+	public var stringifiableEnums:Map<String, Bool> = [];
+	public var enumStringTable:Int = 0;
+	public var enumStringRows:Int = 0;
 	public var markFunction:Int = -1;
 	public var traceFunction:Int = -1;
 	public var collectorFunction:Int = -1;
