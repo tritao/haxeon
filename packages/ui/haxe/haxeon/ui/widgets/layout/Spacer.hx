@@ -22,6 +22,6 @@ class Spacer implements View {
 
 	public function build(context:BuildContext):RenderNode
 		return context.withScope(key, function() {
-			return new RenderNode(context.id("spacer"), LayoutVisualKind.Box, style);
+			return context.createNode(context.rootId("spacer"), LayoutVisualKind.Box, style);
 		});
 }

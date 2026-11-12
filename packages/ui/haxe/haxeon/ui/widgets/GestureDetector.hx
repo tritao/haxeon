@@ -29,7 +29,7 @@ class GestureDetector implements View {
 
 	public function build(context:BuildContext):RenderNode {
 		return context.withScope(key, function() {
-			var node = new RenderNode(context.id("gesture-detector"), LayoutVisualKind.Box, style);
+			var node = context.createNode(context.rootId("gesture-detector"), LayoutVisualKind.Box, style);
 			node.hitTestSelf = false;
 			var content = context.withScope(new Key("content"), function() return child.build(context));
 			node.add(content);

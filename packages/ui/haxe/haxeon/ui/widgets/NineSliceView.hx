@@ -43,7 +43,7 @@ class NineSliceView implements View {
 
 	public function build(context:BuildContext):RenderNode {
 		return context.withScope(new Key(key), function() {
-			var nodeId = context.id("nine-slice");
+			var nodeId = context.rootId("nine-slice");
 			var computed = context.resolveStyle(new StyleTarget("nine-slice", key, key,
 				null, ["nine-slice"], context.interactionStates.get(nodeId)), style);
 			var resolvedDecorations = computed.getDecorations();
@@ -54,7 +54,7 @@ class NineSliceView implements View {
 				computed.setDecorations(DecorationChain.of([
 					new NineSliceDecoration(image, left, top, right, bottom)
 				]), new StyleSource("framework", "nine-slice", -1, "default"));
-			var node = new RenderNode(nodeId, LayoutVisualKind.Custom, computed.toLayoutStyle());
+			var node = context.createNode(nodeId, LayoutVisualKind.Custom, computed.toLayoutStyle());
 			node.setStyleIdentity("nine-slice", key, key, null, ["nine-slice"]);
 			node.states = context.interactionStates.get(nodeId);
 			node.computedStyle = computed;

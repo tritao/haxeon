@@ -571,6 +571,279 @@ retention scenarios, budgets that may only go down, memory runs, compiler suites
    are unchanged against `835a2bbc8` / outer `7eff0a036`; pilot fresh-mount verification passes. The routing regression
    fails against the old control on HashLink (exit 1), and passes on all three targets with inlining off/on.
 
+   **Button constructor and composition port (in progress).** Presentation inputs are a sparse, typed constructor
+   record stored in final fields. Composites supply their complete `Semantics` description as data rather than
+   editing a replaceable body after mount; the control owns that description. Default semantics and activation
+   forwarding are made once from immutable inputs. Decorations compose through existing child-view slots, where
+   they inherit the control's computed style. The stable structural wrapper keeps caller listeners; focus uses the
+   semantic control's widget ID. This uses ordinary values and `View` composition, not a decorator hook, patch
+   fallback or new binding primitive. Existing mutable property setters are removed as their callers are ported.
+   A styled terminal element projects its resolved outer layout (axes, positioning, visibility, clipping and transform)
+   onto the stable scope wrapper; its content node fills that box and retains padding and paint. This keeps CSS layout
+   and caller wrapper edits valid across reruns without adding fields to every scope owner. A changed projection records
+   its prior before mutation; unchanged projections need no style snapshot. Portable scope and Button fixtures cover
+   projection changes, caller overrides and accessible metadata/decorations across interaction reruns.
+   Topology snapshots stop at a native scope's owned body, and interaction snapshots leave native-owned flags to the
+   scope. Otherwise leaf hover/focus or an independent body replacement invalidates the enclosing cache even though
+   its own inputs did not change. Interaction traversal keeps existing lifetime records for unported descendant
+   updaters. Caller-added wrapper children still participate in interaction and topology checks. Native membership queries reuse
+   the registered owner and its existing body pointer; no owner fields, caches or binding primitives are added.
+   Portable regressions fail before the interaction (exit 8) and topology (exit 12) ownership checks. They verify native
+   hover/focus refresh without rebuilding the parent, constructor-input changes that do rebuild it, and removal of a
+   caller-added child that invalidates the cached variant.
+   Focus-dependent composition uses capture listeners on the stable wrapper, following the independent event-model
+   change above; Button has no focus-specific callback props.
+
+
+   **Button allocation stop (2026-11-12; draft remains uncommitted).** The previous pushed head is
+   `835a2bbc8`, with outer control `7eff0a036`. The final measured draft uses the independently committed focus
+   capture change, native scope ownership/topology fixes, and hover-selector identity matching without temporary
+   style targets. Scope and Button regressions pass on all three targets, inlining off/on. Pilot verification
+   still compares against a fresh mount every frame and passes. These checks do not accept the allocation gate.
+   The fifteen standard actions and seven pilot actions are:
+
+   | Action | Control objects / bytes | Button draft objects / bytes | Delta objects / bytes |
+   | --- | ---: | ---: | ---: |
+   | hierarchy->sensors | 1,672 / 121,720 | 1,685 / 125,040 | +13 / +3,320 |
+   | sensors->hierarchy | 1,145 / 80,904 | 1,105 / 79,048 | -40 / -1,856 |
+   | console->telemetry | 1,174 / 79,288 | 1,174 / 79,152 | +0 / -136 |
+   | telemetry->console | 1,708 / 93,680 | 1,647 / 89,280 | -61 / -4,400 |
+   | scroll-inspector | 227 / 25,784 | 232 / 26,744 | +5 / +960 |
+   | hover-enter | 32 / 1,032 | 32 / 1,032 | +0 / +0 |
+   | hover-inside | 32 / 1,032 | 32 / 1,032 | +0 / +0 |
+   | idle | 17 / 584 | 17 / 584 | +0 / +0 |
+   | idle-focused | 17 / 584 | 17 / 584 | +0 / +0 |
+   | hover-other | 187 / 9,760 | 188 / 9,848 | +1 / +88 |
+   | hover-field | 323 / 17,432 | 321 / 16,928 | -2 / -504 |
+   | hover-away | 257 / 12,576 | 257 / 12,552 | +0 / -24 |
+   | type-char | 417 / 16,456 | 417 / 16,456 | +0 / +0 |
+   | type-backspace | 432 / 17,088 | 432 / 17,088 | +0 / +0 |
+   | selection | 8,565 / 581,608 | 8,836 / 608,160 | +271 / +26,552 |
+   | cnc-unchanged | 19 / 640 | 19 / 640 | +0 / +0 |
+   | cnc-select | 2,193 / 123,272 | 2,193 / 123,272 | +0 / +0 |
+   | cnc-source | 4,615 / 268,336 | 4,615 / 268,336 | +0 / +0 |
+   | cnc-progress | 5,467 / 278,736 | 5,470 / 278,544 | +3 / -192 |
+   | cnc-hold | 1,011 / 46,736 | 1,003 / 45,880 | -8 / -856 |
+   | cnc-resume | 1,462 / 76,384 | 1,502 / 81,552 | +40 / +5,168 |
+   | telemetry-step | 14,983 / 624,712 | 15,104 / 639,816 | +121 / +15,104 |
+
+   The inspector-scroll increase is entirely five additional immutable `ResolvedLayoutItem` snapshots, one per
+   added structural wrapper whose geometry moves. Interaction flag and topology ownership fixes removed the large
+   accidental enclosing-cache rebuilds, but native Button mounts and wrapper geometry still exceed the old form.
+   The remaining selection, resume and telemetry increases are not demonstrated correctness costs, so the foundation's
+   telemetry exception does not apply. A value-type terminal body was also measured and rejected: returning it through
+   `View` still boxed it and slightly increased bytes; the draft retains the class form. No budget or verification
+   change is accepted. This stops the Button family under the stage's allocation rule, rather than publishing a
+   regressing batch or introducing another retained-update path.
+   The framework gate also fails with `Uncaught exception: Dock workspace contract failed at line 6519`:
+   Escape cancellation uses the focused inner Button ID while the stable tab wrapper owns pointer capture. That
+   interaction defect remains unfinished in this rejected draft. Tier 1 and the remaining Tier 2 checks have not been
+   run on this final draft; it is not eligible for commit or push. The independent focus commit is local and still
+   awaits its remaining Tier 2 gates. The queued closed event-phase enum port has not started.
+   Machine-readable counts, source hashes, allocation stacks and gate output remain on DATA1 under
+   `button-allocation-stop.json`, `button-selector-{all,pilot}-census.json`,
+   `candidate-button-selector-source-hashes.json` and `button-selector-framework.log`.
+
+   **Lead-directed allocation attribution before changing scope identity (2026-11-12).** The lead requested
+   measurement before removing scope wrappers, and a report before changing direction if non-wrapper costs were
+   responsible. A new control capture reproduces selection at 8,565 objects / 581,608 bytes and telemetry step at
+   14,983 / 624,712, exactly matching the previous control. The final rejected native draft measures 8,836 / 608,160
+   and 15,104 / 639,816. Exact per-type object counts and every-byte site weights reconcile to both complete deltas;
+   allocation-site byte samples are not interpreted as object counts.
+
+   | Cause | Selection delta objects / bytes | Telemetry delta objects / bytes |
+   | --- | ---: | ---: |
+   | Render nodes and element projection storage | +20 / +9,280 | +14 / +6,496 |
+   | Layout nodes | +20 / +2,400 | +14 / +1,680 |
+   | Resolved geometry | +6 / +1,152 | +0 / +0 |
+   | Layout styles | +13 / +4,472 | +12 / +4,128 |
+   | Native scope ownership records | +20 / +3,840 | +14 / +2,688 |
+   | Removed legacy ownership records | -40 / -3,040 | -28 / -2,128 |
+   | Scope/body descriptions | +40 / +1,280 | +28 / +896 |
+   | Interface adapters | +40 / +1,440 | +28 / +1,008 |
+   | Closures and environments | +72 / +2,704 | +46 / +1,776 |
+   | Constructor input records | +20 / +2,400 | +14 / +1,680 |
+   | Arrays | +34 / -1,056 | -25 / -3,328 |
+   | Reactive edges | +10 / +720 | +0 / +0 |
+   | Other types and object size changes | +16 / +960 | +4 / +208 |
+   | Total | +271 / +26,552 | +121 / +15,104 |
+
+   `TrackedScope.build` creates the extra plain root, and `RenderNode.new` creates its `LayoutNode`.
+   Twenty selection and fourteen telemetry Button mounts explain the additional render/layout node pairs. The
+   render-node byte delta also includes 184 extra bytes per styled body in `ComponentElement`, allocated at
+   `Button.buildButton`, for projecting its outer layout onto the wrapper. `ResolvedLayoutItem.decode` accounts
+   for six additional geometry objects in selection and none in telemetry; the telemetry increase is not extra
+   geometry snapshots. Layout-style counts are net of the old updater's removed style copies.
+   Native ownership records allocate at `BuildContext.mountRenderScope`: twenty / fourteen `RenderScope` instances.
+   They replace twenty / fourteen each of `SelfUpdatingBuild` and `BuiltNode`; ownership records therefore save
+   twenty / fourteen objects in aggregate, despite increasing bytes. The `TrackedScope` plus `ButtonBody`
+   descriptions add forty / twenty-eight objects, and the `View` plus reactive-tracking interface adapters add
+   another forty / twenty-eight. Closure/environment sites include `captureBuild`, `mountRenderScope` and
+   `TrackedScope.build`; all closure types together add seventy-two / forty-six objects after subtracting removed
+   legacy closures. Sparse constructor-input records add twenty / fourteen more objects.
+   Thus wrapper render/layout nodes account for 40 of the +271 selection objects and 28 of the +121 telemetry
+   objects. Scope descriptions, adapters, constructor inputs and closures are material independent costs; this is
+   not a wrapper/geometry-only increase. Per the lead's step 3, report this attribution before changing representation.
+   No wrapper-free implementation, native decoration transfer, or alternative retained-update path has been added.
+   Detailed type deltas and allocation-site byte deltas are in DATA1 `evidence/button-lead-attribution.json`; the
+   fresh control allocation stacks are in `evidence/button-direction-control-stacks.json`.
+
+   **Lead-directed mount overhead reductions (in progress, 2026-11-12).** Stateful controls implement
+   `ScopeView` directly: their own key, final-input equality and native `buildBody` method form one component description.
+   Button and IconButton no longer manufacture a `TrackedScope` description and a separate body view. Function-based
+   scopes implement the same protocol. Equality reads final fields and compares authored class names by content;
+   accessible descriptions use the existing deferred-value-safe semantic comparison. A portable input-contract
+   fixture checks equal presentation, changed callback ownership, style, classes and accessibility, with zero allocation
+   for repeated comparisons on HashLink.
+   Step 1's controlled twenty-mount comparison, including component construction and cold state registrations after
+   warming runtime/theme metadata, reduces Button from 3,422 objects / 242,912 bytes to 3,362 / 241,632, and IconButton
+   from 3,437 / 234,752 to 3,377 / 233,632. This saves three objects per mount; it does not yet accept the editor census.
+   Step-zero sources were reconstructed and SHA-checked against the rejected draft. Exact counts are retained in
+   DATA1 `evidence/component-description-step1-measurement.json` and `scope-mount-step{0,1}-{button,icon}-raw.json`.
+   The next reduction stores inherited key/style/text inputs on the native owner and calls the component method directly,
+   rather than allocating captured build functions. Tracking entry/exit will share the existing read/creation-log
+   bookkeeping through a value frame; this changes no subscription or observable-creation rule and introduces no
+   widget binding API. Native lifetime cleanup will belong to the existing state handle, avoiding per-mount resource
+   cleanup closures or a second owner-holder object. Failure recovery and retained hidden-resource lifetime must retain
+   their current tests on all three targets. The wrapper remains until the lead's final identity/decorations step.
+   Step 2's direct mount path reduces the same twenty Button mounts from 3,362 objects / 241,632 bytes to
+   3,104 / 233,256, and IconButton from 3,377 / 233,632 to 3,119 / 225,256. The complete type census contains no
+   BuildContext mount-path closure environments or mutable result cells. Content/paint callbacks within the widgets
+   are unchanged. The state handle now directly releases its native scope; no native lifetime-holder object or
+   per-owner cleanup callback is created. Only that state subtype gains an owner field; normal state handles gain no
+   instance fields. Existing per-frame state reachability and hidden-panel resource ownership remain the mechanism.
+   Native bodies use the existing local read capture, transferring reads to the owner on both success and failure;
+   the redundant outer collector is removed. This also removes the per-owner reactive interface adapter. A recovery
+   regression caught the missing failed-read transfer and now retries when the failed body's dependency changes.
+   The shared tracking entry/exit value frame preserves nested collector and observable-creation bookkeeping.
+   An initially mutable try result allocated a cell, while a try-expression allocated a captured thunk; both measured
+   forms were rejected. The final direct helper keeps its immutable result inside the try statement and allocates
+   neither. Exact measurement is DATA1 `evidence/component-direct-mount-step2-measurement.json`.
+   A minimal non-generic reference-class reproduction already isolates the interface issue: converting 1,024 existing
+   instances to a one-method and a two-method interface allocates 2,048 HashLink virtual adapters / 73,728 bytes
+   (32,768 + 40,960). No value-type boxing or generic erasure is involved. `TToInterface` lowers to `ToVirtual`, and
+   HashLink emits its allocating virtual-view operation; both Wasm lowerings preserve the reference for these classes.
+   The reproduction is DATA1 `interface-mount-repro/InterfaceMountRepro.hx`, with exact HashLink census in
+   `evidence/interface-mount-repro-raw.json`. This compiler gap is reported to the lead; no compiler sources or
+   interface-avoidance workaround have been changed. Cross-target counters confirm the gap: both Wasm targets allocate zero for 8 / 1,024 instances, inlining off/on; HashLink allocates 2,048 adapters / 73,728 bytes for 1,024 instances with either inline setting. The full reproduction and compiler-owner report are DATA1 `evidence/reference-interface-gap.{json,md}`.
+
+   Step 4 removes the sparse `ButtonOptions` heap record entirely. All presentation inputs are direct optional
+   constructor arguments stored in the component's final fields; the equality check reads those fields. The first
+   four constructor arguments retain their roles. Highly customized composites have a longer argument list, but
+   this uses ordinary Haxe without a second props object, a builder API, forced inlining or a compiler feature.
+   Authored mutable styles/class arrays retain their existing defensive ownership rules. No record compatibility
+   overload or alias remains. Controlled twenty-mount input-record/direct-input builds with identical enabled,
+   variant, classes, icon size and accessible name reduce 3,134 objects / 235,576 bytes to 3,094 / 232,856:
+   forty objects / 2,720 bytes saved, comprising the input records and their optional numeric boxes. Exact evidence
+   is DATA1 `evidence/component-direct-inputs-step4-measurement.json`. Button and input-contract fixtures pass
+   on all three targets with both inline settings. The representation still contains the structural wrapper;
+   removing it and transferring caller ownership remain unfinished, and no editor allocation gate is accepted.
+
+   **Body-root prototype and remaining mount cost (unpublished, 2026-11-12).** The next prototype removes
+   `ComponentElement` and the render/layout wrapper. A scope reserves the actual body's ID before interaction and
+   style reads; primitive roots use `BuildContext.rootId` and `createNode`. Only actual scope roots carry an owner
+   reference (`ScopeRootNode`, or `ScopeTextRootNode` for live text); ordinary descendants and live text leaves gain
+   no instance fields. Native owners resolve replaced roots through their logical resource lifetime, rather than
+   `RenderNode.replacedBy`, `latest`, or a global numeric-ID redirect. The native root registry map is removed.
+   A value boundary records authored layout, semantics, callback counts and owned children. Replacement transfers
+   caller overrides, listeners, paint/resolution callbacks and overlays to the new body. Caller style ownership
+   survives an authored default temporarily matching its value. Forwarding scopes can share one physical root;
+   their declared boundaries advance together when an inner scope replaces it. None of this uses `BuiltNode` or
+   reconciliation. Equal-input retention still uses `EqualChild`; the protocol's field comparison is present, but
+   automatic component-mount skipping is not implemented in this draft.
+   HashLink regressions pass for replacement identity, throwing-body recovery, caller decoration transfer,
+   forwarding boundaries, retained reparenting, live binding lifetime, Button and IconButton. Replaced native children
+   retain their authored ownership instead of becoming caller overlays. An equal-child hit that temporarily detaches
+   the body root restores its parent slot. Scheduled ancestors take precedence even after scope storage order changes.
+   Removing a caller overlay still invalidates the retained variant; that assertion is preserved. Focus and dock
+   assertions now address the actual Button root, but the full dock/framework gate has not run on this prototype.
+   A real cached-submission regression, with fresh verification enabled every changed frame, fails on the old
+   top-level submission selection (80-pixel old root versus 120-pixel new root), and passes when submission resolves
+   the native owner's current root. It is included in the layout-session gate. A separate duplicate-key regression
+   preserves rejection of two fresh mounts in one build while allowing independent mounted-body refreshes.
+   The three-target gates are unfinished; these HashLink checks are not a batch acceptance.
+
+   Step 5's same-input twenty-mount comparison reduces 3,094 objects / 232,856 bytes to 2,680 / 204,328
+   (minus 414 / 28,528). A separate fresh control using the published `835a2bbc8` Button and its old constructor/setter
+   API, with identical enabled, variant, classes, icon size and accessible name, measures 2,672 / 198,296.
+   Presentation parity passes for all twenty controls: authored root/label layout fingerprints, selector classes,
+   enabled/focusable state, semantic role/name/actions/states and label typography/color. Thus this control is correct;
+   there is no correctness exception for the remaining **plus 8 objects / 6,032 bytes**.
+   Default-input Buttons independently reproduce the same excess: 2,682 / 198,696 control versus
+   2,690 / 204,728 native. IconButton uses the same body-root form and improves its twenty-mount published control
+   from 3,437 / 234,752 to 2,705 / 200,088 (minus 732 objects / 34,664 bytes).
+
+   | Remaining twenty-mount difference | Objects | Bytes |
+   | --- | ---: | ---: |
+   | Body root owner reference, replacing ordinary roots | 0 | +160 |
+   | `RenderScope` + `ScopeState`, replacing `SelfUpdatingBuild` + `BuiltNode` | 0 | +3,200 |
+   | Button instance storage | 0 | +640 |
+   | Scope protocol interface adapters | +20 | +1,120 |
+   | Boxed value-boundary constructor temporaries | +20 | +1,120 |
+   | Removed infrastructure closure functions and environments | -80 | -2,400 |
+   | Arrays, scalar boxes and allocation buffers | +48 | +2,192 |
+   | Total | +8 | +6,032 |
+
+   These are exact aggregated type counts; equal printed type names are summed rather than overwritten. Site
+   evidence is byte weighted, not interpreted as object counts. The native lifetime registration additionally appears
+   at `StateStore.scopeLifetime` (including twenty Boolean boxes), with usage arrays at `StateStore.markUsed`.
+   The ownership/lifetime record storage is a remaining cost beyond the five directed description/closure/interface/
+   input-copy/wrapper causes. Per the lead's stop rule, do not change that representation further or publish this
+   prototype before reporting the attribution. No current 22-action census or final stage-3 comparison is claimed.
+
+   The boundary temporary also exposes a second compiler limitation, separate from reference-interface adapters.
+   A minimal struct with six conditional scalar assignments, stored in an existing class field, allocates 1,024
+   temporary values / 24,576 bytes for 1,024 operations on HashLink, with inlining both off and on. Five conditional
+   assignments plus one direct assignment produce identical results and allocate zero. The existing value-constructor
+   expansion is bounded to sixteen blocks and sixty-four instructions (`IrValueConstructors`); the reproduction
+   crosses its block bound: five-branch construction has sixteen blocks / thirty-nine instructions, while six has
+   nineteen / forty-three. The actual boundary constructor has nineteen blocks / sixty-three instructions and is
+   left as a constructor call. Report this compiler gap at its cause rather than splitting the UI constructor, forcing
+   inlining or raising expansion limits. No compiler/IR or HashLink edits, new binding primitive, verify-mode change
+   or budget change have been made. Source, exact counters and the owner report remain on DATA1 under
+   `evidence/{scope-root-native-vs-control-types,scope-root-lifetime-site-bytes,scope-root-input-parity,bounded-constructor-hl}.json`
+   and `interface-mount-repro/bounded-constructor/BoundedConstructorRepro.hx`.
+
+   **Lead-directed ownership storage reductions (2026-11-12, unpublished).** Native scopes now have one owner
+   record. `StateStore` stores `RenderScope` directly in a typed registry; `ScopeState` and the unused
+   `State.releaseResource` hook are deleted. A successful mount installs the owner after its body succeeds, preserving
+   the previous installed computation when a replacement throws. Managed membership uses the existing flat integer
+   `IdSet`, with allocation-free cluster repair on deletion, instead of boxed Boolean map values. Per-frame usage
+   IDs and persistent managed-resource IDs use reusable integer storage with logical lengths; nested captures and
+   resource compaction no longer resize their backing storage down. State-usage arrays belong to the store's existing
+   ownership table rather than being duplicated on each owner. Logical resource IDs are integers; the body root holds
+   its own widget identity, and initial build identity lives only in context scratch while construction runs. Packing
+   the owner's scalar fields reduces `RenderScope` from 256 to 224 bytes.
+
+   | Twenty same-input Button mounts | Objects | Bytes |
+   | --- | ---: | ---: |
+   | Correct published control | 2,672 | 198,296 |
+   | Body-root prototype before storage changes | 2,680 | 204,328 |
+   | Single native owner | 2,660 | 203,208 |
+   | Flat managed membership | 2,622 | 201,872 |
+   | Reusable usage and managed ID storage | 2,612 | 201,168 |
+   | Compact owner without duplicated identity/usage data | 2,612 | 200,528 |
+
+   The actual remaining difference is **minus 60 objects / plus 2,232 bytes**. Both compiler-gap items remain
+   unchanged: twenty scope-interface adapters / 1,120 bytes and twenty boundary-constructor value temporaries /
+   1,120 bytes. Arithmetic subtraction of those measured items gives 2,572 / 198,288, eight bytes below control;
+   this is attribution, not a claim that a patched compiler has been measured. No UI workaround for either compiler
+   gap, forced inlining, expanded constructor limit, or verify/budget change is introduced. Per the lead's updated
+   condition, stop and report while the excess is accounted for only by these compiler gaps. Full dock/framework
+   gates, the 22-action census and publication wait for the compiler-side fixes. The next outer gate must use local
+   outer main `60d9d4c36`, superseding `771c20b61`; no outer gate has run on either base during this batch.
+   Exact counters are DATA1 `evidence/scope-mount-{single-owner,flat-managed,flat-usage,compact-owner}-button-raw.json`.
+   Focused validation passes: nine HashLink fixtures covering ownership, binding lifetime, inputs and controls;
+   `IdSetMain` and `StateStoreFlatMain` on all three targets with inlining off/on (twelve configurations); and
+   the real `UiContext` root-replacement submission regression on HashLink with fresh-build verification.
+
+   **Updated lead acceptance direction.** Preserve the Button batch locally and run full three-target,
+   dock/framework and exact 22-action gates despite the twenty-mount residue. Publication is decided per measured
+   action: every action must remain at or below its correct control on both objects and bytes. If an action exceeds
+   control solely through the two compiler-gap items, retain the unpublished branch and record its attribution;
+   continue with the closed event-phase enum and subsequent leaf widgets. Compiler fixes remain owned by dev-c5
+   (HashLink interface adapters) and a1 (value-constructor destination); no UI workaround is authorized.
+
    Foundation evidence is retained under `/media/joao/DATA1/haxeon-stage5-gates/evidence/`:
    `native-foundation-pilot-comparison.log`, `worker-binding-trace-comparison.json`, the paired
    `current-*-all-census.json` and `current-*-pilot-census.json`, and the six-configuration

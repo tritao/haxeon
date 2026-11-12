@@ -68,7 +68,7 @@ class ComboBox<T> implements View {
 			rootStyle.childGap = 0.0;
 			rootStyle.background = Color.rgba(0.0, 0.0, 0.0, 0.0);
 			rootStyle.clipToParent = false;
-			var root = new RenderNode(context.id("combo-box"), LayoutVisualKind.Box, rootStyle);
+			var root = context.createNode(context.rootId("combo-box"), LayoutVisualKind.Box, rootStyle);
 			root.hitTestSelf = false;
 
 			var rootXState:State<Float> = context.state(context.id("root-x"), 0.0);
@@ -164,7 +164,7 @@ class ComboBox<T> implements View {
 			};
 			var focusOption = function(index:Int) {
 				if (index >= 0 && index < optionNodes.length)
-					context.requestFocus(optionNodes[index].id);
+					context.requestFocus(optionNodes[index].children[0].id);
 			};
 			var selectOption = function(index:Int) {
 				if (!enabled || !isEnabledIndex(index))
@@ -219,9 +219,11 @@ class ComboBox<T> implements View {
 					submitActive();
 			};
 			inputNode = context.withScope(new Key("input"), function() return input.build(context));
-			SelectionIndicator.fieldFrame(context, inputNode, "input-frame");
-			SelectionIndicator.search(context, inputNode, "input-search",
-				enabled ? context.theme.mutedText : context.theme.disabledText);
+			context.withStyleParent(inputNode.computedStyle, function() {
+				inputNode.add(SelectionIndicator.fieldFrame("input-frame").build(context));
+				inputNode.add(SelectionIndicator.search("input-search",
+					enabled ? context.theme.mutedText : context.theme.disabledText).build(context));
+			});
 			var inputSemantics:Semantics = cast inputNode.semantics;
 			inputSemantics.states |= AccessibilityState.HasPopup;
 			if (isOpen)
@@ -286,37 +288,34 @@ class ComboBox<T> implements View {
 			rowStyle.width = LayoutAxis.grow();
 			rowStyle.height = style.height;
 			rowStyle.direction = LayoutDirection.LeftToRight;
-			var triggerRow = new RenderNode(context.id("trigger-row"), LayoutVisualKind.Box, rowStyle);
+			var triggerRow = context.createNode(context.rootId("trigger-row"), LayoutVisualKind.Box, rowStyle);
 			triggerRow.hitTestSelf = false;
 			triggerRow.add(inputNode);
 			var anchorStyle = new LayoutStyle();
 			anchorStyle.width = LayoutAxis.percent(0);
 			anchorStyle.height = LayoutAxis.grow();
-			var arrowAnchor = new RenderNode(context.id("toggle-anchor"), LayoutVisualKind.Box, anchorStyle);
+			var arrowAnchor = context.createNode(context.rootId("toggle-anchor"), LayoutVisualKind.Box, anchorStyle);
 			arrowAnchor.hitTestSelf = false;
 			var arrowStyle = new LayoutStyle();
 			arrowStyle.width = LayoutAxis.fixed(32);
 			arrowStyle.height = LayoutAxis.grow();
 			arrowStyle.padding = new Insets(0, 0, 0, 0);
+			var arrowSemantics = new Semantics(AccessibilityRole.Button, isOpen ? "Hide options" : "Show options");
+			arrowSemantics.actions = AccessibilityAction.Activate |
+				(isOpen ? AccessibilityAction.Collapse : AccessibilityAction.Expand);
+			arrowSemantics.states |= AccessibilityState.HasPopup;
+			if (isOpen) arrowSemantics.states |= AccessibilityState.Expanded;
 			var arrow = new Button("", arrowStyle, function() {
 				if (openState.value == true) close();
 				else { open(); context.requestFocus(inputNode.id); }
-			}, "toggle");
-			arrow.variant = ButtonVariant.Navigation;
-			arrow.enabled = enabled;
-			arrow.accessibilityLabel = isOpen ? "Hide options" : "Show options";
-			arrow.semanticActions = AccessibilityAction.Activate |
-				(isOpen ? AccessibilityAction.Collapse : AccessibilityAction.Expand);
+			}, "toggle", enabled, ButtonVariant.Navigation, null, null, null, null, null, SelectionIndicator.chevron("toggle-indicator",
+					enabled ? context.theme.text : context.theme.disabledText, isOpen)
+			, null, null, null, isOpen ? "Hide options" : "Show options", null, arrowSemantics);
 			var arrowNode = context.withScope(new Key("toggle"), function() return arrow.build(context));
 			arrowNode.layout.style.positioning = haxeon.ui.LayoutPositioning.Absolute;
 			arrowNode.layout.style.positionX = -32;
 			arrowNode.layout.style.zIndex = 3;
 			arrowNode.layout.style.clipToParent = false;
-			var arrowSemantics:Semantics = cast arrowNode.semantics;
-			arrowSemantics.states |= AccessibilityState.HasPopup;
-			if (isOpen) arrowSemantics.states |= AccessibilityState.Expanded;
-			SelectionIndicator.chevron(context, arrowNode, "toggle-indicator",
-				enabled ? context.theme.text : context.theme.disabledText, isOpen);
 			arrowNode.on(UiEventKind.KeyDown, function(event) {
 				if (event.key == UiKey.Escape && openState.value == true) {
 					close(); event.preventDefault();

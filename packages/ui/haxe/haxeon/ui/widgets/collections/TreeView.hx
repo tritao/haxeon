@@ -370,7 +370,7 @@ class TreeView implements View {
 			// Model reads are tracked at their fields; child rows retain only the fields they actually read.
 			var guideVisibility = context.resourceState(context.id("guide-visibility"),
 				function() return new TreeGuideVisibility(context), function(value) value.dispose()).value;
-			var treeId = context.id("tree");
+			var treeId = context.rootId("tree");
 			drag = context.resourceState(context.id("tree-drag"),
 				function() return new TreeItemDrag(), function(value) value.dispose()).value;
 			var activeGuides = (context.interactionStates.get(treeId)).contains(StyleState.Hovered)
@@ -475,7 +475,7 @@ class TreeView implements View {
 				ScrollAxis.Vertical, controller);
 			// The rows built depend on the offset.
 			scroll.contentFollowsOffset = true;
-			var root = new RenderNode(treeId, LayoutVisualKind.Box);
+			var root = context.createNode(treeId, LayoutVisualKind.Box);
 			root.layout.style.width = viewportStyle.width;
 			root.layout.style.height = viewportStyle.height;
 			var semantics = new Semantics(AccessibilityRole.Tree);
@@ -1019,7 +1019,7 @@ private class TreeViewRow implements View {
 
 	public function build(context:BuildContext):RenderNode {
 		return context.withScope(new Key(key), function() {
-			var id = context.id("tree-item");
+			var id = context.rootId("tree-item");
 			var flags = context.interactionStates.get(id);
 			var style = new LayoutStyle();
 			style.width = LayoutAxis.grow();
@@ -1030,7 +1030,7 @@ private class TreeViewRow implements View {
 			style.padding = new Insets(entry.depth * indentWidth, 0.0, 0.0, 0.0);
 			// Row width follows the viewport, independent of the custom painter's intrinsic width.
 			style.width = LayoutAxis.stretch();
-			var node = new RenderNode(id, LayoutVisualKind.Custom, style);
+			var node = context.createNode(id, LayoutVisualKind.Custom, style);
 			node.states = flags;
 			// Hover is read as the row paints, so a hover change repaints it (UiContext) without rebuilding anything.
 			var normalHover = context.theme.tokens.selectionHover;
@@ -1074,7 +1074,7 @@ private class TreeViewRow implements View {
 				guides.positioning = LayoutPositioning.Absolute;
 				guides.width = LayoutAxis.grow();
 				guides.height = LayoutAxis.grow();
-				var guideNode = new RenderNode(context.id("branch-guides"), LayoutVisualKind.Custom, guides);
+				var guideNode = context.createNode(context.rootId("branch-guides"), LayoutVisualKind.Custom, guides);
 				guideNode.hitTestSelf = false;
 				var depth = entry.depth;
 				var continuation = entry.guideContinuation;
@@ -1146,7 +1146,7 @@ private class TreeDisclosure implements View {
 			style.childAlignY = LayoutAlignmentY.Center;
 			style.padding = new Insets(0.0, 0.0, 0.0, 0.0);
 			style.background = Color.rgba(0.0, 0.0, 0.0, 0.0);
-			var node = new RenderNode(context.id("disclosure"), LayoutVisualKind.Box, style);
+			var node = context.createNode(context.rootId("disclosure"), LayoutVisualKind.Box, style);
 			node.focusable = true;
 			var semantics = new Semantics(AccessibilityRole.Button, expanded ? "Collapse" : "Expand");
 			semantics.actions = AccessibilityAction.Activate;

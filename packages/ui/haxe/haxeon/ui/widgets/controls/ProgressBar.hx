@@ -44,7 +44,7 @@ class ProgressBar implements View {
 
 	public function build(context:BuildContext):RenderNode {
 		return context.withScope(new Key(key), function() {
-			var nodeId = context.id("progress");
+			var nodeId = context.rootId("progress");
 			return context.selfUpdating(nodeId, function() return buildControl(context, nodeId));
 		});
 	}
@@ -54,7 +54,7 @@ class ProgressBar implements View {
 			new StyleTarget("progress-bar", key, key, null, ["progress-bar"],
 				context.interactionStates.get(nodeId)),
 			context.inheritedStyle, context.theme.styles, context.styleSheet, style, context.environment);
-		var node = new RenderNode(nodeId, LayoutVisualKind.Custom, computed.toLayoutStyle());
+		var node = context.createNode(nodeId, LayoutVisualKind.Custom, computed.toLayoutStyle());
 		node.setStyleIdentity("progress-bar", key, key, null, ["progress-bar"]);
 		node.states = context.interactionStates.get(nodeId);
 		node.computedStyle = computed;

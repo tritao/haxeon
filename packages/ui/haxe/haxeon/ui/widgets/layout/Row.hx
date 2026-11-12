@@ -25,10 +25,10 @@ class Row implements View {
 
 	public function build(context:BuildContext):RenderNode {
 		return context.withScope(key, function() {
-			var id = context.id("row");
+			var id = context.rootId("row");
 			var computed = context.resolveStyle(new StyleTarget("row", key.value, key.value,
 				null, ["row"], context.interactionStates.get(id)), style);
-			var node = new RenderNode(id, LayoutVisualKind.Box, computed.toLayoutStyle());
+			var node = context.createNode(id, LayoutVisualKind.Box, computed.toLayoutStyle());
 			node.setStyleIdentity("row", key.value, key.value, null, ["row"]);
 			node.states = context.interactionStates.get(id);
 			node.computedStyle = computed;

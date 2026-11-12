@@ -63,7 +63,7 @@ class Select<T> implements View {
 			rootStyle.childGap = 0.0;
 			rootStyle.background = Color.rgba(0.0, 0.0, 0.0, 0.0);
 			rootStyle.clipToParent = false;
-			var root = new RenderNode(context.id("select"), LayoutVisualKind.Box, rootStyle);
+			var root = context.createNode(context.rootId("select"), LayoutVisualKind.Box, rootStyle);
 			root.hitTestSelf = false;
 
 			var rootXState:State<Float> = context.state(context.id("root-x"), 0.0);
@@ -122,7 +122,7 @@ class Select<T> implements View {
 				if (openState.value == true)
 					openState.update(false);
 				if (triggerNode != null)
-					context.requestFocus(triggerNode.id);
+					context.requestFocus(triggerNode.children[0].id);
 			};
 			var setActive = function(index:Int, reveal:Bool = true) {
 				var current:Int = activeState.value;
@@ -136,7 +136,7 @@ class Select<T> implements View {
 			};
 			var focusOption = function(index:Int) {
 				if (index >= 0 && index < optionNodes.length)
-					context.requestFocus(optionNodes[index].id);
+					context.requestFocus(optionNodes[index].children[0].id);
 			};
 			var nextEnabled = function(index:Int, direction:Int) {
 				if (options.length == 0)
@@ -177,23 +177,16 @@ class Select<T> implements View {
 				selectedLabel = "Select";
 			var triggerStyle = style.copy();
 			triggerStyle.width = LayoutAxis.grow();
-			var trigger = new Button(selectedLabel, triggerStyle, toggleOpen, "trigger");
-			trigger.classes = ["select-trigger"];
-			trigger.ellipsizeLabel = true;
-			trigger.enabled = enabled && firstEnabled >= 0;
-			trigger.semanticRole = AccessibilityRole.ComboBox;
-			trigger.semanticActions = AccessibilityAction.Activate | AccessibilityAction.SetValue |
+			var triggerSemantics = new Semantics(AccessibilityRole.ComboBox,
+				accessibilityLabel == null ? selectedLabel : accessibilityLabel, selectedLabel);
+			triggerSemantics.actions = AccessibilityAction.Activate | AccessibilityAction.SetValue |
 				(isOpen ? AccessibilityAction.Collapse : AccessibilityAction.Expand);
-			triggerNode = context.withScope(new Key("trigger"), function() return trigger.build(context));
-			SelectionIndicator.fieldFrame(context, triggerNode, "trigger-frame");
-			SelectionIndicator.chevron(context, triggerNode, "trigger-indicator",
-				enabled ? context.theme.text : context.theme.disabledText, isOpen);
-			var triggerSemantics:Semantics = cast triggerNode.semantics;
-			triggerSemantics.label = accessibilityLabel == null ? selectedLabel : accessibilityLabel;
-			triggerSemantics.value = selectedLabel;
 			triggerSemantics.states |= AccessibilityState.HasPopup;
-			if (isOpen)
-				triggerSemantics.states |= AccessibilityState.Expanded;
+			if (isOpen) triggerSemantics.states |= AccessibilityState.Expanded;
+			var trigger = new Button(selectedLabel, triggerStyle, toggleOpen, "trigger", enabled && firstEnabled >= 0, null, null, ["select-trigger"], null, null, null, SelectionIndicator.chevron("trigger-indicator",
+					enabled ? context.theme.text : context.theme.disabledText, isOpen, true)
+			, null, true, null, null, null, triggerSemantics);
+			triggerNode = context.withScope(new Key("trigger"), function() return trigger.build(context));
 			triggerNode.on(UiEventKind.KeyDown, function(event) {
 				if (!enabled || firstEnabled < 0)
 					return;

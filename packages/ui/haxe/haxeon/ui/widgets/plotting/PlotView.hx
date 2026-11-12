@@ -62,10 +62,10 @@ class PlotView implements View {
 
 	public function build(context:BuildContext):RenderNode {
 		return context.withScope(new Key(key), function() {
-			var nodeId = context.id("plot");
+			var nodeId = context.rootId("plot");
 			var computed = context.resolveStyle(new StyleTarget("plot", key, key,
 				null, ["plot"], context.interactionStates.get(nodeId)), style);
-			var node = new RenderNode(nodeId, LayoutVisualKind.Custom, computed.toLayoutStyle());
+			var node = context.createNode(nodeId, LayoutVisualKind.Custom, computed.toLayoutStyle());
 			node.setStyleIdentity("plot", key, key, null, ["plot"]);
 			node.states = context.interactionStates.get(nodeId);
 			node.enabled = enabled;

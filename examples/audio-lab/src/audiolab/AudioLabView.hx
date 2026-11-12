@@ -95,9 +95,8 @@ class AudioLabView implements View {
 			var navItem = item;
 			var button = new Button(navItem.label, navButtonStyle(), function() {
 				screen = navItem.key;
-			}, "nav-" + navItem.key);
-			button.variant = ButtonVariant.Navigation;
-			button.selected = screen == navItem.key;
+			}, "nav-" + navItem.key, null, ButtonVariant.Navigation, screen == navItem.key
+			);
 			children.push(new KeyedView(navItem.key, button));
 		}
 		var style = rowStyle(38.0);
@@ -116,8 +115,8 @@ class AudioLabView implements View {
 			var button = new Button(AudioLabPreset.label(selected), compactButtonStyle(), function() {
 				lab.selectPreset(selected);
 			}
+			, null, null, null, lab.preset == selected
 			);
-			button.selected = lab.preset == selected;
 			presetButtons.push(new KeyedView(AudioLabPreset.label(selected), button));
 		}
 		var presetsStyle = new LayoutStyle();
@@ -447,8 +446,8 @@ class AudioLabView implements View {
 				var cell = new Button(note < 0 ? "---" : noteName(note), trackerCellStyle(), function() {
 					if (trackerNote >= 0)
 						lab.noteOn(trackerNote, 0.76);
-				}, "tracker-cell-" + row + "-" + channel);
-				cell.selected = lab.trackerPlaying && row == lab.trackerStep;
+				}, "tracker-cell-" + row + "-" + channel, null, null, lab.trackerPlaying && row == lab.trackerStep
+				);
 				cells.push(new KeyedView("channel-" + channel, cell));
 			}
 			rows.push(new KeyedView("row-" + row, new Row("tracker-row-" + row, cells, rowStyle)));

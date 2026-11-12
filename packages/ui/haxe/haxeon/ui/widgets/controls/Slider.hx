@@ -53,7 +53,7 @@ class Slider implements View {
 
 	public function build(context:BuildContext):RenderNode {
 		return context.withScope(new Key(key), function() {
-			var nodeId = context.id("slider");
+			var nodeId = context.rootId("slider");
 			return context.selfUpdating(nodeId, function() return buildControl(context, nodeId));
 		});
 	}
@@ -64,7 +64,7 @@ class Slider implements View {
 		var computed = context.styleResolver.resolve(
 			new StyleTarget("slider", key, key, null, ["slider"], flags),
 			context.inheritedStyle, context.theme.styles, context.styleSheet, style, context.environment);
-		var node = new RenderNode(nodeId, LayoutVisualKind.Custom, computed.toLayoutStyle());
+		var node = context.createNode(nodeId, LayoutVisualKind.Custom, computed.toLayoutStyle());
 		node.setStyleIdentity("slider", key, key, null, ["slider"]);
 		node.states = flags;
 		node.computedStyle = computed;

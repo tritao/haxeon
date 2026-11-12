@@ -41,7 +41,7 @@ class Spinner implements View {
 
 	public function build(context:BuildContext):RenderNode {
 		return context.withScope(new Key(key), function() {
-			var node = new RenderNode(context.id("spinner"), LayoutVisualKind.Custom, style);
+			var node = context.createNode(context.rootId("spinner"), LayoutVisualKind.Custom, style);
 			var semantics = new Semantics(AccessibilityRole.ProgressBar, label,
 				running ? "Indeterminate" : "Paused");
 			if (running)

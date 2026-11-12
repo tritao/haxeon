@@ -27,10 +27,10 @@ class SizedBox implements View {
 
 	public function build(context:BuildContext):RenderNode {
 		return context.withScope(key, function() {
-			var id = context.id("sized-box");
+			var id = context.rootId("sized-box");
 			var computed = context.resolveStyle(new StyleTarget("sized-box", key.value, key.value,
 				null, ["sized-box"], context.interactionStates.get(id)), style);
-			var node = new RenderNode(id, LayoutVisualKind.Box, computed.toLayoutStyle());
+			var node = context.createNode(id, LayoutVisualKind.Box, computed.toLayoutStyle());
 			node.setStyleIdentity("sized-box", key.value, key.value, null, ["sized-box"]);
 			node.states = context.interactionStates.get(id);
 			node.computedStyle = computed;

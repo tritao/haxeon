@@ -72,10 +72,10 @@ class CanvasView implements View {
 
 	public function build(context:BuildContext):RenderNode {
 		return context.withScope(new Key(key), function() {
-			var nodeId = context.id("canvas");
+			var nodeId = context.rootId("canvas");
 			var computed = context.resolveStyle(new StyleTarget("canvas", key, key,
 				null, ["canvas"], context.interactionStates.get(nodeId)), style);
-			var node = new RenderNode(nodeId, LayoutVisualKind.Custom, computed.toLayoutStyle());
+			var node = context.createNode(nodeId, LayoutVisualKind.Custom, computed.toLayoutStyle());
 			node.setStyleIdentity("canvas", key, key, null, ["canvas"]);
 			node.states = context.interactionStates.get(nodeId);
 			node.computedStyle = computed;

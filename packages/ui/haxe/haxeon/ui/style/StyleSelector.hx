@@ -70,20 +70,17 @@ class StyleSelector {
 
 	/** Structural matching for queries about rules that may become active. */
 	public function matchesWithoutStates(target:StyleTarget):Bool {
-		if (target == null)
-			return false;
-		if (widgetType != null && widgetType != target.widgetType)
-			return false;
-		if (keyValue != null && keyValue != target.key)
-			return false;
-		if (idValue != null && idValue != target.id)
-			return false;
-		for (name in classNames)
-			if (!target.hasClass(name))
-				return false;
-		for (name in tagNames)
-			if (!target.hasTag(name))
-				return false;
+		return target != null && matchesIdentity(target.widgetType, target.key, target.id, target.classes, target.tags);
+	}
+
+	/** Match an existing node's selector identity without allocating a temporary target. */
+	public function matchesIdentity(type:String, key:Null<String>, id:Null<String>,
+			classes:Array<String>, tags:Array<String>):Bool {
+		if (widgetType != null && widgetType != type) return false;
+		if (keyValue != null && keyValue != key) return false;
+		if (idValue != null && idValue != id) return false;
+		for (name in classNames) if (classes.indexOf(name) < 0) return false;
+		for (name in tagNames) if (tags.indexOf(name) < 0) return false;
 		return true;
 	}
 

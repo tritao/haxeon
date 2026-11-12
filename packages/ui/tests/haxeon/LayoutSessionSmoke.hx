@@ -1,4 +1,12 @@
 import haxeon.ui.Color;
+import haxeon.ui.LayoutStyle;
+import haxeon.ui.LayoutVisualKind;
+import haxeon.ui.core.RenderNode;
+import haxeon.ui.core.BuildContext;
+import haxeon.ui.core.StateStore;
+import haxeon.ui.core.View;
+import haxeon.ui.component.TrackedScope;
+import haxeon.ui.core.WidgetId;
 import haxeon.ui.FontCollection;
 import haxeon.ui.Image;
 import haxeon.ui.ImageFormat;
@@ -169,8 +177,39 @@ class LayoutSessionSmoke {
 		Sys.println("PASS: an intrinsic version changed by measurement is captured as an input, verified, and resubmitted");
 	}
 
+	/** The actual component root preserves intrinsic and authored size without a structural layout node. */
+	static function componentRootLayout():Void {
+		if (ScopeRootSubmissionMain.run() != 42) throw "A cached submission lost its current component body root";
+		var session = LayoutSession.create();
+		session.verifyTransactions = true;
+		for (mode in 0...3) {
+			var parentStyle = new LayoutStyle();
+			parentStyle.width = LayoutAxis.fixed(300);
+			parentStyle.height = LayoutAxis.fixed(100);
+			var parent = new RenderNode(new WidgetId(20000), LayoutVisualKind.Box, parentStyle);
+			var context = new BuildContext(new StateStore());
+			context.beginFrame();
+			var root = new TrackedScope("geometry", () -> new ScopeLayoutBody(mode)).build(context);
+			parent.add(root);
+			var items = session.submit(parent.layout, new LayoutFrame(300, 100));
+			var expectedWidth = mode == 0 ? 48.0 : mode == 1 ? 300.0 : 90.0;
+			var found = 0;
+			for (item in items) if (item.id == root.id.value) {
+				found++;
+				if (item.width != expectedWidth || item.height != 24)
+					throw "Component element lost its fit/grow/fixed layout: mode=" + mode + " width=" + item.width + " height=" + item.height;
+			}
+			if (found != 1 || items.length != 3) throw "A component must contribute exactly its body root and child";
+			session.verifyTree(parent.layout);
+			context.dispose();
+		}
+		session.dispose();
+		Sys.println("PASS: component body roots preserve intrinsic, growing and fixed layout");
+	}
+
 	static function main():Int {
 		immutableGeometryReuse();
+		componentRootLayout();
 		var rect = new Rect(1, 2, 3, 4);
 		var padding = new Insets(1, 2, 3, 4);
 		if (rect != new Rect(1, 2, 3, 4) || rect == new Rect(1, 2, 3, 5)
@@ -387,4 +426,21 @@ class LayoutSessionSmoke {
 		Sys.println("PASS: Haxeon layout session transaction");
 		return 0;
 	}
+}
+
+private class ScopeLayoutBody implements View {
+  final mode:Int;
+  public function new(mode:Int) this.mode = mode;
+  public function build(context:BuildContext):RenderNode {
+    var style = new LayoutStyle();
+    style.width = mode == 0 ? LayoutAxis.fit() : mode == 1 ? LayoutAxis.grow() : LayoutAxis.fixed(90);
+    style.height = LayoutAxis.fit();
+    style.padding = new Insets(4, 4, 4, 4);
+    var root = context.createNode(context.rootId("body"), LayoutVisualKind.Box, style);
+    var childStyle = new LayoutStyle();
+    childStyle.width = LayoutAxis.fixed(40);
+    childStyle.height = LayoutAxis.fixed(16);
+    root.add(context.createNode(context.id("child"), LayoutVisualKind.Box, childStyle));
+    return root;
+  }
 }

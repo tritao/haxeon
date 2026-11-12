@@ -161,13 +161,15 @@ class StructuredPropertyEditor implements PropertyEditorExtension {
 								var remove = new Button("Remove " + field.name, null, () -> {
 									try { var copy = candidate(); Reflect.deleteField(at(copy, path), field.name); stage(copy); }
 									catch (_:Dynamic) { apply(Custom(id, "Invalid structured value")); }
-								}, "remove:" + field.name);
-								remove.accessibilityLabel = label + " Remove"; remove.enabled = enabled;
+								}, "remove:" + field.name, enabled
+								, null, null, null, null, null, null, null, null, null, null, label + " Remove");
+
 								children.push(new KeyedView("remove:" + field.name, remove));
 							}
 						} else {
-							var add = new Button("Add " + field.name, null, () -> send(fieldPath, field.initialValue()), "add:" + field.name);
-							add.accessibilityLabel = label + " Add"; add.enabled = enabled;
+							var add = new Button("Add " + field.name, null, () -> send(fieldPath, field.initialValue()), "add:" + field.name, enabled
+							, null, null, null, null, null, null, null, null, null, null, label + " Add");
+
 							children.push(new KeyedView("add:" + field.name, add));
 						}
 					}
@@ -213,11 +215,9 @@ class StructuredPropertyEditor implements PropertyEditorExtension {
 						var buttonStyle = new LayoutStyle();
 						buttonStyle.width = LayoutAxis.fixed(28); buttonStyle.height = LayoutAxis.fixed(28);
 						buttonStyle.padding = new haxeon.ui.Insets(4, 4, 4, 4);
-						var button = new Button("", buttonStyle, () -> editList(path, edit),
-							"item:" + childPath.join(":") + ":" + suffix);
-						button.leadingIcon = icon; button.iconSize = 14;
-						button.accessibilityLabel = descriptor.label + " item " + childPath.join(".") + " " + label;
-						button.enabled = enabled && available;
+						var button = new Button("", buttonStyle, () -> editList(path, edit), "item:" + childPath.join(":") + ":" + suffix, enabled && available
+						, null, null, null, icon, null, null, null, null, null, 14, descriptor.label + " item " + childPath.join(".") + " " + label);
+
 						(simple ? row : actions).push(new KeyedView(suffix, button));
 					}
 					action("Up", "up", haxeon.ui.icons.IconName.ArrowUp,
@@ -235,27 +235,25 @@ class StructuredPropertyEditor implements PropertyEditorExtension {
 				var add = new Button("Add " + itemLabel.toLowerCase(), null, () -> editList(path, copy -> {
 					// Duplicate the last item; typed empty lists start from presentation metadata.
 					copy.push(copy.length == 0 ? initial(itemStructure) : haxe.Json.parse(haxe.Json.stringify(copy[copy.length - 1])));
-				}), "add:" + path.join(":"));
-				add.accessibilityLabel = descriptor.label + (path.length == 0 ? "" : " item " + path.join(".")) + " Add item";
-				add.enabled = enabled && (maximumLength == null || items.length < maximumLength); children.push(new KeyedView("add", add));
+				}), "add:" + path.join(":"), enabled && (maximumLength == null || items.length < maximumLength)
+				, null, null, null, null, null, null, null, null, null, null, descriptor.label + (path.length == 0 ? "" : " item " + path.join(".")) + " Add item");
+				 children.push(new KeyedView("add", add));
 			}
 			return new Column("list:" + path.join(":"), children, style());
 		}
 		var children:Array<KeyedView> = [];
 		if (!vector) {
 			if (local.dirty) children.push(new KeyedView("unsaved", new Text("Unsaved changes")));
-			var applyButton = new Button("Apply", null, commit, "apply");
-			applyButton.accessibilityLabel = "Apply " + descriptor.label;
-			applyButton.enabled = enabled && local.dirty;
+			var applyButton = new Button("Apply", null, commit, "apply", enabled && local.dirty
+			, null, null, null, null, null, null, null, null, null, null, "Apply " + descriptor.label);
 			var revert = new Button("Revert", null, () -> {
 				local = new StructuredPropertyDrafts(base);
 				if (retainDrafts) retainedDrafts.set(descriptor.id, local);
 				draftState.update(local);
 				draftRevision.update(value -> value + 1);
 				if (onDraftChanged != null) onDraftChanged();
-			}, "revert");
-			revert.accessibilityLabel = record ? "Revert record draft" : "Revert list draft";
-			revert.enabled = enabled && local.dirty;
+			}, "revert", enabled && local.dirty
+			, null, null, null, null, null, null, null, null, null, null, record ? "Revert record draft" : "Revert list draft");
 			children.push(new KeyedView("draft-actions", new Row("draft-actions", [
 				new KeyedView("apply", applyButton), new KeyedView("revert", revert)
 			], style())));
@@ -270,8 +268,8 @@ class StructuredPropertyEditor implements PropertyEditorExtension {
 					for (path in paths) copy.push(path);
 					stage(copy);
 				} catch (_:Dynamic) { apply(Custom(id, "Invalid structured value")); }
-			}), "choose-files");
-			browse.enabled = enabled;
+			}), "choose-files", enabled
+			);
 			children.push(new KeyedView("choose-files", browse));
 		}
 		return new Column(key, children, style());

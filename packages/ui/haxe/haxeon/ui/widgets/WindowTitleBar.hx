@@ -49,9 +49,10 @@ class WindowTitleBar implements View {
 		var style = new LayoutStyle(); style.width = LayoutAxis.fixed(CONTROL_WIDTH); style.height = LayoutAxis.fixed(height);
 		style.padding = new Insets(14, 0, 14, 0);
 		style.radiusTopLeft = style.radiusTopRight = style.radiusBottomLeft = style.radiusBottomRight = 0;
-		var button = new Button("", style, action, "window-" + label.toLowerCase());
-		button.accessibilityLabel = label + " window"; button.variant = ButtonVariant.Navigation;
-		button.leadingIcon = icon; button.iconSize = 16;
+		var button = new Button("", style, action, "window-" + label.toLowerCase(), null, ButtonVariant.Navigation, null, null, icon, null, null, null, null, null, 16
+		, label + " window");
+
+
 		return button;
 	}
 }

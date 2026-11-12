@@ -215,7 +215,7 @@ class DockWorkspace implements View {
 			indicatorStyle.height = LayoutAxis.grow();
 			indicatorStyle.positioning = LayoutPositioning.Absolute;
 			indicatorStyle.zIndex = 2;
-			var indicator = new RenderNode(context.id("tab-drop-indicator:" + panelId),
+			var indicator = context.createNode(context.rootId("tab-drop-indicator:" + panelId),
 				LayoutVisualKind.Custom, indicatorStyle);
 			indicator.hitTestSelf = false;
 			var tabPreviewKey = tabPreview.sourcePanelId + ":" + tabPreview.targetPanelId + ":" +
@@ -645,12 +645,13 @@ private class DockPanelCacheEntry {
 				// A nested self-updating widget owns its children and may reconcile them while this pane is live.
 				// Its interaction snapshot tracks that build; retain only the children its caller added afterward.
 				var owner = node == root ? null : topologyContext.updatingBuild(node);
-				childCounts.push(owner == null ? node.children.length : -1);
+				var native = topologyContext.renderScopeAt(node);
+				childCounts.push(owner == null && native == null ? node.children.length : -1);
 				for (child in node.children) {
-					var owned = false;
+					var owned = native != null && native.owns(child);
 					if (owner != null && owner.built != null)
 						for (made in owner.built.children) if (made.id.value == child.id.value) { owned = true; break; }
-					if (!owned) capture(child, owner != null);
+					if (!owned) capture(child, owner != null || native != null);
 				}
 			}
 			capture(root, false);
@@ -671,7 +672,29 @@ private class DockPanelCacheEntry {
 		if (nodes == null) return true;
 		if (parents == null || positions == null || counts == null) throw "Incomplete pane topology snapshot";
 		if (RenderNode.latest(root) != root) return false;
+		var rootOwner = root.scopeOwner();
+		if (rootOwner != null) {
+			var current = rootOwner.currentRoot(root);
+			if (!current.id.equals(root.id)) return false;
+			root = current;
+		}
 		for (index in 0...nodes.length) {
+			var oldNode = nodes[index], native = oldNode.scopeOwner();
+			if (native != null) {
+				var current = native.currentRoot(oldNode);
+				if (!current.id.equals(oldNode.id)) return false;
+				nodes[index] = current;
+			}
+			var oldParent = parents[index];
+			if (oldParent != null) {
+				var nativeParent = oldParent.scopeOwner();
+				if (nativeParent != null) {
+					var current = nativeParent.currentRoot(oldParent);
+					if (!current.id.equals(oldParent.id)) return false;
+					parents[index] = current;
+				}
+			}
+
 			var node = nodes[index], parent = parents[index];
 			if (counts[index] >= 0 && node.children.length != counts[index]) return false;
 			if (node != root && positions[index] == -2 && (node.parent != parent || parent == null ||
@@ -725,7 +748,7 @@ private class DockDropTargetView implements View {
 			previewStyle.height = LayoutAxis.grow();
 			previewStyle.positioning = LayoutPositioning.Absolute;
 			previewStyle.zIndex = 2;
-			var previewNode = new RenderNode(context.id("drop-preview:" + targetPanelId),
+			var previewNode = context.createNode(context.rootId("drop-preview:" + targetPanelId),
 				LayoutVisualKind.Custom, previewStyle);
 			previewNode.setStyleIdentity("dock-drop-preview", targetPanelId);
 			previewNode.hitTestSelf = false;

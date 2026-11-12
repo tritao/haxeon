@@ -10,7 +10,7 @@ import haxeon.ui.theme.Theme;
 class ScopeLeaf implements View {
   public function new() {}
   public function build(context:BuildContext):RenderNode
-    return new RenderNode(context.id("leaf"), LayoutVisualKind.Box);
+    return context.createNode(context.rootId("leaf"), LayoutVisualKind.Box);
 }
 
 class ScopeResourceLeaf implements View {
@@ -19,7 +19,7 @@ class ScopeResourceLeaf implements View {
   public function new(key:String) this.key = key;
   public function build(context:BuildContext):RenderNode {
     context.resourceState(context.id("resource-" + key), () -> key, _ -> released++);
-    return new RenderNode(context.id("resource-leaf"), LayoutVisualKind.Box);
+    return context.createNode(context.rootId("resource-leaf"), LayoutVisualKind.Box);
   }
 }
 
@@ -39,16 +39,17 @@ class TrackedScopeMain {
     var root = context.trackReads(() -> scope.build(context));
     store.endFrame();
     if (runs != 1 || !read.hasFieldReaders(0)) return 1;
-    var decoration = new RenderNode(context.id("decoration"), LayoutVisualKind.Box);
+    var decoration = context.createNode(context.rootId("decoration"), LayoutVisualKind.Box);
     root.add(decoration);
     unrelated.value = 1;
     if (context.hasPendingRenderScopes() || runs != 1) return 2;
     read.value = 2;
     if (!context.hasPendingRenderScopes()) return 3;
-    var previousChild = root.children[0];
+    var previousChild = root;
     context.flushRenderScopes();
+    root = context.currentRoot(root);
     if (context.patchedPriors().get(previousChild.id.value) != previousChild) return 13;
-    if (runs != 2 || context.hasPendingRenderScopes() || root.children.length != 2 || decoration.parent != root) return 4;
+    if (runs != 2 || context.hasPendingRenderScopes() || root.children.length != 1 || decoration.parent != root) return 4;
     primary.value = false;
     context.flushRenderScopes();
     if (runs != 3 || read.hasFieldReaders(0) || !alternate.hasFieldReaders(0)) return 6;
@@ -56,7 +57,8 @@ class TrackedScopeMain {
     if (context.hasPendingRenderScopes() || runs != 3) return 7;
     alternate.value = 11;
     context.flushRenderScopes();
-    if (runs != 4 || decoration.parent != root || root.children.length != 2) return 8;
+    root = context.currentRoot(root);
+    if (runs != 4 || decoration.parent != root || root.children.length != 1) return 8;
     var mounted:Map<Int, RenderNode> = new Map();
     context.beginFrame();
     store.endFrame();
@@ -87,6 +89,7 @@ class TrackedScopeMain {
     resourceChoice.value = false;
     context.flushRenderScopes();
     context.beginFrame();
+    resourceRoot = context.currentRoot(resourceRoot);
     var resourceNodes:Map<Int, RenderNode> = new Map();
     resourceRoot.walk(node -> resourceNodes.set(node.id.value, node));
     context.retainRenderScopeState(resourceNodes);

@@ -1,7 +1,5 @@
 package haxeon.ui.core;
 
-import haxeon.ui.core.RenderScope.RenderScopeLifetime;
-
 import haxeon.reactive.Derived;
 import haxeon.reactive.ReactiveRuntime;
 
@@ -90,11 +88,11 @@ class BuildContext {
 	var patching:Bool = false;
 	final patchPriors:Map<Int, RenderNode> = new Map();
 	final renderScopes:Array<RenderScope> = [];
-	final renderScopeById:Map<Int, RenderScope> = new Map();
 	var buildingRenderScope:Bool = false;
 	var activeRenderScope:Null<RenderScope>;
-	final scheduleRenderScope:Void->Void;
-	final changingRenderScope:RenderNode->Void;
+	var pendingScopeRootId:Null<WidgetId>;
+	var activeBuildRootId:Null<WidgetId>;
+	var buildingRoot:Null<RenderNode>;
 
 	public function new(stateStore:StateStore, ?fonts:FontCollection, ?textInput:TextInputBridge,
 			?clipboard:ClipboardService, ?theme:Theme, ?gestures:GestureArena,
@@ -103,8 +101,6 @@ class BuildContext {
 		if (stateStore == null)
 			throw "Build context requires a state store";
 		this.stateStore = stateStore;
-		scheduleRenderScope = requestBindingFrame;
-		changingRenderScope = beforeRenderScopeChange;
 		activeObserved = observed;
 		this.fonts = fonts;
 		platformSurface = null;
@@ -232,9 +228,7 @@ class BuildContext {
 			collectHoverTypes(styleSheet);
 		}
 		if (!hoverAnyType && !hoverTypes.exists(node.styleType)) return false;
-		var target = new StyleTarget(node.styleType, node.styleKey, node.styleId,
-			node.styleClasses, node.styleTags);
-		return sheetHasHoverRule(theme.styles, target) || sheetHasHoverRule(styleSheet, target);
+		return sheetHasHoverRule(theme.styles, node) || sheetHasHoverRule(styleSheet, node);
 	}
 
 	/** The style revision `hoverTypes` was collected at, and the widget types of the rules that match on hover (any, if one names none). */
@@ -251,9 +245,9 @@ class BuildContext {
 			}
 	}
 
-	static function sheetHasHoverRule(sheet:haxeon.ui.style.StyleSheet, target:StyleTarget):Bool {
+	static function sheetHasHoverRule(sheet:haxeon.ui.style.StyleSheet, node:RenderNode):Bool {
 		for (rule in sheet.rules)
-			if (rule.selector.stateMask.contains(haxeon.ui.style.StyleState.Hovered) && rule.selector.matchesWithoutStates(target)) return true;
+			if (rule.selector.stateMask.contains(haxeon.ui.style.StyleState.Hovered) && rule.selector.matchesIdentity(node.styleType, node.styleKey, node.styleId, node.styleClasses, node.styleTags)) return true;
 		return false;
 	}
 
@@ -411,7 +405,51 @@ class BuildContext {
 		}
 	}
 
+	/** Reserve the body's identity before any child builds or interaction/style reads. */
+	public function rootId(localKey:String):WidgetId {
+		var reserved = pendingScopeRootId;
+		if (reserved == null) return id(localKey);
+		pendingScopeRootId = null;
+		claimId(reserved, localKey);
+		return reserved;
+	}
+
+	/** Scope ownership is stored only on actual body roots, without an additional render/layout node. */
+	public function createNode(id:WidgetId, kind:haxeon.ui.LayoutVisualKind = haxeon.ui.LayoutVisualKind.Box,
+			?style:LayoutStyle):RenderNode {
+		var owner = rootOwner(id);
+		var node = owner != null ? new ScopeRootNode(id, kind, style, owner) : new RenderNode(id, kind, style);
+		if (owner != null) buildingRoot = node;
+		return node;
+	}
+
+	/** Live text roots keep the same ownership protocol without adding a field to ordinary text leaves. */
+	public function createLiveTextNode(id:WidgetId, style:LayoutStyle, value:String):LiveTextNode {
+		var owner = rootOwner(id);
+		var node:LiveTextNode = owner == null ? new LiveTextNode(id, style, value) : new ScopeTextRootNode(id, style, value, owner);
+		if (owner != null) buildingRoot = node;
+		return node;
+	}
+
+	function rootOwner(id:WidgetId):Null<RenderScope>
+		return activeRenderScope != null && activeBuildRootId != null && activeBuildRootId.equals(id) ? activeRenderScope : null;
+
+	@:allow(haxeon.ui.core.RenderScope)
+	function isBuildingRoot(node:RenderNode):Bool return buildingRoot == node;
+
 	public function id(localKey:String):WidgetId {
+		var result = resolveId(localKey);
+		claimId(result, localKey);
+		return result;
+	}
+
+	function claimId(id:WidgetId, localKey:String):Void {
+		if (!patching && !buildingRenderScope && !claimed.add(id.value))
+			throw 'Duplicate widget ID ${id.value}; existing=${stateStore.describe(id)} current=${scope.widgetPath(localKey)}';
+	}
+
+	/** Logical owner/resource identities need not introduce a render node or claim a retained body's root twice. */
+	function resolveId(localKey:String):WidgetId {
 		var path = scope.widgetPath(localKey);
 		var id = idsByPath.get(path);
 		if (id == null) {
@@ -425,8 +463,6 @@ class BuildContext {
 			pathOrder.push(path);
 			cachedIdCount++;
 		}
-		if (!patching && !buildingRenderScope && !claimed.add(id.value))
-			throw 'Duplicate widget ID ${id.value}; existing=${stateStore.describe(id)} current=$path';
 		stateStore.rememberPath(id, path);
 		return id;
 	}
@@ -559,13 +595,20 @@ class BuildContext {
 		return null;
 	}
 
+	/** The native owner is carried by the actual component body root. */
+	public function renderScopeAt(node:RenderNode):Null<RenderScope> {
+		var owner = node.scopeOwner();
+		return owner != null && owner.root == node && !owner.disposed ? owner : null;
+	}
+
 	/** Native bodies own interaction reads until a more local independent widget takes ownership. */
 	public function interactionRenderScope(node:RenderNode):Null<RenderScope> {
-		var current:Null<RenderNode> = node;
+		var current:Null<RenderNode> = node, branch:Null<RenderNode> = null;
 		while (current != null) {
-			var owner = renderScopeById.get(current.id.value);
-			if (owner != null && owner.root == current && !owner.disposed) return owner;
+			var owner = renderScopeAt(current);
+			if (owner != null && (branch == null || owner.owns(branch))) return owner;
 			if (canPatch(current)) return null;
+			branch = current;
 			current = current.parent;
 		}
 		return null;
@@ -945,8 +988,10 @@ class BuildContext {
 	}
 
 	/** A retained subtree whose root was rebuilt in place since the cache saw it must return the replacement, not the old node. */
-	public function currentRoot(root:RenderNode):RenderNode
-		return RenderNode.latest(root);
+	public function currentRoot(root:RenderNode):RenderNode {
+		var owner = root.scopeOwner();
+		return owner == null ? RenderNode.latest(root) : owner.currentRoot(root);
+	}
 
 	public function withScope<T>(key:Key, build:Void->T):T
 		return withScopeUnder(scope, key, build);
@@ -955,62 +1000,113 @@ class BuildContext {
 	public function currentScope():KeyScope
 		return scope;
 
-	/** Mounts a structural owner directly on its stable wrapper node. */
-	public function mountRenderScope(root:RenderNode, build:Void->RenderNode):RenderNode {
-		var owner = new RenderScope(root, build, scheduleRenderScope, changingRenderScope);
-		owner.build = captureBuild(function() return buildRenderScope(owner, build));
-		owner.resourceId = id("scope-resource");
-		var lifetime = resourceState(owner.resourceId, () -> new RenderScopeLifetime(), value -> value.dispose()).value;
-		owner.parentScope = activeRenderScope;
-		var previous = renderScopeById.get(root.id.value);
-		renderScopeById.set(root.id.value, owner);
-		renderScopes.push(owner);
-		try owner.refresh() catch (error:Dynamic) {
-			owner.dispose();
-			renderScopes.remove(owner);
-			if (previous == null) renderScopeById.remove(root.id.value);
-			else renderScopeById.set(root.id.value, previous);
+	/** Capture inherited values on the native owner, with no mount-path build closures or layout wrapper. */
+	public function mountComponent(component:haxeon.ui.component.ScopeView):RenderNode {
+		var previousScope = scope;
+		scope = scope.child(new Key(component.scopeKey()));
+		try {
+			var resourceId = resolveId("scope");
+			var rootId = pendingScopeRootId == null ? resourceId : pendingScopeRootId;
+			pendingScopeRootId = null;
+			stateStore.beginScope(resourceId.value);
+			var text = textStyleStack.length == 1 ? textStyleStack : textStyleStack.copy();
+			var owner = new RenderScope(resourceId.value, this, component, scope, styleParent, text);
+			owner.parentScope = activeRenderScope;
+			renderScopes.push(owner);
+			try owner.mount(rootId) catch (error:Dynamic) {
+				owner.dispose();
+				renderScopes.remove(owner);
+				throw error;
+			}
+			stateStore.installScope(owner);
+			scope = previousScope;
+			return owner.root;
+		} catch (error:Dynamic) {
+			scope = previousScope;
 			throw error;
 		}
-		lifetime.replace(owner);
-		return root;
 	}
 
-	function beforeRenderScopeChange(root:RenderNode):Void {
-		// Descendants may be reused or rebuilt by other owners before frame comparison runs.
-		// The wrapper's own inputs are stable. Submitted topology already records its old child slots.
-		recordPriors(root, root, false);
+	@:allow(haxeon.ui.component.TrackedScope)
+	function deferRootIdentity():Null<WidgetId> {
+		var reserved = pendingScopeRootId;
+		pendingScopeRootId = null;
+		return reserved;
 	}
 
-	function buildRenderScope(owner:RenderScope, build:Void->RenderNode):RenderNode {
+	@:allow(haxeon.ui.component.TrackedScope)
+	function restoreRootIdentity(id:Null<WidgetId>):Void pendingScopeRootId = id;
+
+	@:allow(haxeon.ui.core.RenderScope)
+	function beforeRenderScopeChange(root:RenderNode):Void recordPriors(root, root, false);
+
+	@:allow(haxeon.ui.core.RenderScope)
+	function buildRenderScope(owner:RenderScope, rootId:WidgetId):RenderNode {
+		var previousBuilding = buildingRenderScope;
+		// A direct owner.refresh is an independent update too; its mounted IDs are claimed by
+		// the enclosing retained tree, while an initial mount must still enforce duplicate IDs.
+		if (owner.root != null) buildingRenderScope = true;
 		var marker = stateStore.beginUsage();
 		var previous = activeRenderScope;
 		var previousUpdater = activeUpdatingBuild;
 		var previousObserved = activeObserved;
+		var previousScope = scope, previousParent = styleParent, previousText = textStyleStack;
+		var previousRoot = pendingScopeRootId;
+		var previousBuildId = activeBuildRootId, previousBuildingRoot = buildingRoot;
+		pendingScopeRootId = rootId;
+		activeBuildRootId = rootId;
+		buildingRoot = null;
 		var capture = previousObserved == observed ? localObserved : previousObserved;
 		var dependencyMark = capture.dependencyMarker();
+		scope = owner.capturedScope;
+		styleParent = owner.capturedParent;
+		textStyleStack = owner.capturedText;
 		activeObserved = capture;
 		activeRenderScope = owner;
 		activeUpdatingBuild = null;
 		try {
-			var result = trackReads(build);
+			var result = readComponentBody(owner.component, capture);
 			for (index in dependencyMark...capture.pendingCount())
 				owner.trackField(capture.pendingSourceAt(index), capture.pendingFieldBitAt(index));
-			owner.stateIds = stateStore.usageMarker() == marker ? null : stateStore.usedIdsSince(marker, owner.stateIds);
-			stateStore.setOwnedStates(owner.resourceId, owner.stateIds);
+			var ownedIds = stateStore.usageMarker() == marker ? null : stateStore.usedIdsSince(marker, stateStore.ownedStateIds(owner.resourceId));
+			stateStore.setOwnedStates(owner.resourceId, ownedIds);
 			stateStore.finishUsage(marker);
-			stateStore.retain(owner.stateIds, false);
+			stateStore.retain(ownedIds, false);
 			capture.truncate(dependencyMark);
 			activeObserved = previousObserved;
 			activeRenderScope = previous;
 			activeUpdatingBuild = previousUpdater;
+			scope = previousScope; styleParent = previousParent; textStyleStack = previousText;
+			pendingScopeRootId = previousRoot;
+			activeBuildRootId = previousBuildId; buildingRoot = previousBuildingRoot;
+			buildingRenderScope = previousBuilding;
 			return result;
 		} catch (error:Dynamic) {
+			// Failed bodies must keep the reads that can make the next attempt succeed.
+			for (index in dependencyMark...capture.pendingCount())
+				owner.trackField(capture.pendingSourceAt(index), capture.pendingFieldBitAt(index));
 			stateStore.finishUsage(marker);
 			capture.truncate(dependencyMark);
 			activeObserved = previousObserved;
 			activeRenderScope = previous;
 			activeUpdatingBuild = previousUpdater;
+			scope = previousScope; styleParent = previousParent; textStyleStack = previousText;
+			pendingScopeRootId = previousRoot;
+			activeBuildRootId = previousBuildId; buildingRoot = previousBuildingRoot;
+			buildingRenderScope = previousBuilding;
+			throw error;
+		}
+	}
+
+	/** Keep tracking cleanup local to the direct call, including a throwing body. */
+	function readComponentBody(component:haxeon.ui.component.ScopeView, capture:Dependencies):RenderNode {
+		var frame = ReactiveRuntime.enterTracking(capture);
+		try {
+			var result = component.buildBody(this);
+			ReactiveRuntime.leaveTracking(frame);
+			return result;
+		} catch (error:Dynamic) {
+			ReactiveRuntime.leaveTracking(frame);
 			throw error;
 		}
 	}
@@ -1019,7 +1115,7 @@ class BuildContext {
 	public function retainRenderScopeState(mounted:Map<Int, RenderNode>):Void {
 		for (owner in renderScopes)
 			if (!owner.disposed && mounted.get(owner.root.id.value) == owner.root)
-				stateStore.touch(owner.resourceId);
+				stateStore.touchScope(owner.resourceId);
 	}
 
 	/** Runs scheduled structural computations before submitting their changed trees. */
@@ -1032,18 +1128,37 @@ class BuildContext {
 		var previous = buildingRenderScope;
 		buildingRenderScope = true;
 		try {
-			var index = 0;
-			while (index < renderScopes.length) {
-				var owner = renderScopes[index++];
-				if (renderScopeById.get(owner.root.id.value) != owner) owner.dispose();
-				else if (owner.mounted && !owner.attached()) owner.dispose();
-				else if (owner.mounted && owner.pending && !hasPendingUpdatingAncestor(owner.root)) owner.refresh();
+			var progressed = true;
+			while (progressed) {
+				progressed = false;
+				var index = 0;
+				while (index < renderScopes.length) {
+					var owner = renderScopes[index++];
+					if (owner.disposed) continue;
+					if (stateStore.scopeOwner(owner.resourceId) != owner || owner.mounted && !owner.attached()) {
+						owner.dispose();
+						progressed = true;
+					} else if (owner.mounted && owner.pending && !hasPendingScopeAncestor(owner) && !hasPendingUpdatingAncestor(owner.root)) {
+						owner.refresh();
+						progressed = true;
+					}
+				}
 			}
 			buildingRenderScope = previous;
 		} catch (error:Dynamic) {
 			buildingRenderScope = previous;
 			throw error;
 		}
+	}
+
+	/** Remounting a scope can put a retained child earlier in storage; ancestors still run first. */
+	function hasPendingScopeAncestor(owner:RenderScope):Bool {
+		var ancestor = owner.parentScope;
+		while (ancestor != null) {
+			if (!ancestor.disposed && ancestor.mounted && ancestor.pending) return true;
+			ancestor = ancestor.parentScope;
+		}
+		return false;
 	}
 
 	function hasPendingUpdatingAncestor(root:RenderNode):Bool {
@@ -1056,15 +1171,14 @@ class BuildContext {
 		return false;
 	}
 
-	/** Releases subscriptions when the wrapper is absent from the mounted tree. */
+	/** Releases subscriptions when the owning state is no longer retained by mounted or cached bodies. */
 	public function pruneRenderScopes(mounted:Map<Int, RenderNode>):Void {
 		var index = 0;
 		while (index < renderScopes.length) {
 			var owner = renderScopes[index];
 			owner.mounted = mounted.get(owner.root.id.value) == owner.root;
-			if (!owner.disposed && stateStore.contains(owner.resourceId)) { index++; continue; }
+			if (!owner.disposed && stateStore.scopeOwner(owner.resourceId) == owner) { index++; continue; }
 			owner.dispose();
-			if (renderScopeById.get(owner.root.id.value) == owner) renderScopeById.remove(owner.root.id.value);
 			renderScopes[index] = renderScopes[renderScopes.length - 1];
 			renderScopes.pop();
 		}
@@ -1073,42 +1187,30 @@ class BuildContext {
 	function clearRenderScopes():Void {
 		for (owner in renderScopes) owner.dispose();
 		renderScopes.resize(0);
-		renderScopeById.clear();
 	}
 
 	function adoptRenderScopes(node:RenderNode, parent:Null<RenderScope>):Void {
-		var owner = renderScopeById.get(node.id.value);
-		if (owner != null && owner.root == node && !owner.disposed) {
-			owner.mounted = true;
-			owner.parentScope = parent;
+		var owner = node.scopeOwner();
+		if (owner != null && parent != null && (owner.disposed || owner.sameSlot(parent))) {
+			node.setScopeOwner(parent);
+			owner = parent;
+		}
+		if (owner != null && !owner.disposed && (owner.root == node || owner == parent)) {
+			var outer = owner;
+			outer.mounted = true;
+			while (outer.parentScope != null && outer.parentScope.root == node) {
+				var ancestor = outer.parentScope;
+				if (ancestor.disposed || parent != null && ancestor.sameSlot(parent)) {
+					outer.parentScope = ancestor.parentScope;
+					continue;
+				}
+				outer = ancestor;
+				outer.mounted = true;
+			}
+			if (outer != parent) outer.parentScope = parent;
 			parent = owner;
 		}
 		for (child in node.children) adoptRenderScopes(child, parent);
-	}
-
-	/** Captures inherited build inputs for a render scope that reruns independently of its parent. */
-	public function captureBuild(build:Void->RenderNode):Void->RenderNode {
-		if (build == null) throw "A captured build requires a body";
-		var capturedScope = scope, capturedParent = styleParent;
-		var capturedText = textStyleStack.length == 1 ? textStyleStack : textStyleStack.copy();
-		return function() {
-			var previousScope = scope, previousParent = styleParent, previousText = textStyleStack;
-			scope = capturedScope;
-			styleParent = capturedParent;
-			textStyleStack = capturedText;
-			try {
-				var result = build();
-				scope = previousScope;
-				styleParent = previousParent;
-				textStyleStack = previousText;
-				return result;
-			} catch (error:Dynamic) {
-				scope = previousScope;
-				styleParent = previousParent;
-				textStyleStack = previousText;
-				throw error;
-			}
-		};
 	}
 
 	/**

@@ -31,7 +31,7 @@ class IconButtonMain {
     var root = new IconButton("search", IconName.Search, "Search").build(context);
     store.endFrame();
     if (root.children.length != 1) return 1;
-    var button = root.children[0];
+    var button = root;
     if (button.semantics == null || button.semantics.role != AccessibilityRole.Button
         || button.semantics.label != "Search"
         || !button.semantics.actions.contains(AccessibilityAction.Activate)
@@ -44,13 +44,14 @@ class IconButtonMain {
     context.interactionStates.set(button.id, StyleState.Pressed);
     scopeOwner.markDirty();
     context.flushRenderScopes();
-    var pressed = root.children[0];
+    root = context.currentRoot(root);
+    var pressed = root;
     if (pressed == button || !pressed.id.equals(button.id)
         || !pressed.states.contains(StyleState.Pressed)
         || root.children.length != 2 || root.children[1] != overlay || overlay.parent != root
         || root.layout.style.zIndex != 3) return 4;
     context.beginFrame();
-    var disabled = new IconButton("disabled", IconName.Close, "Close", null, null, false).build(context).children[0];
+    var disabled = new IconButton("disabled", IconName.Close, "Close", null, null, false).build(context);
     store.endFrame();
     if (disabled.enabled || disabled.focusable || disabled.semantics == null
         || !disabled.semantics.states.contains(AccessibilityState.Disabled)

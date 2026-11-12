@@ -15,7 +15,7 @@ class MenuInteractionTests {
 		var returnFocusView = new Button("Menu origin", null, null, "menu-focus-origin");
 		// Pointer invocation owns keyboard focus without choosing an action.
 		var origin = context.submit(returnFocusView, dialogFrame);
-		context.focusWidget(origin.id);
+		if (!context.focusWidget(origin.id)) throw "Menu origin must accept focus";
 		var pointerChoice = "";
 		var menuFocusLabel = function():String {
 			var focused = context.focus.focusedNode();

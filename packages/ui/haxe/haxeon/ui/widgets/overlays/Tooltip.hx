@@ -95,11 +95,11 @@ class Tooltip implements View {
 			var tooltip = new AnonymousTooltipContent(content, tooltipStyle, visible);
 			var rootStyle = fillAnchor ? FillRootStyle : FitRootStyle;
 			var root = context.withScope(new Key("layers"), function() {
-				var rootId = context.id("stack");
+				var rootId = context.rootId("stack");
 				var rootComputed = context.resolveStyle(
 					new StyleTarget("tooltip-layer", key.value, key.value, null, ["tooltip-layer"],
 						context.interactionStates.get(rootId)), rootStyle);
-				var result = new RenderNode(rootId, LayoutVisualKind.Box, rootComputed.toLayoutStyle());
+				var result = context.createNode(rootId, LayoutVisualKind.Box, rootComputed.toLayoutStyle());
 				result.setStyleIdentity("tooltip-layer", key.value, key.value, null, ["tooltip-layer"]);
 				result.states = context.interactionStates.get(rootId);
 				result.computedStyle = rootComputed;
@@ -148,12 +148,12 @@ class Tooltip implements View {
 					state.update(true);
 				}
 			});
-			anchorNode.on(UiEventKind.Focus, function(_) {
+			anchorNode.on(UiEventKind.Focus, function(event) {
 				pointer.suppressed = false;
-				focused.update(!context.interactionStates.get(anchorNode.id).contains(StyleState.Hovered) && (showWhen == null || showWhen()));
-			});
-			anchorNode.on(UiEventKind.Blur, function(_) { focused.update(false); });
-			anchorNode.on(UiEventKind.FocusLost, function(_) { focused.update(false); });
+				focused.update(!context.interactionStates.get(event.target).contains(StyleState.Hovered) && (showWhen == null || showWhen()));
+			}, "capture");
+			anchorNode.on(UiEventKind.Blur, function(_) { focused.update(false); }, "capture");
+			anchorNode.on(UiEventKind.FocusLost, function(_) { focused.update(false); }, "capture");
 			anchorNode.on(UiEventKind.HoverLeave, function(_) { state.update(false); });
 			tooltipNode.hitTestBehavior = HitTestBehavior.None;
 			root.hitTestSelf = false;
@@ -192,7 +192,7 @@ class Tooltip implements View {
 			var style = new LayoutStyle();
 			style.clipToParent = false;
 			if (fillAnchor) style.width = LayoutAxis.grow();
-			var root = new RenderNode(context.id("layers"), LayoutVisualKind.Box, style);
+			var root = context.createNode(context.rootId("layers"), LayoutVisualKind.Box, style);
 			root.hitTestSelf = false;
 			var header = anchor.build(context);
 			if (fillAnchor) header.layout.style.width = LayoutAxis.stretch();
@@ -207,7 +207,7 @@ class Tooltip implements View {
 			var tipId = context.id("tooltip");
 			var computed = context.resolveStyle(new StyleTarget("tooltip", key.value, key.value, null, ["tooltip"],
 				context.interactionStates.get(tipId)), tipStyle);
-			var tip = new RenderNode(tipId, LayoutVisualKind.Custom, computed.toLayoutStyle());
+			var tip = context.createNode(tipId, LayoutVisualKind.Custom, computed.toLayoutStyle());
 			tip.computedStyle = computed;
 			tip.setStyleIdentity("tooltip", key.value, key.value, null, ["tooltip"]);
 			// A hidden tooltip builds no content: showing it rebuilds, and the layout feedback below positions it that frame.
@@ -293,11 +293,11 @@ private class AnonymousTooltipContent implements View {
 	}
 
 	public function build(context:BuildContext):RenderNode {
-		var nodeId = context.id("tooltip");
+		var nodeId = context.rootId("tooltip");
 		var computed = context.resolveStyle(
 			new StyleTarget("tooltip", "tooltip", "tooltip", null, ["tooltip"],
 				context.interactionStates.get(nodeId)), style);
-		var node = new RenderNode(nodeId, LayoutVisualKind.Custom, computed.toLayoutStyle());
+		var node = context.createNode(nodeId, LayoutVisualKind.Custom, computed.toLayoutStyle());
 		node.setStyleIdentity("tooltip", "tooltip", "tooltip", null, ["tooltip"]);
 		node.states = context.interactionStates.get(nodeId);
 		node.computedStyle = computed;

@@ -164,7 +164,7 @@ class SelectionPopup {
 		dropdownStyle.radiusBottomLeft = dropdownStyle.radiusBottomRight = 5.0;
 		var dropdownComputed = context.resolveStyle(new StyleTarget("selection-popup", "options",
 			"options", null, ["selection-popup"], context.interactionStates.get(dropdownId)), dropdownStyle);
-		var dropdown = new RenderNode(dropdownId, LayoutVisualKind.Custom,
+		var dropdown = context.createNode(dropdownId, LayoutVisualKind.Custom,
 			dropdownComputed.toLayoutStyle());
 		dropdown.setStyleIdentity("selection-popup", "options", "options", null, ["selection-popup"]);
 		dropdown.states = context.interactionStates.get(dropdownId);
@@ -221,7 +221,7 @@ class SelectionPopup {
 			contentStyle.height = LayoutAxis.fit();
 			contentStyle.direction = LayoutDirection.TopToBottom;
 			contentStyle.childGap = 2.0;
-			optionParent = new RenderNode(context.id("option-content"), LayoutVisualKind.Box, contentStyle);
+			optionParent = context.createNode(context.rootId("option-content"), LayoutVisualKind.Box, contentStyle);
 			var scroll = new ScrollView("option-viewport", new SelectionPopupContent(optionParent),
 				viewportStyle, ScrollAxis.Vertical, controller);
 			scroll.showScrollbar = false;
@@ -254,23 +254,16 @@ class SelectionPopup {
 			// The selection check is painted in the first 20 px of the row; the label starts after it
 			// on every row, so the text lines up whether or not that row is the selected one.
 			optionStyle.padding = new Insets(26.0, 5.0, 9.0, 5.0);
-			var optionButton = new Button(option.label, optionStyle,
-				function() { selectedValue = option.value; activeIndex = originalIndex; onSelect(originalIndex); request(); }, option.key);
-			optionButton.classes = ["selection-option"];
-			optionButton.ellipsizeLabel = true;
-			optionButton.variant = ButtonVariant.Navigation;
-			optionButton.enabled = isEnabled(originalIndex);
-			optionButton.selected = sameValue(option.value, selectedValue);
-			optionButton.semanticRole = AccessibilityRole.ListItem;
-			optionButton.semanticActions = optionButton.enabled ? AccessibilityAction.Select : AccessibilityAction.empty();
-			var optionNode = context.withScope(new haxeon.ui.core.Key("option-" + option.key),
-				function() return optionButton.build(context));
-			var optionSemantics:Semantics = cast optionNode.semantics;
-			if (optionButton.selected)
-				SelectionIndicator.check(context, optionNode, "option-check-" + originalIndex,
-					context.theme.text);
+			var optionEnabled = isEnabled(originalIndex);
+			var optionSelected = sameValue(option.value, selectedValue);
+			var optionSemantics = new Semantics(AccessibilityRole.ListItem, option.label);
+			optionSemantics.actions = optionEnabled ? AccessibilityAction.Select : AccessibilityAction.empty();
 			optionSemantics.setSize = visibleIndices.length;
 			optionSemantics.positionInSet = position + 1;
+			var optionButton = new Button(option.label, optionStyle, function() { selectedValue = option.value; activeIndex = originalIndex; onSelect(originalIndex); request(); }, option.key, optionEnabled, ButtonVariant.Navigation, optionSelected, ["selection-option"], null, null, null, optionSelected ? SelectionIndicator.check("option-check-" + originalIndex, context.theme.text) : null
+				, null, true, null, null, null, optionSemantics);
+			var optionNode = context.withScope(new haxeon.ui.core.Key("option-" + option.key),
+				function() return optionButton.build(context));
 			optionNodes.push(optionNode);
 			optionParent.add(optionNode);
 		}
@@ -298,7 +291,7 @@ class SelectionPopup {
 				ensure(next);
 				var nextPosition = visiblePosition(next);
 				if (nextPosition >= 0 && nextPosition < optionNodes.length)
-					context.requestFocus(optionNodes[nextPosition].id);
+					context.requestFocus(optionNodes[nextPosition].children[0].id);
 				event.preventDefault();
 			});
 		}

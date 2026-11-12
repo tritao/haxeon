@@ -69,11 +69,11 @@ class ScrollView implements View {
 	public function build(context:BuildContext):RenderNode {
 		return context.withScope(key, function() {
 			var viewportStyle = style.copy();
-			var id = context.id("scroll");
+			var id = context.rootId("scroll");
 			var flags = context.interactionStates.get(id);
 			var computed = context.resolveStyle(new StyleTarget("scroll-view", key.value, key.value,
 				null, ["scroll-view"], flags), viewportStyle);
-			var viewport = new RenderNode(id, LayoutVisualKind.Box, computed.toLayoutStyle());
+			var viewport = context.createNode(id, LayoutVisualKind.Box, computed.toLayoutStyle());
 			viewport.setStyleIdentity("scroll-view", key.value, key.value, null, ["scroll-view"]);
 			viewport.states = flags;
 			viewport.computedStyle = computed;
@@ -121,7 +121,7 @@ class ScrollView implements View {
 			contentStyle.height = axis == ScrollAxis.Horizontal || fillViewport ? LayoutAxis.grow() : LayoutAxis.fit();
 			contentStyle.transform = Transform2D.identity().translated(-controller.offsetX,
 				-controller.offsetY);
-			var translatedContent = new RenderNode(context.id("scroll-content"),
+			var translatedContent = context.createNode(context.rootId("scroll-content"),
 				LayoutVisualKind.Box, contentStyle);
 			var content = context.withStyleParent(computed, function() {
 				return context.withScope(new Key("content"), function() return child.build(context));
@@ -267,13 +267,13 @@ class ScrollView implements View {
 		trackStyle.zIndex = 4;
 		trackStyle.radiusTopLeft = trackStyle.radiusTopRight = ScrollbarHitWidth * 0.5;
 		trackStyle.radiusBottomLeft = trackStyle.radiusBottomRight = ScrollbarHitWidth * 0.5;
-		var track = new RenderNode(context.id(name + "-scrollbar-track"), LayoutVisualKind.Box, trackStyle);
+		var track = context.createNode(context.rootId(name + "-scrollbar-track"), LayoutVisualKind.Box, trackStyle);
 		track.setStyleIdentity("scrollbar-track", key.value, key.value, null, ["scrollbar", name]);
 		var thumbStyle = new LayoutStyle();
 		thumbStyle.positioning = LayoutPositioning.Absolute;
 		thumbStyle.zIndex = 5;
 		var thumbId = context.id(name + "-scrollbar-thumb");
-		var thumb = new RenderNode(thumbId, LayoutVisualKind.Box, thumbStyle);
+		var thumb = context.createNode(thumbId, LayoutVisualKind.Box, thumbStyle);
 		thumb.setStyleIdentity("scrollbar-thumb", key.value, key.value, null, ["scrollbar", name]);
 		var semantics = new Semantics(AccessibilityRole.Slider, vertical ? "Vertical scroll position" : "Horizontal scroll position");
 		semantics.actions = AccessibilityAction.Increment | AccessibilityAction.Decrement;
@@ -284,7 +284,7 @@ class ScrollView implements View {
 		visualStyle.positioning = LayoutPositioning.Absolute;
 		visualStyle.radiusTopLeft = visualStyle.radiusTopRight = 5.0;
 		visualStyle.radiusBottomLeft = visualStyle.radiusBottomRight = 5.0;
-		var visual = new RenderNode(context.id(name + "-scrollbar-thumb-visual"), LayoutVisualKind.Box, visualStyle);
+		var visual = context.createNode(context.rootId(name + "-scrollbar-thumb-visual"), LayoutVisualKind.Box, visualStyle);
 		visual.hitTestSelf = false;
 		thumb.add(visual);
 		track.add(thumb);

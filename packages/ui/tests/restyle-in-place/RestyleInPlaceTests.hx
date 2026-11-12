@@ -1084,13 +1084,13 @@ class RestyleInPlaceTests {
     var ui = new UiContext(null, fonts), frame = new LayoutFrame(240, 120), input = new EnabledInput();
     ui.verifyRetentionEvery = 1;
     var view:View = new RetainedView("focus-disabling", context -> {
-      var button = new Button("Focus", null, () -> {});
-      button.enabled = input.enabled;
+      var button = new Button("Focus", null, () -> {}, null, input.enabled
+      );
       return button;
     });
     var build = () -> view;
     var root = ui.submitCached(build, frame, "focus-initial");
-    ui.focusWidget(root.id);
+    check(ui.focusWidget(root.id), "Enabled Button did not accept focus");
     ui.submitCached(build, frame, "focus-settled");
     input.enabled = false;
     root = ui.submitCached(build, frame, "focus-disabled");
@@ -1404,19 +1404,21 @@ class RestyleInPlaceTests {
   }
 
   static function buttonIdentityOwnership(fonts:FontCollection):Void {
-    var ui = new UiContext(null, fonts), left = new Button("Left"), right = new Button("Right");
-    left.classes = ["owned-class"];
-    right.classes = ["owned-class"];
-    left.variant = haxeon.ui.widgets.controls.ButtonVariant.Navigation;
-    right.variant = haxeon.ui.widgets.controls.ButtonVariant.Navigation;
+    var ui = new UiContext(null, fonts), callerClasses = ["owned-class"];
+    var left = new Button("Left", null, null, null, null, haxeon.ui.widgets.controls.ButtonVariant.Navigation
+    , null, callerClasses);
+    var right = new Button("Right", null, null, null, null, haxeon.ui.widgets.controls.ButtonVariant.Navigation
+    , null, callerClasses);
+    callerClasses[0] = "caller-change";
     var column = new Column("identity-test", [new KeyedView("left", left), new KeyedView("right", right)]);
     var frame = new LayoutFrame(300, 100), root = ui.submit(column, frame);
-    left.classes[0] = "caller-change";
-    check(root.children[0].styleClasses[0] == "owned-class", "Button did not snapshot its caller's classes");
+    check(root.children[0].children[0].styleClasses[0] == "owned-class", "Button did not snapshot its constructor classes");
     root.children[0].styleClasses[0] = "node-change";
     check(root.children[1].styleClasses[0] == "owned-class", "Buttons shared a mutable class list");
-    root = ui.submit(column, frame);
-    check(root.children[0].styleClasses[0] == "caller-change", "Button reused an obsolete selector snapshot");
+    var replacement = new Button("Left", null, null, null, null, haxeon.ui.widgets.controls.ButtonVariant.Navigation
+    , null, callerClasses);
+    root = ui.submit(new Column("identity-test", [new KeyedView("left", replacement), new KeyedView("right", right)]), frame);
+    check(root.children[0].children[0].styleClasses[0] == "caller-change", "Replacement Button reused an obsolete selector snapshot");
     ui.dispose();
   }
 

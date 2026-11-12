@@ -28,10 +28,10 @@ class Padding implements View {
 
 	public function build(context:BuildContext):RenderNode {
 		return context.withScope(key, function() {
-			var id = context.id("padding");
+			var id = context.rootId("padding");
 			var computed = context.resolveStyle(new StyleTarget("padding", key.value, key.value,
 				null, ["padding"], context.interactionStates.get(id)), style);
-			var node = new RenderNode(id, LayoutVisualKind.Box, computed.toLayoutStyle());
+			var node = context.createNode(id, LayoutVisualKind.Box, computed.toLayoutStyle());
 			node.setStyleIdentity("padding", key.value, key.value, null, ["padding"]);
 			node.states = context.interactionStates.get(id);
 			node.computedStyle = computed;

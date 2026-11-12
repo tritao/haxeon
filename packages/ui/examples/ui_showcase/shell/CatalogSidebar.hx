@@ -81,9 +81,8 @@ class CatalogSidebar {
 			explorer.state.inspector.selectedNodeId = 0;
 			explorer.state.inspector.hoveredNodeId = 0;
 			explorer.state.inspector.tab = "preview";
-		}, "nav-" + page.id);
-		item.variant = ButtonVariant.Navigation;
-		item.selected = explorer.state.selectedPage == page.id;
+		}, "nav-" + page.id, null, ButtonVariant.Navigation, explorer.state.selectedPage == page.id
+		);
 		children.push(explorer.keyed("nav-" + page.id, item));
 	}
 }

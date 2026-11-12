@@ -152,18 +152,41 @@ private class RetainedVariantEntry {
 		nodes.push(node); parents.push(parent);
 		positions.push(parent == null ? -1 : variableParent ? -2 : parent.children.indexOf(node));
 		var owner = node == root ? null : context.updatingBuild(node);
-		childCounts.push(owner == null ? node.children.length : -1);
+		var native = context.renderScopeAt(node);
+		childCounts.push(owner == null && native == null ? node.children.length : -1);
 		for (child in node.children) {
-			var owned = false;
+			var owned = native != null && native.owns(child);
 			if (owner != null && owner.built != null)
 				for (made in owner.built.children) if (made.id.value == child.id.value) { owned = true; break; }
-			if (!owned) capture(child, context, owner != null);
+			if (!owned) capture(child, context, owner != null || native != null);
 		}
 	}
 
 	function topologyMatches():Bool {
 		if (RenderNode.latest(root) != root) return false;
+		var rootOwner = root.scopeOwner();
+		if (rootOwner != null) {
+			var current = rootOwner.currentRoot(root);
+			if (!current.id.equals(root.id)) return false;
+			root = current;
+		}
 		for (index in 0...nodes.length) {
+			var oldNode = nodes[index], native = oldNode.scopeOwner();
+			if (native != null) {
+				var current = native.currentRoot(oldNode);
+				if (!current.id.equals(oldNode.id)) return false;
+				nodes[index] = current;
+			}
+			var oldParent = parents[index];
+			if (oldParent != null) {
+				var nativeParent = oldParent.scopeOwner();
+				if (nativeParent != null) {
+					var current = nativeParent.currentRoot(oldParent);
+					if (!current.id.equals(oldParent.id)) return false;
+					parents[index] = current;
+				}
+			}
+
 			var node = nodes[index], parent = parents[index], position = positions[index];
 			if (childCounts[index] >= 0 && node.children.length != childCounts[index]) return false;
 			if (node != root && position == -2 && (node.parent != parent || parent == null || parent.children.indexOf(node) < 0)) return false;

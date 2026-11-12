@@ -85,10 +85,10 @@ class Shape implements View {
 
 	public function build(context:BuildContext):RenderNode {
 		return context.withScope(new Key(key), function() {
-			var nodeId = context.id("shape");
+			var nodeId = context.rootId("shape");
 			var computed = context.resolveStyle(new StyleTarget("shape", key, key,
 				null, ["shape"], context.interactionStates.get(nodeId)), style);
-			var node = new RenderNode(nodeId, LayoutVisualKind.Custom, computed.toLayoutStyle());
+			var node = context.createNode(nodeId, LayoutVisualKind.Custom, computed.toLayoutStyle());
 			node.setStyleIdentity("shape", key, key, null, ["shape"]);
 			node.states = context.interactionStates.get(nodeId);
 			node.computedStyle = computed;

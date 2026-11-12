@@ -49,27 +49,21 @@ class CommandButton implements View {
 		var invocation = invocationContext;
 		var command = commands.get(commandId);
 		if (command == null) {
-			var missing = new Button("Missing command: " + commandId, style, null, key);
-			missing.enabled = false;
+			var missing = new Button("Missing command: " + commandId, style, null, key, false
+			);
 			return missing.build(context);
 		}
+		var flags = invocation == null ? context.commandFlags(commands, commandId)
+			: (command.isEnabled(invocation) ? 1 : 0) | (command.isChecked(invocation) ? 2 : 0);
+		// Visible text names the control; an icon-only presentation retains the command's full name.
+		var accessibleName = displayLabel != null && displayLabel.length == 0 ? command.label : null;
 		var button = new Button(displayLabel == null ? command.label : displayLabel, style, function() {
 			var actualContext = invocation == null ? context.commandContext : invocation;
 			var result = commands.executeContext(commandId, actualContext);
 			if (onResult != null)
 				onResult(result);
-		}, key);
-		button.variant = variant;
-		button.leadingIcon = leadingIcon;
-		// An icon-only button takes the command's name; visible text names the button itself, so what a user
-		// reads is what assistive technology announces (WCAG 2.5.3, label in name).
-		if (displayLabel != null && displayLabel.length == 0)
-			button.accessibilityLabel = command.label;
-		var flags = invocation == null ? context.commandFlags(commands, commandId)
-			: (command.isEnabled(invocation) ? 1 : 0) | (command.isChecked(invocation) ? 2 : 0);
-		button.enabled = (flags & 1) != 0;
-		button.selected = (flags & 2) != 0;
-		button.classes = ["command-button"].concat(classes);
+		}, key, (flags & 1) != 0, variant, (flags & 2) != 0, ["command-button"].concat(classes)
+		, leadingIcon, null, null, null, null, null, null, accessibleName);
 		return button.build(context);
 	}
 }

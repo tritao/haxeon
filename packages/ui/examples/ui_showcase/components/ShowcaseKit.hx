@@ -61,20 +61,19 @@ class ShowcaseKit {
 	}
 
 	static function button(explorer:UiExplorer, label:String, key:String,
-			action:Void->Void, selected:Bool = false):Button {
+			action:Void->Void, selected:Bool = false, enabled:Bool = true):Button {
 		var style = new LayoutStyle();
 		style.height = LayoutAxis.fixed(38.0);
 		style.padding = new Insets(12.0, 9.0, 12.0, 9.0);
 		style.radiusTopLeft = style.radiusTopRight = 5.0;
 		style.radiusBottomLeft = style.radiusBottomRight = 5.0;
-		var result = new Button(label, style, action, key);
-		result.selected = selected;
+		var result = new Button(label, style, action, key, enabled
+		, null, selected);
 		return result;
 	}
 
 	static function disabledButton(explorer:UiExplorer, label:String):Button {
-		var result = button(explorer, label, "disabled-demo", function() {});
-		result.enabled = false;
+		var result = button(explorer, label, "disabled-demo", function() {}, false, false);
 		return result;
 	}
 

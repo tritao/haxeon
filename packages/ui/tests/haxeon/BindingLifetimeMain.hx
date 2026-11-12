@@ -39,7 +39,9 @@ class BindingLifetimeMain {
     store.endFrame();
     value.value = 1;
     ReactiveRuntime.flushEffects();
-    var valid = value.hasFieldReaders(0) && root.children[0].layout.text == "1";
+    var textMatches = false;
+    root.walk(node -> { if (node.layout.text == "1") textMatches = true; });
+    var valid = value.hasFieldReaders(0) && textMatches;
     context.dispose();
     return valid ? 42 : 5;
   }

@@ -64,7 +64,7 @@ class BinaryControl implements View implements Observable {
 
 	public function build(context:BuildContext):RenderNode {
 		return context.withScope(new Key(key), function() {
-			var nodeId = context.id(toggle ? "toggle" : "checkbox");
+			var nodeId = context.rootId(toggle ? "toggle" : "checkbox");
 			// This read belongs to the enclosing build: activation must invalidate the retained parent even though the
 			// control itself can patch its render node in place.
 			var invalidation:Null<State<Bool>> = null;
@@ -86,7 +86,7 @@ class BinaryControl implements View implements Observable {
 			null, [toggle ? "toggle" : "checkbox"], flags);
 		var computed = context.styleResolver.resolve(target, context.inheritedStyle, context.theme.styles,
 			context.styleSheet, style, context.environment);
-		var node = new RenderNode(nodeId,
+		var node = context.createNode(nodeId,
 			LayoutVisualKind.Box, computed.toLayoutStyle());
 		node.setStyleIdentity(toggle ? "toggle" : "checkbox", key, key,
 			null, [toggle ? "toggle" : "checkbox"]);
@@ -120,7 +120,7 @@ class BinaryControl implements View implements Observable {
 			key + ":indicator", null, null, null, flags);
 		var indicatorComputed = context.styleResolver.resolve(indicatorTarget, null,
 			context.theme.styles, context.styleSheet, indicatorStyle, context.environment);
-		var indicator = new RenderNode(context.id("indicator"),
+		var indicator = context.createNode(context.rootId("indicator"),
 			toggle ? LayoutVisualKind.Box : LayoutVisualKind.Custom,
 			indicatorComputed.toLayoutStyle());
 		indicator.setStyleIdentity(toggle ? "toggle-indicator" : "checkbox-indicator",
@@ -136,7 +136,7 @@ class BinaryControl implements View implements Observable {
 			var thumbComputed = context.styleResolver.resolve(
 				new StyleTarget("toggle-thumb", key + ":thumb", null, null, ["toggle"], flags),
 				null, context.theme.styles, context.styleSheet, thumbStyle, context.environment);
-			var thumb = new RenderNode(context.id("thumb"), LayoutVisualKind.Box,
+			var thumb = context.createNode(context.rootId("thumb"), LayoutVisualKind.Box,
 				thumbComputed.toLayoutStyle());
 			thumb.setStyleIdentity("toggle-thumb", key + ":thumb", null, null, ["toggle"]);
 			thumb.states = flags;
@@ -162,7 +162,7 @@ class BinaryControl implements View implements Observable {
 			}, "checked:" + checked + ":mixed:" + indeterminate);
 		}
 		node.add(indicator);
-		var labelNode = new RenderNode(context.id("label"), LayoutVisualKind.Text);
+		var labelNode = context.createNode(context.rootId("label"), LayoutVisualKind.Text);
 		labelNode.layout.text = label;
 		labelNode.applyTextStyle(context.resolveTextRole(TextRole.Label).withTextColor(
 			context.theme.textRoleColor(TextRole.Label, enabled)));

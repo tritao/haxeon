@@ -27,12 +27,12 @@ class FeedbackGeometry implements View {
   public function build(context:BuildContext):RenderNode {
     var style = new LayoutStyle();
     style.width = LayoutAxis.fixed(100); style.height = LayoutAxis.fixed(100);
-    var root = new RenderNode(context.id("viewport"), LayoutVisualKind.Box, style);
+    var root = context.createNode(context.rootId("viewport"), LayoutVisualKind.Box, style);
     root.states = context.interactionStates.get(root.id);
     var barStyle = new LayoutStyle();
     barStyle.width = LayoutAxis.fixed(5); barStyle.height = LayoutAxis.fixed(0);
     barStyle.positioning = LayoutPositioning.Absolute; barStyle.visible = false;
-    var bar = root.add(new RenderNode(context.id("bar"), LayoutVisualKind.Box, barStyle));
+    var bar = root.add(context.createNode(context.rootId("bar"), LayoutVisualKind.Box, barStyle));
     root.onResolved(_ -> {
       if (!bar.layout.style.visible) {
         context.willEditRetained(bar);
@@ -62,14 +62,14 @@ class NativeScopeFeedbackMain {
     var before = builds;
     var mounted = ui.root;
     if (mounted == null) return 3;
-    ui.interactionStates.set(mounted.children[0].id, StyleState.Pressed);
+    ui.interactionStates.set(mounted.id, StyleState.Pressed);
     revision.value = 2;
     ui.submitCached(build, frame, "feedback");
     // The local update needs no outer build; every-frame verification still performs its fresh build.
     if (builds != before + 1) return 2;
     mounted = ui.root;
     if (mounted == null) return 4;
-    ui.interactionStates.set(mounted.children[0].id, StyleState.empty());
+    ui.interactionStates.set(mounted.id, StyleState.empty());
     before = builds;
     ui.submitCached(build, frame, "feedback");
     if (builds != before + 1) return 5;

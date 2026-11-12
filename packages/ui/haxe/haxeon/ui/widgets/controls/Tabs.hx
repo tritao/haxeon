@@ -99,7 +99,7 @@ class Tabs implements View {
 
 	public function build(context:BuildContext):RenderNode {
 		return context.withScope(key, function() {
-			var rootId = context.id("tabs");
+			var rootId = context.rootId("tabs");
 			return context.selfUpdating(rootId, function() return buildControl(context, rootId), false);
 		});
 	}
@@ -133,7 +133,7 @@ class Tabs implements View {
 		var rootComputed = context.styleResolver.resolve(
 			new StyleTarget("tabs", key.value, key.value, null, ["tabs"], rootFlags),
 			context.inheritedStyle, context.theme.styles, context.styleSheet, style, context.environment);
-		var root = new RenderNode(rootId, LayoutVisualKind.Box, rootComputed.toLayoutStyle());
+		var root = context.createNode(rootId, LayoutVisualKind.Box, rootComputed.toLayoutStyle());
 		root.setStyleIdentity("tabs", key.value, key.value, null, ["tabs"]);
 		root.states = rootFlags;
 		root.computedStyle = rootComputed;
@@ -156,7 +156,7 @@ class Tabs implements View {
 			headerStyle.height = LayoutAxis.fixed(context.theme.tokens.tabHeaderHeight);
 			headerStyle.direction = LayoutDirection.LeftToRight;
 			headerStyle.childAlignY = haxeon.ui.LayoutAlignmentY.Center;
-			var header = new RenderNode(context.id("header-with-actions"), LayoutVisualKind.Box, headerStyle);
+			var header = context.createNode(context.rootId("header-with-actions"), LayoutVisualKind.Box, headerStyle);
 			header.hitTestSelf = false;
 			strip.layout.style.width = LayoutAxis.grow();
 			header.add(strip);
@@ -176,7 +176,7 @@ class Tabs implements View {
 				var panelStyle = new LayoutStyle();
 				panelStyle.width = LayoutAxis.stretch();
 				panelStyle.height = LayoutAxis.grow();
-				var node = new RenderNode(context.id("tab-panel"), LayoutVisualKind.Box,
+				var node = context.createNode(context.rootId("tab-panel"), LayoutVisualKind.Box,
 					panelStyle);
 				node.semantics = new Semantics(AccessibilityRole.TabPanel, item.label);
 				var content = context.withStyleParent(rootComputed, function() {
@@ -192,7 +192,7 @@ class Tabs implements View {
 				dividerStyle.positioning = haxeon.ui.LayoutPositioning.Absolute;
 				dividerStyle.zIndex = 1;
 				dividerStyle.background = context.theme.tokens.border;
-				var divider = new RenderNode(context.id("tab-content-divider"), LayoutVisualKind.Box, dividerStyle);
+				var divider = context.createNode(context.rootId("tab-content-divider"), LayoutVisualKind.Box, dividerStyle);
 				divider.hitTestSelf = false;
 				node.add(divider);
 				return node;
@@ -209,30 +209,22 @@ class Tabs implements View {
 		stripStyle.height = LayoutAxis.fixed(context.theme.tokens.tabHeaderHeight);
 		stripStyle.direction = LayoutDirection.LeftToRight;
 		stripStyle.childGap = 4.0;
-		var strip = new RenderNode(context.id("tab-strip"), LayoutVisualKind.Box, stripStyle);
+		var strip = context.createNode(context.rootId("tab-strip"), LayoutVisualKind.Box, stripStyle);
 		var buttonNodes:Array<RenderNode> = [];
 		var tabDragState:Null<State<TabDragState>> = null;
 		if (onTabDragStart != null || onTabDragMove != null || onTabDragEnd != null ||
 			onTabDragCancel != null)
 			tabDragState = context.lazyState(context.id("tab-drag"), function() return new TabDragState());
 		for (item in items) {
-			var button = new Button(item.displayLabel == null ? item.label : item.displayLabel,
-				null, null, item.key);
-			button.style.height = LayoutAxis.fixed(context.theme.tokens.tabHeaderHeight);
-			button.onClickEvent = function(event) {
-				if (event.kind == UiEventKind.Activate || event.button == 0) select(item.key);
-			};
-			button.accessibilityLabel = item.label + (item.badgeCount > 0 ? ", " + item.badgeCount : "");
-				if (item.badgeCount > 0) button.trailingView = new CountBadge(item.badgeCount);
-			button.variant = ButtonVariant.Navigation;
-			button.classes = ["tab-header"];
-			button.leadingIcon = item.icon;
-			button.leadingView = item.iconView;
-			button.iconSize = 14.0;
-			button.enabled = item.enabled;
-			button.selected = item.key == active;
-			button.semanticRole = AccessibilityRole.Tab;
-			button.semanticActions = AccessibilityAction.Select;
+			var buttonStyle = new LayoutStyle();
+			buttonStyle.height = LayoutAxis.fixed(context.theme.tokens.tabHeaderHeight);
+			var tabName = item.label + (item.badgeCount > 0 ? ", " + item.badgeCount : "");
+			var tabSemantics = new Semantics(AccessibilityRole.Tab, tabName);
+			tabSemantics.actions = AccessibilityAction.Select;
+			var button = new Button(item.displayLabel == null ? item.label : item.displayLabel, buttonStyle, null, item.key, item.enabled, ButtonVariant.Navigation, item.key == active, ["tab-header"], item.icon, null, item.iconView, item.badgeCount > 0 ? new CountBadge(item.badgeCount) : null, null, null, 14.0, tabName, function(event) {
+						if (event.kind == UiEventKind.Activate || event.button == 0) select(item.key);
+					}, tabSemantics
+				);
 			var buttonNode = context.withStyleParent(rootComputed, function() {
 				return context.withScope(new Key(item.key),
 				function() return button.build(context));
@@ -240,7 +232,7 @@ class Tabs implements View {
 			var headerStyle = new LayoutStyle();
 			headerStyle.direction = LayoutDirection.TopToBottom;
 			headerStyle.height = LayoutAxis.fixed(context.theme.tokens.tabHeaderHeight);
-			var header = new RenderNode(context.id("tab-header:" + item.key),
+			var header = context.createNode(context.rootId("tab-header:" + item.key),
 				LayoutVisualKind.Box, headerStyle);
 			header.hitTestSelf = false;
 			if (item.enabled && item.onClose != null) header.on(UiEventKind.Click, function(event) {
@@ -261,7 +253,7 @@ class Tabs implements View {
 				indicatorStyle.zIndex = 1;
 				indicatorStyle.clipToParent = true;
 				indicatorStyle.background = context.theme.tokens.accent;
-				var indicator = new RenderNode(context.id("tab-indicator:" + item.key),
+				var indicator = context.createNode(context.rootId("tab-indicator:" + item.key),
 					LayoutVisualKind.Box, indicatorStyle);
 				indicator.hitTestSelf = false;
 				header.add(indicator);
@@ -355,7 +347,7 @@ class Tabs implements View {
 		rowStyle.direction = LayoutDirection.LeftToRight;
 		rowStyle.childAlignY = LayoutAlignmentY.Center;
 		rowStyle.background = buttonNode.layout.style.background;
-		var row = new RenderNode(context.id("tab-actions:" + item.key), LayoutVisualKind.Box, rowStyle);
+		var row = context.createNode(context.rootId("tab-actions:" + item.key), LayoutVisualKind.Box, rowStyle);
 		row.hitTestSelf = false;
 		row.add(buttonNode);
 		var hover = context.state(context.id("tab-close-hover:" + item.key), false);
@@ -363,47 +355,43 @@ class Tabs implements View {
 		var slotStyle = new LayoutStyle();
 		slotStyle.width = LayoutAxis.fixed(28);
 		slotStyle.height = LayoutAxis.fixed(24);
-		var slot = new RenderNode(context.id("tab-close-slot:" + item.key), LayoutVisualKind.Box, slotStyle);
+		var slot = context.createNode(context.rootId("tab-close-slot:" + item.key), LayoutVisualKind.Box, slotStyle);
 		slot.hitTestSelf = true;
-		var close = new Button("", null, null, "tab-close:" + item.key);
-		close.style.width = LayoutAxis.fixed(24);
-		close.style.height = LayoutAxis.fixed(24);
-		close.style.padding = new Insets(4, 4, 4, 4);
-		close.leadingIcon = haxeon.ui.icons.IconName.Close;
-		close.iconSize = 14;
-		close.variant = ButtonVariant.Navigation;
-		close.classes = ["tab-close"];
-		close.enabled = item.enabled;
-		close.accessibilityLabel = "Close " + item.label;
-		close.onClickEvent = function(event) {
-			event.stopPropagation();
-			var handler = item.onClose;
-			if ((event.kind == UiEventKind.Activate || event.button == 0) && handler != null) handler();
-		};
+		var closeStyle = new LayoutStyle();
+		closeStyle.width = LayoutAxis.fixed(24);
+		closeStyle.height = LayoutAxis.fixed(24);
+		closeStyle.padding = new Insets(4, 4, 4, 4);
+		var close = new Button("", closeStyle, null, "tab-close:" + item.key, item.enabled, ButtonVariant.Navigation, null, ["tab-close"], haxeon.ui.icons.IconName.Close, null, null, null, null, null, 14, "Close " + item.label, function(event) {
+				event.stopPropagation();
+				var handler = item.onClose;
+				if ((event.kind == UiEventKind.Activate || event.button == 0) && handler != null) handler();
+			}
+		);
 		var closeNode = close.build(context);
 		closeNode.on(UiEventKind.PointerDown, function(event) event.stopPropagation());
 		closeNode.on(UiEventKind.PointerUp, function(event) event.stopPropagation());
 		// Built from state; the handlers only update it and the rebuild they cause shows or hides the button, rather than
 		// changing a node of the submitted tree behind the frame's back.
 		closeNode.layout.style.visible = hover.value || focused.value;
-		var setFlag = function(state:State<Bool>, value:Bool) {
-			if (state.value == value) return;
-			state.update(value);
-			if (!context.updateInPlace || !context.requestPatch(rootId)) state.update(value);
-		};
 		row.onTargetBubble(UiEventKind.HoverEnter, function(event) {
-			if (event.target.equals(row.id)) setFlag(hover, true);
+			if (event.target.equals(row.id)) setHeaderFlag(context, rootId, hover, true);
 		});
 		row.onTargetBubble(UiEventKind.HoverLeave, function(event) {
-			if (event.target.equals(row.id)) setFlag(hover, false);
+			if (event.target.equals(row.id)) setHeaderFlag(context, rootId, hover, false);
 		});
 		for (node in [buttonNode, closeNode]) {
-			node.on(UiEventKind.Focus, function(_) setFlag(focused, true));
-			node.on(UiEventKind.Blur, function(_) setFlag(focused, false));
+			node.on(UiEventKind.Focus, function(_) setHeaderFlag(context, rootId, focused, true), "capture");
+			node.on(UiEventKind.Blur, function(_) setHeaderFlag(context, rootId, focused, false), "capture");
 		}
 		slot.add(closeNode);
 		row.add(slot);
 		return row;
+	}
+
+	static function setHeaderFlag(context:BuildContext, rootId:WidgetId, state:State<Bool>, value:Bool):Void {
+		if (state.value == value) return;
+		state.update(value);
+		if (!context.updateInPlace || !context.requestPatch(rootId)) state.update(value);
 	}
 
 	function isEnabled(key:String):Bool {

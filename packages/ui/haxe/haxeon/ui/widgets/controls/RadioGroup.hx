@@ -45,7 +45,7 @@ class RadioGroup implements View {
 
 	public function build(context:BuildContext):RenderNode {
 		return context.withScope(key, function() {
-			var root = new RenderNode(context.id("radio-group"), LayoutVisualKind.Box, style.copy());
+			var root = context.createNode(context.rootId("radio-group"), LayoutVisualKind.Box, style.copy());
 			root.semantics = new Semantics(AccessibilityRole.Group, "Radio group");
 			var selected:State<String> = context.state(root.id, value);
 			var active:String = selected.value;

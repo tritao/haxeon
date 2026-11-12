@@ -107,7 +107,7 @@ class VirtualList implements View {
 				ScrollAxis.Vertical, controller);
 			// The rows built depend on the offset.
 			scroll.contentFollowsOffset = true;
-			var root = new RenderNode(context.id("list"), LayoutVisualKind.Box);
+			var root = context.createNode(context.rootId("list"), LayoutVisualKind.Box);
 			root.layout.style.width = viewportStyle.width;
 			root.layout.style.height = viewportStyle.height;
 			var semantics = new Semantics(AccessibilityRole.Collection);
@@ -156,7 +156,7 @@ private class VirtualCollectionRow implements View {
 			var style = new LayoutStyle();
 			style.width = LayoutAxis.grow();
 			style.height = LayoutAxis.fixed(height);
-			var node = new RenderNode(context.id("collection-item"), LayoutVisualKind.Box, style);
+			var node = context.createNode(context.rootId("collection-item"), LayoutVisualKind.Box, style);
 			var semantics = new Semantics(AccessibilityRole.CollectionItem);
 			semantics.setSize = setSize;
 			semantics.positionInSet = index + 1;

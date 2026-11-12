@@ -37,7 +37,7 @@ class WidgetDocsRegistry {
 			case Type.enumIndex(AccessibilityRole.Button): {
 				description: "A compositional action control. Haxe owns its interaction state and semantic action; the render tree contains a box and label.",
 				behavior: "Activate with click, Enter or Space. It participates in keyboard focus and exposes an Activate accessibility action.",
-				code: 'var save = new Button("Save changes", style, onActivate, "save");\nsave.variant = ButtonVariant.Primary;'
+				code: 'var save = new Button("Save changes", style, onActivate, "save", true, ButtonVariant.Primary);'
 			};
 			case Type.enumIndex(AccessibilityRole.Checkbox): {
 				description: "A boolean selection control composed from ordinary Haxe layout and paint nodes.",

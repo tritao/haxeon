@@ -79,7 +79,7 @@ class Icon implements View {
 
 	public function build(context:BuildContext):RenderNode {
 		return context.withScope(new Key(key), function() {
-			var node = new RenderNode(context.id("icon"), LayoutVisualKind.Custom, style);
+			var node = context.createNode(context.rootId("icon"), LayoutVisualKind.Custom, style);
 			node.hitTestSelf = false;
 			var paintColor = color == null ? context.theme.text : color;
 			var paintKey = namePrefix(name) + colorKey(paintColor);

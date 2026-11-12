@@ -47,14 +47,14 @@ class WindowFrame implements View {
 	public function build(context:BuildContext):RenderNode {
 		return context.withScope(new Key(key), function() {
 			var style = new LayoutStyle(); style.width = LayoutAxis.grow(); style.height = LayoutAxis.grow();
-			var root = new RenderNode(context.id("frame"), LayoutVisualKind.Box, style);
+			var root = context.createNode(context.rootId("frame"), LayoutVisualKind.Box, style);
 			root.add(child.build(context));
 			if (controls.maximized || controls.fullscreen) return root;
 			for (region in resizeRegions(context.viewportWidth, context.viewportHeight)) {
 				var regionStyle = new LayoutStyle(); regionStyle.positioning = LayoutPositioning.Absolute;
 				regionStyle.positionX = region.x; regionStyle.positionY = region.y;
 				regionStyle.width = LayoutAxis.fixed(region.width); regionStyle.height = LayoutAxis.fixed(region.height);
-				var node = new RenderNode(context.id(region.id), LayoutVisualKind.Box, regionStyle);
+				var node = context.createNode(context.rootId(region.id), LayoutVisualKind.Box, regionStyle);
 				node.hitTestSelf = false; node.setWindowDecoration(region.kind); root.add(node);
 			}
 			return root;

@@ -316,8 +316,8 @@ class AccessibilityContract {
 			nativeRow.get_hierarchy_level() != 1)
 			return 14;
 
-		var disabled = new Button("Disabled");
-		disabled.enabled = false;
+		var disabled = new Button("Disabled", null, null, null, false
+		);
 		var disabledRoot = context.submit(disabled, frame);
 		var disabledSnapshot = AccessibilityBridge.project(disabledRoot, null);
 		if (disabledSnapshot.length != 1 ||

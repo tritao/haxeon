@@ -200,7 +200,7 @@ class ListView implements View {
 			// The rows built depend on the offset.
 			scroll.contentFollowsOffset = true;
 			scroll.onScroll = onScroll;
-			var root = new RenderNode(context.id("list"), LayoutVisualKind.Box);
+			var root = context.createNode(context.rootId("list"), LayoutVisualKind.Box);
 			root.layout.style.width = viewportStyle.width;
 			root.layout.style.height = viewportStyle.height;
 			var semantics = new Semantics(AccessibilityRole.Collection);
@@ -427,7 +427,7 @@ private class ListViewRow implements View {
 			style.height = LayoutAxis.fixed(extent);
 			style.background = selected ? context.theme.tokens.selectionHighlight :
 				Color.rgba(0.0, 0.0, 0.0, 0.0);
-			var node = new RenderNode(context.id("list-item"), LayoutVisualKind.Box, style);
+			var node = context.createNode(context.rootId("list-item"), LayoutVisualKind.Box, style);
 			node.focusable = enabled;
 			node.enabled = enabled;
 			var semantics = new Semantics(AccessibilityRole.CollectionItem, label);

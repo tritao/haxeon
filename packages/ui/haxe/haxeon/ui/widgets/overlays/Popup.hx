@@ -81,11 +81,11 @@ class Popup implements View {
 			rootStyle.positioning = LayoutPositioning.Absolute;
 			rootStyle.overlay = true;
 			rootStyle.zIndex = layerZIndex;
-			var rootId = context.id("popup-layer");
+			var rootId = context.rootId("popup-layer");
 			var rootComputed = context.resolveStyle(
 				new StyleTarget("popup", key.value, key.value, null, ["popup"],
 					context.interactionStates.get(rootId)), rootStyle);
-			var root = new RenderNode(rootId, LayoutVisualKind.Box, rootComputed.toLayoutStyle());
+			var root = context.createNode(rootId, LayoutVisualKind.Box, rootComputed.toLayoutStyle());
 			root.setStyleIdentity("popup", key.value, key.value, null, ["popup"]);
 			root.states = context.interactionStates.get(rootId);
 			root.computedStyle = rootComputed;
@@ -111,7 +111,7 @@ class Popup implements View {
 				backdropComputed.setColor(StyleProperty.Background,
 					Color.rgba(0.0, 0.0, 0.0, 0.0),
 					new StyleSource("local", "popup-backdrop", -1, "local"));
-			var backdrop = new RenderNode(backdropId, LayoutVisualKind.Box,
+			var backdrop = context.createNode(backdropId, LayoutVisualKind.Box,
 				backdropComputed.toLayoutStyle());
 			backdrop.setStyleIdentity("popup-backdrop", "backdrop", "backdrop", null, ["popup"]);
 			backdrop.states = context.interactionStates.get(backdropId);
@@ -141,7 +141,7 @@ class Popup implements View {
 				panelComputed.setNumber(StyleProperty.RadiusBottomRight, 0.0, source);
 				panelComputed.setNumber(StyleProperty.RadiusBottomLeft, 0.0, source);
 			}
-			var panel = new RenderNode(panelId, LayoutVisualKind.Box,
+			var panel = context.createNode(panelId, LayoutVisualKind.Box,
 				panelComputed.toLayoutStyle());
 			panel.setStyleIdentity("popup-content", key.value, key.value, null, ["popup"]);
 			panel.states = context.interactionStates.get(panelId);
@@ -153,7 +153,7 @@ class Popup implements View {
 				surfaceStyle.positioning = LayoutPositioning.Absolute;
 				surfaceStyle.zIndex = -1;
 				surfaceStyle.clipToParent = false;
-				var surface = new RenderNode(context.id("popup-surface"),
+				var surface = context.createNode(context.rootId("popup-surface"),
 					LayoutVisualKind.Custom, surfaceStyle);
 				surface.hitTestSelf = false;
 				var background = context.theme.tokens.surface;
@@ -171,7 +171,7 @@ class Popup implements View {
 				shadowStyle.height = LayoutAxis.grow();
 				shadowStyle.positioning = LayoutPositioning.Absolute;
 				shadowStyle.zIndex = layerZIndex + 1;
-				var shadowLayer = new RenderNode(context.id("popup-shadow"),
+				var shadowLayer = context.createNode(context.rootId("popup-shadow"),
 					LayoutVisualKind.Custom, shadowStyle);
 				shadowLayer.hitTestSelf = false;
 				var shadow = context.theme.tokens.selectionPopupShadow;

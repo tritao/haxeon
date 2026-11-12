@@ -40,12 +40,12 @@ class ImageView implements View {
 
 	public function build(context:BuildContext):RenderNode {
 		return context.withScope(new Key(key), function() {
-			var nodeId = context.id("image");
+			var nodeId = context.rootId("image");
 			var computed = context.styleResolver.resolve(
 				new StyleTarget("image", key, key, null, ["image"],
 					context.interactionStates.get(nodeId)),
 				context.inheritedStyle, context.theme.styles, context.styleSheet, style, context.environment);
-			var node = new RenderNode(nodeId, LayoutVisualKind.Custom, computed.toLayoutStyle());
+			var node = context.createNode(nodeId, LayoutVisualKind.Custom, computed.toLayoutStyle());
 			node.setStyleIdentity("image", key, key, null, ["image"]);
 			node.states = context.interactionStates.get(nodeId);
 			node.computedStyle = computed;

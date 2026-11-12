@@ -301,7 +301,7 @@ private class TableHeader implements View {
 			viewportStyle.height = LayoutAxis.fixed(headerHeight);
 			viewportStyle.clipHorizontal = true;
 			viewportStyle.clipVertical = true;
-			var viewport = new RenderNode(context.id("header-viewport"),
+			var viewport = context.createNode(context.rootId("header-viewport"),
 				LayoutVisualKind.Box, viewportStyle);
 			var contentStyle = new LayoutStyle();
 			contentStyle.width = LayoutAxis.fixed(totalWidth);
@@ -353,7 +353,7 @@ private class TableHeaderCell implements View {
 			style.width = LayoutAxis.fixed(column.width);
 			style.height = LayoutAxis.fixed(headerHeight);
 			style.background = context.theme.controlUnselected;
-			var node = new RenderNode(context.id("table-header-cell"), LayoutVisualKind.Box, style);
+			var node = context.createNode(context.rootId("table-header-cell"), LayoutVisualKind.Box, style);
 			node.focusable = true;
 			var semantics = new Semantics(AccessibilityRole.ColumnHeader, column.label);
 			semantics.columnIndex = columnIndex;
@@ -425,7 +425,7 @@ private class TableSelectionCell implements View {
 			style.height = LayoutAxis.grow();
 			style.background = selected ? context.theme.tokens.selectionHighlight :
 				Color.rgba(0.0, 0.0, 0.0, 0.0);
-			var node = new RenderNode(context.id("table-selection"), LayoutVisualKind.Box, style);
+			var node = context.createNode(context.rootId("table-selection"), LayoutVisualKind.Box, style);
 			node.add(context.withScope(new Key("content"), function() return child.build(context)));
 			return node;
 		});

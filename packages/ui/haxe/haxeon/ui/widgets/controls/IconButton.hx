@@ -3,7 +3,7 @@ package haxeon.ui.widgets.controls;
 import haxeon.ui.LayoutStyle;
 import haxeon.ui.LayoutVisualKind;
 import haxeon.ui.core.BuildContext;
-import haxeon.ui.component.TrackedScope;
+import haxeon.ui.component.ScopeView;
 import haxeon.ui.core.RenderNode;
 import haxeon.ui.core.UiEvent;
 import haxeon.ui.core.View;
@@ -17,7 +17,7 @@ import haxeon.ui.style.StyleTarget;
 import haxeon.ui.widgets.Icon;
 
 /** Accessible icon-only button with a required non-visual label. */
-class IconButton implements View {
+class IconButton implements ScopeView {
 	public final key:String;
 	public final icon:IconName;
 	public final label:String;
@@ -37,18 +37,26 @@ class IconButton implements View {
 		this.enabled = enabled;
 	}
 
-	/** The structural body is independent from caller-owned listeners and overlays. */
-	public function body():View return new IconButtonBody(this);
+	public function scopeKey():String return key;
 
-	public function build(context:BuildContext):RenderNode
-		return new TrackedScope(key, body).build(context);
+	public function inputsEqual(previous:ScopeView):Bool {
+		if (!Std.isOfType(previous, IconButton)) return false;
+		var other:IconButton = cast previous;
+		return key == other.key && haxeon.Equality.equals(icon, other.icon) && label == other.label &&
+			haxeon.Diff.mask(style, other.style) == 0 && enabled == other.enabled && onClick == other.onClick;
+	}
+
+	public function buildBody(context:BuildContext):RenderNode
+		return buildButton(context, context.rootId("icon-button"));
+
+	public function build(context:BuildContext):RenderNode return context.mountComponent(this);
 
 	function buildButton(context:BuildContext, id:haxeon.ui.core.WidgetId):RenderNode {
 		var flags = context.interactionStates.get(id);
 		flags = !enabled ? flags.insert(StyleState.Disabled) : flags.remove(StyleState.Disabled);
 		var computed = context.resolveStyle(new StyleTarget("button", key, key,
 			["icon-button"], ["button", "icon-button"], flags), style);
-		var node = new RenderNode(id, LayoutVisualKind.Box, computed.toLayoutStyle());
+		var node = context.createNode(id, LayoutVisualKind.Box, computed.toLayoutStyle());
 		node.setStyleIdentity("button", key, key, ["icon-button"],
 			["button", "icon-button"]);
 		node.states = flags;
@@ -71,13 +79,4 @@ class IconButton implements View {
 		node.add(new Icon("glyph", icon, 16.0, foreground).build(context));
 		return node;
 	}
-}
-
-/** Terminal styled control node inside the component's structural scope. */
-@:access(haxeon.ui.widgets.controls.IconButton)
-private class IconButtonBody implements View {
-	final button:IconButton;
-	public function new(button:IconButton) this.button = button;
-	public function build(context:BuildContext):RenderNode
-		return button.buildButton(context, context.id("icon-button"));
 }

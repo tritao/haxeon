@@ -155,7 +155,7 @@ class VirtualGrid implements View {
 				ScrollAxis.Both, controller);
 			// The rows built depend on the offset.
 			scroll.contentFollowsOffset = true;
-			var root = new RenderNode(context.id("grid"), LayoutVisualKind.Box);
+			var root = context.createNode(context.rootId("grid"), LayoutVisualKind.Box);
 			root.layout.style.width = viewportStyle.width;
 			root.layout.style.height = viewportStyle.height;
 			var semantics = new Semantics(AccessibilityRole.Grid);
@@ -301,7 +301,7 @@ private class VirtualGridCell implements View {
 			var style = new LayoutStyle();
 			style.width = LayoutAxis.fixed(columnWidth);
 			style.height = LayoutAxis.fixed(rowHeight);
-			var node = new RenderNode(context.id("grid-cell"), LayoutVisualKind.Box, style);
+			var node = context.createNode(context.rootId("grid-cell"), LayoutVisualKind.Box, style);
 			node.focusable = onCellActivate != null || onCellKeyDown != null;
 			var semantics = new Semantics(AccessibilityRole.Cell);
 			semantics.rowCount = rowCount;

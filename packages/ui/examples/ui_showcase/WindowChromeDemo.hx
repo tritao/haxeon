@@ -387,8 +387,8 @@ class WindowChromeDemo {
 		style.background = theme.buttonBackground;
 		style.radiusTopLeft = style.radiusTopRight = 4.0;
 		style.radiusBottomLeft = style.radiusBottomRight = 4.0;
-		var button = new Button(label, style, action, key);
-		button.variant = ButtonVariant.Primary;
+		var button = new Button(label, style, action, key, null, ButtonVariant.Primary
+		);
 		return button;
 	}
 

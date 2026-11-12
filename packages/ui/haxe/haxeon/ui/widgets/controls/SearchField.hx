@@ -83,11 +83,8 @@ class SearchField implements View {
 					value = "";
 					if (onChange != null)
 						onChange("");
-				}, "clear");
-				clear.accessibilityLabel = "Clear search";
-				clear.leadingIcon = IconName.Close;
-				clear.variant = ButtonVariant.Navigation;
-				clear.enabled = enabled;
+				}, "clear", enabled
+				, ButtonVariant.Navigation, null, null, IconName.Close, null, null, null, null, null, null, "Clear search");
 				children.push(new KeyedView("clear", clear));
 			}
 			return new Row("search-field", children, style).build(context);

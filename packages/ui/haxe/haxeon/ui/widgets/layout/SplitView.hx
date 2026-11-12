@@ -87,10 +87,10 @@ class SplitView implements View {
 			rootStyle.childGap = 0.0;
 			rootStyle.childDistribution = LayoutDistribution.Start;
 			rootStyle.wrapMode = LayoutWrapMode.NoWrap;
-			var root = new RenderNode(context.id("split-view"), LayoutVisualKind.Box, rootStyle);
+			var root = context.createNode(context.rootId("split-view"), LayoutVisualKind.Box, rootStyle);
 			var paneExtent = collapsed ? 0.0 : boundedExtent();
 
-			var leadingPane = new RenderNode(context.id("leading-pane"), LayoutVisualKind.Box,
+			var leadingPane = context.createNode(context.rootId("leading-pane"), LayoutVisualKind.Box,
 				paneStyle(horizontal, resizableSide == SplitSide.Leading, paneExtent));
 			leadingPane.layout.style.visible = !collapsed || resizableSide != SplitSide.Leading;
 			var leadingNode = context.withScope(new Key("leading"), function() {
@@ -105,7 +105,7 @@ class SplitView implements View {
 				var dividerComputed = context.resolveStyle(new StyleTarget("split-divider",
 					key.value, key.value + ":divider", null, ["split-divider"], dividerStates),
 					dividerLayoutStyle(horizontal));
-				var divider = new RenderNode(dividerId, LayoutVisualKind.Box,
+				var divider = context.createNode(dividerId, LayoutVisualKind.Box,
 					dividerComputed.toLayoutStyle());
 				divider.setStyleIdentity("split-divider", key.value, key.value + ":divider",
 					null, ["split-divider"]);
@@ -117,7 +117,7 @@ class SplitView implements View {
 					var lineStyle = new LayoutStyle();
 					lineStyle.width = horizontal ? LayoutAxis.fixed(dividerExtent) : LayoutAxis.stretch();
 					lineStyle.height = horizontal ? LayoutAxis.stretch() : LayoutAxis.fixed(dividerExtent);
-					var line = new RenderNode(context.id("divider-visual"), LayoutVisualKind.Custom, lineStyle);
+					var line = context.createNode(context.rootId("divider-visual"), LayoutVisualKind.Custom, lineStyle);
 					line.hitTestSelf = false;
 					line.cachePolicy = haxeon.ui.core.CachePolicy.None;
 					line.onPaint(function(canvas, geometry) {
@@ -148,7 +148,7 @@ class SplitView implements View {
 					divider.layout.style.childAlignY = LayoutAlignmentY.Center;
 					// Main-axis centering uses distribution; alignment centers the cross axis.
 					divider.layout.style.childDistribution = LayoutDistribution.Center;
-					var visual = new RenderNode(context.id("divider-visual"), LayoutVisualKind.Box,
+					var visual = context.createNode(context.rootId("divider-visual"), LayoutVisualKind.Box,
 						visualStyle);
 					visual.hitTestSelf = false;
 					divider.add(visual);
@@ -173,7 +173,7 @@ class SplitView implements View {
 					var anchorStyle = new LayoutStyle();
 					anchorStyle.width = horizontal ? LayoutAxis.percent(0) : LayoutAxis.grow();
 					anchorStyle.height = horizontal ? LayoutAxis.grow() : LayoutAxis.percent(0);
-					var anchor = new RenderNode(context.id("divider-anchor"), LayoutVisualKind.Box, anchorStyle);
+					var anchor = context.createNode(context.rootId("divider-anchor"), LayoutVisualKind.Box, anchorStyle);
 					anchor.hitTestSelf = false;
 					divider.layout.style.positioning = haxeon.ui.LayoutPositioning.Absolute;
 					divider.layout.style.positionX = horizontal ? -dividerExtent / 2 : 0;
@@ -185,7 +185,7 @@ class SplitView implements View {
 				} else root.add(divider);
 			}
 
-			var trailingPane = new RenderNode(context.id("trailing-pane"), LayoutVisualKind.Box,
+			var trailingPane = context.createNode(context.rootId("trailing-pane"), LayoutVisualKind.Box,
 				paneStyle(horizontal, resizableSide == SplitSide.Trailing, paneExtent));
 			trailingPane.layout.style.visible = !collapsed || resizableSide != SplitSide.Trailing;
 			var trailingNode = context.withScope(new Key("trailing"), function() {
@@ -293,7 +293,7 @@ class SplitView implements View {
 		style.height = LayoutAxis.grow();
 		style.positioning = haxeon.ui.LayoutPositioning.Absolute;
 		style.clipToParent = true;
-		var root = new RenderNode(context.id(key), LayoutVisualKind.Box, style);
+		var root = context.createNode(context.rootId(key), LayoutVisualKind.Box, style);
 		root.hitTestSelf = false;
 		root.add(content);
 		return root;

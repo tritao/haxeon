@@ -1,67 +1,145 @@
+import haxeon.ui.core.BuildContext;
+import haxeon.ui.core.StateStore;
+import haxeon.ui.component.ScopeView;
+import haxeon.ui.theme.Theme;
 import haxeon.reactive.Signal;
 import haxeon.ui.core.RenderNode;
 import haxeon.ui.core.RenderScope;
 import haxeon.ui.core.WidgetId;
+import haxeon.ui.LayoutAxis;
+import haxeon.ui.LayoutSizing;
+import haxeon.ui.LayoutStyle;
+import haxeon.ui.LayoutPositioning;
+import haxeon.ui.LayoutVisualKind;
+import haxeon.ui.Insets;
 
 /** Native structural ownership does not reconcile or redirect removed nodes. */
 class RenderScopeMain {
   static function node(id:Int):RenderNode return new RenderNode(new WidgetId(id));
   static function main():Int {
     var primary = new Signal<Bool>(true), first = new Signal<Int>(1), second = new Signal<Int>(2);
-    var root = node(1), decoration = node(2), runs = 0, scheduled = 0, edits = 0;
-    var scope = new RenderScope(root, () -> {
+    var context = new BuildContext(new StateStore(), null, null, null, Theme.light());
+    context.beginFrame();
+    var decoration = node(2), runs = 0;
+    var component = new NativeScopeFixture("primary", build -> {
       var value = primary.value ? first.value : second.value;
       runs++;
-      return node(value + 10);
-    }, () -> scheduled++, changed -> {
-      if (changed != root) throw "Unexpected scope root";
-      edits++;
+      var result = build.createNode(build.rootId("body"));
+      result.layout.text = Std.string(value + 10);
+      return result;
     });
-    scope.refresh();
+    var root = component.build(context), scope = context.renderScopeAt(root);
+    if (scope == null) return 15;
     root.add(decoration);
-    var old = root.children[0];
+    var old = root;
     scope.refresh();
-    if (runs != 1 || edits != 0 || scheduled != 0) return 1;
+    if (runs != 1 || context.patchedPriors().get(root.id.value) != null || context.bindingRequestRevision != 0) return 1;
     first.value = 3;
-    if (scheduled != 1) return 2;
+    if (context.bindingRequestRevision != 1) return 2;
     scope.refresh();
-    if (runs != 2 || edits != 1 || scheduled != 1 || root.children.length != 2 || root.children[1] != decoration
-        || old.parent != null || old.replacedBy != null || root.children[0].id.value != 13) return 3;
+    root = context.currentRoot(root);
+    if (runs != 2 || context.patchedPriors().get(root.id.value) != old || context.bindingRequestRevision != 1 || root.children.length != 1 || root.children[0] != decoration
+        || old.parent != null || old.replacedBy != null || root.layout.text != "13" || !root.id.equals(old.id)) return 3;
+    context.consumeBindingFrameRequest();
     primary.value = false;
     scope.refresh();
     if (first.hasFieldReaders(0) || !second.hasFieldReaders(0) || runs != 3) return 4;
-    var before = scheduled;
+    var before = context.bindingRequestRevision;
     first.value = 4;
     scope.refresh();
-    if (scheduled != before || runs != 3) return 5;
+    if (context.bindingRequestRevision != before || runs != 3) return 5;
     scope.dispose();
     scope.dispose();
     if (primary.hasFieldReaders(0) || second.hasFieldReaders(0)) return 6;
     second.value = 5;
     scope.refresh();
-    if (scheduled != before || runs != 3) return 7;
-    var recoverySource = new Signal<Int>(0), recoveryRoot = node(40), requests = 0;
-    var recovering = new RenderScope(recoveryRoot, () -> {
+    if (context.bindingRequestRevision != before || runs != 3) return 7;
+    var recoverySource = new Signal<Int>(0);
+    var recoveryRoot:RenderNode = null;
+    var recoveryComponent = new NativeScopeFixture("recovering", build -> {
       var value = recoverySource.value;
       if (value == 1) {
         // A retained child can be detached while constructing the next body, before a later child fails.
-        recoveryRoot.children[0].detach();
+        recoveryRoot.detach();
         throw "Expected scope failure";
       }
-      return node(41 + value);
-    }, () -> requests++, _ -> {});
-    recovering.refresh();
-    var installed = recoveryRoot.children[0];
+      var result = build.createNode(build.rootId("body"));
+      result.layout.text = Std.string(41 + value);
+      return result;
+    });
+    recoveryRoot = recoveryComponent.build(context);
+    var recovering = context.renderScopeAt(recoveryRoot);
+    if (recovering == null) return 16;
+    context.consumeBindingFrameRequest();
+    var holder = node(40);
+    holder.add(recoveryRoot);
+    var installed = recoveryRoot;
     recoverySource.value = 1;
     var failed = false;
     try recovering.refresh() catch (_:Dynamic) failed = true;
-    if (!failed || recoveryRoot.children.length != 1 || recoveryRoot.children[0] != installed || installed.parent != recoveryRoot) return 8;
-    var failedRequests = requests;
+    if (!failed || holder.children.length != 1 || holder.children[0] != installed || installed.parent != holder) return 8;
+    var failedRequests = context.bindingRequestRevision;
+    context.consumeBindingFrameRequest();
     recoverySource.value = 2;
-    if (requests <= failedRequests) return 9;
+    if (context.bindingRequestRevision <= failedRequests) return 9;
     recovering.refresh();
-    if (recoveryRoot.children[0].id.value != 43 || installed.parent != null) return 10;
+    recoveryRoot = context.currentRoot(recoveryRoot);
+    if (recoveryRoot.layout.text != "43" || installed.parent != null || holder.children[0] != recoveryRoot) return 10;
     recovering.dispose();
-    return recoverySource.hasFieldReaders(0) ? 11 : 42;
+    if (recoverySource.hasFieldReaders(0)) return 11;
+    context.endPatchFrame();
+    var width = new Signal<Float>(80);
+    var elementComponent = new NativeScopeFixture("element", build -> {
+      var style = new LayoutStyle();
+      style.width = LayoutAxis.fixed(width.value);
+      style.height = LayoutAxis.fixed(24);
+      style.padding = new Insets(4, 4, 4, 4);
+      style.positioning = LayoutPositioning.Absolute;
+      style.positionX = 7;
+      style.zIndex = 2;
+      return build.createNode(build.rootId("body"), LayoutVisualKind.Box, style);
+    });
+    var elementRoot = elementComponent.build(context), elementScope = context.renderScopeAt(elementRoot);
+    if (elementScope == null) return 17;
+    var element = elementRoot;
+    if (elementRoot.layout.style.width.value != 80 || elementRoot.layout.style.height.value != 24 ||
+        elementRoot.layout.style.positioning != LayoutPositioning.Absolute || elementRoot.layout.style.positionX != 7 ||
+        !elementRoot.hitTestSelf || elementRoot.children.length != 0 || element.layout.style.padding.left != 4) return 12;
+    elementRoot.layout.style.zIndex = 9;
+    width.value = 100;
+    elementScope.refresh();
+    var previousElement = elementRoot;
+    elementRoot = context.currentRoot(elementRoot);
+    var prior = context.patchedPriors().get(elementRoot.id.value);
+    if (prior == null || prior != previousElement || prior == elementRoot || prior.layout.style.width.value != 80 ||
+        elementRoot.layout.style.width.value != 100 || elementRoot.layout.style.zIndex != 9) return 13;
+    context.endPatchFrame();
+    elementScope.refresh();
+    if (context.patchedPriors().get(elementRoot.id.value) != null) return 14;
+    elementScope.dispose();
+    // Independent refreshes reuse mounted IDs; two fresh mounts in one build must still reject a duplicate key.
+    context.beginFrame();
+    var duplicate = new NativeScopeFixture("duplicate", build -> {
+      var value = first.value;
+      return build.createNode(build.rootId("body"));
+    });
+    var installedRoot = duplicate.build(context), installedOwner = context.renderScopeAt(installedRoot);
+    var rejected = false;
+    try duplicate.build(context) catch (error:Dynamic) rejected = Std.string(error).indexOf("Duplicate widget ID") >= 0;
+    if (!rejected || installedOwner == null || installedOwner.disposed ||
+        context.renderScopeAt(installedRoot) != installedOwner || !first.hasFieldReaders(0)) return 18;
+    context.dispose();
+    return 42;
   }
+}
+
+/** A test component supplies changing bodies; the native mount path supplies no callback adapters. */
+private class NativeScopeFixture implements ScopeView {
+  final key:String;
+  final make:BuildContext->RenderNode;
+  public function new(key:String, make:BuildContext->RenderNode) { this.key = key; this.make = make; }
+  public function scopeKey():String return key;
+  public function inputsEqual(previous:ScopeView):Bool return previous == this;
+  public function buildBody(context:BuildContext):RenderNode return make(context);
+  public function build(context:BuildContext):RenderNode return context.mountComponent(this);
 }

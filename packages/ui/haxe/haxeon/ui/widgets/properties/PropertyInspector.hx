@@ -269,12 +269,8 @@ private class PropertyInspectorSectionHeader implements View {
 		style.width = LayoutAxis.grow();
 		// Keep the header's text inside its available width when the dock narrows.
 		style.clipHorizontal = true;
-		var button = new Button(section.label,
-			style, onToggle, key);
-		button.leadingIcon = section.expanded ? IconName.ChevronDown : IconName.ChevronRight;
-		button.iconSize = 14.0;
-		button.variant = ButtonVariant.Secondary;
-		button.classes = ["inspector-section-header"];
+		var button = new Button(section.label, style, onToggle, key, null, ButtonVariant.Secondary, null, ["inspector-section-header"]
+		, section.expanded ? IconName.ChevronDown : IconName.ChevronRight, null, null, null, null, null, 14.0);
 		return button.build(context);
 	}
 }

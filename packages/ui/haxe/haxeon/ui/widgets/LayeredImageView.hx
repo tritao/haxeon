@@ -54,7 +54,7 @@ class LayeredImageView implements View {
 
 	public function build(context:BuildContext):RenderNode {
 		return context.withScope(new Key(key), function() {
-			var node = new RenderNode(context.id("layered-image"), LayoutVisualKind.Custom, style);
+			var node = context.createNode(context.rootId("layered-image"), LayoutVisualKind.Custom, style);
 			if (label != null)
 				node.semantics = new Semantics(AccessibilityRole.Image, label);
 			node.onPaint(function(canvas:Canvas, geometry:ResolvedLayoutItem) {

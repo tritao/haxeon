@@ -171,7 +171,7 @@ class TextField implements View {
 
 	public function build(context:BuildContext):RenderNode {
 		return context.withScope(new Key(key), function() {
-			var id = context.id("field");
+			var id = context.rootId("field");
 			// Read document-backed state in the tracked field build so its Observable history drives the local patch.
 			// The field rebuilds only itself when its own state changes (typing, selection, caret), so the panel around it stays cached.
 			return context.selfUpdating(id, function() return buildField(context, id));
@@ -221,7 +221,7 @@ class TextField implements View {
 			if (textColor != null)
 				computed.setColor(StyleProperty.TextColor, textColor,
 					new StyleSource("local", "text-field", -1, "local"));
-			var node = new RenderNode(id, LayoutVisualKind.Box, computed.toLayoutStyle());
+			var node = context.createNode(id, LayoutVisualKind.Box, computed.toLayoutStyle());
 			node.setStyleIdentity("text-field", key, key, classes, ["text-field"]);
 			node.states = flags;
 			node.computedStyle = computed;
@@ -252,7 +252,7 @@ class TextField implements View {
 			editorContentStyle.height = LayoutAxis.grow();
 			editorContentStyle.clipHorizontal = true;
 			editorContentStyle.clipVertical = multiline;
-			var editorContent = new RenderNode(context.id("editor-content"),
+			var editorContent = context.createNode(context.rootId("editor-content"),
 				LayoutVisualKind.Box, editorContentStyle);
 			if (decorationProvider != null) {
 				var backgroundStyle = new LayoutStyle();
@@ -260,7 +260,7 @@ class TextField implements View {
 				backgroundStyle.height = LayoutAxis.grow();
 				backgroundStyle.positioning = LayoutPositioning.Absolute;
 				backgroundStyle.zIndex = 0;
-				var backgroundNode = new RenderNode(context.id("editor-background"),
+				var backgroundNode = context.createNode(context.rootId("editor-background"),
 					LayoutVisualKind.Custom, backgroundStyle);
 				backgroundNode.hitTestSelf = false;
 				backgroundNode.onPaint(function(canvas, geometry) {
@@ -285,7 +285,7 @@ class TextField implements View {
 				selectionStyle.height = LayoutAxis.grow();
 				selectionStyle.positioning = LayoutPositioning.Absolute;
 				selectionStyle.zIndex = 0;
-				var selectionNode = new RenderNode(context.id("editor-selection"),
+				var selectionNode = context.createNode(context.rootId("editor-selection"),
 					LayoutVisualKind.Custom, selectionStyle);
 				selectionNode.hitTestSelf = false;
 				selectionNode.onPaint(function(canvas, geometry) {
@@ -305,7 +305,7 @@ class TextField implements View {
 				whitespaceStyle.height = LayoutAxis.grow();
 				whitespaceStyle.positioning = LayoutPositioning.Absolute;
 				whitespaceStyle.zIndex = 3;
-				var whitespaceNode = new RenderNode(context.id("editor-whitespace"), LayoutVisualKind.Custom, whitespaceStyle);
+				var whitespaceNode = context.createNode(context.rootId("editor-whitespace"), LayoutVisualKind.Custom, whitespaceStyle);
 				whitespaceNode.hitTestSelf = false;
 				whitespaceNode.onPaint(function(canvas, geometry) {
 					if (editor.isDisposed()) return;
@@ -330,7 +330,7 @@ class TextField implements View {
 			// Single-line fields use the text node so their full value and theme
 			// foreground update together as the editor content changes.
 			var useTextNode = showsPlaceholder || (!multiline && colorRangeProvider == null && decorationProvider == null);
-			var textNode = new RenderNode(context.id("text"),
+			var textNode = context.createNode(context.rootId("text"),
 				useTextNode ? LayoutVisualKind.Text : LayoutVisualKind.Custom, textNodeStyle);
 			if (showsPlaceholder)
 				textNode.layout.text = placeholder;
@@ -369,7 +369,7 @@ class TextField implements View {
 				var measureStyle = new LayoutStyle();
 				measureStyle.width = LayoutAxis.grow();
 				measureStyle.height = LayoutAxis.grow();
-				var measureNode = new RenderNode(context.id("editor-measure"), LayoutVisualKind.Custom, measureStyle);
+				var measureNode = context.createNode(context.rootId("editor-measure"), LayoutVisualKind.Custom, measureStyle);
 				measureNode.hitTestSelf = false;
 				measureNode.layout.intrinsicContent = editor.renderMeasurement;
 				editorContent.add(measureNode);
@@ -380,7 +380,7 @@ class TextField implements View {
 				paintStyle.height = LayoutAxis.grow();
 				paintStyle.positioning = LayoutPositioning.Absolute;
 				paintStyle.zIndex = 2;
-				var paintNode = new RenderNode(context.id("editor-paint"),
+				var paintNode = context.createNode(context.rootId("editor-paint"),
 					LayoutVisualKind.Custom, paintStyle);
 				paintNode.hitTestSelf = false;
 				paintNode.onPaint(function(canvas, _) {

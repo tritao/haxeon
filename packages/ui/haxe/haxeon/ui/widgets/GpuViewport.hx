@@ -127,10 +127,10 @@ class GpuViewport implements View {
 
 	public function build(context:BuildContext):RenderNode {
 		return context.withScope(new Key(key), function() {
-			var nodeId = context.id("viewport");
+			var nodeId = context.rootId("viewport");
 			var computed = context.resolveStyle(new StyleTarget("gpu-viewport", key, key,
 				null, ["gpu-viewport"], context.interactionStates.get(nodeId)), style);
-			var node = new RenderNode(nodeId, LayoutVisualKind.Custom, computed.toLayoutStyle());
+			var node = context.createNode(nodeId, LayoutVisualKind.Custom, computed.toLayoutStyle());
 			node.setStyleIdentity("gpu-viewport", key, key, null, ["gpu-viewport"]);
 			node.states = context.interactionStates.get(nodeId);
 			node.enabled = enabled;

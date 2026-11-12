@@ -54,11 +54,11 @@ class Dialog implements View {
 			rootStyle.height = LayoutAxis.grow();
 			rootStyle.positioning = LayoutPositioning.Absolute;
 			rootStyle.overlay = true;
-			var rootId = context.id("dialog");
+			var rootId = context.rootId("dialog");
 			var rootComputed = context.resolveStyle(
 				new StyleTarget("dialog", key.value, key.value, null, ["dialog"],
 					context.interactionStates.get(rootId)), rootStyle);
-			var root = new RenderNode(rootId, LayoutVisualKind.Box, rootComputed.toLayoutStyle());
+			var root = context.createNode(rootId, LayoutVisualKind.Box, rootComputed.toLayoutStyle());
 			root.setStyleIdentity("dialog", key.value, key.value, null, ["dialog"]);
 			root.states = context.interactionStates.get(rootId);
 			root.computedStyle = rootComputed;
@@ -78,7 +78,7 @@ class Dialog implements View {
 			var backdropComputed = context.resolveStyle(
 				new StyleTarget("dialog-backdrop", "backdrop", "backdrop", null, ["dialog"],
 					context.interactionStates.get(backdropId)), backdropStyle);
-			var backdrop = new RenderNode(backdropId, LayoutVisualKind.Box,
+			var backdrop = context.createNode(backdropId, LayoutVisualKind.Box,
 				backdropComputed.toLayoutStyle());
 			backdrop.setStyleIdentity("dialog-backdrop", "backdrop", "backdrop", null, ["dialog"]);
 			backdrop.states = context.interactionStates.get(backdropId);
@@ -102,7 +102,7 @@ class Dialog implements View {
 			var centerComputed = context.resolveStyle(
 				new StyleTarget("dialog-center", "center", "center", null, ["dialog"],
 					context.interactionStates.get(centerId)), centerStyle);
-			var center = new RenderNode(centerId, LayoutVisualKind.Box,
+			var center = context.createNode(centerId, LayoutVisualKind.Box,
 				centerComputed.toLayoutStyle());
 			center.setStyleIdentity("dialog-center", "center", "center", null, ["dialog"]);
 			center.states = context.interactionStates.get(centerId);
@@ -113,7 +113,7 @@ class Dialog implements View {
 			var panelComputed = context.resolveStyle(
 				new StyleTarget("dialog-panel", "panel", "panel", null, ["dialog"],
 					context.interactionStates.get(panelId)), panelStyle);
-			var panel = new RenderNode(panelId, LayoutVisualKind.Box,
+			var panel = context.createNode(panelId, LayoutVisualKind.Box,
 				panelComputed.toLayoutStyle());
 			panel.setStyleIdentity("dialog-panel", "panel", "panel", null, ["dialog"]);
 			panel.states = context.interactionStates.get(panelId);
@@ -125,7 +125,7 @@ class Dialog implements View {
 					var headingComputed = context.resolveStyle(
 						new StyleTarget("dialog-heading", "title", "title", null, ["dialog-heading"],
 							context.interactionStates.get(headingId)), new LayoutStyle());
-					var node = new RenderNode(headingId, LayoutVisualKind.Text,
+					var node = context.createNode(headingId, LayoutVisualKind.Text,
 						headingComputed.toLayoutStyle());
 					node.setStyleIdentity("dialog-heading", "title", "title", null, ["dialog-heading"]);
 					node.states = context.interactionStates.get(headingId);

@@ -70,9 +70,8 @@ class ComponentLab implements Observable {
       var button = new Button(story.title, null, function() {
         selectedId = captured.id;
 
-      }, "story:" + story.id);
-      button.variant = ButtonVariant.Navigation;
-      button.selected = story.id == selected.id;
+      }, "story:" + story.id, null, ButtonVariant.Navigation, story.id == selected.id
+      );
       sidebarRows.push(new KeyedView(story.id, button));
     }
 
@@ -141,9 +140,8 @@ class ComponentLab implements Observable {
       var button = new Button(entry.label, null, function() {
         previewWidth = captured.width;
 
-      }, "width:" + entry.key);
-      button.variant = ButtonVariant.Navigation;
-      button.selected = previewWidth == entry.width;
+      }, "width:" + entry.key, null, ButtonVariant.Navigation, previewWidth == entry.width
+      );
       items.push(new KeyedView(entry.key, button));
     }
     return new Row("lab-environment", items, rowStyle());
@@ -214,14 +212,14 @@ class ComponentLab implements Observable {
   ];
 
   function buttonStates():View {
-    var primary = new Button("Primary", null, function() {}, "primary");
-    primary.variant = ButtonVariant.Primary;
-    var secondary = new Button("Navigation", null, function() {}, "navigation");
-    secondary.variant = ButtonVariant.Navigation;
-    var selected = new Button("Selected", null, function() {}, "selected");
-    selected.selected = true;
-    var disabled = new Button("Disabled", null, null, "disabled");
-    disabled.enabled = false;
+    var primary = new Button("Primary", null, function() {}, "primary", null, ButtonVariant.Primary
+    );
+    var secondary = new Button("Navigation", null, function() {}, "navigation", null, ButtonVariant.Navigation
+    );
+    var selected = new Button("Selected", null, function() {}, "selected", null, null, true
+    );
+    var disabled = new Button("Disabled", null, null, "disabled", false
+    );
     return new Row("button-states", [
       new KeyedView("primary", primary),
       new KeyedView("navigation", secondary),
@@ -296,13 +294,12 @@ class ComponentLab implements Observable {
     var columnStyle = new LayoutStyle();
     columnStyle.width = LayoutAxis.fixed(560.0);
     columnStyle.childGap = 16.0;
-    var disabled = new Button("Disabled action", null, null, "token-disabled");
-    disabled.enabled = false;
-    var nav = new Button("Navigation item", null, function() {}, "token-navigation");
-    nav.variant = ButtonVariant.Navigation;
-    nav.selected = true;
-    var primary = new Button("Primary action", null, function() {}, "token-primary");
-    primary.variant = ButtonVariant.Primary;
+    var disabled = new Button("Disabled action", null, null, "token-disabled", false
+    );
+    var nav = new Button("Navigation item", null, function() {}, "token-navigation", null, ButtonVariant.Navigation, true
+    );
+    var primary = new Button("Primary action", null, function() {}, "token-primary", null, ButtonVariant.Primary
+    );
     return new Column("design-tokens", [
       new KeyedView("heading", new Text("Typography / Heading")),
       new KeyedView("body", new Text("Body text establishes the default reading rhythm.")),

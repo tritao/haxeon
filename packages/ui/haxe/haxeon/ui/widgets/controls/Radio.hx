@@ -50,7 +50,7 @@ class Radio implements View {
 
 	public function build(context:BuildContext):RenderNode {
 		return context.withScope(key, function() {
-			var nodeId = context.id("radio");
+			var nodeId = context.rootId("radio");
 			// Hover and press change only how the option looks, so it updates itself and the panel around it stays cached.
 			return context.selfUpdating(nodeId, function() return buildRadio(context, nodeId));
 		});
@@ -63,7 +63,7 @@ class Radio implements View {
 		var computed = context.styleResolver.resolve(
 			new StyleTarget("radio", key.value, key.value, null, ["radio"], flags),
 			context.inheritedStyle, context.theme.styles, context.styleSheet, style, context.environment);
-		var node = new RenderNode(nodeId, LayoutVisualKind.Box, computed.toLayoutStyle());
+		var node = context.createNode(nodeId, LayoutVisualKind.Box, computed.toLayoutStyle());
 		node.setStyleIdentity("radio", key.value, key.value, null, ["radio"]);
 		node.states = flags;
 		node.computedStyle = computed;
@@ -87,7 +87,7 @@ class Radio implements View {
 			new StyleTarget("radio-indicator", key.value + ":indicator", null,
 				null, ["radio"], flags), null, context.theme.styles, context.styleSheet,
 			indicatorStyle, context.environment);
-		var indicator = new RenderNode(context.id("indicator"), LayoutVisualKind.Box,
+		var indicator = context.createNode(context.rootId("indicator"), LayoutVisualKind.Box,
 			indicatorComputed.toLayoutStyle());
 		indicator.setStyleIdentity("radio-indicator", key.value + ":indicator", null,
 			null, ["radio"]);
@@ -104,7 +104,7 @@ class Radio implements View {
 		var dotComputed = context.styleResolver.resolve(
 			new StyleTarget("radio-dot", key.value + ":dot", null, null, ["radio"], flags),
 			null, context.theme.styles, context.styleSheet, dotStyle, context.environment);
-		var dot = new RenderNode(context.id("dot"), LayoutVisualKind.Box,
+		var dot = context.createNode(context.rootId("dot"), LayoutVisualKind.Box,
 			dotComputed.toLayoutStyle());
 		dot.setStyleIdentity("radio-dot", key.value + ":dot", null, null, ["radio"]);
 		dot.states = flags;
@@ -117,7 +117,7 @@ class Radio implements View {
 		var markComputed = context.styleResolver.resolve(
 			new StyleTarget("radio-mark", key.value + ":mark", null, null, ["radio"], flags),
 			null, context.theme.styles, context.styleSheet, markStyle, context.environment);
-		var mark = new RenderNode(context.id("mark"), LayoutVisualKind.Box,
+		var mark = context.createNode(context.rootId("mark"), LayoutVisualKind.Box,
 			markComputed.toLayoutStyle());
 		mark.setStyleIdentity("radio-mark", key.value + ":mark", null, null, ["radio"]);
 		mark.states = flags;
@@ -126,7 +126,7 @@ class Radio implements View {
 		indicator.add(dot);
 		node.add(indicator);
 
-		var text = new RenderNode(context.id("label"), LayoutVisualKind.Text);
+		var text = context.createNode(context.rootId("label"), LayoutVisualKind.Text);
 		text.layout.text = label;
 		text.applyTextStyle(context.resolveTextRole(TextRole.Label).withTextColor(
 			context.theme.textRoleColor(TextRole.Label, enabled)));

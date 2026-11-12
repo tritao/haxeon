@@ -54,6 +54,30 @@ class IdSet {
 		used = 0;
 	}
 
+	public function count():Int return used;
+
+	/** Repair the following probe cluster in place; deletion needs no tombstones or allocations. */
+	public function remove(id:Int):Bool {
+		var slot = (id ^ (id >>> 15)) & mask;
+		while (stamps[slot] == generation) {
+			if (keys[slot] == id) {
+				stamps[slot] = 0;
+				used--;
+				var next = (slot + 1) & mask;
+				while (stamps[next] == generation) {
+					var key = keys[next];
+					stamps[next] = 0;
+					used--;
+					add(key);
+					next = (next + 1) & mask;
+				}
+				return true;
+			}
+			slot = (slot + 1) & mask;
+		}
+		return false;
+	}
+
 	function grow():Void {
 		var oldKeys = keys, oldStamps = stamps, oldGeneration = generation;
 		var size = (mask + 1) * 2;

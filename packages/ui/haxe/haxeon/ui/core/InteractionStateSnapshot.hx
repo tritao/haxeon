@@ -48,7 +48,9 @@ class InteractionStateSnapshot {
 				}
 				return;
 			}
-			if (node.recordsInteraction && context.updatingOwner(node) == null) {
+			// Native leaf flags belong to their scope. Keep traversing so unported descendant updaters
+			// still retain their existing lifetime records while their enclosing scope is cached.
+			if (node.recordsInteraction && context.updatingOwner(node) == null && context.interactionRenderScope(node) == null) {
 				var mask = interactionMask;
 				if (!context.hoverRebuilds(node)) mask = mask.remove(StyleState.Hovered);
 				if (ids.length == 0) {ids = []; values = []; masks = [];}

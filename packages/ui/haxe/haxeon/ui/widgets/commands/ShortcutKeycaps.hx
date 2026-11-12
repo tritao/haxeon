@@ -93,7 +93,7 @@ private class ShortcutKeycap implements View {
 		surfaceStyle.width = LayoutAxis.grow();
 		surfaceStyle.height = LayoutAxis.grow();
 		surfaceStyle.positioning = haxeon.ui.LayoutPositioning.Absolute;
-		var surface = new RenderNode(context.id("keycap-surface"), haxeon.ui.LayoutVisualKind.Custom, surfaceStyle);
+		var surface = context.createNode(context.rootId("keycap-surface"), haxeon.ui.LayoutVisualKind.Custom, surfaceStyle);
 		surface.hitTestSelf = false;
 		var border = blend(base, ink, selected ? 0.35 : 0.20);
 		surface.onPaint(function(canvas, geometry) {

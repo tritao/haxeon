@@ -37,6 +37,11 @@ import haxeon.ui.semantics.Semantics;
 
 /** One Haxe-owned node joins visual layout, interaction, focus, and state identity. */
 class RenderNode {
+	/** Ordinary nodes carry no scope field; only component body roots override this method. */
+	public function scopeOwner():Null<RenderScope> return null;
+	/** A retained body root can acquire a new logical owner without allocating a replacement node. */
+	public function setScopeOwner(owner:RenderScope):Void throw "Only a reserved component root can own a render scope";
+
 	static inline final TargetBubblePhase = "target-bubble";
 	public final id:WidgetId;
 	public final layout:LayoutNode;

@@ -1754,8 +1754,7 @@ class FrameworkSmoke {
 			new LayoutFrame(256.0, 192.0));
 		if (narrowButtonRoot.children[0].layout.paragraphStyle.wrap != TextWrap.None)
 			return 102;
-		var labeledIconButton = new Button("Search", null, null, "labeled-icon-smoke");
-		labeledIconButton.leadingIcon = IconName.Search;
+		var labeledIconButton = new Button("Search", null, null, "labeled-icon-smoke", null, null, null, null, IconName.Search);
 		var labeledIconRoot = context.submit(labeledIconButton, new LayoutFrame(256.0, 192.0));
 		var labeledIconSemantics:Semantics = cast labeledIconRoot.semantics;
 		if (labeledIconRoot.children.length != 2 || labeledIconSemantics == null ||
@@ -1973,9 +1972,7 @@ class FrameworkSmoke {
 			style.width = LayoutAxis.fixed(256.0);
 			style.height = LayoutAxis.fixed(192.0);
 			var button = new Button("Increment", null, function() {
-				clicks++;
-			});
-			button.enabled = buttonEnabled;
+				clicks++;}, null, buttonEnabled);
 			return new Column("main", [
 				new KeyedView("increment", button),
 				new KeyedView("next", new Button("Next")),
@@ -4000,8 +3997,7 @@ class FrameworkSmoke {
 			siblingParagraph.wrap != TextWrap.Word || siblingParagraph.tabWidth != 3)
 			throw "A text field changed its sibling's inherited paragraph style";
 		var themedClicks = 0;
-		var themedButton = new Button("Themed", null, function() { themedClicks++; }, "theme-key");
-		themedButton.variant = ButtonVariant.Primary;
+		var themedButton = new Button("Themed", null, function() { themedClicks++;}, "theme-key", null, ButtonVariant.Primary);
 		var themedFrame = new LayoutFrame(256.0, 192.0);
 		var themedRoot = context.submit(themedButton, themedFrame);
 		if (!frameMetricsValid(context, false))
@@ -4036,9 +4032,9 @@ class FrameworkSmoke {
 			themedSnapshot[1].pressed)
 			return 83;
 		context.pointerUp(themedX, themedY, 0);
-		if (themedClicks != 1 || context.inspect()[0].pressed)
+		if (themedClicks != 1 || context.inspect()[1].pressed)
 			return 84;
-		themedButton.enabled = false;
+		themedButton = new Button("Themed", null, function() { themedClicks++;}, "theme-key", false, ButtonVariant.Primary);
 		themedRoot = context.submit(themedButton, themedFrame);
 		if (themedRoot.layout.style.background.red != 0.2)
 			return 85;
@@ -4061,7 +4057,7 @@ class FrameworkSmoke {
 		context.setStyleSheet(inspectorEffects);
 		context.submit(new Button("Inspector effects", null, function() {}, "inspector-effects"),
 			new LayoutFrame(256.0, 192.0));
-		var effectSnapshot = context.inspect()[0];
+		var effectSnapshot = context.inspect()[1];
 		if (!effectSnapshot.causesIsolation || effectSnapshot.effectPasses != 3 ||
 			effectSnapshot.backdropEffectPasses != 1 || effectSnapshot.maskPasses != 1 ||
 			effectSnapshot.effectDescriptions.length != 1 ||
@@ -4082,8 +4078,7 @@ class FrameworkSmoke {
 		navigationTokens.navigationHover = Color.rgba(0.31, 0.32, 0.33, 1.0);
 		context.setTheme(new Theme(navigationTokens));
 		context.pointerLeave();
-		var navigationButton = new Button("Navigation");
-		navigationButton.variant = ButtonVariant.Navigation;
+		var navigationButton = new Button("Navigation", null, null, null, null, ButtonVariant.Navigation);
 		var navigationRoot = context.submit(navigationButton, themedFrame);
 		if (navigationRoot.styleClasses.indexOf("navigation") < 0 ||
 			navigationRoot.layout.style.background.red != 0.11)
@@ -4093,8 +4088,7 @@ class FrameworkSmoke {
 		navigationRoot = context.submit(navigationButton, themedFrame);
 		if (navigationRoot.layout.style.background.red != 0.31)
 			return 241;
-		var navigationReplacement = new Button("Navigation replacement");
-		navigationReplacement.variant = ButtonVariant.Navigation;
+		var navigationReplacement = new Button("Navigation replacement", null, null, null, null, ButtonVariant.Navigation);
 		var replacementRoot = context.submit(navigationReplacement, themedFrame);
 		if (replacementRoot.layout.style.background.red != 0.31)
 			throw "A newly mounted button under a stationary pointer must resolve its hover style before paint";
@@ -4720,7 +4714,8 @@ class FrameworkSmoke {
 	static function tabStrip(root:RenderNode):RenderNode {
 		var found:RenderNode = null;
 		root.walk(function(node) {
-			if (node.children.length == 0 || node.children[0].children.length == 0) return;
+			if (node.children.length == 0 || node.children[0].children.length == 0 ||
+				node.children[0].children[0].children.length == 0) return;
 			var semantics = node.children[0].children[0].semantics;
 			if (found == null && semantics != null && semantics.role == AccessibilityRole.Tab) found = node;
 		});
@@ -6252,13 +6247,13 @@ class FrameworkSmoke {
 			reorder.register(new DockPanelDescriptor(panelId, panelId, false));
 		reorder.setDefaultLayout(DockNode.Tabs(["a", "b", "c"], "a"));
 		if (!reorder.dock("a", "c", DockDropZone.TabAfter))
-			return false;
+			return failDock();
 		switch (reorder.root) {
 			case DockNode.Tabs(ids, active):
 				if (ids.length != 3 || ids[0] != "b" || ids[1] != "c" || ids[2] != "a" ||
 					active != "a")
-					return false;
-			default: return false;
+					return failDock();
+			default: return failDock();
 		}
 		var singletonDock = new DockWorkspaceModel();
 		var groupedDock = new DockWorkspaceModel();
@@ -6274,18 +6269,18 @@ class FrameworkSmoke {
 		groupedDock.setDefaultLayout(DockNode.Panel("surface"));
 		if (groupedDock.canDock("tool-a", "surface", DockDropZone.Center) ||
 			groupedDock.dock("tool-a", "surface", DockDropZone.TabBefore) ||
-			!groupedDock.open("tool-a", "surface") || !groupedDock.open("tool-b", "surface")) return false;
+			!groupedDock.open("tool-a", "surface") || !groupedDock.open("tool-b", "surface")) return failDock();
 		var groupedSnapshot = new haxeon.ui.docking.DockWorkspaceSnapshot(DockNode.Tabs(["surface", "tool-a", "tool-b"], "tool-b"), "tool-b");
-		if (!groupedDock.restorePersisted(groupedSnapshot) || groupedDock.activePanelId != "tool-b") return false;
+		if (!groupedDock.restorePersisted(groupedSnapshot) || groupedDock.activePanelId != "tool-b") return failDock();
 		switch groupedDock.root {
 			case Split(Vertical, _, Panel("surface"), Tabs(ids, selected)):
-				if (ids.length != 2 || ids[0] != "tool-a" || ids[1] != "tool-b" || selected != "tool-b") return false;
-			default: return false;
+				if (ids.length != 2 || ids[0] != "tool-a" || ids[1] != "tool-b" || selected != "tool-b") return failDock();
+			default: return failDock();
 		}
 		var groupedJson = groupedDock.snapshotJson();
-		if (!groupedDock.restoreJson(groupedJson) || groupedDock.snapshotJson() != groupedJson) return false;
+		if (!groupedDock.restoreJson(groupedJson) || groupedDock.snapshotJson() != groupedJson) return failDock();
 		if (!groupedDock.canDock("tool-a", "surface", DockDropZone.Right) ||
-			!groupedDock.dock("tool-a", "surface", DockDropZone.Right)) return false;
+			!groupedDock.dock("tool-a", "surface", DockDropZone.Right)) return failDock();
 		var contentHeaderDock = new DockWorkspaceModel();
 		contentHeaderDock.register(new DockPanelDescriptor("content-header", "Content header", false,
 			true, null, haxeon.ui.docking.DockPanelHeaderMode.Content));
@@ -6294,27 +6289,27 @@ class FrameworkSmoke {
 		var contentHeaderWorkspace = new DockWorkspace("content-header-workspace", contentHeaderDock);
 		var contentHeaderRoot = uiContext.submit(contentHeaderWorkspace, new LayoutFrame(640.0, 480.0));
 		var contentHeaderTabs = 0;
-		if (contentHeaderRoot == null) return false;
+		if (contentHeaderRoot == null) return failDock();
 		contentHeaderRoot.walk(function(node) {
 			if (node.semantics != null && node.semantics.role == AccessibilityRole.Tab) contentHeaderTabs++;
 		});
-		if (contentHeaderTabs != 0) return false;
-		if (!contentHeaderDock.dock("tool-header", "content-header", DockDropZone.Center)) return false;
+		if (contentHeaderTabs != 0) return failDock();
+		if (!contentHeaderDock.dock("tool-header", "content-header", DockDropZone.Center)) return failDock();
 		contentHeaderRoot = uiContext.submit(contentHeaderWorkspace, new LayoutFrame(640.0, 480.0));
 		contentHeaderTabs = 0;
-		if (contentHeaderRoot == null) return false;
+		if (contentHeaderRoot == null) return failDock();
 		contentHeaderRoot.walk(function(node) {
 			if (node.semantics != null && node.semantics.role == AccessibilityRole.Tab) contentHeaderTabs++;
 		});
-		if (contentHeaderTabs != 2) return false;
-		if (!contentHeaderDock.close("tool-header")) return false;
+		if (contentHeaderTabs != 2) return failDock();
+		if (!contentHeaderDock.close("tool-header")) return failDock();
 		contentHeaderRoot = uiContext.submit(contentHeaderWorkspace, new LayoutFrame(640.0, 480.0));
 		contentHeaderTabs = 0;
-		if (contentHeaderRoot == null) return false;
+		if (contentHeaderRoot == null) return failDock();
 		contentHeaderRoot.walk(function(node) {
 			if (node.semantics != null && node.semantics.role == AccessibilityRole.Tab) contentHeaderTabs++;
 		});
-		if (contentHeaderTabs != 0) return false;
+		if (contentHeaderTabs != 0) return failDock();
 		for (panelId in ["single-source", "single-target"])
 			singletonDock.register(new DockPanelDescriptor(panelId, panelId));
 		singletonDock.setDefaultLayout(DockNode.Split(DockSplitAxis.Horizontal, 0.5,
@@ -6333,7 +6328,7 @@ class FrameworkSmoke {
 				}
 			});
 		if (singletonTabs.length != 2 || singletonSourceTab == null || singletonTargetTab == null)
-			return false;
+			return failDock();
 		var singletonSourceId = singletonSourceTab.id;
 		var sourceBounds = singletonSourceTab.globalBounds(), targetBounds = singletonTargetTab.globalBounds();
 		var sourceX = sourceBounds.x + sourceBounds.width * 0.5;
@@ -6347,39 +6342,39 @@ class FrameworkSmoke {
 		uiContext.setPointerCaptureHandler(function(captured) tabPlatformCaptureStates.push(captured));
 		uiContext.pointerDown(sourceX, sourceY, 0);
 		if (tabPlatformCaptureStates.length != 0)
-			return false;
+			return failDock();
 		uiContext.pointerMove(ownPaneX, ownPaneY);
 		if (singletonWorkspace.interaction.preview == null)
-			return false;
+			return failDock();
 		singletonRoot = uiContext.submit(singletonWorkspace, new LayoutFrame(640.0, 480.0));
 		if (!uiContext.events.hasPointerCapture(singletonSourceId))
-			return false;
+			return failDock();
 		uiContext.pointerUp(ownPaneX, ownPaneY, 0);
 		if (singletonWorkspace.interaction.preview != null || uiContext.events.hasPointerCapture(singletonSourceId) ||
 			tabPlatformCaptureStates.length != 0)
-			return false;
+			return failDock();
 		switch (singletonDock.root) {
 			case DockNode.Split(_, _, DockNode.Panel("single-source"), DockNode.Panel("single-target")):
-			default: return false;
+			default: return failDock();
 		}
 		uiContext.pointerDown(sourceX, sourceY, 0);
 		if (!uiContext.events.hasPointerCapture(singletonSourceId))
-			return false;
+			return failDock();
 		uiContext.pointerMove(targetX, targetY);
 		if (singletonWorkspace.interaction.preview == null)
-			return false;
+			return failDock();
 		singletonRoot = uiContext.submit(singletonWorkspace, new LayoutFrame(640.0, 480.0));
 		if (!uiContext.events.hasPointerCapture(singletonSourceId))
-			return false;
+			return failDock();
 		uiContext.pointerUp(targetX, targetY, 0);
 		if (singletonWorkspace.interaction.preview != null || uiContext.events.hasPointerCapture(singletonSourceId))
-			return false;
+			return failDock();
 		switch (singletonDock.root) {
 			case DockNode.Tabs(ids, active):
 				if (ids.length != 2 || !ids.contains("single-source") || !ids.contains("single-target") ||
 					active != "single-source")
-					return false;
-			default: return false;
+					return failDock();
+			default: return failDock();
 		}
 		singletonRoot = uiContext.submit(singletonWorkspace, new LayoutFrame(640.0, 480.0));
 		singletonTargetTab = null;
@@ -6389,14 +6384,14 @@ class FrameworkSmoke {
 					node.semantics.label == "single-target") singletonTargetTab = node;
 			});
 		if (singletonTargetTab == null)
-			return false;
+			return failDock();
 		targetBounds = singletonTargetTab.globalBounds();
 		uiContext.pointerDown(targetBounds.x + targetBounds.width * 0.5,
 			targetBounds.y + targetBounds.height * 0.5, 0);
 		uiContext.pointerUp(targetBounds.x + targetBounds.width * 0.5,
 			targetBounds.y + targetBounds.height * 0.5, 0);
 		if (singletonDock.activePanelId != "single-target")
-			return false;
+			return failDock();
 		singletonRoot = uiContext.submit(singletonWorkspace, new LayoutFrame(640.0, 480.0));
 		singletonSourceTab = null;
 		singletonTargetTab = null;
@@ -6408,7 +6403,7 @@ class FrameworkSmoke {
 				}
 			});
 		if (singletonSourceTab == null || singletonTargetTab == null)
-			return false;
+			return failDock();
 		singletonSourceId = singletonSourceTab.id;
 		sourceBounds = singletonSourceTab.globalBounds();
 		targetBounds = singletonTargetTab.globalBounds();
@@ -6419,27 +6414,27 @@ class FrameworkSmoke {
 		uiContext.pointerDown(sourceX, sourceY, 0);
 		uiContext.pointerMove(targetX, targetY);
 		if (singletonWorkspace.interaction.preview == null)
-			return false;
+			return failDock();
 		uiContext.pointerLeave();
 		if (singletonWorkspace.interaction.preview != null ||
 			!uiContext.events.hasPointerCapture(singletonSourceId))
-			return false;
+			return failDock();
 		singletonRoot = uiContext.submit(singletonWorkspace, new LayoutFrame(640.0, 480.0));
 		if (!uiContext.events.hasPointerCapture(singletonSourceId))
-			return false;
+			return failDock();
 		uiContext.pointerMove(targetX, targetY);
 		if (singletonWorkspace.interaction.preview == null)
-			return false;
+			return failDock();
 		uiContext.pointerUp(targetX, targetY, 0);
 		if (singletonWorkspace.interaction.preview != null ||
 			uiContext.events.hasPointerCapture(singletonSourceId))
-			return false;
+			return failDock();
 		switch (singletonDock.root) {
 			case DockNode.Tabs(ids, active):
 				if (ids.length != 2 || !ids.contains("single-source") || !ids.contains("single-target") ||
 					active != "single-source")
-					return false;
-			default: return false;
+					return failDock();
+			default: return failDock();
 		}
 		singletonRoot = uiContext.submit(singletonWorkspace, new LayoutFrame(640.0, 480.0));
 		singletonTargetTab = null;
@@ -6449,14 +6444,14 @@ class FrameworkSmoke {
 					node.semantics.label == "single-target") singletonTargetTab = node;
 			});
 		if (singletonTargetTab == null)
-			return false;
+			return failDock();
 		targetBounds = singletonTargetTab.globalBounds();
 		uiContext.pointerDown(targetBounds.x + targetBounds.width * 0.5,
 			targetBounds.y + targetBounds.height * 0.5, 0);
 		uiContext.pointerUp(targetBounds.x + targetBounds.width * 0.5,
 			targetBounds.y + targetBounds.height * 0.5, 0);
 		if (singletonDock.activePanelId != "single-target")
-			return false;
+			return failDock();
 		singletonRoot = uiContext.submit(singletonWorkspace, new LayoutFrame(640.0, 480.0));
 		singletonSourceTab = null;
 		singletonTargetTab = null;
@@ -6468,7 +6463,7 @@ class FrameworkSmoke {
 				}
 			});
 		if (singletonSourceTab == null || singletonTargetTab == null)
-			return false;
+			return failDock();
 		singletonSourceId = singletonSourceTab.id;
 		sourceBounds = singletonSourceTab.globalBounds();
 		targetBounds = singletonTargetTab.globalBounds();
@@ -6480,29 +6475,29 @@ class FrameworkSmoke {
 		uiContext.pointerMove(targetX, targetY);
 		if (singletonWorkspace.interaction.preview == null ||
 			!uiContext.events.hasPointerCapture(singletonSourceId))
-			return false;
+			return failDock();
 		// A header needs a drop indicator only while it is the current tab drop target.
 		var tabPreview = singletonWorkspace.interaction.preview;
 		if (tabPreview == null || tabPreview.targetPanelId != "single-target" ||
 			(tabPreview.zone != DockDropZone.TabBefore && tabPreview.zone != DockDropZone.TabAfter))
-			return false;
+			return failDock();
 		singletonRoot = uiContext.submit(singletonWorkspace, new LayoutFrame(640.0, 480.0));
 		var previewTab:Null<RenderNode> = null;
 		singletonRoot.walk(function(node) {
 			if (node.semantics != null && node.semantics.role == AccessibilityRole.Tab &&
 				node.semantics.label == "single-target") previewTab = node;
 		});
-		if (previewTab == null) return false;
+		if (previewTab == null) return failDock();
 		var sawTabIndicator = false;
 		for (child in previewTab.children)
 			if (child.layout.visualKind == LayoutVisualKind.Custom && child.layout.style.zIndex == 2)
 				sawTabIndicator = true;
-		if (!sawTabIndicator) return false;
+		if (!sawTabIndicator) return failDock();
 		uiContext.key(UiEventKind.KeyDown, UiKey.Escape);
 		if (singletonWorkspace.interaction.draggingPanelId != null ||
 			singletonWorkspace.interaction.preview != null ||
 			uiContext.events.hasPointerCapture(singletonSourceId))
-			return false;
+			return failDock();
 		uiContext.setPointerCaptureHandler(null);
 		var changes = 0;
 		model.listen(function() changes++);
@@ -6511,34 +6506,34 @@ class FrameworkSmoke {
 		if (workspaceRoot == null || hierarchyBuilds != 1 || viewportBuilds != 1 ||
 			viewportDockWidth < 300.0 || viewportDockWidth > 640.0 ||
 			inspectorBuilds != 0 || consoleBuilds != 0 || model.activePanelId != "hierarchy")
-			return false;
+			return failDock();
 		if (!model.activate("inspector") || changes != 1)
-			return false;
+			return failDock();
 		workspaceRoot = uiContext.submit(workspace, new LayoutFrame(640.0, 480.0));
 		if (workspaceRoot == null || inspectorBuilds != 1 || viewportBuilds != 1)
-			return false;
+			return failDock();
 		var dockedConsole = model.dock("console", "viewport", DockDropZone.Center);
 		if (!dockedConsole ||
 			!model.isOpen("console") || model.activePanelId != "console")
-			return false;
+			return failDock();
 		var snapshot = model.snapshot();
 		workspaceRoot = uiContext.submit(workspace, new LayoutFrame(640.0, 480.0));
 		if (workspaceRoot == null || consoleBuilds != 1)
-			return false;
+			return failDock();
 		var tabsNode:Null<RenderNode> = null;
 		workspaceRoot.walk(function(node) {
 			if (tabsNode == null && node.styleType == "tabs")
 				tabsNode = node;
 		});
 		if (tabsNode == null)
-			return false;
+			return failDock();
 		var tabsBounds = tabsNode.globalBounds();
 		var centerX = tabsBounds.x + tabsBounds.width * 0.5;
 		var centerY = tabsBounds.y + tabsBounds.height * 0.5;
 		if (!workspace.interaction.beginTabDrag("inspector", 11, centerX, centerY) ||
 			!workspace.interaction.moveTabDrag("inspector", 11, centerX, centerY) ||
 			workspace.interaction.preview == null)
-			return false;
+			return failDock();
 		// The drag preview must submit while the pointer is held, including when
 		// the target panel's own root is a Text or Box render node.
 		workspaceRoot = uiContext.submit(workspace, new LayoutFrame(640.0, 480.0));
@@ -6551,16 +6546,16 @@ class FrameworkSmoke {
 			});
 		if (!sawDropPreview ||
 			!workspace.interaction.endTabDrag("inspector", 11, centerX, centerY))
-			return false;
+			return failDock();
 		if (!model.restore(snapshot))
-			return false;
+			return failDock();
 		var snapshotJson = model.snapshotJson();
 		if (snapshotJson == null || snapshotJson.length == 0 || !model.restoreJson(snapshotJson))
-			return false;
+			return failDock();
 		var storage = new SmokeDockStorage();
 		DockWorkspaceStorage.save(model, storage, "editor");
 		if (!DockWorkspaceStorage.restore(model, storage, "editor") || DockWorkspaceStorage.restore(model, storage, "missing"))
-			return false;
+			return failDock();
 		var persisted = new DockWorkspaceModel();
 		persisted.register(new DockPanelDescriptor("known", "Known", false));
 		persisted.register(new DockPanelDescriptor("removed", "Removed"));
@@ -6569,26 +6564,26 @@ class FrameworkSmoke {
 		persisted.unregister("removed");
 		if (!persisted.restoreJson(persistedJson) || persisted.isOpen("removed") ||
 			!persisted.isOpen("known") || persisted.activePanelId != "known")
-			return false;
+			return failDock();
 		var transientTabs = ["start", "one", "two"],
 			transientRoot = DockNode.Split(DockSplitAxis.Horizontal, 0.72,
 				DockNode.Tabs(transientTabs, "start"), DockNode.Panel("start")),
 			filteredRoot = DockNodeTools.copyExcluding(transientRoot, ["start"]),
 			expectedFiltered = DockNode.Tabs(["one", "two"], "one");
 		if (!DockNodeTools.same(filteredRoot, expectedFiltered))
-			return false;
+			return failDock();
 		var filteredSnapshot = new haxeon.ui.docking.DockWorkspaceSnapshot(transientRoot, "start",
 			haxeon.ui.docking.DockWorkspaceSnapshot.CurrentVersion, ["start"]);
 		transientTabs[1] = "changed";
 		if (!DockNodeTools.same(filteredSnapshot.root, expectedFiltered))
-			return false;
+			return failDock();
 		var fallback = new DockWorkspaceModel();
 		fallback.register(new DockPanelDescriptor("fallback", "Fallback", false));
 		fallback.setDefaultLayout(DockNode.Panel("fallback"));
 		storage.save("broken", "not-json");
 		if (DockWorkspaceStorage.restoreOrDefault(fallback, storage, "broken") || !fallback.isOpen("fallback") ||
 			fallback.activePanelId != "fallback")
-			return false;
+			return failDock();
 		workspaceRoot = uiContext.submit(workspace, new LayoutFrame(640.0, 480.0));
 		var inspectorTab:Null<RenderNode> = null;
 		workspaceRoot.walk(function(node) {
@@ -6596,7 +6591,7 @@ class FrameworkSmoke {
 				inspectorTab = node;
 		});
 		if (inspectorTab == null)
-			return false;
+			return failDock();
 		var inspectorBounds = inspectorTab.globalBounds();
 		var inspectorX = inspectorBounds.x + inspectorBounds.width * 0.5;
 		var inspectorY = inspectorBounds.y + inspectorBounds.height * 0.5;
@@ -6605,22 +6600,22 @@ class FrameworkSmoke {
 		uiContext.pointerUp(inspectorX + 12.0, inspectorY, 0);
 		if (workspace.interaction.draggingPanelId != null || model.activePanelId != "inspector" ||
 			!model.restore(snapshot))
-			return false;
+			return failDock();
 		if (!model.close("console") || model.isOpen("console") || !model.open("console", "viewport"))
-			return false;
+			return failDock();
 		if (!model.restore(snapshot) || !model.isOpen("console") || model.activePanelId != "console")
-			return false;
+			return failDock();
 		if (!model.setSplitRatio([], 0.6))
-			return false;
+			return failDock();
 		switch (model.root) {
 			case DockNode.Split(_, ratio, _, _):
 				if (ratio != 0.6)
-					return false;
-			default: return false;
+					return failDock();
+			default: return failDock();
 		}
 		if (!model.dock("inspector", "hierarchy", DockDropZone.Left) ||
 			!model.isOpen("inspector"))
-			return false;
+			return failDock();
 		var commandRegistry = new CommandRegistry();
 		DockWorkspaceCommands.install(model, commandRegistry, "workspace");
 		var parameters = new CommandParameters();
@@ -6628,28 +6623,33 @@ class FrameworkSmoke {
 		var commandContext = new CommandContext(null, [], null, parameters, "dock-smoke");
 		var closeResult = commandRegistry.executeContext("workspace.close", commandContext);
 		if (!closeResult.succeeded || model.isOpen("console"))
-			return false;
+			return failDock();
 		var resetResult = commandRegistry.executeContext("workspace.reset", commandContext);
 		if (!resetResult.succeeded || !model.isOpen("hierarchy") || !model.isOpen("viewport") ||
 			model.isOpen("console") || !model.isOpen("inspector"))
-			return false;
+			return failDock();
 		if (!model.restore(snapshot) || !model.isOpen("console"))
-			return false;
+			return failDock();
 		var retainedInteraction:Null<DockWorkspaceInteraction> = null;
 		for (index in 0...20) {
 			var rebuilt = new DockWorkspace("editor-workspace", model, panelContents);
 			uiContext.submit(rebuilt, new LayoutFrame(640.0, 480.0));
 			if (index == 0) retainedInteraction = rebuilt.interaction;
 			else if (rebuilt.interaction != retainedInteraction)
-				return false;
+				return failDock();
 		}
 		if (model.listenerCount != 1 || retainedInteraction == null)
-			return false;
+			return failDock();
 		uiContext.submit(new Text("workspace unmounted"), new LayoutFrame(640.0, 480.0));
 		return model.listenerCount == 1;
 	}
 
 	/** Covers the shared Haxe scene policy around transforms, clipping, order, and events. */
+	/** Fail at the original assertion site instead of reporting the shared framework check number. */
+	static function failDock(?position:haxe.PosInfos):Bool {
+		throw position == null ? "Dock workspace contract failed" : "Dock workspace contract failed at line " + position.lineNumber;
+	}
+
 	static function nestedSceneSemanticsValid():Bool {
 		var broadClip = new Rect(-1000.0, -1000.0, 3000.0, 3000.0);
 		var root = new RenderNode(new WidgetId(910));
@@ -7044,7 +7044,7 @@ private class DecoratedButtonSmoke implements View {
     public function build(context:BuildContext):RenderNode {
         var node=new Button("Decorated",null,function(){},"decoration-normalization").build(context);
         if(decorated) {
-            var computed=node.computedStyle.copy();
+            var computed=context.resolveStyle(new StyleTarget("box", "caller-decoration"), node.layout.style);
             computed.setDecorations(new DecorationChain([
                 new BorderDecoration(Color.fromBytes(255,0,0),2)
             ]),null);

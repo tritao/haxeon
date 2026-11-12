@@ -71,8 +71,9 @@ private class TextBinding {
 
 private class BoundTextPrimitive extends Text {
   public function new(value:String) super(value);
-  override function createNode(id:WidgetId, style:LayoutStyle):RenderNode
-    return new LiveTextNode(id, style, value);
+  override function createNode(context:BuildContext, id:WidgetId, style:LayoutStyle):RenderNode {
+    return context.createLiveTextNode(id, style, value);
+  }
 }
 
 private class ScheduledBindingEffect extends Effect {

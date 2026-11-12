@@ -369,7 +369,7 @@ private class PropertyEditorRow implements View {
 	}
 
 	public function build(context:BuildContext):RenderNode {
-		var id = context.id("property-row-root");
+		var id = context.rootId("property-row-root");
 		owner.rowIds.set(descriptor.id, id);
 		return context.selfUpdating(id, function() return buildRow(context, id), false);
 	}
@@ -428,7 +428,7 @@ private class PropertyEditorRowContent implements View {
 			var rootId = id == null ? context.id("column") : id;
 			var computed = context.resolveStyle(new StyleTarget("column", "row", "row", null, ["column"],
 				context.interactionStates.get(rootId)), style);
-			var node = new RenderNode(rootId, LayoutVisualKind.Box, computed.toLayoutStyle());
+			var node = context.createNode(rootId, LayoutVisualKind.Box, computed.toLayoutStyle());
 			node.setStyleIdentity("column", "row", "row", null, ["column"]);
 			node.states = context.interactionStates.get(rootId);
 			node.computedStyle = computed;

@@ -24,7 +24,7 @@ class Column implements View {
 	}
 
 	public function build(context:BuildContext):RenderNode {
-		var id = context.withScope(key, function() return context.id("column"));
+		var id = context.withScope(key, function() return context.rootId("column"));
 		return buildWithId(context, id);
 	}
 
@@ -33,7 +33,7 @@ class Column implements View {
 		return context.withScope(key, function() {
 			var computed = context.resolveStyle(new StyleTarget("column", key.value, key.value,
 				null, ["column"], context.interactionStates.get(id)), style);
-			var node = new RenderNode(id, LayoutVisualKind.Box, computed.toLayoutStyle());
+			var node = context.createNode(id, LayoutVisualKind.Box, computed.toLayoutStyle());
 			node.setStyleIdentity("column", key.value, key.value, null, ["column"]);
 			node.states = context.interactionStates.get(id);
 			node.computedStyle = computed;

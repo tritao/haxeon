@@ -88,12 +88,12 @@ class ActivationTests {
         var calls = 0;
         exercise(fonts, new Button("Button", style(), function() calls++), "Button", function() return calls);
         calls = 0;
-        var eventButton = new Button("Event button", style());
-        eventButton.onClickEvent = function(event) {
+        var eventButton = new Button("Event button", style(), null, null, null, null, null, null, null, null, null, null, null, null, null, null, function(event) {
             if (event.kind == UiEventKind.Click)
                 check(event.button == 0 && event.modifiers.contains(UiModifier.Control), "Click event metadata changed");
             calls++;
-        };
+        }
+        );
         exercise(fonts, eventButton, "Event button", function() return calls);
         calls = 0;
         exercise(fonts, new IconButton("icon", IconName.Settings, "Icon", function() calls++, style()), "Icon", function() return calls);
@@ -105,8 +105,8 @@ class ActivationTests {
         exercise(fonts, new VirtualGrid("grid", 1, 1, 40, 140, function(_, _) return new Text("Cell"),
             style(), null, null, 140, 40, function(_, _) calls++), "", function() return calls);
         calls = 0;
-        var disabled = new Button("Disabled", style(), function() calls++);
-        disabled.enabled = false;
+        var disabled = new Button("Disabled", style(), function() calls++, null, false
+        );
         exercise(fonts, disabled, "Disabled", function() return calls, true);
         fonts.dispose();
         runtime.dispose();

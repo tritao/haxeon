@@ -103,23 +103,32 @@ class ReactiveRuntime {
 	public static function changed():Void
 		version = version == 0x7fffffff ? 1 : version + 1;
 
-	public static function withTracking<T>(collector:ReactiveCollector, run:Void->T):T {
-		if (collector == null || run == null)
-			throw "Reactive tracking requires a collector and computation";
+	/** Enter tracking for a direct method call; callers restore the returned value on success and failure. */
+	public static function enterTracking(collector:ReactiveCollector):TrackingFrame {
+		if (collector == null) throw "Reactive tracking requires a collector";
 		var previous = currentCollector();
 		var log = creationLogs.value;
 		var previousStart = log == null ? 0 : log.start;
 		var previousCount = log == null ? 0 : log.count;
 		if (log != null) log.start = previousCount;
 		setCollector(collector);
+		return new TrackingFrame(previous, previousStart, previousCount);
+	}
+
+	public static function leaveTracking(frame:TrackingFrame):Void {
+		setCollector(frame.previous);
+		finishCreationScope(frame.previousStart, frame.previousCount, frame.previous);
+	}
+
+	public static function withTracking<T>(collector:ReactiveCollector, run:Void->T):T {
+		if (run == null) throw "Reactive tracking requires a computation";
+		var frame = enterTracking(collector);
 		try {
 			var result = run();
-			setCollector(previous);
-			finishCreationScope(previousStart, previousCount, previous);
+			leaveTracking(frame);
 			return result;
 		} catch (error:Dynamic) {
-			setCollector(previous);
-			finishCreationScope(previousStart, previousCount, previous);
+			leaveTracking(frame);
 			throw error;
 		}
 	}

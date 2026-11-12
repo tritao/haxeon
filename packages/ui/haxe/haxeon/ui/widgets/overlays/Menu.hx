@@ -75,21 +75,8 @@ class Menu implements View {
 					context.theme.tokens.textSecondary, TextStyleOverride.text(11.0))));
 				continue;
 			}
-			var button = new Button(item.label, null, function() {
-				if (item.hasSelectHandler)
-					item.onSelect();
-				if (hasDismissHandler)
-					onDismiss();
-			}, item.key);
-			button.classes = ["menu-item"];
-			button.variant = ButtonVariant.Navigation;
-			button.enabled = item.enabled;
-			button.semanticRole = AccessibilityRole.MenuItem;
-			button.semanticActions = AccessibilityAction.Select;
-			if (item.shortcut != null && item.shortcut.length > 0)
-				button.trailingView = new Text(item.shortcut, null, context.theme.tokens.textSecondary, TextStyleOverride.text(13));
 			var computed = context.resolveStyle(new StyleTarget("button", item.key, item.key,
-				["menu-item", "navigation"], ["button"], haxeon.ui.style.StyleState.empty()), button.style);
+				["menu-item", "navigation"], ["button"], haxeon.ui.style.StyleState.empty()), null);
 			var itemStyle = computed.toLayoutStyle();
 			var typography = context.resolveTextRole(TextRole.Button, TextStyleOverride.combine(
 				TextStyleOverride.text(13), TextStyleOverride.paragraph(TextWrap.None)));
@@ -114,7 +101,16 @@ class Menu implements View {
 				measurement.dispose();
 			}
 			var label = new MiddleEllipsisText("menu-label", item.label, false, labelStyle);
-			button.labelView = label;
+			var itemSemantics = new Semantics(AccessibilityRole.MenuItem, item.label);
+			itemSemantics.actions = AccessibilityAction.Select;
+			var button = new Button(item.label, null, function() {
+				if (item.hasSelectHandler)
+					item.onSelect();
+				if (hasDismissHandler)
+					onDismiss();
+			}, item.key, item.enabled, ButtonVariant.Navigation, null, ["menu-item"], null, null, null, item.shortcut != null && item.shortcut.length > 0
+					? new Text(item.shortcut, null, context.theme.tokens.textSecondary, TextStyleOverride.text(13)) : null
+			, label, null, null, null, null, itemSemantics);
 			var tooltip = new Tooltip("menu-label-tooltip", button, new Text(item.label), 0.0, 28.0);
 			tooltip.fillAnchor = true;
 			tooltip.showWhen = function() return label.truncated;

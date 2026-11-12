@@ -32,10 +32,10 @@ class Text implements View {
 	}
 
 	public function build(context:BuildContext):RenderNode {
-		var id = context.id("text");
+		var id = context.rootId("text");
 		var computed = context.resolveStyle(new StyleTarget("text", null, null, null, ["text"],
 			context.interactionStates.get(id)), style, color);
-		var node = createNode(id, computed.toLayoutStyle());
+		var node = createNode(context, id, computed.toLayoutStyle());
 		node.setStyleIdentity("text", null, null, null, ["text"]);
 		node.states = context.interactionStates.get(id);
 		node.computedStyle = computed;
@@ -60,6 +60,6 @@ class Text implements View {
 		return node;
 	}
 
-	function createNode(id:WidgetId, style:LayoutStyle):RenderNode
-		return new RenderNode(id, LayoutVisualKind.Text, style);
+	function createNode(context:BuildContext, id:WidgetId, style:LayoutStyle):RenderNode
+		return context.createNode(id, LayoutVisualKind.Text, style);
 }
