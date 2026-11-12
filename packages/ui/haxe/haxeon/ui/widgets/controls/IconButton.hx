@@ -18,65 +18,71 @@ import haxeon.ui.widgets.Icon;
 
 /** Accessible icon-only button with a required non-visual label. */
 class IconButton implements ScopeView {
-	public final key:String;
-	public final icon:IconName;
-	public final label:String;
-	public final style:LayoutStyle;
-	public final enabled:Bool;
-	public final onClick:Void->Void;
+  public final key:String;
+  public final icon:IconName;
+  public final label:String;
+  public final style:LayoutStyle;
+  public final enabled:Bool;
+  public final onClick:Void -> Void;
 
-	public function new(key:String, icon:IconName, label:String,
-			?onClick:Void->Void, ?style:LayoutStyle, enabled:Bool = true) {
-		if (key == null || key.length == 0 || label == null || label.length == 0)
-			throw "Icon buttons require a stable key and accessible label";
-		this.key = key;
-		this.icon = icon;
-		this.label = label;
-		this.onClick = onClick;
-		this.style = style == null ? new LayoutStyle() : style.copy();
-		this.enabled = enabled;
-	}
+  public function new(
+    key:String,
+    icon:IconName,
+    label:String,
+    ?onClick:Void -> Void,
+    ?style:LayoutStyle,
+    enabled:Bool = true
+  ) {
+    if (key == null || key.length == 0
+      || label == null || label.length == 0) throw "Icon buttons require a stable key and accessible label";
+    this.key = key;
+    this.icon = icon;
+    this.label = label;
+    this.onClick = onClick;
+    this.style = style == null ? new LayoutStyle() : style.copy();
+    this.enabled = enabled;
+  }
 
-	public function scopeKey():String return key;
+  public function scopeKey():String return key;
 
-	public function inputsEqual(previous:ScopeView):Bool {
-		if (!Std.isOfType(previous, IconButton)) return false;
-		var other:IconButton = cast previous;
-		return key == other.key && haxeon.Equality.equals(icon, other.icon) && label == other.label &&
-			haxeon.Diff.mask(style, other.style) == 0 && enabled == other.enabled && onClick == other.onClick;
-	}
+  public function inputsEqual(previous:ScopeView):Bool {
+    if (!Std.isOfType(previous, IconButton)) return false;
+    var other:IconButton = cast previous;
+    return key == other.key && haxeon.Equality.equals(icon, other.icon) && label == other.label && haxeon.Diff.mask(
+      style,
+      other.style
+    ) == 0 && enabled == other.enabled && onClick == other.onClick;
+  }
 
-	public function buildBody(context:BuildContext):RenderNode
-		return buildButton(context, context.rootId("icon-button"));
+  public function buildBody(context:BuildContext):RenderNode return buildButton(context, context.rootId("icon-button"));
 
-	public function build(context:BuildContext):RenderNode return context.mountComponent(this);
+  public function build(context:BuildContext):RenderNode return context.mountComponent(this);
 
-	function buildButton(context:BuildContext, id:haxeon.ui.core.WidgetId):RenderNode {
-		var flags = context.interactionStates.get(id);
-		flags = !enabled ? flags.insert(StyleState.Disabled) : flags.remove(StyleState.Disabled);
-		var computed = context.resolveStyle(new StyleTarget("button", key, key,
-			["icon-button"], ["button", "icon-button"], flags), style);
-		var node = context.createNode(id, LayoutVisualKind.Box, computed.toLayoutStyle());
-		node.setStyleIdentity("button", key, key, ["icon-button"],
-			["button", "icon-button"]);
-		node.states = flags;
-		node.computedStyle = computed;
-		node.focusable = enabled;
-		node.enabled = enabled;
-		var semantics = new Semantics(AccessibilityRole.Button, label);
-		semantics.actions = AccessibilityAction.Activate;
-		if (!enabled)
-			semantics.states |= AccessibilityState.Disabled;
-		node.semantics = semantics;
-		if (enabled && onClick != null) {
-			var activate = function(_:UiEvent) {
-				onClick();
-			};
-			node.onActivate(activate);
-		}
-		var foreground = context.theme.buttonLabelColor(enabled,
-			node.layout.style.background);
-		node.add(new Icon("glyph", icon, 16.0, foreground).build(context));
-		return node;
-	}
+  function buildButton(context:BuildContext, id:haxeon.ui.core.WidgetId):RenderNode {
+    var flags = context.interactionStates.get(id);
+    flags = !enabled ? flags.insert(StyleState.Disabled) : flags.remove(StyleState.Disabled);
+    var computed = context.resolveStyle(
+      new StyleTarget("button", key, key, ["icon-button"], ["button", "icon-button"], flags),
+      style
+    );
+    var node = context.createNode(id, LayoutVisualKind.Box, computed.toLayoutStyle());
+    node.setStyleIdentity("button", key, key, ["icon-button"], ["button", "icon-button"]);
+    node.states = flags;
+    node.computedStyle = computed;
+    node.focusable = enabled;
+    node.enabled = enabled;
+    var semantics = new Semantics(AccessibilityRole.Button, label);
+    semantics.actions = AccessibilityAction.Activate;
+    if (!enabled) semantics.states |= AccessibilityState.Disabled;
+    node.semantics = semantics;
+    if (enabled && onClick != null) {
+      var activate = function(_:UiEvent) {
+        onClick();
+      };
+      node.onActivate(activate);
+    }
+    var foreground = context.theme.buttonLabelColor(enabled, node.layout.style.background);
+    node.add(new Icon("glyph", icon, 16.0, foreground).build(context));
+    return node;
+  }
 }

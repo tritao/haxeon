@@ -15,10 +15,12 @@ class MenuMeasurementMain {
     var prior = context.resolveStyle(target, button.style);
     var current = context.resolveStyle(target, null);
     var a = prior.toLayoutStyle(), b = current.toLayoutStyle();
-    if (a.padding.left != b.padding.left || a.padding.right != b.padding.right ||
-        prior.getNumber(StyleProperty.FontSize) != current.getNumber(StyleProperty.FontSize) ||
-        prior.getNumber(StyleProperty.LetterSpacing) != current.getNumber(StyleProperty.LetterSpacing))
-      throw "Menu's measurement padding or typography differs from its Button";
-    context.dispose();context.stateStore.dispose();return 42;
+    if (a.padding.left != b.padding.left || a.padding.right != b.padding.right
+      || prior.getNumber(StyleProperty.FontSize) != current.getNumber(StyleProperty.FontSize)
+      || prior.getNumber(StyleProperty.LetterSpacing) != current
+      .getNumber(StyleProperty.LetterSpacing)) throw "Menu's measurement padding or typography differs from its Button";
+    context.dispose();
+    context.stateStore.dispose();
+    return 42;
   }
 }

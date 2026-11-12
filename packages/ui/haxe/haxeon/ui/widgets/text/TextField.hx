@@ -46,966 +46,1148 @@ import haxeon.editor.TextDocument;
 
 /** Text editor composed from a Haxe box and NativeUI text primitive. */
 class TextField implements View {
-	/** Shared only by internal read-only selection paths. */
-	static final NoAdditionalSelections:Array<TextSelection> = [];
-	public final key:String;
-	public var value:String;
-	/** Paint-only whitespace visibility: off, selection, or all. */
-	public var renderWhitespace:String = "off";
-	public var whitespaceColor:Null<Color>;
-	public var label:Null<String>;
-	/** Muted visual hint shown only while the editor is empty. */
-	public var placeholder:Null<String>;
-	/** Show a trailing ellipsis while an overflowing single-line value is not being edited. */
-	public var ellipsizeWhenUnfocused:Bool = false;
-	public final multiline:Bool;
-	public final style:LayoutStyle;
-	public final textStyle:Null<TextStyle>;
-	public final textColor:Null<Color>;
-	/** Sorted, disjoint absolute codepoint foreground ranges for a visible chunk. */
-	public var colorRangeProvider:Null<(Int, Int)->Array<TextColorRange>>;
-	/** Backgrounds and underlines in absolute document codepoint coordinates. */
-	public var decorationProvider:Null<(Int, Int)->Array<TextDecoration>>;
-	/** Increment when state captured by presentation providers changes. */
-	public var presentationRevision:Int = 0;
-	/** Optional controlled selection, queried on rebuild after shared-document synchronization. */
-	public var selectionProvider:Null<Void->TextSelection>;
-	/** Reports widget selection after edit callbacks have synchronized a caller-owned document. */
-	public var onSelectionChange:Null<TextSelection->Void>;
-	/** Explicit navigation/edit request for owners that manage an outer viewport. */
-	public var onEditorAction:Null<TextEditorAction->Bool>;
-	public var onCaretRevealRequest:Null<Void->Void>;
-	/** Additional owner-controlled selections; the primary stays in selectionProvider. */
-	public var additionalSelectionProvider:Null<Void->Array<TextSelection>>;
-	/** Handles navigation of all selections when additional carets are present. */
-	public var onNavigationIntent:Null<(TextNavigationIntent, TextEditorLayout)->Bool>;
-	/** Logical viewport height when an outer scroll container owns scrolling. */
-	public var pageHeightProvider:Null<Void->Float>;
-	/** Return true after applying an operation; the live layout supplies shaped word boundaries. */
-	/** True when an application document owns undo/redo. */
-	public var historyManagedExternally:Bool = false;
-	/** Optional external viewport scroll; delta uses application layout coordinates. */
-	public var onSelectionDragScroll:Null<Float->Bool>;
-	public var onEditIntent:Null<(TextEditIntent, TextEditorLayout)->Bool>;
-	/** Optional aggregate selected text for clipboard copy/cut. */
-	public var selectionTextProvider:Null<Void->Null<String>>;
-	/** Optional pointer action at the text offset; true consumes normal selection handling. */
-	public var onTextPointerDown:Null<Int->UiEvent->Bool>;
-	/** Hit-tested pointer movement, independent of selection dragging. */
-	public var onTextPointerMove:Null<Int->UiEvent->Void>;
-	/** Typed selector classes used by composite fields such as ComboBox. */
-	public var classes:Array<String>;
-	public var enabled:Bool;
-	/** Selectable and copyable but not editable; multiline fields also scroll with the wheel. */
-	public var readOnly:Bool;
-	/** With readOnly, keeps the newest text in view until the user scrolls away from the end. */
-	public var followTail:Bool;
-	public var onChange:Null<String->Void>;
-	/** Applied edit notifications for a caller-owned EditorKit document. */
-	public var onEdit:Null<EditTransaction->Void>;
-	/** Optional mutable EditorKit model shared with the persistent editor state. */
-	public var document:Null<TextDocument>;
-	public var onSubmit:Null<String->Void>;
-	public var onDiagnostics:Null<TextEditorDiagnostics->Void>;
-	/** Current logical-screen caret bounds after layout, or null when clipped out. */
-	public var onCaretRect:Null<Null<Rect>->Void>;
-	/** Borrowed retained text geometry after layout, for aligned companion views. */
-	public var onLayoutResolved:Null<TextEditorLayout->ResolvedLayoutItem->Void>;
-	/** Semantic role override used by composite editable controls. */
-	public var semanticRole:AccessibilityRole;
-	/** Semantic action capabilities override used by composite editable controls. */
-	public var semanticActions:AccessibilityAction;
+  /** Shared only by internal read-only selection paths. */
+  static final NoAdditionalSelections:Array<TextSelection> = [];
+  public final key:String;
+  public var value:String;
+  /** Paint-only whitespace visibility: off, selection, or all. */
+  public var renderWhitespace:String = "off";
+  public var whitespaceColor:Null<Color>;
+  public var label:Null<String>;
+  /** Muted visual hint shown only while the editor is empty. */
+  public var placeholder:Null<String>;
+  /** Show a trailing ellipsis while an overflowing single-line value is not being edited. */
+  public var ellipsizeWhenUnfocused:Bool = false;
+  public final multiline:Bool;
+  public final style:LayoutStyle;
+  public final textStyle:Null<TextStyle>;
+  public final textColor:Null<Color>;
+  /** Sorted, disjoint absolute codepoint foreground ranges for a visible chunk. */
+  public var colorRangeProvider:Null<(Int, Int) -> Array<TextColorRange>>;
+  /** Backgrounds and underlines in absolute document codepoint coordinates. */
+  public var decorationProvider:Null<(Int, Int) -> Array<TextDecoration>>;
+  /** Increment when state captured by presentation providers changes. */
+  public var presentationRevision:Int = 0;
+  /** Optional controlled selection, queried on rebuild after shared-document synchronization. */
+  public var selectionProvider:Null<Void -> TextSelection>;
+  /** Reports widget selection after edit callbacks have synchronized a caller-owned document. */
+  public var onSelectionChange:Null<TextSelection -> Void>;
+  /** Explicit navigation/edit request for owners that manage an outer viewport. */
+  public var onEditorAction:Null<TextEditorAction -> Bool>;
+  public var onCaretRevealRequest:Null<Void -> Void>;
+  /** Additional owner-controlled selections; the primary stays in selectionProvider. */
+  public var additionalSelectionProvider:Null<Void -> Array<TextSelection>>;
+  /** Handles navigation of all selections when additional carets are present. */
+  public var onNavigationIntent:Null<(TextNavigationIntent, TextEditorLayout) -> Bool>;
+  /** Logical viewport height when an outer scroll container owns scrolling. */
+  public var pageHeightProvider:Null<Void -> Float>;
+  /** Return true after applying an operation; the live layout supplies shaped word boundaries. */
+  /** True when an application document owns undo/redo. */
+  public var historyManagedExternally:Bool = false;
+  /** Optional external viewport scroll; delta uses application layout coordinates. */
+  public var onSelectionDragScroll:Null<Float -> Bool>;
+  public var onEditIntent:Null<(TextEditIntent, TextEditorLayout) -> Bool>;
+  /** Optional aggregate selected text for clipboard copy/cut. */
+  public var selectionTextProvider:Null<Void -> Null<String>>;
+  /** Optional pointer action at the text offset; true consumes normal selection handling. */
+  public var onTextPointerDown:Null<Int -> UiEvent -> Bool>;
+  /** Hit-tested pointer movement, independent of selection dragging. */
+  public var onTextPointerMove:Null<Int -> UiEvent -> Void>;
+  /** Typed selector classes used by composite fields such as ComboBox. */
+  public var classes:Array<String>;
+  public var enabled:Bool;
+  /** Selectable and copyable but not editable; multiline fields also scroll with the wheel. */
+  public var readOnly:Bool;
+  /** With readOnly, keeps the newest text in view until the user scrolls away from the end. */
+  public var followTail:Bool;
+  public var onChange:Null<String -> Void>;
+  /** Applied edit notifications for a caller-owned EditorKit document. */
+  public var onEdit:Null<EditTransaction -> Void>;
+  /** Optional mutable EditorKit model shared with the persistent editor state. */
+  public var document:Null<TextDocument>;
+  public var onSubmit:Null<String -> Void>;
+  public var onDiagnostics:Null<TextEditorDiagnostics -> Void>;
+  /** Current logical-screen caret bounds after layout, or null when clipped out. */
+  public var onCaretRect:Null<Null<Rect> -> Void>;
+  /** Borrowed retained text geometry after layout, for aligned companion views. */
+  public var onLayoutResolved:Null<TextEditorLayout -> ResolvedLayoutItem -> Void>;
+  /** Semantic role override used by composite editable controls. */
+  public var semanticRole:AccessibilityRole;
+  /** Semantic action capabilities override used by composite editable controls. */
+  public var semanticActions:AccessibilityAction;
 
-	public function new(key:String, value:String = "", ?onChange:String->Void,
-			?style:LayoutStyle, ?label:String, ?textStyle:TextStyle, ?textColor:Color,
-			multiline:Bool = false, ?document:TextDocument,
-			?onEdit:EditTransaction->Void) {
-		if (key == null || key.length == 0)
-			throw "Text fields require a stable key";
-		if (onEdit != null && document == null)
-			throw "Transaction callbacks require a shared EditorKit document";
-		this.key = key;
-		this.value = value == null ? "" : value;
-		this.onChange = onChange;
-		this.onEdit = onEdit;
-		this.document = document;
-		this.onSubmit = null;
-		this.onCaretRect = null;
-		this.onLayoutResolved = null;
-		this.colorRangeProvider = null;
-		this.decorationProvider = null;
-		this.selectionProvider = null;
-		this.onSelectionChange = null;
-		this.additionalSelectionProvider = null;
-		this.onNavigationIntent = null;
-		this.onEditIntent = null;
-		this.selectionTextProvider = null;
-		this.label = label;
-		this.placeholder = null;
-		this.multiline = multiline;
-		this.style = style == null ? defaultStyle(multiline) : style.copy();
-		this.textStyle = textStyle;
-		this.textColor = textColor;
-		classes = [];
-		enabled = true;
-		readOnly = false;
-		followTail = false;
-		onDiagnostics = null;
-		semanticRole = AccessibilityRole.TextField;
-		semanticActions = AccessibilityAction.SetValue | AccessibilityAction.SetSelection;
-	}
+  public function new(
+    key:String,
+    value:String = "",
+    ?onChange:String -> Void,
+    ?style:LayoutStyle,
+    ?label:String,
+    ?textStyle:TextStyle,
+    ?textColor:Color,
+    multiline:Bool = false,
+    ?document:TextDocument,
+    ?onEdit:EditTransaction -> Void
+  ) {
+    if (key == null || key.length == 0) throw "Text fields require a stable key";
+    if (onEdit != null && document == null) throw "Transaction callbacks require a shared EditorKit document";
+    this.key = key;
+    this.value = value == null ? "" : value;
+    this.onChange = onChange;
+    this.onEdit = onEdit;
+    this.document = document;
+    this.onSubmit = null;
+    this.onCaretRect = null;
+    this.onLayoutResolved = null;
+    this.colorRangeProvider = null;
+    this.decorationProvider = null;
+    this.selectionProvider = null;
+    this.onSelectionChange = null;
+    this.additionalSelectionProvider = null;
+    this.onNavigationIntent = null;
+    this.onEditIntent = null;
+    this.selectionTextProvider = null;
+    this.label = label;
+    this.placeholder = null;
+    this.multiline = multiline;
+    this.style = style == null ? defaultStyle(multiline) : style.copy();
+    this.textStyle = textStyle;
+    this.textColor = textColor;
+    classes = [];
+    enabled = true;
+    readOnly = false;
+    followTail = false;
+    onDiagnostics = null;
+    semanticRole = AccessibilityRole.TextField;
+    semanticActions = AccessibilityAction.SetValue | AccessibilityAction.SetSelection;
+  }
 
-	/** Creates a field backed by a shared document and edit transaction stream. */
-	public static function withDocument(key:String, document:TextDocument,
-			?onEdit:EditTransaction->Void, ?style:LayoutStyle, ?label:String,
-			?textStyle:TextStyle, ?textColor:Color, multiline:Bool = false):TextField
-		return new TextField(key, "", null, style, label, textStyle, textColor,
-			multiline, document, onEdit);
+  /** Creates a field backed by a shared document and edit transaction stream. */
+  public static function withDocument(
+    key:String,
+    document:TextDocument,
+    ?onEdit:EditTransaction -> Void,
+    ?style:LayoutStyle,
+    ?label:String,
+    ?textStyle:TextStyle,
+    ?textColor:Color,
+    multiline:Bool = false
+  ):TextField return new TextField(
+    key,
+    "",
+    null,
+    style,
+    label,
+    textStyle,
+    textColor,
+    multiline,
+    document,
+    onEdit
+  );
 
-	/** Tab stops in space advances; zero preserves the default layout behavior. */
-	public var tabWidth:Null<Int> = null;
-	/** Explicit wrapping policy; null retains the normal single/multiline defaults. */
-	public var wrap:Null<TextWrap> = null;
-	/** Use lexical identifier boundaries for code selection and word commands. */
-	public var codeWordBoundaries:Bool = false;
+  /** Tab stops in space advances; zero preserves the default layout behavior. */
+  public var tabWidth:Null<Int> = null;
+  /** Explicit wrapping policy; null retains the normal single/multiline defaults. */
+  public var wrap:Null<TextWrap> = null;
+  /** Use lexical identifier boundaries for code selection and word commands. */
+  public var codeWordBoundaries:Bool = false;
 
-	public function build(context:BuildContext):RenderNode {
-		return context.withScope(new Key(key), function() {
-			var id = context.rootId("field");
-			// Read document-backed state in the tracked field build so its Observable history drives the local patch.
-			// The field rebuilds only itself when its own state changes (typing, selection, caret), so the panel around it stays cached.
-			return context.selfUpdating(id, function() return buildField(context, id));
-		});
-	}
+  public function build(context:BuildContext):RenderNode {
+    return context.withScope(new Key(key), function() {
+      var id = context.rootId("field");
+      // Read document-backed state in the tracked field build so its Observable history drives the local patch.
+      // The field rebuilds only itself when its own state changes (typing, selection, caret), so the panel around it stays cached.
+      return context.selfUpdating(id, function() return buildField(context, id));
+    }
+    );
+  }
 
-	function buildField(context:BuildContext, id:haxeon.ui.core.WidgetId):RenderNode {
-			var resolved = context.resolveTextRole(TextRole.Body,
-				TextStyleOverride.fromTextStyle(textStyle));
-			var resolvedTextColor = textColor == null ? resolved.textColor : textColor;
-			// Typography is immutable; replace the complete paragraph value for this field.
-			var paragraph = resolved.paragraphStyle;
-			if (tabWidth != null) paragraph = paragraph.withTabWidth(tabWidth);
-			paragraph = paragraph.withWrap(wrap == null
-				? (multiline ? TextWrap.WordCharacter : TextWrap.None) : wrap);
-			var stored:State<TextEditorState> = acquireState(context, id, value, resolved.textStyle, paragraph, document);
-			var editor:TextEditorState = stored.value;
-			// The editor is an identity-bearing mutable resource; its event requests the owning field's local rebuild.
-			var refresh = function() context.requestPatch(id);
-			editor.layout.codeWordBoundaries = codeWordBoundaries;
-			editor.configureTail(followTail && readOnly);
-			var documentChanged = document != null
-				? editor.syncDocument(document, true)
-				: editor.syncExternal(value, true);
-			if (documentChanged) {
-				editor.resetCaretBlink(Sys.time());
-				if (editor.tailFollowing)
-					editor.scrollToEnd();
-			}
-			if (selectionProvider != null)
-				editor.setAnchoredSelection(selectionProvider(), true);
-			var additionalSelections = additionalSelectionProvider == null ? NoAdditionalSelections : additionalSelectionProvider();
-			var hasAdditionalCaret = false;
-			for (selection in additionalSelections) {
-				if (selection.anchor == selection.focus) hasAdditionalCaret = true;
-				if (selection.anchor > editor.documentLength() || selection.focus > editor.documentLength())
-					throw "Additional selection is outside the document";
-			}
-			editor.updateStyle(resolved.textStyle, paragraph);
-			editor.configurePresentation(colorRangeProvider, decorationProvider, presentationRevision);
+  function buildField(context:BuildContext, id:haxeon.ui.core.WidgetId):RenderNode {
+    var resolved = context.resolveTextRole(TextRole.Body, TextStyleOverride.fromTextStyle(textStyle));
+    var resolvedTextColor = textColor == null ? resolved.textColor : textColor;
+    // Typography is immutable; replace the complete paragraph value for this field.
+    var paragraph = resolved.paragraphStyle;
+    if (tabWidth != null) paragraph = paragraph.withTabWidth(tabWidth);
+    paragraph = paragraph.withWrap(wrap == null ? (multiline ? TextWrap.WordCharacter : TextWrap.None) : wrap);
+    var stored:State<TextEditorState> = acquireState(context, id, value, resolved.textStyle, paragraph, document);
+    var editor:TextEditorState = stored.value;
+    // The editor is an identity-bearing mutable resource; its event requests the owning field's local rebuild.
+    var refresh = function() context.requestPatch(id);
+    editor.layout.codeWordBoundaries = codeWordBoundaries;
+    editor.configureTail(followTail && readOnly);
+    var documentChanged = document != null ? editor.syncDocument(document, true) : editor.syncExternal(value, true);
+    if (documentChanged) {
+      editor.resetCaretBlink(Sys.time());
+      if (editor.tailFollowing) editor.scrollToEnd();
+    }
+    if (selectionProvider != null) editor.setAnchoredSelection(selectionProvider(), true);
+    var additionalSelections = additionalSelectionProvider
+      == null ? NoAdditionalSelections : additionalSelectionProvider();
+    var hasAdditionalCaret = false;
+    for (selection in additionalSelections) {
+      if (selection.anchor == selection.focus) hasAdditionalCaret = true;
+      if (selection.anchor > editor.documentLength()
+        || selection.focus > editor.documentLength()) throw "Additional selection is outside the document";
+    }
+    editor.updateStyle(resolved.textStyle, paragraph);
+    editor.configurePresentation(colorRangeProvider, decorationProvider, presentationRevision);
 
-			var flags = context.interactionStates.get(id);
-			flags = (!enabled ? flags.insert(StyleState.Disabled) : flags.remove(StyleState.Disabled));
-			var computed = context.styleResolver.resolve(
-				new StyleTarget("text-field", key, key, classes, ["text-field"], flags),
-				context.inheritedStyle, context.theme.styles, context.styleSheet, style, context.environment);
-			if (textColor != null)
-				computed.setColor(StyleProperty.TextColor, textColor,
-					new StyleSource("local", "text-field", -1, "local"));
-			var node = context.createNode(id, LayoutVisualKind.Box, computed.toLayoutStyle());
-			node.setStyleIdentity("text-field", key, key, classes, ["text-field"]);
-			node.states = flags;
-			node.computedStyle = computed;
-			node.focusable = enabled;
-			node.enabled = enabled;
-			var semantics = new Semantics(semanticRole, label == null ? key : label);
-			semantics.setValueSource(editor, editor.documentLength());
-			semantics.actions = readOnly ? semanticActions.remove(AccessibilityAction.SetValue) : semanticActions;
-			if (readOnly)
-				semantics.states |= AccessibilityState.ReadOnly;
-			semantics.textStart = 0;
-			semantics.selectionStart = editor.selectionStart;
-			semantics.selectionEnd = editor.selectionEnd;
-			if (!enabled)
-				semantics.states |= AccessibilityState.Disabled;
-			if (editor.focused)
-				semantics.states |= AccessibilityState.Focused;
-			if (multiline)
-				semantics.states |= AccessibilityState.Multiline;
-			node.semantics = semantics;
+    var flags = context.interactionStates.get(id);
+    flags = (!enabled ? flags.insert(StyleState.Disabled) : flags.remove(StyleState.Disabled));
+    var computed = context.styleResolver.resolve(
+      new StyleTarget("text-field", key, key, classes, ["text-field"], flags),
+      context.inheritedStyle,
+      context.theme.styles,
+      context.styleSheet,
+      style,
+      context.environment
+    );
+    if (textColor != null) computed.setColor(
+      StyleProperty.TextColor,
+      textColor,
+      new StyleSource("local", "text-field", -1, "local")
+    );
+    var node = context.createNode(id, LayoutVisualKind.Box, computed.toLayoutStyle());
+    node.setStyleIdentity("text-field", key, key, classes, ["text-field"]);
+    node.states = flags;
+    node.computedStyle = computed;
+    node.focusable = enabled;
+    node.enabled = enabled;
+    var semantics = new Semantics(semanticRole, label == null ? key : label);
+    semantics.setValueSource(editor, editor.documentLength());
+    semantics.actions = readOnly ? semanticActions.remove(AccessibilityAction.SetValue) : semanticActions;
+    if (readOnly) semantics.states |= AccessibilityState.ReadOnly;
+    semantics.textStart = 0;
+    semantics.selectionStart = editor.selectionStart;
+    semantics.selectionEnd = editor.selectionEnd;
+    if (!enabled) semantics.states |= AccessibilityState.Disabled;
+    if (editor.focused) semantics.states |= AccessibilityState.Focused;
+    if (multiline) semantics.states |= AccessibilityState.Multiline;
+    node.semantics = semantics;
 
-			var textNodeStyle = new LayoutStyle();
-			textNodeStyle.width = LayoutAxis.grow();
-			textNodeStyle.height = LayoutAxis.grow();
-			textNodeStyle.zIndex = 1;
-			var editorContentStyle = new LayoutStyle();
-			editorContentStyle.width = LayoutAxis.grow();
-			editorContentStyle.height = LayoutAxis.grow();
-			editorContentStyle.clipHorizontal = true;
-			editorContentStyle.clipVertical = multiline;
-			var editorContent = context.createNode(context.rootId("editor-content"),
-				LayoutVisualKind.Box, editorContentStyle);
-			if (decorationProvider != null) {
-				var backgroundStyle = new LayoutStyle();
-				backgroundStyle.width = LayoutAxis.grow();
-				backgroundStyle.height = LayoutAxis.grow();
-				backgroundStyle.positioning = LayoutPositioning.Absolute;
-				backgroundStyle.zIndex = 0;
-				var backgroundNode = context.createNode(context.rootId("editor-background"),
-					LayoutVisualKind.Custom, backgroundStyle);
-				backgroundNode.hitTestSelf = false;
-				backgroundNode.onPaint(function(canvas, geometry) {
-					if (!editor.isDisposed()) {
-						var visible = geometry.visibleLocalBounds();
-						canvas.translate(0.0, -editor.scrollOffsetY);
-						editor.layout.paintDecorations(canvas, true,
-							editor.scrollOffsetY + visible.y,
-							editor.scrollOffsetY + visible.y + visible.height,
-							visible.x, visible.x + visible.width);
-					}
-				});
-				editorContent.add(backgroundNode);
-			}
-			// Unfocused, unselected fields need only their text node. State changes
-			// invalidate the frame before selection or caret decoration is painted.
-			var showEllipsis = ellipsizeWhenUnfocused && !multiline && !editor.focused && editor.documentLength() > 0
-				&& colorRangeProvider == null && decorationProvider == null;
-			if (!showEllipsis && (editor.selectionStart != editor.selectionEnd || additionalSelections.length > 0)) {
-				var selectionStyle = new LayoutStyle();
-				selectionStyle.width = LayoutAxis.grow();
-				selectionStyle.height = LayoutAxis.grow();
-				selectionStyle.positioning = LayoutPositioning.Absolute;
-				selectionStyle.zIndex = 0;
-				var selectionNode = context.createNode(context.rootId("editor-selection"),
-					LayoutVisualKind.Custom, selectionStyle);
-				selectionNode.hitTestSelf = false;
-				selectionNode.onPaint(function(canvas, geometry) {
-					if (!editor.isDisposed()) {
-						var visible = geometry.visibleLocalBounds();
-						paintSelection(canvas, editor, context.textInput.isOwner(id), context.theme, additionalSelections,
-							editor.scrollOffsetY + visible.y, editor.scrollOffsetY + visible.y + visible.height);
-					}
-				});
-				editorContent.add(selectionNode);
-			}
-			if (renderWhitespace != "off") {
-				// The painter retains the value independently of the rebuilt node.
-				var fieldBackground = node.layout.style.background;
-				var whitespaceStyle = new LayoutStyle();
-				whitespaceStyle.width = LayoutAxis.grow();
-				whitespaceStyle.height = LayoutAxis.grow();
-				whitespaceStyle.positioning = LayoutPositioning.Absolute;
-				whitespaceStyle.zIndex = 3;
-				var whitespaceNode = context.createNode(context.rootId("editor-whitespace"), LayoutVisualKind.Custom, whitespaceStyle);
-				whitespaceNode.hitTestSelf = false;
-				whitespaceNode.onPaint(function(canvas, geometry) {
-					if (editor.isDisposed()) return;
-					var visible = geometry.visibleLocalBounds();
-					var selections = additionalSelections.copy();
-					selections.push(new TextSelection(editor.selectionAnchor, editor.selectionFocus));
-					var normal = whitespaceColor == null ? context.theme.mutedText : whitespaceColor;
-					var editorBackground = fieldBackground.compositeOver(context.theme.tokens.surface);
-					var selectionFill = context.textInput.isOwner(id) ? context.theme.textSelection : context.theme.textSelectionInactive;
-					var background = selectionFill.compositeOver(editorBackground);
-					var selected = haxeon.ui.theme.Theme.contrastingDecoration(normal, background);
-					normal = haxeon.ui.theme.Theme.contrastingDecoration(normal, editorBackground);
-					canvas.translate(0, -editor.scrollOffsetY);
-					editor.layout.paintWhitespace(canvas, renderWhitespace, selections, normal, selected,
-						editor.scrollOffsetY + visible.y, editor.scrollOffsetY + visible.y + visible.height,
-						visible.x, visible.x + visible.width);
-				});
-				editorContent.add(whitespaceNode);
-			}
-			var showsPlaceholder = editor.documentLength() == 0 && placeholder != null &&
-				placeholder.length > 0;
-			// Single-line fields use the text node so their full value and theme
-			// foreground update together as the editor content changes.
-			var useTextNode = showsPlaceholder || (!multiline && colorRangeProvider == null && decorationProvider == null);
-			var textNode = context.createNode(context.rootId("text"),
-				useTextNode ? LayoutVisualKind.Text : LayoutVisualKind.Custom, textNodeStyle);
-			if (showsPlaceholder)
-				textNode.layout.text = placeholder;
-			else if (useTextNode)
-				textNode.layout.text = editor.layoutText();
-			else {
-				// Clay orders absolute paint layers independently of flow content.
-				// Keep glyphs above decoration/selection layers, while a separate
-				// measurement-only node supplies their shared intrinsic size.
-				textNodeStyle.positioning = LayoutPositioning.Absolute;
-				textNode.layout.intrinsicContent = editor.renderContent;
-			}
-			// The text node owns this style; it can also serve as the working copy for computed font overrides.
-			var textNodeTextStyle = editor.textStyle;
-			var fontSource = computed.source(StyleProperty.FontSize);
-			var letterSource = computed.source(StyleProperty.LetterSpacing);
-			if (textStyle == null && fontSource != null && fontSource.layer != "framework")
-				textNodeTextStyle = textNodeTextStyle.withFontSize(computed.getNumber(StyleProperty.FontSize));
-			if (textStyle == null && letterSource != null && letterSource.layer != "framework")
-				textNodeTextStyle = textNodeTextStyle.withLetterSpacing(computed.getNumber(StyleProperty.LetterSpacing));
-			var colorSource = computed.source(StyleProperty.TextColor);
-			var textNodeColor = showsPlaceholder ? context.theme.mutedText :
-				(colorSource != null && colorSource.layer != "framework"
-					? computed.getColor(StyleProperty.TextColor) : resolvedTextColor);
-			if (showEllipsis)
-				textNode = new MiddleEllipsisText("inactive-value", editor.text, false,
-					new TextStyleOverride(textNodeTextStyle.font, textNodeTextStyle.fontSize,
-						textNodeTextStyle.letterSpacing, TextWrap.None, null, null, null, textNodeColor)).build(context);
-			textNode.applyTextComponents(textNodeTextStyle, editor.paragraphStyle, textNodeColor);
-			if (!showsPlaceholder) {
-				editor.updateStyle(textNodeTextStyle, editor.paragraphStyle);
-				editor.setRenderColor(textNodeColor);
-			}
-			editorContent.add(textNode);
-			if (!useTextNode) {
-				var measureStyle = new LayoutStyle();
-				measureStyle.width = LayoutAxis.grow();
-				measureStyle.height = LayoutAxis.grow();
-				var measureNode = context.createNode(context.rootId("editor-measure"), LayoutVisualKind.Custom, measureStyle);
-				measureNode.hitTestSelf = false;
-				measureNode.layout.intrinsicContent = editor.renderMeasurement;
-				editorContent.add(measureNode);
-			}
-			if (editor.focused) {
-				var paintStyle = new LayoutStyle();
-				paintStyle.width = LayoutAxis.grow();
-				paintStyle.height = LayoutAxis.grow();
-				paintStyle.positioning = LayoutPositioning.Absolute;
-				paintStyle.zIndex = 2;
-				var paintNode = context.createNode(context.rootId("editor-paint"),
-					LayoutVisualKind.Custom, paintStyle);
-				paintNode.hitTestSelf = false;
-				paintNode.onPaint(function(canvas, _) {
-					if (!editor.isDisposed()) {
-						var now = Sys.time();
-						var active = context.textInput.isOwner(id);
-						if (active && (editor.selectionStart == editor.selectionEnd || hasAdditionalCaret))
-							context.textInput.requestCaretFrameAt(editor.nextCaretBlinkTime(now));
-						paintEditorDecorations(canvas, editor, active, context.theme, now, true, additionalSelections);
-					}
-				});
-				editorContent.add(paintNode);
-			}
-			node.add(editorContent);
+    var textNodeStyle = new LayoutStyle();
+    textNodeStyle.width = LayoutAxis.grow();
+    textNodeStyle.height = LayoutAxis.grow();
+    textNodeStyle.zIndex = 1;
+    var editorContentStyle = new LayoutStyle();
+    editorContentStyle.width = LayoutAxis.grow();
+    editorContentStyle.height = LayoutAxis.grow();
+    editorContentStyle.clipHorizontal = true;
+    editorContentStyle.clipVertical = multiline;
+    var editorContent = context.createNode(context.rootId("editor-content"), LayoutVisualKind.Box, editorContentStyle);
+    if (decorationProvider != null) {
+      var backgroundStyle = new LayoutStyle();
+      backgroundStyle.width = LayoutAxis.grow();
+      backgroundStyle.height = LayoutAxis.grow();
+      backgroundStyle.positioning = LayoutPositioning.Absolute;
+      backgroundStyle.zIndex = 0;
+      var backgroundNode = context.createNode(
+        context.rootId("editor-background"),
+        LayoutVisualKind.Custom,
+        backgroundStyle
+      );
+      backgroundNode.hitTestSelf = false;
+      backgroundNode.onPaint(function(canvas, geometry) {
+        if (!editor.isDisposed()) {
+          var visible = geometry.visibleLocalBounds();
+          canvas.translate(0.0, -editor.scrollOffsetY);
+          editor.layout.paintDecorations(
+            canvas,
+            true,
+            editor.scrollOffsetY + visible.y,
+            editor.scrollOffsetY + visible.y + visible.height,
+            visible.x,
+            visible.x + visible.width
+          );
+        }
+      }
+      );
+      editorContent.add(backgroundNode);
+    }
+    // Unfocused, unselected fields need only their text node. State changes
+    // invalidate the frame before selection or caret decoration is painted.
+    var showEllipsis = ellipsizeWhenUnfocused && !multiline
+      && !editor.focused && editor.documentLength() > 0 && colorRangeProvider == null && decorationProvider == null;
+    if (!showEllipsis && (editor.selectionStart != editor.selectionEnd || additionalSelections.length > 0)) {
+      var selectionStyle = new LayoutStyle();
+      selectionStyle.width = LayoutAxis.grow();
+      selectionStyle.height = LayoutAxis.grow();
+      selectionStyle.positioning = LayoutPositioning.Absolute;
+      selectionStyle.zIndex = 0;
+      var selectionNode = context.createNode(
+        context.rootId("editor-selection"),
+        LayoutVisualKind.Custom,
+        selectionStyle
+      );
+      selectionNode.hitTestSelf = false;
+      selectionNode.onPaint(function(canvas, geometry) {
+        if (!editor.isDisposed()) {
+          var visible = geometry.visibleLocalBounds();
+          paintSelection(
+            canvas,
+            editor,
+            context.textInput.isOwner(id),
+            context.theme,
+            additionalSelections,
+            editor.scrollOffsetY + visible.y,
+            editor.scrollOffsetY + visible.y + visible.height
+          );
+        }
+      }
+      );
+      editorContent.add(selectionNode);
+    }
+    if (renderWhitespace != "off") {
+      // The painter retains the value independently of the rebuilt node.
+      var fieldBackground = node.layout.style.background;
+      var whitespaceStyle = new LayoutStyle();
+      whitespaceStyle.width = LayoutAxis.grow();
+      whitespaceStyle.height = LayoutAxis.grow();
+      whitespaceStyle.positioning = LayoutPositioning.Absolute;
+      whitespaceStyle.zIndex = 3;
+      var whitespaceNode = context.createNode(
+        context.rootId("editor-whitespace"),
+        LayoutVisualKind.Custom,
+        whitespaceStyle
+      );
+      whitespaceNode.hitTestSelf = false;
+      whitespaceNode.onPaint(function(canvas, geometry) {
+        if (editor.isDisposed()) return;
+        var visible = geometry.visibleLocalBounds();
+        var selections = additionalSelections.copy();
+        selections.push(new TextSelection(editor.selectionAnchor, editor.selectionFocus));
+        var normal = whitespaceColor == null ? context.theme.mutedText : whitespaceColor;
+        var editorBackground = fieldBackground.compositeOver(context.theme.tokens.surface);
+        var selectionFill = context.textInput.isOwner(id)
+          ? context.theme.textSelection : context.theme.textSelectionInactive;
+        var background = selectionFill.compositeOver(editorBackground);
+        var selected = haxeon.ui.theme.Theme.contrastingDecoration(normal, background);
+        normal = haxeon.ui.theme.Theme.contrastingDecoration(normal, editorBackground);
+        canvas.translate(0, -editor.scrollOffsetY);
+        editor.layout.paintWhitespace(
+          canvas,
+          renderWhitespace,
+          selections,
+          normal,
+          selected,
+          editor.scrollOffsetY + visible.y,
+          editor.scrollOffsetY + visible.y + visible.height,
+          visible.x,
+          visible.x + visible.width
+        );
+      }
+      );
+      editorContent.add(whitespaceNode);
+    }
+    var showsPlaceholder = editor.documentLength() == 0 && placeholder != null && placeholder.length > 0;
+    // Single-line fields use the text node so their full value and theme
+    // foreground update together as the editor content changes.
+    var useTextNode = showsPlaceholder || (!multiline && colorRangeProvider == null && decorationProvider == null);
+    var textNode = context.createNode(
+      context.rootId("text"),
+      useTextNode ? LayoutVisualKind.Text : LayoutVisualKind.Custom,
+      textNodeStyle
+    );
+    if (showsPlaceholder) textNode.layout.text = placeholder;
+    else if (useTextNode) textNode.layout.text = editor.layoutText();
+    else {
+      // Clay orders absolute paint layers independently of flow content.
+      // Keep glyphs above decoration/selection layers, while a separate
+      // measurement-only node supplies their shared intrinsic size.
+      textNodeStyle.positioning = LayoutPositioning.Absolute;
+      textNode.layout.intrinsicContent = editor.renderContent;
+    }
+    // The text node owns this style; it can also serve as the working copy for computed font overrides.
+    var textNodeTextStyle = editor.textStyle;
+    var fontSource = computed.source(StyleProperty.FontSize);
+    var letterSource = computed.source(StyleProperty.LetterSpacing);
+    if (textStyle == null && fontSource != null && fontSource.layer
+      != "framework") textNodeTextStyle = textNodeTextStyle.withFontSize(computed.getNumber(StyleProperty.FontSize));
+    if (textStyle == null && letterSource != null && letterSource.layer != "framework") textNodeTextStyle =
+      textNodeTextStyle.withLetterSpacing(computed.getNumber(StyleProperty.LetterSpacing));
+    var colorSource = computed.source(StyleProperty.TextColor);
+    var textNodeColor = showsPlaceholder ? context.theme.mutedText : (colorSource != null
+      && colorSource.layer != "framework" ? computed.getColor(StyleProperty.TextColor) : resolvedTextColor);
+    if (showEllipsis) textNode = new MiddleEllipsisText(
+      "inactive-value",
+      editor.text,
+      false,
+      new TextStyleOverride(
+        textNodeTextStyle.font,
+        textNodeTextStyle.fontSize,
+        textNodeTextStyle.letterSpacing,
+        TextWrap.None,
+        null,
+        null,
+        null,
+        textNodeColor
+      )
+    ).build(context);
+    textNode.applyTextComponents(textNodeTextStyle, editor.paragraphStyle, textNodeColor);
+    if (!showsPlaceholder) {
+      editor.updateStyle(textNodeTextStyle, editor.paragraphStyle);
+      editor.setRenderColor(textNodeColor);
+    }
+    editorContent.add(textNode);
+    if (!useTextNode) {
+      var measureStyle = new LayoutStyle();
+      measureStyle.width = LayoutAxis.grow();
+      measureStyle.height = LayoutAxis.grow();
+      var measureNode = context.createNode(context.rootId("editor-measure"), LayoutVisualKind.Custom, measureStyle);
+      measureNode.hitTestSelf = false;
+      measureNode.layout.intrinsicContent = editor.renderMeasurement;
+      editorContent.add(measureNode);
+    }
+    if (editor.focused) {
+      var paintStyle = new LayoutStyle();
+      paintStyle.width = LayoutAxis.grow();
+      paintStyle.height = LayoutAxis.grow();
+      paintStyle.positioning = LayoutPositioning.Absolute;
+      paintStyle.zIndex = 2;
+      var paintNode = context.createNode(context.rootId("editor-paint"), LayoutVisualKind.Custom, paintStyle);
+      paintNode.hitTestSelf = false;
+      paintNode.onPaint(function(canvas, _) {
+        if (!editor.isDisposed()) {
+          var now = Sys.time();
+          var active = context.textInput.isOwner(id);
+          if (active && (editor.selectionStart == editor.selectionEnd
+            || hasAdditionalCaret)) context.textInput.requestCaretFrameAt(editor.nextCaretBlinkTime(now));
+          paintEditorDecorations(canvas, editor, active, context.theme, now, true, additionalSelections);
+        }
+      }
+      );
+      editorContent.add(paintNode);
+    }
+    node.add(editorContent);
 
-			var refreshState = function(revealCaret:Bool = true) {
-				if (revealCaret) {
-					editor.requestCaretReveal();
-					if (onCaretRevealRequest != null) onCaretRevealRequest();
-				} else editor.preserveViewport();
-				if (document == null || onChange != null)
-					value = editor.layoutText();
-				semantics.setValueSource(editor, editor.documentLength());
-				semantics.selectionStart = editor.selectionStart;
-				semantics.selectionEnd = editor.selectionEnd;
-				refresh();
-			};
-			var updateState = function(revealCaret:Bool = true) {
-				publishSelection(editor);
-				refreshState(revealCaret);
-			};
-			var delegateEdit = function(intent:TextEditIntent):Bool {
-				var handler = onEditIntent;
-				if (handler == null || !handler(intent, editor.layout)) return false;
-				if (document != null) editor.syncDocument(document);
-				else editor.syncExternal(value);
-				if (selectionProvider != null) editor.setAnchoredSelection(selectionProvider());
-				editor.resetCaretBlink(Sys.time());
-				updateState();
-				return true;
-			};
-			var publishTextChange = function(previousRevision:Int) {
-				if (document == null || onChange != null)
-					value = editor.layoutText();
-				if (editor.documentRevision() != previousRevision &&
-					editor.lastEditTransaction != null && onEdit != null)
-					onEdit(editor.lastEditTransaction);
-				if (editor.documentRevision() != previousRevision && onChange != null)
-					onChange(value);
-				publishSelection(editor);
-				refreshState();
-			};
+    var refreshState = function(revealCaret:Bool = true) {
+      if (revealCaret) {
+        editor.requestCaretReveal();
+        if (onCaretRevealRequest != null) onCaretRevealRequest();
+      } else editor.preserveViewport();
+      if (document == null || onChange != null) value = editor.layoutText();
+      semantics.setValueSource(editor, editor.documentLength());
+      semantics.selectionStart = editor.selectionStart;
+      semantics.selectionEnd = editor.selectionEnd;
+      refresh();
+    };
+    var updateState = function(revealCaret:Bool = true) {
+      publishSelection(editor);
+      refreshState(revealCaret);
+    };
+    var delegateEdit = function(intent:TextEditIntent):Bool {
+      var handler = onEditIntent;
+      if (handler == null || !handler(intent, editor.layout)) return false;
+      if (document != null) editor.syncDocument(document);
+      else editor.syncExternal(value);
+      if (selectionProvider != null) editor.setAnchoredSelection(selectionProvider());
+      editor.resetCaretBlink(Sys.time());
+      updateState();
+      return true;
+    };
+    var publishTextChange = function(previousRevision:Int) {
+      if (document == null || onChange != null) value = editor.layoutText();
+      if (editor.documentRevision() != previousRevision
+        && editor.lastEditTransaction != null && onEdit != null) onEdit(editor.lastEditTransaction);
+      if (editor.documentRevision() != previousRevision && onChange != null) onChange(value);
+      publishSelection(editor);
+      refreshState();
+    };
 
-			editorContent.onResolved(function(geometry) {
-				editor.finishBuildSynchronization();
-				editor.configureHistory(!historyManagedExternally);
-				if (multiline) {
-					editor.updateLayout(geometry.width);
-					if (readOnly) {
-						// A read-only view keeps what the user scrolled to instead of chasing the caret.
-						editor.setViewportHeight(geometry.height);
-						if (editor.tailFollowing && editor.scrollToEnd())
-							refresh();
-					} else if (editor.resolveCaretReveal(geometry.height))
-						refresh();
-				}
-			});
-			var drag = context.resourceState(context.id("selection-drag"),
-				function() return new SelectionDragController(), function(value) value.dispose()).value;
-			textNode.onResolved(function(geometry) {
-				editor.updateLayout(geometry.width);
-				drag.layoutResolved();
-				if (onLayoutResolved != null) onLayoutResolved(editor.layout, geometry);
-				if (multiline && !readOnly && editorContent.resolved != null &&
-					editor.resolveCaretReveal(editorContent.resolved.height))
-					refresh();
-				syncCursor(editor, context, id, geometry);
-			});
-			node.on(UiEventKind.Focus, function(_) {
-				if (!enabled)
-					return;
-				editor.focused = true;
-				editor.resetCaretBlink(Sys.time());
-				semantics.states |= AccessibilityState.Focused;
-				refresh();
-				context.textInput.activate(id);
-				if (textNode.resolved != null)
-					syncCursor(editor, context, id, cast textNode.resolved);
-				else
-					publishDiagnostics(editor, context, null);
-			});
-			var blur = function(event:UiEvent) {
-				if (!editor.focused && !editor.draggingSelection)
-					return;
-				editor.breakHistoryGroup();
-				editor.focused = false;
-				editor.draggingSelection = false;
-				editor.cancelPointerClick();
-				semantics.states = semantics.states.remove(AccessibilityState.Focused);
-				refresh();
-				context.textInput.deactivate(id);
-				publishDiagnostics(editor, context, null);
-			};
-			node.on(UiEventKind.Blur, blur);
-			node.on(UiEventKind.FocusLost, blur);
+    editorContent.onResolved(function(geometry) {
+      editor.finishBuildSynchronization();
+      editor.configureHistory(!historyManagedExternally);
+      if (multiline) {
+        editor.updateLayout(geometry.width);
+        if (readOnly) {
+          // A read-only view keeps what the user scrolled to instead of chasing the caret.
+          editor.setViewportHeight(geometry.height);
+          if (editor.tailFollowing && editor.scrollToEnd()) refresh();
+        } else if (editor.resolveCaretReveal(geometry.height)) refresh();
+      }
+    }
+    );
+    var drag = context.resourceState(
+      context.id("selection-drag"),
+      function() return new SelectionDragController(),
+      function(value) value.dispose()
+    ).value;
+    textNode.onResolved(function(geometry) {
+      editor.updateLayout(geometry.width);
+      drag.layoutResolved();
+      if (onLayoutResolved != null) onLayoutResolved(editor.layout, geometry);
+      if (multiline && !readOnly
+        && editorContent.resolved != null && editor.resolveCaretReveal(editorContent.resolved.height)) refresh();
+      syncCursor(editor, context, id, geometry);
+    }
+    );
+    node.on(UiEventKind.Focus, function(_) {
+      if (!enabled) return;
+      editor.focused = true;
+      editor.resetCaretBlink(Sys.time());
+      semantics.states |= AccessibilityState.Focused;
+      refresh();
+      context.textInput.activate(id);
+      if (textNode.resolved != null) syncCursor(editor, context, id, cast textNode.resolved);
+      else publishDiagnostics(editor, context, null);
+    }
+    );
+    var blur = function(event:UiEvent) {
+      if (!editor.focused && !editor.draggingSelection) return;
+      editor.breakHistoryGroup();
+      editor.focused = false;
+      editor.draggingSelection = false;
+      editor.cancelPointerClick();
+      semantics.states = semantics.states.remove(AccessibilityState.Focused);
+      refresh();
+      context.textInput.deactivate(id);
+      publishDiagnostics(editor, context, null);
+    };
+    node.on(UiEventKind.Blur, blur);
+    node.on(UiEventKind.FocusLost, blur);
 
-			var extendDrag = function(x:Float, y:Float):Void {
-				var geometry = textNode.resolved;
-				if (geometry == null) return;
-				var clip = geometry.clipBounds;
-				var clampedY = Math.max(clip.y, Math.min(clip.y + clip.height, y));
-				var point = geometry.viewportToLayout(x, clampedY);
-				var pointer = geometry.viewportToLayout(x, y);
-				var position = editor.hitTestSelectionDrag(point.x - geometry.x,
-					pointer.y - geometry.y + editor.scrollOffsetY, point.y - geometry.y + editor.scrollOffsetY);
-				if (editor.extendPointerSelection(position)) {
-					editor.resetCaretBlink(Sys.time());
-					updateState(false);
-				}
-			};
-			drag.configure(context.animations, editor, function() return textNode.resolved, extendDrag, function(delta) {
-				var changed = onSelectionDragScroll == null ? editor.scrollBy(delta) : onSelectionDragScroll(delta);
-				if (changed) refresh();
-				return changed;
-			});
-			node.on(UiEventKind.PointerDown, function(event) {
-				var pointerAction = onTextPointerDown;
-				if (enabled && pointerAction != null && textNode.resolved != null) {
-					var geometry:ResolvedLayoutItem = cast textNode.resolved;
-					var point = geometry.viewportToLayout(event.x, event.y);
-					var hit = editor.hitTest(point.x - geometry.x, point.y - geometry.y + editor.scrollOffsetY);
-					if (pointerAction(hit.offset, event)) { event.preventDefault(); event.stopPropagation(); return; }
-				}
-				if (!enabled || event.button != 0 || textNode.resolved == null)
-					return;
-				event.capturePointer();
-				var geometry:ResolvedLayoutItem = cast textNode.resolved;
-				var point = geometry.viewportToLayout(event.x, event.y);
-				var position = editor.hitTest(point.x - geometry.x,
-					point.y - geometry.y + editor.scrollOffsetY);
-				editor.resetCaretBlink(Sys.time());
-				var extend = event.modifiers.contains(UiModifier.Shift);
-				if (extend)
-					editor.cancelPointerClick();
-				var clickCount = extend ? 1 : editor.registerPointerClick(position,
-					context.gestures.timeSeconds(), event.x, event.y);
-				var changed = editor.beginPointerSelection(position, clickCount, extend);
-				if (changed)
-					updateState(false);
-				editor.draggingSelection = true;
-				event.preventDefault();
-			});
-			node.on(UiEventKind.PointerMove, function(event) {
-				var pointerMove = onTextPointerMove;
-				if (enabled && pointerMove != null && textNode.resolved != null) {
-					var geometry:ResolvedLayoutItem = cast textNode.resolved;
-					var point = geometry.viewportToLayout(event.x, event.y);
-					var hit = editor.hitTest(point.x - geometry.x, point.y - geometry.y + editor.scrollOffsetY);
-					pointerMove(hit.offset, event);
-				}
-				if (!enabled || !editor.draggingSelection || textNode.resolved == null)
-					return;
-				editor.cancelPointerClickIfMoved(event.x, event.y);
-				extendDrag(event.x, event.y);
-				drag.update(event.x, event.y);
-			});
-			node.on(UiEventKind.PointerUp, function(event) {
-				drag.stop();
-				editor.completePointerClick(event.x, event.y);
-				editor.draggingSelection = false;
-			});
-			node.on(UiEventKind.PointerCancel, function(_) {
-				drag.stop();
-				editor.cancelPointerClick();
-				editor.draggingSelection = false;
-			});
+    var extendDrag = function(x:Float, y:Float):Void {
+      var geometry = textNode.resolved;
+      if (geometry == null) return;
+      var clip = geometry.clipBounds;
+      var clampedY = Math.max(clip.y, Math.min(clip.y + clip.height, y));
+      var point = geometry.viewportToLayout(x, clampedY);
+      var pointer = geometry.viewportToLayout(x, y);
+      var position = editor.hitTestSelectionDrag(
+        point.x - geometry.x,
+        pointer.y - geometry.y + editor.scrollOffsetY,
+        point.y - geometry.y + editor.scrollOffsetY
+      );
+      if (editor.extendPointerSelection(position)) {
+        editor.resetCaretBlink(Sys.time());
+        updateState(false);
+      }
+    };
+    drag.configure(context.animations, editor, function() return textNode.resolved, extendDrag, function(delta) {
+      var changed = onSelectionDragScroll == null ? editor.scrollBy(delta) : onSelectionDragScroll(delta);
+      if (changed) refresh();
+      return changed;
+    }
+    );
+    node.on(UiEventKind.PointerDown, function(event) {
+      var pointerAction = onTextPointerDown;
+      if (enabled && pointerAction != null && textNode.resolved != null) {
+        var geometry:ResolvedLayoutItem = cast textNode.resolved;
+        var point = geometry.viewportToLayout(event.x, event.y);
+        var hit = editor.hitTest(point.x - geometry.x, point.y - geometry.y + editor.scrollOffsetY);
+        if (pointerAction(hit.offset, event)) {
+          event.preventDefault();
+          event.stopPropagation();
+          return;
+        }
+      }
+      if (!enabled || event.button != 0 || textNode.resolved == null) return;
+      event.capturePointer();
+      var geometry:ResolvedLayoutItem = cast textNode.resolved;
+      var point = geometry.viewportToLayout(event.x, event.y);
+      var position = editor.hitTest(point.x - geometry.x, point.y - geometry.y + editor.scrollOffsetY);
+      editor.resetCaretBlink(Sys.time());
+      var extend = event.modifiers.contains(UiModifier.Shift);
+      if (extend) editor.cancelPointerClick();
+      var clickCount = extend ? 1 : editor.registerPointerClick(
+        position,
+        context.gestures.timeSeconds(),
+        event.x,
+        event.y
+      );
+      var changed = editor.beginPointerSelection(position, clickCount, extend);
+      if (changed) updateState(false);
+      editor.draggingSelection = true;
+      event.preventDefault();
+    }
+    );
+    node.on(UiEventKind.PointerMove, function(event) {
+      var pointerMove = onTextPointerMove;
+      if (enabled && pointerMove != null && textNode.resolved != null) {
+        var geometry:ResolvedLayoutItem = cast textNode.resolved;
+        var point = geometry.viewportToLayout(event.x, event.y);
+        var hit = editor.hitTest(point.x - geometry.x, point.y - geometry.y + editor.scrollOffsetY);
+        pointerMove(hit.offset, event);
+      }
+      if (!enabled || !editor.draggingSelection || textNode.resolved == null) return;
+      editor.cancelPointerClickIfMoved(event.x, event.y);
+      extendDrag(event.x, event.y);
+      drag.update(event.x, event.y);
+    }
+    );
+    node.on(UiEventKind.PointerUp, function(event) {
+      drag.stop();
+      editor.completePointerClick(event.x, event.y);
+      editor.draggingSelection = false;
+    }
+    );
+    node.on(UiEventKind.PointerCancel, function(_) {
+      drag.stop();
+      editor.cancelPointerClick();
+      editor.draggingSelection = false;
+    }
+    );
 
-			var handleKey = function(event:UiEvent) {
-				if (!enabled)
-					return;
-				// Ctrl+Alt arrows belong to application navigation, including its
-				// Shift variant. Leave them unconsumed for the command route.
-				if ((event.modifiers & (UiModifier.Control | UiModifier.Alt)) ==
-					(UiModifier.Control | UiModifier.Alt) &&
-					(event.key == UiKey.Left || event.key == UiKey.Right ||
-					 event.key == UiKey.Up || event.key == UiKey.Down)) return;
-				var extend = event.modifiers.contains(UiModifier.Shift);
-				var command = (event.modifiers.contains(UiModifier.Control) || event.modifiers.contains(UiModifier.Super));
-				var action:Null<TextEditorAction> = event.key == UiKey.Escape ? ClearSelection :
-					command && event.key == UiKey.C ? Copy :
-					command && event.key == UiKey.X ? Cut :
-					extend && !command && event.key == UiKey.Delete ? Cut :
-					command && event.key == UiKey.V ? Paste :
-					event.modifiers.contains(UiModifier.Control) && event.key == UiKey.Insert ? Copy :
-					extend && event.key == UiKey.Insert ? Paste :
-					command && event.key == UiKey.Enter ? (extend ? InsertLineAbove : InsertLineBelow) : null;
-				if (action != null && (!readOnly || action == Copy || action == ClearSelection) && onEditorAction != null && onEditorAction(action)) {
-					if (document != null) editor.syncDocument(document);
-					if (selectionProvider != null) editor.setAnchoredSelection(selectionProvider());
-					refreshState(false);
-					event.preventDefault();
-					return;
-				}
-				if (command && (event.key == UiKey.Z || event.key == UiKey.Y)) {
-					if (historyManagedExternally) return;
-					var previousRevision = editor.documentRevision();
-					var changed = !readOnly && (event.key == UiKey.Y || extend ? editor.redo() : editor.undo());
-					if (changed) publishTextChange(previousRevision);
-					editor.resetCaretBlink(Sys.time());
-					event.preventDefault();
-					return;
-				}
-				var macWordNavigation = #if (mac || ios)
-					event.modifiers.contains(UiModifier.Alt) &&
-					!event.modifiers.contains(UiModifier.Control);
-				#else
-					false;
-				#end
-				var wordNavigation = #if (mac || ios)
-					macWordNavigation;
-				#else
-					event.modifiers.contains(UiModifier.Control);
-				#end
-				if (additionalSelections.length > 0 && onNavigationIntent != null) {
-					var navigation:Null<TextNavigationIntent> = switch (event.key) {
-						case UiKey.Left: #if (mac || ios) event.modifiers.contains(UiModifier.Super) ? LineBoundary(false, extend) : #end wordNavigation ? Word(-1, extend, macWordNavigation) : Character(-1, extend);
-						case UiKey.Right: #if (mac || ios) event.modifiers.contains(UiModifier.Super) ? LineBoundary(true, extend) : #end wordNavigation ? Word(1, extend, macWordNavigation) : Character(1, extend);
-						case UiKey.Up: wordNavigation ? Paragraph(-1, extend, macWordNavigation) :
-							multiline ? VisualLine(-1, extend) : null;
-						case UiKey.Down: wordNavigation ? Paragraph(1, extend, macWordNavigation) :
-							multiline ? VisualLine(1, extend) : null;
-						case UiKey.PageUp: multiline ? VisualLine(pageStep(editor, editorContent, -1), extend) : null;
-						case UiKey.PageDown: multiline ? VisualLine(pageStep(editor, editorContent, 1), extend) : null;
-						case UiKey.Home: LineBoundary(false, extend);
-						case UiKey.End: LineBoundary(true, extend);
-						case _: null;
-					};
-					#if (mac || ios)
-					if (event.modifiers.contains(UiModifier.Super) && event.key == UiKey.Up)
-						navigation = DocumentBoundary(false, extend);
-					else if (event.modifiers.contains(UiModifier.Super) && event.key == UiKey.Down)
-						navigation = DocumentBoundary(true, extend);
-					#end
-					if (command && (event.key == UiKey.Home || event.key == UiKey.End))
-						navigation = DocumentBoundary(event.key == UiKey.End, extend);
-					if (navigation != null && onNavigationIntent(navigation, editor.layout)) {
-						refreshState();
-						editor.resetCaretBlink(Sys.time());
-						event.preventDefault();
-						return;
-					}
-				}
-				if (!readOnly) {
-					var consumed = event.key == UiKey.Backspace ? delegateEdit(wordNavigation ? DeleteWordBackward(macWordNavigation) : DeleteBackward) :
-						event.key == UiKey.Delete ? delegateEdit(wordNavigation ? DeleteWordForward(macWordNavigation) : DeleteForward) :
-						event.key == UiKey.Enter && multiline ? delegateEdit(Insert("\n")) : false;
-					if (consumed) { event.preventDefault(); return; }
-				}
-				var handled = true;
-				var changed = false;
-				var textEdited = false;
-				var previousRevision = editor.documentRevision();
-				// Select-all is exactly Ctrl+A (Cmd+A on macOS); Shift/Alt variants belong to the application keymap.
-				if (command && event.key == UiKey.A && (!event.modifiers.contains(UiModifier.Shift) && !event.modifiers.contains(UiModifier.Alt)))
-					changed = editor.selectAll();
-				else if (command && event.key == UiKey.C)
-					copyCurrentSelection(context, editor);
-				else if (command && event.key == UiKey.X) {
-					copyCurrentSelection(context, editor);
-					if (!readOnly && delegateEdit(Insert(""))) { event.preventDefault(); return; }
-					if (!readOnly) {
-						changed = editor.replace(editor.selectionStart, editor.selectionEnd, "");
-						textEdited = true;
-					}
-				} else if (command && event.key == UiKey.V) {
-					if (readOnly)
-						handled = false;
-					else
-						context.clipboard.readText(function(pasted) {
-							if (editor.isDisposed() || !editor.focused)
-								return;
-							if (delegateEdit(Paste(pasted))) return;
-							var beforePaste = editor.documentRevision();
-							if (editor.insert(pasted, TextEditorHistoryKind.Paste)) {
-								editor.resetCaretBlink(Sys.time());
-								publishTextChange(beforePaste);
-							}
-						});
-				}
-				#if (mac || ios)
-				else if (event.modifiers.contains(UiModifier.Super) && event.key == UiKey.Left)
-					changed = editor.moveCaretToLineBoundary(false, extend);
-				else if (event.modifiers.contains(UiModifier.Super) && event.key == UiKey.Right)
-					changed = editor.moveCaretToLineBoundary(true, extend);
-				#end
-				else if (wordNavigation && event.key == UiKey.Left)
-					changed = editor.moveCaretByWord(-1, extend, macWordNavigation);
-				else if (wordNavigation && event.key == UiKey.Right)
-					changed = editor.moveCaretByWord(1, extend, macWordNavigation);
-				else if (wordNavigation && event.key == UiKey.Up)
-					changed = editor.moveCaretByParagraph(-1, extend, macWordNavigation);
-				else if (wordNavigation && event.key == UiKey.Down)
-					changed = editor.moveCaretByParagraph(1, extend, macWordNavigation);
-				else if (multiline && event.key == UiKey.PageUp)
-					changed = editor.moveCaretVertically(pageStep(editor, editorContent, -1), extend);
-				else if (multiline && event.key == UiKey.PageDown)
-					changed = editor.moveCaretVertically(pageStep(editor, editorContent, 1), extend);
-				else if (multiline && event.key == UiKey.Up)
-					changed = editor.moveCaretVertically(-1, extend);
-				else if (multiline && event.key == UiKey.Down)
-					changed = editor.moveCaretVertically(1, extend);
-				#if (mac || ios)
-				else if (event.modifiers.contains(UiModifier.Super) && event.key == UiKey.Up)
-					changed = editor.placeCaret(0, extend);
-				else if (event.modifiers.contains(UiModifier.Super) && event.key == UiKey.Down)
-					changed = editor.placeCaret(editor.documentLength(), extend);
-				#end
-				else if (event.key == UiKey.Left)
-					changed = editor.moveCaret(-1, extend);
-				else if (event.key == UiKey.Right)
-					changed = editor.moveCaret(1, extend);
-				else if (event.key == UiKey.Home)
-					changed = multiline && !command ? editor.moveCaretToLineBoundary(false, extend) :
-						editor.placeCaret(0, extend);
-				else if (event.key == UiKey.End)
-					changed = multiline && !command ? editor.moveCaretToLineBoundary(true, extend) :
-						editor.placeCaret(editor.documentLength(), extend);
-				else if (event.key == UiKey.Backspace) {
-					if (readOnly)
-						handled = false;
-					else {
-						changed = wordNavigation ? editor.deleteWord(-1, macWordNavigation) : editor.deleteBackward();
-						textEdited = true;
-					}
-				} else if (event.key == UiKey.Delete) {
-					if (readOnly)
-						handled = false;
-					else {
-						changed = wordNavigation ? editor.deleteWord(1, macWordNavigation) : editor.deleteForward();
-						textEdited = true;
-					}
-				} else if (event.key == UiKey.Enter) {
-					if (multiline) {
-						if (readOnly)
-							handled = false;
-						else {
-							changed = editor.insert("\n");
-							textEdited = true;
-						}
-					} else if (onSubmit != null)
-						onSubmit(editor.layoutText());
-				} else
-					handled = false;
-				if (changed) {
-					if (textEdited)
-						publishTextChange(previousRevision);
-					else
-						updateState(!(command && event.key == UiKey.A));
-				}
-				if (handled) {
-					editor.resetCaretBlink(Sys.time());
-					event.preventDefault();
-				}
-			};
-			node.on(UiEventKind.KeyDown, handleKey);
-			node.on(UiEventKind.KeyRepeat, handleKey);
+    var handleKey = function(event:UiEvent) {
+      if (!enabled) return;
+      // Ctrl+Alt arrows belong to application navigation, including its
+      // Shift variant. Leave them unconsumed for the command route.
+      if ((event.modifiers & (UiModifier.Control | UiModifier.Alt)) == (UiModifier.Control | UiModifier.Alt)
+        && (event.key == UiKey.Left
+        || event.key == UiKey.Right || event.key == UiKey.Up || event.key == UiKey.Down)) return;
+      var extend = event.modifiers.contains(UiModifier.Shift);
+      var command = (event.modifiers.contains(UiModifier.Control) || event.modifiers.contains(UiModifier.Super));
+      var action:Null<TextEditorAction> = event.key == UiKey.Escape ? ClearSelection : command
+        && event.key == UiKey.C ? Copy : command && event.key == UiKey.X ? Cut : extend && !command && event.key
+        == UiKey.Delete ? Cut : command && event.key == UiKey.V ? Paste : event.modifiers.contains(UiModifier.Control)
+        && event.key == UiKey.Insert ? Copy : extend && event.key == UiKey.Insert ? Paste : command
+        && event.key == UiKey.Enter ? (extend ? InsertLineAbove : InsertLineBelow) : null;
+      if (action != null && (!readOnly
+        || action == Copy || action == ClearSelection) && onEditorAction != null && onEditorAction(action)) {
+        if (document != null) editor.syncDocument(document);
+        if (selectionProvider != null) editor.setAnchoredSelection(selectionProvider());
+        refreshState(false);
+        event.preventDefault();
+        return;
+      }
+      if (command && (event.key == UiKey.Z || event.key == UiKey.Y)) {
+        if (historyManagedExternally) return;
+        var previousRevision = editor.documentRevision();
+        var changed = !readOnly && (event.key == UiKey.Y || extend ? editor.redo() : editor.undo());
+        if (changed) publishTextChange(previousRevision);
+        editor.resetCaretBlink(Sys.time());
+        event.preventDefault();
+        return;
+      }
+      var macWordNavigation =
+      #if (mac || ios)
+      event.modifiers.contains(UiModifier.Alt) && !event.modifiers.contains(UiModifier.Control);
+      #else
+      false;
+      #end
+      var wordNavigation =
+      #if (mac || ios)
+      macWordNavigation;
+      #else
+      event.modifiers.contains(UiModifier.Control);
+      #end
+      if (additionalSelections.length > 0 && onNavigationIntent != null) {
+        var navigation:Null<TextNavigationIntent> = switch (event.key) {
+          case UiKey.Left:
+            #if (mac || ios)
+            event.modifiers.contains(UiModifier.Super) ? LineBoundary(false, extend) :
+            #end
+            wordNavigation ? Word(-1, extend, macWordNavigation) : Character(-1, extend);
+          case UiKey.Right:
+            #if (mac || ios)
+            event.modifiers.contains(UiModifier.Super) ? LineBoundary(true, extend) :
+            #end
+            wordNavigation ? Word(1, extend, macWordNavigation) : Character(1, extend);
+          case UiKey.Up:
+            wordNavigation ? Paragraph(-1, extend, macWordNavigation) : multiline ? VisualLine(-1, extend) : null;
+          case UiKey.Down:
+            wordNavigation ? Paragraph(1, extend, macWordNavigation) : multiline ? VisualLine(1, extend) : null;
+          case UiKey.PageUp:
+            multiline ? VisualLine(pageStep(editor, editorContent, -1), extend) : null;
+          case UiKey.PageDown:
+            multiline ? VisualLine(pageStep(editor, editorContent, 1), extend) : null;
+          case UiKey.Home:
+            LineBoundary(false, extend);
+          case UiKey.End:
+            LineBoundary(true, extend);
+          case _:
+            null;
+        };
+        #if (mac || ios)
+        if (event.modifiers.contains(UiModifier.Super) && event.key == UiKey.Up) navigation = DocumentBoundary(
+          false,
+          extend
+        );
+        else if (event.modifiers.contains(UiModifier.Super) && event.key == UiKey.Down) navigation = DocumentBoundary(
+          true,
+          extend
+        );
+        #end
+        if (command && (event.key == UiKey.Home || event.key == UiKey.End)) navigation = DocumentBoundary(
+          event.key == UiKey.End,
+          extend
+        );
+        if (navigation != null && onNavigationIntent(navigation, editor.layout)) {
+          refreshState();
+          editor.resetCaretBlink(Sys.time());
+          event.preventDefault();
+          return;
+        }
+      }
+      if (!readOnly) {
+        var consumed = event.key
+          == UiKey.Backspace ? delegateEdit(wordNavigation ? DeleteWordBackward(macWordNavigation) : DeleteBackward)
+          : event.key == UiKey.Delete ? delegateEdit(wordNavigation ? DeleteWordForward(macWordNavigation)
+          : DeleteForward) : event.key == UiKey.Enter && multiline ? delegateEdit(Insert("\n")) : false;
+        if (consumed) {
+          event.preventDefault();
+          return;
+        }
+      }
+      var handled = true;
+      var changed = false;
+      var textEdited = false;
+      var previousRevision = editor.documentRevision();
+      // Select-all is exactly Ctrl+A (Cmd+A on macOS); Shift/Alt variants belong to the application keymap.
+      if (command && event.key == UiKey.A && (!event.modifiers.contains(UiModifier.Shift)
+        && !event.modifiers.contains(UiModifier.Alt))) changed = editor.selectAll();
+      else if (command && event.key == UiKey.C) copyCurrentSelection(context, editor);
+      else if (command && event.key == UiKey.X) {
+        copyCurrentSelection(context, editor);
+        if (!readOnly && delegateEdit(Insert(""))) {
+          event.preventDefault();
+          return;
+        }
+        if (!readOnly) {
+          changed = editor.replace(editor.selectionStart, editor.selectionEnd, "");
+          textEdited = true;
+        }
+      } else if (command && event.key == UiKey.V) {
+        if (readOnly) handled = false;
+        else context.clipboard.readText(function(pasted) {
+          if (editor.isDisposed() || !editor.focused) return;
+          if (delegateEdit(Paste(pasted))) return;
+          var beforePaste = editor.documentRevision();
+          if (editor.insert(pasted, TextEditorHistoryKind.Paste)) {
+            editor.resetCaretBlink(Sys.time());
+            publishTextChange(beforePaste);
+          }
+        }
+        );
+      }
+      #if (mac || ios)
+      else if (event.modifiers.contains(UiModifier.Super)
+        && event.key == UiKey.Left) changed = editor.moveCaretToLineBoundary(
+          false,
+          extend
+        );
+      else if (event.modifiers.contains(UiModifier.Super)
+        && event.key == UiKey.Right) changed = editor.moveCaretToLineBoundary(
+          true,
+          extend
+        );
+      #end
+      else if (wordNavigation && event.key == UiKey.Left) changed = editor.moveCaretByWord(
+        -1,
+        extend,
+        macWordNavigation
+      );
+      else if (wordNavigation && event.key == UiKey.Right) changed = editor.moveCaretByWord(
+        1,
+        extend,
+        macWordNavigation
+      );
+      else if (wordNavigation && event.key == UiKey.Up) changed = editor.moveCaretByParagraph(
+        -1,
+        extend,
+        macWordNavigation
+      );
+      else if (wordNavigation && event.key == UiKey.Down) changed = editor.moveCaretByParagraph(
+        1,
+        extend,
+        macWordNavigation
+      );
+      else if (multiline && event.key == UiKey.PageUp) changed = editor.moveCaretVertically(
+        pageStep(editor, editorContent, -1),
+        extend
+      );
+      else if (multiline && event.key == UiKey.PageDown) changed = editor.moveCaretVertically(
+        pageStep(editor, editorContent, 1),
+        extend
+      );
+      else if (multiline && event.key == UiKey.Up) changed = editor.moveCaretVertically(-1, extend);
+      else if (multiline && event.key == UiKey.Down) changed = editor.moveCaretVertically(1, extend);
+      #if (mac || ios)
+      else if (event.modifiers.contains(UiModifier.Super) && event.key == UiKey.Up) changed = editor.placeCaret(
+        0,
+        extend
+      );
+      else if (event.modifiers.contains(UiModifier.Super) && event.key == UiKey.Down) changed = editor.placeCaret(
+        editor.documentLength(),
+        extend
+      );
+      #end
+      else if (event.key == UiKey.Left) changed = editor.moveCaret(-1, extend);
+      else if (event.key == UiKey.Right) changed = editor.moveCaret(1, extend);
+      else if (event.key == UiKey.Home) changed = multiline && !command ? editor.moveCaretToLineBoundary(false,
+        extend) : editor.placeCaret(
+          0,
+          extend
+        );
+      else if (event.key == UiKey.End) changed = multiline && !command ? editor.moveCaretToLineBoundary(true,
+        extend) : editor.placeCaret(
+          editor.documentLength(),
+          extend
+        );
+      else if (event.key == UiKey.Backspace) {
+        if (readOnly) handled = false;
+        else {
+          changed = wordNavigation ? editor.deleteWord(-1, macWordNavigation) : editor.deleteBackward();
+          textEdited = true;
+        }
+      } else if (event.key == UiKey.Delete) {
+        if (readOnly) handled = false;
+        else {
+          changed = wordNavigation ? editor.deleteWord(1, macWordNavigation) : editor.deleteForward();
+          textEdited = true;
+        }
+      } else if (event.key == UiKey.Enter) {
+        if (multiline) {
+          if (readOnly) handled = false;
+          else {
+            changed = editor.insert("\n");
+            textEdited = true;
+          }
+        } else if (onSubmit != null) onSubmit(editor.layoutText());
+      } else handled = false;
+      if (changed) {
+        if (textEdited) publishTextChange(previousRevision);
+        else updateState(!(command && event.key == UiKey.A));
+      }
+      if (handled) {
+        editor.resetCaretBlink(Sys.time());
+        event.preventDefault();
+      }
+    };
+    node.on(UiEventKind.KeyDown, handleKey);
+    node.on(UiEventKind.KeyRepeat, handleKey);
 
-			if (multiline && readOnly)
-				node.on(UiEventKind.Scroll, function(event) {
-					if (scrollReadOnly(editor, event.deltaY)) {
-						refresh();
-						event.stopPropagation();
-					}
-				});
+    if (multiline && readOnly) node.on(UiEventKind.Scroll, function(event) {
+      if (scrollReadOnly(editor, event.deltaY)) {
+        refresh();
+        event.stopPropagation();
+      }
+    }
+    );
 
-			node.on(UiEventKind.TextInput, function(event) {
-				if (enabled && !readOnly && delegateEdit(Insert(event.text))) return;
-				var previousRevision = editor.documentRevision();
-				if (enabled && !readOnly && editor.insert(event.text)) {
-					editor.resetCaretBlink(Sys.time());
-					publishTextChange(previousRevision);
-				}
-			});
-			node.on(UiEventKind.TextEdit, function(event) {
-				if (!enabled || readOnly || event.data == null)
-					return;
-				var edit:TextEdit = cast event.data;
-				// Windows sends Backspace/Delete as both a key event and a text-edit
-				// transaction. handleKey owns deletion; applying this transaction too
-				// would delete a second character, potentially at a stale native caret.
-				if (Sys.systemName() == "Windows" && edit.action == TextEditAction.Delete) return;
-				var previousRevision = editor.documentRevision();
-				if (editor.applyTextEdit(edit)) {
-					editor.resetCaretBlink(Sys.time());
-					publishTextChange(previousRevision);
-				}
-			});
-			node.on(UiEventKind.AccessibilitySetValue, function(event) {
-				var previousRevision = editor.documentRevision();
-				if (enabled && !readOnly && editor.replace(0, editor.documentLength(), event.text)) {
-					editor.resetCaretBlink(Sys.time());
-					publishTextChange(previousRevision);
-				}
-			});
-			node.on(UiEventKind.AccessibilitySetSelection, function(event) {
-				if (!enabled || event.data == null)
-					return;
-				var request:AccessibilityActionData = cast event.data;
-				if (editor.setSelection(request.selectionStart, request.selectionEnd)) {
-					editor.resetCaretBlink(Sys.time());
-					updateState();
-				}
-			});
-			return node;
-	}
+    node.on(UiEventKind.TextInput, function(event) {
+      if (enabled && !readOnly && delegateEdit(Insert(event.text))) return;
+      var previousRevision = editor.documentRevision();
+      if (enabled && !readOnly && editor.insert(event.text)) {
+        editor.resetCaretBlink(Sys.time());
+        publishTextChange(previousRevision);
+      }
+    }
+    );
+    node.on(UiEventKind.TextEdit, function(event) {
+      if (!enabled || readOnly || event.data == null) return;
+      var edit:TextEdit = cast event.data;
+      // Windows sends Backspace/Delete as both a key event and a text-edit
+      // transaction. handleKey owns deletion; applying this transaction too
+      // would delete a second character, potentially at a stale native caret.
+      if (Sys.systemName() == "Windows" && edit.action == TextEditAction.Delete) return;
+      var previousRevision = editor.documentRevision();
+      if (editor.applyTextEdit(edit)) {
+        editor.resetCaretBlink(Sys.time());
+        publishTextChange(previousRevision);
+      }
+    }
+    );
+    node.on(UiEventKind.AccessibilitySetValue, function(event) {
+      var previousRevision = editor.documentRevision();
+      if (enabled && !readOnly && editor.replace(0, editor.documentLength(), event.text)) {
+        editor.resetCaretBlink(Sys.time());
+        publishTextChange(previousRevision);
+      }
+    }
+    );
+    node.on(UiEventKind.AccessibilitySetSelection, function(event) {
+      if (!enabled || event.data == null) return;
+      var request:AccessibilityActionData = cast event.data;
+      if (editor.setSelection(request.selectionStart, request.selectionEnd)) {
+        editor.resetCaretBlink(Sys.time());
+        updateState();
+      }
+    }
+    );
+    return node;
+  }
 
-	/** Publishes the focused caret and visible text-input geometry. */
-	function syncCursor(editor:TextEditorState, context:BuildContext, id:haxeon.ui.core.WidgetId, geometry:ResolvedLayoutItem):Void {
-		// Resolved callbacks run on every frame: without a focused editor or a listener, nobody uses the caret.
-		if (!editor.focused && onCaretRect == null && onDiagnostics == null)
-			return;
-		var caret = editor.layout.caretAt(editor.selectionFocusLayoutOffset, editor.selectionFocusAffinity);
-		var topX = geometry.x + caret.x + caret.ascender * caret.slope;
-		var topY = geometry.y + caret.y + caret.ascender - editor.scrollOffsetY;
-		var bottomX = geometry.x + caret.x + caret.descender * caret.slope;
-		var bottomY = geometry.y + caret.y + caret.descender - editor.scrollOffsetY;
-		var transform:Transform2D = cast geometry.transform;
-		var screenTopX = transform.a * topX + transform.c * topY + transform.tx;
-		var screenTopY = transform.b * topX + transform.d * topY + transform.ty;
-		var screenBottomX = transform.a * bottomX + transform.c * bottomY + transform.tx;
-		var screenBottomY = transform.b * bottomX + transform.d * bottomY + transform.ty;
-		var caretRect = new Rect(Math.min(screenTopX, screenBottomX), Math.min(screenTopY, screenBottomY),
-			Math.max(1.0, absolute(screenBottomX - screenTopX)),
-			Math.max(1.0, absolute(screenBottomY - screenTopY)));
-		var caretHandler = onCaretRect;
-		if (caretHandler != null) {
-			var clip = geometry.clipBounds;
-			var visible = geometry.visible && caretRect.x < clip.x + clip.width &&
-				caretRect.x + caretRect.width > clip.x && caretRect.y < clip.y + clip.height &&
-				caretRect.y + caretRect.height > clip.y;
-			caretHandler(visible ? caretRect : null);
-		}
-		// Passing an optional value to a listener is an escape boundary; avoid it when no listener exists.
-		if (onDiagnostics != null) publishDiagnostics(editor, context, caretRect);
-		if (!editor.focused || !context.textInput.isOwner(id) || context.platformSurface == null ||
-			context.platformSurface.isDisposed() ||
-			(context.textInput.platformChecked && !context.textInput.platformSupported))
-			return;
-		// The field can be document-sized inside an ancestor ScrollView. Its
-		// content height is not the viewport: only publish geometry inside
-		// the resolved ancestor clip, converted back into local text space.
-		var visible = geometry.visibleLocalBounds();
-		var visibleTop = editor.scrollOffsetY + visible.y;
-		var visibleBottom = visibleTop + visible.height;
-		// The selection is reported clamped into the text-input window, and its rectangles must lie within what
-		// is reported: those reaching past a clamped edge are left out.
-		var window = editor.surroundingText(2048, 2048);
-		var selectionGeometry:Array<TextRangeRect> = [];
-		if (window.selectionStart != window.selectionEnd)
-			for (rect in editor.layout.selectionRangeRects(editor.anchorPosition(),
-				editor.focusPosition(), visibleTop, visibleBottom))
-				if (rect.start >= window.selectionStart && rect.end <= window.selectionEnd)
-					selectionGeometry.push(transformTextRangeRect(rect, geometry, transform,
-						editor.scrollOffsetY));
-		var compositionGeometry:Array<TextRangeRect> = [];
-		for (rect in editor.compositionRangeRects(visibleTop, visibleBottom))
-			compositionGeometry.push(transformTextRangeRect(rect, geometry, transform,
-				editor.scrollOffsetY));
-		context.textInput.update(window, editor.documentLength(),
-			window.selectionStart, window.selectionEnd, editor.compositionStart,
-			editor.compositionEnd, 0,
-			multiline ? nativekit.ffi.NativeKitTypes.TextInputFlags.Multiline : nativekit.ffi.NativeKitTypes.TextInputFlags.empty(),
-			caretRect, selectionGeometry, compositionGeometry);
-	}
+  /** Publishes the focused caret and visible text-input geometry. */
+  function syncCursor(
+    editor:TextEditorState,
+    context:BuildContext,
+    id:haxeon.ui.core.WidgetId,
+    geometry:ResolvedLayoutItem
+  ):Void {
+    // Resolved callbacks run on every frame: without a focused editor or a listener, nobody uses the caret.
+    if (!editor.focused && onCaretRect == null && onDiagnostics == null) return;
+    var caret = editor.layout.caretAt(editor.selectionFocusLayoutOffset, editor.selectionFocusAffinity);
+    var topX = geometry.x + caret.x + caret.ascender * caret.slope;
+    var topY = geometry.y + caret.y + caret.ascender - editor.scrollOffsetY;
+    var bottomX = geometry.x + caret.x + caret.descender * caret.slope;
+    var bottomY = geometry.y + caret.y + caret.descender - editor.scrollOffsetY;
+    var transform:Transform2D = cast geometry.transform;
+    var screenTopX = transform.a * topX + transform.c * topY + transform.tx;
+    var screenTopY = transform.b * topX + transform.d * topY + transform.ty;
+    var screenBottomX = transform.a * bottomX + transform.c * bottomY + transform.tx;
+    var screenBottomY = transform.b * bottomX + transform.d * bottomY + transform.ty;
+    var caretRect = new Rect(
+      Math.min(screenTopX, screenBottomX),
+      Math.min(screenTopY, screenBottomY),
+      Math.max(1.0, absolute(screenBottomX - screenTopX)),
+      Math.max(1.0, absolute(screenBottomY - screenTopY))
+    );
+    var caretHandler = onCaretRect;
+    if (caretHandler != null) {
+      var clip = geometry.clipBounds;
+      var visible = geometry.visible && caretRect.x < clip.x + clip.width && caretRect.x + caretRect.width > clip.x
+        && caretRect.y < clip.y + clip.height && caretRect.y + caretRect.height > clip.y;
+      caretHandler(visible ? caretRect : null);
+    }
+    // Passing an optional value to a listener is an escape boundary; avoid it when no listener exists.
+    if (onDiagnostics != null) publishDiagnostics(editor, context, caretRect);
+    if (!editor.focused
+      || !context.textInput.isOwner(id) || context.platformSurface == null || context.platformSurface.isDisposed()
+      || (context.textInput.platformChecked && !context.textInput.platformSupported)) return;
+    // The field can be document-sized inside an ancestor ScrollView. Its
+    // content height is not the viewport: only publish geometry inside
+    // the resolved ancestor clip, converted back into local text space.
+    var visible = geometry.visibleLocalBounds();
+    var visibleTop = editor.scrollOffsetY + visible.y;
+    var visibleBottom = visibleTop + visible.height;
+    // The selection is reported clamped into the text-input window, and its rectangles must lie within what
+    // is reported: those reaching past a clamped edge are left out.
+    var window = editor.surroundingText(2048, 2048);
+    var selectionGeometry:Array<TextRangeRect> = [];
+    if (window.selectionStart != window.selectionEnd) for (rect in editor.layout.selectionRangeRects(
+      editor.anchorPosition(),
+      editor.focusPosition(),
+      visibleTop,
+      visibleBottom
+    )) if (rect.start >= window.selectionStart
+      && rect.end <= window.selectionEnd) selectionGeometry.push(transformTextRangeRect(
+        rect,
+        geometry,
+        transform,
+        editor.scrollOffsetY
+      ));
+    var compositionGeometry:Array<TextRangeRect> = [];
+    for (rect in editor.compositionRangeRects(visibleTop,
+      visibleBottom)) compositionGeometry.push(transformTextRangeRect(
+        rect,
+        geometry,
+        transform,
+        editor.scrollOffsetY
+      ));
+    context.textInput.update(
+      window,
+      editor.documentLength(),
+      window.selectionStart,
+      window.selectionEnd,
+      editor.compositionStart,
+      editor.compositionEnd,
+      0,
+      multiline
+      ? nativekit.ffi.NativeKitTypes.TextInputFlags.Multiline : nativekit.ffi.NativeKitTypes.TextInputFlags.empty(),
+      caretRect,
+      selectionGeometry,
+      compositionGeometry
+    );
+  }
 
-	function publishSelection(editor:TextEditorState):Void {
-		var handler = onSelectionChange;
-		if (handler != null)
-			handler(new TextSelection(editor.selectionAnchor, editor.selectionFocus,
-				editor.selectionAnchorAffinity, editor.selectionFocusAffinity));
-	}
+  function publishSelection(editor:TextEditorState):Void {
+    var handler = onSelectionChange;
+    if (handler != null) handler(new TextSelection(
+      editor.selectionAnchor,
+      editor.selectionFocus,
+      editor.selectionAnchorAffinity,
+      editor.selectionFocusAffinity
+    ));
+  }
 
-	function copyCurrentSelection(context:BuildContext, editor:TextEditorState):Bool {
-		if (selectionTextProvider != null) {
-			var selectedText = selectionTextProvider();
-			if (selectedText == null) return false;
-			context.clipboard.writeText(selectedText);
-		} else {
-			if (editor.selectionStart == editor.selectionEnd) return false;
-			copySelection(context.clipboard, editor);
-		}
-		return true;
-	}
+  function copyCurrentSelection(context:BuildContext, editor:TextEditorState):Bool {
+    if (selectionTextProvider != null) {
+      var selectedText = selectionTextProvider();
+      if (selectedText == null) return false;
+      context.clipboard.writeText(selectedText);
+    } else {
+      if (editor.selectionStart == editor.selectionEnd) return false;
+      copySelection(context.clipboard, editor);
+    }
+    return true;
+  }
 
-	function publishDiagnostics(editor:TextEditorState, context:BuildContext, caretRect:Null<Rect>):Void {
-		if (onDiagnostics == null) return;
-		var compositionText = editor.compositionStart >= 0 && editor.compositionEnd >= editor.compositionStart
-			? editor.documentOffsets().sliceCodepoints(editor.compositionStart, editor.compositionEnd) : "";
-		onDiagnostics(new TextEditorDiagnostics(key, label == null ? key : label,
-			editor.focused, editor.selectionStart, editor.selectionEnd, editor.selectionFocus,
-			editor.compositionStart, editor.compositionEnd, compositionText, caretRect,
-			context.textInput.platformSupported, context.textInput.platformActive));
-	}
+  function publishDiagnostics(editor:TextEditorState, context:BuildContext, caretRect:Null<Rect>):Void {
+    if (onDiagnostics == null) return;
+    var compositionText = editor.compositionStart >= 0
+      && editor.compositionEnd >= editor.compositionStart ? editor.documentOffsets().sliceCodepoints(
+        editor.compositionStart,
+        editor.compositionEnd
+      ) : "";
+    onDiagnostics(new TextEditorDiagnostics(
+      key,
+      label == null ? key : label,
+      editor.focused,
+      editor.selectionStart,
+      editor.selectionEnd,
+      editor.selectionFocus,
+      editor.compositionStart,
+      editor.compositionEnd,
+      compositionText,
+      caretRect,
+      context.textInput.platformSupported,
+      context.textInput.platformActive
+    ));
+  }
 
-	function pageStep(editor:TextEditorState, editorContent:RenderNode, direction:Int):Int {
-		var height = pageHeightProvider != null ? pageHeightProvider() :
-			editorContent.resolved == null ? 0.0 : editorContent.resolved.height;
-		var caret = editor.layout.caretAt(editor.selectionFocusLayoutOffset, editor.selectionFocusAffinity);
-		var lineHeight = editor.layout.paragraphStyle.lineHeight;
-		var step = lineHeight == null ? Math.abs(caret.descender - caret.ascender) : lineHeight;
-		// Keep one line of overlap between consecutive pages.
-		return direction * (Math.isFinite(height) && height > 0
-			? Std.int(Math.max(1, Math.floor(height / Math.max(1.0, step)) - 1)) : 1);
-	}
+  function pageStep(editor:TextEditorState, editorContent:RenderNode, direction:Int):Int {
+    var height = pageHeightProvider
+      != null ? pageHeightProvider() : editorContent.resolved == null ? 0.0 : editorContent.resolved.height;
+    var caret = editor.layout.caretAt(editor.selectionFocusLayoutOffset, editor.selectionFocusAffinity);
+    var lineHeight = editor.layout.paragraphStyle.lineHeight;
+    var step = lineHeight == null ? Math.abs(caret.descender - caret.ascender) : lineHeight;
+    // Keep one line of overlap between consecutive pages.
+    return direction * (Math.isFinite(height) && height > 0 ? Std.int(Math.max(
+      1,
+      Math.floor(height / Math.max(1.0, step)) - 1
+    )) : 1);
+  }
 
-	/** Applies a wheel delta and re-pins to the tail when the view reaches the end again. */
-	static function scrollReadOnly(editor:TextEditorState, deltaY:Float):Bool {
-		var changed = editor.scrollBy(deltaY);
-		if (changed)
-			editor.tailFollowing = editor.isScrolledToEnd();
-		return changed;
-	}
+  /** Applies a wheel delta and re-pins to the tail when the view reaches the end again. */
+  static function scrollReadOnly(editor:TextEditorState, deltaY:Float):Bool {
+    var changed = editor.scrollBy(deltaY);
+    if (changed) editor.tailFollowing = editor.isScrolledToEnd();
+    return changed;
+  }
 
-	static function acquireState(context:BuildContext, id:haxeon.ui.core.WidgetId,
-			value:String, textStyle:TextStyle, paragraphStyle:ParagraphStyle,
-			document:Null<TextDocument>):State<TextEditorState> {
-		if (context.fonts == null || context.fonts.isDisposed())
-			throw "Text fields require fonts on their build context";
-		if (context.stateStore.contains(id))
-			return context.existingState(id);
-		var fonts = context.fonts;
-		return context.resourceState(id,
-			function() {
-				return new TextEditorState(cast fonts, value, textStyle, paragraphStyle, document);
-			},
-			function(editor:TextEditorState) { editor.dispose(); });
-	}
+  static function acquireState(
+    context:BuildContext,
+    id:haxeon.ui.core.WidgetId,
+    value:String,
+    textStyle:TextStyle,
+    paragraphStyle:ParagraphStyle,
+    document:Null<TextDocument>
+  ):State<TextEditorState> {
+    if (context.fonts == null || context.fonts.isDisposed()) throw "Text fields require fonts on their build context";
+    if (context.stateStore.contains(id)) return context.existingState(id);
+    var fonts = context.fonts;
+    return context.resourceState(id, function() {
+      return new TextEditorState(cast fonts, value, textStyle, paragraphStyle, document);
+    }, function(editor:TextEditorState) {
+      editor.dispose();
+    }
+    );
+  }
 
-	static function copySelection(clipboard:haxeon.ui.core.ClipboardService,
-			editor:TextEditorState):Void {
-		if (editor.selectionStart != editor.selectionEnd)
-			clipboard.writeText(editor.documentOffsets().sliceCodepoints(editor.selectionStart,
-				editor.selectionEnd));
-	}
+  static function copySelection(clipboard:haxeon.ui.core.ClipboardService, editor:TextEditorState):Void {
+    if (editor.selectionStart != editor.selectionEnd) clipboard.writeText(editor.documentOffsets().sliceCodepoints(
+      editor.selectionStart,
+      editor.selectionEnd
+    ));
+  }
 
-	static function paintSelection(canvas:Canvas, editor:TextEditorState,
-			active:Bool, theme:haxeon.ui.theme.Theme, additional:Array<TextSelection>,
-			minY:Float, maxY:Float):Void {
-		canvas.translate(0.0, -editor.scrollOffsetY);
-		for (selection in additional)
-			for (rect in editor.layout.selectionRects(new TextPosition(selection.anchor, selection.anchorAffinity),
-				new TextPosition(selection.focus, selection.focusAffinity), minY, maxY))
-				canvas.fillRectIfPositive(rect, active ? theme.textSelection : theme.textSelectionInactive);
-		if (editor.selectionStart != editor.selectionEnd) {
-			for (rect in editor.layout.selectionRects(editor.anchorPosition(), editor.focusPosition(), minY, maxY))
-				canvas.fillRectIfPositive(rect, active ? theme.textSelection : theme.textSelectionInactive);
-		}
-	}
+  static function paintSelection(
+    canvas:Canvas,
+    editor:TextEditorState,
+    active:Bool,
+    theme:haxeon.ui.theme.Theme,
+    additional:Array<TextSelection>,
+    minY:Float,
+    maxY:Float
+  ):Void {
+    canvas.translate(0.0, -editor.scrollOffsetY);
+    for (selection in additional) for (rect in editor.layout.selectionRects(
+      new TextPosition(selection.anchor, selection.anchorAffinity),
+      new TextPosition(selection.focus, selection.focusAffinity),
+      minY,
+      maxY
+    )) canvas.fillRectIfPositive(
+      rect,
+      active ? theme.textSelection : theme.textSelectionInactive
+    );
+    if (editor.selectionStart != editor.selectionEnd) {
+      for (rect in editor.layout.selectionRects(editor.anchorPosition(),
+        editor.focusPosition(), minY, maxY)) canvas.fillRectIfPositive(
+          rect,
+          active ? theme.textSelection : theme.textSelectionInactive
+        );
+    }
+  }
 
-	static function paintEditorDecorations(canvas:Canvas, editor:TextEditorState,
-			active:Bool, theme:haxeon.ui.theme.Theme, timeSeconds:Float,
-			showCaret:Bool = true, ?additional:Array<TextSelection>):Void {
-		if (editor.scrollOffsetY != 0.0)
-			canvas.translate(0.0, -editor.scrollOffsetY);
-		if (active && editor.compositionStart >= 0 && editor.compositionStart != editor.compositionEnd) {
-			for (rect in editor.compositionRects())
-				canvas.fillRectIfPositive(new Rect(rect.x, rect.y + rect.height - 1.0, rect.width, 1.0),
-					Color.rgba(0.95, 0.75, 0.24, 1.0));
-		}
-		if (showCaret && active && additional != null && editor.isCaretVisible(timeSeconds))
-			for (selection in additional) if (selection.anchor == selection.focus) {
-				var caret = editor.layout.caretAt(selection.focus, selection.focusAffinity);
-				var topX = caret.x + caret.ascender * caret.slope;
-				var bottomX = caret.x + caret.descender * caret.slope;
-				canvas.fillRectIfPositive(new Rect(Math.min(topX, bottomX), caret.y + Math.min(caret.ascender, caret.descender),
-					Math.max(1.0, absolute(bottomX - topX)), Math.max(1.0, absolute(caret.descender - caret.ascender))), theme.textCaret);
-			}
-		if (showCaret && active && editor.selectionStart == editor.selectionEnd &&
-				editor.isCaretVisible(timeSeconds)) {
-			var caret = editor.layout.caretAt(editor.selectionFocusLayoutOffset, editor.selectionFocusAffinity);
-			var topX = caret.x + caret.ascender * caret.slope;
-			var topY = caret.y + caret.ascender;
-			var bottomX = caret.x + caret.descender * caret.slope;
-			var bottomY = caret.y + caret.descender;
-			var x = Math.min(topX, bottomX);
-			var y = Math.min(topY, bottomY);
-			var height = Math.max(1.0, absolute(bottomY - topY));
-			canvas.fillRectIfPositive(new Rect(x, y, Math.max(1.0, absolute(bottomX - topX)), height),
-				theme.textCaret);
-		}
-	}
+  static function paintEditorDecorations(
+    canvas:Canvas,
+    editor:TextEditorState,
+    active:Bool,
+    theme:haxeon.ui.theme.Theme,
+    timeSeconds:Float,
+    showCaret:Bool = true,
+    ?additional:Array<TextSelection>
+  ):Void {
+    if (editor.scrollOffsetY != 0.0) canvas.translate(0.0, -editor.scrollOffsetY);
+    if (active && editor.compositionStart >= 0 && editor.compositionStart != editor.compositionEnd) {
+      for (rect in editor.compositionRects()) canvas.fillRectIfPositive(
+        new Rect(rect.x, rect.y + rect.height - 1.0, rect.width, 1.0),
+        Color.rgba(0.95, 0.75, 0.24, 1.0)
+      );
+    }
+    if (showCaret && active && additional != null
+      && editor.isCaretVisible(timeSeconds)) for (selection in additional) if (selection.anchor == selection.focus) {
+      var caret = editor.layout.caretAt(selection.focus, selection.focusAffinity);
+      var topX = caret.x + caret.ascender * caret.slope;
+      var bottomX = caret.x + caret.descender * caret.slope;
+      canvas.fillRectIfPositive(
+        new Rect(
+          Math.min(topX, bottomX),
+          caret.y + Math.min(caret.ascender, caret.descender),
+          Math.max(1.0, absolute(bottomX - topX)),
+          Math.max(1.0, absolute(caret.descender - caret.ascender))
+        ),
+        theme.textCaret
+      );
+    }
+    if (showCaret && active && editor.selectionStart == editor.selectionEnd && editor.isCaretVisible(timeSeconds)) {
+      var caret = editor.layout.caretAt(editor.selectionFocusLayoutOffset, editor.selectionFocusAffinity);
+      var topX = caret.x + caret.ascender * caret.slope;
+      var topY = caret.y + caret.ascender;
+      var bottomX = caret.x + caret.descender * caret.slope;
+      var bottomY = caret.y + caret.descender;
+      var x = Math.min(topX, bottomX);
+      var y = Math.min(topY, bottomY);
+      var height = Math.max(1.0, absolute(bottomY - topY));
+      canvas.fillRectIfPositive(new Rect(x, y, Math.max(1.0, absolute(bottomX - topX)), height), theme.textCaret);
+    }
+  }
 
-	static inline function absolute(value:Float):Float
-		return value < 0.0 ? -value : value;
+  static inline function absolute(value:Float):Float return value < 0.0 ? -value : value;
 
-	static function transformTextRangeRect(rect:TextRangeRect, geometry:ResolvedLayoutItem,
-			transform:Transform2D, scrollOffsetY:Float):TextRangeRect {
-		var left = geometry.x + rect.x;
-		var top = geometry.y + rect.y - scrollOffsetY;
-		var right = left + rect.width;
-		var bottom = top + rect.height;
-		var x0 = transform.a * left + transform.c * top + transform.tx;
-		var y0 = transform.b * left + transform.d * top + transform.ty;
-		var x1 = transform.a * right + transform.c * top + transform.tx;
-		var y1 = transform.b * right + transform.d * top + transform.ty;
-		var x2 = transform.a * left + transform.c * bottom + transform.tx;
-		var y2 = transform.b * left + transform.d * bottom + transform.ty;
-		var x3 = transform.a * right + transform.c * bottom + transform.tx;
-		var y3 = transform.b * right + transform.d * bottom + transform.ty;
-		var minX = Math.min(Math.min(x0, x1), Math.min(x2, x3));
-		var minY = Math.min(Math.min(y0, y1), Math.min(y2, y3));
-		var maxX = Math.max(Math.max(x0, x1), Math.max(x2, x3));
-		var maxY = Math.max(Math.max(y0, y1), Math.max(y2, y3));
-		return new TextRangeRect(rect.start, rect.end, minX, minY, maxX - minX, maxY - minY,
-			rect.visualLeftIsStart);
-	}
+  static function transformTextRangeRect(
+    rect:TextRangeRect,
+    geometry:ResolvedLayoutItem,
+    transform:Transform2D,
+    scrollOffsetY:Float
+  ):TextRangeRect {
+    var left = geometry.x + rect.x;
+    var top = geometry.y + rect.y - scrollOffsetY;
+    var right = left + rect.width;
+    var bottom = top + rect.height;
+    var x0 = transform.a * left + transform.c * top + transform.tx;
+    var y0 = transform.b * left + transform.d * top + transform.ty;
+    var x1 = transform.a * right + transform.c * top + transform.tx;
+    var y1 = transform.b * right + transform.d * top + transform.ty;
+    var x2 = transform.a * left + transform.c * bottom + transform.tx;
+    var y2 = transform.b * left + transform.d * bottom + transform.ty;
+    var x3 = transform.a * right + transform.c * bottom + transform.tx;
+    var y3 = transform.b * right + transform.d * bottom + transform.ty;
+    var minX = Math.min(Math.min(x0, x1), Math.min(x2, x3));
+    var minY = Math.min(Math.min(y0, y1), Math.min(y2, y3));
+    var maxX = Math.max(Math.max(x0, x1), Math.max(x2, x3));
+    var maxY = Math.max(Math.max(y0, y1), Math.max(y2, y3));
+    return new TextRangeRect(rect.start, rect.end, minX, minY, maxX - minX, maxY - minY, rect.visualLeftIsStart);
+  }
 
-	static function defaultStyle(multiline:Bool):LayoutStyle {
-		var result = new LayoutStyle();
-		result.width = LayoutAxis.fixed(240.0);
-		result.height = LayoutAxis.fixed(multiline ? 120.0 : 40.0);
-		result.padding = new Insets(10.0, 8.0, 10.0, 8.0);
-		result.radiusTopLeft = result.radiusTopRight = 5.0;
-		result.radiusBottomLeft = result.radiusBottomRight = 5.0;
-		result.clipHorizontal = true;
-		return result;
-	}
+  static function defaultStyle(multiline:Bool):LayoutStyle {
+    var result = new LayoutStyle();
+    result.width = LayoutAxis.fixed(240.0);
+    result.height = LayoutAxis.fixed(multiline ? 120.0 : 40.0);
+    result.padding = new Insets(10.0, 8.0, 10.0, 8.0);
+    result.radiusTopLeft = result.radiusTopRight = 5.0;
+    result.radiusBottomLeft = result.radiusBottomRight = 5.0;
+    result.clipHorizontal = true;
+    return result;
+  }
 }

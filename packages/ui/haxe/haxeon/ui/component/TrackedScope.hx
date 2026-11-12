@@ -11,9 +11,9 @@ import haxeon.ui.core.View;
 class TrackedScope implements ScopeView {
   static final DefaultStyle = new LayoutStyle();
   final key:String;
-  final body:Void->View;
+  final body:Void -> View;
   final style:Null<LayoutStyle>;
-  public function new(key:String, body:Void->View, ?style:LayoutStyle) {
+  public function new(key:String, body:Void -> View, ?style:LayoutStyle) {
     if (key == null || key.length == 0 || body == null) throw "A re-running scope needs a key and body";
     this.key = key;
     this.body = body;
@@ -23,8 +23,10 @@ class TrackedScope implements ScopeView {
   public function inputsEqual(previous:ScopeView):Bool {
     if (!Std.isOfType(previous, TrackedScope)) return false;
     var other:TrackedScope = cast previous;
-    return body == other.body && (style == other.style || style != null && other.style != null &&
-      haxeon.Diff.mask(style, other.style) == 0);
+    return body == other.body && (style == other.style || style != null && other.style != null && haxeon.Diff.mask(
+      style,
+      other.style
+    ) == 0);
   }
   public function buildBody(context:BuildContext):RenderNode {
     // Description construction can build helper nodes; only the returned body's root owns this identity.

@@ -26,10 +26,9 @@ class ScopeRootSubmissionMain {
     var builds = view.builds;
     width.value = 120;
     var next = ui.submitCached(build, frame, "scope-root");
-    if (next == first || !next.id.equals(first.id) || next.layout.style.width.value != 120 ||
-        next.layout.style.zIndex != 7 || next.children.length != 1 ||
-        view.builds != builds + 1 || view.focuses != 1 || ui.focus.focusedId == null ||
-        !ui.focus.focusedId.equals(next.id)) return 2;
+    if (next == first || !next.id.equals(first.id) || next.layout.style.width.value != 120
+      || next.layout.style.zIndex != 7 || next.children.length != 1 || view.builds != builds + 1
+      || view.focuses != 1 || ui.focus.focusedId == null || !ui.focus.focusedId.equals(next.id)) return 2;
     ui.dispose();
     session.dispose();
     return 42;

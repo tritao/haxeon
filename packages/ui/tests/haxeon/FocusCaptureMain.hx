@@ -10,11 +10,12 @@ class FocusCaptureMain {
     var root = new RenderNode(new WidgetId(1)), wrapper = new RenderNode(new WidgetId(2));
     var target = new RenderNode(new WidgetId(3)), seen:Array<String> = [], bubbles = 0;
     var detach = false, stop = false;
-    root.add(wrapper); wrapper.add(target);
+    root.add(wrapper);
+    wrapper.add(target);
     for (kind in [UiEventKind.Focus, UiEventKind.Blur]) {
       root.on(kind, function(event) {
-        if (!event.target.equals(target.id) || event.phase != "capture" || !event.currentTarget.equals(root.id))
-          throw "Invalid captured focus event";
+        if (!event.target.equals(target.id)
+          || event.phase != "capture" || !event.currentTarget.equals(root.id)) throw "Invalid captured focus event";
         seen.push("root");
         if (detach) wrapper.detach();
       }, "capture");
@@ -29,7 +30,8 @@ class FocusCaptureMain {
       target.on(kind, function(event) {
         if (event.phase != "target") throw "Target listener ran outside target delivery";
         seen.push("target");
-      });
+      }
+      );
       root.on(kind, function(_) bubbles++);
       wrapper.on(kind, function(_) bubbles++);
     }
@@ -40,10 +42,13 @@ class FocusCaptureMain {
     seen.resize(0);
     events.focusEvent(target.id, UiEventKind.Blur);
     if (seen.join(",") != "root,wrapper,target-capture,target" || bubbles != 0) return 4;
-    seen.resize(0); stop = true;
+    seen.resize(0);
+    stop = true;
     events.focusEvent(target.id, UiEventKind.Focus);
     if (seen.join(",") != "root,wrapper" || bubbles != 0) return 2;
-    seen.resize(0); stop = false; detach = true;
+    seen.resize(0);
+    stop = false;
+    detach = true;
     events.focusEvent(target.id, UiEventKind.Focus);
     if (seen.join(",") != "root,wrapper,target-capture,target" || wrapper.parent != null || bubbles != 0) return 3;
     return 42;

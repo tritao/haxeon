@@ -17,9 +17,27 @@ class ScopeInputsMain {
     if (!left.inputsEqual(equal) || !equal.inputsEqual(left)) return 1;
     if (left.inputsEqual(new Button("Save", null, alternate, "save"))) return 2;
     if (left.inputsEqual(new Button("Save", null, activate, "save", false))) return 3;
-    var style = new LayoutStyle(); style.width = LayoutAxis.fixed(90);
+    var style = new LayoutStyle();
+    style.width = LayoutAxis.fixed(90);
     if (left.inputsEqual(new Button("Save", style, activate, "save"))) return 4;
-    if (left.inputsEqual(new Button("Save", null, activate, "save", null, null, null, null, null, null, null, null, null, null, null, "Save document"))) return 5;
+    if (left.inputsEqual(new Button(
+      "Save",
+      null,
+      activate,
+      "save",
+      null,
+      null,
+      null,
+      null,
+      null,
+      null,
+      null,
+      null,
+      null,
+      null,
+      null,
+      "Save document"
+    ))) return 5;
     if (left.inputsEqual(new Button("Save", null, activate, "save", null, null, true))) return 6;
     var classed = new Button("Save", null, activate, "save", null, null, null, ["toolbar"]);
     if (!classed.inputsEqual(new Button("Save", null, activate, "save", null, null, null, ["toolbar"]))) return 12;

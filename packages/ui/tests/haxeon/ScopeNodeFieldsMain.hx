@@ -35,14 +35,14 @@ class ScopeNodeFieldsMain {
     changed.cursor = CursorShape.Crosshair;
     changed.tabIndex = 12;
     authored.transfer(plain, changed);
-    if (changed.cursor != CursorShape.Crosshair || changed.tabIndex != 12)
-      throw "Body-owned fields failed to advance without a caller override";
+    if (changed.cursor != CursorShape.Crosshair
+      || changed.tabIndex != 12) throw "Body-owned fields failed to advance without a caller override";
     return 42;
   }
   static function check(node:RenderNode):Void {
-    if (node.cursor != CursorShape.Hand || node.tabIndex != 7 || node.commandScope != "caller" ||
-        node.windowDecoration != WindowDecorationRegionKind.Drag || node.windowDecorationCursor != CursorShape.Move ||
-        node.hitTestBehavior != HitTestBehavior.ChildrenOnly || !node.focusTrap || node.hitTestSelf)
-      throw "Caller node fields lost on body replacement";
+    if (node.cursor != CursorShape.Hand
+      || node.tabIndex != 7 || node.commandScope != "caller" || node.windowDecoration != WindowDecorationRegionKind.Drag
+      || node.windowDecorationCursor != CursorShape.Move || node.hitTestBehavior != HitTestBehavior.ChildrenOnly
+      || !node.focusTrap || node.hitTestSelf) throw "Caller node fields lost on body replacement";
   }
 }

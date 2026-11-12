@@ -47,767 +47,817 @@ import haxeon.ui.debug.UiStyleInvalidationMetrics.UiStyleInvalidationFrame;
 
 /** Owns the frame-local render tree and the Haxe-side UI subsystems. */
 class UiContext {
-	final session:LayoutSession;
-	final layoutChanges:LayoutChanges = new LayoutChanges();
-	final comparisonFrame:UiStyleInvalidationFrame;
-	public final stateStore:StateStore;
-	public final clipboard:ClipboardService;
-	public final buildContext:BuildContext;
-	public final focus:FocusManager;
-	public final events:EventDispatcher;
-	public final gestures:GestureArena;
-	public final animations:AnimationScheduler;
-	public final interactionStates:InteractionStateStore;
-	/** Application commands and shortcut scopes owned by this UI context. */
-	public final commands:CommandRegistry;
-	/** Current document/selection context used by command-bound UI. */
-	public var commandContext(default, null):CommandContext;
-	public var root(default, null):Null<RenderNode>;
-	/** Opt-in developer selection. Drawn after application paint and excluded from hit testing. */
-	public var inspectionHighlight(default, set):Int = 0;
-	/** Optional detailed paint probe. Disabled unless an inspector explicitly subscribes. */
-	public var onInspectionPaint:Null<Int->Float->Void>;
-	var inspectionEnabled = false;
-	var inspectionNode:Null<RenderNode>;
-	var pendingFocus:Null<WidgetId> = null;
-	var windowFocused:Bool = true;
-	var focusBeforeWindowBlur:Null<WidgetId> = null;
-	/** Called when an active animation needs another host frame. */
-	public var onAnimationFrameRequested:Null<Void->Void>;
-	/** Modifier observation independent of keyboard focus (for pointer affordances). */
-	public var onModifiersChanged:Null<UiModifier->Void>;
-	public var modifiers(default, null):UiModifier = UiModifier.empty();
+  final session:LayoutSession;
+  final layoutChanges:LayoutChanges = new LayoutChanges();
+  final comparisonFrame:UiStyleInvalidationFrame;
+  public final stateStore:StateStore;
+  public final clipboard:ClipboardService;
+  public final buildContext:BuildContext;
+  public final focus:FocusManager;
+  public final events:EventDispatcher;
+  public final gestures:GestureArena;
+  public final animations:AnimationScheduler;
+  public final interactionStates:InteractionStateStore;
+  /** Application commands and shortcut scopes owned by this UI context. */
+  public final commands:CommandRegistry;
+  /** Current document/selection context used by command-bound UI. */
+  public var commandContext(default, null):CommandContext;
+  public var root(default, null):Null<RenderNode>;
+  /** Opt-in developer selection. Drawn after application paint and excluded from hit testing. */
+  public var inspectionHighlight(default, set):Int = 0;
+  /** Optional detailed paint probe. Disabled unless an inspector explicitly subscribes. */
+  public var onInspectionPaint:Null<Int -> Float -> Void>;
+  var inspectionEnabled = false;
+  var inspectionNode:Null<RenderNode>;
+  var pendingFocus:Null<WidgetId> = null;
+  var windowFocused:Bool = true;
+  var focusBeforeWindowBlur:Null<WidgetId> = null;
+  /** Called when an active animation needs another host frame. */
+  public var onAnimationFrameRequested:Null<Void -> Void>;
+  /** Modifier observation independent of keyboard focus (for pointer affordances). */
+  public var onModifiersChanged:Null<UiModifier -> Void>;
+  public var modifiers(default, null):UiModifier = UiModifier.empty();
 
-	function updateModifiers(value:UiModifier):Void {
-		if (modifiers == value) return;
-		modifiers = value;
-		var handler = onModifiersChanged;
-		if (handler != null) handler(value);
-	}
-	var submittedInteractionRevision:Int;
-	var submittedRetainedEditRevision:Int = 0;
-	var submittedPatchRequestRevision:Int = 0;
-	var submittedBindingRequestRevision:Int = 0;
-	var submittedStyleRevision:Int;
-	var submittedAnimationRevision:Int;
-	var submittedGestureRevision:Int;
-	var submittedNodeCount:Int;
-	var submittedFrameWidth:Float;
-	var submittedFrameHeight:Float;
-	var submittedBuildKey:Null<String>;
-	var submittedTheme:Null<Theme>;
-	var submittedStyleSheet:Null<StyleSheet>;
-	final hitTestIds:Array<Int>;
-	/** Reused until releaseRetained, so a frame need not allocate another picker closure. */
-	var retainedHitTestProvider:Null<Float->Float->Array<RenderNode>> = null;
-	/** The dispatcher treats paths as immutable; reuse one while all of its node identities still match. */
-	var retainedHitPath:Null<Array<RenderNode>> = null;
-	/** Reuse the resolved-node visitor and counters across submissions. */
-	final visitResolvedNode:RenderNode->Void;
-	var visitResolved:Array<ResolvedLayoutItem>;
-	var visitMissing = false;
-	var visitMissingNode:Null<RenderNode>;
-	var visitNodeCount = 0;
-	var visitMountedHash = 0;
-	var visitGeometryChanged = 0;
-	var visitGeometryReused = 0;
-	var disposed:Bool;
-	final stalePaintNodes:Array<Int> = [];
-	var customCanvases:Map<Int, Canvas>;
-	var customLists:Map<Int, DisplayList>;
-	var customGeometries:Map<Int, ResolvedLayoutItem>;
-	var customPaintKeys:Map<Int, String>;
-	var customContentRevisions:Map<Int, Int>;
-	var customListHasCommands:Map<Int, Bool>;
-	var customPaintBound:Map<Int, Bool>;
-	var customCompositeCanvases:Map<Int, Canvas>;
-	var customCompositeLists:Map<Int, DisplayList>;
-	var customCompositeKeys:Map<Int, String>;
-	var customCompositeGeometries:Map<Int, ResolvedLayoutItem>;
-	var customCompositeBound:Map<Int, Bool>;
-	final previousNodesById:Map<Int, RenderNode>;
-	final currentNodesById:Map<Int, RenderNode>;
-	final submittedNodes:Array<RenderNode> = [];
-	final submittedPaintNodes:Array<RenderNode> = [];
-	var submittedTopology:RenderTreeTopology = new RenderTreeTopology();
-	var nextTopology:RenderTreeTopology = new RenderTreeTopology();
-	/** Reuses integer storage for the current native result's ID-to-position index. */
-	final resolvedById:IntIndex;
-	var accessibilityBridge:Null<AccessibilityBridge>;
-	var accessibilitySurface:Null<PlatformSurface>;
-	var decorationWindow:Null<WindowHandle>;
-	var decorationCapabilityChecked:Bool;
-	var decorationAvailable:Bool;
-	var cursorHandler:Null<UiCursorShape->Void>;
-	var currentCursor:UiCursorShape;
-	var lastFrameMetrics:Null<UiFrameMetrics>;
-	var pendingReusedMetrics:Bool = false;
-	var reusedMetricsSeconds:Float = 0.0;
-	var reusedMetricsCachedStyles:Int = 0;
-	var reusedMetricsHoverNodes:Int = -1;
-	var frameNumber:Int;
-	var diagnosticStage:Int = 0;
-	public final textInput:TextInputBridge;
-	/** Application layout to window logical coordinates for platform geometry. */
-	public var platformCoordinateScale:Float = 1.0;
+  function updateModifiers(value:UiModifier):Void {
+    if (modifiers == value) return;
+    modifiers = value;
+    var handler = onModifiersChanged;
+    if (handler != null) handler(value);
+  }
+  var submittedInteractionRevision:Int;
+  var submittedRetainedEditRevision:Int = 0;
+  var submittedPatchRequestRevision:Int = 0;
+  var submittedBindingRequestRevision:Int = 0;
+  var submittedStyleRevision:Int;
+  var submittedAnimationRevision:Int;
+  var submittedGestureRevision:Int;
+  var submittedNodeCount:Int;
+  var submittedFrameWidth:Float;
+  var submittedFrameHeight:Float;
+  var submittedBuildKey:Null<String>;
+  var submittedTheme:Null<Theme>;
+  var submittedStyleSheet:Null<StyleSheet>;
+  final hitTestIds:Array<Int>;
+  /** Reused until releaseRetained, so a frame need not allocate another picker closure. */
+  var retainedHitTestProvider:Null<Float -> Float -> Array<RenderNode>> = null;
+  /** The dispatcher treats paths as immutable; reuse one while all of its node identities still match. */
+  var retainedHitPath:Null<Array<RenderNode>> = null;
+  /** Reuse the resolved-node visitor and counters across submissions. */
+  final visitResolvedNode:RenderNode -> Void;
+  var visitResolved:Array<ResolvedLayoutItem>;
+  var visitMissing = false;
+  var visitMissingNode:Null<RenderNode>;
+  var visitNodeCount = 0;
+  var visitMountedHash = 0;
+  var visitGeometryChanged = 0;
+  var visitGeometryReused = 0;
+  var disposed:Bool;
+  final stalePaintNodes:Array<Int> = [];
+  var customCanvases:Map<Int, Canvas>;
+  var customLists:Map<Int, DisplayList>;
+  var customGeometries:Map<Int, ResolvedLayoutItem>;
+  var customPaintKeys:Map<Int, String>;
+  var customContentRevisions:Map<Int, Int>;
+  var customListHasCommands:Map<Int, Bool>;
+  var customPaintBound:Map<Int, Bool>;
+  var customCompositeCanvases:Map<Int, Canvas>;
+  var customCompositeLists:Map<Int, DisplayList>;
+  var customCompositeKeys:Map<Int, String>;
+  var customCompositeGeometries:Map<Int, ResolvedLayoutItem>;
+  var customCompositeBound:Map<Int, Bool>;
+  final previousNodesById:Map<Int, RenderNode>;
+  final currentNodesById:Map<Int, RenderNode>;
+  final submittedNodes:Array<RenderNode> = [];
+  final submittedPaintNodes:Array<RenderNode> = [];
+  var submittedTopology:RenderTreeTopology = new RenderTreeTopology();
+  var nextTopology:RenderTreeTopology = new RenderTreeTopology();
+  /** Reuses integer storage for the current native result's ID-to-position index. */
+  final resolvedById:IntIndex;
+  var accessibilityBridge:Null<AccessibilityBridge>;
+  var accessibilitySurface:Null<PlatformSurface>;
+  var decorationWindow:Null<WindowHandle>;
+  var decorationCapabilityChecked:Bool;
+  var decorationAvailable:Bool;
+  var cursorHandler:Null<UiCursorShape -> Void>;
+  var currentCursor:UiCursorShape;
+  var lastFrameMetrics:Null<UiFrameMetrics>;
+  var pendingReusedMetrics:Bool = false;
+  var reusedMetricsSeconds:Float = 0.0;
+  var reusedMetricsCachedStyles:Int = 0;
+  var reusedMetricsHoverNodes:Int = -1;
+  var frameNumber:Int;
+  var diagnosticStage:Int = 0;
+  public final textInput:TextInputBridge;
+  /** Application layout to window logical coordinates for platform geometry. */
+  public var platformCoordinateScale:Float = 1.0;
 
-	public function new(?session:LayoutSession, ?fonts:FontCollection, ?theme:Theme) {
-		visitResolvedNode = collectResolvedNode;
-		this.session = session == null ? LayoutSession.create() : session;
-		stateStore = new StateStore();
-		clipboard = new ClipboardService();
-		textInput = new TextInputBridge();
-		gestures = new GestureArena();
-		animations = new AnimationScheduler();
-		interactionStates = new InteractionStateStore();
-		commands = new CommandRegistry();
-		commandContext = new CommandContext();
-		buildContext = new BuildContext(stateStore, fonts, textInput, clipboard, theme,
-			gestures, animations, null, interactionStates, commands);
-		comparisonFrame = new UiStyleInvalidationFrame(buildContext, layoutChanges, submittedTopology);
-		buildContext.setCommandContext(commandContext);
-		if (fonts != null)
-			this.session.setFonts(fonts);
-		focus = new FocusManager();
-		events = new EventDispatcher(focus, interactionStates, commands, commandContext);
-		root = null;
-		onAnimationFrameRequested = null;
-		submittedInteractionRevision = -1;
-		var verifyEvery = Sys.getEnv("HAXEON_UI_VERIFY_RETENTION");
-		var parsedEvery:Null<Int> = verifyEvery == null ? null : Std.parseInt(verifyEvery);
-		if (parsedEvery != null && parsedEvery > 0)
-			verifyRetentionEvery = parsedEvery;
-		submittedStyleRevision = -1;
-		submittedAnimationRevision = -1;
-		submittedGestureRevision = -1;
-		submittedNodeCount = 0;
-		submittedFrameWidth = -1.0;
-		submittedFrameHeight = -1.0;
-		submittedBuildKey = null;
-		submittedTheme = null;
-		submittedStyleSheet = null;
-		hitTestIds = [];
-		disposed = false;
-		buildContext.setFocusRequester(function(id) { return focusWidget(id); });
-		buildContext.setDeferredFocusRequester(function(id) { ensureLive(); pendingFocus = id; });
-		customCanvases = new Map();
-		customLists = new Map();
-		customGeometries = new Map();
-		customPaintKeys = new Map();
-		customContentRevisions = new Map();
-		customListHasCommands = new Map();
-		customPaintBound = new Map();
-		customCompositeCanvases = new Map();
-		customCompositeLists = new Map();
-		customCompositeKeys = new Map();
-		customCompositeGeometries = new Map();
-		customCompositeBound = new Map();
-		previousNodesById = new Map();
-		currentNodesById = new Map();
-		resolvedById = new IntIndex();
-		accessibilityBridge = null;
-		accessibilitySurface = null;
-		decorationWindow = null;
-		decorationCapabilityChecked = false;
-		decorationAvailable = false;
-		cursorHandler = null;
-		currentCursor = UiCursorShape.Arrow;
-		animations.onFrameRequested = function() {
-			if (!disposed && onAnimationFrameRequested != null)
-				onAnimationFrameRequested();
-		};
-		buildContext.onBindingFrameRequested = function() {
-			if (!disposed && onAnimationFrameRequested != null) onAnimationFrameRequested();
-		};
-		lastFrameMetrics = null;
-		frameNumber = 0;
-	}
+  public function new(?session:LayoutSession, ?fonts:FontCollection, ?theme:Theme) {
+    visitResolvedNode = collectResolvedNode;
+    this.session = session == null ? LayoutSession.create() : session;
+    stateStore = new StateStore();
+    clipboard = new ClipboardService();
+    textInput = new TextInputBridge();
+    gestures = new GestureArena();
+    animations = new AnimationScheduler();
+    interactionStates = new InteractionStateStore();
+    commands = new CommandRegistry();
+    commandContext = new CommandContext();
+    buildContext = new BuildContext(
+      stateStore,
+      fonts,
+      textInput,
+      clipboard,
+      theme,
+      gestures,
+      animations,
+      null,
+      interactionStates,
+      commands
+    );
+    comparisonFrame = new UiStyleInvalidationFrame(buildContext, layoutChanges, submittedTopology);
+    buildContext.setCommandContext(commandContext);
+    if (fonts != null) this.session.setFonts(fonts);
+    focus = new FocusManager();
+    events = new EventDispatcher(focus, interactionStates, commands, commandContext);
+    root = null;
+    onAnimationFrameRequested = null;
+    submittedInteractionRevision = -1;
+    var verifyEvery = Sys.getEnv("HAXEON_UI_VERIFY_RETENTION");
+    var parsedEvery:Null<Int> = verifyEvery == null ? null : Std.parseInt(verifyEvery);
+    if (parsedEvery != null && parsedEvery > 0) verifyRetentionEvery = parsedEvery;
+    submittedStyleRevision = -1;
+    submittedAnimationRevision = -1;
+    submittedGestureRevision = -1;
+    submittedNodeCount = 0;
+    submittedFrameWidth = -1.0;
+    submittedFrameHeight = -1.0;
+    submittedBuildKey = null;
+    submittedTheme = null;
+    submittedStyleSheet = null;
+    hitTestIds = [];
+    disposed = false;
+    buildContext.setFocusRequester(function(id) {
+      return focusWidget(id);
+    }
+    );
+    buildContext.setDeferredFocusRequester(function(id) {
+      ensureLive();
+      pendingFocus = id;
+    }
+    );
+    customCanvases = new Map();
+    customLists = new Map();
+    customGeometries = new Map();
+    customPaintKeys = new Map();
+    customContentRevisions = new Map();
+    customListHasCommands = new Map();
+    customPaintBound = new Map();
+    customCompositeCanvases = new Map();
+    customCompositeLists = new Map();
+    customCompositeKeys = new Map();
+    customCompositeGeometries = new Map();
+    customCompositeBound = new Map();
+    previousNodesById = new Map();
+    currentNodesById = new Map();
+    resolvedById = new IntIndex();
+    accessibilityBridge = null;
+    accessibilitySurface = null;
+    decorationWindow = null;
+    decorationCapabilityChecked = false;
+    decorationAvailable = false;
+    cursorHandler = null;
+    currentCursor = UiCursorShape.Arrow;
+    animations.onFrameRequested = function() {
+      if (!disposed && onAnimationFrameRequested != null) onAnimationFrameRequested();
+    };
+    buildContext.onBindingFrameRequested = function() {
+      if (!disposed && onAnimationFrameRequested != null) onAnimationFrameRequested();
+    };
+    lastFrameMetrics = null;
+    frameNumber = 0;
+  }
 
-	/** Sets the active document/selection context for contextual commands. */
-	public function setCommandContext(context:Null<CommandContext>):Void {
-		commandContext = context == null ? new CommandContext() : context;
-		buildContext.setCommandContext(commandContext);
-		events.setCommandContext(commandContext);
-	}
+  /** Sets the active document/selection context for contextual commands. */
+  public function setCommandContext(context:Null<CommandContext>):Void {
+    commandContext = context == null ? new CommandContext() : context;
+    buildContext.setCommandContext(commandContext);
+    events.setCommandContext(commandContext);
+  }
 
-	/** Sets fonts for text-aware widgets and the native layout session. */
-	public function setFonts(fonts:FontCollection):Void {
-		ensureLive();
-		if (fonts == null || fonts.isDisposed())
-			throw "UI context requires a live font collection";
-		session.setFonts(fonts);
-		buildContext.setFonts(fonts);
-		submittedStyleRevision = -1;
-	}
+  /** Sets fonts for text-aware widgets and the native layout session. */
+  public function setFonts(fonts:FontCollection):Void {
+    ensureLive();
+    if (fonts == null || fonts.isDisposed()) throw "UI context requires a live font collection";
+    session.setFonts(fonts);
+    buildContext.setFonts(fonts);
+    submittedStyleRevision = -1;
+  }
 
-	/** Sets the palette used by subsequent view builds. */
-	public function setTheme(theme:Theme):Void {
-		ensureLive();
-		buildContext.setTheme(theme);
-	}
+  /** Sets the palette used by subsequent view builds. */
+  public function setTheme(theme:Theme):Void {
+    ensureLive();
+    buildContext.setTheme(theme);
+  }
 
-	/** Sets the application rules layered above the active theme stylesheet. */
-	public function setStyleSheet(styleSheet:StyleSheet):Void {
-		ensureLive();
-		buildContext.setStyleSheet(styleSheet);
-	}
+  /** Sets the application rules layered above the active theme stylesheet. */
+  public function setStyleSheet(styleSheet:StyleSheet):Void {
+    ensureLive();
+    buildContext.setStyleSheet(styleSheet);
+  }
 
-	/** Attaches the host surface used by platform text-input synchronization. */
-	public function attachPlatformSurface(surface:PlatformSurface):Void {
-		ensureLive();
-		if (surface == null || surface.isDisposed())
-			throw "UI context requires a live NativeKit surface";
-		buildContext.setPlatformSurface(surface);
-	}
+  /** Attaches the host surface used by platform text-input synchronization. */
+  public function attachPlatformSurface(surface:PlatformSurface):Void {
+    ensureLive();
+    if (surface == null || surface.isDisposed()) throw "UI context requires a live NativeKit surface";
+    buildContext.setPlatformSurface(surface);
+  }
 
-	/** Attaches the NativeKit-owned window that receives declarative chrome regions. */
-	public function attachPlatformWindow(window:WindowHandle):Void {
-		ensureLive();
-		if (window == null || !window.isValid())
-			throw "UI context requires a live NativeKit window";
-		if (decorationWindow != null)
-			clearWindowDecorations();
-		decorationWindow = window;
-		decorationCapabilityChecked = false;
-		decorationAvailable = false;
-		if (root != null)
-			syncWindowDecorations(root);
-	}
+  /** Attaches the NativeKit-owned window that receives declarative chrome regions. */
+  public function attachPlatformWindow(window:WindowHandle):Void {
+    ensureLive();
+    if (window == null || !window.isValid()) throw "UI context requires a live NativeKit window";
+    if (decorationWindow != null) clearWindowDecorations();
+    decorationWindow = window;
+    decorationCapabilityChecked = false;
+    decorationAvailable = false;
+    if (root != null) syncWindowDecorations(root);
+  }
 
-	/** Detaches the window and clears any regions previously projected by this context. */
-	public function detachPlatformWindow():Void {
-		ensureLive();
-		if (decorationWindow != null)
-			clearWindowDecorations();
-		decorationWindow = null;
-	}
+  /** Detaches the window and clears any regions previously projected by this context. */
+  public function detachPlatformWindow():Void {
+    ensureLive();
+    if (decorationWindow != null) clearWindowDecorations();
+    decorationWindow = null;
+  }
 
-	/** Builds a fresh view tree, resolves native layout, and reconnects geometry by stable ID. */
-	public function submit(view:View, frame:LayoutFrame):RenderNode {
-		var build = function() return view;
-		var result = submitInternal(frame, null, build);
-		return maybeVerifyRetention(build, frame, result);
-	}
+  /** Builds a fresh view tree, resolves native layout, and reconnects geometry by stable ID. */
+  public function submit(view:View, frame:LayoutFrame):RenderNode {
+    var build = function() return view;
+    var result = submitInternal(frame, null, build);
+    return maybeVerifyRetention(build, frame, result);
+  }
 
-	/**
+  /**
 	 * Submits a lazily built view and reuses the prior tree when the complete
 	 * caller-provided build key and all framework revisions are unchanged.
 	 */
-	public function submitCached(build:Void->View, frame:LayoutFrame,
-			cacheKey:String):RenderNode {
-		if (build == null)
-			throw "Cached UI submissions require a build callback";
-		if (cacheKey == null || cacheKey.length == 0)
-			throw "Cached UI submissions require a non-empty cache key";
-		var result = submitInternal(frame, cacheKey, build);
-		return maybeVerifyRetention(build, frame, result);
-	}
+  public function submitCached(build:Void -> View, frame:LayoutFrame, cacheKey:String):RenderNode {
+    if (build == null) throw "Cached UI submissions require a build callback";
+    if (cacheKey == null || cacheKey.length == 0) throw "Cached UI submissions require a non-empty cache key";
+    var result = submitInternal(frame, cacheKey, build);
+    return maybeVerifyRetention(build, frame, result);
+  }
 
-	/**
+  /**
 	 * Debug check that retention is invisible. Every `verifyRetentionEvery` frames that did work, the view is built again from
 	 * scratch, bypassing every retained cache, patch and in-place edit, and must give the same tree; see verifyRetention. 0 turns
 	 * it off. The environment variable HAXEON_UI_VERIFY_RETENTION sets it when the context is created.
 	 */
-	public var verifyRetentionEvery:Int = 0;
-	/** Called with the difference when a check fails; by default the check throws it. */
-	public var onRetentionMismatch:Null<String->Void> = null;
-	var framesSinceVerify:Int = 0;
-	var verifying:Bool = false;
+  public var verifyRetentionEvery:Int = 0;
+  /** Called with the difference when a check fails; by default the check throws it. */
+  public var onRetentionMismatch:Null<String -> Void> = null;
+  var framesSinceVerify:Int = 0;
+  var verifying:Bool = false;
 
-	function maybeVerifyRetention(build:Void->View, frame:LayoutFrame, result:RenderNode):RenderNode {
-		if (verifyRetentionEvery <= 0 || verifying)
-			return result;
-		if (pendingReusedMetrics) return result;
-		var metrics = lastFrameMetrics;
-		if (metrics != null && metrics.reusedSubmission)
-			return result;
-		framesSinceVerify++;
-		if (framesSinceVerify < verifyRetentionEvery)
-			return result;
-		framesSinceVerify = 0;
-		var difference = verifyRetention(build, frame);
-		if (difference != null) {
-			var report = onRetentionMismatch;
-			if (report == null)
-				throw difference;
-			report(difference);
-		}
-		return cast root;
-	}
+  function maybeVerifyRetention(build:Void -> View, frame:LayoutFrame, result:RenderNode):RenderNode {
+    if (verifyRetentionEvery <= 0 || verifying) return result;
+    if (pendingReusedMetrics) return result;
+    var metrics = lastFrameMetrics;
+    if (metrics != null && metrics.reusedSubmission) return result;
+    framesSinceVerify++;
+    if (framesSinceVerify < verifyRetentionEvery) return result;
+    framesSinceVerify = 0;
+    var difference = verifyRetention(build, frame);
+    if (difference != null) {
+      var report = onRetentionMismatch;
+      if (report == null) throw difference;
+      report(difference);
+    }
+    return cast root;
+  }
 
-	/**
+  /**
 	 * Builds the view again from scratch, with every retained cache, patch and in-place edit bypassed and no time passing, and
 	 * compares the result with the tree that was live. Returns null when they match, or the first lines that differ. Hover and
 	 * press flags are not compared: routing writes them onto live nodes that no widget built from them. The rebuilt tree stays
 	 * live, which is harmless when they match.
 	 */
-	public function verifyRetention(build:Void->View, frame:LayoutFrame):Null<String> {
-		ensureLive();
-		if (root == null || build == null || frame == null)
-			return null;
-		session.verifyTree(root.layout);
-		var live = comparableDump();
-		var savedKey = submittedBuildKey;
-		var delta = frame.deltaSeconds;
-		frame.deltaSeconds = 0.0;
-		verifying = true;
-		buildContext.bypassRetention = true;
-		try {
-			submitInternal(frame, null, build, false);
-		} catch (error:Dynamic) {
-			buildContext.bypassRetention = false;
-			verifying = false;
-			frame.deltaSeconds = delta;
-			throw error;
-		}
-		buildContext.bypassRetention = false;
-		verifying = false;
-		frame.deltaSeconds = delta;
-		// The tree is equivalent when the check passes, so the next frame may reuse it as before.
-		submittedBuildKey = savedKey;
-		var rebuilt = comparableDump();
-		return live == rebuilt ? null : describeDifference(live, rebuilt);
-	}
+  public function verifyRetention(build:Void -> View, frame:LayoutFrame):Null<String> {
+    ensureLive();
+    if (root == null || build == null || frame == null) return null;
+    session.verifyTree(root.layout);
+    var live = comparableDump();
+    var savedKey = submittedBuildKey;
+    var delta = frame.deltaSeconds;
+    frame.deltaSeconds = 0.0;
+    verifying = true;
+    buildContext.bypassRetention = true;
+    try {
+      submitInternal(frame, null, build, false);
+    } catch (error:Dynamic) {
+      buildContext.bypassRetention = false;
+      verifying = false;
+      frame.deltaSeconds = delta;
+      throw error;
+    }
+    buildContext.bypassRetention = false;
+    verifying = false;
+    frame.deltaSeconds = delta;
+    // The tree is equivalent when the check passes, so the next frame may reuse it as before.
+    submittedBuildKey = savedKey;
+    var rebuilt = comparableDump();
+    return live == rebuilt ? null : describeDifference(live, rebuilt);
+  }
 
-	/** Fingerprints of the submitted tree's nodes, by widget ID, while verification is on. */
-	final submittedFingerprints:Map<Int, Int> = new Map();
+  /** Fingerprints of the submitted tree's nodes, by widget ID, while verification is on. */
+  final submittedFingerprints:Map<Int, Int> = new Map();
 
-	function recordFingerprints(tree:RenderNode):Void {
-		submittedFingerprints.clear();
-		tree.walk(function(node) submittedFingerprints.set(node.id.value, node.fingerprint()));
-	}
+  function recordFingerprints(tree:RenderNode):Void {
+    submittedFingerprints.clear();
+    tree.walk(function(node) submittedFingerprints.set(node.id.value, node.fingerprint()));
+  }
 
-	/**
+  /**
 	 * Finds nodes of the submitted tree that are still in the new one and were changed in between without willEditRetained
 	 * or a patch: a frame cannot see such a change, so it is shown only by chance. Reported like a retention mismatch.
 	 */
-	function checkUnannouncedEdits(tree:RenderNode):Void {
-		var patched = buildContext.patchedPriors();
-		var found:Array<String> = [];
-		tree.walk(function(node) {
-			var id = node.id.value;
-			if (currentNodesById.get(id) != node || !submittedFingerprints.exists(id) || patched.exists(id) ||
-				buildContext.editAnnounced(node))
-				return;
-			if (submittedFingerprints.get(id) != node.submittedFingerprint() && found.length < 5)
-				found.push(stateStoreDescription(node));
-		});
-		if (found.length == 0)
-			return;
-		var difference = "Nodes of the submitted tree changed without willEditRetained:\n  " + found.join("\n  ");
-		var report = onRetentionMismatch;
-		if (report == null)
-			throw difference;
-		report(difference);
-	}
+  function checkUnannouncedEdits(tree:RenderNode):Void {
+    var patched = buildContext.patchedPriors();
+    var found:Array<String> = [];
+    tree.walk(function(node) {
+      var id = node.id.value;
+      if (currentNodesById.get(id) != node
+        || !submittedFingerprints.exists(id) || patched.exists(id) || buildContext.editAnnounced(node)) return;
+      if (submittedFingerprints.get(id) != node.submittedFingerprint()
+        && found.length < 5) found.push(stateStoreDescription(node));
+    }
+    );
+    if (found.length == 0) return;
+    var difference = "Nodes of the submitted tree changed without willEditRetained:\n  " + found.join("\n  ");
+    var report = onRetentionMismatch;
+    if (report == null) throw difference;
+    report(difference);
+  }
 
-	function stateStoreDescription(node:RenderNode):String
-		return (node.styleType == null ? "" : node.styleType + " ") + stateStore.describe(node.id);
+  function stateStoreDescription(node:RenderNode):String return (node.styleType
+    == null ? "" : node.styleType + " ") + stateStore.describe(node.id);
 
-	function comparableDump():String
-		return UiInspector.dump(root, focus.focusedId,
-			haxeon.ui.style.StyleState.Hovered | haxeon.ui.style.StyleState.Pressed);
+  function comparableDump():String return UiInspector.dump(
+    root,
+    focus.focusedId,
+    haxeon.ui.style.StyleState.Hovered | haxeon.ui.style.StyleState.Pressed
+  );
 
-	static function describeDifference(live:String, rebuilt:String):String {
-		var left = live.split("\n"), right = rebuilt.split("\n");
-		var line = 0;
-		while (line < left.length && line < right.length && left[line] == right[line])
-			line++;
-		var from = line < 3 ? 0 : line - 3;
-		var out = new StringBuf();
-		out.add("Retained UI differs from a fresh build at line " + (line + 1) + ":\n");
-		for (index in from...line)
-			out.add("    " + left[index] + "\n");
-		for (index in line...Std.int(Math.min(left.length, line + 4)))
-			out.add("  - " + left[index] + "\n");
-		for (index in line...Std.int(Math.min(right.length, line + 4)))
-			out.add("  + " + right[index] + "\n");
-		return out.toString();
-	}
+  static function describeDifference(live:String, rebuilt:String):String {
+    var left = live.split("\n"), right = rebuilt.split("\n");
+    var line = 0;
+    while (line < left.length && line < right.length && left[line] == right[line]) line++;
+    var from = line < 3 ? 0 : line - 3;
+    var out = new StringBuf();
+    out.add("Retained UI differs from a fresh build at line " + (line + 1) + ":\n");
+    for (index in from...line) out.add("    " + left[index] + "\n");
+    for (index in line...Std.int(Math.min(left.length, line + 4))) out.add("  - " + left[index] + "\n");
+    for (index in line...Std.int(Math.min(right.length, line + 4))) out.add("  + " + right[index] + "\n");
+    return out.toString();
+  }
 
-	function collectResolvedNode(node:RenderNode):Void {
-		submittedNodes.push(node);
-		visitNodeCount++;
-		visitMountedHash = visitMountedHash * 31 + node.id.value;
-		// Geometry is keyed by the exact LayoutNode ID serialized to NativeUI.
-		var position = resolvedById.get(node.layout.id);
-		var resolved:Array<ResolvedLayoutItem> = cast visitResolved;
-		var item = position < 0 ? null : resolved[position];
-		if (item == null) {
-			visitMissing = true;
-			if (visitMissingNode == null) visitMissingNode = node;
-			return;
-		}
-		var previous = previousNodesById.get(node.id.value);
-		var previousResolved:Null<ResolvedLayoutItem> = previous == null ? null : previous.resolved;
-		var geometryChanged = previousResolved == null || !sameGeometry(previousResolved, item);
-		if (!geometryChanged && previousResolved != null) {
-			item = previousResolved;
-			visitGeometryReused++;
-		} else
-			visitGeometryChanged++;
-		// Resolved callbacks still run when geometry is retained.
-		node.setResolved(item);
-		if (node.layout.visualKind == haxeon.ui.LayoutVisualKind.Custom || node.cachePolicy != CachePolicy.None)
-			submittedPaintNodes.push(node);
-		nextTopology.append(node);
-	}
+  function collectResolvedNode(node:RenderNode):Void {
+    submittedNodes.push(node);
+    visitNodeCount++;
+    visitMountedHash = visitMountedHash * 31 + node.id.value;
+    // Geometry is keyed by the exact LayoutNode ID serialized to NativeUI.
+    var position = resolvedById.get(node.layout.id);
+    var resolved:Array<ResolvedLayoutItem> = cast visitResolved;
+    var item = position < 0 ? null : resolved[position];
+    if (item == null) {
+      visitMissing = true;
+      if (visitMissingNode == null) visitMissingNode = node;
+      return;
+    }
+    var previous = previousNodesById.get(node.id.value);
+    var previousResolved:Null<ResolvedLayoutItem> = previous == null ? null : previous.resolved;
+    var geometryChanged = previousResolved == null || !sameGeometry(previousResolved, item);
+    if (!geometryChanged && previousResolved != null) {
+      item = previousResolved;
+      visitGeometryReused++;
+    } else visitGeometryChanged++;
+    // Resolved callbacks still run when geometry is retained.
+    node.setResolved(item);
+    if (node.layout.visualKind == haxeon.ui.LayoutVisualKind.Custom
+      || node.cachePolicy != CachePolicy.None) submittedPaintNodes.push(node);
+    nextTopology.append(node);
+  }
 
-	function submitInternal(frame:LayoutFrame, cacheKey:Null<String>, build:Void->View,
-			reconcileNewFocus:Bool = true, buildFeedbackPass:Int = 0):RenderNode {
-		var submitStartedAt = Sys.time();
-		diagnosticStage = 1;
-		ensureLive();
-		if (frame == null || build == null)
-			throw "A UI frame requires a view and layout frame";
-		@:privateAccess buildContext.buildFeedbackPass = buildFeedbackPass;
-		// Consume the request before running user getters so a failed effect can schedule a later retry.
-		var bindingAppliedRevision = buildContext.consumeBindingFrameRequest();
-		ReactiveRuntime.flushEffects();
-		var styleResolutionsBefore = buildContext.styleResolver.resolutions;
-		var styleCacheHitsBefore = buildContext.styleResolver.cacheHits;
-		var styleCacheMissesBefore = buildContext.styleResolver.cacheMisses;
-		diagnosticStage = 2;
-		if (reconcileNewFocus && buildFeedbackPass == 0)
-			gestures.advance(frame.deltaSeconds);
-		diagnosticStage = 3;
-		if (reconcileNewFocus && buildFeedbackPass == 0)
-			animations.advance(frame.deltaSeconds);
-		buildContext.setViewport(frame.width, frame.height);
-		buildContext.setEnvironmentViewport(frame.width, frame.height);
-		var hoverPaintNodes = -1;
-		var rootReactiveDirty = buildContext.rootDependenciesDirty();
-		var reuse = buildFeedbackPass == 0 && reconcileNewFocus && cacheKey != null && !rootReactiveDirty &&
-			canReuseSubmittedFrame(cacheKey, frame);
-		if (!reuse && buildFeedbackPass == 0 && reconcileNewFocus && cacheKey != null) {
-			hoverPaintNodes = reuseHoverPaint(cacheKey, frame);
-			reuse = hoverPaintNodes >= 0;
-		}
-		var localPatchPending = (buildContext.hasPendingPatches || buildContext.hasPendingRenderScopes()) && !rootReactiveDirty;
-		var bindingOnly = cacheKey != null && root != null && submittedBuildKey == cacheKey && !rootReactiveDirty &&
-			buildContext.bindingRequestRevision != submittedBindingRequestRevision &&
-			interactionStates.revision == submittedInteractionRevision && buildContext.styleRevision == submittedStyleRevision &&
-			submittedFrameWidth == frame.width && submittedFrameHeight == frame.height &&
-			animations.revision == submittedAnimationRevision && gestures.revision == submittedGestureRevision &&
-			buildContext.theme == submittedTheme && buildContext.styleSheet == submittedStyleSheet;
-		var patchOnly = !reuse && (localPatchPending || bindingOnly) && (!reconcileNewFocus || cacheKey != null);
-		if (!patchOnly && !reuse && reconcileNewFocus && cacheKey != null && buildFeedbackPass == 0)
-			patchOnly = planInteractionPatches(cacheKey, frame);
-		if (reuse) {
-			frameNumber++;
-			lastFrameMetrics = null;
-			pendingReusedMetrics = true;
-			reusedMetricsSeconds = Sys.time() - submitStartedAt;
-			reusedMetricsCachedStyles = buildContext.styleResolver.cachedStyleCount;
-			reusedMetricsHoverNodes = hoverPaintNodes;
-			diagnosticStage = 0;
-			return cast root;
-		}
-		var buildCostStartedAt = RenderCost.time();
-		buildContext.beginLayoutSubmission();
-		// Building reparents retained children out of the old tree. Preserve that frame's complete membership before it moves.
-		previousNodesById.clear();
-		for (node in submittedNodes) previousNodesById.set(node.id.value, node);
-		// A patch-only frame keeps the submitted tree and rebuilds just queued self-updating widgets. Internal feedback can
-		// use that path without a cache key because its outer build already ran; a new uncached submission still builds its root.
-		buildContext.resetObserved();
-		if (!patchOnly) {
-			buildContext.beginFrame();
-			queueInteractionPatches();
-		} else {
-			if (interactionStates.revision != submittedInteractionRevision)
-				queueInteractionPatches();
-		}
-		// Announced edits precede patches: a composite rebuild must not replace their original priors with edited children.
-		buildContext.takeRetainedEdits(currentNodesById);
-		buildContext.flushRenderScopes(root);
-		buildContext.applyPatches(submittedTopology);
-		buildContext.flushRenderScopes(root);
-		diagnosticStage = 4;
-		var viewStartedAt = Sys.time();
-		var viewAllocatedAt = AllocationProbe.now();
-		var view = patchOnly ? null : buildContext.trackReads(build);
-		var viewBuiltAt = Sys.time();
-		var viewBuiltAllocatedAt = AllocationProbe.now();
-		var next = patchOnly ? (root == null ? null : buildContext.currentRoot(root)) : buildContext.trackReads(function()
-			return buildContext.withScope(new haxeon.ui.core.Key("root"), function() return view == null ? null : view.build(buildContext)));
-		if (!patchOnly) buildContext.captureRootDependencies();
-		if (next == null || (!patchOnly && next.parent != null))
-			throw "A view must produce one unparented render tree root";
-		if (inspectionEnabled) appendInspectionOverlay(next, frame);
-		// Decorations may be assigned by view wrappers after widget construction.
-		// Promote those boxes before invalidation compares their native visual kind.
-		next.walk(function(node) node.syncPaintKind());
-		diagnosticStage = 5;
-		var treeBuiltAllocatedAt = AllocationProbe.now();
-		// Nodes changed in place since the last frame are compared against how they were (currentNodesById is still that frame's).
-		if (verifyRetentionEvery > 0 && !verifying)
-			checkUnannouncedEdits(next);
+  function submitInternal(
+    frame:LayoutFrame,
+    cacheKey:Null<String>,
+    build:Void -> View,
+    reconcileNewFocus:Bool = true,
+    buildFeedbackPass:Int = 0
+  ):RenderNode {
+    var submitStartedAt = Sys.time();
+    diagnosticStage = 1;
+    ensureLive();
+    if (frame == null || build == null) throw "A UI frame requires a view and layout frame";
+    @:privateAccess buildContext.buildFeedbackPass = buildFeedbackPass;
+    // Consume the request before running user getters so a failed effect can schedule a later retry.
+    var bindingAppliedRevision = buildContext.consumeBindingFrameRequest();
+    ReactiveRuntime.flushEffects();
+    var styleResolutionsBefore = buildContext.styleResolver.resolutions;
+    var styleCacheHitsBefore = buildContext.styleResolver.cacheHits;
+    var styleCacheMissesBefore = buildContext.styleResolver.cacheMisses;
+    diagnosticStage = 2;
+    if (reconcileNewFocus && buildFeedbackPass == 0) gestures.advance(frame.deltaSeconds);
+    diagnosticStage = 3;
+    if (reconcileNewFocus && buildFeedbackPass == 0) animations.advance(frame.deltaSeconds);
+    buildContext.setViewport(frame.width, frame.height);
+    buildContext.setEnvironmentViewport(frame.width, frame.height);
+    var hoverPaintNodes = -1;
+    var rootReactiveDirty = buildContext.rootDependenciesDirty();
+    var reuse = buildFeedbackPass == 0
+      && reconcileNewFocus && cacheKey != null && !rootReactiveDirty && canReuseSubmittedFrame(
+        cacheKey,
+        frame
+      );
+    if (!reuse && buildFeedbackPass == 0 && reconcileNewFocus && cacheKey != null) {
+      hoverPaintNodes = reuseHoverPaint(cacheKey, frame);
+      reuse = hoverPaintNodes >= 0;
+    }
+    var localPatchPending = (buildContext.hasPendingPatches
+      || buildContext.hasPendingRenderScopes()) && !rootReactiveDirty;
+    var bindingOnly = cacheKey != null && root != null && submittedBuildKey == cacheKey
+      && !rootReactiveDirty && buildContext.bindingRequestRevision != submittedBindingRequestRevision
+      && interactionStates.revision == submittedInteractionRevision && buildContext.styleRevision
+      == submittedStyleRevision && submittedFrameWidth == frame.width && submittedFrameHeight == frame.height
+      && animations.revision == submittedAnimationRevision && gestures.revision == submittedGestureRevision
+      && buildContext.theme == submittedTheme && buildContext.styleSheet == submittedStyleSheet;
+    var patchOnly = !reuse && (localPatchPending || bindingOnly) && (!reconcileNewFocus || cacheKey != null);
+    if (!patchOnly
+      && !reuse && reconcileNewFocus && cacheKey != null && buildFeedbackPass == 0) patchOnly = planInteractionPatches(
+        cacheKey,
+        frame
+      );
+    if (reuse) {
+      frameNumber++;
+      lastFrameMetrics = null;
+      pendingReusedMetrics = true;
+      reusedMetricsSeconds = Sys.time() - submitStartedAt;
+      reusedMetricsCachedStyles = buildContext.styleResolver.cachedStyleCount;
+      reusedMetricsHoverNodes = hoverPaintNodes;
+      diagnosticStage = 0;
+      return cast root;
+    }
+    var buildCostStartedAt = RenderCost.time();
+    buildContext.beginLayoutSubmission();
+    // Building reparents retained children out of the old tree. Preserve that frame's complete membership before it moves.
+    previousNodesById.clear();
+    for (node in submittedNodes) previousNodesById.set(node.id.value, node);
+    // A patch-only frame keeps the submitted tree and rebuilds just queued self-updating widgets. Internal feedback can
+    // use that path without a cache key because its outer build already ran; a new uncached submission still builds its root.
+    buildContext.resetObserved();
+    if (!patchOnly) {
+      buildContext.beginFrame();
+      queueInteractionPatches();
+    } else {
+      if (interactionStates.revision != submittedInteractionRevision) queueInteractionPatches();
+    }
+    // Announced edits precede patches: a composite rebuild must not replace their original priors with edited children.
+    buildContext.takeRetainedEdits(currentNodesById);
+    buildContext.flushRenderScopes(root);
+    buildContext.applyPatches(submittedTopology);
+    buildContext.flushRenderScopes(root);
+    diagnosticStage = 4;
+    var viewStartedAt = Sys.time();
+    var viewAllocatedAt = AllocationProbe.now();
+    var view = patchOnly ? null : buildContext.trackReads(build);
+    var viewBuiltAt = Sys.time();
+    var viewBuiltAllocatedAt = AllocationProbe.now();
+    var next = patchOnly ? (root == null
+      ? null : buildContext.currentRoot(root)) : buildContext.trackReads(function() return buildContext.withScope(
+        new haxeon.ui.core.Key("root"),
+        function() return view == null ? null : view.build(buildContext)
+      ));
+    if (!patchOnly) buildContext.captureRootDependencies();
+    if (next == null
+      || (!patchOnly && next.parent != null)) throw "A view must produce one unparented render tree root";
+    if (inspectionEnabled) appendInspectionOverlay(next, frame);
+    // Decorations may be assigned by view wrappers after widget construction.
+    // Promote those boxes before invalidation compares their native visual kind.
+    next.walk(function(node) node.syncPaintKind());
+    diagnosticStage = 5;
+    var treeBuiltAllocatedAt = AllocationProbe.now();
+    // Nodes changed in place since the last frame are compared against how they were (currentNodesById is still that frame's).
+    if (verifyRetentionEvery > 0 && !verifying) checkUnannouncedEdits(next);
 
-		buildContext.takeRetainedEdits(currentNodesById);
-		layoutChanges.clear();
-		comparisonFrame.topology = submittedTopology;
-		comparisonFrame.preserveRevisions = false;
-		var styleInvalidation = UiStyleInvalidationMetrics.compare(root, next,
-			previousNodesById, currentNodesById, buildContext.patchedPriors(), comparisonFrame);
-		buildContext.endPatchFrame();
-		// The comparison above resets paint revisions, so custom paint that only reacts to hover is invalidated after it. On a
-		// full rebuild a node may have been replaced by a fresh one, which paints anyway; invalidating the old one is harmless.
-		for (node in patchFramePaintNodes) node.invalidatePaint();
-		patchFramePaintNodes.resize(0);
-		var compareAllocatedAt = AllocationProbe.now();
-		next.syncLayoutInputs(layoutChanges);
-		var syncAllocatedAt = AllocationProbe.now();
-		var previousById = previousNodesById;
-		var nodesById = currentNodesById;
-		var nativeLayoutReused = !verifying && !styleInvalidation.nativeLayoutRequired &&
-			submittedFrameWidth == frame.width && submittedFrameHeight == frame.height;
-		if (nativeLayoutReused)
-			next.walk(function(node) {
-				var previous = previousById.get(node.id.value);
-				var previousResolved:Null<ResolvedLayoutItem> = previous == null ? null : previous.resolved;
-				if (previousResolved == null)
-					nativeLayoutReused = false;
-			});
-		var resolved:Array<ResolvedLayoutItem>;
-		var nativeLayoutStartedAt = Sys.time();
-		var nativeLayoutStartAllocatedAt = AllocationProbe.now();
-		if (nativeLayoutReused) {
-			resolved = [];
-			next.walk(function(node) {
-				var previous = previousById.get(node.id.value);
-				var previousResolved:Null<ResolvedLayoutItem> = previous == null ? null : previous.resolved;
-				if (previousResolved != null)
-					resolved.push(previousResolved);
-			});
-		} else {
-			session.verifyTransactions = verifyRetentionEvery > 0;
-			resolved = session.submit(next.layout, frame, layoutChanges, verifying);
-		}
-		layoutChanges.clear();
-		diagnosticStage = 6;
-		var nodeCount = 0;
-		var mountedHash = 0;
-		var resolvedGeometryChangedNodes = 0;
-		var resolvedGeometryReusedNodes = 0;
-		var resolvedBuildFeedback = false;
-		var layoutPass = 0;
-		while (true) {
-			resolvedById.clear();
-			for (index in 0...resolved.length)
-				resolvedById.set(resolved[index].id, index);
-			visitMissing = false;
-			visitMissingNode = null;
-			visitNodeCount = 0;
-			visitMountedHash = 0;
-			visitGeometryChanged = 0;
-			visitGeometryReused = 0;
-			diagnosticStage = 7;
-			submittedNodes.resize(0);
-			submittedPaintNodes.resize(0);
-			nextTopology.clear();
-			visitResolved = resolved;
-			next.walk(visitResolvedNode);
-			visitResolved = null;
-			nodeCount = visitNodeCount;
-			mountedHash = visitMountedHash;
-			resolvedGeometryChangedNodes = visitGeometryChanged;
-			resolvedGeometryReusedNodes = visitGeometryReused;
-			if (visitMissing) {
-				var missingNode = visitMissingNode;
-				diagnosticStage = 8;
-				throw "Native layout did not return geometry for render node " +
-					Std.string(missingNode == null ? -1 : missingNode.id.value) + " (" +
-					(missingNode == null ? "unknown" : missingNode.styleType) + ")" +
-					" pass=" + layoutPass + " reused=" + nativeLayoutReused +
-					" resolved=" + resolved.length + " nodes=" + nodeCount +
-					" firstResolved=" + (resolved.length == 0 ? -1 : resolved[0].id) +
-					" visible=" + (missingNode == null ? "?" : Std.string(missingNode.layout.style.visible)) +
-					" parent=" + (missingNode == null || missingNode.parent == null ? "?" : missingNode.parent.styleType) +
-					" parentVisible=" + (missingNode == null || missingNode.parent == null ? "?" : Std.string(missingNode.parent.layout.style.visible));
-			}
-			// Handlers may read parent, child, viewport and content geometry. Give all of them the same settled layout pass
-			// before any handler changes layout inputs or requests another pass.
-			for (index in 0...submittedNodes.length) submittedNodes[submittedNodes.length - 1 - index].didResolve();
-			// Signal writes and explicit callback requests rebuild before another layout pass consumes stale view geometry.
-			var rootDirty = buildContext.rootDependenciesDirty();
-			var patchesPending = buildContext.hasPendingPatches || buildContext.hasPendingRenderScopes();
-			var earlyFeedback = buildContext.consumeBuildFeedbackBeforeLayout();
-			if (rootDirty || patchesPending || earlyFeedback) {
-				resolvedBuildFeedback = true;
-				break;
-			}
-			if (!buildContext.consumeLayoutFeedback())
-				break;
-			// Dependent geometry (text reflow, scroll extent, overlay placement)
-			// must settle before publishing the frame. Never silently discard
-			// a requested pass; fail explicitly if callbacks cannot converge.
-			if (layoutPass >= 7)
-				throw "UI layout feedback did not converge after 8 passes";
-			buildContext.takeRetainedEdits(currentNodesById);
-			UiStyleInvalidationMetrics.collectLayoutEdits(currentNodesById, buildContext.patchedPriors(), layoutChanges);
-			buildContext.endPatchFrame();
-			resolved = session.submit(next.layout, frame, layoutChanges, verifying);
-			layoutChanges.clear();
-			layoutPass++;
-		}
-		var nativeLayoutEndedAt = Sys.time();
-		var nativeLayoutEndAllocatedAt = AllocationProbe.now();
-		if (layoutPass > 0) {
-			comparisonFrame.preserveRevisions = true;
-			styleInvalidation = UiStyleInvalidationMetrics.compare(root, next,
-				previousNodesById, currentNodesById, null, comparisonFrame);
-		}
-		var previousTopology = submittedTopology;
-		submittedTopology = nextTopology;
-		nextTopology = previousTopology;
-		// Geometry callbacks run after the tracked build. If one updates a signal read by that tree, rebuild before
-		// returning so the first submitted frame reflects the synchronized value.
-		var callbackBuildFeedback = buildContext.consumeBuildFeedback();
-		var requestedBuildFeedback = resolvedBuildFeedback || callbackBuildFeedback;
-		if (requestedBuildFeedback || buildContext.rootDependenciesDirty() || buildContext.hasPendingPatches ||
-			buildContext.hasPendingRenderScopes()) {
-			if (buildFeedbackPass >= 7) throw "UI build feedback did not converge after 8 passes";
-			// Commit layout for the next comparison, but keep focus requests and widget resources until children settle.
-			root = next;
-			if (verifyRetentionEvery > 0) recordFingerprints(next);
-			if (RenderCost.enabled) RenderCost.submit(submitStartedAt, buildCostStartedAt, nativeLayoutStartedAt,
-				nativeLayoutEndedAt, Sys.time(), nodeCount);
-			return submitInternal(frame, cacheKey, build, reconcileNewFocus, buildFeedbackPass + 1);
-		}
-		syncWindowDecorations(next);
-		diagnosticStage = 9;
-		interactionStates.acknowledge();
-		var routedInteractionRevision = interactionStates.revision;
-		var previousFocus = focus.focusedId;
-		focus.rebuild(next);
-		var requestedFocus = pendingFocus;
-		pendingFocus = null;
-		if (requestedFocus != null) focus.focus(requestedFocus);
-		var nextFocus = focus.focusedId;
-		var focusChanged = (previousFocus == null && nextFocus != null) ||
-			(previousFocus != null && (nextFocus == null || !previousFocus.equals(nextFocus)));
-		if (previousFocus != null && (nextFocus == null || !previousFocus.equals(nextFocus)))
-			events.focusEvent(previousFocus, UiEventKind.Blur);
-		root = next;
-		// Do not keep an old tree alive if a cached path's nodes were replaced while the pointer was absent.
-		if (retainedHitPath != null)
-			for (node in retainedHitPath)
-				if (nodesById.get(node.id.value) != node) {
-					retainedHitPath = null;
-					break;
-				}
-		var picker = retainedHitTestProvider;
-		if (picker == null) {
-			picker = function(x:Float, y:Float) {
-				session.hitTestInto(x, y, hitTestIds);
-				var cached = retainedHitPath;
-				if (cached != null && cached.length == hitTestIds.length) {
-					var same = true;
-					for (index in 0...hitTestIds.length)
-						if (currentNodesById.get(hitTestIds[index]) != cached[index]) {
-							same = false;
-							break;
-						}
-					if (same) return cached;
-				}
-				var path:Array<RenderNode> = [];
-				path.resize(hitTestIds.length);
-				for (index in 0...hitTestIds.length) {
-					var node = currentNodesById.get(hitTestIds[index]);
-					if (node == null) {
-						retainedHitPath = null;
-						return [];
-					}
-					path[index] = node;
-				}
-				retainedHitPath = path;
-				return path;
-			};
-			retainedHitTestProvider = picker;
-		}
-		events.setHitTestProvider(picker);
-		events.setRoot(next, nodesById);
-		gestures.setRoot(next);
-		updateCursor();
-		if (nextFocus != null && (previousFocus == null || !previousFocus.equals(nextFocus)))
-			events.focusEvent(nextFocus, UiEventKind.Focus);
-		// Reconcile focus before releasing resources owned by unmounted widgets.
-		// Blur is the old tree's final lifecycle event, so its handlers must still
-		// be able to access widget state while that event is being dispatched.
-		buildContext.retainRenderScopeState(nodesById);
-		stateStore.endFrame();
-		buildContext.pruneSelfUpdatingBuilds(nodesById);
-		buildContext.pruneRenderScopes(nodesById);
-		buildContext.pruneKeyCaches(nodesById, mountedHash);
-		buildContext.stateStore.prunePaths(nodesById);
-		submittedInteractionRevision = interactionStates.revision;
-		submittedStyleRevision = buildContext.styleRevision;
-		submittedAnimationRevision = animations.revision;
-		submittedRetainedEditRevision = buildContext.retainedEditRevision;
-		submittedPatchRequestRevision = buildContext.patchRequestRevision;
-		submittedBindingRequestRevision = bindingAppliedRevision;
-		submittedGestureRevision = gestures.revision;
-		submittedNodeCount = nodeCount;
-		submittedFrameWidth = frame.width;
-		submittedFrameHeight = frame.height;
-		submittedBuildKey = cacheKey;
-		submittedTheme = buildContext.theme;
-		submittedStyleSheet = buildContext.styleSheet;
-		if (accessibilityBridge != null && (styleInvalidation.treeChanged ||
-			styleInvalidation.semanticsInvalidatedNodes > 0 ||
-			resolvedGeometryChangedNodes > 0 || focusChanged)) {
-			accessibilityBridge.coordinateScale = platformCoordinateScale;
-			accessibilityBridge.update(next, focus.focusedId);
-		}
-		// Layout can move a different node under a stationary pointer, and a newly mounted focus trap chooses its target here.
-		// Settle those routed states before painting, using the same bounded feedback as viewport-dependent builds.
-		// This pass is now committed, including fresh nodes. A focus pass must compare against these instances, not
-		// fingerprints of the previous frame's different nodes with the same IDs.
-		if (verifyRetentionEvery > 0)
-			recordFingerprints(next);
-		if ((interactionStates.revision != routedInteractionRevision && routedInteractionNeedsBuild()) || (reconcileNewFocus && focusChanged &&
-			(nextFocus != null || (previousFocus != null && nodesById.exists(previousFocus.value))))) {
-			if (buildFeedbackPass >= 7) throw "UI interaction feedback did not converge after 8 passes";
-			if (RenderCost.enabled) RenderCost.submit(submitStartedAt, buildCostStartedAt, nativeLayoutStartedAt,
-				nativeLayoutEndedAt, Sys.time(), nodeCount);
-			// Re-run the original factory: its conditional reads decide which views exist.
-			// A constant view here would replace root subscriptions with only View.build's
-			// reads, leaving later model changes unable to invalidate the cached tree.
-			return submitInternal(frame, cacheKey, build, false, buildFeedbackPass + 1);
-		}
-		// Routing can add changes after the build. Keep them until the feedback pass has patched their owners.
-		interactionStates.acknowledge();
-		frameNumber++;
-		var submitEndedAt = Sys.time();
-		var submitEndAllocatedAt = AllocationProbe.now();
-		pendingReusedMetrics = false;
-		lastFrameMetrics = new UiFrameMetrics(frameNumber, nodeCount,
-			buildContext.styleResolver.resolutions - styleResolutionsBefore,
-			buildContext.styleResolver.cacheHits - styleCacheHitsBefore,
-			buildContext.styleResolver.cacheMisses - styleCacheMissesBefore,
-			buildContext.styleResolver.cachedStyleCount,
-			styleInvalidation.styleChangedNodes, styleInvalidation.styleUnchangedNodes,
-			styleInvalidation.invalidationFlags, styleInvalidation.layoutInvalidatedNodes,
-			styleInvalidation.textLayoutInvalidatedNodes, styleInvalidation.paintInvalidatedNodes,
-			styleInvalidation.compositeInvalidatedNodes, styleInvalidation.semanticsInvalidatedNodes,
-			styleInvalidation.hitGeometryInvalidatedNodes,
-				submitEndedAt - submitStartedAt, !nativeLayoutReused, nativeLayoutReused,
-				resolvedGeometryChangedNodes, resolvedGeometryReusedNodes, buildFeedbackPass + 1);
-		lastFrameMetrics.setSubmitPhases(viewBuiltAt - viewStartedAt,
-			nativeLayoutStartedAt - viewBuiltAt, nativeLayoutEndedAt - nativeLayoutStartedAt,
-			submitEndedAt - nativeLayoutEndedAt);
-		lastFrameMetrics.setTreeAllocations(treeBuiltAllocatedAt - viewBuiltAllocatedAt, compareAllocatedAt - treeBuiltAllocatedAt,
-			syncAllocatedAt - compareAllocatedAt, nativeLayoutStartAllocatedAt - syncAllocatedAt);
-		lastFrameMetrics.setSubmitAllocations(viewBuiltAllocatedAt - viewAllocatedAt, nativeLayoutStartAllocatedAt - viewBuiltAllocatedAt,
-			nativeLayoutEndAllocatedAt - nativeLayoutStartAllocatedAt, submitEndAllocatedAt - nativeLayoutEndAllocatedAt);
-		if (RenderCost.enabled) RenderCost.submit(submitStartedAt, buildCostStartedAt, nativeLayoutStartedAt,
-			nativeLayoutEndedAt, submitEndedAt, nodeCount);
-		diagnosticStage = 0;
-		return next;
-	}
+    buildContext.takeRetainedEdits(currentNodesById);
+    layoutChanges.clear();
+    comparisonFrame.topology = submittedTopology;
+    comparisonFrame.preserveRevisions = false;
+    var styleInvalidation = UiStyleInvalidationMetrics.compare(
+      root,
+      next,
+      previousNodesById,
+      currentNodesById,
+      buildContext.patchedPriors(),
+      comparisonFrame
+    );
+    buildContext.endPatchFrame();
+    // The comparison above resets paint revisions, so custom paint that only reacts to hover is invalidated after it. On a
+    // full rebuild a node may have been replaced by a fresh one, which paints anyway; invalidating the old one is harmless.
+    for (node in patchFramePaintNodes) node.invalidatePaint();
+    patchFramePaintNodes.resize(0);
+    var compareAllocatedAt = AllocationProbe.now();
+    next.syncLayoutInputs(layoutChanges);
+    var syncAllocatedAt = AllocationProbe.now();
+    var previousById = previousNodesById;
+    var nodesById = currentNodesById;
+    var nativeLayoutReused = !verifying && !styleInvalidation.nativeLayoutRequired
+      && submittedFrameWidth == frame.width && submittedFrameHeight == frame.height;
+    if (nativeLayoutReused) next.walk(function(node) {
+      var previous = previousById.get(node.id.value);
+      var previousResolved:Null<ResolvedLayoutItem> = previous == null ? null : previous.resolved;
+      if (previousResolved == null) nativeLayoutReused = false;
+    }
+    );
+    var resolved:Array<ResolvedLayoutItem>;
+    var nativeLayoutStartedAt = Sys.time();
+    var nativeLayoutStartAllocatedAt = AllocationProbe.now();
+    if (nativeLayoutReused) {
+      resolved = [];
+      next.walk(function(node) {
+        var previous = previousById.get(node.id.value);
+        var previousResolved:Null<ResolvedLayoutItem> = previous == null ? null : previous.resolved;
+        if (previousResolved != null) resolved.push(previousResolved);
+      }
+      );
+    } else {
+      session.verifyTransactions = verifyRetentionEvery > 0;
+      resolved = session.submit(next.layout, frame, layoutChanges, verifying);
+    }
+    layoutChanges.clear();
+    diagnosticStage = 6;
+    var nodeCount = 0;
+    var mountedHash = 0;
+    var resolvedGeometryChangedNodes = 0;
+    var resolvedGeometryReusedNodes = 0;
+    var resolvedBuildFeedback = false;
+    var layoutPass = 0;
+    while (true) {
+      resolvedById.clear();
+      for (index in 0...resolved.length) resolvedById.set(resolved[index].id, index);
+      visitMissing = false;
+      visitMissingNode = null;
+      visitNodeCount = 0;
+      visitMountedHash = 0;
+      visitGeometryChanged = 0;
+      visitGeometryReused = 0;
+      diagnosticStage = 7;
+      submittedNodes.resize(0);
+      submittedPaintNodes.resize(0);
+      nextTopology.clear();
+      visitResolved = resolved;
+      next.walk(visitResolvedNode);
+      visitResolved = null;
+      nodeCount = visitNodeCount;
+      mountedHash = visitMountedHash;
+      resolvedGeometryChangedNodes = visitGeometryChanged;
+      resolvedGeometryReusedNodes = visitGeometryReused;
+      if (visitMissing) {
+        var missingNode = visitMissingNode;
+        diagnosticStage = 8;
+        throw "Native layout did not return geometry for render node " + Std.string(missingNode
+          == null ? -1 : missingNode.id.value) + " (" + (missingNode == null ? "unknown" : missingNode.styleType)
+          + ")" + " pass=" + layoutPass + " reused=" + nativeLayoutReused + " resolved=" + resolved.length + " nodes="
+          + nodeCount + " firstResolved=" + (resolved.length == 0 ? -1 : resolved[0].id) + " visible=" + (missingNode
+          == null ? "?" : Std.string(missingNode.layout.style.visible)) + " parent=" + (missingNode == null
+          || missingNode.parent == null ? "?" : missingNode.parent.styleType) + " parentVisible=" + (missingNode == null
+          || missingNode.parent == null ? "?" : Std.string(missingNode.parent.layout.style.visible));
+      }
+      // Handlers may read parent, child, viewport and content geometry. Give all of them the same settled layout pass
+      // before any handler changes layout inputs or requests another pass.
+      for (index in 0...submittedNodes.length) submittedNodes[submittedNodes.length - 1 - index].didResolve();
+      // Signal writes and explicit callback requests rebuild before another layout pass consumes stale view geometry.
+      var rootDirty = buildContext.rootDependenciesDirty();
+      var patchesPending = buildContext.hasPendingPatches || buildContext.hasPendingRenderScopes();
+      var earlyFeedback = buildContext.consumeBuildFeedbackBeforeLayout();
+      if (rootDirty || patchesPending || earlyFeedback) {
+        resolvedBuildFeedback = true;
+        break;
+      }
+      if (!buildContext.consumeLayoutFeedback()) break;
+      // Dependent geometry (text reflow, scroll extent, overlay placement)
+      // must settle before publishing the frame. Never silently discard
+      // a requested pass; fail explicitly if callbacks cannot converge.
+      if (layoutPass >= 7) throw "UI layout feedback did not converge after 8 passes";
+      buildContext.takeRetainedEdits(currentNodesById);
+      UiStyleInvalidationMetrics.collectLayoutEdits(currentNodesById, buildContext.patchedPriors(), layoutChanges);
+      buildContext.endPatchFrame();
+      resolved = session.submit(next.layout, frame, layoutChanges, verifying);
+      layoutChanges.clear();
+      layoutPass++;
+    }
+    var nativeLayoutEndedAt = Sys.time();
+    var nativeLayoutEndAllocatedAt = AllocationProbe.now();
+    if (layoutPass > 0) {
+      comparisonFrame.preserveRevisions = true;
+      styleInvalidation = UiStyleInvalidationMetrics.compare(
+        root,
+        next,
+        previousNodesById,
+        currentNodesById,
+        null,
+        comparisonFrame
+      );
+    }
+    var previousTopology = submittedTopology;
+    submittedTopology = nextTopology;
+    nextTopology = previousTopology;
+    // Geometry callbacks run after the tracked build. If one updates a signal read by that tree, rebuild before
+    // returning so the first submitted frame reflects the synchronized value.
+    var callbackBuildFeedback = buildContext.consumeBuildFeedback();
+    var requestedBuildFeedback = resolvedBuildFeedback || callbackBuildFeedback;
+    if (requestedBuildFeedback || buildContext.rootDependenciesDirty()
+      || buildContext.hasPendingPatches || buildContext.hasPendingRenderScopes()) {
+      if (buildFeedbackPass >= 7) throw "UI build feedback did not converge after 8 passes";
+      // Commit layout for the next comparison, but keep focus requests and widget resources until children settle.
+      root = next;
+      if (verifyRetentionEvery > 0) recordFingerprints(next);
+      if (RenderCost.enabled) RenderCost.submit(
+        submitStartedAt,
+        buildCostStartedAt,
+        nativeLayoutStartedAt,
+        nativeLayoutEndedAt,
+        Sys.time(),
+        nodeCount
+      );
+      return submitInternal(frame, cacheKey, build, reconcileNewFocus, buildFeedbackPass + 1);
+    }
+    syncWindowDecorations(next);
+    diagnosticStage = 9;
+    interactionStates.acknowledge();
+    var routedInteractionRevision = interactionStates.revision;
+    var previousFocus = focus.focusedId;
+    focus.rebuild(next);
+    var requestedFocus = pendingFocus;
+    pendingFocus = null;
+    if (requestedFocus != null) focus.focus(requestedFocus);
+    var nextFocus = focus.focusedId;
+    var focusChanged = (previousFocus == null
+      && nextFocus != null) || (previousFocus != null && (nextFocus == null || !previousFocus.equals(nextFocus)));
+    if (previousFocus != null && (nextFocus == null || !previousFocus.equals(nextFocus))) events.focusEvent(
+      previousFocus,
+      UiEventKind.Blur
+    );
+    root = next;
+    // Do not keep an old tree alive if a cached path's nodes were replaced while the pointer was absent.
+    if (retainedHitPath != null) for (node in retainedHitPath) if (nodesById.get(node.id.value) != node) {
+      retainedHitPath = null;
+      break;
+    }
+    var picker = retainedHitTestProvider;
+    if (picker == null) {
+      picker = function(x:Float, y:Float) {
+        session.hitTestInto(x, y, hitTestIds);
+        var cached = retainedHitPath;
+        if (cached != null && cached.length == hitTestIds.length) {
+          var same = true;
+          for (index in 0...hitTestIds.length) if (currentNodesById.get(hitTestIds[index]) != cached[index]) {
+            same = false;
+            break;
+          }
+          if (same) return cached;
+        }
+        var path:Array<RenderNode> = [];
+        path.resize(hitTestIds.length);
+        for (index in 0...hitTestIds.length) {
+          var node = currentNodesById.get(hitTestIds[index]);
+          if (node == null) {
+            retainedHitPath = null;
+            return [];
+          }
+          path[index] = node;
+        }
+        retainedHitPath = path;
+        return path;
+      };
+      retainedHitTestProvider = picker;
+    }
+    events.setHitTestProvider(picker);
+    events.setRoot(next, nodesById);
+    gestures.setRoot(next);
+    updateCursor();
+    if (nextFocus != null && (previousFocus == null || !previousFocus.equals(nextFocus))) events.focusEvent(
+      nextFocus,
+      UiEventKind.Focus
+    );
+    // Reconcile focus before releasing resources owned by unmounted widgets.
+    // Blur is the old tree's final lifecycle event, so its handlers must still
+    // be able to access widget state while that event is being dispatched.
+    buildContext.retainRenderScopeState(nodesById);
+    stateStore.endFrame();
+    buildContext.pruneSelfUpdatingBuilds(nodesById);
+    buildContext.pruneRenderScopes(nodesById);
+    buildContext.pruneKeyCaches(nodesById, mountedHash);
+    buildContext.stateStore.prunePaths(nodesById);
+    submittedInteractionRevision = interactionStates.revision;
+    submittedStyleRevision = buildContext.styleRevision;
+    submittedAnimationRevision = animations.revision;
+    submittedRetainedEditRevision = buildContext.retainedEditRevision;
+    submittedPatchRequestRevision = buildContext.patchRequestRevision;
+    submittedBindingRequestRevision = bindingAppliedRevision;
+    submittedGestureRevision = gestures.revision;
+    submittedNodeCount = nodeCount;
+    submittedFrameWidth = frame.width;
+    submittedFrameHeight = frame.height;
+    submittedBuildKey = cacheKey;
+    submittedTheme = buildContext.theme;
+    submittedStyleSheet = buildContext.styleSheet;
+    if (accessibilityBridge != null && (styleInvalidation.treeChanged
+      || styleInvalidation.semanticsInvalidatedNodes > 0 || resolvedGeometryChangedNodes > 0 || focusChanged)) {
+      accessibilityBridge.coordinateScale = platformCoordinateScale;
+      accessibilityBridge.update(next, focus.focusedId);
+    }
+    // Layout can move a different node under a stationary pointer, and a newly mounted focus trap chooses its target here.
+    // Settle those routed states before painting, using the same bounded feedback as viewport-dependent builds.
+    // This pass is now committed, including fresh nodes. A focus pass must compare against these instances, not
+    // fingerprints of the previous frame's different nodes with the same IDs.
+    if (verifyRetentionEvery > 0) recordFingerprints(next);
+    if ((interactionStates.revision != routedInteractionRevision && routedInteractionNeedsBuild()) || (reconcileNewFocus
+      && focusChanged && (nextFocus != null || (previousFocus != null && nodesById.exists(previousFocus.value))))) {
+      if (buildFeedbackPass >= 7) throw "UI interaction feedback did not converge after 8 passes";
+      if (RenderCost.enabled) RenderCost.submit(
+        submitStartedAt,
+        buildCostStartedAt,
+        nativeLayoutStartedAt,
+        nativeLayoutEndedAt,
+        Sys.time(),
+        nodeCount
+      );
+      // Re-run the original factory: its conditional reads decide which views exist.
+      // A constant view here would replace root subscriptions with only View.build's
+      // reads, leaving later model changes unable to invalidate the cached tree.
+      return submitInternal(frame, cacheKey, build, false, buildFeedbackPass + 1);
+    }
+    // Routing can add changes after the build. Keep them until the feedback pass has patched their owners.
+    interactionStates.acknowledge();
+    frameNumber++;
+    var submitEndedAt = Sys.time();
+    var submitEndAllocatedAt = AllocationProbe.now();
+    pendingReusedMetrics = false;
+    lastFrameMetrics = new UiFrameMetrics(
+      frameNumber,
+      nodeCount,
+      buildContext.styleResolver.resolutions - styleResolutionsBefore,
+      buildContext.styleResolver.cacheHits - styleCacheHitsBefore,
+      buildContext.styleResolver.cacheMisses - styleCacheMissesBefore,
+      buildContext.styleResolver.cachedStyleCount,
+      styleInvalidation.styleChangedNodes,
+      styleInvalidation.styleUnchangedNodes,
+      styleInvalidation.invalidationFlags,
+      styleInvalidation.layoutInvalidatedNodes,
+      styleInvalidation.textLayoutInvalidatedNodes,
+      styleInvalidation.paintInvalidatedNodes,
+      styleInvalidation.compositeInvalidatedNodes,
+      styleInvalidation.semanticsInvalidatedNodes,
+      styleInvalidation.hitGeometryInvalidatedNodes,
+      submitEndedAt - submitStartedAt,
+      !nativeLayoutReused,
+      nativeLayoutReused,
+      resolvedGeometryChangedNodes,
+      resolvedGeometryReusedNodes,
+      buildFeedbackPass + 1
+    );
+    lastFrameMetrics.setSubmitPhases(
+      viewBuiltAt - viewStartedAt,
+      nativeLayoutStartedAt - viewBuiltAt,
+      nativeLayoutEndedAt - nativeLayoutStartedAt,
+      submitEndedAt - nativeLayoutEndedAt
+    );
+    lastFrameMetrics.setTreeAllocations(
+      treeBuiltAllocatedAt - viewBuiltAllocatedAt,
+      compareAllocatedAt - treeBuiltAllocatedAt,
+      syncAllocatedAt - compareAllocatedAt,
+      nativeLayoutStartAllocatedAt - syncAllocatedAt
+    );
+    lastFrameMetrics.setSubmitAllocations(
+      viewBuiltAllocatedAt - viewAllocatedAt,
+      nativeLayoutStartAllocatedAt - viewBuiltAllocatedAt,
+      nativeLayoutEndAllocatedAt - nativeLayoutStartAllocatedAt,
+      submitEndAllocatedAt - nativeLayoutEndAllocatedAt
+    );
+    if (RenderCost.enabled) RenderCost.submit(
+      submitStartedAt,
+      buildCostStartedAt,
+      nativeLayoutStartedAt,
+      nativeLayoutEndedAt,
+      submitEndedAt,
+      nodeCount
+    );
+    diagnosticStage = 0;
+    return next;
+  }
 
-	/**
+  /**
 	 * Lets go of the retained render tree and everything that holds its nodes or their handler closures: the root, the
 	 * node maps, the hit-test picker, hover paths, focus order, in-flight gestures and self-updating builders. Interaction
 	 * state that holds no code stays: focus by ID, pointer presses and captures by ID, widget state, the key caches and the
@@ -815,874 +865,913 @@ class UiContext {
 	 * context must not be rendered; the next submit builds the whole tree afresh. A live host calls this before a patch that
 	 * drops functions, so stored closures only the old tree held no longer reach them.
 	 */
-	public function releaseRetained():Void {
-		ensureLive();
-		root = null;
-		submittedNodes.resize(0);
-		submittedPaintNodes.resize(0);
-		submittedTopology.clear();
-		nextTopology.clear();
-		inspectionNode = null;
-		submittedBuildKey = null;
-		previousNodesById.clear();
-		currentNodesById.clear();
-		resolvedById.clear();
-		events.releaseTree();
-		retainedHitTestProvider = null;
-		retainedHitPath = null;
-		focus.releaseTree();
-		gestures.setRoot(null);
-		buildContext.releaseRetained();
-		// The painters may be new code: paint every node again instead of reusing its list by key.
-		customPaintKeys.clear();
-		customCompositeKeys.clear();
-	}
+  public function releaseRetained():Void {
+    ensureLive();
+    root = null;
+    submittedNodes.resize(0);
+    submittedPaintNodes.resize(0);
+    submittedTopology.clear();
+    nextTopology.clear();
+    inspectionNode = null;
+    submittedBuildKey = null;
+    previousNodesById.clear();
+    currentNodesById.clear();
+    resolvedById.clear();
+    events.releaseTree();
+    retainedHitTestProvider = null;
+    retainedHitPath = null;
+    focus.releaseTree();
+    gestures.setRoot(null);
+    buildContext.releaseRetained();
+    // The painters may be new code: paint every node again instead of reusing its list by key.
+    customPaintKeys.clear();
+    customCompositeKeys.clear();
+  }
 
-	public function getDiagnosticStage():Int
-		return diagnosticStage;
+  public function getDiagnosticStage():Int return diagnosticStage;
 
-	/** Connects this frame's semantic projection to a NativeKit platform surface. */
-	public function updateAccessibility(surface:PlatformSurface):Void {
-		ensureLive();
-		if (surface == null || surface.isDisposed())
-			throw "Accessibility projection requires a live NativeKit surface";
-		if (accessibilitySurface != surface) {
-			if (accessibilityBridge != null)
-				accessibilityBridge.dispose();
-			accessibilitySurface = surface;
-			accessibilityBridge = new AccessibilityBridge(surface);
-		}
-		accessibilityBridge.coordinateScale = platformCoordinateScale;
-		accessibilityBridge.update(root, focus.focusedId);
-	}
+  /** Connects this frame's semantic projection to a NativeKit platform surface. */
+  public function updateAccessibility(surface:PlatformSurface):Void {
+    ensureLive();
+    if (surface == null || surface.isDisposed()) throw "Accessibility projection requires a live NativeKit surface";
+    if (accessibilitySurface != surface) {
+      if (accessibilityBridge != null) accessibilityBridge.dispose();
+      accessibilitySurface = surface;
+      accessibilityBridge = new AccessibilityBridge(surface);
+    }
+    accessibilityBridge.coordinateScale = platformCoordinateScale;
+    accessibilityBridge.update(root, focus.focusedId);
+  }
 
-	/** Matches the render traversal's eligibility checks without a second node map. */
-	function hasCurrentCustomPaint(nodeId:Int):Bool {
-		var node = currentNodesById.get(nodeId);
-		if (node == null || !node.hasPaintHandler() || node.resolved == null) return false;
-		var geometry = node.resolved;
-		return geometry.width > 0.0 && geometry.height > 0.0 &&
-			geometry.clipBounds.width > 0.0 && geometry.clipBounds.height > 0.0;
-	}
+  /** Matches the render traversal's eligibility checks without a second node map. */
+  function hasCurrentCustomPaint(nodeId:Int):Bool {
+    var node = currentNodesById.get(nodeId);
+    if (node == null || !node.hasPaintHandler() || node.resolved == null) return false;
+    var geometry = node.resolved;
+    return geometry.width > 0.0
+      && geometry.height > 0.0 && geometry.clipBounds.width > 0.0 && geometry.clipBounds.height > 0.0;
+  }
 
-	public function render(renderer:Renderer, surface:Surface, frame:FrameInfo):Void {
-		RenderCost.begin();
-		var renderStartedAt = Sys.time();
-		var renderStartAllocatedAt = AllocationProbe.now();
-		diagnosticStage = 20;
-		ensureLive();
-		if (root == null)
-			throw "Submit a view before rendering the UI context";
-		diagnosticStage = 21;
-		var paintedNodes = 0;
-		var paintSkippedNodes = 0;
-		var emptyPaintNodes = 0;
-		diagnosticStage = 22;
-		for (node in submittedPaintNodes) {
-			var nodeId = node.id.value;
-			if (node.resolved != null && node.cachePolicy != CachePolicy.None)
-				session.setCachePolicy(node.id.value, NativeEnums.cachePolicy(node.cachePolicy));
-			if (!node.hasPaintHandler() || node.resolved == null) {
-				clearCustomPaintBindings(node.id.value);
-				continue;
-			}
-			if (node.resolved.visible &&
-				(node.resolved.width <= 0.0 || node.resolved.height <= 0.0))
-				emptyPaintNodes++;
-			// A hidden painter records nothing; do not cache that empty result as its content.
-			// Keep any existing local list so it can be rebound when the node becomes visible.
-			if (!node.resolved.visible || node.resolved.width <= 0.0 || node.resolved.height <= 0.0 ||
-				node.resolved.clipBounds.width <= 0.0 || node.resolved.clipBounds.height <= 0.0) {
-				clearCustomPaintBindings(nodeId);
-				continue;
-			}
-			var displayList = customLists.get(nodeId);
-			var contentReused = displayList != null && canReuseCustomPaint(node);
-			if (contentReused) {
-				if (customListHasCommands.get(nodeId) == true) {
-					if (customPaintBound.get(nodeId) != true) {
-						session.setCustomPaint(nodeId, displayList);
-						customPaintBound.set(nodeId, true);
-					}
-					if (node.cachePolicy != CachePolicy.None)
-						session.setCustomPaintCachePolicy(nodeId, NativeEnums.cachePolicy(node.cachePolicy));
-				}
-			} else {
-				var canvas = customCanvases.get(nodeId);
-				if (canvas == null) {
-					canvas = new Canvas();
-					canvas.retainRectangles = true;
-					customCanvases.set(nodeId, canvas);
-				}
-				canvas.reset();
-				var geometry:ResolvedLayoutItem = cast node.resolved;
-				var inspectionStarted = onInspectionPaint == null || node == inspectionNode ? 0.0 : Sys.time();
-				canvas.withState(function(target) {
-					target.resetTransform();
-					// Custom painters own only node-local pixels. Native layout and
-					// compositing apply the resolved position, transform, and ancestor
-					// clips when the retained list is embedded.
-					target.clip(new Rect(0.0, 0.0, geometry.width, geometry.height));
-					node.paintContent(target);
-				});
-				if (displayList == null) {
-					displayList = DisplayList.create();
-					customLists.set(nodeId, displayList);
-				}
-				canvas.update(displayList);
-				if (onInspectionPaint != null && node != inspectionNode) onInspectionPaint(nodeId, Sys.time() - inspectionStarted);
-				var hasCommands = displayList.info().commandCount > 0;
-				customListHasCommands.set(nodeId, hasCommands);
-				if (hasCommands) {
-					session.setCustomPaint(nodeId, displayList);
-					customPaintBound.set(nodeId, true);
-				} else {
-					session.clearCustomPaint(nodeId);
-					customPaintBound.set(nodeId, false);
-				}
-				if (hasCommands && node.cachePolicy != CachePolicy.None)
-					session.setCustomPaintCachePolicy(nodeId, NativeEnums.cachePolicy(node.cachePolicy));
-				customGeometries.set(nodeId, geometry);
-				customPaintKeys.set(nodeId, node.retainedPaintKey());
-				customContentRevisions.set(nodeId, node.paintRevision);
-				paintedNodes++;
-			}
+  public function render(renderer:Renderer, surface:Surface, frame:FrameInfo):Void {
+    RenderCost.begin();
+    var renderStartedAt = Sys.time();
+    var renderStartAllocatedAt = AllocationProbe.now();
+    diagnosticStage = 20;
+    ensureLive();
+    if (root == null) throw "Submit a view before rendering the UI context";
+    diagnosticStage = 21;
+    var paintedNodes = 0;
+    var paintSkippedNodes = 0;
+    var emptyPaintNodes = 0;
+    diagnosticStage = 22;
+    for (node in submittedPaintNodes) {
+      var nodeId = node.id.value;
+      if (node.resolved != null && node.cachePolicy != CachePolicy.None) session.setCachePolicy(
+        node.id.value,
+        NativeEnums.cachePolicy(node.cachePolicy)
+      );
+      if (!node.hasPaintHandler() || node.resolved == null) {
+        clearCustomPaintBindings(node.id.value);
+        continue;
+      }
+      if (node.resolved.visible && (node.resolved.width <= 0.0 || node.resolved.height <= 0.0)) emptyPaintNodes++;
+      // A hidden painter records nothing; do not cache that empty result as its content.
+      // Keep any existing local list so it can be rebound when the node becomes visible.
+      if (!node.resolved.visible || node.resolved.width <= 0.0 || node.resolved.height <= 0.0
+        || node.resolved.clipBounds.width <= 0.0 || node.resolved.clipBounds.height <= 0.0) {
+        clearCustomPaintBindings(nodeId);
+        continue;
+      }
+      var displayList = customLists.get(nodeId);
+      var contentReused = displayList != null && canReuseCustomPaint(node);
+      if (contentReused) {
+        if (customListHasCommands.get(nodeId) == true) {
+          if (customPaintBound.get(nodeId) != true) {
+            session.setCustomPaint(nodeId, displayList);
+            customPaintBound.set(nodeId, true);
+          }
+          if (node.cachePolicy != CachePolicy.None) session.setCustomPaintCachePolicy(
+            nodeId,
+            NativeEnums.cachePolicy(node.cachePolicy)
+          );
+        }
+      } else {
+        var canvas = customCanvases.get(nodeId);
+        if (canvas == null) {
+          canvas = new Canvas();
+          canvas.retainRectangles = true;
+          customCanvases.set(nodeId, canvas);
+        }
+        canvas.reset();
+        var geometry:ResolvedLayoutItem = cast node.resolved;
+        var inspectionStarted = onInspectionPaint == null || node == inspectionNode ? 0.0 : Sys.time();
+        canvas.withState(function(target) {
+          target.resetTransform();
+          // Custom painters own only node-local pixels. Native layout and
+          // compositing apply the resolved position, transform, and ancestor
+          // clips when the retained list is embedded.
+          target.clip(new Rect(0.0, 0.0, geometry.width, geometry.height));
+          node.paintContent(target);
+        }
+        );
+        if (displayList == null) {
+          displayList = DisplayList.create();
+          customLists.set(nodeId, displayList);
+        }
+        canvas.update(displayList);
+        if (onInspectionPaint != null && node != inspectionNode) onInspectionPaint(
+          nodeId,
+          Sys.time() - inspectionStarted
+        );
+        var hasCommands = displayList.info().commandCount > 0;
+        customListHasCommands.set(nodeId, hasCommands);
+        if (hasCommands) {
+          session.setCustomPaint(nodeId, displayList);
+          customPaintBound.set(nodeId, true);
+        } else {
+          session.clearCustomPaint(nodeId);
+          customPaintBound.set(nodeId, false);
+        }
+        if (hasCommands && node.cachePolicy != CachePolicy.None) session.setCustomPaintCachePolicy(
+          nodeId,
+          NativeEnums.cachePolicy(node.cachePolicy)
+        );
+        customGeometries.set(nodeId, geometry);
+        customPaintKeys.set(nodeId, node.retainedPaintKey());
+        customContentRevisions.set(nodeId, node.paintRevision);
+        paintedNodes++;
+      }
 
-			var compositeList = customCompositeLists.get(nodeId);
-			if (node.hasCompositePaint() && customListHasCommands.get(nodeId) == true) {
-				var compositeRebuilt = false;
-				if (compositeList == null || !canReuseCustomComposite(node)) {
-					compositeRebuilt = true;
-					var compositeCanvas = customCompositeCanvases.get(nodeId);
-					if (compositeCanvas == null) {
-						compositeCanvas = new Canvas();
-						customCompositeCanvases.set(nodeId, compositeCanvas);
-					}
-					compositeCanvas.reset();
-					node.paintComposite(compositeCanvas);
-					if (compositeList == null) {
-						compositeList = DisplayList.create();
-						customCompositeLists.set(nodeId, compositeList);
-					}
-					compositeCanvas.update(compositeList);
-					customCompositeKeys.set(nodeId, node.retainedCompositeKey());
-					customCompositeGeometries.set(nodeId, cast node.resolved);
-				}
-				if (compositeList != null && compositeList.info().commandCount > 0) {
-					if (compositeRebuilt || customCompositeBound.get(nodeId) != true)
-						session.setCustomPaintComposite(nodeId, compositeList);
-					customCompositeBound.set(nodeId, true);
-				} else if (customCompositeBound.get(nodeId) == true) {
-					session.clearCustomPaintComposite(nodeId);
-					customCompositeBound.set(nodeId, false);
-				}
-			} else if (customCompositeBound.get(nodeId) == true) {
-				session.clearCustomPaintComposite(nodeId);
-				customCompositeBound.set(nodeId, false);
-			}
-			if (contentReused)
-				paintSkippedNodes++;
-		}
-		diagnosticStage = 23;
-		var stale = stalePaintNodes;
-		stale.resize(0);
-		for (nodeId in customLists.keys())
-			if (!hasCurrentCustomPaint(nodeId)) stale.push(nodeId);
-		for (nodeId in customCompositeLists.keys())
-			if (!customLists.exists(nodeId) && !hasCurrentCustomPaint(nodeId)) stale.push(nodeId);
-		for (nodeId in stale) {
-			clearCustomPaintBindings(nodeId);
-			var canvas = customCanvases.get(nodeId);
-			if (canvas != null) {
-				canvas.reset();
-				canvas.releaseRetained();
-			}
-			var displayList = customLists.get(nodeId);
-			if (displayList != null)
-				displayList.dispose();
-			customCanvases.remove(nodeId);
-			customLists.remove(nodeId);
-			customGeometries.remove(nodeId);
-			customPaintKeys.remove(nodeId);
-			customContentRevisions.remove(nodeId);
-			customPaintBound.remove(nodeId);
-			var compositeCanvas = customCompositeCanvases.get(nodeId);
-			if (compositeCanvas != null)
-				compositeCanvas.reset();
-			var compositeList = customCompositeLists.get(nodeId);
-			if (compositeList != null)
-				compositeList.dispose();
-			customCompositeCanvases.remove(nodeId);
-			customCompositeLists.remove(nodeId);
-			customCompositeKeys.remove(nodeId);
-			customCompositeGeometries.remove(nodeId);
-			customCompositeBound.remove(nodeId);
-			customListHasCommands.remove(nodeId);
-		}
-		diagnosticStage = 24;
-		var nativeRenderStartedAt = Sys.time();
-		var nativeRenderStartAllocatedAt = AllocationProbe.now();
-		session.render(renderer, surface, frame);
-		var renderMetrics = frameMetrics;
-		if (renderMetrics != null) {
-			var renderEndedAt = Sys.time();
-			renderMetrics.completeRender(renderEndedAt - renderStartedAt, paintedNodes,
-				paintSkippedNodes, emptyPaintNodes);
-			renderMetrics.setRenderPhases(nativeRenderStartedAt - renderStartedAt,
-				renderEndedAt - nativeRenderStartedAt);
-			var renderEndAllocatedAt = AllocationProbe.now();
-			renderMetrics.setRenderAllocations(nativeRenderStartAllocatedAt - renderStartAllocatedAt,
-				renderEndAllocatedAt - nativeRenderStartAllocatedAt);
-		}
-		if (RenderCost.enabled) RenderCost.render(renderStartedAt, nativeRenderStartedAt, Sys.time(), submittedNodeCount);
-		diagnosticStage = 0;
-	}
+      var compositeList = customCompositeLists.get(nodeId);
+      if (node.hasCompositePaint() && customListHasCommands.get(nodeId) == true) {
+        var compositeRebuilt = false;
+        if (compositeList == null || !canReuseCustomComposite(node)) {
+          compositeRebuilt = true;
+          var compositeCanvas = customCompositeCanvases.get(nodeId);
+          if (compositeCanvas == null) {
+            compositeCanvas = new Canvas();
+            customCompositeCanvases.set(nodeId, compositeCanvas);
+          }
+          compositeCanvas.reset();
+          node.paintComposite(compositeCanvas);
+          if (compositeList == null) {
+            compositeList = DisplayList.create();
+            customCompositeLists.set(nodeId, compositeList);
+          }
+          compositeCanvas.update(compositeList);
+          customCompositeKeys.set(nodeId, node.retainedCompositeKey());
+          customCompositeGeometries.set(nodeId, cast node.resolved);
+        }
+        if (compositeList != null && compositeList.info().commandCount > 0) {
+          if (compositeRebuilt || customCompositeBound.get(nodeId) != true) session.setCustomPaintComposite(
+            nodeId,
+            compositeList
+          );
+          customCompositeBound.set(nodeId, true);
+        } else if (customCompositeBound.get(nodeId) == true) {
+          session.clearCustomPaintComposite(nodeId);
+          customCompositeBound.set(nodeId, false);
+        }
+      } else if (customCompositeBound.get(nodeId) == true) {
+        session.clearCustomPaintComposite(nodeId);
+        customCompositeBound.set(nodeId, false);
+      }
+      if (contentReused) paintSkippedNodes++;
+    }
+    diagnosticStage = 23;
+    var stale = stalePaintNodes;
+    stale.resize(0);
+    for (nodeId in customLists.keys()) if (!hasCurrentCustomPaint(nodeId)) stale.push(nodeId);
+    for (nodeId in customCompositeLists.keys()) if (!customLists.exists(nodeId)
+      && !hasCurrentCustomPaint(nodeId)) stale.push(nodeId);
+    for (nodeId in stale) {
+      clearCustomPaintBindings(nodeId);
+      var canvas = customCanvases.get(nodeId);
+      if (canvas != null) {
+        canvas.reset();
+        canvas.releaseRetained();
+      }
+      var displayList = customLists.get(nodeId);
+      if (displayList != null) displayList.dispose();
+      customCanvases.remove(nodeId);
+      customLists.remove(nodeId);
+      customGeometries.remove(nodeId);
+      customPaintKeys.remove(nodeId);
+      customContentRevisions.remove(nodeId);
+      customPaintBound.remove(nodeId);
+      var compositeCanvas = customCompositeCanvases.get(nodeId);
+      if (compositeCanvas != null) compositeCanvas.reset();
+      var compositeList = customCompositeLists.get(nodeId);
+      if (compositeList != null) compositeList.dispose();
+      customCompositeCanvases.remove(nodeId);
+      customCompositeLists.remove(nodeId);
+      customCompositeKeys.remove(nodeId);
+      customCompositeGeometries.remove(nodeId);
+      customCompositeBound.remove(nodeId);
+      customListHasCommands.remove(nodeId);
+    }
+    diagnosticStage = 24;
+    var nativeRenderStartedAt = Sys.time();
+    var nativeRenderStartAllocatedAt = AllocationProbe.now();
+    session.render(renderer, surface, frame);
+    var renderMetrics = frameMetrics;
+    if (renderMetrics != null) {
+      var renderEndedAt = Sys.time();
+      renderMetrics.completeRender(renderEndedAt - renderStartedAt, paintedNodes, paintSkippedNodes, emptyPaintNodes);
+      renderMetrics.setRenderPhases(nativeRenderStartedAt - renderStartedAt, renderEndedAt - nativeRenderStartedAt);
+      var renderEndAllocatedAt = AllocationProbe.now();
+      renderMetrics.setRenderAllocations(
+        nativeRenderStartAllocatedAt - renderStartAllocatedAt,
+        renderEndAllocatedAt - nativeRenderStartAllocatedAt
+      );
+    }
+    if (RenderCost.enabled) RenderCost.render(renderStartedAt, nativeRenderStartedAt, Sys.time(), submittedNodeCount);
+    diagnosticStage = 0;
+  }
 
-	/**
+  /**
 	 * Advances active animations and repaints the retained tree without relayout.
 	 * Hosts should use this for animation-only frames instead of submit().
 	 */
-	public function renderAnimationFrame(renderer:Renderer, surface:Surface,
-			frame:FrameInfo, deltaSeconds:Float):Void {
-		ensureLive();
-		animations.advance(deltaSeconds);
-		render(renderer, surface, frame);
-	}
+  public function renderAnimationFrame(renderer:Renderer, surface:Surface, frame:FrameInfo, deltaSeconds:Float):Void {
+    ensureLive();
+    animations.advance(deltaSeconds);
+    render(renderer, surface, frame);
+  }
 
-	public function focusWidget(id:WidgetId):Bool {
-		ensureLive();
-		var previous = focus.focusedId;
-		if (!focus.focus(id))
-			return false;
-		dispatchFocusChange(previous, focus.focusedId);
-		return true;
-	}
+  public function focusWidget(id:WidgetId):Bool {
+    ensureLive();
+    var previous = focus.focusedId;
+    if (!focus.focus(id)) return false;
+    dispatchFocusChange(previous, focus.focusedId);
+    return true;
+  }
 
-	public function focusNext():Null<WidgetId> {
-		ensureLive();
-		var previous = focus.focusedId;
-		var next = focus.focusNext();
-		dispatchFocusChange(previous, next);
-		return next;
-	}
+  public function focusNext():Null<WidgetId> {
+    ensureLive();
+    var previous = focus.focusedId;
+    var next = focus.focusNext();
+    dispatchFocusChange(previous, next);
+    return next;
+  }
 
-	public function focusPrevious():Null<WidgetId> {
-		ensureLive();
-		var previous = focus.focusedId;
-		var next = focus.focusPrevious();
-		dispatchFocusChange(previous, next);
-		return next;
-	}
+  public function focusPrevious():Null<WidgetId> {
+    ensureLive();
+    var previous = focus.focusedId;
+    var next = focus.focusPrevious();
+    dispatchFocusChange(previous, next);
+    return next;
+  }
 
-	public function clearFocus():Void {
-		ensureLive();
-		focusBeforeWindowBlur = null;
-		var previous = focus.focusedId;
-		focus.focus(null);
-		dispatchFocusChange(previous, null);
-	}
+  public function clearFocus():Void {
+    ensureLive();
+    focusBeforeWindowBlur = null;
+    var previous = focus.focusedId;
+    focus.focus(null);
+    dispatchFocusChange(previous, null);
+  }
 
-	/** Routes a NativeKit platform accessibility action to the addressed semantic node. */
-	public function accessibilityAction(id:Int, action:Int, value:Null<String>,
-			selectionStart:Int, selectionEnd:Int, granularity:Int):Bool {
-		ensureLive();
-		if (root == null || id <= 0)
-			return false;
-		var widgetId = new WidgetId(id);
-		var node = root.find(widgetId);
-		if (node == null || node.semantics == null || node.resolved == null || !node.resolved.visible)
-			return false;
-		var semantics:Semantics = cast node.semantics;
-		var request = AccessibilityRequest.create(action, value, selectionStart,
-			selectionEnd, granularity);
-		if (request == null)
-			return false;
-		var enabled = enabledAlongPath(node);
-		var actions = semantics.actions;
-		if (node.focusable && enabled)
-			actions |= haxeon.ui.semantics.AccessibilityAction.Focus;
-		if (!enabled)
-			actions = haxeon.ui.semantics.AccessibilityAction.empty();
-		if (!actions.contains(request.capability))
-			return false;
-		var geometry:ResolvedLayoutItem = cast node.resolved;
-		if (action == AccessibilityRequest.Focus)
-			return focusWidget(widgetId);
-		if (action == AccessibilityRequest.ClearFocus) {
-			if (focus.focusedId != null && focus.focusedId.equals(widgetId))
-				clearFocus();
-			return true;
-		}
-		var deltaX = 0.0;
-		var deltaY = 0.0;
-		if (action == AccessibilityRequest.ScrollForward)
-			deltaY = geometry.height;
-		else if (action == AccessibilityRequest.ScrollBackward)
-			deltaY = -geometry.height;
-		if (action == AccessibilityRequest.ScrollForward ||
-			action == AccessibilityRequest.ScrollBackward)
-			return events.targetEvent(UiEventKind.Scroll, widgetId, null, deltaX,
-				deltaY, new AccessibilityActionData(action, selectionStart, selectionEnd, granularity));
-		return events.targetEvent(request.kind, widgetId, request.value, 0.0, 0.0,
-			new AccessibilityActionData(action, selectionStart, selectionEnd, granularity));
-	}
+  /** Routes a NativeKit platform accessibility action to the addressed semantic node. */
+  public function accessibilityAction(
+    id:Int,
+    action:Int,
+    value:Null<String>,
+    selectionStart:Int,
+    selectionEnd:Int,
+    granularity:Int
+  ):Bool {
+    ensureLive();
+    if (root == null || id <= 0) return false;
+    var widgetId = new WidgetId(id);
+    var node = root.find(widgetId);
+    if (node == null || node.semantics == null || node.resolved == null || !node.resolved.visible) return false;
+    var semantics:Semantics = cast node.semantics;
+    var request = AccessibilityRequest.create(action, value, selectionStart, selectionEnd, granularity);
+    if (request == null) return false;
+    var enabled = enabledAlongPath(node);
+    var actions = semantics.actions;
+    if (node.focusable && enabled) actions |= haxeon.ui.semantics.AccessibilityAction.Focus;
+    if (!enabled) actions = haxeon.ui.semantics.AccessibilityAction.empty();
+    if (!actions.contains(request.capability)) return false;
+    var geometry:ResolvedLayoutItem = cast node.resolved;
+    if (action == AccessibilityRequest.Focus) return focusWidget(widgetId);
+    if (action == AccessibilityRequest.ClearFocus) {
+      if (focus.focusedId != null && focus.focusedId.equals(widgetId)) clearFocus();
+      return true;
+    }
+    var deltaX = 0.0;
+    var deltaY = 0.0;
+    if (action == AccessibilityRequest.ScrollForward) deltaY = geometry.height;
+    else if (action == AccessibilityRequest.ScrollBackward) deltaY = -geometry.height;
+    if (action == AccessibilityRequest.ScrollForward
+      || action == AccessibilityRequest.ScrollBackward) return events.targetEvent(
+        UiEventKind.Scroll,
+        widgetId,
+        null,
+        deltaX,
+        deltaY,
+        new AccessibilityActionData(action, selectionStart, selectionEnd, granularity)
+      );
+    return events.targetEvent(
+      request.kind,
+      widgetId,
+      request.value,
+      0.0,
+      0.0,
+      new AccessibilityActionData(action, selectionStart, selectionEnd, granularity)
+    );
+  }
 
-	/** Clears transient pointer state and reports loss of platform window focus. */
-	public function windowFocusLost():Void {
-		ensureLive();
-		if (windowFocused) focusBeforeWindowBlur = focus.focusedId;
-		windowFocused = false;
-		events.cancelPointers();
-		updateCursor();
-		gestures.cancelAll();
-		var previous = focus.focusedId;
-		if (previous != null)
-			events.focusEvent(previous, UiEventKind.FocusLost);
-		focus.focus(null);
-		dispatchFocusChange(previous, null);
-	}
+  /** Clears transient pointer state and reports loss of platform window focus. */
+  public function windowFocusLost():Void {
+    ensureLive();
+    if (windowFocused) focusBeforeWindowBlur = focus.focusedId;
+    windowFocused = false;
+    events.cancelPointers();
+    updateCursor();
+    gestures.cancelAll();
+    var previous = focus.focusedId;
+    if (previous != null) events.focusEvent(previous, UiEventKind.FocusLost);
+    focus.focus(null);
+    dispatchFocusChange(previous, null);
+  }
 
-	/** Restore keyboard ownership after activation, subject to current focus eligibility. */
-	public function windowFocusGained():Void {
-		ensureLive();
-		if (windowFocused) return;
-		windowFocused = true;
-		var restore = focusBeforeWindowBlur;
-		focusBeforeWindowBlur = null;
-		// A background change may have selected another widget or opened a modal.
-		// focusWidget also rejects removed, hidden, disabled and trapped-out nodes.
-		// With the tree released, the next submit restores it.
-		if (focus.focusedId == null && restore != null) {
-			if (root == null) pendingFocus = restore;
-			else focusWidget(restore);
-		}
-	}
+  /** Restore keyboard ownership after activation, subject to current focus eligibility. */
+  public function windowFocusGained():Void {
+    ensureLive();
+    if (windowFocused) return;
+    windowFocused = true;
+    var restore = focusBeforeWindowBlur;
+    focusBeforeWindowBlur = null;
+    // A background change may have selected another widget or opened a modal.
+    // focusWidget also rejects removed, hidden, disabled and trapped-out nodes.
+    // With the tree released, the next submit restores it.
+    if (focus.focusedId == null && restore != null) {
+      if (root == null) pendingFocus = restore;
+      else focusWidget(restore);
+    }
+  }
 
-	public function pointerMove(x:Float, y:Float, modifiers:UiModifier = UiModifier.empty(),
-			pointerId:Int = 0, data:Dynamic = null):Void {
-		ensureLive();
-		updateModifiers(modifiers);
-		events.pointerMove(x, y, modifiers, pointerId, data);
-		updateCursor();
-	}
+  public function pointerMove(
+    x:Float,
+    y:Float,
+    modifiers:UiModifier = UiModifier.empty(),
+    pointerId:Int = 0,
+    data:Dynamic = null
+  ):Void {
+    ensureLive();
+    updateModifiers(modifiers);
+    events.pointerMove(x, y, modifiers, pointerId, data);
+    updateCursor();
+  }
 
-	public function pointerDown(x:Float, y:Float, button:Int, modifiers:UiModifier = UiModifier.empty(),
-			pointerId:Int = 0, data:Dynamic = null, timestamp:Float = -1.0):Void {
-		ensureLive();
-		updateModifiers(modifiers);
-		events.pointerDown(x, y, button, modifiers, pointerId, data, timestamp);
-		updateCursor();
-	}
+  public function pointerDown(
+    x:Float,
+    y:Float,
+    button:Int,
+    modifiers:UiModifier = UiModifier.empty(),
+    pointerId:Int = 0,
+    data:Dynamic = null,
+    timestamp:Float = -1.0
+  ):Void {
+    ensureLive();
+    updateModifiers(modifiers);
+    events.pointerDown(x, y, button, modifiers, pointerId, data, timestamp);
+    updateCursor();
+  }
 
-	public function pointerUp(x:Float, y:Float, button:Int, modifiers:UiModifier = UiModifier.empty(),
-			pointerId:Int = 0, data:Dynamic = null):Void {
-		ensureLive();
-		updateModifiers(modifiers);
-		events.pointerUp(x, y, button, modifiers, pointerId, data);
-		updateCursor();
-	}
+  public function pointerUp(
+    x:Float,
+    y:Float,
+    button:Int,
+    modifiers:UiModifier = UiModifier.empty(),
+    pointerId:Int = 0,
+    data:Dynamic = null
+  ):Void {
+    ensureLive();
+    updateModifiers(modifiers);
+    events.pointerUp(x, y, button, modifiers, pointerId, data);
+    updateCursor();
+  }
 
-	public function pointerCancel(pointerId:Int, x:Float, y:Float,
-			modifiers:UiModifier = UiModifier.empty(), data:Dynamic = null):Void {
-		ensureLive();
-		events.pointerCancel(pointerId, x, y, modifiers, data);
-		updateCursor();
-	}
+  public function pointerCancel(
+    pointerId:Int,
+    x:Float,
+    y:Float,
+    modifiers:UiModifier = UiModifier.empty(),
+    data:Dynamic = null
+  ):Void {
+    ensureLive();
+    events.pointerCancel(pointerId, x, y, modifiers, data);
+    updateCursor();
+  }
 
-	public function pointerLeave(pointerId:Int = 0):Void {
-		ensureLive();
-		events.clearPointer(pointerId);
-		updateCursor();
-	}
+  public function pointerLeave(pointerId:Int = 0):Void {
+    ensureLive();
+    events.clearPointer(pointerId);
+    updateCursor();
+  }
 
-	/** Ends a captured drag if the platform reports its button released on re-entry. */
-	public function pointerReenter(buttonPressed:Bool, x:Float, y:Float,
-			pointerId:Int = 0):Void {
-		ensureLive();
-		if (!buttonPressed && events.hasCapturedPointer(pointerId))
-			pointerCancel(pointerId, x, y);
-	}
+  /** Ends a captured drag if the platform reports its button released on re-entry. */
+  public function pointerReenter(buttonPressed:Bool, x:Float, y:Float, pointerId:Int = 0):Void {
+    ensureLive();
+    if (!buttonPressed && events.hasCapturedPointer(pointerId)) pointerCancel(pointerId, x, y);
+  }
 
-	/** Installs the platform bridge that applies the context's effective cursor. */
-	public function setCursorHandler(handler:Null<UiCursorShape->Void>):Void {
-		ensureLive();
-		cursorHandler = handler;
-		if (handler != null)
-			handler(currentCursor);
-	}
+  /** Installs the platform bridge that applies the context's effective cursor. */
+  public function setCursorHandler(handler:Null<UiCursorShape -> Void>):Void {
+    ensureLive();
+    cursorHandler = handler;
+    if (handler != null) handler(currentCursor);
+  }
 
-	/** Installs the host bridge used for physical window/surface pointer capture. */
-	public function setPointerCaptureHandler(handler:Null<Bool->Void>):Void {
-		ensureLive();
-		events.setPointerCaptureHandler(handler);
-	}
+  /** Installs the host bridge used for physical window/surface pointer capture. */
+  public function setPointerCaptureHandler(handler:Null<Bool -> Void>):Void {
+    ensureLive();
+    events.setPointerCaptureHandler(handler);
+  }
 
-	public function scroll(x:Float, y:Float, deltaX:Float, deltaY:Float, modifiers:UiModifier = UiModifier.empty()):Void {
-		ensureLive();
-		updateModifiers(modifiers);
-		events.scroll(x, y, deltaX, deltaY, modifiers);
-	}
+  public function scroll(x:Float, y:Float, deltaX:Float, deltaY:Float, modifiers:UiModifier = UiModifier.empty()):Void {
+    ensureLive();
+    updateModifiers(modifiers);
+    events.scroll(x, y, deltaX, deltaY, modifiers);
+  }
 
-	public function key(kind:String, key:Int, modifiers:UiModifier = UiModifier.empty(), scancode:Int = 0):Void {
-		ensureLive();
-		updateModifiers(modifiers);
-		// NativeKit preserves the keypad key code; UI controls share Enter behavior.
-		if (key == 335) key = UiKey.Enter;
-		events.key(kind, key, modifiers, scancode);
-	}
+  public function key(kind:String, key:Int, modifiers:UiModifier = UiModifier.empty(), scancode:Int = 0):Void {
+    ensureLive();
+    updateModifiers(modifiers);
+    // NativeKit preserves the keypad key code; UI controls share Enter behavior.
+    if (key == 335) key = UiKey.Enter;
+    events.key(kind, key, modifiers, scancode);
+  }
 
-	public function text(kind:String, value:Null<String>, data:Dynamic = null):Void {
-		ensureLive();
-		events.text(kind, value, data);
-	}
+  public function text(kind:String, value:Null<String>, data:Dynamic = null):Void {
+    ensureLive();
+    events.text(kind, value, data);
+  }
 
-	/** True when nothing but pointer state moved since the submitted frame, so retained output may be updated instead of rebuilt. */
-	function steadyForInteractionReuse(cacheKey:String, frame:LayoutFrame):Bool {
-		return root != null && submittedBuildKey == cacheKey && !buildContext.rootDependenciesDirty() &&
-			submittedStyleRevision == buildContext.styleRevision && submittedFrameWidth == frame.width &&
-			submittedFrameHeight == frame.height && animations.rebuildingCount == 0 &&
-			animations.revision == submittedAnimationRevision && gestures.revision == submittedGestureRevision &&
-			buildContext.theme == submittedTheme &&
-			buildContext.styleSheet == submittedStyleSheet;
-	}
+  /** True when nothing but pointer state moved since the submitted frame, so retained output may be updated instead of rebuilt. */
+  function steadyForInteractionReuse(cacheKey:String, frame:LayoutFrame):Bool {
+    return root != null && submittedBuildKey == cacheKey
+      && !buildContext.rootDependenciesDirty() && submittedStyleRevision == buildContext.styleRevision
+      && submittedFrameWidth == frame.width && submittedFrameHeight == frame.height && animations.rebuildingCount == 0
+      && animations.revision == submittedAnimationRevision && gestures.revision == submittedGestureRevision
+      && buildContext.theme == submittedTheme && buildContext.styleSheet == submittedStyleSheet;
+  }
 
-	/** Validate every changed widget before mutating retained paint; unknown behavior rebuilds. */
-	function reuseHoverPaint(cacheKey:String, frame:LayoutFrame):Int {
-		if (!steadyForInteractionReuse(cacheKey, frame) || buildContext.hasRetainedEdits || buildContext.hasPendingPatches ||
-			buildContext.hasPendingRenderScopes() ||
-			buildContext.bindingRequestRevision != submittedBindingRequestRevision) return -1;
-		var changes = interactionStates.changes();
-		for (change in changes) {
-			if (((change.before.rawValue() ^ change.after.rawValue()) & ~haxeon.ui.style.StyleState.Hovered.rawValue()) != 0) return -1;
-			var node = currentNodesById.get(change.id);
-			if (node == null || (node.recordsInteraction && buildContext.hoverRebuilds(node))) return -1;
-		}
-		var painted = 0;
-		for (change in changes) {
-			var node:RenderNode = cast currentNodesById.get(change.id);
-			if (node.hasPaintHandler()) { node.invalidatePaint(); painted++; }
-		}
-		submittedInteractionRevision = interactionStates.revision;
-		interactionStates.acknowledge();
-		return painted;
-	}
+  /** Validate every changed widget before mutating retained paint; unknown behavior rebuilds. */
+  function reuseHoverPaint(cacheKey:String, frame:LayoutFrame):Int {
+    if (!steadyForInteractionReuse(cacheKey,
+      frame) || buildContext.hasRetainedEdits || buildContext.hasPendingPatches || buildContext.hasPendingRenderScopes()
+      || buildContext.bindingRequestRevision != submittedBindingRequestRevision) return -1;
+    var changes = interactionStates.changes();
+    for (change in changes) {
+      if (((change.before.rawValue() ^ change.after.rawValue()) & ~haxeon.ui.style.StyleState.Hovered.rawValue())
+        != 0) return -1;
+      var node = currentNodesById.get(change.id);
+      if (node == null || (node.recordsInteraction && buildContext.hoverRebuilds(node))) return -1;
+    }
+    var painted = 0;
+    for (change in changes) {
+      var node:RenderNode = cast currentNodesById.get(change.id);
+      if (node.hasPaintHandler()) {
+        node.invalidatePaint();
+        painted++;
+      }
+    }
+    submittedInteractionRevision = interactionStates.revision;
+    interactionStates.acknowledge();
+    return painted;
+  }
 
-	/** Nodes whose only change is custom paint during a patch-only frame; filled by `planInteractionPatches`. */
-	final patchFramePaintNodes:Array<RenderNode> = [];
-	static final patchInteractionMask:haxeon.ui.style.StyleState = haxeon.ui.style.StyleState.Hovered | haxeon.ui.style.StyleState.Pressed;
+  /** Nodes whose only change is custom paint during a patch-only frame; filled by `planInteractionPatches`. */
+  final patchFramePaintNodes:Array<RenderNode> = [];
+  static final patchInteractionMask:haxeon.ui.style.StyleState = haxeon.ui.style.StyleState.Hovered
+    | haxeon.ui.style.StyleState.Pressed;
 
-	/**
+  /**
 	 * Decides whether the pending pointer changes can be met by rebuilding just the widgets that read them (self-updating
 	 * widgets, such as buttons), leaving every other node of the submitted tree as it is. Queues those rebuilds and returns true,
 	 * or returns false having changed nothing, in which case the whole view rebuilds.
 	 */
-	function planInteractionPatches(cacheKey:String, frame:LayoutFrame):Bool {
-		if (inspectionEnabled || !buildContext.updateInPlace || !steadyForInteractionReuse(cacheKey, frame)) return false;
-		var changes = interactionStates.changes();
-		for (change in changes) {
-			var bits = change.before.rawValue() ^ change.after.rawValue();
-			var node = currentNodesById.get(change.id);
-			if (node == null) return false;
-			// Routing stores the state a node was built with (Selected, Disabled) alongside the pointer bits, so the first pointer
-			// change of a node appears to set those too. Only a pointer bit, or a disagreement with the built state, is a change.
-			var other = bits & ~patchInteractionMask.rawValue();
-			if (other != 0 && (change.after.rawValue() & other) != (node.states.rawValue() & other)) return false;
-			bits &= patchInteractionMask.rawValue();
-			if (bits == 0) continue;
-			if (buildContext.interactionRenderScope(node) == null && buildContext.updatingOwner(node) == null && node.recordsInteraction && (bits != haxeon.ui.style.StyleState.Hovered.rawValue() || buildContext.hoverRebuilds(node))) return false;
-		}
-		patchFramePaintNodes.resize(0);
-		for (change in changes) {
-			var node:RenderNode = cast currentNodesById.get(change.id);
-			var hoverOnly = ((change.before.rawValue() ^ change.after.rawValue()) & ~haxeon.ui.style.StyleState.Hovered.rawValue()) == 0;
-			if (queueNativeInteraction(node, hoverOnly)) continue;
-			var owner = buildContext.updatingOwner(node);
-			if (owner != null && (!hoverOnly || buildContext.hoverRebuilds(node))) {
-				if (owner == node || node.recordsInteraction) buildContext.queuePatch(owner.id);
-			} else if (node.hasPaintHandler()) patchFramePaintNodes.push(node);
-		}
-		return true;
-	}
+  function planInteractionPatches(cacheKey:String, frame:LayoutFrame):Bool {
+    if (inspectionEnabled || !buildContext.updateInPlace || !steadyForInteractionReuse(cacheKey, frame)) return false;
+    var changes = interactionStates.changes();
+    for (change in changes) {
+      var bits = change.before.rawValue() ^ change.after.rawValue();
+      var node = currentNodesById.get(change.id);
+      if (node == null) return false;
+      // Routing stores the state a node was built with (Selected, Disabled) alongside the pointer bits, so the first pointer
+      // change of a node appears to set those too. Only a pointer bit, or a disagreement with the built state, is a change.
+      var other = bits & ~patchInteractionMask.rawValue();
+      if (other != 0 && (change.after.rawValue() & other) != (node.states.rawValue() & other)) return false;
+      bits &= patchInteractionMask.rawValue();
+      if (bits == 0) continue;
+      if (buildContext.interactionRenderScope(node) == null
+        && buildContext.updatingOwner(node) == null && node.recordsInteraction
+        && (bits != haxeon.ui.style.StyleState.Hovered.rawValue() || buildContext.hoverRebuilds(node))) return false;
+    }
+    patchFramePaintNodes.resize(0);
+    for (change in changes) {
+      var node:RenderNode = cast currentNodesById.get(change.id);
+      var hoverOnly = ((change.before.rawValue()
+        ^ change.after.rawValue()) & ~haxeon.ui.style.StyleState.Hovered.rawValue()) == 0;
+      if (queueNativeInteraction(node, hoverOnly)) continue;
+      var owner = buildContext.updatingOwner(node);
+      if (owner != null && (!hoverOnly || buildContext.hoverRebuilds(node))) {
+        if (owner == node || node.recordsInteraction) buildContext.queuePatch(owner.id);
+      } else if (node.hasPaintHandler()) patchFramePaintNodes.push(node);
+    }
+    return true;
+  }
 
-	function routedInteractionNeedsBuild():Bool {
-		var rebuild = false;
-		for (change in interactionStates.changes()) {
-			var node = currentNodesById.get(change.id);
-			if (node == null) continue;
-			var hoverOnly = ((change.before.rawValue() ^ change.after.rawValue()) & ~haxeon.ui.style.StyleState.Hovered.rawValue()) == 0;
-			if (node.recordsInteraction && (!hoverOnly || buildContext.hoverRebuilds(node))) rebuild = true;
-			else if (node.hasPaintHandler()) {
-				// Layout is already submitted; only the custom list depends on this paint-only routed change.
-				customPaintKeys.remove(node.id.value);
-			}
-		}
-		return rebuild;
-	}
+  function routedInteractionNeedsBuild():Bool {
+    var rebuild = false;
+    for (change in interactionStates.changes()) {
+      var node = currentNodesById.get(change.id);
+      if (node == null) continue;
+      var hoverOnly = ((change.before.rawValue()
+        ^ change.after.rawValue()) & ~haxeon.ui.style.StyleState.Hovered.rawValue()) == 0;
+      if (node.recordsInteraction && (!hoverOnly || buildContext.hoverRebuilds(node))) rebuild = true;
+      else if (node.hasPaintHandler()) {
+        // Layout is already submitted; only the custom list depends on this paint-only routed change.
+        customPaintKeys.remove(node.id.value);
+      }
+    }
+    return rebuild;
+  }
 
-	/** On a full rebuild, retained caches no longer notice pointer changes of self-updating widgets, so they are rebuilt here. */
-	function queueInteractionPatches():Void {
-		patchFramePaintNodes.resize(0);
-		for (change in interactionStates.changes()) {
-			var node = currentNodesById.get(change.id);
-			if (node == null) continue;
-			var hoverOnly = ((change.before.rawValue() ^ change.after.rawValue()) & ~haxeon.ui.style.StyleState.Hovered.rawValue()) == 0;
-			if (queueNativeInteraction(node, hoverOnly)) continue;
-			var owner = buildContext.updatingOwner(node);
-			if (owner != null && (!hoverOnly || buildContext.hoverRebuilds(node))) {
-				if (owner == node || node.recordsInteraction) buildContext.queuePatch(owner.id);
-			// Retained caches ignore hover no rule matches, so a cached node that paints it is repainted here.
-			} else if (node.recordsInteraction && node.hasPaintHandler()) patchFramePaintNodes.push(node);
-		}
-	}
+  /** On a full rebuild, retained caches no longer notice pointer changes of self-updating widgets, so they are rebuilt here. */
+  function queueInteractionPatches():Void {
+    patchFramePaintNodes.resize(0);
+    for (change in interactionStates.changes()) {
+      var node = currentNodesById.get(change.id);
+      if (node == null) continue;
+      var hoverOnly = ((change.before.rawValue()
+        ^ change.after.rawValue()) & ~haxeon.ui.style.StyleState.Hovered.rawValue()) == 0;
+      if (queueNativeInteraction(node, hoverOnly)) continue;
+      var owner = buildContext.updatingOwner(node);
+      if (owner != null && (!hoverOnly || buildContext.hoverRebuilds(node))) {
+        if (owner == node || node.recordsInteraction) buildContext.queuePatch(owner.id);
+        // Retained caches ignore hover no rule matches, so a cached node that paints it is repainted here.
+      } else if (node.recordsInteraction && node.hasPaintHandler()) patchFramePaintNodes.push(node);
+    }
+  }
 
-	function queueNativeInteraction(node:RenderNode, hoverOnly:Bool):Bool {
-		var owner = buildContext.interactionRenderScope(node);
-		if (owner == null) return false;
-		if (node.recordsInteraction && (!hoverOnly || buildContext.hasHoverStyle(node))) owner.markDirty();
-		else if (node.hasPaintHandler()) patchFramePaintNodes.push(node);
-		return true;
-	}
+  function queueNativeInteraction(node:RenderNode, hoverOnly:Bool):Bool {
+    var owner = buildContext.interactionRenderScope(node);
+    if (owner == null) return false;
+    if (node.recordsInteraction && (!hoverOnly || buildContext.hasHoverStyle(node))) owner.markDirty();
+    else if (node.hasPaintHandler()) patchFramePaintNodes.push(node);
+    return true;
+  }
 
-	function canReuseSubmittedFrame(cacheKey:String, frame:LayoutFrame):Bool {
-		return root != null && submittedBuildKey == cacheKey && dirtyFlagsWithoutRootReads() == UiDirtyFlag.None &&
-			!buildContext.rootDependenciesDirty() && !buildContext.hasPendingPatches &&
-			submittedFrameWidth == frame.width && submittedFrameHeight == frame.height &&
-			animations.revision == submittedAnimationRevision && gestures.revision == submittedGestureRevision &&
-			buildContext.theme == submittedTheme &&
-			buildContext.styleSheet == submittedStyleSheet;
-	}
+  function canReuseSubmittedFrame(cacheKey:String, frame:LayoutFrame):Bool {
+    return root != null && submittedBuildKey == cacheKey
+      && dirtyFlagsWithoutRootReads() == UiDirtyFlag.None && !buildContext.rootDependenciesDirty()
+      && !buildContext.hasPendingPatches && submittedFrameWidth == frame.width && submittedFrameHeight == frame.height
+      && animations.revision == submittedAnimationRevision && gestures.revision == submittedGestureRevision
+      && buildContext.theme == submittedTheme && buildContext.styleSheet == submittedStyleSheet;
+  }
 
-	function canReuseCustomPaint(node:RenderNode):Bool {
-		var nodeId = node.id.value;
-		var key = node.retainedPaintKey();
-		if (key == null || !customPaintKeys.exists(nodeId) ||
-			!customListHasCommands.exists(nodeId) || customPaintKeys.get(nodeId) != key)
-			return false;
-		if (customContentRevisions.get(nodeId) != node.paintRevision)
-			return false;
-		var previousGeometry = customGeometries.get(nodeId);
-		if (previousGeometry == null || node.resolved == null ||
-			!samePaintGeometry(previousGeometry, node.resolved))
-			return false;
-		return true;
-	}
+  function canReuseCustomPaint(node:RenderNode):Bool {
+    var nodeId = node.id.value;
+    var key = node.retainedPaintKey();
+    if (key == null || !customPaintKeys.exists(nodeId)
+      || !customListHasCommands.exists(nodeId) || customPaintKeys.get(nodeId) != key) return false;
+    if (customContentRevisions.get(nodeId) != node.paintRevision) return false;
+    var previousGeometry = customGeometries.get(nodeId);
+    if (previousGeometry == null || node.resolved == null || !samePaintGeometry(previousGeometry,
+      node.resolved)) return false;
+    return true;
+  }
 
-	function canReuseCustomComposite(node:RenderNode):Bool {
-		var nodeId = node.id.value;
-		if (!customCompositeLists.exists(nodeId) ||
-			customCompositeKeys.get(nodeId) != node.retainedCompositeKey())
-			return false;
-		var previousGeometry = customCompositeGeometries.get(nodeId);
-		return previousGeometry != null && node.resolved != null &&
-			samePaintGeometry(previousGeometry, node.resolved);
-	}
+  function canReuseCustomComposite(node:RenderNode):Bool {
+    var nodeId = node.id.value;
+    if (!customCompositeLists.exists(nodeId)
+      || customCompositeKeys.get(nodeId) != node.retainedCompositeKey()) return false;
+    var previousGeometry = customCompositeGeometries.get(nodeId);
+    return previousGeometry != null && node.resolved != null && samePaintGeometry(previousGeometry, node.resolved);
+  }
 
-	/** Local custom display lists only depend on the size of their paint plane. */
-	static function samePaintGeometry(left:ResolvedLayoutItem, right:ResolvedLayoutItem):Bool
-		return left.width == right.width && left.height == right.height;
+  /** Local custom display lists only depend on the size of their paint plane. */
+  static function samePaintGeometry(left:ResolvedLayoutItem,
+    right:ResolvedLayoutItem):Bool return left.width == right.width && left.height == right.height;
 
-	function clearCustomPaintBindings(nodeId:Int):Void {
-		if (customPaintBound.get(nodeId) == true) {
-			session.clearCustomPaint(nodeId);
-			customPaintBound.set(nodeId, false);
-		}
-		if (customCompositeBound.get(nodeId) == true) {
-			session.clearCustomPaintComposite(nodeId);
-			customCompositeBound.set(nodeId, false);
-		}
-	}
+  function clearCustomPaintBindings(nodeId:Int):Void {
+    if (customPaintBound.get(nodeId) == true) {
+      session.clearCustomPaint(nodeId);
+      customPaintBound.set(nodeId, false);
+    }
+    if (customCompositeBound.get(nodeId) == true) {
+      session.clearCustomPaintComposite(nodeId);
+      customCompositeBound.set(nodeId, false);
+    }
+  }
 
-	static function sameGeometry(left:ResolvedLayoutItem, right:ResolvedLayoutItem):Bool {
-		// Everything but the id, which names the node rather than where it is. The rectangles and the transform are compared by
-		// the generated equality of their structural classes.
-		return left == right || left.flags == right.flags && left.x == right.x && left.y == right.y &&
-			left.width == right.width && left.height == right.height && left.baseline == right.baseline &&
-			haxeon.Equality.equals(left.clipBounds, right.clipBounds) &&
-			haxeon.Equality.equals(left.contentBounds, right.contentBounds) &&
-			haxeon.Equality.equals(left.transform, right.transform);
-	}
+  static function sameGeometry(left:ResolvedLayoutItem, right:ResolvedLayoutItem):Bool {
+    // Everything but the id, which names the node rather than where it is. The rectangles and the transform are compared by
+    // the generated equality of their structural classes.
+    return left == right || left.flags == right.flags && left.x == right.x && left.y == right.y && left.width
+      == right.width && left.height == right.height && left.baseline == right.baseline && haxeon.Equality.equals(
+        left.clipBounds,
+        right.clipBounds
+      ) && haxeon.Equality.equals(
+        left.contentBounds,
+        right.contentBounds
+      ) && haxeon.Equality.equals(
+        left.transform,
+        right.transform
+      );
+  }
 
-	public function isDirty():Bool
-		return dirtyFlags != UiDirtyFlag.None;
+  public function isDirty():Bool return dirtyFlags != UiDirtyFlag.None;
 
-	public var needsAnimationFrame(get, never):Bool;
-	inline function get_needsAnimationFrame():Bool
-		return animations.needsFrame;
+  public var needsAnimationFrame(get, never):Bool;
+  inline function get_needsAnimationFrame():Bool return animations.needsFrame;
 
-	/** Seconds until animations that are only waiting next need a frame, or -1 for none. */
-	public function animationWaitSeconds():Float
-		return animations.waitSeconds();
+  /** Seconds until animations that are only waiting next need a frame, or -1 for none. */
+  public function animationWaitSeconds():Float return animations.waitSeconds();
 
-	/** Reports pending work categories without changing the current full-submit behavior. */
-	public var dirtyFlags(get, never):UiDirtyFlag;
-	function get_dirtyFlags():UiDirtyFlag {
-		var result = dirtyFlagsWithoutRootReads();
-		// Retained dependencies are validated against their tracked source versions.
-		if (buildContext.rootDependenciesDirty())
-			result |= UiDirtyFlag.NeedsBuild | UiDirtyFlag.NeedsStyle | UiDirtyFlag.NeedsTextLayout |
-				UiDirtyFlag.NeedsLayout | UiDirtyFlag.NeedsPaint | UiDirtyFlag.NeedsComposite |
-				UiDirtyFlag.NeedsSemantics | UiDirtyFlag.NeedsHitGeometry;
-		return result;
-	}
+  /** Reports pending work categories without changing the current full-submit behavior. */
+  public var dirtyFlags(get, never):UiDirtyFlag;
+  function get_dirtyFlags():UiDirtyFlag {
+    var result = dirtyFlagsWithoutRootReads();
+    // Retained dependencies are validated against their tracked source versions.
+    if (buildContext.rootDependenciesDirty()) result |= UiDirtyFlag.NeedsBuild
+      | UiDirtyFlag.NeedsStyle | UiDirtyFlag.NeedsTextLayout | UiDirtyFlag.NeedsLayout
+      | UiDirtyFlag.NeedsPaint | UiDirtyFlag.NeedsComposite | UiDirtyFlag.NeedsSemantics | UiDirtyFlag.NeedsHitGeometry;
+    return result;
+  }
 
-	/** Dirty categories other than dependency validation, which can run model getters. */
-	function dirtyFlagsWithoutRootReads():UiDirtyFlag {
-		var result = UiDirtyFlag.empty();
-		if (buildContext.hasPendingRenderScopes())
-			result |= UiDirtyFlag.NeedsBuild | UiDirtyFlag.NeedsLayout | UiDirtyFlag.NeedsPaint |
-				UiDirtyFlag.NeedsSemantics | UiDirtyFlag.NeedsHitGeometry;
-		if (interactionStates.revision != submittedInteractionRevision)
-			result |= UiDirtyFlag.NeedsStyle | UiDirtyFlag.NeedsTextLayout | UiDirtyFlag.NeedsLayout |
-				UiDirtyFlag.NeedsPaint | UiDirtyFlag.NeedsComposite | UiDirtyFlag.NeedsSemantics |
-				UiDirtyFlag.NeedsHitGeometry;
-		if (buildContext.styleRevision != submittedStyleRevision)
-			result |= UiDirtyFlag.NeedsStyle | UiDirtyFlag.NeedsTextLayout | UiDirtyFlag.NeedsLayout |
-				UiDirtyFlag.NeedsPaint | UiDirtyFlag.NeedsComposite | UiDirtyFlag.NeedsSemantics |
-				UiDirtyFlag.NeedsHitGeometry;
-		if (animations.rebuildingCount > 0)
-			result |= UiDirtyFlag.NeedsComposite;
-		if (buildContext.patchRequestRevision != submittedPatchRequestRevision)
-			result |= UiDirtyFlag.NeedsBuild | UiDirtyFlag.NeedsStyle | UiDirtyFlag.NeedsTextLayout |
-				UiDirtyFlag.NeedsLayout | UiDirtyFlag.NeedsPaint | UiDirtyFlag.NeedsComposite |
-				UiDirtyFlag.NeedsSemantics | UiDirtyFlag.NeedsHitGeometry;
-		if (buildContext.retainedEditRevision != submittedRetainedEditRevision)
-			result |= UiDirtyFlag.NeedsStyle | UiDirtyFlag.NeedsLayout | UiDirtyFlag.NeedsPaint |
-				UiDirtyFlag.NeedsComposite | UiDirtyFlag.NeedsHitGeometry;
-		if (buildContext.bindingRequestRevision != submittedBindingRequestRevision)
-			result |= UiDirtyFlag.NeedsTextLayout | UiDirtyFlag.NeedsLayout | UiDirtyFlag.NeedsPaint | UiDirtyFlag.NeedsSemantics;
-		return result;
-	}
+  /** Dirty categories other than dependency validation, which can run model getters. */
+  function dirtyFlagsWithoutRootReads():UiDirtyFlag {
+    var result = UiDirtyFlag.empty();
+    if (buildContext.hasPendingRenderScopes()) result |= UiDirtyFlag.NeedsBuild
+      | UiDirtyFlag.NeedsLayout | UiDirtyFlag.NeedsPaint | UiDirtyFlag.NeedsSemantics | UiDirtyFlag.NeedsHitGeometry;
+    if (interactionStates.revision != submittedInteractionRevision) result |= UiDirtyFlag.NeedsStyle
+      | UiDirtyFlag.NeedsTextLayout | UiDirtyFlag.NeedsLayout
+      | UiDirtyFlag.NeedsPaint | UiDirtyFlag.NeedsComposite | UiDirtyFlag.NeedsSemantics | UiDirtyFlag.NeedsHitGeometry;
+    if (buildContext.styleRevision != submittedStyleRevision) result |= UiDirtyFlag.NeedsStyle
+      | UiDirtyFlag.NeedsTextLayout | UiDirtyFlag.NeedsLayout
+      | UiDirtyFlag.NeedsPaint | UiDirtyFlag.NeedsComposite | UiDirtyFlag.NeedsSemantics | UiDirtyFlag.NeedsHitGeometry;
+    if (animations.rebuildingCount > 0) result |= UiDirtyFlag.NeedsComposite;
+    if (buildContext.patchRequestRevision != submittedPatchRequestRevision) result |= UiDirtyFlag.NeedsBuild
+      | UiDirtyFlag.NeedsStyle | UiDirtyFlag.NeedsTextLayout | UiDirtyFlag.NeedsLayout
+      | UiDirtyFlag.NeedsPaint | UiDirtyFlag.NeedsComposite | UiDirtyFlag.NeedsSemantics | UiDirtyFlag.NeedsHitGeometry;
+    if (buildContext.retainedEditRevision != submittedRetainedEditRevision) result |= UiDirtyFlag.NeedsStyle
+      | UiDirtyFlag.NeedsLayout | UiDirtyFlag.NeedsPaint | UiDirtyFlag.NeedsComposite | UiDirtyFlag.NeedsHitGeometry;
+    if (buildContext.bindingRequestRevision != submittedBindingRequestRevision) result |= UiDirtyFlag.NeedsTextLayout
+      | UiDirtyFlag.NeedsLayout | UiDirtyFlag.NeedsPaint | UiDirtyFlag.NeedsSemantics;
+    return result;
+  }
 
-	function set_inspectionHighlight(value:Int):Int {
-		if (value != inspectionHighlight) submittedBuildKey = null;
-		if (value > 0) inspectionEnabled = true;
-		return inspectionHighlight = value;
-	}
+  function set_inspectionHighlight(value:Int):Int {
+    if (value != inspectionHighlight) submittedBuildKey = null;
+    if (value > 0) inspectionEnabled = true;
+    return inspectionHighlight = value;
+  }
 
-	/** A final retained paint plane shares the application's frame acquisition and presentation. */
-	function appendInspectionOverlay(tree:RenderNode, frame:LayoutFrame):Void {
-		if (inspectionNode != null && inspectionNode.parent == tree) return;
-		var style = new haxeon.ui.LayoutStyle();
-		style.positioning = haxeon.ui.LayoutPositioning.Absolute;
-		style.width = haxeon.ui.LayoutAxis.fixed(frame.width);
-		style.height = haxeon.ui.LayoutAxis.fixed(frame.height);
-		style.zIndex = 32767;
-		style.clipToParent = false;
-		var id = buildContext.withScope(new haxeon.ui.core.Key("__devtools_inspection"), function() return buildContext.id("overlay"));
-		var node = new RenderNode(id, haxeon.ui.LayoutVisualKind.Custom, style);
-		node.setStyleIdentity("devtools-overlay", null, null);
-		node.hitTestSelf = false;
-		node.onPaint(function(canvas, geometry) {
-			if (inspectionHighlight <= 0 || root == null) return;
-			var inspected = root.find(new WidgetId(inspectionHighlight));
-			if (inspected == null || inspected.resolved == null || !inspected.resolved.visible) return;
-			var bounds = inspected.resolved.clippedViewportBounds();
-			var x = bounds.x - geometry.x, y = bounds.y - geometry.y;
-			var color = haxeon.ui.Color.fromBytes(80, 180, 255, 220);
-			canvas.fillRectIfPositive(new Rect(x, y, bounds.width, 2), color);
-			canvas.fillRectIfPositive(new Rect(x, y + bounds.height - 2, bounds.width, 2), color);
-			canvas.fillRectIfPositive(new Rect(x, y, 2, bounds.height), color);
-			canvas.fillRectIfPositive(new Rect(x + bounds.width - 2, y, 2, bounds.height), color);
-		});
-		inspectionNode = node;
-		tree.add(node);
-	}
+  /** A final retained paint plane shares the application's frame acquisition and presentation. */
+  function appendInspectionOverlay(tree:RenderNode, frame:LayoutFrame):Void {
+    if (inspectionNode != null && inspectionNode.parent == tree) return;
+    var style = new haxeon.ui.LayoutStyle();
+    style.positioning = haxeon.ui.LayoutPositioning.Absolute;
+    style.width = haxeon.ui.LayoutAxis.fixed(frame.width);
+    style.height = haxeon.ui.LayoutAxis.fixed(frame.height);
+    style.zIndex = 32767;
+    style.clipToParent = false;
+    var id = buildContext.withScope(
+      new haxeon.ui.core.Key("__devtools_inspection"),
+      function() return buildContext.id("overlay")
+    );
+    var node = new RenderNode(id, haxeon.ui.LayoutVisualKind.Custom, style);
+    node.setStyleIdentity("devtools-overlay", null, null);
+    node.hitTestSelf = false;
+    node.onPaint(function(canvas, geometry) {
+      if (inspectionHighlight <= 0 || root == null) return;
+      var inspected = root.find(new WidgetId(inspectionHighlight));
+      if (inspected == null || inspected.resolved == null || !inspected.resolved.visible) return;
+      var bounds = inspected.resolved.clippedViewportBounds();
+      var x = bounds.x - geometry.x, y = bounds.y - geometry.y;
+      var color = haxeon.ui.Color.fromBytes(80, 180, 255, 220);
+      canvas.fillRectIfPositive(new Rect(x, y, bounds.width, 2), color);
+      canvas.fillRectIfPositive(new Rect(x, y + bounds.height - 2, bounds.width, 2), color);
+      canvas.fillRectIfPositive(new Rect(x, y, 2, bounds.height), color);
+      canvas.fillRectIfPositive(new Rect(x + bounds.width - 2, y, 2, bounds.height), color);
+    }
+    );
+    inspectionNode = node;
+    tree.add(node);
+  }
 
-	/** Returns a deterministic headless snapshot of the most recently submitted tree. */
-	public function inspect():Array<UiNodeSnapshot> {
-		ensureLive();
-		return UiInspector.snapshot(root, focus.focusedId, events.hoveredId(), events.pressedId());
-	}
+  /** Returns a deterministic headless snapshot of the most recently submitted tree. */
+  public function inspect():Array<UiNodeSnapshot> {
+    ensureLive();
+    return UiInspector.snapshot(root, focus.focusedId, events.hoveredId(), events.pressedId());
+  }
 
-	/** Timing and style-cache counters captured during the latest submit/render. */
-	public var frameMetrics(get, never):Null<UiFrameMetrics>;
-	function get_frameMetrics():Null<UiFrameMetrics> {
-		if (pendingReusedMetrics) {
-			lastFrameMetrics = new UiFrameMetrics(frameNumber, submittedNodeCount, 0, 0, 0,
-				reusedMetricsCachedStyles, 0, submittedNodeCount, UiDirtyFlag.None,
-				0, 0, 0, 0, 0, 0, reusedMetricsSeconds, false, true, 0, submittedNodeCount);
-			lastFrameMetrics.markReusedSubmission();
-			if (reusedMetricsHoverNodes >= 0) lastFrameMetrics.hoverPaintUpdatedNodes = reusedMetricsHoverNodes;
-			pendingReusedMetrics = false;
-		}
-		return lastFrameMetrics;
-	}
+  /** Timing and style-cache counters captured during the latest submit/render. */
+  public var frameMetrics(get, never):Null<UiFrameMetrics>;
+  function get_frameMetrics():Null<UiFrameMetrics> {
+    if (pendingReusedMetrics) {
+      lastFrameMetrics = new UiFrameMetrics(
+        frameNumber,
+        submittedNodeCount,
+        0,
+        0,
+        0,
+        reusedMetricsCachedStyles,
+        0,
+        submittedNodeCount,
+        UiDirtyFlag.None,
+        0,
+        0,
+        0,
+        0,
+        0,
+        0,
+        reusedMetricsSeconds,
+        false,
+        true,
+        0,
+        submittedNodeCount
+      );
+      lastFrameMetrics.markReusedSubmission();
+      if (reusedMetricsHoverNodes >= 0) lastFrameMetrics.hoverPaintUpdatedNodes = reusedMetricsHoverNodes;
+      pendingReusedMetrics = false;
+    }
+    return lastFrameMetrics;
+  }
 
-	/** Returns cumulative native geometric hit-test diagnostics. */
-	public var hitTestMetrics(get, never):LayoutHitTestStats;
-	function get_hitTestMetrics():LayoutHitTestStats
-		return session.hitTestStats();
+  /** Returns cumulative native geometric hit-test diagnostics. */
+  public var hitTestMetrics(get, never):LayoutHitTestStats;
+  function get_hitTestMetrics():LayoutHitTestStats return session.hitTestStats();
 
-	/** Formats the current render and semantic tree for logs or developer tools. */
-	public function dumpTree():String {
-		ensureLive();
-		return UiInspector.dump(root, focus.focusedId);
-	}
+  /** Formats the current render and semantic tree for logs or developer tools. */
+  public function dumpTree():String {
+    ensureLive();
+    return UiInspector.dump(root, focus.focusedId);
+  }
 
-	/** Audits common accessibility naming and focus-geometry mistakes. */
-	public function auditAccessibility():Array<AccessibilityIssue> {
-		ensureLive();
-		return AccessibilityAudit.inspect(root);
-	}
+  /** Audits common accessibility naming and focus-geometry mistakes. */
+  public function auditAccessibility():Array<AccessibilityIssue> {
+    ensureLive();
+    return AccessibilityAudit.inspect(root);
+  }
 
-	public function dispose():Void {
-		if (disposed)
-			return;
-		pendingFocus = null;
-		focusBeforeWindowBlur = null;
-		session.clearCustomPaints();
-		for (nodeId in customCanvases.keys()) {
-			var canvas = customCanvases.get(nodeId);
-			if (canvas != null) {
-				canvas.reset();
-				canvas.releaseRetained();
-			}
-		}
-		for (nodeId in customLists.keys()) {
-			var displayList = customLists.get(nodeId);
-			if (displayList != null)
-				displayList.dispose();
-		}
-		for (nodeId in customCompositeLists.keys()) {
-			var displayList = customCompositeLists.get(nodeId);
-			if (displayList != null)
-				displayList.dispose();
-		}
-		customCanvases = new Map();
-		customLists = new Map();
-		customGeometries = new Map();
-		customPaintKeys = new Map();
-		customContentRevisions = new Map();
-		customListHasCommands = new Map();
-		customPaintBound = new Map();
-		customCompositeCanvases = new Map();
-		customCompositeLists = new Map();
-		customCompositeKeys = new Map();
-		customCompositeGeometries = new Map();
-		customCompositeBound = new Map();
-		events.setHitTestProvider(null);
-		retainedHitTestProvider = null;
-		retainedHitPath = null;
-		session.dispose();
-		clipboard.dispose();
-		textInput.dispose();
-		gestures.cancelAll();
-		if (cursorHandler != null)
-			cursorHandler(UiCursorShape.Arrow);
-		cursorHandler = null;
-		events.setPointerCaptureHandler(null);
-		currentCursor = UiCursorShape.Arrow;
-		animations.cancelAll();
-		if (accessibilityBridge != null)
-			accessibilityBridge.dispose();
-		if (decorationWindow != null)
-			clearWindowDecorations();
-		decorationWindow = null;
-		stateStore.dispose();
-		buildContext.dispose();
-		interactionStates.dispose();
-		disposed = true;
-		root = null;
-		accessibilityBridge = null;
-		accessibilitySurface = null;
-	}
+  public function dispose():Void {
+    if (disposed) return;
+    pendingFocus = null;
+    focusBeforeWindowBlur = null;
+    session.clearCustomPaints();
+    for (nodeId in customCanvases.keys()) {
+      var canvas = customCanvases.get(nodeId);
+      if (canvas != null) {
+        canvas.reset();
+        canvas.releaseRetained();
+      }
+    }
+    for (nodeId in customLists.keys()) {
+      var displayList = customLists.get(nodeId);
+      if (displayList != null) displayList.dispose();
+    }
+    for (nodeId in customCompositeLists.keys()) {
+      var displayList = customCompositeLists.get(nodeId);
+      if (displayList != null) displayList.dispose();
+    }
+    customCanvases = new Map();
+    customLists = new Map();
+    customGeometries = new Map();
+    customPaintKeys = new Map();
+    customContentRevisions = new Map();
+    customListHasCommands = new Map();
+    customPaintBound = new Map();
+    customCompositeCanvases = new Map();
+    customCompositeLists = new Map();
+    customCompositeKeys = new Map();
+    customCompositeGeometries = new Map();
+    customCompositeBound = new Map();
+    events.setHitTestProvider(null);
+    retainedHitTestProvider = null;
+    retainedHitPath = null;
+    session.dispose();
+    clipboard.dispose();
+    textInput.dispose();
+    gestures.cancelAll();
+    if (cursorHandler != null) cursorHandler(UiCursorShape.Arrow);
+    cursorHandler = null;
+    events.setPointerCaptureHandler(null);
+    currentCursor = UiCursorShape.Arrow;
+    animations.cancelAll();
+    if (accessibilityBridge != null) accessibilityBridge.dispose();
+    if (decorationWindow != null) clearWindowDecorations();
+    decorationWindow = null;
+    stateStore.dispose();
+    buildContext.dispose();
+    interactionStates.dispose();
+    disposed = true;
+    root = null;
+    accessibilityBridge = null;
+    accessibilitySurface = null;
+  }
 
-	function updateCursor():Void {
-		var next = events.cursorShape();
-		if (next == currentCursor)
-			return;
-		currentCursor = next;
-		if (cursorHandler != null)
-			cursorHandler(next);
-	}
+  function updateCursor():Void {
+    var next = events.cursorShape();
+    if (next == currentCursor) return;
+    currentCursor = next;
+    if (cursorHandler != null) cursorHandler(next);
+  }
 
-	function syncWindowDecorations(tree:RenderNode):Void {
-		if (decorationWindow == null || !supportsWindowDecorations())
-			return;
-		var regions:Array<NativeWindowDecorationRegion> = [];
-		tree.walk(function(node) {
-			if (node.windowDecoration == null || node.resolved == null ||
-				!node.resolved.visible)
-				return;
-			var bounds = node.resolved.clippedViewportBounds();
-			var left = Math.max(0.0, bounds.x);
-			var top = Math.max(0.0, bounds.y);
-			var right = Math.min(buildContext.viewportWidth, bounds.x + bounds.width);
-			var bottom = Math.min(buildContext.viewportHeight, bounds.y + bounds.height);
-			if (right <= left || bottom <= top)
-				return;
-			var region = new NativeWindowDecorationRegion();
-			region.set_x(left * platformCoordinateScale);
-			region.set_y(top * platformCoordinateScale);
-			region.set_width((right - left) * platformCoordinateScale);
-			region.set_height((bottom - top) * platformCoordinateScale);
-			var kind:WindowDecorationRegionKind = cast node.windowDecoration;
-			region.set_kind(kind);
-			region.set_cursor_shape(node.windowDecorationCursor == null
-				? NativeCursorShape.Arrow : nativeCursorShape(node.windowDecorationCursor));
-			regions.push(region);
-		});
-		var window:WindowHandle = cast decorationWindow;
-		NativeKit.nk_window_set_decoration_regions_checked(window, regions);
-	}
+  function syncWindowDecorations(tree:RenderNode):Void {
+    if (decorationWindow == null || !supportsWindowDecorations()) return;
+    var regions:Array<NativeWindowDecorationRegion> = [];
+    tree.walk(function(node) {
+      if (node.windowDecoration == null || node.resolved == null || !node.resolved.visible) return;
+      var bounds = node.resolved.clippedViewportBounds();
+      var left = Math.max(0.0, bounds.x);
+      var top = Math.max(0.0, bounds.y);
+      var right = Math.min(buildContext.viewportWidth, bounds.x + bounds.width);
+      var bottom = Math.min(buildContext.viewportHeight, bounds.y + bounds.height);
+      if (right <= left || bottom <= top) return;
+      var region = new NativeWindowDecorationRegion();
+      region.set_x(left * platformCoordinateScale);
+      region.set_y(top * platformCoordinateScale);
+      region.set_width((right - left) * platformCoordinateScale);
+      region.set_height((bottom - top) * platformCoordinateScale);
+      var kind:WindowDecorationRegionKind = cast node.windowDecoration;
+      region.set_kind(kind);
+      region.set_cursor_shape(node.windowDecorationCursor
+        == null ? NativeCursorShape.Arrow : nativeCursorShape(node.windowDecorationCursor));
+      regions.push(region);
+    }
+    );
+    var window:WindowHandle = cast decorationWindow;
+    NativeKit.nk_window_set_decoration_regions_checked(window, regions);
+  }
 
-	function clearWindowDecorations():Void {
-		if (decorationWindow == null || !supportsWindowDecorations())
-			return;
-		try {
-			var window:WindowHandle = cast decorationWindow;
-			NativeKit.nk_window_set_decoration_regions_checked(window, []);
-		} catch (_:Dynamic) {
-			// Context disposal must remain best-effort if the host already destroyed the window.
-		}
-	}
+  function clearWindowDecorations():Void {
+    if (decorationWindow == null || !supportsWindowDecorations()) return;
+    try {
+      var window:WindowHandle = cast decorationWindow;
+      NativeKit.nk_window_set_decoration_regions_checked(window, []);
+    } catch (_:Dynamic) {
+      // Context disposal must remain best-effort if the host already destroyed the window.
+    }
+  }
 
-	function supportsWindowDecorations():Bool {
-		if (decorationCapabilityChecked)
-			return decorationAvailable;
-		decorationCapabilityChecked = true;
-		var capabilities = NativeKit.nk_get_capabilities();
-		decorationAvailable = haxe.Int64.compare(
-			haxe.Int64.and(capabilities, Capabilities.windowCustomDecorations()),
-			haxe.Int64.ofInt(0)) != 0;
-		return decorationAvailable;
-	}
+  function supportsWindowDecorations():Bool {
+    if (decorationCapabilityChecked) return decorationAvailable;
+    decorationCapabilityChecked = true;
+    var capabilities = NativeKit.nk_get_capabilities();
+    decorationAvailable = haxe.Int64.compare(
+      haxe.Int64.and(capabilities, Capabilities.windowCustomDecorations()),
+      haxe.Int64.ofInt(0)
+    ) != 0;
+    return decorationAvailable;
+  }
 
-	static function nativeCursorShape(shape:UiCursorShape):NativeCursorShape {
-		return switch shape {
-			case UiCursorShape.Arrow: NativeCursorShape.Arrow;
-			case UiCursorShape.Text: NativeCursorShape.Ibeam;
-			case UiCursorShape.Crosshair: NativeCursorShape.Crosshair;
-			case UiCursorShape.Hand: NativeCursorShape.Hand;
-			case UiCursorShape.HorizontalResize: NativeCursorShape.HorizontalResize;
-			case UiCursorShape.VerticalResize: NativeCursorShape.VerticalResize;
-			case UiCursorShape.DiagonalResize: NativeCursorShape.NwseResize;
-			case UiCursorShape.DiagonalResizeNesw: NativeCursorShape.NeswResize;
-			case UiCursorShape.Move: NativeCursorShape.Move;
-			case UiCursorShape.NotAllowed: NativeCursorShape.NotAllowed;
-		};
-	}
+  static function nativeCursorShape(shape:UiCursorShape):NativeCursorShape {
+    return switch shape {
+      case UiCursorShape.Arrow:
+        NativeCursorShape.Arrow;
+      case UiCursorShape.Text:
+        NativeCursorShape.Ibeam;
+      case UiCursorShape.Crosshair:
+        NativeCursorShape.Crosshair;
+      case UiCursorShape.Hand:
+        NativeCursorShape.Hand;
+      case UiCursorShape.HorizontalResize:
+        NativeCursorShape.HorizontalResize;
+      case UiCursorShape.VerticalResize:
+        NativeCursorShape.VerticalResize;
+      case UiCursorShape.DiagonalResize:
+        NativeCursorShape.NwseResize;
+      case UiCursorShape.DiagonalResizeNesw:
+        NativeCursorShape.NeswResize;
+      case UiCursorShape.Move:
+        NativeCursorShape.Move;
+      case UiCursorShape.NotAllowed:
+        NativeCursorShape.NotAllowed;
+    };
+  }
 
-	function dispatchFocusChange(previous:Null<WidgetId>, next:Null<WidgetId>):Void {
-		if (previous != null && (next == null || !previous.equals(next)))
-			events.focusEvent(previous, UiEventKind.Blur);
-		if (next != null && (previous == null || !previous.equals(next)))
-			events.focusEvent(next, UiEventKind.Focus);
-	}
+  function dispatchFocusChange(previous:Null<WidgetId>, next:Null<WidgetId>):Void {
+    if (previous != null && (next == null || !previous.equals(next))) events.focusEvent(previous, UiEventKind.Blur);
+    if (next != null && (previous == null || !previous.equals(next))) events.focusEvent(next, UiEventKind.Focus);
+  }
 
-	function ensureLive():Void {
-		if (disposed)
-			throw "UI context has been disposed";
-	}
+  function ensureLive():Void {
+    if (disposed) throw "UI context has been disposed";
+  }
 
-	static function enabledAlongPath(node:RenderNode):Bool {
-		var current:Null<RenderNode> = node;
-		while (current != null) {
-			var present:RenderNode = cast current;
-			if (!present.enabled)
-				return false;
-			current = present.parent;
-		}
-		return true;
-	}
+  static function enabledAlongPath(node:RenderNode):Bool {
+    var current:Null<RenderNode> = node;
+    while (current != null) {
+      var present:RenderNode = cast current;
+      if (!present.enabled) return false;
+      current = present.parent;
+    }
+    return true;
+  }
 }

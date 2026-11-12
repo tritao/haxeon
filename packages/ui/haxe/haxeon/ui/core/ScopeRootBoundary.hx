@@ -5,8 +5,7 @@ import haxeon.ui.semantics.Semantics;
 
 /** The boundary between a component root and decorations added by its caller.
  * Stored by value on the native scope; it never reconciles or mutates the new body's contents. */
-@:access(haxeon.ui.core.RenderNode)
-struct ScopeRootBoundary {
+@:access(haxeon.ui.core.RenderNode) struct ScopeRootBoundary {
   final style:LayoutStyle;
   final children:Array<RenderNode>;
   var semantics:Null<Semantics>;
@@ -65,7 +64,11 @@ struct ScopeRootBoundary {
     if (semanticsOverride) next.semantics = previous.semantics;
     semantics = nextSemantics;
     next.handlers = appendTail(previous.handlers, handlers, next.handlers);
-    next.outsidePointerDownHandlers = appendTail(previous.outsidePointerDownHandlers, outside, next.outsidePointerDownHandlers);
+    next.outsidePointerDownHandlers = appendTail(
+      previous.outsidePointerDownHandlers,
+      outside,
+      next.outsidePointerDownHandlers
+    );
     next.resolvedHandlers = appendTail(previous.resolvedHandlers, resolved, next.resolvedHandlers);
     next.paintHandlers = appendTail(previous.paintHandlers, paint, next.paintHandlers);
     next.paintCacheKeys = appendTail(previous.paintCacheKeys, paint, next.paintCacheKeys);
@@ -75,7 +78,10 @@ struct ScopeRootBoundary {
     var index = 0;
     while (index < previous.children.length) {
       var child = previous.children[index];
-      if (owns(child)) { index++; continue; }
+      if (owns(child)) {
+        index++;
+        continue;
+      }
       child.detach();
       next.add(child);
     }
@@ -107,7 +113,8 @@ struct ScopeRootBoundary {
     if (haxeon.Equality.equals(style.direction, inner.style.direction)) style.direction = after.direction;
     if (haxeon.Equality.equals(style.childAlignX, inner.style.childAlignX)) style.childAlignX = after.childAlignX;
     if (haxeon.Equality.equals(style.childAlignY, inner.style.childAlignY)) style.childAlignY = after.childAlignY;
-    if (haxeon.Equality.equals(style.childDistribution, inner.style.childDistribution)) style.childDistribution = after.childDistribution;
+    if (haxeon.Equality.equals(style.childDistribution,
+      inner.style.childDistribution)) style.childDistribution = after.childDistribution;
     if (haxeon.Equality.equals(style.positioning, inner.style.positioning)) style.positioning = after.positioning;
     if (haxeon.Equality.equals(style.wrapMode, inner.style.wrapMode)) style.wrapMode = after.wrapMode;
     if (haxeon.Equality.equals(style.rowGap, inner.style.rowGap)) style.rowGap = after.rowGap;
@@ -121,21 +128,29 @@ struct ScopeRootBoundary {
     if (haxeon.Equality.equals(style.padding, inner.style.padding)) style.padding = after.padding;
     if (haxeon.Equality.equals(style.childGap, inner.style.childGap)) style.childGap = after.childGap;
     if (haxeon.Equality.equals(style.background, inner.style.background)) style.background = after.background;
-    if (haxeon.Equality.equals(style.radiusTopLeft, inner.style.radiusTopLeft)) style.radiusTopLeft = after.radiusTopLeft;
-    if (haxeon.Equality.equals(style.radiusTopRight, inner.style.radiusTopRight)) style.radiusTopRight = after.radiusTopRight;
-    if (haxeon.Equality.equals(style.radiusBottomLeft, inner.style.radiusBottomLeft)) style.radiusBottomLeft = after.radiusBottomLeft;
-    if (haxeon.Equality.equals(style.radiusBottomRight, inner.style.radiusBottomRight)) style.radiusBottomRight = after.radiusBottomRight;
-    if (haxeon.Equality.equals(style.clipHorizontal, inner.style.clipHorizontal)) style.clipHorizontal = after.clipHorizontal;
+    if (haxeon.Equality.equals(style.radiusTopLeft,
+      inner.style.radiusTopLeft)) style.radiusTopLeft = after.radiusTopLeft;
+    if (haxeon.Equality.equals(style.radiusTopRight,
+      inner.style.radiusTopRight)) style.radiusTopRight = after.radiusTopRight;
+    if (haxeon.Equality.equals(style.radiusBottomLeft,
+      inner.style.radiusBottomLeft)) style.radiusBottomLeft = after.radiusBottomLeft;
+    if (haxeon.Equality.equals(style.radiusBottomRight,
+      inner.style.radiusBottomRight)) style.radiusBottomRight = after.radiusBottomRight;
+    if (haxeon.Equality.equals(style.clipHorizontal,
+      inner.style.clipHorizontal)) style.clipHorizontal = after.clipHorizontal;
     if (haxeon.Equality.equals(style.clipVertical, inner.style.clipVertical)) style.clipVertical = after.clipVertical;
     if (haxeon.Equality.equals(style.visible, inner.style.visible)) style.visible = after.visible;
     if (haxeon.Equality.equals(style.transform, inner.style.transform)) style.transform = after.transform;
-    if (haxeon.Equality.equals(style.transformOriginX, inner.style.transformOriginX)) style.transformOriginX = after.transformOriginX;
-    if (haxeon.Equality.equals(style.transformOriginY, inner.style.transformOriginY)) style.transformOriginY = after.transformOriginY;
+    if (haxeon.Equality.equals(style.transformOriginX,
+      inner.style.transformOriginX)) style.transformOriginX = after.transformOriginX;
+    if (haxeon.Equality.equals(style.transformOriginY,
+      inner.style.transformOriginY)) style.transformOriginY = after.transformOriginY;
     if (authored_cursor == inner.authored_cursor) authored_cursor = next.cursor;
     if (authored_tabIndex == inner.authored_tabIndex) authored_tabIndex = next.tabIndex;
     if (authored_commandScope == inner.authored_commandScope) authored_commandScope = next.commandScope;
     if (authored_windowDecoration == inner.authored_windowDecoration) authored_windowDecoration = next.windowDecoration;
-    if (authored_windowDecorationCursor == inner.authored_windowDecorationCursor) authored_windowDecorationCursor = next.windowDecorationCursor;
+    if (authored_windowDecorationCursor
+      == inner.authored_windowDecorationCursor) authored_windowDecorationCursor = next.windowDecorationCursor;
     if (authored_hitTestBehavior == inner.authored_hitTestBehavior) authored_hitTestBehavior = next.hitTestBehavior;
     if (authored_focusTrap == inner.authored_focusTrap) authored_focusTrap = next.focusTrap;
     if (authored_hitTestSelf == inner.authored_hitTestSelf) authored_hitTestSelf = next.hitTestSelf;
@@ -208,7 +223,8 @@ struct ScopeRootBoundary {
     if ((styleOverrides & haxeon.Diff.bit(\LayoutStyle.childAlignY)) != 0) next.childAlignY = previous.childAlignY;
     style.childAlignY = authored_childAlignY;
     var authored_childDistribution = next.childDistribution;
-    if ((styleOverrides & haxeon.Diff.bit(\LayoutStyle.childDistribution)) != 0) next.childDistribution = previous.childDistribution;
+    if ((styleOverrides & haxeon.Diff.bit(\LayoutStyle.childDistribution))
+      != 0) next.childDistribution = previous.childDistribution;
     style.childDistribution = authored_childDistribution;
     var authored_positioning = next.positioning;
     if ((styleOverrides & haxeon.Diff.bit(\LayoutStyle.positioning)) != 0) next.positioning = previous.positioning;
@@ -250,19 +266,24 @@ struct ScopeRootBoundary {
     if ((styleOverrides & haxeon.Diff.bit(\LayoutStyle.background)) != 0) next.background = previous.background;
     style.background = authored_background;
     var authored_radiusTopLeft = next.radiusTopLeft;
-    if ((styleOverrides & haxeon.Diff.bit(\LayoutStyle.radiusTopLeft)) != 0) next.radiusTopLeft = previous.radiusTopLeft;
+    if ((styleOverrides & haxeon.Diff.bit(\LayoutStyle.radiusTopLeft))
+      != 0) next.radiusTopLeft = previous.radiusTopLeft;
     style.radiusTopLeft = authored_radiusTopLeft;
     var authored_radiusTopRight = next.radiusTopRight;
-    if ((styleOverrides & haxeon.Diff.bit(\LayoutStyle.radiusTopRight)) != 0) next.radiusTopRight = previous.radiusTopRight;
+    if ((styleOverrides & haxeon.Diff.bit(\LayoutStyle.radiusTopRight))
+      != 0) next.radiusTopRight = previous.radiusTopRight;
     style.radiusTopRight = authored_radiusTopRight;
     var authored_radiusBottomLeft = next.radiusBottomLeft;
-    if ((styleOverrides & haxeon.Diff.bit(\LayoutStyle.radiusBottomLeft)) != 0) next.radiusBottomLeft = previous.radiusBottomLeft;
+    if ((styleOverrides & haxeon.Diff.bit(\LayoutStyle.radiusBottomLeft))
+      != 0) next.radiusBottomLeft = previous.radiusBottomLeft;
     style.radiusBottomLeft = authored_radiusBottomLeft;
     var authored_radiusBottomRight = next.radiusBottomRight;
-    if ((styleOverrides & haxeon.Diff.bit(\LayoutStyle.radiusBottomRight)) != 0) next.radiusBottomRight = previous.radiusBottomRight;
+    if ((styleOverrides & haxeon.Diff.bit(\LayoutStyle.radiusBottomRight))
+      != 0) next.radiusBottomRight = previous.radiusBottomRight;
     style.radiusBottomRight = authored_radiusBottomRight;
     var authored_clipHorizontal = next.clipHorizontal;
-    if ((styleOverrides & haxeon.Diff.bit(\LayoutStyle.clipHorizontal)) != 0) next.clipHorizontal = previous.clipHorizontal;
+    if ((styleOverrides & haxeon.Diff.bit(\LayoutStyle.clipHorizontal))
+      != 0) next.clipHorizontal = previous.clipHorizontal;
     style.clipHorizontal = authored_clipHorizontal;
     var authored_clipVertical = next.clipVertical;
     if ((styleOverrides & haxeon.Diff.bit(\LayoutStyle.clipVertical)) != 0) next.clipVertical = previous.clipVertical;
@@ -274,10 +295,12 @@ struct ScopeRootBoundary {
     if ((styleOverrides & haxeon.Diff.bit(\LayoutStyle.transform)) != 0) next.transform = previous.transform;
     style.transform = authored_transform;
     var authored_transformOriginX = next.transformOriginX;
-    if ((styleOverrides & haxeon.Diff.bit(\LayoutStyle.transformOriginX)) != 0) next.transformOriginX = previous.transformOriginX;
+    if ((styleOverrides & haxeon.Diff.bit(\LayoutStyle.transformOriginX))
+      != 0) next.transformOriginX = previous.transformOriginX;
     style.transformOriginX = authored_transformOriginX;
     var authored_transformOriginY = next.transformOriginY;
-    if ((styleOverrides & haxeon.Diff.bit(\LayoutStyle.transformOriginY)) != 0) next.transformOriginY = previous.transformOriginY;
+    if ((styleOverrides & haxeon.Diff.bit(\LayoutStyle.transformOriginY))
+      != 0) next.transformOriginY = previous.transformOriginY;
     style.transformOriginY = authored_transformOriginY;
   }
 

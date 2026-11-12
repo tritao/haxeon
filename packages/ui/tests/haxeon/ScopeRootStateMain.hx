@@ -6,14 +6,12 @@ import haxeon.ui.widgets.controls.Checkbox;
 import haxeon.reactive.Signal;
 
 /** A scope owner and a stateful body root occupy distinct resource identities. */
-@:access(haxeon.ui.core.BuildContext)
-class ScopeRootStateMain {
+@:access(haxeon.ui.core.BuildContext) class ScopeRootStateMain {
   static function main():Int {
     var reads = new Signal<Int>(0);
     var context = new BuildContext(new StateStore(), null, null, null, Theme.light());
-    var view = new TrackedScope("stateful", () -> {
-      var value = reads.value;
-      return new Checkbox("check", "Check", value > 0, _ -> {});
+    var view = new TrackedScope("stateful", () -> {var value = reads.value;
+    return new Checkbox("check", "Check", value > 0, _ -> {});
     });
     for (i in 0...3) {
       context.beginFrame();
@@ -39,9 +37,10 @@ class ScopeRootStateMain {
       if (Std.string(error) != "Expected installation failure") throw error;
       failed = true;
     }
-    if (!failed || source.hasFieldReaders(0) || context.renderScopes.length != 0)
-      throw "Failed installation retained a subscribed native owner";
-    context.dispose();store.dispose();
+    if (!failed || source.hasFieldReaders(0)
+      || context.renderScopes.length != 0) throw "Failed installation retained a subscribed native owner";
+    context.dispose();
+    store.dispose();
   }
 }
 

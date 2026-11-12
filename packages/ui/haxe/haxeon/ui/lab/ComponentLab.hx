@@ -50,8 +50,7 @@ class ComponentLab implements Observable {
   public function new(?initialStory:String, ?registry:ComponentStoryRegistry) {
     stories = registry == null ? makeStories() : registry.all();
     if (stories.length == 0) throw "Component Lab requires at least one story";
-    selectedId = initialStory == null || find(initialStory) == null
-      ? stories[0].id : initialStory;
+    selectedId = initialStory == null || find(initialStory) == null ? stories[0].id : initialStory;
   }
 
   public function view(ui:UiContext):View {
@@ -63,15 +62,16 @@ class ComponentLab implements Observable {
     for (story in stories) {
       if (story.group != previousGroup) {
         previousGroup = story.group;
-        sidebarRows.push(new KeyedView("group:" + story.group,
-          new Text(story.group.toUpperCase(), null, Color.rgba(0.43, 0.55, 0.7, 1.0))));
+        sidebarRows.push(new KeyedView(
+          "group:" + story.group,
+          new Text(story.group.toUpperCase(), null, Color.rgba(0.43, 0.55, 0.7, 1.0))
+        ));
       }
       var captured = story;
       var button = new Button(story.title, null, function() {
         selectedId = captured.id;
 
-      }, "story:" + story.id, null, ButtonVariant.Navigation, story.id == selected.id
-      );
+      }, "story:" + story.id, null, ButtonVariant.Navigation, story.id == selected.id);
       sidebarRows.push(new KeyedView(story.id, button));
     }
 
@@ -95,37 +95,37 @@ class ComponentLab implements Observable {
     previewStyle.padding = new Insets(24.0, 24.0, 24.0, 24.0);
     previewStyle.background = Color.rgba(0.025, 0.032, 0.048, 1.0);
 
-    var content = new Column("lab-canvas", [
-      new KeyedView("eyebrow", new Text(selected.group.toUpperCase(), null,
-        Color.rgba(0.43, 0.62, 0.88, 1.0))),
-      new KeyedView("title", new Text(selected.title)),
-      new KeyedView("description", new Text(selected.description, null,
-        Color.rgba(0.62, 0.68, 0.78, 1.0))),
-      new KeyedView("environment", environmentToolbar(ui)),
-      new KeyedView("preview", new Column("story-preview", [
-        new KeyedView("story", selected.build())
-      ], previewStyle))
-    ], canvasStyle);
+    var content = new Column(
+      "lab-canvas",
+      [
+        new KeyedView("eyebrow", new Text(selected.group.toUpperCase(), null, Color.rgba(0.43, 0.62, 0.88, 1.0))),
+        new KeyedView("title", new Text(selected.title)),
+        new KeyedView("description", new Text(selected.description, null, Color.rgba(0.62, 0.68, 0.78, 1.0))),
+        new KeyedView("environment", environmentToolbar(ui)),
+        new KeyedView("preview", new Column("story-preview", [new KeyedView("story", selected.build())], previewStyle))
+      ],
+      canvasStyle
+    );
 
     var rootStyle = new LayoutStyle();
     rootStyle.width = LayoutAxis.grow();
     rootStyle.height = LayoutAxis.grow();
     rootStyle.direction = LayoutDirection.LeftToRight;
-    return new Row("component-lab", [
-      new KeyedView("catalog", new Column("story-catalog", sidebarRows, sidebarStyle)),
-      new KeyedView("content", content),
-      new KeyedView("inspector", inspector(ui))
-    ], rootStyle);
+    return new Row(
+      "component-lab",
+      [
+        new KeyedView("catalog", new Column("story-catalog", sidebarRows, sidebarStyle)),
+        new KeyedView("content", content),
+        new KeyedView("inspector", inspector(ui))
+      ],
+      rootStyle
+    );
   }
 
   public function diagnosticState():Dynamic return {
     selectedStory: selectedId,
     storyIds: [for (story in stories) story.id],
-    controls: {
-      text: textValue,
-      checked: checkboxValue,
-      select: selectValue
-    },
+    controls: {text: textValue, checked: checkboxValue, select: selectValue},
     environment: {previewWidth: previewWidth}
   };
 
@@ -140,8 +140,7 @@ class ComponentLab implements Observable {
       var button = new Button(entry.label, null, function() {
         previewWidth = captured.width;
 
-      }, "width:" + entry.key, null, ButtonVariant.Navigation, previewWidth == entry.width
-      );
+      }, "width:" + entry.key, null, ButtonVariant.Navigation, previewWidth == entry.width);
       items.push(new KeyedView(entry.key, button));
     }
     return new Row("lab-environment", items, rowStyle());
@@ -149,36 +148,31 @@ class ComponentLab implements Observable {
 
   function inspector(ui:UiContext):View {
     var active:Null<UiNodeSnapshot> = null;
-    for (node in ui.inspect())
-      if (node.focused || node.hovered || node.pressed) active = node;
-    var lines:Array<KeyedView> = [
-      new KeyedView("heading", new Text("INSPECTOR", null,
-        Color.rgba(0.43, 0.55, 0.7, 1.0)))
-    ];
-    if (active == null)
-      lines.push(new KeyedView("empty", new Text("Focus or hover a component to inspect it.")));
+    for (node in ui.inspect()) if (node.focused || node.hovered || node.pressed) active = node;
+    var lines:Array<KeyedView> = [new KeyedView(
+      "heading",
+      new Text("INSPECTOR", null, Color.rgba(0.43, 0.55, 0.7, 1.0))
+    )];
+    if (active == null) lines.push(new KeyedView("empty", new Text("Focus or hover a component to inspect it.")));
     else {
       var node:UiNodeSnapshot = cast active;
-      lines.push(new KeyedView("type", new Text("Type: " +
-        (node.styleType == null ? "untyped" : node.styleType))));
-      lines.push(new KeyedView("bounds", new Text("Bounds: " + round(node.bounds.x) + ", " +
-        round(node.bounds.y) + "  " + round(node.bounds.width) + " × " +
-        round(node.bounds.height))));
+      lines.push(new KeyedView("type", new Text("Type: " + (node.styleType == null ? "untyped" : node.styleType))));
+      lines.push(new KeyedView(
+        "bounds",
+        new Text("Bounds: " + round(node.bounds.x)
+        + ", " + round(node.bounds.y) + "  " + round(node.bounds.width) + " × " + round(node.bounds.height))
+      ));
       lines.push(new KeyedView("role", new Text("Role: " + node.role)));
       lines.push(new KeyedView("states", new Text("States: " + node.interactionStates)));
-      lines.push(new KeyedView("label", new Text("Label: " +
-        (node.label == null ? "—" : node.label))));
+      lines.push(new KeyedView("label", new Text("Label: " + (node.label == null ? "—" : node.label))));
       lines.push(new KeyedView("actions", new Text("Actions: " + node.actions)));
     }
     var metrics = ui.frameMetrics;
     if (metrics != null) {
-      lines.push(new KeyedView("metrics-heading", new Text("FRAME", null,
-        Color.rgba(0.43, 0.55, 0.7, 1.0))));
+      lines.push(new KeyedView("metrics-heading", new Text("FRAME", null, Color.rgba(0.43, 0.55, 0.7, 1.0))));
       lines.push(new KeyedView("nodes", new Text("Nodes: " + metrics.nodeCount)));
-      lines.push(new KeyedView("submit", new Text("Submit: " +
-        round(metrics.submitSeconds * 1000.0) + " ms")));
-      lines.push(new KeyedView("render", new Text("Render: " +
-        round(metrics.renderSeconds * 1000.0) + " ms")));
+      lines.push(new KeyedView("submit", new Text("Submit: " + round(metrics.submitSeconds * 1000.0) + " ms")));
+      lines.push(new KeyedView("render", new Text("Render: " + round(metrics.renderSeconds * 1000.0) + " ms")));
     }
     var style = new LayoutStyle();
     style.width = LayoutAxis.fixed(260.0);
@@ -192,40 +186,82 @@ class ComponentLab implements Observable {
   static function round(value:Float):Float return Math.round(value * 100.0) / 100.0;
 
   function makeStories():Array<ComponentStory> return [
-    new ComponentStory("button/states", "Button states", "Controls",
+    new ComponentStory(
+      "button/states",
+      "Button states",
+      "Controls",
       "Primary, secondary, selected, and disabled states in one deterministic frame.",
-      buttonStates),
-    new ComponentStory("text-field/editing", "Text field", "Controls",
-      "Editable text with retained selection, keyboard, and IME state.", textFieldStory),
-    new ComponentStory("selection/controls", "Selection controls", "Controls",
-      "Checkbox and typed select controls with live local state.", selectionStory),
-    new ComponentStory("controls/value", "Value controls", "Controls",
-      "Slider, progress, toggle, and radio states over shared theme tokens.", valueControlsStory),
-    new ComponentStory("text/multiline", "Multiline text", "Text & Input",
-      "A constrained multiline editor for wrapping, selection, and IME testing.", multilineStory),
-    new ComponentStory("navigation/tabs", "Tabs", "Navigation",
-      "A constrained tab strip whose selected page fills the preview width.", tabsStory),
-    new ComponentStory("layout/split-view", "Split view", "Layout",
-      "A draggable two-pane split with fixed minimum and maximum extents.", splitStory),
-    new ComponentStory("design/tokens", "Design tokens", "Foundations",
-      "Canonical control rhythm, spacing, selection, and disabled treatments.", tokensStory)
+      buttonStates
+    ),
+    new ComponentStory(
+      "text-field/editing",
+      "Text field",
+      "Controls",
+      "Editable text with retained selection, keyboard, and IME state.",
+      textFieldStory
+    ),
+    new ComponentStory(
+      "selection/controls",
+      "Selection controls",
+      "Controls",
+      "Checkbox and typed select controls with live local state.",
+      selectionStory
+    ),
+    new ComponentStory(
+      "controls/value",
+      "Value controls",
+      "Controls",
+      "Slider, progress, toggle, and radio states over shared theme tokens.",
+      valueControlsStory
+    ),
+    new ComponentStory(
+      "text/multiline",
+      "Multiline text",
+      "Text & Input",
+      "A constrained multiline editor for wrapping, selection, and IME testing.",
+      multilineStory
+    ),
+    new ComponentStory(
+      "navigation/tabs",
+      "Tabs",
+      "Navigation",
+      "A constrained tab strip whose selected page fills the preview width.",
+      tabsStory
+    ),
+    new ComponentStory(
+      "layout/split-view",
+      "Split view",
+      "Layout",
+      "A draggable two-pane split with fixed minimum and maximum extents.",
+      splitStory
+    ),
+    new ComponentStory(
+      "design/tokens",
+      "Design tokens",
+      "Foundations",
+      "Canonical control rhythm, spacing, selection, and disabled treatments.",
+      tokensStory
+    )
   ];
 
   function buttonStates():View {
-    var primary = new Button("Primary", null, function() {}, "primary", null, ButtonVariant.Primary
+    var primary = new Button("Primary", null, function() {
+    }, "primary", null, ButtonVariant.Primary);
+    var secondary = new Button("Navigation", null, function() {
+    }, "navigation", null, ButtonVariant.Navigation);
+    var selected = new Button("Selected", null, function() {
+    }, "selected", null, null, true);
+    var disabled = new Button("Disabled", null, null, "disabled", false);
+    return new Row(
+      "button-states",
+      [
+        new KeyedView("primary", primary),
+        new KeyedView("navigation", secondary),
+        new KeyedView("selected", selected),
+        new KeyedView("disabled", disabled)
+      ],
+      rowStyle()
     );
-    var secondary = new Button("Navigation", null, function() {}, "navigation", null, ButtonVariant.Navigation
-    );
-    var selected = new Button("Selected", null, function() {}, "selected", null, null, true
-    );
-    var disabled = new Button("Disabled", null, null, "disabled", false
-    );
-    return new Row("button-states", [
-      new KeyedView("primary", primary),
-      new KeyedView("navigation", secondary),
-      new KeyedView("selected", selected),
-      new KeyedView("disabled", disabled)
-    ], rowStyle());
   }
 
   function textFieldStory():View {
@@ -239,78 +275,125 @@ class ComponentLab implements Observable {
   function selectionStory():View {
     var selectStyle = new LayoutStyle();
     selectStyle.width = LayoutAxis.fixed(220.0);
-    return new Row("selection-controls", [
-      new KeyedView("checkbox", new Checkbox("enabled", "Enabled", checkboxValue,
-        function(next) checkboxValue = next)),
-      new KeyedView("select", new Select<String>("quality", [
-        new SelectOption<String>("fast", "Fast", "fast"),
-        new SelectOption<String>("balanced", "Balanced", "balanced"),
-        new SelectOption<String>("quality", "High quality", "quality")
-      ], selectValue, function(next) selectValue = next, selectStyle))
-    ], rowStyle());
+    return new Row(
+      "selection-controls",
+      [
+        new KeyedView(
+          "checkbox",
+          new Checkbox("enabled", "Enabled", checkboxValue, function(next) checkboxValue = next)
+        ),
+        new KeyedView(
+          "select",
+          new Select<String>(
+            "quality",
+            [
+              new SelectOption<String>("fast", "Fast", "fast"),
+              new SelectOption<String>("balanced", "Balanced", "balanced"),
+              new SelectOption<String>("quality", "High quality", "quality")
+            ],
+            selectValue,
+            function(next) selectValue = next,
+            selectStyle
+          )
+        )
+      ],
+      rowStyle()
+    );
   }
 
   function tabsStory():View {
     var style = new LayoutStyle();
     style.width = LayoutAxis.grow();
     style.height = LayoutAxis.fixed(240.0);
-    return new Tabs("lab-tabs", [
-      new TabItem("overview", "Overview", new Text("Overview content")),
-      new TabItem("details", "Details", new Text("Detailed component information")),
-      new TabItem("disabled", "Disabled", new Text("Unavailable"), false)
-    ], "overview", null, style);
+    return new Tabs(
+      "lab-tabs",
+      [
+        new TabItem("overview", "Overview", new Text("Overview content")),
+        new TabItem("details", "Details", new Text("Detailed component information")),
+        new TabItem("disabled", "Disabled", new Text("Unavailable"), false)
+      ],
+      "overview",
+      null,
+      style
+    );
   }
 
   function valueControlsStory():View {
     var columnStyle = new LayoutStyle();
     columnStyle.width = LayoutAxis.fixed(480.0);
     columnStyle.childGap = 18.0;
-    var slider = new Slider("volume", "Volume", sliderValue, 0.0, 1.0, 0.01,
-      function(next) sliderValue = next);
+    var slider = new Slider("volume", "Volume", sliderValue, 0.0, 1.0, 0.01, function(next) sliderValue = next);
     var progress = new ProgressBar("progress", sliderValue, 0.0, 1.0, "Progress");
     progress.animationDuration = 0.0;
-    return new Column("value-controls", [
-      new KeyedView("slider", slider),
-      new KeyedView("progress", progress),
-      new KeyedView("toggle", new Toggle("notifications", "Notifications", checkboxValue,
-        function(next) checkboxValue = next)),
-      new KeyedView("radio", new RadioGroup("quality", [
-        new RadioOption("low", "Low", "low"),
-        new RadioOption("middle", "Balanced", "middle"),
-        new RadioOption("high", "High", "high")
-      ], radioValue, function(next) radioValue = next))
-    ], columnStyle);
+    return new Column(
+      "value-controls",
+      [
+        new KeyedView("slider", slider),
+        new KeyedView("progress", progress),
+        new KeyedView(
+          "toggle",
+          new Toggle("notifications", "Notifications", checkboxValue, function(next) checkboxValue = next)
+        ),
+        new KeyedView(
+          "radio",
+          new RadioGroup(
+            "quality",
+            [
+              new RadioOption("low", "Low", "low"),
+              new RadioOption("middle", "Balanced", "middle"),
+              new RadioOption("high", "High", "high")
+            ],
+            radioValue,
+            function(next) radioValue = next
+          )
+        )
+      ],
+      columnStyle
+    );
   }
 
   function multilineStory():View {
     var style = new LayoutStyle();
     style.width = LayoutAxis.fixed(520.0);
     style.height = LayoutAxis.fixed(220.0);
-    return new TextArea("multiline-editor", multilineValue,
-      function(next) multilineValue = next, style, "Example notes");
+    return new TextArea(
+      "multiline-editor",
+      multilineValue,
+      function(next) multilineValue = next,
+      style,
+      "Example notes"
+    );
   }
 
   function tokensStory():View {
     var columnStyle = new LayoutStyle();
     columnStyle.width = LayoutAxis.fixed(560.0);
     columnStyle.childGap = 16.0;
-    var disabled = new Button("Disabled action", null, null, "token-disabled", false
+    var disabled = new Button("Disabled action", null, null, "token-disabled", false);
+    var nav = new Button("Navigation item", null, function() {
+    }, "token-navigation", null, ButtonVariant.Navigation, true);
+    var primary = new Button("Primary action", null, function() {
+    }, "token-primary", null, ButtonVariant.Primary);
+    return new Column(
+      "design-tokens",
+      [
+        new KeyedView("heading", new Text("Typography / Heading")),
+        new KeyedView("body", new Text("Body text establishes the default reading rhythm.")),
+        new KeyedView(
+          "muted",
+          new Text("Muted text supports secondary information.", null, Color.rgba(0.62, 0.68, 0.78, 1.0))
+        ),
+        new KeyedView(
+          "actions",
+          new Row(
+            "token-actions",
+            [new KeyedView("primary", primary), new KeyedView("navigation", nav), new KeyedView("disabled", disabled)],
+            rowStyle()
+          )
+        )
+      ],
+      columnStyle
     );
-    var nav = new Button("Navigation item", null, function() {}, "token-navigation", null, ButtonVariant.Navigation, true
-    );
-    var primary = new Button("Primary action", null, function() {}, "token-primary", null, ButtonVariant.Primary
-    );
-    return new Column("design-tokens", [
-      new KeyedView("heading", new Text("Typography / Heading")),
-      new KeyedView("body", new Text("Body text establishes the default reading rhythm.")),
-      new KeyedView("muted", new Text("Muted text supports secondary information.", null,
-        Color.rgba(0.62, 0.68, 0.78, 1.0))),
-      new KeyedView("actions", new Row("token-actions", [
-        new KeyedView("primary", primary),
-        new KeyedView("navigation", nav),
-        new KeyedView("disabled", disabled)
-      ], rowStyle()))
-    ], columnStyle);
   }
 
   function splitStory():View {
@@ -324,10 +407,12 @@ class ComponentLab implements Observable {
     splitStyle.width = LayoutAxis.grow();
     splitStyle.height = LayoutAxis.fixed(320.0);
     options.style = splitStyle;
-    return new SplitView("lab-split",
+    return new SplitView(
+      "lab-split",
       new SizedBox("leading", new Text("Leading pane"), LayoutAxis.grow(), LayoutAxis.grow()),
       new SizedBox("trailing", new Text("Trailing pane"), LayoutAxis.grow(), LayoutAxis.grow()),
-      options);
+      options
+    );
   }
 
   function find(id:String):Null<ComponentStory> {

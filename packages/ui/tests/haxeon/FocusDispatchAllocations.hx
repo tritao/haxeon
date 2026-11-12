@@ -9,8 +9,7 @@ import haxeon.ui.core.UiEventKind;
 import haxeon.ui.core.WidgetId;
 
 /** Event construction and listener setup precede the measured dispatch interval. */
-@:access(haxeon.ui.core.EventDispatcher)
-class FocusDispatchCensus {
+@:access(haxeon.ui.core.EventDispatcher) class FocusDispatchCensus {
   static var dispatcher:EventDispatcher;
   static var target:RenderNode;
   static var focused:UiEvent;
@@ -20,11 +19,22 @@ class FocusDispatchCensus {
   public static function prepare():Void {
     var root = new RenderNode(new WidgetId(1)), wrapper = new RenderNode(new WidgetId(2));
     target = new RenderNode(new WidgetId(3));
-    root.add(wrapper); wrapper.add(target);
+    root.add(wrapper);
+    wrapper.add(target);
     for (node in [root, wrapper, target]) {
       var bounds = new Rect(0, 0, 100, 80);
-      node.resolved = new ResolvedLayoutItem(node.id.value, 1, 3, 4, 100, 80,
-        bounds, bounds, new Transform2D(2, 0, 0, 2, 5, 6), 0);
+      node.resolved = new ResolvedLayoutItem(
+        node.id.value,
+        1,
+        3,
+        4,
+        100,
+        80,
+        bounds,
+        bounds,
+        new Transform2D(2, 0, 0, 2, 5, 6),
+        0
+      );
     }
     for (kind in [UiEventKind.Focus, UiEventKind.Blur]) {
       root.on(kind, function(_) deliveries++, "capture");

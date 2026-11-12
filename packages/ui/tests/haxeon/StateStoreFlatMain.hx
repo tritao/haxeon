@@ -8,13 +8,17 @@ class StateStoreFlatMain {
   static function main():Int {
     var store = new StateStore(), ids = [for (i in 0...600) new WidgetId(i + 1)];
     store.beginFrame();
-    for (index in 0...400) { store.initialize(ids[index], index); store.onUnmount(ids[index], release); }
+    for (index in 0...400) {
+      store.initialize(ids[index], index);
+      store.onUnmount(ids[index], release);
+    }
     store.endFrame();
     store.beginFrame();
     var outer = store.beginUsage();
     store.touch(ids[10]);
     var inner = store.beginUsage();
-    store.touch(ids[20]); store.touch(ids[20]);
+    store.touch(ids[20]);
+    store.touch(ids[20]);
     var child = store.usedIdsSince(inner);
     if (child.length != 1 || child[0] != ids[20].value) return 1;
     store.finishUsage(inner);
@@ -27,7 +31,10 @@ class StateStoreFlatMain {
     if (released != 200 || store.diagnosticCounts().resources != 200) return 3;
     store.beginFrame();
     for (index in 0...400) if (index % 2 == 0) store.touch(ids[index]);
-    for (index in 400...600) { store.initialize(ids[index], index); store.onUnmount(ids[index], release); }
+    for (index in 400...600) {
+      store.initialize(ids[index], index);
+      store.onUnmount(ids[index], release);
+    }
     if (store.usageMarker() != 400) return 4;
     store.endFrame();
     if (released != 200 || store.diagnosticCounts().resources != 400) return 5;

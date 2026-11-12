@@ -19,7 +19,9 @@ class ScopeTextFieldStateMain {
       if (context.renderScopeAt(root) == null) throw "Editor root lost its scope owner";
       context.stateStore.endFrame();
     }
-    context.dispose(); context.stateStore.dispose();fonts.dispose();
+    context.dispose();
+    context.stateStore.dispose();
+    fonts.dispose();
     return 42;
   }
 }

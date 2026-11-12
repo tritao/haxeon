@@ -19,9 +19,14 @@ class BindingLifetimeMain {
     var store = new StateStore();
     var context = new BuildContext(store, null, null, null, Theme.light());
     var value = new Signal<Int>(0);
-    var view = new TrackedScope("lifetime", () ->
-      new EqualChild<LifetimeProps>("stable", new LifetimeProps(1),
-        (_, _) -> new BoundText("text", () -> Std.string(value.value))));
+    var view = new TrackedScope(
+      "lifetime",
+      () -> new EqualChild<LifetimeProps>(
+        "stable",
+        new LifetimeProps(1),
+        (_, _) -> new BoundText("text", () -> Std.string(value.value))
+      )
+    );
     context.beginFrame();
     context.trackReads(() -> view.build(context));
     store.endFrame();
@@ -40,7 +45,8 @@ class BindingLifetimeMain {
     value.value = 1;
     ReactiveRuntime.flushEffects();
     var textMatches = false;
-    root.walk(node -> { if (node.layout.text == "1") textMatches = true; });
+    root.walk(node -> {if (node.layout.text == "1") textMatches = true;
+    });
     var valid = value.hasFieldReaders(0) && textMatches;
     context.dispose();
     return valid ? 42 : 5;

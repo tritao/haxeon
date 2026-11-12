@@ -12,8 +12,11 @@ class ScopeFullFrameOwnershipMain {
     var store = new StateStore();
     var context = new BuildContext(store, null, null, null, Theme.light());
     var source = new Signal<Int>(0);
-    var view = new RetainedVariants("cache", "A", _ -> new TrackedScope("parent", () ->
-      new Button(Std.string(source.value), null, null, "child")));
+    var view = new RetainedVariants(
+      "cache",
+      "A",
+      _ -> new TrackedScope("parent", () -> new Button(Std.string(source.value), null, null, "child"))
+    );
     context.beginFrame();
     var root = view.build(context), original = context.renderScopeAt(root);
     store.endFrame();

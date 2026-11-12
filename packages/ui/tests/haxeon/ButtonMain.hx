@@ -29,21 +29,45 @@ class ButtonMain {
     var store = new StateStore();
     var context = new BuildContext(store, null, null, null, Theme.light());
     var sheet = new StyleSheet("button-layout");
-    sheet.rule(StyleSelector.widget("button"), [StyleValue.width(LayoutAxis.fixed(120)),
-      StyleValue.height(LayoutAxis.fixed(32)), StyleValue.positioning(LayoutPositioning.Absolute)]);
+    sheet.rule(
+      StyleSelector.widget("button"),
+      [
+        StyleValue.width(LayoutAxis.fixed(120)),
+        StyleValue.height(LayoutAxis.fixed(32)),
+        StyleValue.positioning(LayoutPositioning.Absolute)
+      ]
+    );
     sheet.rule(StyleSelector.widget("button").state(StyleState.Hovered), [StyleValue.width(LayoutAxis.fixed(150))]);
     context.setStyleSheet(sheet);
     var semantics = new Semantics(AccessibilityRole.ComboBox, "Choose", "First");
     semantics.actions = AccessibilityAction.Expand | AccessibilityAction.SetValue;
     var decoration = new ButtonDecoration(), focuses = 0, blurs = 0;
     context.beginFrame();
-    var root = new Button("First", null, null, "choose", null, null, null, null, null, null, null, decoration, null, null, null, null, null, semantics).build(context);
+    var root = new Button(
+      "First",
+      null,
+      null,
+      "choose",
+      null,
+      null,
+      null,
+      null,
+      null,
+      null,
+      null,
+      decoration,
+      null,
+      null,
+      null,
+      null,
+      null,
+      semantics
+    ).build(context);
     store.endFrame();
     var control = root;
-    if (root.layout.style.width.value != 120 || root.layout.style.height.value != 32 ||
-        root.layout.style.positioning != LayoutPositioning.Absolute || !root.hitTestSelf ||
-        root.children.length != 2 || !control.focusable ||
-        control.semantics != semantics || decoration.builds != 1) return 1;
+    if (root.layout.style.width.value != 120 || root.layout.style.height.value != 32
+      || root.layout.style.positioning != LayoutPositioning.Absolute || !root.hitTestSelf || root.children.length != 2
+      || !control.focusable || control.semantics != semantics || decoration.builds != 1) return 1;
     var events = new EventDispatcher(new FocusManager(), context.interactionStates);
     events.setRoot(root);
     root.on(UiEventKind.Focus, function(_) focuses++, "capture");
@@ -64,11 +88,11 @@ class ButtonMain {
     var refreshed = root;
     var refreshedSemantics = refreshed.semantics;
     if (refreshedSemantics == null) return 5;
-    if (refreshed == control || !refreshed.id.equals(control.id) || refreshed.semantics != semantics ||
-        refreshedSemantics.value != "First" || refreshedSemantics.actions != semantics.actions ||
-        !refreshed.states.contains(StyleState.Hovered) || decoration.builds != 2 ||
-        root.children.length != 3 || root.children[2] != extra || extra.parent != root ||
-        root.layout.style.width.value != 150 || root.layout.style.zIndex != 9) return 3;
+    if (refreshed == control
+      || !refreshed.id.equals(control.id) || refreshed.semantics != semantics || refreshedSemantics.value != "First"
+      || refreshedSemantics.actions != semantics.actions || !refreshed.states.contains(StyleState.Hovered)
+      || decoration.builds != 2 || root.children.length != 3 || root.children[2] != extra
+      || extra.parent != root || root.layout.style.width.value != 150 || root.layout.style.zIndex != 9) return 3;
     events.setRoot(root);
     events.focusEvent(refreshed.id, UiEventKind.Focus);
     events.focusEvent(refreshed.id, UiEventKind.Blur);
@@ -81,7 +105,8 @@ class ButtonMain {
     var parent = new RetainedView("cached-button-parent", function(_) {
       parentBuilds++;
       return new Button("Cached", null, null, "cached-button", parentEnabled.value);
-    });
+    }
+    );
     context.beginFrame();
     var cachedRoot = context.trackReads(function() return parent.build(context));
     store.endFrame();
@@ -94,29 +119,28 @@ class ButtonMain {
     context.beginFrame();
     var reusedRoot = context.trackReads(function() return parent.build(context));
     store.endFrame();
-    if (parentBuilds != 1 || reusedRoot != context.currentRoot(cachedRoot) ||
-        !reusedRoot.states.contains(StyleState.Hovered) ||
-        reusedRoot.layout.style.width.value != 150) return 8;
+    if (parentBuilds != 1 || reusedRoot != context.currentRoot(cachedRoot)
+      || !reusedRoot.states.contains(StyleState.Hovered) || reusedRoot.layout.style.width.value != 150) return 8;
     context.interactionStates.set(cachedControl.id, StyleState.Focused);
     cachedOwner.markDirty();
     context.flushRenderScopes(reusedRoot);
     context.beginFrame();
     reusedRoot = context.trackReads(function() return parent.build(context));
     store.endFrame();
-    if (parentBuilds != 1 || reusedRoot != context.currentRoot(cachedRoot) ||
-        !reusedRoot.states.contains(StyleState.Focused) ||
-        reusedRoot.layout.style.width.value != 120) return 10;
+    if (parentBuilds != 1 || reusedRoot != context.currentRoot(cachedRoot)
+      || !reusedRoot.states.contains(StyleState.Focused) || reusedRoot.layout.style.width.value != 120) return 10;
     parentEnabled.value = false;
     context.beginFrame();
     var changedRoot = context.trackReads(function() return parent.build(context));
     store.endFrame();
-    if (parentBuilds != 2 || changedRoot == cachedRoot || changedRoot.enabled ||
-        changedRoot.focusable || !cachedOwner.disposed) return 11;
+    if (parentBuilds != 2
+      || changedRoot == cachedRoot || changedRoot.enabled || changedRoot.focusable || !cachedOwner.disposed) return 11;
     var variantBuilds = 0;
     var variant = new RetainedVariants("native-variant", "one", function(_) {
       variantBuilds++;
       return new ButtonWithCallerExtra();
-    });
+    }
+    );
     context.beginFrame();
     var variantRoot = context.trackReads(function() return variant.build(context));
     store.endFrame();
@@ -129,8 +153,8 @@ class ButtonMain {
     context.beginFrame();
     var keptVariant = context.trackReads(function() return variant.build(context));
     store.endFrame();
-    if (variantBuilds != 1 || keptVariant != context.currentRoot(variantRoot) || keptVariant.children[1] != outside ||
-        keptVariant == variantBody || keptVariant.layout.style.width.value != 150) return 12;
+    if (variantBuilds != 1 || keptVariant != context.currentRoot(variantRoot) || keptVariant.children[1] != outside
+      || keptVariant == variantBody || keptVariant.layout.style.width.value != 150) return 12;
     outside.detach();
     context.beginFrame();
     var rebuiltVariant = context.trackReads(function() return variant.build(context));
@@ -143,7 +167,8 @@ class ButtonMain {
 
 private class ButtonDecoration implements View {
   public var builds = 0;
-  public function new() {}
+  public function new() {
+  }
   public function build(context:BuildContext):RenderNode {
     if (context.inheritedStyle == null) throw "Button child did not inherit computed style";
     builds++;
@@ -153,7 +178,8 @@ private class ButtonDecoration implements View {
 
 /** The extra is attached by the component caller, outside the independently replaced body. */
 private class ButtonWithCallerExtra implements View {
-  public function new() {}
+  public function new() {
+  }
   public function build(context:BuildContext):RenderNode {
     var root = new Button("Variant", null, null, "variant-button").build(context);
     var extra = context.createNode(context.rootId("outside-body"), LayoutVisualKind.Box);

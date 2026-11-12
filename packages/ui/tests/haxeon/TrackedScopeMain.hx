@@ -8,9 +8,12 @@ import haxeon.ui.component.TrackedScope;
 import haxeon.ui.theme.Theme;
 
 class ScopeLeaf implements View {
-  public function new() {}
-  public function build(context:BuildContext):RenderNode
-    return context.createNode(context.rootId("leaf"), LayoutVisualKind.Box);
+  public function new() {
+  }
+  public function build(context:BuildContext):RenderNode return context.createNode(
+    context.rootId("leaf"),
+    LayoutVisualKind.Box
+  );
 }
 
 class ScopeResourceLeaf implements View {
@@ -31,10 +34,9 @@ class TrackedScopeMain {
     var primary = new Signal<Bool>(true), alternate = new Signal<Int>(10);
     var runs = 0;
     context.beginFrame();
-    var scope = new TrackedScope("value", () -> {
-      var value = primary.value ? read.value : alternate.value;
-      runs++;
-      return new ScopeLeaf();
+    var scope = new TrackedScope("value", () -> {var value = primary.value ? read.value : alternate.value;
+    runs++;
+    return new ScopeLeaf();
     });
     var root = context.trackReads(() -> scope.build(context));
     store.endFrame();
@@ -49,7 +51,8 @@ class TrackedScopeMain {
     context.flushRenderScopes(root);
     root = context.currentRoot(root);
     if (context.patchedPriors().get(previousChild.id.value) != previousChild) return 13;
-    if (runs != 2 || context.hasPendingRenderScopes() || root.children.length != 1 || decoration.parent != root) return 4;
+    if (runs != 2
+      || context.hasPendingRenderScopes() || root.children.length != 1 || decoration.parent != root) return 4;
     primary.value = false;
     context.flushRenderScopes(root);
     if (runs != 3 || read.hasFieldReaders(0) || !alternate.hasFieldReaders(0)) return 6;
@@ -66,13 +69,11 @@ class TrackedScopeMain {
     if (read.hasFieldReaders(0) || primary.hasFieldReaders(0) || alternate.hasFieldReaders(0)) return 5;
     var visible = new Signal<Bool>(true), childSource = new Signal<Int>(0), childRuns = 0;
     context.beginFrame();
-    var nested = new TrackedScope("parent", () -> {
-      if (!visible.value) return new ScopeLeaf();
-      return new TrackedScope("child", () -> {
-        var value = childSource.value;
-        childRuns++;
-        return new ScopeLeaf();
-      });
+    var nested = new TrackedScope("parent", () -> {if (!visible.value) return new ScopeLeaf();
+    return new TrackedScope("child", () -> {var value = childSource.value;
+    childRuns++;
+    return new ScopeLeaf();
+    });
     });
     var nestedRoot = context.trackReads(() -> nested.build(context));
     store.endFrame();
@@ -100,11 +101,10 @@ class TrackedScopeMain {
     if (ScopeResourceLeaf.released != 2) return 12;
     var replacementSource = new Signal<Int>(0), replacementRuns = 0;
     var rejectReplacement = false;
-    var replacement = new TrackedScope("replacement", () -> {
-      var value = replacementSource.value;
-      if (rejectReplacement) throw "expected replacement failure";
-      replacementRuns++;
-      return new ScopeLeaf();
+    var replacement = new TrackedScope("replacement", () -> {var value = replacementSource.value;
+    if (rejectReplacement) throw "expected replacement failure";
+    replacementRuns++;
+    return new ScopeLeaf();
     });
     context.beginFrame();
     var replacementRoot = context.trackReads(() -> replacement.build(context));
@@ -130,10 +130,9 @@ class TrackedScopeMain {
     context.beginFrame();
     var cachedMark = context.stateUsageMarker();
     var cachedSource = new Signal<Int>(0), cachedRuns = 0;
-    var cachedResource = new TrackedScope("cached-resource", () -> {
-      var value = cachedSource.value;
-      cachedRuns++;
-      return new ScopeResourceLeaf("cached");
+    var cachedResource = new TrackedScope("cached-resource", () -> {var value = cachedSource.value;
+    cachedRuns++;
+    return new ScopeResourceLeaf("cached");
     });
     var cachedRoot = context.trackReads(() -> cachedResource.build(context));
     var cachedIds = context.stateIdsUsedSince(cachedMark);

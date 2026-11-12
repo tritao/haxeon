@@ -12,34 +12,36 @@ import haxeon.ui.style.StyleTarget;
 
 /** Vertical composition over a generic box render node. */
 class Column implements View {
-	final key:Key;
-	final children:Array<KeyedView>;
-	public final style:LayoutStyle;
+  final key:Key;
+  final children:Array<KeyedView>;
+  public final style:LayoutStyle;
 
-	public function new(key:String, children:Array<KeyedView>, ?style:LayoutStyle) {
-		this.key = new Key(key);
-		this.children = children == null ? [] : children;
-		this.style = style == null ? new LayoutStyle() : style.copy();
-		this.style.direction = LayoutDirection.TopToBottom;
-	}
+  public function new(key:String, children:Array<KeyedView>, ?style:LayoutStyle) {
+    this.key = new Key(key);
+    this.children = children == null ? [] : children;
+    this.style = style == null ? new LayoutStyle() : style.copy();
+    this.style.direction = LayoutDirection.TopToBottom;
+  }
 
-	public function build(context:BuildContext):RenderNode {
-		var id = context.withScope(key, function() return context.rootId("column"));
-		return buildWithId(context, id);
-	}
+  public function build(context:BuildContext):RenderNode {
+    var id = context.withScope(key, function() return context.rootId("column"));
+    return buildWithId(context, id);
+  }
 
-	/** Build with an ID already claimed by a self-updating owner. */
-	public function buildWithId(context:BuildContext, id:haxeon.ui.core.WidgetId):RenderNode {
-		return context.withScope(key, function() {
-			var computed = context.resolveStyle(new StyleTarget("column", key.value, key.value,
-				null, ["column"], context.interactionStates.get(id)), style);
-			var node = context.createNode(id, LayoutVisualKind.Box, computed.toLayoutStyle());
-			node.setStyleIdentity("column", key.value, key.value, null, ["column"]);
-			node.states = context.interactionStates.get(id);
-			node.computedStyle = computed;
-			for (child in children)
-				node.add(context.withStyleParent(computed, function() return child.build(context)));
-			return node;
-		});
-	}
+  /** Build with an ID already claimed by a self-updating owner. */
+  public function buildWithId(context:BuildContext, id:haxeon.ui.core.WidgetId):RenderNode {
+    return context.withScope(key, function() {
+      var computed = context.resolveStyle(
+        new StyleTarget("column", key.value, key.value, null, ["column"], context.interactionStates.get(id)),
+        style
+      );
+      var node = context.createNode(id, LayoutVisualKind.Box, computed.toLayoutStyle());
+      node.setStyleIdentity("column", key.value, key.value, null, ["column"]);
+      node.states = context.interactionStates.get(id);
+      node.computedStyle = computed;
+      for (child in children) node.add(context.withStyleParent(computed, function() return child.build(context)));
+      return node;
+    }
+    );
+  }
 }
