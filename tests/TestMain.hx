@@ -550,7 +550,9 @@ class TestMain {
 			'Type mismatch for local "wrong"');
 		expectCompileError('function main():Int { missing = 1; return 0; }', 'Unknown variable "missing"');
 		expectCompileError('function main():Int { var value:Int; return value; }', 'Local "value" may be used before assignment');
-		expectCompileError('function main():Int { var value:Int; if (true) value = 42; return value; }', 'Local "value" may be used before assignment');
+		// A literal-true condition always runs its body (as a bare block, which parses to `if (true)`, must), a literal-false one never does.
+		Frontend.compile('function main():Int { var value:Int; if (true) value = 42; return value; }');
+		expectCompileError('function main():Int { var value:Int; if (false) value = 42; return value; }', 'Local "value" may be used before assignment');
 		expectCompileError('function main():Int { var value:Int; value++; return value; }', 'Local "value" may be used before assignment');
 		Frontend.compile('class Box { public var value:Int; public function new() { this.value = 1; } } function main():Int { var box = new Box(); var old = box.value++; return old + box.value; }');
 		Frontend.compile('class Callbacks { public final callback:Int->Int; public function new(callback:Int->Int) this.callback = callback; } function invoke(value:Null<Callbacks>):Int { if (value != null) return value.callback(41); return 0; } function main():Int return invoke(new Callbacks(value -> value + 1));');

@@ -7,6 +7,14 @@ import compiler.types.TypedAst.TypedSwitchCase;
 
 /** Structural exit analysis for typed statement bodies. */
 class ControlFlow {
+	/**
+	 * Whether the else of an `if` can run. A bare block `{ ... }` is an `if (true)` without an else (the parser lowers it so), so
+	 * its body always runs and no path skips it. The one rule for flow merges and for the exit analysis. As in C# and Java, a constant
+	 * true condition is definitely taken for definite assignment (`if (true) x = 1;` assigns x), a constant false one is not.
+	 */
+	public static function elseCanRun(condition:TypedExpression):Bool
+		return !isTrueLiteral(condition);
+
 	public static function isInfiniteLoop(condition:TypedExpression, body:Array<TypedStatement>):Bool
 		return isTrueLiteral(condition) && !canBreakCurrentLoop(body);
 
@@ -39,8 +47,9 @@ class ControlFlow {
 				case TExpression(expression, _) if ((switch (expression.type) { case TNever: true; default: false; })):
 					return true;
 				case TIf(condition, yes, no, _):
-					// A bare block `{ ... }` is an `if (true)` without an `else`: it always runs its body.
-					if (complete && isTrueLiteral(condition)) {
+					// A bare block always runs its body. `alwaysReturns`, the unreachable-code rule, still does not count it: dead code after
+					// one has always been accepted.
+					if ((complete || loopExit) && !elseCanRun(condition)) {
 						if (alwaysTerminates(yes, exhaustive, loopExit, complete))
 							return true;
 					} else if (no.length > 0

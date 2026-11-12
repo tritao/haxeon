@@ -136,9 +136,12 @@ class Scope {
 		return outer == null ? null : outer.mapKeySource(name);
 	}
 
+	/** What every continuing path assigned is assigned after them. With no continuing path the code after is unreachable, so every local counts as assigned. */
 	public function mergeAssignmentsFrom(scopes:Array<Scope>):Void {
-		if (scopes.length == 0)
+		if (scopes.length == 0) {
+			assumeAllAssigned();
 			return;
+		}
 		for (value in visibleValues()) {
 			var allAssigned = true;
 			for (scope in scopes)

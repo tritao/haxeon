@@ -556,3 +556,5 @@ generic-map-read-view	42
 abstract-int-float	42
 diff-stored-property	42
 readonly-anonymous-array	42
+bare-block-assignment	42
+bare-block-exit	42
