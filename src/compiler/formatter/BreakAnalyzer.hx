@@ -203,7 +203,7 @@ class BreakAnalyzer {
 			return colonNeedsSpace(tokens, index, syntax) ? 1 : 0;
 		if (right == TokenKind.Colon)
 			return ternaryColon(tokens, index) ? 1 : 0;
-		if (left == TokenKind.At)
+		if (left == TokenKind.At || left == TokenKind.Backslash)
 			return 0;
 		if (left == TokenKind.Question && !isTernaryQuestion(tokens, index))
 			return 0;
@@ -255,7 +255,7 @@ class BreakAnalyzer {
 
 	/** A prefix operator binds to what follows it without a space: `!(a)`, `-(a)`, `@:meta`. */
 	static function isPrefixOperator(tokens:Array<FormatToken>, index:Int, kind:Null<TokenKind>):Bool
-		return kind == TokenKind.Not || kind == TokenKind.BitNot || kind == TokenKind.Increment || kind == TokenKind.Decrement || kind == TokenKind.At
+		return kind == TokenKind.Not || kind == TokenKind.BitNot || kind == TokenKind.Increment || kind == TokenKind.Decrement || kind == TokenKind.At || kind == TokenKind.Backslash
 			|| isUnary(tokens, index, kind);
 
 	static function colonNeedsSpace(tokens:Array<FormatToken>, index:Int, syntax:SyntaxInfo):Bool {

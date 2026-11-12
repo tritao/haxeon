@@ -9,22 +9,24 @@ trap 'rm -rf -- "$project_dir"' EXIT
 node - "$repo_dir" <<'JS'
 const assert = require('assert');
 const fs = require('fs');
-const {hasStructDeclaration} = require(process.argv[2] + '/scripts/format-source-profile.js');
+const {needsHaxeonFormatter} = require(process.argv[2] + '/scripts/format-source-profile.js');
 for (const source of [
   'struct Vec2 { public var x:Int; }',
   '@:value struct /* comment */ Vec2 { public var x:Int; }',
-  '/* struct Fake {} */ struct Real {}'
-]) assert.strictEqual(hasStructDeclaration(source), true, source);
+  '/* struct Fake {} */ struct Real {}',
+  'function main():Int return Diff.bit(\\Style.width);'
+]) assert.strictEqual(needsHaxeonFormatter(source), true, source);
 for (const source of [
   'class Main { var text = "\nstruct Fake {}"; }',
   "class Main { var text = '\nstruct Fake {}'; }",
   '// struct Fake {}\nclass Main {}',
   '/* struct Fake {} */ class Main {}',
   'class Main { var pattern = ~/struct Fake [/] {}/; }',
-  "class Main { var text = '${'struct Fake {}'}'; }"
-]) assert.strictEqual(hasStructDeclaration(source), false, source);
-assert.strictEqual(hasStructDeclaration(fs.readFileSync(process.argv[2] + '/tests/runtime/HxiNumericStorageMain.hx', 'utf8')), false);
-console.log('PASS: formatter profiles ignore embedded structs in literals/comments/regex/interpolation');
+  "class Main { var text = '${'struct Fake {}'}'; }",
+  'class Main { var text = "a\\\\b"; var other = \'c\\\\d\'; var pattern = ~/\\d+/; }'
+]) assert.strictEqual(needsHaxeonFormatter(source), false, source);
+assert.strictEqual(needsHaxeonFormatter(fs.readFileSync(process.argv[2] + '/tests/runtime/HxiNumericStorageMain.hx', 'utf8')), false);
+console.log('PASS: formatter profiles ignore embedded structs and backslashes in literals/comments/regex/interpolation, and route property paths');
 JS
 
 source='function main():Int { var value=compute(firstArgument,secondArgument,thirdArgument); return value; }'
@@ -61,6 +63,11 @@ printf 'struct Vec2 { public var x:Int; }\n' > "$struct_path"
 "$cli" fmt "$struct_path"
 grep -q '^struct Vec2 {' "$struct_path"
 "$cli" fmt --check "$struct_path"
+
+# A property path keeps its backslash: formatting once dropped it, which turned the path into a different name.
+path_source=$(printf 'function main():Int { return Diff.bit(\\Style.width) | Diff.bit( \\Style.mode ); }')
+path_formatted=$(printf '%s\n' "$path_source" | "$cli" fmt --stdin)
+[[ "$path_formatted" == *'Diff.bit(\Style.width)'* && "$path_formatted" == *'Diff.bit(\Style.mode)'* ]]
 
 # A directory stands for the .hx files under it; reading one as a file used to crash HashLink.
 tree_dir="$project_dir/tree"

@@ -1,8 +1,8 @@
-// Route genuine module-level Haxeon struct declarations to the built-in formatter.
+// Route files with Haxeon-only syntax (module-level struct declarations, `\Type.field` property paths) to the built-in formatter.
 // Embedded HXI/Haxe sources and comments must remain with the host-Haxe formatter.
 const fs = require('fs');
 
-function hasStructDeclaration(source) {
+function needsHaxeonFormatter(source) {
   let position = 0;
   function skipQuoted(quote) {
     position++;
@@ -60,6 +60,8 @@ function hasStructDeclaration(source) {
   let depth = 0;
   while (position < source.length) {
     const token = nextToken();
+    // A property path (`\Style.width`) is Haxeon syntax; outside a string or regex literal a backslash is not Haxe.
+    if (token === '\\') return true;
     if (token === 'struct' && depth === 0 && /^[A-Za-z_][A-Za-z0-9_]*$/.test(nextToken())) return true;
     if (token === '{') depth++;
     if (token === '}') depth--;
@@ -67,7 +69,7 @@ function hasStructDeclaration(source) {
   return false;
 }
 
-module.exports = {hasStructDeclaration};
+module.exports = {needsHaxeonFormatter};
 if (require.main === module)
   for (const file of process.argv.slice(2))
-    console.log(`${hasStructDeclaration(fs.readFileSync(file, 'utf8')) ? 'struct' : 'external'}\t${file}`);
+    console.log(`${needsHaxeonFormatter(fs.readFileSync(file, 'utf8')) ? 'struct' : 'external'}\t${file}`);
