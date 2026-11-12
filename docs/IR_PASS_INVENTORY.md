@@ -98,6 +98,15 @@ functions; the exact allocation windows matched. One-shot typing and memory meas
 builds. The complete control, per-run measurements, module hashes and accepted baseline messages are preserved in the
 [November 2026 gate history](history/ir-pass-inventory-2026-11.md).
 
+On outer `8ced7e09a`, the app suite also stopped at `Worker document tests failed: schema v17 is unsupported;
+expected v18`. The same message occurs with the unchanged `124b72aa0` control compiler in the same outer worktree;
+the candidate and control logs are `q3-outer-logs/app-tests.log` and `q3-outer-logs/control-app-tests.log` under
+`/media/joao/DATA1/haxeon-a1-gates/`. The remaining outer gates were run separately: retention and budgets encountered
+the previously recorded `Inspection camera ignored its view label` baseline, and the headless-only check passed.
+On the updated outer base `60d9d4c36`, the app suite passes, including with its test temporary directory under
+`TMPDIR`; retention and budgets still report the inspection-camera baseline, and headless-only passes. The logs are
+under `/media/joao/DATA1/haxeon-a1-gates/q3-outer-60d-logs/`.
+
 ## Measurement
 
 App edit build (one-line edit in `src/Main.hx` of the app, after a cold build and two no-op builds in the same worker), pre-merge

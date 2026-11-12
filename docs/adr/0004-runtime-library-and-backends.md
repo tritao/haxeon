@@ -71,6 +71,10 @@ The library lives in the stdlib as Haxeon source and is the one definition of wh
 
 A target may add a faster version of an operation only if a differential test checks it against the source version.
 
+| Runtime function | Shared implementation and target boundary |
+|---|---|
+| Enum stringification | Write once in the Haxeon runtime library over constructor-name and payload intrinsics, for HashLink, Wasm32 and Wasm GC. Replace the HashLink C path in `native/runtime/strings.c`, `WasmLinearRuntime.dynamicString`, and `WasmGcRepresentation.dynamicString`. The current Wasm payload formatting is a correctness fix until this migration. |
+
 C cannot be the shared language. C compiled to Wasm sees only linear memory, so it cannot allocate or read Wasm GC
 structs and arrays. Each call on the GC model would copy its data into linear memory and back. That works for hashing but
 not for `charAt` or `map.get`.
