@@ -94,6 +94,7 @@ class BackendAssembly {
 	public static function assemble(context:CompilationContext, ir:IrProgram, regenerated:Array<String>, relocated:Array<String>,
 			token:Null<CancellationToken>):BackendAssemblyResult {
 		var allocationAtStart = AllocationMeter.sample();
+		compiler.ir.IrReachabilityReport.report("final program", ir);
 		var nextAbi = RuntimeAbi.describe(ir), previousAbi = context.publishedAbi, baseAssembler = context.assembler;
 		// Compilation sessions retain a HashLink assembly even when the requested
 		// artifact is Wasm. Keep its closure ABI adaptation local to that assembly;

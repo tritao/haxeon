@@ -70,6 +70,8 @@ class TestCatalog {
 		"LoopBoundsMain",
 		"OpportunityCensusMain",
 		"AllocationReportMain",
+		"TypeAwareWalkMain",
+		"WholeNumberMain",
 		"GenericDynamicArgumentMain",
 		"GenericScalarMapOwnerMain",
 		"WasmClosureVerificationOrderMain",

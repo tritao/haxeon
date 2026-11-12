@@ -545,6 +545,10 @@ class IrProgramAssembler {
 			reflectionInput.natives = natives == null ? [] : natives;
 			reflectionInput.cNatives = cNatives == null ? [] : cNatives;
 			allFunctions = compiler.compilation.IrPassMeter.measure("enum-dynamic-dispatch", () -> IrEnumDynamicDispatch.rewrite(allFunctions, reflectionInput, reflectableObjects));
+			if (IrReachabilityReport.enabled()) {
+				reflectionInput.functions = allFunctions;
+				IrReachabilityReport.report("after enum dispatch (the 3a prune point)", reflectionInput);
+			}
 		}
 		if (objects != null)
 			allFunctions = compiler.compilation.IrPassMeter.measure("value-dynamic-dispatch", () -> IrValueDynamicDispatch.rewrite(allFunctions, objects));

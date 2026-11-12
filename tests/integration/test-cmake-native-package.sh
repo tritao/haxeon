@@ -19,6 +19,9 @@ printf '%s\n' 'int foo_value(void) {' '    return 42;' '}' > "$project_dir/foo/n
 printf '%s\n' '{"version":1,"package":{"name":"app"},"entry":"Main","sourceRoots":["src"],"dependencies":{"foo":{"path":"../foo"}}}' > "$project_dir/app/haxeon.json"
 printf '%s\n' 'package app;' '' 'function main():Int' '    return 0;' > "$project_dir/app/src/Main.hx"
 
+# Package build trees live in the native cache, not under the project's build directory; a cache of its own keeps this run's trees findable and its own.
+export HAXEON_NATIVE_CACHE="$project_dir/native-cache"
+
 run_cli() {
 	HAXEON_HOME="$home" HAXEON_COMPILER_SOURCE="$repo_dir/src" "$haxe" --cwd "$repo_dir" -cp "$repo_dir/src" -cp "$repo_dir/lib/haxeon-io" --run tools.HaxeonCli "$@"
 }
@@ -65,17 +68,20 @@ test -s "$project_dir/app/build/host/native/foo/foo.hdll"
 
 # Native compiles go through ccache when it is installed, keyed by paths relative to the project root, and not with HAXEON_CCACHE=0.
 cache_of() {
-	grep -h '^CMAKE_CXX_COMPILER_LAUNCHER:' "$(find "$1" -name CMakeCache.txt -path '*foo*' | head -1)" || true
+	local cache
+	cache=$(find "$1" -name CMakeCache.txt -path '*foo*' | head -1)
+	[[ -n $cache ]] || { echo "no CMakeCache.txt for foo under $1" >&2; return 1; }
+	grep -h '^CMAKE_CXX_COMPILER_LAUNCHER:' "$cache" || true
 }
 if command -v ccache >/dev/null 2>&1; then
-	[[ "$(cache_of "$project_dir/app/build")" == *ccache* ]]
+	[[ "$(cache_of "$HAXEON_NATIVE_CACHE")" == *ccache* ]]
 fi
 off_dir=$(mktemp -d "${TMPDIR:-/tmp}/haxeon-cmake-no-ccache.XXXXXX")
 trap 'rm -rf -- "$project_dir" "$off_dir"' EXIT
 cp -r "$project_dir/app" "$project_dir/foo" "$off_dir/"
 rm -rf "$off_dir/app/build"
-HAXEON_CCACHE=0 run_cli build --project "$off_dir/app/haxeon.json"
+HAXEON_NATIVE_CACHE="$off_dir/native-cache" HAXEON_CCACHE=0 run_cli build --project "$off_dir/app/haxeon.json"
 test -s "$off_dir/app/build/host/native/foo/foo.hdll"
-[[ -z "$(cache_of "$off_dir/app/build")" ]]
+[[ -n "$(find "$off_dir/native-cache" -name CMakeCache.txt -path '*foo*')" && -z "$(cache_of "$off_dir/native-cache")" ]]
 
 echo "PASS: CMake native provider configures and builds a coarse package target"

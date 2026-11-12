@@ -642,13 +642,11 @@ class StatementTyper {
 			continuing:Array<Scope> = [];
 		if (!ControlFlow.alwaysExits(typedThen, exhaustiveEnum))
 			continuing.push(thenScope);
-		if (elseBranch.length == 0)
-			continuing.push(elseScope);
-		else if (!ControlFlow.alwaysExits(typedElse, exhaustiveEnum))
+		if (ControlFlow.elseCanRun(typedCondition) && (elseBranch.length == 0 || !ControlFlow.alwaysExits(typedElse, exhaustiveEnum)))
 			continuing.push(elseScope);
 		scope.mergeAssignmentsFrom(continuing);
 		scope.mergeRefinementsFrom(continuing);
-		if (elseBranch.length == 0 && ControlFlow.alwaysExits(typedThen, exhaustiveEnum))
+		if (elseBranch.length == 0 && ControlFlow.elseCanRun(typedCondition) && ControlFlow.alwaysExits(typedThen, exhaustiveEnum))
 			FlowAnalysis.refineAfterGuard(scope, typedCondition, session.isPureCall);
 		return TIf(typedCondition, typedThen, typedElse, span);
 	}

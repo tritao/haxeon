@@ -3,7 +3,8 @@ set -euo pipefail
 
 root_dir=$(cd "$(dirname "$0")/.." && pwd)
 haxe="$root_dir/.tools/haxe/haxe"
-hl="$("$root_dir/scripts/hashlink-path.sh")/hl"
+export HAXEON_HASHLINK_DIR="$("$root_dir/scripts/hashlink-path.sh")" # the Haxe test mains start the VM from it
+hl="$HAXEON_HASHLINK_DIR/hl"
 test_cli_hl=""
 
 if [[ ! -x "$haxe" ]]; then

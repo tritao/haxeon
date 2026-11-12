@@ -16,8 +16,10 @@ def main():
     with tempfile.TemporaryDirectory(prefix='haxeon-debug-lines-') as directory:
         artifact = Path(directory) / 'lines.hl'
         fixture = subprocess.run([str(ROOT / '.tools/haxe/haxe'), '-cp', 'src', '-cp', 'lib/haxeon-io', '-cp', 'tests/tooling',
-                                  '--run', 'DebugLineEncodingFixture', str(artifact)], cwd=ROOT, check=True,
+                                  '--run', 'DebugLineEncodingFixture', str(artifact)], cwd=ROOT,
                                  env={**os.environ, 'HAXEON_IR_CENSUS': '1'}, capture_output=True, text=True)
+        if fixture.returncode != 0:
+            raise SystemExit(f'the fixture exited {fixture.returncode}:\n{fixture.stdout}{fixture.stderr}')
         census = next(json.loads(line[len('SIZE_CENSUS '):]) for line in fixture.stderr.splitlines()
                       if line.startswith('SIZE_CENSUS '))
         assert census['functionDebug'] < 40, census['functionDebug']

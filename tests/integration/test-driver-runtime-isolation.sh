@@ -6,6 +6,8 @@ if [[ $(uname -s) != Linux ]]; then
   exit 0
 fi
 hashlink_dir=$("$root_dir/scripts/hashlink-path.sh")
+# The driver names the output directory as given but reports a loaded library by its real path; `out` may be a symlink to another disk.
+out_dir=$(realpath "$root_dir/out")
 work=$(mktemp -d "${TMPDIR:-/tmp}/haxeon-runtime-isolation.XXXXXX")
 trap 'rm -rf -- "$work"' EXIT
 mkdir -p "$work/out" "$work/loaded" "$work/bin"
@@ -28,7 +30,7 @@ set +e
 status=$?
 set -e
 if [[ $status != 1 ]] || ! grep -Fq "Cannot build native libraries in $root_dir/out:" "$work/refusal.log" \
-    || ! grep -Fq "$root_dir/out/haxeon_runtime.hdll" "$work/refusal.log" \
+    || ! grep -Fq "$out_dir/haxeon_runtime.hdll" "$work/refusal.log" \
     || grep -Fq 'native build marker' "$work/refusal.log"; then
   cat "$work/refusal.log" >&2
   echo "FAIL: driver did not reject its loaded runtime (exit $status)" >&2
