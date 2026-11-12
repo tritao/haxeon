@@ -21,13 +21,12 @@ class TrackedScope implements View {
   public function build(context:BuildContext):RenderNode {
     return context.withScope(new Key(key), () -> {
       var id = context.id("scope");
-      return context.selfUpdating(id, () -> {
+      var root = new RenderNode(id, LayoutVisualKind.Box, style);
+      return context.mountRenderScope(root, () -> {
         var result = body();
         if (result == null) throw "A re-running scope returned no view";
-        var root = new RenderNode(id, LayoutVisualKind.Box, style);
-        root.add(result.build(context));
-        return root;
-      }, false);
+        return result.build(context);
+      });
     });
   }
 }

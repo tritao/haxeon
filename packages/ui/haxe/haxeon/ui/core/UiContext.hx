@@ -389,7 +389,7 @@ class UiContext {
 			if (currentNodesById.get(id) != node || !submittedFingerprints.exists(id) || patched.exists(id) ||
 				buildContext.editAnnounced(node))
 				return;
-			if (submittedFingerprints.get(id) != node.fingerprint() && found.length < 5)
+			if (submittedFingerprints.get(id) != node.submittedFingerprint() && found.length < 5)
 				found.push(stateStoreDescription(node));
 		});
 		if (found.length == 0)
@@ -483,7 +483,7 @@ class UiContext {
 			hoverPaintNodes = reuseHoverPaint(cacheKey, frame);
 			reuse = hoverPaintNodes >= 0;
 		}
-		var localPatchPending = buildContext.hasPendingPatches && !rootReactiveDirty;
+		var localPatchPending = (buildContext.hasPendingPatches || buildContext.hasPendingRenderScopes()) && !rootReactiveDirty;
 		var bindingOnly = cacheKey != null && root != null && submittedBuildKey == cacheKey && !rootReactiveDirty &&
 			buildContext.bindingRequestRevision != submittedBindingRequestRevision &&
 			interactionStates.revision == submittedInteractionRevision && buildContext.styleRevision == submittedStyleRevision &&
@@ -520,7 +520,9 @@ class UiContext {
 		}
 		// Announced edits precede patches: a composite rebuild must not replace their original priors with edited children.
 		buildContext.takeRetainedEdits(currentNodesById);
+		buildContext.flushRenderScopes();
 		buildContext.applyPatches(submittedTopology);
+		buildContext.flushRenderScopes();
 		diagnosticStage = 4;
 		var viewStartedAt = Sys.time();
 		var viewAllocatedAt = AllocationProbe.now();
@@ -629,7 +631,7 @@ class UiContext {
 			for (index in 0...submittedNodes.length) submittedNodes[submittedNodes.length - 1 - index].didResolve();
 			// Signal writes and explicit callback requests rebuild before another layout pass consumes stale view geometry.
 			var rootDirty = buildContext.rootDependenciesDirty();
-			var patchesPending = buildContext.hasPendingPatches;
+			var patchesPending = buildContext.hasPendingPatches || buildContext.hasPendingRenderScopes();
 			var earlyFeedback = buildContext.consumeBuildFeedbackBeforeLayout();
 			if (rootDirty || patchesPending || earlyFeedback) {
 				resolvedBuildFeedback = true;
@@ -663,7 +665,8 @@ class UiContext {
 		// returning so the first submitted frame reflects the synchronized value.
 		var callbackBuildFeedback = buildContext.consumeBuildFeedback();
 		var requestedBuildFeedback = resolvedBuildFeedback || callbackBuildFeedback;
-		if (requestedBuildFeedback || buildContext.rootDependenciesDirty() || buildContext.hasPendingPatches) {
+		if (requestedBuildFeedback || buildContext.rootDependenciesDirty() || buildContext.hasPendingPatches ||
+			buildContext.hasPendingRenderScopes()) {
 			if (buildFeedbackPass >= 7) throw "UI build feedback did not converge after 8 passes";
 			// Commit layout for the next comparison, but keep focus requests and widget resources until children settle.
 			root = next;
@@ -732,8 +735,10 @@ class UiContext {
 		// Reconcile focus before releasing resources owned by unmounted widgets.
 		// Blur is the old tree's final lifecycle event, so its handlers must still
 		// be able to access widget state while that event is being dispatched.
+		buildContext.retainRenderScopeState(nodesById);
 		stateStore.endFrame();
 		buildContext.pruneSelfUpdatingBuilds(nodesById);
+		buildContext.pruneRenderScopes(nodesById);
 		buildContext.pruneKeyCaches(nodesById, mountedHash);
 		buildContext.stateStore.prunePaths(nodesById);
 		submittedInteractionRevision = interactionStates.revision;
@@ -1243,7 +1248,9 @@ class UiContext {
 
 	/** Validate every changed widget before mutating retained paint; unknown behavior rebuilds. */
 	function reuseHoverPaint(cacheKey:String, frame:LayoutFrame):Int {
-		if (!steadyForInteractionReuse(cacheKey, frame) || buildContext.hasRetainedEdits || buildContext.hasPendingPatches) return -1;
+		if (!steadyForInteractionReuse(cacheKey, frame) || buildContext.hasRetainedEdits || buildContext.hasPendingPatches ||
+			buildContext.hasPendingRenderScopes() ||
+			buildContext.bindingRequestRevision != submittedBindingRequestRevision) return -1;
 		var changes = interactionStates.changes();
 		for (change in changes) {
 			if (((change.before.rawValue() ^ change.after.rawValue()) & ~haxeon.ui.style.StyleState.Hovered.rawValue()) != 0) return -1;
@@ -1282,13 +1289,14 @@ class UiContext {
 			if (other != 0 && (change.after.rawValue() & other) != (node.states.rawValue() & other)) return false;
 			bits &= patchInteractionMask.rawValue();
 			if (bits == 0) continue;
-			if (buildContext.updatingOwner(node) == null && node.recordsInteraction && (bits != haxeon.ui.style.StyleState.Hovered.rawValue() || buildContext.hoverRebuilds(node))) return false;
+			if (buildContext.interactionRenderScope(node) == null && buildContext.updatingOwner(node) == null && node.recordsInteraction && (bits != haxeon.ui.style.StyleState.Hovered.rawValue() || buildContext.hoverRebuilds(node))) return false;
 		}
 		patchFramePaintNodes.resize(0);
 		for (change in changes) {
 			var node:RenderNode = cast currentNodesById.get(change.id);
-			var owner = buildContext.updatingOwner(node);
 			var hoverOnly = ((change.before.rawValue() ^ change.after.rawValue()) & ~haxeon.ui.style.StyleState.Hovered.rawValue()) == 0;
+			if (queueNativeInteraction(node, hoverOnly)) continue;
+			var owner = buildContext.updatingOwner(node);
 			if (owner != null && (!hoverOnly || buildContext.hoverRebuilds(node))) {
 				if (owner == node || node.recordsInteraction) buildContext.queuePatch(owner.id);
 			} else if (node.hasPaintHandler()) patchFramePaintNodes.push(node);
@@ -1317,13 +1325,22 @@ class UiContext {
 		for (change in interactionStates.changes()) {
 			var node = currentNodesById.get(change.id);
 			if (node == null) continue;
-			var owner = buildContext.updatingOwner(node);
 			var hoverOnly = ((change.before.rawValue() ^ change.after.rawValue()) & ~haxeon.ui.style.StyleState.Hovered.rawValue()) == 0;
+			if (queueNativeInteraction(node, hoverOnly)) continue;
+			var owner = buildContext.updatingOwner(node);
 			if (owner != null && (!hoverOnly || buildContext.hoverRebuilds(node))) {
 				if (owner == node || node.recordsInteraction) buildContext.queuePatch(owner.id);
 			// Retained caches ignore hover no rule matches, so a cached node that paints it is repainted here.
 			} else if (node.recordsInteraction && node.hasPaintHandler()) patchFramePaintNodes.push(node);
 		}
+	}
+
+	function queueNativeInteraction(node:RenderNode, hoverOnly:Bool):Bool {
+		var owner = buildContext.interactionRenderScope(node);
+		if (owner == null) return false;
+		if (node.recordsInteraction && (!hoverOnly || buildContext.hasHoverStyle(node))) owner.markDirty();
+		else if (node.hasPaintHandler()) patchFramePaintNodes.push(node);
+		return true;
 	}
 
 	function canReuseSubmittedFrame(cacheKey:String, frame:LayoutFrame):Bool {
@@ -1411,6 +1428,9 @@ class UiContext {
 	/** Dirty categories other than dependency validation, which can run model getters. */
 	function dirtyFlagsWithoutRootReads():UiDirtyFlag {
 		var result = UiDirtyFlag.empty();
+		if (buildContext.hasPendingRenderScopes())
+			result |= UiDirtyFlag.NeedsBuild | UiDirtyFlag.NeedsLayout | UiDirtyFlag.NeedsPaint |
+				UiDirtyFlag.NeedsSemantics | UiDirtyFlag.NeedsHitGeometry;
 		if (interactionStates.revision != submittedInteractionRevision)
 			result |= UiDirtyFlag.NeedsStyle | UiDirtyFlag.NeedsTextLayout | UiDirtyFlag.NeedsLayout |
 				UiDirtyFlag.NeedsPaint | UiDirtyFlag.NeedsComposite | UiDirtyFlag.NeedsSemantics |

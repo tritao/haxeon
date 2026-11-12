@@ -4,7 +4,7 @@ root=$(cd "$(dirname "${BASH_SOURCE[0]}")/../../.." && pwd)
 ui="$root/packages/ui"
 hl_dir=$("$root/scripts/hashlink-path.sh")
 work=$(mktemp -d "${TMPDIR:-$root/out}/haxeon-state-idle.XXXXXXXX")
-capture=$(mktemp -d /dev/shm/haxeon-state-idle.XXXXXXXX)
+capture=$(mktemp -d "${TMPDIR:-/tmp}/haxeon-state-idle.XXXXXXXX")
 trap 'rm -rf -- "$work" "$capture"' EXIT
 compiler=${HAXEON_COMPILER_HL:-"$work/compiler.hl"}
 if [[ ! -f "$compiler" ]]; then
