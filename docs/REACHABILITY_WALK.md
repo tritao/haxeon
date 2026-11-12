@@ -146,3 +146,32 @@ What the numbers say about the walk itself:
 - Objects with a reached method: the app 8850 -> 1593 (today) -> 1571; self-hosting 1399 -> 148; the corpus 933 -> 221 -> 217.
 - No `$` function without a kind in any of the three (kindless helpers: 0), so the prerequisite "no target-only helper without a kind" holds on these.
 - Not measured: the effect of the prune on pass time, which is step 3's evidence (`measure-cold.sh` before and after).
+
+## Step 3a, first cut (HAXEON_EARLY_PRUNE=1, off by default)
+
+`IrEntryPrune` prunes a plain HashLink build inside `IrProgramAssembler.assemble`, **after generic owner erasure** and before every later
+pass (value interface boxes, typed interface calls, checked casts, enum lowering, optional flows, reflection and, after `assemble`, the passes
+of `FrontendCompilation`). The point is not the one measured in step 1 (right after enum dispatch): before erasure the walk does not know
+the erased owner of a generic class (`Derived<Payload>` is the class `Derived` only once erasure has renamed it), so `Derived.get` was pruned
+and the erasure's own devirtualization silently did not happen. Erased-owner naming in the walk is **3b**; the prune point moves earlier then.
+
+- **Walk.** Today's walk (`IrReachability.withGeneratedRuntimeRoots`, mentioned classes keep their methods) united with `IrTypeAwareWalk`
+  (whole created classes). The union is **temporary**: it stays until the type-aware walk alone passes the corpus and the driver.
+- **Roots.** `main` (or the entry), the static initializers and `__init`, the exported functions, and every `@:keep` / `@:expose` function. The
+  callbacks of natives and the toString methods come from the existing walk.
+- **Typed demands the walk reads** (what a later pass asks for without a call edge): a struct's equality row (a `__dynamic_equal` site reaches
+  the rows of the created types), and the value method behind an optional-field request
+  (`IrOptionalFieldStorage.requestedMethod`, read by the walk when it meets the request call). `IrValueDynamicDispatch` no longer falls back
+  to a runtime "does not conform" throw for a struct that declares `Equatable`: a missing provider is an internal compile error.
+- **Detection, in check mode (HAXEON_CHECK_REUSE=1).** `IrProgram.prunedFunctions` is the set the prune removed.
+  - `checkRemoved` runs after each later pass in `assemble` and at the end of the pipeline: no call or closure may name a removed function.
+  - `IrFunctionIndex` is the one by-name view of the function list for the nine passes that built their own maps; a lookup of a removed name
+    throws, naming the pass and the function. A pass that needs a function the prune would remove must ask for it by (type, operation).
+  - Method-table lookups (`IrProgramIndex.findMethod`, the erasure's and the typed interface dispatch's `findMethod`) throw when they visit a
+    class whose entry for the method the prune removed. Other readers of `IrObject.methods` (about 30 files) are not covered yet.
+- **Evidence.** `tests/programs` is built plain, unpruned and pruned, with the driver's third run (`Main --early-prune`) and the warm-edit sweep
+  under HAXEON_CHECK_REUSE=1. On the 582 programs that build as HashLink: 0 differences in exit code, 0 invariant or lookup hits. Bytes differ in
+  55: in 52 only the runtime natives imported differ (a native only unreachable code needed is gone), in `scoped-cleanup` two types, and in
+  `key-path-semantics` and `enum-generated-dependencies` the scalar ABI of key-path accessors (`$get` is `fun(i32)->i32` unpruned and
+  `fun(struct Key)->i32` pruned). The last two show that an ABI choice depends on which functions are present; it is deterministic for a
+  given program, so a warm build still equals a cold one (the warm-edit sweep runs with the prune on).
