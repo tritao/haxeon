@@ -224,6 +224,7 @@ class CfgVerifier {
 							switch type { case Enum(_): default: throw "CFG enum Dynamic view requires an enum type"; }
 							if (!sameType(arguments[0].type, Array(Dyn)) || !sameType(out.type, Array(Dyn))) throw "Invalid CFG enum Dynamic view signature";
 						case EnumTagBox(_), EnumTagUnbox(_): throw "Enum tag adapters are introduced after CFG lowering";
+						case InlineEnumBox(_), InlineEnumUnbox(_): throw "Inline enum adapters are introduced after CFG lowering";
 					}
 					define(out, defined, available, block.id);
 				case StaticClosure(out, _):

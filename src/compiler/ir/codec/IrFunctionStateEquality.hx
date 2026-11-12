@@ -267,7 +267,8 @@ class IrFunctionStateEquality {
 				case Intrinsic(otherOutput, otherOperation, otherArguments):
 					value(output, otherOutput) && values(arguments, otherArguments) && switch [operation, otherOperation] {
 						case [EnumDynamicBox(aType), EnumDynamicBox(bType)], [EnumDynamicView(aType), EnumDynamicView(bType)],
-							[EnumTagBox(aType), EnumTagBox(bType)], [EnumTagUnbox(aType), EnumTagUnbox(bType)]:
+							[EnumTagBox(aType), EnumTagBox(bType)], [EnumTagUnbox(aType), EnumTagUnbox(bType)],
+							[InlineEnumBox(aType), InlineEnumBox(bType)], [InlineEnumUnbox(aType), InlineEnumUnbox(bType)]:
 							IrVerifier.sameType(aType, bType);
 						default: false;
 					};

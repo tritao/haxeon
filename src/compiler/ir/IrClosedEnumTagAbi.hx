@@ -100,7 +100,7 @@ class IrClosedEnumTagAbi {
 					switch located.value {
 						case Intrinsic(_, operation, _):
 							switch operation {
-								case EnumDynamicBox(type), EnumDynamicView(type), EnumTagBox(type), EnumTagUnbox(type): escape(type);
+								case EnumDynamicBox(type), EnumDynamicView(type), EnumTagBox(type), EnumTagUnbox(type), InlineEnumBox(type), InlineEnumUnbox(type): escape(type);
 							}
 						case TypeValue(out, type):
 							escape(type);

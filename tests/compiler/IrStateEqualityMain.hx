@@ -76,6 +76,10 @@ class IrStateEqualityMain {
 		var tagIntrinsic = fn(Intrinsic(v, EnumTagBox(EnumTag("First")), [w]));
 		compare(tagIntrinsic, IrFunctionStateCodec.decode(IrFunctionStateCodec.encode(tagIntrinsic)));
 		compare(tagIntrinsic, fn(Intrinsic(v, EnumTagUnbox(EnumTag("First")), [w])));
+		var inlineIntrinsic = fn(Intrinsic(v, InlineEnumBox(Enum("First")), [w]));
+		compare(inlineIntrinsic, IrFunctionStateCodec.decode(IrFunctionStateCodec.encode(inlineIntrinsic)));
+		compare(inlineIntrinsic, fn(Intrinsic(v, InlineEnumBox(Enum("Second")), [w])));
+		compare(inlineIntrinsic, fn(Intrinsic(v, InlineEnumUnbox(Enum("First")), [w])));
 		var cases:Array<{original:IrInstruction, changed:Array<IrInstruction>}> = [
 			{
 				original: Phi(v, [{block: 0, value: v}]),
