@@ -1029,7 +1029,7 @@ retention scenarios, budgets that may only go down, memory runs, compiler suites
    differ from the earlier compiler's modules. The previous runtime measurements were therefore
    not accepted as proof for this compiler: all 22 actions were captured again.
 
-   **Post-rebase census stop; do not publish.** Twenty-one actions keep their earlier candidate
+   **First post-rebase capture: publication stopped.** Twenty-one actions kept their earlier candidate
    counts, including the exact approved telemetry exception. CNC resume instead measures
    1,462 objects / 76,384 B on the control and 1,547 / 80,464 B on the candidate: **+85 objects /
    +4,080 B**, failing the structural object rule. Compared with the previous candidate, the
@@ -1038,10 +1038,81 @@ retention scenarios, budgets that may only go down, memory runs, compiler suites
    `WorkspaceSaveWorker` source; its background thread encodes and writes a pending snapshot after
    a 150 ms quiet period. This is evidence of possible setup-save activity entering the process-wide
    census window, not permission to subtract it or accept a passing retry. A deterministic scheduling
-   reproduction and a correction at the measurement cause are still required. No UI increase has
+   reproduction and a correction at the measurement cause were required, as resolved below. No UI increase was
    been excused. Fresh module-bound evidence is DATA1 `evidence/publication-rebase-exact-22-comparison.json`
-   and `publication-rebase-cnc-resume-persistence-stop.json`. Fresh timing diagnostics and publication
-   remain pending; the earlier frame/GC pairs above belong to the earlier modules.
+   and `publication-rebase-cnc-resume-persistence-stop.json`. The earlier frame/GC pairs above belong
+   to the earlier modules; the current-module diagnostics are recorded below.
+
+   **Workspace-save census barrier; corrected baseline on `bac1af1c8`.** The controlled reproduction
+   queues a setup snapshot under the worker's enqueue lock, opens the census, then releases the lock and
+   lets the normal quiet timer expire. The old path fails with one save marker in the window; its stack
+   enters through `WorkspaceSaveWorker.run`. Waiting on `awaitIdle()` before opening the window removes
+   that marker. A save scheduled by the action itself is included: the harness waits for its encode/write
+   and asserts idle before stopping the census. The end-barrier reproduction counts exactly one such save.
+   Neither barrier enqueues a save or bypasses the quiet period. Errors remain available through `takeError()`.
+
+   The harness registers every editor it creates, including the additional CNC editor, and drains them
+   after setup and at both capture boundaries. The worker and harness changes are identical in the
+   published-head control, pre-enum control and candidate. The idle barrier allocates zero on HashLink,
+   Wasm32 and Wasm GC with inlining off/on; the worker tests cover quiet completion, no extra writes,
+   action saves, coalescing and error reporting. All 22 actions were captured again after the source
+   correction, without subtracting any work from the earlier failing capture. The corrected census passes
+   the refined acceptance rule. CNC resume is back to -7 objects / +584 B; telemetry remains the exact
+   approved -132 objects / +320 B temporary exception. Tab switches now include their own workspace saves
+   on both sides, so their absolute counts rise equally and their deltas remain unchanged.
+
+   | Action | Control objects / B | Candidate objects / B | Delta objects / B |
+   | --- | ---: | ---: | ---: |
+   | hierarchy->sensors | 2,092 / 137,168 | 2,080 / 135,648 | -12 / -1,520 |
+   | sensors->hierarchy | 1,565 / 96,384 | 1,562 / 96,144 | -3 / -240 |
+   | console->telemetry | 1,594 / 94,776 | 1,582 / 93,760 | -12 / -1,016 |
+   | telemetry->console | 2,128 / 109,136 | 2,120 / 108,512 | -8 / -624 |
+   | scroll-inspector | 227 / 25,784 | 226 / 25,592 | -1 / -192 |
+   | hover-enter | 32 / 1,032 | 32 / 1,032 | +0 / +0 |
+   | hover-inside | 32 / 1,032 | 32 / 1,032 | +0 / +0 |
+   | idle | 17 / 584 | 17 / 584 | +0 / +0 |
+   | idle-focused | 17 / 584 | 17 / 584 | +0 / +0 |
+   | hover-other | 187 / 9,760 | 182 / 9,520 | -5 / -240 |
+   | hover-field | 323 / 17,432 | 313 / 16,472 | -10 / -960 |
+   | hover-away | 257 / 12,576 | 249 / 12,104 | -8 / -472 |
+   | type-char | 417 / 16,456 | 417 / 16,456 | +0 / +0 |
+   | type-backspace | 432 / 17,088 | 432 / 17,088 | +0 / +0 |
+   | selection | 8,649 / 585,416 | 8,563 / 589,792 | -86 / +4,376 |
+   | cnc-unchanged | 19 / 640 | 19 / 640 | +0 / +0 |
+   | cnc-select | 2,193 / 123,272 | 2,193 / 123,272 | +0 / +0 |
+   | cnc-source | 4,615 / 268,336 | 4,595 / 267,448 | -20 / -888 |
+   | cnc-progress | 5,466 / 278,240 | 5,465 / 277,912 | -1 / -328 |
+   | cnc-hold | 1,011 / 46,736 | 1,001 / 45,648 | -10 / -1,088 |
+   | cnc-resume | 1,462 / 76,384 | 1,455 / 76,968 | -7 / +584 |
+   | telemetry-step | 14,983 / 624,712 | 14,851 / 625,032 | -132 / +320 |
+
+   Evidence: DATA1 `evidence/workspace-census-unsafe-summary.json`, `workspace-census-barrier-summary.json`,
+   `workspace-idle-parity-summary.json`, `workspace-barrier-identical-inputs.json` and
+   `workspace-barrier-exact-22-comparison.json`. The fresh enum-only comparison is exactly unchanged on all
+   22 actions. Outer app tests and three 500-cycle headless performance runs pass. Retention passes eight
+   scenarios; its only failure, "Inspection camera ignored its view label", reproduces on the fresh barrier
+   control with verification enabled. The budget runner fails only that same nested retention check;
+   its three performance scenarios have no budget failures. No verifier or ceiling changed. The local outer
+   commit is `d2ca0968d`, based on `e9173b977`; it is never pushed from this worktree.
+
+   Seven alternating frame/GC pairs use the same fresh modules as the corrected census. Frame time is
+   ordinary UI submission time; the allocation-only workspace barriers are inactive in these timing runs.
+   Selected p50 / p95 / p99 frame times in milliseconds are:
+
+   | Action | Control | Candidate |
+   | --- | ---: | ---: |
+   | selection | 2.978 / 5.554 / 5.644 | 2.911 / 5.899 / 5.939 |
+   | CNC progress | 0.885 / 1.098 / 1.578 | 0.934 / 1.306 / 1.776 |
+   | CNC resume | 0.491 / 0.569 / 0.737 | 0.523 / 0.751 / 0.813 |
+   | telemetry step | 2.601 / 4.477 / 5.410 | 2.754 / 3.483 / 3.711 |
+
+   All 22 actions have zero in-frame GC-pause p50/p95/p99 and zero collections in their captured frames.
+   The component-panel processes have 21 collections per side outside those frames, with maximum pauses
+   of 3.232 ms control and 3.410 ms candidate. These are per-frame pause sums and process maxima, not a
+   per-collection percentile distribution or a claim of a GC-free application. All 22 allocation rows and
+   diagnostic percentiles are in DATA1 `evidence/workspace-barrier-full-census-report.json` and `.md`;
+   outer classification is `workspace-barrier-outer-gate-classification.json`. The final source fetch and
+   publication check still precede the push.
 
    **Independent review corrections (local, before renewed gates).** The body-root batch `0892af06d` had four
    reproduced correctness defects. `ScopeRootStateMain` overflowed recursive `StateStore.retain` for a Checkbox
