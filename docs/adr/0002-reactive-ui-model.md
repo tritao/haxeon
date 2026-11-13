@@ -890,7 +890,7 @@ retention scenarios, budgets that may only go down, memory runs, compiler suites
    and the same compiler/runtime as the candidate. These are the exact 15 census actions plus seven pilot actions;
    this is an allocation checkpoint, not the final stage-3 comparison or a passing batch. The following numbers include the sorted-array cache fix. Formatting, rebase, Tier 1 (895 passed,
    zero failed), fixed-point self-hosting and all ten native UI gates pass. The renewed full Tier 2 gates
-   remain unfinished; publication still requires the lead decision on telemetry.
+   remain unfinished; telemetry has the temporary approval recorded below.
 
    | Action | Control objects | Native objects | Control bytes | Native bytes | Objects delta | Bytes delta |
    | --- | ---: | ---: | ---: | ---: | ---: | ---: |
@@ -934,9 +934,8 @@ retention scenarios, budgets that may only go down, memory runs, compiler suites
    same exact 5,467 objects / 278,736 bytes. HashLink map removal grows its fragmented-slot freelist; this is a
    separate runtime allocation, not the interface-adapter or constructor-temporary limitation and not a correctness
    exception. No HashLink edit was made. After the attribution report, the lead assigned this to UI cache
-   maintenance and requested the stable-capacity fix below. Telemetry remains unpublished while the lead asks
-   whether to record a temporary steady-state exception or wait for the two owned compiler fixes. No exception
-   is assumed before that answer.
+   maintenance and requested the stable-capacity fix below. At that checkpoint, telemetry remained unpublished pending the lead decision. The later user approval
+   is recorded below; no exception was assumed during those measurements.
    Evidence: DATA1 `evidence/instance-body-root-exact-22-comparison.json`,
    `native-child-ownership-*-type-delta.json`, `instance-body-root-structural-byte-attribution.json`,
    `cnc-progress-freelist-confirmed-gdb.log` and its calibrated census JSON.
@@ -959,7 +958,7 @@ retention scenarios, budgets that may only go down, memory runs, compiler suites
    additionally saves one object / 1,120 bytes versus the pre-fix candidate; no other action increases. Full
    batch gates remain unfinished. Evidence is
    DATA1 `evidence/cache-old-path-new-base.json` and `evidence/cache-new-base-three-target.log`. Telemetry
-   publication still waits for the lead's answer on its two compiler-gap items; no temporary exception is assumed.
+   has the temporary user approval recorded below for its two compiler-gap items.
 
    **Paired frame and GC diagnostics.** Seven alternating control/native pairs cover all 22 actions.
    Frame p50 / p95 / p99 in milliseconds (control → native): selection
@@ -976,7 +975,15 @@ retention scenarios, budgets that may only go down, memory runs, compiler suites
    not describe the distribution of individual GC pauses or establish a GC-free application. Complete raw
    frame samples, all-action percentiles and process GC counters are in DATA1
    `evidence/button-7b97-paired-frame-gc.json`; the combined allocation/diagnostic report is
-   `evidence/button-7b97-full-census-report.json`. It remains rejected solely for telemetry's +320 bytes.
+   `evidence/button-7b97-full-census-report.json`. The original comparison rejected telemetry's +320 bytes; the temporary user approval follows.
+
+   **Temporary telemetry exception approved by the user.** For the Button batch, `telemetry-step`
+   changes from 14,983 objects / 624,712 bytes to 14,851 / 625,032: minus 132 objects and plus 320 bytes.
+   This steady-state byte residue is accepted temporarily, attributed to the two measured compiler gaps:
+   HashLink class-to-interface adapters (owner: dev-c5) and value-constructor temporaries (owner: a1).
+   Re-measure when those fixes land. The residue must disappear; if it does not, the remaining increase is
+   a regression to fix, not a continuing exception. This approval does not relax verify mode, budgets, or
+   any other action's allocation rule. Publication still requires the remaining full batch gates and rebase.
 
    **Queued event phase port (implementation under validation).** `UiEventPhase` closes the public event
    phase to `Capture`, `Target` and `Bubble`; registration takes the same enum, with `Bubble` as the default.
