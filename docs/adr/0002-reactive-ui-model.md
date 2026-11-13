@@ -1018,7 +1018,30 @@ retention scenarios, budgets that may only go down, memory runs, compiler suites
    Fresh reports are DATA1 `evidence/publish-9707-exact-22-comparison.json`,
    `publish-9707-enum-comparison.json`, `publish-9707-full-gate-summary.json` and
    `publish-9707-outer-gate-classification.json` and `publish-9707-ten-ui-summary.json`. Publication still
-   requires a final fetch/rebase and Tier 1.
+   requires the final publication checks below.
+
+   The publication branch is rebased onto `bac1af1c8`. Its rebuilt compiler passes Tier 1 with
+   898 tests and zero failures, including 554 live, plain and plain-without-early-pruning cases.
+   Self-hosting reaches a byte-identical stage-1/stage-2 fixed point. All 162 component runtime
+   configurations and twelve string-phase rejection cases also pass after the rebase. UI and native
+   runtime sources and pins are unchanged from the renewed census above. Fresh editor control and
+   candidate builds pass, with equal source hashes and non-output arguments, but their raw modules
+   differ from the earlier compiler's modules. The previous runtime measurements were therefore
+   not accepted as proof for this compiler: all 22 actions were captured again.
+
+   **Post-rebase census stop; do not publish.** Twenty-one actions keep their earlier candidate
+   counts, including the exact approved telemetry exception. CNC resume instead measures
+   1,462 objects / 76,384 B on the control and 1,547 / 80,464 B on the candidate: **+85 objects /
+   +4,080 B**, failing the structural object rule. Compared with the previous candidate, the
+   extra 92 objects / 3,496 B comprise snapshot encoding, JSON serialization and file-persistence
+   allocation sites, including `FileDockWorkspacePersistence.save`. Both sides use identical
+   `WorkspaceSaveWorker` source; its background thread encodes and writes a pending snapshot after
+   a 150 ms quiet period. This is evidence of possible setup-save activity entering the process-wide
+   census window, not permission to subtract it or accept a passing retry. A deterministic scheduling
+   reproduction and a correction at the measurement cause are still required. No UI increase has
+   been excused. Fresh module-bound evidence is DATA1 `evidence/publication-rebase-exact-22-comparison.json`
+   and `publication-rebase-cnc-resume-persistence-stop.json`. Fresh timing diagnostics and publication
+   remain pending; the earlier frame/GC pairs above belong to the earlier modules.
 
    **Independent review corrections (local, before renewed gates).** The body-root batch `0892af06d` had four
    reproduced correctness defects. `ScopeRootStateMain` overflowed recursive `StateStore.retain` for a Checkbox
