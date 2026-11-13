@@ -1,6 +1,7 @@
 package compiler.ir;
 
 import compiler.ir.Ir.IrObject;
+import compiler.ir.Ir.IrIntrinsic;
 import compiler.ir.Ir.IrObjectTools;
 import compiler.ir.Ir.IrProgram;
 import compiler.ir.Ir.IrType;
@@ -118,31 +119,10 @@ class IrReachability {
 						default:
 					}
 		program.staticFields = [for (field in program.staticFields) if (globals.exists(field.name)) field];
-		var kept:Map<String, Bool> = walk.liveClassNames();
+		// The classes the written program names, and what those classes hold: `namedTypes` is the one list of where a program names a type, shared with
+		// `checkTables`, so what the trim keeps and what the check demands cannot drift apart.
 		var objects:Map<String, IrObject> = [for (object in program.objects) object.name => object];
-		var pending:Array<IrType> = [];
-		for (field in program.staticFields)
-			pending.push(field.type);
-		for (declaration in program.enums)
-			for (enumCase in declaration.cases)
-				for (type in enumCase.params)
-					pending.push(type);
-		for (interfaceDecl in program.interfaces)
-			for (method in interfaceDecl.methods) {
-				pending.push(method.result);
-				for (argument in method.arguments)
-					pending.push(argument);
-			}
-		// An instruction can name a type without producing a value of it: a type value (the runtime type of a class, for a dispatch on it).
-		for (fn in program.functions)
-			for (block in fn.blocks)
-				for (located in block.instructions)
-					switch located.value {
-						case TypeValue(_, type):
-							pending.push(type);
-						default:
-					}
-		var classes = [for (name in kept.keys()) name];
+		var kept:Map<String, Bool> = [], classes:Array<String> = [];
 		function mention(type:IrType):Void
 			switch type {
 				case Obj(name):
@@ -158,70 +138,100 @@ class IrReachability {
 					mention(result);
 				default:
 			}
-		for (type in pending)
-			mention(type);
+		namedTypes(program, (_, type) -> mention(type));
 		var index = 0;
 		while (index < classes.length) {
 			var object = objects.get(classes[index++]);
-			if (object == null)
-				continue;
-			if (object.base != null)
-				mention(Obj(object.base));
-			for (field in object.fields)
-				mention(field.type);
+			if (object != null)
+				objectTypes(object, (_, type) -> mention(type));
 		}
 		program.objects = [for (object in program.objects) if (kept.exists(object.name)) object];
 	}
 
 	/**
-	 * Check mode, after `trimTables`: every class a function of the written program names (an argument, a result, an instruction's output or a type
-	 * value) and every class a kept table names is in the program's class table. Without it a missing class surfaces as a lowering failure in the backend
-	 * ("Object type must be registered before use"); this names the function that mentions it.
+	 * Every type the functions and tables of `program` name, as `visit(owner, type)`: the types of a function's arguments, result and instruction outputs;
+	 * the types an instruction names without producing a value of them (a type value, the type operand of an enum intrinsic); the signatures of the
+	 * natives and C natives; the globals; the payloads of the enums; the interface method signatures. The classes of `program.objects` are not listed
+	 * (`objectTypes`): the trim follows them from the classes named here, the check looks at every one.
+	 */
+	public static function namedTypes(program:IrProgram, visit:(String, IrType) -> Void):Void {
+		for (fn in program.functions) {
+			visit(fn.name, fn.result);
+			for (argument in fn.arguments)
+				visit(fn.name, argument.type);
+			for (block in fn.blocks)
+				for (located in block.instructions) {
+					var output = IrOperands.output(located.value);
+					if (output != null)
+						visit(fn.name, output.type);
+					switch located.value {
+						case TypeValue(_, type):
+							visit(fn.name, type);
+						case Intrinsic(_, operation, _):
+							visit(fn.name, intrinsicType(operation));
+						default:
+					}
+				}
+		}
+		for (native in program.natives) {
+			for (argument in native.arguments)
+				visit("native " + native.name, argument);
+			visit("native " + native.name, native.result);
+		}
+		for (native in program.cNatives) {
+			for (argument in native.arguments)
+				visit("native " + native.name, argument);
+			visit("native " + native.name, native.result);
+		}
+		for (field in program.staticFields)
+			visit("global " + field.name, field.type);
+		for (declaration in program.enums)
+			for (enumCase in declaration.cases)
+				for (type in enumCase.params)
+					visit("enum " + declaration.name, type);
+		for (interfaceDecl in program.interfaces)
+			for (method in interfaceDecl.methods) {
+				visit("interface " + interfaceDecl.name, method.result);
+				for (argument in method.arguments)
+					visit("interface " + interfaceDecl.name, argument);
+			}
+	}
+
+	/** The types a class names: the one it extends and the types of its fields. */
+	public static function objectTypes(object:IrObject, visit:(String, IrType) -> Void):Void {
+		if (object.base != null)
+			visit("class " + object.name, Obj(object.base));
+		for (field in object.fields)
+			visit("class " + object.name, field.type);
+	}
+
+	static function intrinsicType(operation:IrIntrinsic):IrType
+		return switch operation {
+			case EnumDynamicBox(type), EnumDynamicView(type), EnumTagBox(type), EnumTagUnbox(type), InlineEnumBox(type), InlineEnumUnbox(type): type;
+		};
+
+	/**
+	 * Check mode, after `trimTables`: every class the written program names (`namedTypes`, `objectTypes`) is in its class table. Without it a missing class
+	 * surfaces as a lowering failure in the backend ("Object type must be registered before use"); this names the function or table that mentions it.
 	 */
 	public static function checkTables(program:IrProgram):Void {
 		var present:Map<String, Bool> = [for (object in program.objects) object.name => true];
-		var owner = "";
-		function check(type:IrType):Void
+		function check(owner:String, type:IrType):Void
 			switch type {
 				case Obj(name):
 					if (!present.exists(name))
 						throw 'trimmed tables: "$owner" names class "$name", which the module written for this build does not have';
 				case Array(element), Nullable(element), Iterator(element):
-					check(element);
+					check(owner, element);
 				case Function(arguments, result):
 					for (argument in arguments)
-						check(argument);
-					check(result);
+						check(owner, argument);
+					check(owner, result);
 				default:
 			}
-		for (fn in program.functions) {
-			owner = fn.name;
-			check(fn.result);
-			for (argument in fn.arguments)
-				check(argument.type);
-			for (block in fn.blocks)
-				for (located in block.instructions) {
-					var output = IrOperands.output(located.value);
-					if (output != null)
-						check(output.type);
-					switch located.value {
-						case TypeValue(_, type):
-							check(type);
-						default:
-					}
-				}
-		}
-		for (object in program.objects) {
-			owner = "class " + object.name;
-			if (object.base != null)
-				check(Obj(object.base));
-			for (field in object.fields)
-				check(field.type);
-		}
-		for (field in program.staticFields) {
-			owner = "global " + field.name;
-			check(field.type);
-		}
+		namedTypes(program, check);
+		for (object in program.objects)
+			objectTypes(object, check);
 	}
 
 	/** The toString implementation an object of exactly this class uses, if any. */
@@ -246,10 +256,6 @@ class IrReachabilityWalk {
 	public final used:Map<String, Bool> = [];
 
 	public var count(default, null) = 0;
-
-	/** The classes some reached function mentions by type (only with `keepLiveClasses`). */
-	public function liveClassNames():Map<String, Bool>
-		return liveClasses.copy();
 
 	final index:IrProgramIndex;
 	final byName:Map<String, IrFunction> = [];
