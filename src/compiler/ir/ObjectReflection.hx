@@ -28,7 +28,8 @@ class ObjectReflection {
 		if (natives == null)
 			return null;
 		var remaining:Array<IrNative> = [],
-			layouts:Null<Array<ReflectedLayout>> = null;
+			layouts:Null<Array<ReflectedLayout>> = null,
+			firstGenerated = functions.length;
 		for (native in natives) {
 			// Field listings keep their allocation-free constant names; the native helpers allocate field arrays.
 			var projectValues = switch native.symbol {
@@ -80,15 +81,43 @@ class ObjectReflection {
 				default: throw 'Unknown object reflection native "${native.symbol}"';
 			});
 		}
+		if (IrEntryPrune.checking())
+			checkCallees(functions.slice(firstGenerated));
 		return remaining;
 	}
 
-	/** What the copy helper of an observable layout calls (`recordObservableCreation`): the one definition, for the helper and for the walks. */
+	/** Check mode: a generated helper calls only helpers generated with it, runtime natives and `HELPER_CALLEES`, the functions the walk was told about. */
+	static function checkCallees(generated:Array<IrFunction>):Void {
+		var names:Map<String, Bool> = [for (fn in generated) fn.name => true];
+		for (fn in generated)
+			for (block in fn.blocks)
+				for (located in block.instructions)
+					switch located.value {
+						case Call(_, target, _) if (!names.exists(target) && !StringTools.startsWith(target, "__") && HELPER_CALLEES.indexOf(target) < 0):
+							throw 'reflection helper "${fn.name}" calls "$target", which is not one of its declared dependencies (ObjectReflection.HELPER_CALLEES)';
+						default:
+					}
+	}
+
+	/** What the set and delete helpers of an observable layout call before a write (`guardObservableWrite`). */
+	static inline final WRITE_STATUS = "haxeon.reactive.ReactiveRuntime.observableWriteStatus";
+
+	/**
+	 * Every function a generated reflection helper calls that is not itself a generated helper or a runtime native: the one list, for the helper
+	 * bodies, for the walk (`dependencies`) and for the check-mode assertion in `generate`.
+	 */
+	static final HELPER_CALLEES = [RECORD_CREATION, WRITE_STATUS];
+
+	/** What the copy helper of an observable layout calls (`recordObservableCreation`). */
 	static inline final RECORD_CREATION = "haxeon.reactive.ReactiveRuntime.recordObservableCreation";
 
-	/** The natives whose helpers copy an object: each copy helper of an observable class calls `RECORD_CREATION`. */
-	public static function copySymbols():Array<String>
-		return ["__reflect_copy", "__reflect_object_copy"];
+	/** Every `IrNative.symbol` whose declaration `generate` replaces with generated code. */
+	public static function helperSymbols():Array<String>
+		return [
+			"__reflect_field", "__reflect_set_field", "__reflect_has_field", "__reflect_delete_field", "__reflect_field_count", "__reflect_field_name",
+			"__reflect_copy", "__reflect_object_copy", "__reflect_object_field", "__reflect_object_set_field", "__reflect_object_field_count",
+			"__reflect_object_field_name", "__reflect_object_delete_field"
+		];
 
 	/** Whether the class, or one it extends, has the observable-state field that makes its layout observable. */
 	public static function isObservableClass(objects:Map<String, IrObject>, className:String):Bool {
@@ -103,15 +132,24 @@ class ObjectReflection {
 	}
 
 	/**
-	 * The functions the copy helper of `className` will call, for a reachability walk that runs before `generate`. A missing
-	 * function is an internal error: the helper would not link, and nothing may skip the call silently.
+	 * The functions the helper that replaces the native with `symbol` will call for the class `className`, for a reachability walk that runs
+	 * before `generate`: copy records the creation of an observable class, and set and delete check the write status of an observable class that
+	 * has field bits. A missing function is an internal error: the helper would not link, and nothing may skip the call silently.
 	 */
-	public static function copyDependencies(objects:Map<String, IrObject>, className:String, hasFunction:String->Bool):Array<String> {
+	public static function dependencies(objects:Map<String, IrObject>, observableBits:Map<String, Map<String, Int>>, className:String, symbol:String,
+			hasFunction:String->Bool):Array<String> {
 		if (!isObservableClass(objects, className))
 			return [];
-		if (!hasFunction(RECORD_CREATION))
-			throw 'internal error: the copy helper of observable class "$className" needs $RECORD_CREATION, which is not in the program';
-		return [RECORD_CREATION];
+		var needed = switch symbol {
+			case "__reflect_copy", "__reflect_object_copy": [RECORD_CREATION];
+			case "__reflect_set_field", "__reflect_delete_field", "__reflect_object_set_field", "__reflect_object_delete_field":
+				observableBits.exists(className) ? [WRITE_STATUS] : [];
+			default: [];
+		};
+		for (name in needed)
+			if (!hasFunction(name))
+				throw 'internal error: the "$symbol" helper of observable class "$className" needs $name, which is not in the program';
+		return needed;
 	}
 
 	/**
@@ -176,11 +214,13 @@ class ObjectReflection {
 	/** Preserve logical fields when HashLink storage uses inline values or scalar closure ABIs. */
 	static function hashLinkReflection(native:IrNative, fallback:String, layouts:Array<ReflectedLayout>, functions:Array<IrFunction>):IrFunction {
 		var builder = new IrBuilder(), object = builder.argument("object", Dyn), arguments = [
-			for (index in 1...native.arguments.length) builder.argument('argument$index', native.arguments[index])
+			for (index in 1...native.arguments.length)
+				builder.argument('argument$index', native.arguments[index])
 		];
 		forEachLayout(builder, object, layouts, (layout, typed) -> {
 			var parameters = [
-				for (index in 1...native.arguments.length) {name: 'argument$index', type: native.arguments[index]}
+				for (index in 1...native.arguments.length)
+					{name: 'argument$index', type: native.arguments[index]}
 			];
 			var body:(IrBuilder, ReflectedLayout, IrValue, Array<IrValue>) -> Void = switch native.symbol {
 				case "__reflect_field": fieldBody;
@@ -261,14 +301,17 @@ class ObjectReflection {
 				}
 			var names = [for (name in methods.keys()) name];
 			names.sort(Reflect.compare);
-			result.push({layout: {
-				name: name,
-				fields: fields,
-				methods: [for (name in names) methods.get(name)],
-				payload: payload,
-				observable: observable,
-				observableBits: facts.observableFieldBits.get(name)
-			}, depth: chain.length});
+			result.push({
+				layout: {
+					name: name,
+					fields: fields,
+					methods: [for (name in names) methods.get(name)],
+					payload: payload,
+					observable: observable,
+					observableBits: facts.observableFieldBits.get(name)
+				},
+				depth: chain.length
+			});
 		}
 		result.sort((left, right) -> right.depth - left.depth);
 		return [for (entry in result) entry.layout];

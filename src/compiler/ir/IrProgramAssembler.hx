@@ -581,8 +581,9 @@ class IrProgramAssembler {
 			var objectTable:Map<String, IrObject> = [for (object in objects) object.name => object],
 				present:Map<String, Bool> = [for (fn in allFunctions) fn.name => true];
 			var pruned = IrEntryPrune.run(pruneInput, roots, {
-				symbols: ObjectReflection.copySymbols(),
-				of: className -> ObjectReflection.copyDependencies(objectTable, className, name -> present.exists(name))
+				symbols: ObjectReflection.helperSymbols(),
+				of: (className, symbol) -> ObjectReflection.dependencies(objectTable, generator.facts.observableFieldBits, className, symbol,
+					name -> present.exists(name))
 			});
 			removedByPrune = pruned.removed;
 			reachedNativesAfterPrune = pruned.calledNatives;

@@ -47,11 +47,11 @@ typedef IrWalkResult = {
  * called: the typed form of a dependency that has no call edge yet (a reflection copy of an observable class).
  */
 typedef IrClassDependencies = {
-	/** The `IrNative.symbol`s that, when declared, make generated code call the dependencies (for every class: nothing needs to call the native). */
+	/** The `IrNative.symbol`s that generated code replaces: when reached code calls one, the generated code's dependencies are reached for every class. */
 	final symbols:Array<String>;
 
-	/** The functions the generated code for this class calls; throws when one that must exist does not. */
-	final of:String->Array<String>;
+	/** The functions the code generated for this class in place of the native with this symbol calls; throws when one that must exist does not. */
+	final of:(String, String) -> Array<String>;
 }
 
 /**
@@ -175,15 +175,17 @@ private class IrTypeAwareWalkState {
 	final requireProviders:Bool;
 	final keepCreatedClassMethods:Bool;
 	final classDependencies:Null<IrClassDependencies>;
-	var classDependenciesNeeded = false;
+	final dependencySymbolsDone:Map<String, Bool> = [];
 	final index:IrProgramIndex;
 	final byName:Map<String, IrFunction> = [];
 	final natives:Map<String, IrNative> = [];
 	final cNatives:Map<String, IrCNative> = [];
 	final nativeResults:Map<String, String>;
 	final staticTypes:Map<String, IrType> = [];
+
 	/** `operation\nTypeKey` (operation without detail) to the names of the functions serving it. */
 	final providers:Map<String, Array<String>> = [];
+
 	final reached:Map<String, Bool> = [];
 	final created:Map<String, Bool> = [];
 	final createdClasses:Map<String, Bool> = [];
@@ -200,13 +202,9 @@ private class IrTypeAwareWalkState {
 	final declarationOnly:Map<String, Bool> = [];
 	final calledNatives:Map<String, Bool> = [];
 
-	public function new(program:IrProgram, roots:IrWalkRoots, dynamicSites:Map<String, Array<String>>, requireProviders:Bool,
-			keepCreatedClassMethods:Bool, classDependencies:Null<IrClassDependencies>) {
+	public function new(program:IrProgram, roots:IrWalkRoots, dynamicSites:Map<String, Array<String>>, requireProviders:Bool, keepCreatedClassMethods:Bool,
+			classDependencies:Null<IrClassDependencies>) {
 		this.classDependencies = classDependencies;
-		if (classDependencies != null)
-			for (native in program.natives)
-				if (classDependencies.symbols.indexOf(native.symbol) >= 0)
-					classDependenciesNeeded = true;
 		this.program = program;
 		this.roots = roots;
 		this.dynamicSites = dynamicSites;
@@ -467,11 +465,17 @@ private class IrTypeAwareWalkState {
 					for (name in names)
 						reach(name, false);
 			}
-		// Generated code is written for every declared native of those symbols and every class, whether or not anything calls it.
-		if (classDependenciesNeeded && classDependencies != null)
-			for (object in program.objects)
-				for (dependency in classDependencies.of(object.name))
-					reach(dependency, false);
+		// Code is generated in place of a native that reached code calls, for every class; what it calls is reached here, once per symbol.
+		if (classDependencies != null)
+			for (name in [for (name in calledNatives.keys()) name]) {
+				var native = natives.get(name);
+				if (native == null || dependencySymbolsDone.exists(native.symbol) || classDependencies.symbols.indexOf(native.symbol) < 0)
+					continue;
+				dependencySymbolsDone.set(native.symbol, true);
+				for (object in program.objects)
+					for (dependency in classDependencies.of(object.name, native.symbol))
+						reach(dependency, false);
+			}
 		if (stringUsed)
 			for (name in createdClasses.keys()) {
 				var method = index.findMethod(name, "__string");
