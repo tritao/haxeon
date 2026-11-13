@@ -137,6 +137,9 @@ class IrOptionalScalarFlow {
 						case NewObject(out, name) if (!result.exists(out.id)):
 							result.set(out.id, name);
 							changed = true;
+						case ValueInit(out) if (!result.exists(out.id)):
+							result.set(out.id, compiler.ir.IrTypeTools.valueObjectName(out.type));
+							changed = true;
 						case Upcast(out, value) if (!result.exists(out.id) && result.exists(value.id)):
 							result.set(out.id, result.get(value.id));
 							changed = true;
@@ -601,7 +604,7 @@ class IrOptionalScalarFlow {
 					prefix.push(new Located(FieldGet(parts[i], aggregate, "$slot" + i), origin));
 				if (holders.exists(arg.id)) {
 					var holder = holders.get(arg.id);
-					prefix.push(new Located(NewObject(holder, wrapper(name).name), origin));
+					prefix.push(new Located(ValueInit(holder), origin));
 					for (i in 0...parts.length)
 						prefix.push(new Located(FieldSet(holder, "$slot" + i, parts[i]), origin));
 				}
@@ -613,7 +616,7 @@ class IrOptionalScalarFlow {
 			if (!holders.exists(id))
 				return;
 			var holder = holders.get(id), parts = component(id);
-			add(block, NewObject(holder, wrapper(types.get(id)).name), from);
+			add(block, ValueInit(holder), from);
 			for (i in 0...parts.length)
 				add(block, FieldSet(holder, "$slot" + i, parts[i]), from);
 		}
@@ -696,7 +699,7 @@ class IrOptionalScalarFlow {
 					object = objects.get(name);
 				if (object == null)
 					throw 'Missing optional alias value "$name"';
-				add(block, NewObject(result, name), from);
+				add(block, ValueInit(result), from);
 				for (entry in object.fields) {
 					var pathField = path.concat([entry.name]),
 						child = optional(entry.type);
@@ -751,7 +754,7 @@ class IrOptionalScalarFlow {
 		}
 		function aggregate(block:IrBlock, name:String, parts:Array<IrValue>, from:Located<IrInstruction>):IrValue {
 			var target = new IrValue(next++, "$optional-components", Obj(wrapper(name).name));
-			add(block, NewObject(target, wrapper(name).name), from);
+			add(block, ValueInit(target), from);
 			for (i in 0...parts.length)
 				add(block, FieldSet(target, "$slot" + i, parts[i]), from);
 			return target;

@@ -20,7 +20,8 @@ class WasmScalarLocals {
 		for (block in fn.blocks)
 			for (located in block.instructions)
 				switch located.value {
-					case NewObject(out, name) if (isValue(out.type)):
+					case ValueInit(out) if (isValue(out.type)):
+						var name = compiler.ir.IrTypeTools.valueObjectName(out.type);
 						roots.set(out.id, name);
 						valid.set(out.id, true);
 					default:
@@ -59,7 +60,8 @@ class WasmScalarLocals {
 		for (block in fn.blocks)
 			for (located in block.instructions)
 				switch located.value {
-					case NewObject(out, name) if (roots.exists(out.id) && valid.get(out.id) == true):
+					case ValueInit(out) if (roots.exists(out.id) && valid.get(out.id) == true):
+						var name = compiler.ir.IrTypeTools.valueObjectName(out.type);
 						var fields:Map<String, Int> = [],
 							declarations = physicalFields(name);
 						for (field in declarations)

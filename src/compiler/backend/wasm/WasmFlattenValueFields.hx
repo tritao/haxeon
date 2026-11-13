@@ -109,7 +109,7 @@ class WasmFlattenValueFields {
 					if (output != null && output.id >= next)
 						next = output.id + 1;
 					switch located.value {
-						case NewObject(out, _):
+						case NewObject(out, _) | ValueInit(out):
 							fresh.set(out.id, true);
 						case FieldGet(out, owner, field) if (values.isValue(out.type) && !aliases.exists(out.id)):
 							var name = switch out.type {
@@ -271,7 +271,7 @@ class WasmFlattenValueFields {
 		if (place == null)
 			return {value: value, next: next};
 		var copy = new IrValue(next++, "$wasm-gc-place-copy", value.type);
-		block.instructions.push(new Located(NewObject(copy, place.typeName), origin.provenance));
+		block.instructions.push(new Located(ValueInit(copy), origin.provenance));
 		for (slot in values.leaves(value.type)) {
 			var leaf = new IrValue(next++, "$wasm-gc-place-leaf", slot.type);
 			block.instructions.push(new Located(FieldGet(leaf, place.owner, physical(place.owner.type, place.path.concat(slot.path))), origin.provenance));

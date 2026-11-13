@@ -12,7 +12,7 @@ import compiler.ir.codec.IrValueTableCodec;
 
 /** Closed, versioned encoding for every persisted IR instruction operand. */
 class IrInstructionCodec {
-	static inline final VERSION = 9;
+	static inline final VERSION = 10;
 	static final CONSTRUCTORS:Map<String, Bool> = [
 		"Phi" => true,
 		"ConstVoid" => true,
@@ -65,6 +65,7 @@ class IrInstructionCodec {
 		"MethodCall" => true,
 		"TerminalMethodCall" => true,
 		"NewObject" => true,
+		"ValueInit" => true,
 		"FieldGet" => true,
 		"FieldSet" => true,
 		"ArrayGet" => true,
@@ -284,6 +285,9 @@ class IrInstructionCodec {
 				begin(output, "NewObject", 2);
 				writeValue(output, value);
 				writeName(output, name, erase);
+			case ValueInit(value):
+				begin(output, "ValueInit", 1);
+				writeValue(output, value);
 			case FieldGet(value, object, name):
 				begin(output, "FieldGet", 3);
 				writeValue(output, value);
@@ -497,6 +501,9 @@ class IrInstructionCodec {
 			case "NewObject":
 				arity(2);
 				NewObject(readValue(input, values), readText(input, totalLength));
+			case "ValueInit":
+				arity(1);
+				ValueInit(readValue(input, values));
 			case "FieldGet":
 				arity(3);
 				FieldGet(readValue(input, values), readValue(input, values), readText(input, totalLength));

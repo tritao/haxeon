@@ -186,7 +186,7 @@ class IrInlineEnumLowering {
 			function copyLoad(block:IrBlock, output:IrValue, raw:IrValue, enumName:String, provenance:SourceProvenance):Void {
 				var shape = storage(enumName),
 					origin = new SourceProvenance(provenance.location, CompilerGenerated(IrGenerator.ValueCopyReason));
-				block.instructions.push(new Located(NewObject(use(output), shape.valueObject.name), origin));
+				block.instructions.push(new Located(ValueInit(use(output)), origin));
 				for (field in shape.valueObject.fields) {
 					var leaf = fresh(field.type);
 					block.instructions.push(new Located(FieldGet(leaf, raw, field.name), origin));
@@ -227,7 +227,7 @@ class IrInlineEnumLowering {
 								case Enum(enumName) if (planner.shape(enumName) != null):
 									var shape = storage(enumName),
 										origin = new SourceProvenance(located.provenance.location, CompilerGenerated(IrGenerator.ValueCopyReason));
-									copy.instructions.push(new Located(NewObject(use(output), shape.valueObject.name), origin));
+									copy.instructions.push(new Located(ValueInit(use(output)), origin));
 									for (field in shape.valueObject.fields) {
 										var leaf = fresh(field.type);
 										if (IrValueLaneReference.isCarrier(field.type)) {

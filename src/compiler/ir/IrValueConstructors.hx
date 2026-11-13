@@ -10,16 +10,11 @@ class IrValueConstructors {
 		var constructors:Map<String, IrFunction> = [],
 			straight:Map<String, IrFunction> = [];
 		for (fn in program.functions) {
-			if (!StringTools.endsWith(fn.name, ".new") || fn.arguments.length == 0 || (switch (fn.result) {
-				case Void: false;
-				default: true;
-			}))
-				continue;
-			var owner = switch fn.arguments[0].type {
+			var owner = switch fn.result {
 				case Obj(name): objects.get(name);
 				default: null;
 			};
-			if (owner == null || !owner.isValue || fn.blocks.length == 0 || fn.blocks.length > 16)
+			if (owner == null || !owner.isValue || fn.name != owner.name + ".new" || fn.blocks.length == 0 || fn.blocks.length > 16)
 				continue;
 			var safe = true, count = 0;
 			for (block in fn.blocks)
@@ -176,13 +171,33 @@ class IrValueConstructors {
 							copy.instructions.push(located);
 							continue;
 						}
+						var single:IrBlock = callee.blocks[0];
+						var terminator = single.terminator;
+						if (terminator == null) {
+							copy.instructions.push(located);
+							continue;
+						}
+						var returned:Null<IrValue> = switch terminator.value {
+							case Return(value): value;
+							default: null;
+						};
+						var defined = false;
+						for (instruction in single.instructions) {
+							var value = IrOperands.output(instruction.value);
+							if (value != null && returned != null && value.id == returned.id)
+								defined = true;
+						}
+						if (!defined || returned == null) {
+							copy.instructions.push(located);
+							continue;
+						}
 						var mapping:Map<Int, IrValue> = [];
 						for (i in 0...args.length)
 							mapping.set(callee.arguments[i].id, args[i]);
-						for (instruction in callee.blocks[0].instructions) {
+						for (instruction in single.instructions) {
 							var result = IrOperands.output(instruction.value);
 							if (result != null)
-								mapping.set(result.id, new IrValue(next++, result.name, result.type));
+								mapping.set(result.id, result.id == returned.id ? out : new IrValue(next++, result.name, result.type));
 							var mapped = IrInliner.remap(instruction.value, value -> {
 								var found = mapping.get(value.id);
 								if (found == null)
@@ -191,7 +206,6 @@ class IrValueConstructors {
 							}, id -> id);
 							copy.instructions.push(new Located(mapped, instruction.provenance));
 						}
-						copy.instructions.push(new Located(ConstVoid(out), located.provenance));
 						changed = true;
 					default:
 						copy.instructions.push(located);

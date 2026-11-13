@@ -42,7 +42,7 @@ class InlineEnumReferenceMain {
 	static function main() {
 		var b = new IrBuilder(),
 			ref = b.newObject("Source"),
-			owner = b.newObject("Payload");
+			owner = b.valueInit("Payload");
 		b.fieldSet(ref, "code", b.constInt(42));
 		IrInlineEnumReferenceAccess.write(b, owner, 0, ref);
 		var restored = IrInlineEnumReferenceAccess.read(b, owner, 0, Obj("Source"));
@@ -84,7 +84,7 @@ class InlineEnumReferenceMain {
 		var pick = new IrBuilder(),
 			arg = pick.argument("source", Obj("Source")),
 			keep = pick.argument("keep", Bool),
-			storage = pick.newObject("Payload");
+			storage = pick.valueInit("Payload");
 		IrInlineEnumReferenceAccess.write(pick, storage, 0, arg);
 		var retained = pick.createBlock(),
 			empty = pick.createBlock(),
@@ -195,7 +195,7 @@ class InlineEnumReferenceMain {
 			p.staticFields = [{name: "root", type: Obj("RootPayload")}];
 			var prepare = new IrBuilder(),
 				source = prepare.newObject("RootSource"),
-				payload = prepare.newObject("RootPayload");
+				payload = prepare.valueInit("RootPayload");
 			prepare.fieldSet(source, "code", prepare.constInt(42));
 			IrInlineEnumReferenceAccess.write(prepare, payload, 0, source);
 			prepare.emit(GlobalSet("root", payload));

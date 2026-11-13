@@ -4,6 +4,12 @@ import compiler.ir.Ir.IrType;
 
 /** Rules about IR types that more than one stage needs. */
 class IrTypeTools {
+	/** The nominal class of a verified value initializer. */
+	public static function valueObjectName(type:IrType):String
+		return switch type {
+			case Obj(name): name;
+			default: throw 'Value initializer requires an object type';
+		};
 	/** Whether values currently use a boxed dynamic representation: `Dyn` or a nullable. */
 	public static function isDynamic(type:IrType):Bool
 		return switch type {

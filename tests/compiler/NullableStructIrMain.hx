@@ -66,7 +66,7 @@ class NullableStructIrMain {
 					case FieldSet(_, _, _):
 						wrote = true;
 						writes++;
-					case NewObject(_, _) | ToDyn(_, _) | Call(_, _, _):
+					case NewObject(_, _) | ValueInit(_) | ToDyn(_, _) | Call(_, _, _):
 						throw "optional field copy allocated or called an accessor";
 					default:
 				}

@@ -140,7 +140,8 @@ class IrScalarArguments {
 					for (block in specialized.blocks)
 						for (located in block.instructions)
 							switch located.value {
-								case NewObject(out, name):
+								case ValueInit(out):
+									var name = compiler.ir.IrTypeTools.valueObjectName(out.type);
 									for (arg in fn.arguments)
 										if (isValue(arg.type, objects) && out.id == arg.id && scalarLocals.get(out) == null)
 											retained = true;
@@ -175,7 +176,8 @@ class IrScalarArguments {
 					for (block in specialized.blocks)
 						for (located in block.instructions)
 							switch located.value {
-								case NewObject(out, name):
+								case ValueInit(out):
+									var name = compiler.ir.IrTypeTools.valueObjectName(out.type);
 									for (index in 1...fn.arguments.length)
 										if (isValue(fn.arguments[index].type, objects)
 											&& out.id == fn.arguments[index].id
@@ -399,7 +401,7 @@ class IrScalarArguments {
 		for (block in fn.blocks) {
 			for (located in block.instructions) {
 				switch located.value {
-					case NewObject(out, _) | Call(out, _, _) | MethodCall(out, _, _, _, _) | CallClosure(out, _, _) if (out.id == receiver.id):
+					case NewObject(out, _) | ValueInit(out) | Call(out, _, _) | MethodCall(out, _, _, _, _) | CallClosure(out, _, _) if (out.id == receiver.id):
 						fresh = true;
 					default:
 				}
@@ -461,7 +463,7 @@ class IrScalarArguments {
 		for (block in fn.blocks) {
 			for (located in block.instructions) {
 				switch located.value {
-					case NewObject(out, _) | Call(out, _, _) | MethodCall(out, _, _, _, _) | CallClosure(out, _, _) if (out.id == receiver.id):
+					case NewObject(out, _) | ValueInit(out) | Call(out, _, _) | MethodCall(out, _, _, _, _) | CallClosure(out, _, _) if (out.id == receiver.id):
 						fresh = true;
 					case Phi(_, incoming):
 						for (input in incoming)
@@ -533,7 +535,7 @@ class IrScalarArguments {
 				case Obj(name): name;
 				default: throw "Invalid scalar argument";
 			};
-			prefix.push(new Located(NewObject(arg, name), origin));
+			prefix.push(new Located(ValueInit(arg), origin));
 			for (slot in slots(arg.type, objects)) {
 				var leaf = new IrValue(next++, arg.name + "." + slot.path.join("."), slot.type);
 				args.push(leaf);
@@ -713,7 +715,7 @@ class IrScalarArguments {
 								case Obj(value): value;
 								default: throw "Invalid scalar result";
 							};
-							copy.instructions.push(new Located(NewObject(out, typeName), located.provenance));
+							copy.instructions.push(new Located(ValueInit(out), located.provenance));
 							for (index in 0...returnSlots.length) {
 								var slot = returnSlots[index], leaf = new IrValue(next++, "$hl:result-leaf", slot.type), current = out;
 								copy.instructions.push(new Located(Call(leaf, IrHlScalarRef.LOAD, [references[index]]), located.provenance));

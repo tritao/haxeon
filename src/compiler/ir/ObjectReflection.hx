@@ -4,6 +4,7 @@ import compiler.ir.Ir;
 
 private typedef ReflectedLayout = {
 	final name:String;
+	final isValue:Bool;
 	final fields:Array<IrObjectField>;
 	final methods:Array<{name:String, functionName:String, type:IrType}>;
 	final payload:Null<String>;
@@ -181,7 +182,7 @@ class ObjectReflection {
 				case "__reflect_field_name": fieldNameBody;
 				case "__reflect_delete_field": deleteFieldBody;
 				case "__reflect_copy": (inner, entry, source, _) -> {
-						var result = inner.newObject(entry.name);
+						var result = entry.isValue ? inner.valueInit(entry.name) : inner.newObject(entry.name);
 						if (entry.observable)
 							recordObservableCreation(inner, result);
 						if (entry.payload != null)
@@ -257,6 +258,7 @@ class ObjectReflection {
 			result.push({
 				layout: {
 					name: name,
+					isValue: object.isValue,
 					fields: fields,
 					methods: [for (name in names) methods.get(name)],
 					payload: payload,
@@ -272,7 +274,7 @@ class ObjectReflection {
 
 	static function copy(name:String, layouts:Array<ReflectedLayout>, functions:Array<IrFunction>):IrFunction
 		return perLayout(name, layouts, functions, Dyn, [], (builder, layout, typed, _) -> {
-			var result = builder.newObject(layout.name);
+			var result = layout.isValue ? builder.valueInit(layout.name) : builder.newObject(layout.name);
 			if (layout.observable)
 				recordObservableCreation(builder, result);
 			if (layout.payload != null)

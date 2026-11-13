@@ -161,7 +161,65 @@ class AuditVerifierMain {
 		rejected(program, "IR enum Dynamic intrinsic requires one argument");
 	}
 
+	static function verifyValueConstructionShape():Void {
+		var value:IrObject = {
+			name: "ShapeValue",
+			isValue: true,
+			base: null,
+			interfaces: [],
+			fields: [],
+			methods: []
+		};
+		var reference:IrObject = {
+			name: "ShapeReference",
+			isValue: false,
+			base: null,
+			interfaces: [],
+			fields: [],
+			methods: []
+		};
+		var oldAllocation = new IrBuilder();
+		oldAllocation.newObject(value.name);
+		oldAllocation.returnValue(oldAllocation.constInt(42));
+		var oldProgram = new IrProgram("main");
+		oldProgram.objects = [value, reference];
+		oldProgram.functions = [
+			new IrFunction("main", oldAllocation.arguments, I32, oldAllocation.blocks, Ordinary)
+		];
+		rejected(oldProgram, 'IR object allocation cannot initialize value "ShapeValue"');
+
+		var invalidValue = new IrBuilder();
+		invalidValue.valueInit(reference.name);
+		invalidValue.returnValue(invalidValue.constInt(42));
+		oldProgram.functions = [
+			new IrFunction("main", invalidValue.arguments, I32, invalidValue.blocks, Ordinary)
+		];
+		rejected(oldProgram, 'Unknown or mismatched IR value "ShapeReference"');
+
+		var valid = new IrBuilder();
+		valid.valueInit(value.name);
+		valid.returnValue(valid.constInt(42));
+		var legacy = new IrBuilder();
+		legacy.argument("this", Obj(value.name));
+		legacy.returnValue(legacy.constVoid());
+		oldProgram.functions = [
+			new IrFunction("main", valid.arguments, I32, valid.blocks, Ordinary),
+			new IrFunction("ShapeValue.new", legacy.arguments, Void, legacy.blocks, Ordinary)
+		];
+		rejected(oldProgram, 'IR value constructor "ShapeValue.new" must return its value');
+		var receiverConstructor = new IrBuilder(),
+			receiver = receiverConstructor.argument("this", Obj(value.name));
+		receiverConstructor.returnValue(receiver);
+		oldProgram.functions[1] = new IrFunction("ShapeValue.new", receiverConstructor.arguments, Obj(value.name), receiverConstructor.blocks, Ordinary);
+		rejected(oldProgram, 'IR value constructor "ShapeValue.new" must not take a receiver');
+		oldProgram.functions.pop();
+		IrVerifier.verify(oldProgram);
+		var decoded = compiler.ir.codec.CanonicalIrCodec.decode(compiler.ir.codec.CanonicalIrCodec.encode(oldProgram));
+		IrVerifier.verify(decoded);
+	}
+
 	static function main():Void {
+		verifyValueConstructionShape();
 		verifyInlineEnumIntrinsics();
 		verifyLaneArrayInvariant();
 		var intrinsicBuilder = new IrBuilder(),

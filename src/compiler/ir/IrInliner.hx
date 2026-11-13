@@ -782,8 +782,8 @@ class IrInliner {
 			for (block in fn.blocks) {
 				for (located in block.instructions)
 					switch located.value {
-						case NewObject(_, name):
-							var object = table.get(name);
+						case ValueInit(out):
+							var object = table.get(compiler.ir.IrTypeTools.valueObjectName(out.type));
 							if (object != null && object.isValue)
 								found = true;
 						default:
@@ -1202,6 +1202,7 @@ class IrInliner {
 			case MethodCall(out, object, name, arguments,
 				terminalReceiver): MethodCall(use(out), use(object), name, [for (argument in arguments) use(argument)], terminalReceiver);
 			case NewObject(out, typeName): NewObject(use(out), typeName);
+			case ValueInit(out): ValueInit(use(out));
 			case FieldGet(out, object, name): FieldGet(use(out), use(object), name);
 			case FieldSet(object, name, value): FieldSet(use(object), name, use(value));
 			case ArrayGet(out, array, index): ArrayGet(use(out), use(array), use(index));

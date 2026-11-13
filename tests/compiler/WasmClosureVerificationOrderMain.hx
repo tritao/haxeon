@@ -48,7 +48,7 @@ class WasmClosureVerificationOrderMain {
 			}
 		];
 		var builder = new IrBuilder();
-		builder.returnValue(builder.toDyn(builder.newObject(name)));
+		builder.returnValue(builder.toDyn(builder.valueInit(name)));
 		program.functions = [new IrFunction("main", builder.arguments, Dyn, builder.blocks, Ordinary)];
 		var failure:Null<String> = null;
 		try

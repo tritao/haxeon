@@ -240,7 +240,7 @@ class IrOpportunityCensus {
 				switch instruction {
 					case Call(_, name, arguments) if (name == IrReceiverCheck.NAME && arguments.length == 1):
 						switch bounds.definition(arguments[0].id) {
-							case NewObject(_, _), StaticClosure(_, _), InstanceClosure(_, _, _): count(14);
+							case NewObject(_, _), ValueInit(_), StaticClosure(_, _), InstanceClosure(_, _, _): count(14);
 							default:
 						}
 					case SafeCast(out, source) if (Std.string(out.type) == Std.string(source.type)):
@@ -258,7 +258,7 @@ class IrOpportunityCensus {
 					case ToDyn(_, _), SafeCast(_, _), ToVirtual(_, _), IntToFloat(_, _), FloatToInt(_, _), FloatToFloat(_, _), IntToInt64(_, _):
 						if (depth > 0)
 							count(4);
-					case NewObject(out, _):
+					case NewObject(out, _) | ValueInit(out):
 						count(5);
 						if (localUses(fn, out))
 							count(6);
@@ -339,7 +339,7 @@ class IrOpportunityCensus {
 	/** Conservative diagnostic subset: no memory, allocation, calls, comparisons or division. */
 	static function pureUnusedResult(instruction:IrInstruction):Bool
 		return switch instruction {
-			case Phi(_, _), ConstVoid(_), ConstInt(_, _), ConstFloat(_, _), ConstBool(_, _), ConstNull(_), Add(_, _, _), Sub(_, _, _), Mul(_, _, _),
+			case ValueInit(_), Phi(_, _), ConstVoid(_), ConstInt(_, _), ConstFloat(_, _), ConstBool(_, _), ConstNull(_), Add(_, _, _), Sub(_, _, _), Mul(_, _, _),
 				BitAnd(_, _, _), BitOr(_, _, _), BitXor(_, _, _), ShiftLeft(_, _, _), ShiftRight(_, _, _), UnsignedShiftRight(_, _, _): true;
 			default: false;
 		};
@@ -374,7 +374,7 @@ class IrOpportunityCensus {
 				return false;
 		}
 		switch bounds.definition(receiver.id) {
-			case NewObject(_, _):
+			case NewObject(_, _) | ValueInit(_):
 			default:
 				return false;
 		}

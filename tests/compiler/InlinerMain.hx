@@ -430,7 +430,7 @@ function main():Int return stay(1);
 		for (block in fn.blocks)
 			for (located in block.instructions)
 				switch located.value {
-					case NewObject(_, _):
+					case NewObject(_, _) | ValueInit(_):
 						count++;
 					default:
 				}

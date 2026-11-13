@@ -203,7 +203,7 @@ class IrValueArrayBridge {
 				builder.select(done);
 				builder.phi(type, [{block: absentBlock.id, value: nil}, {block: presentBlock.id, value: boxed}]);
 			case Obj(className) if (isValue(type)):
-				var result = builder.newObject(className),
+				var result = builder.valueInit(className),
 					object = requireObject(className);
 				for (field in object.fields)
 					builder.fieldSet(result, field.name, readValue(builder, array, index, field.type, path.concat([field.name])));

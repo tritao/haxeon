@@ -591,6 +591,9 @@ class SsaBuilder {
 				case NewObject(out, typeName):
 					var result = define(out);
 					emit(target, NewObject(result, typeName), provenance);
+				case ValueInit(out):
+					var result = define(out);
+					emit(target, ValueInit(result), provenance);
 				case FieldGet(out, object, fieldName):
 					var result = define(out);
 					emit(target, FieldGet(result, resolve(object), fieldName), provenance);

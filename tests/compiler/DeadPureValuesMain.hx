@@ -39,6 +39,20 @@ class DeadPureValuesMain {
 		IrVerifier.verify(program);
 		var interpreter = new IrInterpreter(program);
 		expect(interpreter.run("main", [true]) == 42 && interpreter.run("main", [false]) == 43, "phi operands survive on both edges");
+		b = new IrBuilder();
+		b.valueInit("Point"); // An unused default value has no effect.
+		var liveValue = b.valueInit("Point"), field = b.constInt(1);
+		b.fieldSet(liveValue, "x", field);
+		b.returnValue(field);
+		fn = new IrFunction("values", b.arguments, I32, b.blocks, Ordinary);
+		result = IrDeadPureValues.run(fn);
+		var initializers = 0, stores = 0;
+		for (instruction in result.blocks[0].instructions) switch instruction.value {
+			case ValueInit(_): initializers++;
+			case FieldSet(_, _, _): stores++;
+			default:
+		}
+		expect(initializers == 1 && stores == 1, "dead defaults are removed and field writes keep their initializer");
 		Sys.println("PASS: dead pure values preserve effects, debug bindings and live phi inputs");
 	}
 }

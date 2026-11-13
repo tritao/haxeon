@@ -318,6 +318,19 @@ class IrVerifier {
 					throw 'Invalid nullable scalar storage for "${object.name}.${field.name}"';
 			objects.set(object.name, object);
 		}
+		var receiverArguments:Map<String, Bool> = [
+			for (fn in program.functions)
+				if (fn.arguments.length > 0 && fn.arguments[0].name == "this") fn.name => true
+		];
+		for (object in program.objects)
+			if (object.isValue) {
+				var name = object.name + ".new",
+					signature = signatures.get(name);
+				if (signature != null && !sameType(signature.result, Obj(object.name)))
+					throw 'IR value constructor "$name" must return its value';
+				if (signature != null && receiverArguments.exists(name))
+					throw 'IR value constructor "$name" must not take a receiver';
+			}
 		// Private enum records and values containing opaque references need logical escape adapters.
 		for (object in program.objects)
 			if (object.isValue && StringTools.startsWith(object.name, IrInlineEnumLayout.VALUE_PREFIX))
@@ -1325,8 +1338,16 @@ class IrVerifier {
 				if (!sameType(out.type, signature.result))
 					throw 'Wrong IR method result type for "$methodName": got ${out.type}, expected ${signature.result}';
 			case NewObject(out, typeName):
-				if (!objects.exists(typeName) || !isObjectType(out.type, typeName))
+				var object:IrObject = objects.get(typeName);
+				if (object == null || !isObjectType(out.type, typeName))
 					throw 'Unknown or mismatched IR object "$typeName"';
+				if (object.isValue)
+					throw 'IR object allocation cannot initialize value "$typeName"';
+			case ValueInit(out):
+				var typeName = compiler.ir.IrTypeTools.valueObjectName(out.type);
+				var object = objects.get(typeName);
+				if (object == null || !object.isValue || !isObjectType(out.type, typeName))
+					throw 'Unknown or mismatched IR value "$typeName"';
 			case FieldGet(out, object, fieldName):
 				if (fieldName == compiler.backend.wasm.WasmFlattenValueFields.CHECK_FIELD) {
 					requireObject(object, values, objects);

@@ -89,7 +89,7 @@ class IrOptionalValueFlow {
 		builder.select(present);
 		var slots = shapes.slots(type);
 		function buildValue(valueName:String, path:Array<String>):IrValue {
-			var value = builder.newObject(valueName),
+			var value = builder.valueInit(valueName),
 				object = objects.get(valueName);
 			if (object == null)
 				throw 'Unknown optional value "$valueName"';
@@ -141,7 +141,7 @@ class IrOptionalValueFlow {
 		var builder = new IrBuilder(),
 			type:IrType = Nullable(Obj(name)),
 			input = builder.argument("value", type),
-			wrapper = builder.newObject(IrOptionalScalarFlow.wrapperName(name)),
+			wrapper = builder.valueInit(IrOptionalScalarFlow.wrapperName(name)),
 			present = builder.createBlock(),
 			done = builder.createBlock();
 		builder.branch(builder.equal(input, builder.constNull(type)), done, present);
@@ -226,7 +226,7 @@ class IrOptionalValueFlow {
 		var object = objects.get(name);
 		if (object == null || !object.isValue)
 			throw 'Unknown optional value "$name"';
-		var copy = builder.newObject(name);
+		var copy = builder.valueInit(name);
 		for (field in object.fields) {
 			var value = builder.fieldGet(source, field.name, field.type);
 			switch field.type {

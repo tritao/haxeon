@@ -32,6 +32,8 @@ typedef ExecutableCase = {
 class TestCatalog {
 	static final compilerMains = [
 		"ValueLaneRuntimeMain",
+		"ValueConstructorDestinationMain",
+		"ValueConstructorWarmMain",
 		"EnumTagStorageMain",
 		"RawRepresentableMain",
 		"FlagsMain",

@@ -105,6 +105,10 @@ class IrStateEqualityMain {
 		var tagIntrinsic = fn(Intrinsic(v, EnumTagBox(EnumTag("First")), [w]));
 		compare(tagIntrinsic, IrFunctionStateCodec.decode(IrFunctionStateCodec.encode(tagIntrinsic)));
 		compare(tagIntrinsic, fn(Intrinsic(v, EnumTagUnbox(EnumTag("First")), [w])));
+		var valueInit = fn(ValueInit(new IrValue(9, "value", Obj("First"))));
+		compare(valueInit, IrFunctionStateCodec.decode(IrFunctionStateCodec.encode(valueInit)));
+		compare(valueInit, fn(ValueInit(new IrValue(9, "value", Obj("Second")))));
+		compare(valueInit, fn(NewObject(new IrValue(9, "value", Obj("First")), "First")));
 		var inlineIntrinsic = fn(Intrinsic(v, InlineEnumBox(Enum("First")), [w]));
 		compare(inlineIntrinsic, IrFunctionStateCodec.decode(IrFunctionStateCodec.encode(inlineIntrinsic)));
 		compare(inlineIntrinsic, fn(Intrinsic(v, InlineEnumBox(Enum("Second")), [w])));

@@ -60,7 +60,6 @@ class WasmScalarAbi {
 		var instanceMethods:Map<String, Bool> = [];
 		for (object in program.objects)
 			if (object.isValue) {
-				instanceMethods.set(object.name + ".new", true);
 				for (method in object.methods)
 					instanceMethods.set(method.functionName, true);
 			}
@@ -109,7 +108,6 @@ class WasmScalarAbi {
 		var methodNames:Array<String> = [];
 		for (object in program.objects)
 			if (object.isValue) {
-				methodNames.push(object.name + ".new");
 				for (method in object.methods)
 					methodNames.push(method.functionName);
 			}
@@ -615,7 +613,7 @@ class WasmScalarAbi {
 			for (block in fn.blocks)
 				for (located in block.instructions)
 					switch located.value {
-						case NewObject(out, _) if (values.isValue(out.type) && !aliases.exists(out.id)):
+						case ValueInit(out) if (values.isValue(out.type) && !aliases.exists(out.id)):
 							aliases.set(out.id, true);
 							changed = true;
 						case FieldGet(out, owner, _) if (aliases.exists(owner.id) && values.isValue(out.type) && !aliases.exists(out.id)):
@@ -632,7 +630,7 @@ class WasmScalarAbi {
 							if (aliases.exists(input.value.id))
 								return false;
 					case FieldGet(_, owner, _), FieldSet(owner, _, _) if (aliases.exists(owner.id)):
-					case NewObject(out, _) if (values.isValue(out.type)):
+					case ValueInit(out) if (values.isValue(out.type)):
 					case Call(_, name, args) if (candidates.exists(name) && args.length > 0 && aliases.exists(args[0].id)):
 					case MethodCall(_, owner, method, _, _) if (aliases.exists(owner.id)):
 						var target = resolveMethod(owner.type, method);
@@ -698,7 +696,7 @@ class WasmScalarAbi {
 		for (block in fn.blocks)
 			for (located in block.instructions)
 				switch located.value {
-					case NewObject(out, _) if (values.isValue(out.type)):
+					case ValueInit(out) if (values.isValue(out.type)):
 						roots.set(out.id, out.id);
 						valid.set(out.id, true);
 					default:
@@ -987,7 +985,7 @@ class WasmScalarAbi {
 				continue;
 			}
 			var name = objectName(argument.type);
-			prefix.push(new Located(NewObject(argument, name), provenance));
+			prefix.push(new Located(ValueInit(argument), provenance));
 			for (slot in values.leaves(argument.type)) {
 				var scalar = new IrValue(next++, argument.name + ".$field", slot.type);
 				args.push(scalar);
@@ -1096,7 +1094,7 @@ class WasmScalarAbi {
 		}
 		var handle = new IrValue(next++, "$wasm-gc-virtual-result", out.type), index = 0;
 		block.instructions.push(new Located(MethodCall(handle, receiver, method, expanded, false), origin.provenance));
-		block.instructions.push(new Located(NewObject(out, objectName(out.type)), origin.provenance));
+		block.instructions.push(new Located(ValueInit(out), origin.provenance));
 		for (slot in values.leaves(out.type)) {
 			var scalar = new IrValue(next++, "$wasm-gc-virtual-result-field", slot.type);
 			block.instructions.push(new Located(FieldGet(scalar, handle, RESULT_FIELD_PREFIX + index++), origin.provenance));
@@ -1130,7 +1128,7 @@ class WasmScalarAbi {
 		}
 		var handle = new IrValue(next++, "$wasm-gc-closure-result", out.type), index = 0;
 		block.instructions.push(new Located(CallClosure(handle, closure, expanded), origin.provenance));
-		block.instructions.push(new Located(NewObject(out, objectName(out.type)), origin.provenance));
+		block.instructions.push(new Located(ValueInit(out), origin.provenance));
 		for (slot in values.leaves(out.type)) {
 			var scalar = new IrValue(next++, "$wasm-gc-closure-result-field", slot.type);
 			block.instructions.push(new Located(FieldGet(scalar, handle, RESULT_FIELD_PREFIX + index++), origin.provenance));
@@ -1181,7 +1179,7 @@ class WasmScalarAbi {
 			block.instructions.push(new Located(Call(check, RETHROW_MARKER, [exception, thrown]), origin.provenance));
 		}
 		if (values.isValue(callee.result)) {
-			block.instructions.push(new Located(NewObject(out, objectName(out.type)), origin.provenance));
+			block.instructions.push(new Located(ValueInit(out), origin.provenance));
 			for (slot in values.leaves(out.type)) {
 				var scalar = new IrValue(next++, "$wasm-gc-result-field", slot.type);
 				block.instructions.push(new Located(FieldGet(scalar, handle, RESULT_FIELD_PREFIX + index++), origin.provenance));

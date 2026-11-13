@@ -286,7 +286,7 @@ class IrValueArrayOptionalRewrite {
 			for (position in 0...block.instructions.length) {
 				var instruction = block.instructions[position].value;
 				switch instruction {
-					case NewObject(out, _) if (out.id == wrapper.id):
+					case ValueInit(out) if (out.id == wrapper.id):
 						if (block.id != blockId || position >= boxPosition)
 							return false;
 						allocated = true;

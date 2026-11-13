@@ -31,8 +31,8 @@ class IrScalarReplacement {
 		for (block in fn.blocks) {
 			for (located in block.instructions)
 				switch located.value {
-					case NewObject(_, name):
-						var object = objects.get(name);
+					case ValueInit(out):
+						var object = objects.get(compiler.ir.IrTypeTools.valueObjectName(out.type));
 						if (object != null && object.isValue)
 							candidate = true;
 					default:
@@ -151,7 +151,8 @@ class IrScalarReplacement {
 			while (position < block.instructions.length) {
 				var located = block.instructions[position];
 				switch located.value {
-					case NewObject(object, typeName):
+					case ValueInit(object):
+						var typeName = compiler.ir.IrTypeTools.valueObjectName(object.type);
 						var descriptor = objects.get(typeName);
 						if (descriptor != null && descriptor.isValue && stored.exists(object.id)) {
 							nextValue = IrNestedScalarReplacement.constructInPlace(blocks, objects, object, typeName, block, position, substitutions,
@@ -295,7 +296,7 @@ class IrScalarReplacement {
 	static function allocationPosition(block:IrBlock, object:IrValue):Int {
 		for (position in 0...block.instructions.length)
 			switch block.instructions[position].value {
-				case NewObject(out, _) if (out.id == object.id):
+				case ValueInit(out) if (out.id == object.id):
 					return position;
 				default:
 			}
@@ -317,7 +318,8 @@ class IrScalarReplacement {
 		for (block in blocks)
 			for (position in 0...block.instructions.length)
 				switch block.instructions[position].value {
-					case NewObject(object, typeName):
+					case ValueInit(object):
+						var typeName = compiler.ir.IrTypeTools.valueObjectName(object.type);
 						var descriptor = objects.get(typeName);
 						if (descriptor != null && descriptor.isValue)
 							found.push({

@@ -36,7 +36,7 @@ class IrInlineEnumCaseAccess {
 
 	/** Tag zero is the null value and contains no live payload. */
 	public function nullValue(builder:IrBuilder):IrValue {
-		var result = builder.newObject(shape.valueObject.name);
+		var result = builder.valueInit(shape.valueObject.name);
 		builder.fieldSet(result, "tag", builder.constInt(0));
 		for (index in 0...shape.scalarWords)
 			builder.fieldSet(result, 'scalar$index', builder.constInt(0, shape.wordBits == 64 ? I64 : I32));
@@ -113,7 +113,7 @@ class IrInlineEnumCaseAccess {
 				builder.select(done);
 				builder.phi(type, [{block: absentBlock.id, value: nil}, {block: presentBlock.id, value: wrapped}]);
 			case Obj(name) if (isValue(type)):
-				var result = builder.newObject(name);
+				var result = builder.valueInit(name);
 				for (field in requireObject(name).fields)
 					builder.fieldSet(result, field.name, read(builder, source, entry, path.concat([field.name]), field.type));
 				result;

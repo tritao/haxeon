@@ -136,7 +136,7 @@ class IrValueArrayPlaceMethods {
 					switch located.value {
 						case ConstNull(out):
 							nulls.set(out.id, true);
-						case NewObject(out, _) if (isValue(out.type)):
+						case ValueInit(out) if (isValue(out.type)):
 							fresh.set(out.id, true);
 						case FieldGet(out, owner, field) if (aliases.exists(owner.id) && isValue(out.type) && !aliases.exists(out.id)):
 							aliases.set(out.id, aliases.get(owner.id).concat([field]));
@@ -156,7 +156,7 @@ class IrValueArrayPlaceMethods {
 		for (block in fn.blocks)
 			for (position in 0...block.instructions.length)
 				switch block.instructions[position].value {
-					case NewObject(out, _) if (isValue(out.type)):
+					case ValueInit(out) if (isValue(out.type)):
 						freshHomes.set(out.id, {block: block.id, position: position});
 						virtualFresh.set(out.id, true);
 					default:
@@ -351,7 +351,7 @@ class IrValueArrayPlaceMethods {
 							needsEntryCheck = false;
 					}
 				switch instruction {
-					case NewObject(out, _) if (virtualFresh.exists(out.id)):
+					case ValueInit(out) if (virtualFresh.exists(out.id)):
 						freshFields.set(out.id, []);
 						omit = true;
 						handled = true;

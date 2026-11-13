@@ -275,7 +275,7 @@ class ValueArrayAccessMain {
 		var outerBridgeFunctions = outerBridge.functions(),
 			outerHelperFunctions = outerHelpers.functions();
 		var bridgeArray = builder.call(pairFactory.allocateName(), [builder.constInt(1)], pairArrayType);
-		var bridgeSource = builder.newObject("LanePair");
+		var bridgeSource = builder.valueInit("LanePair");
 		builder.fieldSet(bridgeSource, "value", builder.constInt(314));
 		builder.fieldSet(bridgeSource, "label", owner);
 		var dynamicPair = builder.toDyn(bridgeSource);
@@ -320,20 +320,20 @@ class ValueArrayAccessMain {
 		builder.call("__value_array_resize", [optionalPushArray, builder.constInt(0)], Void);
 		var beforeOptionalPush = builder.call("std.gc_total_allocated", [], F64);
 		for (i in 0...20) {
-			var components = builder.newObject(pairWrapperName);
+			var components = builder.valueInit(pairWrapperName);
 			builder.fieldSet(components, "$slot0", builder.constBool(i % 2 == 1));
 			builder.fieldSet(components, "$slot1", builder.constInt(i));
 			builder.fieldSet(components, "$slot2", owner);
 			var value = builder.call(compiler.ir.IrOptionalValueFlow.boxName("LanePair"), [components], optionalPairType);
 			builder.call("__array_push_ref", [optionalPushArray, value], I32);
 		}
-		var absentComponents = builder.newObject(pairWrapperName);
+		var absentComponents = builder.valueInit(pairWrapperName);
 		builder.fieldSet(absentComponents, "$slot0", builder.constBool(false));
 		builder.fieldSet(absentComponents, "$slot1", builder.constInt(777));
 		builder.fieldSet(absentComponents, "$slot2", owner);
 		var absentValue = builder.call(compiler.ir.IrOptionalValueFlow.boxName("LanePair"), [absentComponents], optionalPairType);
 		builder.call("__array_unshift_any", [optionalPushArray, absentValue], I32);
-		var insertedComponents = builder.newObject(pairWrapperName);
+		var insertedComponents = builder.valueInit(pairWrapperName);
 		builder.fieldSet(insertedComponents, "$slot0", builder.constBool(true));
 		builder.fieldSet(insertedComponents, "$slot1", builder.constInt(42));
 		builder.fieldSet(insertedComponents, "$slot2", otherOwner);
@@ -352,7 +352,7 @@ class ValueArrayAccessMain {
 			builder.constInt(nestedPairShape.scalarStrideBits), builder.constInt(nestedPairShape.references),
 			  builder.constInt(nestedPairShape.scalarWordBits),                      builder.constBool(true)
 		], nestedPairArrayType);
-		var nestedBridgeSource = builder.newObject("LaneNestedPair");
+		var nestedBridgeSource = builder.valueInit("LaneNestedPair");
 		builder.fieldSet(nestedBridgeSource, "nested", bridgeSource);
 		builder.fieldSet(nestedBridgeSource, "optional", builder.toDyn(builder.constInt(93), Nullable(I32)));
 		var dynamicNested = builder.toDyn(nestedBridgeSource);
@@ -372,8 +372,8 @@ class ValueArrayAccessMain {
 			builder.constInt(outerShape.scalarStrideBits), builder.constInt(outerShape.references),
 			  builder.constInt(outerShape.scalarWordBits),                 builder.constBool(true)
 		], outerArrayType);
-		var outerSource = builder.newObject("LaneOuter"),
-			outerInner = builder.newObject("LaneInner");
+		var outerSource = builder.valueInit("LaneOuter"),
+			outerInner = builder.valueInit("LaneInner");
 		builder.fieldSet(outerInner, "value", builder.constInt(45));
 		builder.fieldSet(outerInner, "label", owner);
 		builder.fieldSet(outerInner, "flag", builder.toDyn(builder.constInt(-7), Nullable(I32)));
@@ -412,7 +412,7 @@ class ValueArrayAccessMain {
 			typedElementValue:IrValue = null,
 			typedElementLabel:IrValue = null;
 		for (_ in 0...10) {
-			var pair = builder.newObject("LanePair");
+			var pair = builder.valueInit("LanePair");
 			builder.fieldSet(pair, "value", builder.constInt(753));
 			builder.fieldSet(pair, "label", otherOwner);
 			builder.currentBlock().instructions.push(new Located(ArraySet(bridgeArray, index, pair), SourceProvenance.generated("array-element-test")));
@@ -427,7 +427,7 @@ class ValueArrayAccessMain {
 		var beforeTypedPush = builder.call("std.gc_total_allocated", [], F64),
 			typedPushLength:IrValue = null;
 		for (i in 0...20) {
-			var pair = builder.newObject("LanePair");
+			var pair = builder.valueInit("LanePair");
 			builder.fieldSet(pair, "value", builder.constInt(i));
 			builder.fieldSet(pair, "label", otherOwner);
 			typedPushLength = builder.call("__array_push_ref", [pushArray, pair], I32);
@@ -440,7 +440,7 @@ class ValueArrayAccessMain {
 		builder.currentBlock()
 			.instructions.push(new Located(ArrayGet(selectedPair, pushArray, builder.constInt(1)), SourceProvenance.generated("array-insert-test")));
 		builder.call("__array_insert_ref", [pushArray, builder.constInt(5), selectedPair], Void);
-		var frontPair = builder.newObject("LanePair");
+		var frontPair = builder.valueInit("LanePair");
 		builder.fieldSet(frontPair, "value", builder.constInt(31));
 		builder.fieldSet(frontPair, "label", owner);
 		var typedUnshiftLength = builder.call("__array_unshift_ref", [pushArray, frontPair], I32);
@@ -500,7 +500,7 @@ class ValueArrayAccessMain {
 			snapshotCallback = snapshotMethod.argument("callback", callbackType),
 			snapshotArray = snapshotMethod.argument("array", arrayType);
 		var snapshotChild = snapshotMethod.fieldGet(snapshotReceiver, "inner", Obj("LaneInner"));
-		var snapshot = snapshotMethod.newObject("LaneInner");
+		var snapshot = snapshotMethod.valueInit("LaneInner");
 		snapshotMethod.fieldSet(snapshot, "value", snapshotMethod.fieldGet(snapshotChild, "value", I32));
 		snapshotMethod.fieldSet(snapshot, "label", snapshotMethod.fieldGet(snapshotChild, "label", Obj("LaneOwner")));
 		snapshotMethod.callClosure(snapshotCallback, [snapshotArray], Void);
@@ -511,7 +511,7 @@ class ValueArrayAccessMain {
 		for (block in rewrittenSnapshot.blocks)
 			for (located in block.instructions)
 				switch located.value {
-					case NewObject(_, "LaneInner"):
+					case ValueInit(out) if (Type.enumEq(out.type, Obj("LaneInner"))):
 						throw "A copied array value must stay scalar across a callback";
 					default:
 				}
@@ -647,7 +647,7 @@ class ValueArrayAccessMain {
 			constructReceiver = construct.argument("this", element),
 			constructValue = construct.argument("value", I32),
 			constructLabel = construct.argument("label", Obj("LaneOwner"));
-		var freshPair = construct.newObject("LanePair");
+		var freshPair = construct.valueInit("LanePair");
 		construct.fieldSet(freshPair, "value", constructValue);
 		construct.fieldSet(freshPair, "label", constructLabel);
 		construct.fieldSet(constructReceiver, "pair", freshPair);
@@ -658,7 +658,7 @@ class ValueArrayAccessMain {
 		for (block in rewrittenConstruct.blocks)
 			for (located in block.instructions)
 				switch located.value {
-					case NewObject(_, "LanePair"):
+					case ValueInit(out) if (Type.enumEq(out.type, Obj("LanePair"))):
 						throw "A constructed array value must stay scalar";
 					default:
 				}
@@ -674,7 +674,7 @@ class ValueArrayAccessMain {
 			compositeCallback = composite.argument("callback", callbackType),
 			compositeArray = composite.argument("array", arrayType);
 		var compositeSource = composite.fieldGet(compositeReceiver, "inner2", Obj("LaneInner"));
-		var compositeSaved = composite.newObject("LaneInner");
+		var compositeSaved = composite.valueInit("LaneInner");
 		composite.fieldSet(compositeSaved, "value", composite.fieldGet(compositeSource, "value", I32));
 		composite.fieldSet(compositeSaved, "label", composite.fieldGet(compositeSource, "label", Obj("LaneOwner")));
 		composite.fieldSet(compositeSaved, "flag", composite.fieldGet(compositeSource, "flag", Nullable(I32)));
@@ -686,20 +686,20 @@ class ValueArrayAccessMain {
 		for (block in rewrittenComposite.blocks)
 			for (located in block.instructions)
 				switch located.value {
-					case NewObject(_, "LaneInner"):
+					case ValueInit(out) if (Type.enumEq(out.type, Obj("LaneInner"))):
 						throw "A composite snapshot must stay scalar";
 					default:
 				}
 		var defaults = new IrBuilder(),
 			defaultsReceiver = defaults.argument("this", element);
-		var defaultInner = defaults.newObject("LaneInner");
+		var defaultInner = defaults.valueInit("LaneInner");
 		defaults.fieldSet(defaultsReceiver, "inner", defaultInner);
 		defaults.returnValue(defaults.constVoid());
 		var rewrittenDefaults = methodRewriter.specialize(Ordinary, "array_place_defaults",
 			new IrFunction("LaneElement.defaults", defaults.arguments, Void, defaults.blocks, Ordinary), []);
 		var nestedDefaults = new IrBuilder(),
 			nestedDefaultsReceiver = nestedDefaults.argument("this", element);
-		var defaultOuter = nestedDefaults.newObject("LaneOuter");
+		var defaultOuter = nestedDefaults.valueInit("LaneOuter");
 		nestedDefaults.fieldSet(nestedDefaultsReceiver, "outer", defaultOuter);
 		nestedDefaults.returnValue(nestedDefaults.constVoid());
 		var rewrittenNestedDefaults = methodRewriter.specialize(Ordinary, "array_place_nested_defaults",
@@ -707,8 +707,8 @@ class ValueArrayAccessMain {
 		var nestedConstruct = new IrBuilder(),
 			nestedConstructReceiver = nestedConstruct.argument("this", element),
 			nestedConstructLabel = nestedConstruct.argument("label", Obj("LaneOwner"));
-		var constructedOuter = nestedConstruct.newObject("LaneOuter"),
-			constructedInner = nestedConstruct.newObject("LaneInner");
+		var constructedOuter = nestedConstruct.valueInit("LaneOuter"),
+			constructedInner = nestedConstruct.valueInit("LaneInner");
 		nestedConstruct.fieldSet(constructedInner, "value", nestedConstruct.constInt(23));
 		nestedConstruct.fieldSet(constructedInner, "label", nestedConstructLabel);
 		nestedConstruct.fieldSet(constructedInner, "flag", nestedConstruct.toDyn(nestedConstruct.constInt(5), Nullable(I32)));
@@ -725,7 +725,7 @@ class ValueArrayAccessMain {
 		for (block in rewrittenNestedConstruct.blocks)
 			for (located in block.instructions)
 				switch located.value {
-					case NewObject(_, "LaneInner" | "LaneOuter"):
+					case ValueInit(out) if (Type.enumEq(out.type, Obj("LaneInner")) || Type.enumEq(out.type, Obj("LaneOuter"))):
 						throw "A nested constructed snapshot must stay scalar";
 					case ToDyn(out, _) if (Type.enumEq(out.type, Nullable(Obj("LaneInner")))):
 						throw "An optional nested snapshot must stay scalar";
@@ -733,7 +733,7 @@ class ValueArrayAccessMain {
 				}
 		var nullConstruct = new IrBuilder(),
 			nullConstructReceiver = nullConstruct.argument("this", element);
-		var nullOuter = nullConstruct.newObject("LaneOuter");
+		var nullOuter = nullConstruct.valueInit("LaneOuter");
 		nullConstruct.fieldSet(nullOuter, "maybe", nullConstruct.constNull(Nullable(Obj("LaneInner"))));
 		nullConstruct.fieldSet(nullConstructReceiver, "outer", nullOuter);
 		nullConstruct.returnValue(nullConstruct.constVoid());
@@ -963,7 +963,7 @@ class ValueArrayAccessMain {
 		var afterCopies = builder.call("std.gc_total_allocated", [], F64);
 		var beforeArguments = builder.call("std.gc_total_allocated", [], F64);
 		for (_ in 0...10) {
-			var pair = builder.newObject("LanePair");
+			var pair = builder.valueInit("LanePair");
 			builder.fieldSet(pair, "value", builder.constInt(72));
 			builder.fieldSet(pair, "label", owner);
 			builder.call(rewrittenArgument.name, [array, index, pair], Void);
@@ -973,7 +973,7 @@ class ValueArrayAccessMain {
 		var argumentLabel = builder.call(helpers.getter(pairLabel), [array, index], Obj("LaneOwner"));
 		var beforeValueCaller = builder.call("std.gc_total_allocated", [], F64);
 		for (_ in 0...10) {
-			var value = builder.newObject("LanePair");
+			var value = builder.valueInit("LanePair");
 			builder.fieldSet(value, "value", builder.constInt(83));
 			builder.fieldSet(value, "label", otherOwner);
 			builder.call(rewrittenValueCaller.name, [array, index, value], Void);
@@ -1801,9 +1801,9 @@ class ValueArrayAccessMain {
 				for (block in fn.blocks)
 					for (located in block.instructions)
 						switch located.value {
-							case NewObject(_, "LanePair"):
+							case ValueInit(out) if (Type.enumEq(out.type, Obj("LanePair"))):
 								escapedPairs++;
-							case NewObject(_, name) if (name == pairWrapperName):
+							case ValueInit(out) if (Type.enumEq(out.type, Obj(pairWrapperName))):
 								throw "Nullable array mutations must not allocate component wrappers";
 							case Call(_, name, _) if (name == compiler.ir.IrScalarArguments.PREFIX + rewrittenArgument.name):
 								scalarArgumentCall = true;
@@ -2332,7 +2332,9 @@ class ValueArrayAccessMain {
 						for (block in fn.blocks)
 							for (located in block.instructions)
 								switch located.value {
-									case NewObject(_, "NestedCensus" | "$optional-components:NestedCensus"):
+									case ValueInit(out)
+										if (Type.enumEq(out.type, Obj("NestedCensus"))
+											|| Type.enumEq(out.type, Obj("$optional-components:NestedCensus"))):
 										throw "HashLink array census retains a value box";
 									case ToDyn(out, value) if (Type.enumEq(out.type, Nullable(I32)) && value.type == I32):
 										throw "HashLink array census retains a nullable scalar box";
@@ -2451,7 +2453,8 @@ class ValueArrayAccessMain {
 						for (block in fn.blocks)
 							for (located in block.instructions)
 								switch located.value {
-									case NewObject(_, "PlaceRoot" | "PlaceLeaf"):
+									case ValueInit(out) if (Type.enumEq(out.type, Obj("PlaceRoot"))
+										|| Type.enumEq(out.type, Obj("PlaceLeaf"))):
 										throw "Frontend array operations must not allocate a struct box";
 									case ArrayGet(_, array, _), ArraySet(array, _, _) if (Type.enumEq(array.type, Array(Obj("PlaceRoot")))):
 										throw "Frontend array operations must use the inline lanes";
@@ -2478,7 +2481,8 @@ class ValueArrayAccessMain {
 						for (block in fn.blocks)
 							for (located in block.instructions)
 								switch located.value {
-									case NewObject(_, "OptionalParent" | "OptionalChild"):
+									case ValueInit(out) if (Type.enumEq(out.type, Obj("OptionalParent"))
+										|| Type.enumEq(out.type, Obj("OptionalChild"))):
 										throw "Nullable nested array values must stay scalar";
 									default:
 								}
@@ -2504,7 +2508,9 @@ class ValueArrayAccessMain {
 						for (block in fn.blocks)
 							for (located in block.instructions)
 								switch located.value {
-									case NewObject(_, "OptionalElement" | "$optional-components:OptionalElement"):
+									case ValueInit(out)
+										if (Type.enumEq(out.type, Obj("OptionalElement"))
+											|| Type.enumEq(out.type, Obj("$optional-components:OptionalElement"))):
 										throw "Nullable array elements must stay scalar";
 									case Call(_, name, _)
 										if (name == compiler.ir.IrOptionalValueFlow.boxName("OptionalElement")

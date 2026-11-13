@@ -395,7 +395,7 @@ class IrScalarClosures {
 									default: throw "Invalid scalar closure result";
 								};
 							rewritten.instructions.push(new Located(CallClosure(ignored, map(closure), expanded), located.provenance));
-							rewritten.instructions.push(new Located(NewObject(result, name), located.provenance));
+							rewritten.instructions.push(new Located(ValueInit(result), located.provenance));
 							for (index in 0...resultSlots.length) {
 								var slot = resultSlots[index],
 									leaf = new IrValue(next++, "$scalar-closure:result", mapType(slot.type)),
@@ -652,7 +652,7 @@ class IrScalarClosures {
 			var name = switch argument {
 				case Obj(value): value;
 				default: throw "Invalid scalar closure argument";
-			}, record = call.newObject(name);
+			}, record = call.valueInit(name);
 			for (slot in slots(argument)) {
 				var scalar = call.argument('argument$index.' + slot.path.join("."), mapType(slot.type)),
 					current = record,

@@ -34,7 +34,7 @@ class InlineEnumWordMain {
 			root = "/tmp";
 		var stem = root + "/inline-enum-words-" + bits + "-" + inlineEnabled + "-" + Std.random(0x7fffffff);
 		var builder = new IrBuilder(),
-			owner = builder.newObject("PayloadWords"),
+			owner = builder.valueInit("PayloadWords"),
 			words = new IrInlineEnumWordAccess(bits);
 		var wordType:IrType = bits == 64 ? I64 : I32;
 		builder.fieldSet(owner, "scalar0", builder.constInt(0, wordType));

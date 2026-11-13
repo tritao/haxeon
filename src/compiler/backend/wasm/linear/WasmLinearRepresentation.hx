@@ -93,7 +93,7 @@ class WasmLinearRepresentation implements WasmValueRepresentation implements Was
 		if (scalarLocals == null)
 			return null;
 		return switch instruction {
-			case NewObject(out, _):
+			case ValueInit(out):
 				var candidate = scalarLocals.get(out);
 				if (candidate == null) null; else {
 					var body:Array<WasmInstruction> = [];
@@ -353,7 +353,7 @@ class WasmLinearRepresentation implements WasmValueRepresentation implements Was
 		for (block in fn.blocks)
 			for (located in block.instructions)
 				switch located.value {
-					case NewObject(out, _) if (out.id == signature.receiverId):
+					case ValueInit(out) if (out.id == signature.receiverId):
 						receiver = out;
 					default:
 				}

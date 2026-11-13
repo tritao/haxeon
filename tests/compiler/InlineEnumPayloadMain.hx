@@ -62,7 +62,7 @@ class InlineEnumPayloadMain {
 			outside = new IrInlineEnumCaseAccess(outer, table);
 		var b = new IrBuilder(),
 			owner = b.newObject("Source"),
-			record = b.newObject("Small");
+			record = b.valueInit("Small");
 		b.fieldSet(record, "tiny", b.constInt(-2));
 		b.fieldSet(record, "owner", owner);
 		var f32 = b.constFloat(-0.125, F32),
@@ -123,7 +123,7 @@ class InlineEnumPayloadMain {
 		p.natives = compiler.ir.IrInlineEnumWordAccess.natives();
 		var relay = new IrBuilder(),
 			input = relay.argument("value", Obj(mixed.valueObject.name)),
-			output = relay.newObject(mixed.valueObject.name);
+			output = relay.valueInit(mixed.valueObject.name);
 		for (field in mixed.valueObject.fields)
 			relay.fieldSet(output, field.name, relay.fieldGet(input, field.name, field.type));
 		relay.returnValue(output);

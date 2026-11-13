@@ -83,7 +83,7 @@ class IrValuePhiScalarization {
 				if (out != null && out.id >= next)
 					next = out.id + 1;
 				switch located.value {
-					case NewObject(out, _) if (valueName(out.type) != null):
+					case ValueInit(out) if (valueName(out.type) != null):
 						known.set(out.id, true);
 					default:
 				}
@@ -220,7 +220,7 @@ class IrValuePhiScalarization {
 							scalar:Array<IrValue> = [];
 						for (slot in shape)
 							scalar.push(new IrValue(next++, "$value-phi-slot", slot.type));
-						setup.push(new Located(NewObject(out, valueName(out.type)), located.provenance));
+						setup.push(new Located(ValueInit(out), located.provenance));
 						for (index in 0...shape.length) {
 							var current = out, path = shape[index].path;
 							for (partIndex in 0...path.length) {
@@ -304,7 +304,7 @@ class IrValuePhiScalarization {
 		for (block in optimized.blocks)
 			for (located in block.instructions)
 				switch located.value {
-					case NewObject(out, _) if (plans.exists(out.id)
+					case ValueInit(out) if (plans.exists(out.id)
 						&& !(alwaysPresent != null && alwaysPresent.exists(valueName(out.type)))):
 						return fn;
 					default:

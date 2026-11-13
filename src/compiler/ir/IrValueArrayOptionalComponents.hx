@@ -63,7 +63,7 @@ class IrValueArrayOptionalComponents {
 				default: throw "Invalid optional wrapper";
 			};
 		get.call(helpers.checker([], false), [array, index], Void);
-		var result = get.newObject(wrapperName);
+		var result = get.valueInit(wrapperName);
 		for (slotIndex in 0...slots.length) {
 			var slot = slots[slotIndex], value = switch slot.type {
 				case Nullable(I32 | I64 | F32 | F64 | Bool): bridge.readValue(get, array, index, slot.type, slot.path);

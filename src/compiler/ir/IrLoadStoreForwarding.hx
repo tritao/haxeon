@@ -343,7 +343,7 @@ class IrLoadStoreForwarding {
 		return switch instruction {
 			case Call(_, name, _) if (name == IrReceiverCheck.NAME || name == IrReferenceIdentity.NAME): false;
 			case Phi(_, _), ConstVoid(_), ConstInt(_, _), ConstFloat(_, _), ConstString(_, _), ConstBool(_, _), ConstNull(_), TypeValue(_, _),
-				StaticDataAddress(_, _), PointerOffset(_, _, _), MemoryLoad(_, _, _, _), NewObject(_, _), IntToFloat(_, _), IntToInt64(_, _),
+				StaticDataAddress(_, _), PointerOffset(_, _, _), MemoryLoad(_, _, _, _), NewObject(_, _), ValueInit(_), IntToFloat(_, _), IntToInt64(_, _),
 				FloatToInt(_, _), FloatToFloat(_, _), ArraySize(_, _), EnumIndex(_, _), EnumField(_, _, _, _): false;
 			case Add(_, a, b), Sub(_, a, b), Mul(_, a, b), Div(_, a, b), Mod(_, a, b), BitAnd(_, a, b), BitOr(_, a, b), BitXor(_, a, b), ShiftLeft(_, a, b),
 				ShiftRight(_, a, b), UnsignedShiftRight(_, a, b), Less(_, a, b), LessEqual(_, a, b), Equal(_, a, b): !primitive(a.type) || !primitive(b.type);

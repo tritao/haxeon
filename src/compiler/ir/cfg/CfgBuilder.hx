@@ -396,6 +396,12 @@ class CfgBuilder {
 		return out;
 	}
 
+	public function valueInit(typeName:String):CfgValue {
+		var out = temporary(Obj(typeName));
+		emit(ValueInit(out));
+		return out;
+	}
+
 	public function newObject(typeName:String):CfgValue {
 		var out = temporary(Obj(typeName));
 		emit(NewObject(out, typeName));

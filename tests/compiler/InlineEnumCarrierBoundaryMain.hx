@@ -93,7 +93,7 @@ class InlineEnumCarrierBoundaryMain {
 					}
 				];
 				var b = new IrBuilder(),
-					value = array ? b.argument("array", Array(Obj(name))) : b.newObject(name);
+					value = array ? b.argument("array", Array(Obj(name))) : b.valueInit(name);
 				b.returnValue(b.toDyn(value));
 				p.functions = [new IrFunction("main", b.arguments, Dyn, b.blocks, Ordinary)];
 			}, "requires a logical Dynamic adapter");
@@ -116,10 +116,10 @@ class InlineEnumCarrierBoundaryMain {
 					fields: [{name: "packet", type: Obj("Packet")}]
 				};
 				p.objects = [packet, outer];
-				var b = new IrBuilder(), value = b.newObject("Packet");
+				var b = new IrBuilder(), value = b.valueInit("Packet");
 				b.fieldSet(value, "reference0", b.constNull(IrValueLaneReference.type()));
 				if (nested) {
-					var wrapper = b.newObject("Outer");
+					var wrapper = b.valueInit("Outer");
 					b.fieldSet(wrapper, "packet", value);
 					value = wrapper;
 				}

@@ -25,7 +25,7 @@ class InlineEnumPointerWordMain {
 	static function check(target:BackendTarget, bits:Int):Void {
 		var b = new IrBuilder(),
 			word:IrType = bits == 64 ? I64 : I32,
-			payload = b.newObject("Words"),
+			payload = b.valueInit("Words"),
 			words = new IrInlineEnumWordAccess(bits);
 		for (i in 0...4)
 			b.fieldSet(payload, "scalar" + i, b.constInt(0, word));

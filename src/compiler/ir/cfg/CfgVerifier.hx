@@ -343,7 +343,7 @@ class CfgVerifier {
 					for (argument in arguments)
 						require(argument, available, block.id);
 					define(out, defined, available, block.id);
-				case NewObject(out, _):
+				case NewObject(out, _) | ValueInit(out):
 					switch out.type {
 						case Obj(_):
 						default: throw 'CFG object allocation must produce an object';

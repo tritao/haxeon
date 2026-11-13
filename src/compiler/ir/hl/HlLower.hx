@@ -1129,7 +1129,7 @@ class HlLower {
 						} else
 							instructions.push(HlInstruction.CallMethod(defineRegister(output, registers, registerTypes),
 								requireObjectMethod(object, methodName), methodArguments));
-					case NewObject(output, _) if (scalarOptionals.get(output) != null):
+					case ValueInit(output) if (scalarOptionals.get(output) != null):
 						var local:HlScalarValueLocal = cast scalarOptionals.get(output);
 						for (field in local.declarations) {
 							var target:Int = cast local.fields.get(field.name);
@@ -1142,6 +1142,8 @@ class HlLower {
 						}
 					case NewObject(output, typeName):
 						instructions.push(HlInstruction.New(defineRegister(output, registers, registerTypes), requireObjectType(typeName), 0));
+					case ValueInit(output):
+						instructions.push(HlInstruction.New(defineRegister(output, registers, registerTypes), requireObjectType(compiler.ir.IrTypeTools.valueObjectName(output.type)), 0));
 					case FieldGet(output, object, fieldName) if (scalarOptionals.get(object) != null):
 						var local:HlScalarValueLocal = cast scalarOptionals.get(object);
 						var source:Int = cast local.fields.get(fieldName);

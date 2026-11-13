@@ -325,6 +325,10 @@ class IrFunctionStateEquality {
 					case NewObject(otherOutput, otherName): value(output, otherOutput) && name == otherName;
 					default: false;
 				};
+			case ValueInit(output): switch b {
+					case ValueInit(otherOutput): value(output, otherOutput);
+					default: false;
+				};
 			case FieldGet(output, object, name): switch b {
 					case FieldGet(otherOutput, otherObject, otherName): value(output, otherOutput) && value(object, otherObject) && name == otherName;
 					default: false;

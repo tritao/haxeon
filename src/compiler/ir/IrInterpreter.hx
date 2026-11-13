@@ -217,6 +217,7 @@ class IrInterpreter {
 				globals.set(name, value(values, input));
 				null;
 			case NewObject(_, typeName): newObject(typeName);
+			case ValueInit(out): newObject(compiler.ir.IrTypeTools.valueObjectName(out.type));
 			case FieldGet(_, object, fieldName): objectField(value(values, object), fieldName);
 			case FieldSet(object, fieldName, input):
 				setObjectField(value(values, object), fieldName, value(values, input));
@@ -909,9 +910,9 @@ class IrInterpreter {
 				BitXor(output, _, _), BitOr(output, _, _), ShiftLeft(output, _, _), ShiftRight(output, _, _), UnsignedShiftRight(output, _, _),
 				Less(output, _, _), LessEqual(output, _, _), Equal(output, _, _), Call(output, _, _), Intrinsic(output, _, _), CNativeCall(output, _, _),
 				StaticClosure(output, _), InstanceClosure(output, _, _), CallClosure(output, _, _), ToVirtual(output, _), Upcast(output, _),
-				ClassId(output, _), MethodCall(output, _, _, _, _), NewObject(output, _), FieldGet(output, _, _), ArrayGet(output, _, _),
-				ArraySize(output, _), IteratorNew(output, _), IteratorHasNext(output, _), IteratorNext(output, _), MakeEnum(output, _, _, _),
-				EnumIndex(output, _), EnumField(output, _, _, _): output;
+				ClassId(output, _), MethodCall(output, _, _, _, _), NewObject(output, _), ValueInit(output), FieldGet(output, _, _),
+				ArrayGet(output, _, _), ArraySize(output, _), IteratorNew(output, _), IteratorHasNext(output, _), IteratorNext(output, _),
+				MakeEnum(output, _, _, _), EnumIndex(output, _), EnumField(output, _, _, _): output;
 			case BeginTry(_, _, _), EndTry(_, _), GlobalSet(_, _), FieldSet(_, _, _), ArraySet(_, _, _), MemoryStore(_, _, _): null;
 		};
 }

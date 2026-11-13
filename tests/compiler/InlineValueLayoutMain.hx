@@ -513,8 +513,8 @@ class InlineValueLayoutMain {
 		if (physical.fields.length != 4)
 			throw 'wrong nullable field storage: ${physical.fields.length}';
 		var builder = new IrBuilder(),
-			holder = builder.newObject("Value"),
-			child = builder.newObject("Child");
+			holder = builder.valueInit("Value"),
+			child = builder.valueInit("Child");
 		builder.fieldSet(child, "x", builder.constInt(42));
 		builder.fieldSet(child, "label", builder.constString("kept"));
 		builder.fieldSet(holder, "child", builder.toDyn(child, Nullable(Obj("Child"))));

@@ -72,6 +72,7 @@ enum CfgInstruction {
 	Upcast(output:CfgValue, value:CfgValue);
 	MethodCall(output:CfgValue, object:CfgValue, methodName:String, arguments:Array<CfgValue>, terminalReceiver:Bool);
 	NewObject(output:CfgValue, typeName:String);
+	ValueInit(output:CfgValue);
 	FieldGet(output:CfgValue, object:CfgValue, fieldName:String);
 	FieldSet(object:CfgValue, fieldName:String, value:CfgValue);
 	ArrayGet(output:CfgValue, array:CfgValue, index:CfgValue);

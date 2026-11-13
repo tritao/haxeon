@@ -54,7 +54,7 @@ class IrCopyElision {
 				var located = block.instructions[position];
 				if (isValueCopy(located)) {
 					switch located.value {
-						case NewObject(copy, _):
+						case ValueInit(copy):
 							if (tryElide(blocks, block, position, copy))
 								continue;
 						default:
@@ -76,7 +76,7 @@ class IrCopyElision {
 
 	static function isValueCopy(located:Located<IrInstruction>):Bool {
 		switch located.value {
-			case NewObject(_, _):
+			case ValueInit(_):
 			default:
 				return false;
 		}
@@ -202,7 +202,7 @@ class IrCopyElision {
 				for (located in block.instructions) {
 					var instruction = located.value;
 					switch instruction {
-						case NewObject(out, _):
+						case NewObject(out, _) | ValueInit(out):
 							fresh.set(out.id, true);
 						case FieldSet(target, _, value) if (fresh.exists(target.id) && tainted.exists(value.id)):
 							if (!tainted.exists(target.id)) {
@@ -304,7 +304,7 @@ class IrCopyElision {
 		for (position in 0...block.instructions.length) {
 			var instruction = block.instructions[position].value;
 			switch instruction {
-				case NewObject(out, _):
+				case NewObject(out, _) | ValueInit(out):
 					fresh.set(out.id, true);
 				default:
 			}
@@ -440,7 +440,7 @@ class IrCopyElision {
 		for (block in fn.blocks)
 			for (located in block.instructions)
 				switch located.value {
-					case NewObject(out, _):
+					case NewObject(out, _) | ValueInit(out):
 						fresh.set(out.id, true);
 					default:
 				}
@@ -454,7 +454,15 @@ class IrCopyElision {
 					case ArraySet(_, _, _), GlobalSet(_, _), MemoryStore(_, _, _), CNativeCall(_, _, _), CallClosure(_, _, _):
 						ok = false;
 					case Call(_, callee, arguments):
-						var constructor = StringTools.endsWith(callee, ".new") && arguments.length > 0 && fresh.exists(arguments[0].id);
+						var target = byName.get(callee);
+						var constructor = target != null
+							&& (switch target.result {
+								case Void: true;
+								default: false;
+							})
+							&& StringTools.endsWith(callee, ".new")
+							&& arguments.length > 0
+							&& fresh.exists(arguments[0].id);
 						if (!storesNothing(callee, constructor, visiting, depth + 1))
 							ok = false;
 					case MethodCall(_, receiverValue, method, _, _):

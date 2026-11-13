@@ -74,7 +74,7 @@ class IrNonNullFacts {
 				switch located.value {
 					case ConstNull(out):
 						nulls.set(out.id, true);
-					case NewObject(out, _), StaticClosure(out, _), InstanceClosure(out, _, _):
+					case NewObject(out, _), ValueInit(out), StaticClosure(out, _), InstanceClosure(out, _, _):
 						fresh.set(out.id, true);
 					case BeginTry(_, _, _), EndTry(_, _), Catch(_):
 						hasTry = true;
@@ -187,7 +187,7 @@ class IrNonNullFacts {
 		if (receiver != null && (checkedDereferences || isExplicitCheck(instruction)))
 			facts.set(receiver.id, true);
 		switch instruction {
-			case NewObject(out, _), StaticClosure(out, _), InstanceClosure(out, _, _):
+			case NewObject(out, _), ValueInit(out), StaticClosure(out, _), InstanceClosure(out, _, _):
 				facts.set(out.id, true);
 			case Upcast(out, value):
 				if (facts.exists(value.id))

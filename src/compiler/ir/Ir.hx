@@ -141,6 +141,10 @@ enum IrInstruction {
 	MethodCall(output:IrValue, object:IrValue, methodName:String, arguments:Array<IrValue>, terminalReceiver:Bool);
 
 	NewObject(output:IrValue, typeName:String);
+
+	/** The default value of output.type; it has no observable identity or effects. */
+	ValueInit(output:IrValue);
+
 	FieldGet(output:IrValue, object:IrValue, fieldName:String);
 	FieldSet(object:IrValue, fieldName:String, value:IrValue);
 	ArrayGet(output:IrValue, array:IrValue, index:IrValue);

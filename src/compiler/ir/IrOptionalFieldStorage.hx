@@ -533,7 +533,7 @@ class IrOptionalFieldStorage {
 					{block: presentBlock.id, value: wrapped}
 				]);
 			case Obj(name) if (isValue(name)):
-				var value = builder.newObject(name),
+				var value = builder.valueInit(name),
 					object = objects.get(name);
 				if (object == null)
 					throw 'Missing value object "$name"';

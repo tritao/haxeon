@@ -108,7 +108,8 @@ class WasmBackendMain {
 				for (block in fn.blocks)
 					for (located in block.instructions)
 						switch located.value {
-							case NewObject(out, name) if (StringTools.startsWith(name, compiler.ir.IrOptionalScalarFlow.WRAPPER)):
+							case ValueInit(out)
+								if (StringTools.startsWith(compiler.ir.IrTypeTools.valueObjectName(out.type), compiler.ir.IrOptionalScalarFlow.WRAPPER)):
 								if (locals.get(out) == null)
 									throw "optional value place still allocates in the Wasm GC scalar clone";
 							default:
@@ -139,8 +140,9 @@ class WasmBackendMain {
 				for (block in fn.blocks)
 					for (located in block.instructions)
 						switch located.value {
-							case NewObject(out, name) if (name == "V"
-								|| StringTools.startsWith(name, compiler.ir.IrOptionalScalarFlow.WRAPPER)):
+							case ValueInit(out)
+								if (compiler.ir.IrTypeTools.valueObjectName(out.type) == "V"
+									|| StringTools.startsWith(compiler.ir.IrTypeTools.valueObjectName(out.type), compiler.ir.IrOptionalScalarFlow.WRAPPER)):
 								if (locals.get(out) == null)
 									throw "nullable value equality still allocates on Wasm GC";
 							default:
@@ -198,7 +200,7 @@ class WasmBackendMain {
 				for (block in lowered.blocks)
 					for (located in block.instructions)
 						switch located.value {
-							case NewObject(_, _):
+							case ValueInit(_):
 								throw "Reading and copying an inline value must not allocate a temporary";
 							default:
 						}
@@ -206,7 +208,7 @@ class WasmBackendMain {
 		if (!foundCopyWork)
 			throw "The inline value-copy fixture has no work function";
 		// Large generated functions can have a dominator chain deeper than the host interpreter's call stack.
-		var deep = new IrBuilder(), deepValue = deep.newObject("P");
+		var deep = new IrBuilder(), deepValue = deep.valueInit("P");
 		deep.fieldSet(deepValue, "x", deep.constInt(42));
 		for (_ in 0...1500) {
 			var next = deep.createBlock();
@@ -219,7 +221,7 @@ class WasmBackendMain {
 		for (block in deepResult.blocks)
 			for (located in block.instructions)
 				switch located.value {
-					case NewObject(_, _), FieldGet(_, _, _), FieldSet(_, _, _):
+					case NewObject(_, _), ValueInit(_), FieldGet(_, _, _), FieldSet(_, _, _):
 						throw "Deep value flow must be scalar-replaced";
 					default:
 				}
@@ -396,7 +398,7 @@ class WasmBackendMain {
 		var nestedProgram = Frontend.compile("@:value class RootChild { public final number:Int; public function new() number = 1; } @:value class RootParent { public final child:RootChild; public final tag:Int; public function new() { child = new RootChild(); tag = 2; } } function main():Int return new RootParent().tag;");
 		var nestedBuilder = new IrBuilder(),
 			nestedSource = nestedBuilder.argument("source", Obj("RootParent")),
-			nestedCopy = nestedBuilder.newObject("RootParent"),
+			nestedCopy = nestedBuilder.valueInit("RootParent"),
 			nestedChild = nestedBuilder.fieldGet(nestedSource, "child", Obj("RootChild"));
 		nestedBuilder.fieldGet(nestedSource, "tag", I32);
 		nestedBuilder.call("retain", [nestedCopy, nestedChild], Void);

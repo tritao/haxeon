@@ -61,6 +61,7 @@ private class FunctionScratch {
 
 	public var observableAccessSerial = 0;
 	public var observableConstructorInitialization:Bool;
+	public var valueConstructor:Null<String>;
 
 	public function new(isConstructor:Bool)
 		observableConstructorInitialization = isConstructor;
@@ -276,6 +277,9 @@ class IrGenerator {
 	public function generateCfg(fn:TypedFunction):CfgFunction {
 		var outer = scratch;
 		scratch = new FunctionScratch(fn.isConstructor);
+		var owner = fn.physicalOwner == null ? fn.owner : fn.physicalOwner;
+		if (fn.isConstructor && owner != null && facts.valueClasses.exists(owner))
+			scratch.valueConstructor = owner;
 		try {
 			var cfg = generateFunctionCfg(fn);
 			scratch = outer;
@@ -303,6 +307,11 @@ class IrGenerator {
 				{name: argument.name, type: argument.type};
 			}
 		];
+		if (scratch.valueConstructor != null) {
+			var valueType:IrType = Obj(scratch.valueConstructor);
+			localTypes.set("this", valueType);
+			builder.store("this", builder.valueInit(scratch.valueConstructor));
+		}
 		for (argument in fn.arguments) {
 			var type = lowerType(argument.type);
 			localTypes.set(argument.name, type);
@@ -318,7 +327,9 @@ class IrGenerator {
 				}
 		lowerStatements(fn.statements, builder, localTypes, fn.span.end);
 		if (!builder.isTerminated()) {
-			if ((switch (lowerType(fn.result)) {
+			if (scratch.valueConstructor != null)
+				builder.returnValue(builder.load("this", Obj(scratch.valueConstructor)));
+			else if ((switch (lowerType(fn.result)) {
 				case Void: true;
 				default: false;
 			}))
@@ -326,7 +337,8 @@ class IrGenerator {
 			else
 				throw 'Function ${fn.name} does not return on every path';
 		}
-		return new CfgFunction(fn.name, arguments, lowerType(fn.result), builder.blocks, localTypes, builder.valueCount(), builder.debugLocals);
+		return new CfgFunction(fn.name, arguments, scratch.valueConstructor == null ? lowerType(fn.result) : Obj(scratch.valueConstructor), builder.blocks,
+			localTypes, builder.valueCount(), builder.debugLocals);
 	}
 
 	function initializeLocal(name:String, value:CfgValue, builder:CfgBuilder, localTypes:Map<String, IrType>):Void {
@@ -671,8 +683,12 @@ class IrGenerator {
 					}
 				case TReturnVoid(_):
 					emitExitCleanups(builder, localTypes, 0, 0);
-					if (!builder.isTerminated())
-						builder.returnVoid();
+					if (!builder.isTerminated()) {
+						if (scratch.valueConstructor == null)
+							builder.returnVoid();
+						else
+							builder.returnValue(builder.load("this", Obj(scratch.valueConstructor)));
+					}
 				case TThrow(expression, _):
 					builder.throwValue(builder.toDyn(lowerExpression(expression, builder, localTypes)));
 				case TTry(tryBranch, catches, span):
@@ -1772,7 +1788,7 @@ class IrGenerator {
 		var object = flatValueObjects.get(name);
 		if (object == null)
 			throw 'Missing Flat value layout for "$name"';
-		var result = builder.newObject(name),
+		var result = builder.valueInit(name),
 			nextVisiting = visiting.concat([name]);
 		for (field in object.fields) {
 			var layout = field.nativeLayout;
@@ -1848,7 +1864,7 @@ class IrGenerator {
 
 	function copyFields(builder:CfgBuilder, source:CfgValue, layout:ValueCopyLayout, localTypes:Map<String, IrType>):CfgValue {
 		if (!copyMayBranch(layout)) {
-			var direct = builder.newObject(layout.name);
+			var direct = builder.valueInit(layout.name);
 			for (field in layout.fields) {
 				var value = builder.fieldGet(source, field.name, lowerType(field.type));
 				if (field.nested != null)
@@ -1857,7 +1873,7 @@ class IrGenerator {
 			}
 			return direct;
 		}
-		var copy = builder.newObject(layout.name),
+		var copy = builder.valueInit(layout.name),
 			sourceName = '$' + 'copy-source:${source.id}',
 			copyName = '$' + 'copy-result:${copy.id}',
 			objectType:IrType = Obj(layout.name);
@@ -2524,26 +2540,35 @@ class IrGenerator {
 					physicalName = switch resultType {
 						case Obj(name): name;
 						default: typeName;
-					},
-					object = builder.newObject(physicalName),
-					objectType:IrType = Obj(physicalName),
-					objectName = '$' + 'new-object:${expression.span.start}:${object.id}';
-				localTypes.set(objectName, objectType);
-				builder.store(objectName, object);
-				if (facts.observableStateOwner(physicalName) != null)
-					builder.call(ReactiveRuntimeClass + ".recordObservableCreation", [builder.toDyn(builder.load(objectName, objectType))], Void);
-				if (hasConstructor) {
-					var loweredArguments = lowerOperands(args, builder, localTypes),
-						constructorArgs:Array<CfgValue> = [builder.load(objectName, objectType)];
-					for (argument in loweredArguments)
-						constructorArgs.push(argument);
-					builder.call('$physicalName.new', constructorArgs, Void);
+					};
+				if (facts.valueClasses.exists(physicalName)) {
+					var constructed = hasConstructor ? builder.call('$physicalName.new', lowerOperands(args, builder, localTypes),
+						Obj(physicalName)) : builder.valueInit(physicalName);
+					switch resultType {
+						case Dyn: builder.toDyn(constructed);
+						default: constructed;
+					}
+				} else {
+					var object = builder.newObject(physicalName),
+						objectType:IrType = Obj(physicalName),
+						objectName = '$' + 'new-object:${expression.span.start}:${object.id}';
+					localTypes.set(objectName, objectType);
+					builder.store(objectName, object);
+					if (facts.observableStateOwner(physicalName) != null)
+						builder.call(ReactiveRuntimeClass + ".recordObservableCreation", [builder.toDyn(builder.load(objectName, objectType))], Void);
+					if (hasConstructor) {
+						var loweredArguments = lowerOperands(args, builder, localTypes),
+							constructorArgs:Array<CfgValue> = [builder.load(objectName, objectType)];
+						for (argument in loweredArguments)
+							constructorArgs.push(argument);
+						builder.call('$physicalName.new', constructorArgs, Void);
+					}
+					var constructed = builder.load(objectName, objectType);
+					(switch (resultType) {
+						case Dyn: true;
+						default: false;
+					}) ? builder.toDyn(constructed) : constructed;
 				}
-				var constructed = builder.load(objectName, objectType);
-				(switch (resultType) {
-					case Dyn: true;
-					default: false;
-				}) ? builder.toDyn(constructed) : constructed;
 			case TObjectLiteral(typeName, fields, isDynamic):
 				if (isDynamic && profile.dynamicObjectLiterals) {
 					var object = builder.call("__reflect_dynamic_object", [], IrType.Dyn),
@@ -2579,7 +2604,7 @@ class IrGenerator {
 					var physicalName = switch expression.type {
 						case TAnonymous(name, _): name;
 						default: typeName;
-					}, object = builder.newObject(physicalName), objectType:IrType = Obj(physicalName), objectName = '$'
+					}, object = facts.valueClasses.exists(physicalName) ? builder.valueInit(physicalName) : builder.newObject(physicalName), objectType:IrType = Obj(physicalName), objectName = '$'
 						+ 'object-literal:${expression.span.start}:${object.id}';
 					localTypes.set(objectName, objectType);
 					builder.store(objectName, object);
@@ -3286,7 +3311,7 @@ class IrGenerator {
 
 	function implicitArguments(fn:TypedFunction):Array<CfgArgument> {
 		var owner = fn.owner;
-		if (owner == null || fn.isStatic)
+		if (owner == null || fn.isStatic || scratch.valueConstructor != null)
 			return [];
 		return [{name: "this", type: Obj(fn.physicalOwner == null ? owner : fn.physicalOwner)}];
 	}
