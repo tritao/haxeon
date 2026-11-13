@@ -16,7 +16,7 @@ JSON
 export LD_LIBRARY_PATH="$root/out:$("$root/scripts/hashlink-path.sh")${LD_LIBRARY_PATH:+:$LD_LIBRARY_PATH}"
 fixtures=("$@")
 if [[ ${#fixtures[@]} == 0 ]]; then
-  fixtures=(UiEventPhaseMain WidgetIdCacheMain RetainedWidgetIdMain InteractionStateStoreMain ScopeFullFrameOwnershipMain ScopeLegacyCacheLifetimeMain ScopeLegacyReplacementMain ScopeInstanceLifetimeMain ScopeCachedNestedLifetimeMain ScopeRootStateMain ScopeVariantRootMain ScopeNodeFieldsMain ScopePatchOrderMain ScopeIncomingInteractionMain RoutingStateMain SelectionFocusMain MenuMeasurementMain IdSetMain StateStoreFlatMain ScopeRootBoundaryMain RenderScopeMain TrackedScopeMain EqualChildMain BoundTextMain BoundTextFailureMain BindingLifetimeMain TextIconMain IconButtonMain ButtonMain ScopeInputsMain FocusCaptureMain FocusDispatchAllocations)
+  fixtures=(UiEventPhaseMain ScopeResourceIdMain WidgetIdCacheMain RetainedWidgetIdMain InteractionStateStoreMain ScopeFullFrameOwnershipMain ScopeLegacyCacheLifetimeMain ScopeLegacyReplacementMain ScopeInstanceLifetimeMain ScopeCachedNestedLifetimeMain ScopeRootStateMain ScopeVariantRootMain ScopeNodeFieldsMain ScopePatchOrderMain ScopeIncomingInteractionMain RoutingStateMain SelectionFocusMain MenuMeasurementMain IdSetMain StateStoreFlatMain ScopeRootBoundaryMain RenderScopeMain TrackedScopeMain EqualChildMain BoundTextMain BoundTextFailureMain BindingLifetimeMain TextIconMain IconButtonMain ButtonMain ScopeInputsMain FocusCaptureMain FocusDispatchAllocations)
 fi
 for fixture in "${fixtures[@]}"; do
   for inline in 0 1; do
@@ -130,6 +130,31 @@ JS
                     exit 1
                 fi
                 echo "PASS: $invalid rejects string phase on $target, inline=$inline"
+            done
+        fi
+        if [[ $fixture == ScopeResourceIdMain ]]; then
+            for invalid in ScopeOwnerWidgetId ScopeOwnerInt WidgetStateScopeId; do
+                if HAXEON_INLINE="$inline" "$hl" "$compiler" "${options[@]}" --output="$tmp/invalid-$target" \
+                    --entry="$invalid" --root="$ui/tests/haxeon/negative" --root="$ui/haxe" \
+                    --root="$ui/bindings/haxe" --root="$root/packages/editor/src" --root="$root/packages/platform/src" \
+                    --ffi-interface="$platform_hxi" --ffi-projection="$root/packages/platform/bindings/nativekit.hxmap" \
+                    --ffi-interface="$net_hxi" --ffi-projection="$root/packages/platform/bindings/nativekit-net.hxmap" \
+                    --ffi-interface="$ui_hxi" --ffi-projection="$ui/bindings/nativekit-ui.hxmap" \
+                    "$ui/tests/haxeon/negative/$invalid.hx" > "$tmp/invalid.log" 2>&1; then
+                    echo "FAIL: $invalid mixed widget and scope IDs on $target" >&2
+                    exit 1
+                fi
+                case "$invalid" in
+                    ScopeOwnerWidgetId) method=scopeOwner ;;
+                    ScopeOwnerInt) method=touchScope ;;
+                    WidgetStateScopeId) method=contains ;;
+                esac
+                expected="E1009: Type mismatch for argument 1 to \"haxeon.ui.core.StateStore.$method\""
+                if ! rg -Fq "$expected" "$tmp/invalid.log"; then
+                    cat "$tmp/invalid.log" >&2
+                    exit 1
+                fi
+                echo "PASS: $invalid rejects mixed resource IDs on $target, inline=$inline"
             done
         fi
         echo "PASS: $fixture on $target, inline=$inline"

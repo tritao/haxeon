@@ -4,20 +4,20 @@ package haxeon.ui.core;
 class StateStore {
   final handles:Map<Int, State<Dynamic>> = new Map();
   /** A native scope is its own lifetime record, rather than a signal-valued state wrapper. */
-  final scopes:Map<Int, RenderScope> = new Map();
+  final scopes:Map<ScopeResourceId, RenderScope> = new Map();
   // A cached alternative owns its component instances even when their widget IDs match the visible alternative.
-  var nextScopeId:Int = -1;
+  var nextScopeId:Int = 1;
   final retainedWidgetScratch:IdSet = new IdSet(256);
 
   /** Resource ownership follows the current body, rather than a cache's initial flattened ID list. */
-  final ownedStates:Map<Int, Array<Int>> = new Map();
+  final ownedStates:Map<ResourceId, Array<ResourceId>> = new Map();
 
-  public function setOwnedStates(owner:Int, ids:Null<Array<Int>>):Void {
+  public function setOwnedStates(owner:ResourceId, ids:Null<Array<ResourceId>>):Void {
     if (ids == null) ownedStates.remove(owner);
     else ownedStates.set(owner, ids);
   }
-  public function ownedStateIds(owner:Int):Null<Array<Int>> return ownedStates.get(owner);
-  public function ownsResource(owner:Int, child:Int):Bool {
+  public function ownedStateIds(owner:ResourceId):Null<Array<ResourceId>> return ownedStates.get(owner);
+  public function ownsResource(owner:ResourceId, child:ResourceId):Bool {
     var ids = ownedStates.get(owner);
     if (ids != null) for (index in 0...ids.length) if (ids[index] == child) return true;
     return false;
@@ -29,15 +29,15 @@ class StateStore {
   final pathIds:Array<Int> = [];
   final managed:IdSet;
   /** Stable membership avoids copying all managed IDs on each frame. */
-  final managedIds:Array<Int> = [for (_ in 0...256) 0];
+  final managedIds:Array<ResourceId> = [for (_ in 0...256) new ResourceId(0)];
   var managedCount:Int = 0;
   /** Reuse the normal cleanup worklist; nested cleanup gets its own list. */
-  final staleScratch:Array<Int> = [];
+  final staleScratch:Array<ResourceId> = [];
   var sweeping:Bool = false;
   final frameUsed:IdSet;
   /** Scratch for usedIdsSince, reused so collecting a subtree's states allocates only the result. */
   final seenScratch:IdSet = new IdSet(256);
-  final frameUseOrder:Array<Int>;
+  final frameUseOrder:Array<ResourceId>;
   var frameUseCount:Int = 0;
   public var frameActive(default, null):Bool;
 
@@ -46,7 +46,7 @@ class StateStore {
     paths = new Map();
     managed = new IdSet(256);
     frameUsed = new IdSet();
-    frameUseOrder = [for (_ in 0...256) 0];
+    frameUseOrder = [for (_ in 0...256) new ResourceId(0)];
     frameActive = false;
   }
 
@@ -91,17 +91,19 @@ class StateStore {
 
   public function initialize<T>(id:WidgetId, initial:T):Void {
     if (id == null) throw "State requires a widget ID";
-    if (scopes.exists(id.value)) throw "A native scope already owns this resource ID";
     if (!handles.exists(id.value)) handles.set(id.value, new State<T>(this, id, initial));
     markUsed(id);
   }
 
   /** Reserve one native instance lifetime before its body captures descendant resource usage. */
-  public function beginScope():Int {
-    var id = nextScopeId;
-    while (scopes.exists(id) || frameUsed.has(id)) id = id == -0x7fffffff ? -1 : id - 1;
-    nextScopeId = id == -0x7fffffff ? -1 : id - 1;
-    markUsedValue(id);
+  public function beginScope():ScopeResourceId {
+    var id = new ScopeResourceId(nextScopeId);
+    while (scopes.exists(id) || frameUsed.has(ResourceId.scope(id).rawValue())) {
+      nextScopeId = nextScopeId == 0x7fffffff ? 1 : nextScopeId + 1;
+      id = new ScopeResourceId(nextScopeId);
+    }
+    nextScopeId = nextScopeId == 0x7fffffff ? 1 : nextScopeId + 1;
+    markUsedResource(ResourceId.scope(id));
     return id;
   }
 
@@ -109,7 +111,8 @@ class StateStore {
   @:allow(haxeon.ui.core.WidgetIdCache) function retainedWidgetIds(mounted:Map<Int, RenderNode>):IdSet {
     retainedWidgetScratch.clear();
     for (index in 0...managedCount) {
-      var owner = scopes.get(managedIds[index]);
+      var id = managedIds[index];
+      var owner = id.isScope() ? scopes.get(id.scopeId()) : null;
       if (owner == null || owner.disposed) continue;
       retainedWidgetScratch.add(owner.identityId);
       if (owner.root != null && mounted.get(owner.root.id.value) != owner.root) retainBodyWidgetIds(owner.root,
@@ -123,18 +126,18 @@ class StateStore {
     for (child in node.children) retainBodyWidgetIds(child, mounted);
   }
 
-  public function scopeOwner(id:Int):Null<RenderScope> return scopes.get(id);
+  public function scopeOwner(id:ScopeResourceId):Null<RenderScope> return scopes.get(id);
 
   /** Install one instance owner; cached instances with the same widget identity remain independent. */
   public function installScope(owner:RenderScope):Void {
     var id = owner.resourceId;
-    if (handles.exists(id)) throw "Native scope resource has a different owner type";
     var previous = scopes.get(id);
     if (previous != null && previous != owner) throw "Native scope resource already has an owner";
     scopes.set(id, owner);
-    if (!managed.has(id)) {
-      managed.add(id);
-      appendManaged(id);
+    var resource = ResourceId.scope(id);
+    if (!managed.has(resource.rawValue())) {
+      managed.add(resource.rawValue());
+      appendManaged(resource);
     }
   }
 
@@ -143,8 +146,9 @@ class StateStore {
     var id = owner.resourceId, current = scopes.get(id);
     if (current != null && current != owner) return;
     scopes.remove(id);
-    ownedStates.remove(id);
-    managed.remove(id);
+    var resource = ResourceId.scope(id);
+    ownedStates.remove(resource);
+    managed.remove(resource.rawValue());
     if (!sweeping && managedCount > 256 && managedCount > managed.count() * 2) compactManaged();
   }
 
@@ -153,7 +157,7 @@ class StateStore {
     seenScratch.clear();
     while (read < managedCount) {
       var id = managedIds[read++];
-      if (managed.has(id) && seenScratch.add(id)) managedIds[write++] = id;
+      if (managed.has(id.rawValue()) && seenScratch.add(id.rawValue())) managedIds[write++] = id;
     }
     managedCount = write;
   }
@@ -169,24 +173,24 @@ class StateStore {
   public function usageMarker():Int return frameUseCount;
 
   /** Returns state IDs first touched after a usage marker. */
-  public function usedIdsSince(marker:Int, ?previous:Array<Int>):Array<Int> {
+  public function usedIdsSince(marker:Int, ?previous:Array<ResourceId>):Array<ResourceId> {
     var start = marker < 0 ? 0 : marker > frameUseCount ? frameUseCount : marker;
     var count = 0, same = previous != null;
     seenScratch.clear();
     for (index in start...frameUseCount) {
       var id = frameUseOrder[index];
-      if (!seenScratch.add(id)) continue;
+      if (!seenScratch.add(id.rawValue())) continue;
       if (previous == null || count >= previous.length || previous[count] != id) same = false;
       count++;
     }
     if (previous != null && same && previous.length == count) return previous;
-    var result:Array<Int> = [];
+    var result:Array<ResourceId> = [];
     result.resize(count);
     seenScratch.clear();
     var position = 0;
     for (index in start...frameUseCount) {
       var id = frameUseOrder[index];
-      if (seenScratch.add(id)) result[position++] = id;
+      if (seenScratch.add(id.rawValue())) result[position++] = id;
     }
     return result;
   }
@@ -203,10 +207,10 @@ class StateStore {
   }
 
   /** Keeps state-backed resources for a retained, temporarily detached subtree. */
-  public function retain(ids:Array<Int>, recordUsage:Bool = true):Void {
+  public function retain(ids:Array<ResourceId>, recordUsage:Bool = true):Void {
     if (ids == null) return;
-    for (id in ids) if (handles.exists(id) || scopes.exists(id)) {
-      if (frameActive) frameUsed.add(id);
+    for (id in ids) if (id.isScope() ? scopes.exists(id.scopeId()) : handles.exists(id.payload())) {
+      if (frameActive) frameUsed.add(id.rawValue());
       if (recordUsage && (frameActive || usageCaptures > 0)) appendUsage(id);
       var children = ownedStates.get(id);
       if (children != null) retain(children, false);
@@ -217,14 +221,15 @@ class StateStore {
   public function touch(id:WidgetId):Void {
     if (id == null || !contains(id)) throw "Widget state has not been initialized";
     markUsed(id);
-    var children = ownedStates.get(id.value);
+    var children = ownedStates.get(ResourceId.widget(id));
     if (children != null) retain(children, false);
   }
 
-  public function touchScope(id:Int):Void {
+  public function touchScope(id:ScopeResourceId):Void {
     if (!scopes.exists(id)) throw "Native scope has not been initialized";
-    markUsedValue(id);
-    var children = ownedStates.get(id);
+    var resource = ResourceId.scope(id);
+    markUsedResource(resource);
+    var children = ownedStates.get(resource);
     if (children != null) retain(children, false);
   }
 
@@ -236,27 +241,32 @@ class StateStore {
   public function endFrame():Void {
     if (!frameActive) return;
     var nested = sweeping;
-    var stale:Array<Int> = nested ? [] : staleScratch;
+    var stale:Array<ResourceId> = nested ? [] : staleScratch;
     stale.resize(0);
     sweeping = true;
     for (index in 0...managedCount) {
       var id = managedIds[index];
-      if (!frameUsed.has(id)) stale.push(id);
+      if (!frameUsed.has(id.rawValue())) stale.push(id);
     }
     var failure:Dynamic = null;
     for (id in stale) {
-      var disposer = disposers.get(id);
       try {
-        var owner = scopes.get(id);
-        if (owner != null) owner.dispose();
-        if (disposer != null) disposer();
+        if (id.isScope()) {
+          var owner = scopes.get(id.scopeId());
+          if (owner != null) owner.dispose();
+        } else {
+          var disposer = disposers.get(id.payload());
+          if (disposer != null) disposer();
+        }
       } catch (error:Dynamic) {
         if (failure == null) failure = error;
       }
-      disposers.remove(id);
-      managed.remove(id);
-      handles.remove(id);
-      scopes.remove(id);
+      managed.remove(id.rawValue());
+      if (id.isScope()) scopes.remove(id.scopeId());
+      else {
+        disposers.remove(id.payload());
+        handles.remove(id.payload());
+      }
       ownedStates.remove(id);
     }
     if (stale.length > 0) compactManaged();
@@ -298,8 +308,9 @@ class StateStore {
   /** Registers a resource cleanup callback and enables per-frame liveness cleanup. */
   public function onUnmount(id:WidgetId, disposer:Void -> Void):Void {
     onDispose(id, disposer);
-    managed.add(id.value);
-    appendManaged(id.value);
+    var resource = ResourceId.widget(id);
+    managed.add(resource.rawValue());
+    appendManaged(resource);
   }
 
   /** Releases registered widget resources and clears the store. */
@@ -309,7 +320,7 @@ class StateStore {
     var failure:Dynamic = null;
     for (index in 0...managedCount) {
       var id = managedIds[index];
-      var owner = scopes.get(id);
+      var owner = id.isScope() ? scopes.get(id.scopeId()) : null;
       try {
         if (owner != null) owner.dispose();
       } catch (error:Dynamic) {
@@ -338,22 +349,22 @@ class StateStore {
     if (failure != null) throw failure;
   }
 
-  function appendManaged(id:Int):Void {
+  function appendManaged(id:ResourceId):Void {
     if (!sweeping && managedCount == managedIds.length && managedCount > managed.count()) compactManaged();
     if (managedCount == managedIds.length) managedIds.resize(managedIds.length * 2);
     managedIds[managedCount++] = id;
   }
 
   /** Logical length is independent of capacity, including nested usage captures. */
-  function appendUsage(id:Int):Void {
+  function appendUsage(id:ResourceId):Void {
     if (frameUseCount == frameUseOrder.length) frameUseOrder.resize(frameUseOrder.length * 2);
     frameUseOrder[frameUseCount++] = id;
   }
 
-  function markUsed(id:WidgetId):Void markUsedValue(id.value);
+  function markUsed(id:WidgetId):Void markUsedResource(ResourceId.widget(id));
 
-  function markUsedValue(id:Int):Void {
-    if (frameActive) frameUsed.add(id);
+  function markUsedResource(id:ResourceId):Void {
+    if (frameActive) frameUsed.add(id.rawValue());
     if (frameActive || usageCaptures > 0) appendUsage(id);
   }
 }

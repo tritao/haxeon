@@ -1,4 +1,5 @@
 import haxeon.ui.core.StateStore;
+import haxeon.ui.core.ResourceId;
 import haxeon.ui.core.WidgetId;
 
 /** Usage spans and resource sweep lists retain capacity across captures, compaction and refills. */
@@ -20,11 +21,12 @@ class StateStoreFlatMain {
     store.touch(ids[20]);
     store.touch(ids[20]);
     var child = store.usedIdsSince(inner);
-    if (child.length != 1 || child[0] != ids[20].value) return 1;
+    if (child.length != 1 || child[0] != ResourceId.widget(ids[20])) return 1;
     store.finishUsage(inner);
     store.touch(ids[30]);
     var parent = store.usedIdsSince(outer);
-    if (parent.length != 2 || parent[0] != ids[10].value || parent[1] != ids[30].value) return 2;
+    if (parent.length != 2
+      || parent[0] != ResourceId.widget(ids[10]) || parent[1] != ResourceId.widget(ids[30])) return 2;
     store.finishUsage(outer);
     for (index in 0...400) if (index % 2 == 0) store.touch(ids[index]);
     store.endFrame();

@@ -9,6 +9,7 @@ import haxeon.ui.component.TrackedScope;
 import haxeon.ui.core.BuildContext;
 import haxeon.ui.core.Key;
 import haxeon.ui.core.RenderNode;
+import haxeon.ui.core.ResourceId;
 import haxeon.ui.core.UiContext;
 import haxeon.ui.core.View;
 import haxeon.ui.style.StyleState;
@@ -21,8 +22,8 @@ import haxeon.ui.style.StyleState;
   final flag:StyleState;
   var incoming:RenderNode;
   var outgoing:RenderNode;
-  var incomingIds:Array<Int>;
-  var outgoingIds:Array<Int>;
+  var incomingIds:Array<ResourceId>;
+  var outgoingIds:Array<ResourceId>;
 
   public function new(fresh:Bool, flag:StyleState) {
     this.fresh = fresh;

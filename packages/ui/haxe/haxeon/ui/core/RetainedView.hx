@@ -63,10 +63,10 @@ private class RetainedViewCache {
     keyA:Int,
     keyB:Int,
     root:RenderNode,
-    usedStates:Null<Array<Int>>,
+    usedStates:Null<Array<ResourceId>>,
     interactions:InteractionStateSnapshot,
     observed:Dependencies,
-    previousStates:Null<Array<Int>>
+    previousStates:Null<Array<ResourceId>>
   ):Void {
     var previous = entry;
     if (previous != null) {
@@ -86,8 +86,8 @@ private class RetainedViewEntry {
   final keyA:Int;
   final keyB:Int;
   public var root(default, null):RenderNode;
-  public var stateIds(default, null):Array<Int>;
-  final usedStates:Array<Int>;
+  public var stateIds(default, null):Array<ResourceId>;
+  final usedStates:Array<ResourceId>;
   public final interactions:InteractionStateSnapshot;
   /** Signal and Observable fields read while building the subtree. */
   public final observed:Dependencies;
@@ -96,10 +96,10 @@ private class RetainedViewEntry {
     keyA:Int,
     keyB:Int,
     root:RenderNode,
-    usedStates:Null<Array<Int>>,
+    usedStates:Null<Array<ResourceId>>,
     interactions:InteractionStateSnapshot,
     observed:Dependencies,
-    previousStates:Null<Array<Int>>
+    previousStates:Null<Array<ResourceId>>
   ) {
     this.keyA = keyA;
     this.keyB = keyB;
@@ -116,7 +116,7 @@ private class RetainedViewEntry {
   public function replaceRoot(next:RenderNode):Void root = next;
 
   /** Nested self-updating widgets may replace resource state IDs without rebuilding this cache entry. */
-  public function refreshStateIds():Array<Int> {
+  public function refreshStateIds():Array<ResourceId> {
     stateIds = interactions.appendStateIds(usedStates, stateIds);
     return stateIds;
   }

@@ -161,8 +161,8 @@ private class RetainedVariantEntry {
   final keyB:Int;
   public final scope:String;
   public var root:RenderNode;
-  public var stateIds(default, null):Array<Int>;
-  final usedStateIds:Array<Int>;
+  public var stateIds(default, null):Array<ResourceId>;
+  final usedStateIds:Array<ResourceId>;
   public final interactions:InteractionStateSnapshot;
   public final observed:Dependencies;
   public final dirty:Bool;
@@ -177,12 +177,12 @@ private class RetainedVariantEntry {
     keyB:Int,
     scope:String,
     root:RenderNode,
-    ids:Array<Int>,
+    ids:Array<ResourceId>,
     interactions:InteractionStateSnapshot,
     observed:Dependencies,
     context:BuildContext,
     dirty:Bool,
-    previousStateIds:Null<Array<Int>>
+    previousStateIds:Null<Array<ResourceId>>
   ) {
     this.keyA = keyA;
     this.keyB = keyB;
@@ -198,7 +198,7 @@ private class RetainedVariantEntry {
   }
 
   /** Nested self-updating widgets may replace resource IDs while this variant stays cached. */
-  public function refreshStateIds():Array<Int> {
+  public function refreshStateIds():Array<ResourceId> {
     stateIds = interactions.appendStateIds(usedStateIds, stateIds);
     return stateIds;
   }

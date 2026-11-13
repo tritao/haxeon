@@ -23,6 +23,7 @@ import haxeon.ui.TextLayout;
 import haxeon.ui.TextStyle;
 import haxeon.ui.TextWrap;
 import haxeon.ui.core.BuildContext;
+import haxeon.ui.core.ResourceId;
 import haxeon.ui.core.InteractionStateSnapshot;
 import haxeon.ui.core.Key;
 import haxeon.ui.core.KeyScope;
@@ -741,7 +742,7 @@ private class DockPanelCache {
     keyA:Int,
     keyB:Int,
     root:RenderNode,
-    stateIds:Array<Int>,
+    stateIds:Array<ResourceId>,
     interactions:InteractionStateSnapshot,
     observed:haxeon.ui.core.Dependencies,
     ?targets:Array<DockDropTarget>,
@@ -807,7 +808,7 @@ private class DockPanelCacheEntry {
   final keyA:Int;
   final keyB:Int;
   public var root(default, null):RenderNode;
-  public final stateIds:Array<Int>;
+  public final stateIds:Array<ResourceId>;
   /** Drop targets the build registered; a hit replays them because the interaction forgets them every frame. */
   public final targets:Array<DockDropTarget>;
   public final tabTargets:Array<DockTabDropTarget>;
@@ -824,7 +825,7 @@ private class DockPanelCacheEntry {
     keyA:Int,
     keyB:Int,
     root:RenderNode,
-    stateIds:Array<Int>,
+    stateIds:Array<ResourceId>,
     interactions:InteractionStateSnapshot,
     observed:haxeon.ui.core.Dependencies,
     ?targets:Array<DockDropTarget>,

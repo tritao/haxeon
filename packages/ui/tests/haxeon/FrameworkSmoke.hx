@@ -4838,13 +4838,14 @@ class FrameworkSmoke {
     store.endFrame();
     store.beginFrame();
     var parentMarker = store.usageMarker();
-    store.retain([id.value]);
+    store.retain([haxeon.ui.core.ResourceId.widget(id)]);
     var parentIds = store.usedIdsSince(parentMarker);
     store.endFrame();
     store.beginFrame();
     store.retain(parentIds);
     store.endFrame();
-    var retained = parentIds.length == 1 && parentIds[0] == id.value && store.contains(id) && disposals == 0;
+    var retained = parentIds.length == 1
+      && parentIds[0] == haxeon.ui.core.ResourceId.widget(id) && store.contains(id) && disposals == 0;
     store.beginFrame();
     store.endFrame();
     return retained && !store.contains(id) && disposals == 1;

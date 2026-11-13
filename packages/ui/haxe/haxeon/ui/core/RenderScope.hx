@@ -18,7 +18,7 @@ class RenderScope extends ReactiveDependencySet {
 
   final context:BuildContext;
 
-  public final resourceId:Int;
+  public final resourceId:ScopeResourceId;
   public final identityId:Int;
 
   @:allow(haxeon.ui.core.BuildContext) var mounted:Bool = true;
@@ -29,7 +29,7 @@ class RenderScope extends ReactiveDependencySet {
   @:allow(haxeon.ui.core.UiContext) var builtEpoch:Int = 0;
 
   public function new(
-    resourceId:Int,
+    resourceId:ScopeResourceId,
     identityId:Int,
     context:BuildContext,
     component:ScopeView,
@@ -38,7 +38,7 @@ class RenderScope extends ReactiveDependencySet {
     text:Array<ResolvedTextStyle>
   ) {
     super();
-    if (resourceId >= 0 || identityId <= 0 || context == null
+    if (resourceId.rawValue() <= 0 || identityId <= 0 || context == null
       || component == null) throw "A render scope requires an identity, lifetime, context and component";
     this.resourceId = resourceId;
     this.identityId = identityId;
@@ -162,7 +162,10 @@ class RenderScope extends ReactiveDependencySet {
   public function retainedByParent():Bool {
     var ancestor = parentScope;
     while (ancestor != null) {
-      if (!ancestor.disposed && context.stateStore.ownsResource(ancestor.resourceId, resourceId)) return true;
+      if (!ancestor.disposed && context.stateStore.ownsResource(
+        ResourceId.scope(ancestor.resourceId),
+        ResourceId.scope(resourceId)
+      )) return true;
       ancestor = ancestor.parentScope;
     }
     return false;

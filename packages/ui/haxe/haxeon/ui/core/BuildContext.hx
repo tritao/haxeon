@@ -1181,9 +1181,9 @@ class BuildContext {
       );
       var ownedIds = stateStore.usageMarker() == marker ? null : stateStore.usedIdsSince(
         marker,
-        stateStore.ownedStateIds(owner.resourceId)
+        stateStore.ownedStateIds(ResourceId.scope(owner.resourceId))
       );
-      stateStore.setOwnedStates(owner.resourceId, ownedIds);
+      stateStore.setOwnedStates(ResourceId.scope(owner.resourceId), ownedIds);
       stateStore.finishUsage(marker);
       stateStore.retain(ownedIds, false);
       capture.truncate(dependencyMark);
@@ -1426,13 +1426,14 @@ class BuildContext {
   }
 
   /** Returns state IDs touched after a retained subtree build marker. */
-  public function stateIdsUsedSince(marker:Int, ?previous:Array<Int>):Array<Int> return stateStore.usedIdsSince(
-    marker,
-    previous
-  );
+  public function stateIdsUsedSince(marker:Int,
+    ?previous:Array<ResourceId>):Array<ResourceId> return stateStore.usedIdsSince(
+      marker,
+      previous
+    );
 
   /** Keeps state-backed resources alive for a retained subtree this frame. */
-  public function retainStateIds(ids:Array<Int>, bubbleToEnclosingBuild:Bool = false):Void stateStore.retain(
+  public function retainStateIds(ids:Array<ResourceId>, bubbleToEnclosingBuild:Bool = false):Void stateStore.retain(
     ids,
     bubbleToEnclosingBuild || activeUpdatingBuild == null
   );
@@ -1613,8 +1614,8 @@ private class RetainedEditCache {
 
 /** Dependencies of a composite or stateful updater; leaf controls need no additional capture record. */
 class UpdatingDependencies {
-  public var allStateIds:Null<Array<Int>>;
-  public var stateIds:Null<Array<Int>>;
+  public var allStateIds:Null<Array<ResourceId>>;
+  public var stateIds:Null<Array<ResourceId>>;
   public var observed:Null<Dependencies>;
   public var children:Null<InteractionStateSnapshot>;
 

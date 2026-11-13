@@ -1251,6 +1251,41 @@ retention scenarios, budgets that may only go down, memory runs, compiler suites
    byte. The `bytes` type alone is missing 16 sampled bytes. No subtraction or retry is accepted and
    no complete 22-action comparison is claimed. See `undo-3d8a96e58-census-accounting-failure.json`.
 
+   **Reflected-copy compiler baseline retired (`c6da3300b`).** Fresh compilers on this base pass all 48
+   configurations of WidgetIdCache, flat state, routing, focus dispatch, hidden-body IDs, nested scope lifetime,
+   patch ordering and incoming interactions: HashLink, Wasm32 and Wasm GC with inlining off/on. The 24 explicit
+   Wasm allocation checks also pass. The missing `recordObservableCreation` callee is no longer an accepted
+   baseline failure; the earlier `3d8a96e58` reports are historical. DATA1 evidence:
+   `c6da3300b-retired-baseline-focused-summary.json` and `compiler-baseline-exceptions-current.json`.
+   The separate HashLink census accounting failure remains unresolved; this compiler fix does not waive it.
+
+   **Typed scope resources (implementation under validation).** Replace the negative-number namespace with
+   `ScopeResourceId`, an erased integer abstract accepted by scope-owner APIs. Widget APIs continue to take
+   `WidgetId`. Mixed ownership and liveness lists use the separate erased `ResourceId`: its low bit selects
+   widget or scope ownership and its remaining 31 bits hold the payload. Decode with an unsigned shift;
+   the encoded sign is payload, never a domain test. This preserves the existing ID range without allocating
+   wrapper objects, adding a map per component, or retaining an integer overload. Scope and widget maps can
+   independently contain the same numeric payload. Resource cleanup selects the domain before accessing
+   either map, so disposing one cannot erase the other.
+   The regression covers equal payloads, parent retention, independent disposal and counter wrap; negative
+   compile fixtures reject raw integers and widget/scope mixing at the public APIs. A cold 1,024-entry
+   container comparison on `c6da3300b` measures identical typed/plain costs with inlining off/on: HashLink
+   62 objects / 66,192 bytes, Wasm32 18 / 24,528, and Wasm GC 50 objects (engine byte sizes are not exposed).
+   This supplements the zero-allocation warmed access probes; it does not replace the component gates or
+   the unchanged-action census requirement. The full component matrix passes 198 positive configurations,
+   30 expected compile failures and 32 explicit zero-allocation checks, with unchanged source inputs and no
+   compiler-baseline skips. On matched `c6da3300b` editor modules, both versions pass three-cycle undo,
+   tab-matrix and component-panel scenarios with fresh-mount verification every frame (telemetry steps
+   cover indices 0 through 8). This proves behavior, not allocation acceptance. Tier 1 passes
+   907 tests with zero failures. The full 22-action census remains pending; the port is unpublished. All 15 editor actions have identical
+   object and byte counts against the matched untyped-resource checkpoint on this compiler. This is
+   per-family evidence, not acceptance against the previous pushed head; the pilot accounting failure
+   and the undo return-tab increases remain unresolved. See
+   `scope-id-c6da3300b-editor-15-comparison.json`. See also
+   `scope-id-c6da3300b-editor-verification.json` and `scope-id-c6da3300b-paired-build-audit.json`.
+   DATA1 evidence: `scope-id-cold-c6da3300b-summary.json`,
+   `typed-scope-id-c6da3300b-frozen-inputs.json`, and `typed-scope-id-c6da3300b-component-model-summary.json`.
+
    **Independent review corrections (local, before renewed gates).** The body-root batch `0892af06d` had four
    reproduced correctness defects. `ScopeRootStateMain` overflowed recursive `StateStore.retain` for a Checkbox
    with `onChange`; the actual TextField fixture with loaded fonts threw "Native scope resource has a different

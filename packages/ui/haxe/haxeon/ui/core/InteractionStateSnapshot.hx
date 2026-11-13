@@ -81,14 +81,14 @@ class InteractionStateSnapshot {
     return false;
   }
 
-  public function appendStateIds(ids:Null<Array<Int>>, ?previous:Array<Int>):Null<Array<Int>> {
+  public function appendStateIds(ids:Null<Array<ResourceId>>, ?previous:Array<ResourceId>):Null<Array<ResourceId>> {
     var count = ids == null ? 0 : ids.length;
     for (entry in updatingBuilds) {
       var dependencies = entry.dependencies;
       if (dependencies != null && dependencies.allStateIds != null) count += dependencies.allStateIds.length;
     }
     if (count == 0) return ids;
-    var result:Null<Array<Int>> = null, position = 0;
+    var result:Null<Array<ResourceId>> = null, position = 0;
     if (previous == null || previous.length != count) {
       result = [];
       result.resize(count);

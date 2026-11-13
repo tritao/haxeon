@@ -1,6 +1,7 @@
 package haxeon.ui.component;
 
 import Equatable;
+import haxeon.ui.core.ResourceId;
 import haxeon.ui.core.BuildContext;
 import haxeon.ui.core.Dependencies;
 import haxeon.ui.core.InteractionStateSnapshot;
@@ -81,8 +82,8 @@ private class EqualChildEntry < T:Equatable > {
   public final width:Float;
   public final height:Float;
   public var root:RenderNode;
-  final used:Array<Int>;
-  public var stateIds:Array<Int>;
+  final used:Array<ResourceId>;
+  public var stateIds:Array<ResourceId>;
   public final interactions:InteractionStateSnapshot;
   public final reads:Dependencies;
 
@@ -92,10 +93,10 @@ private class EqualChildEntry < T:Equatable > {
     width:Float,
     height:Float,
     root:RenderNode,
-    used:Null<Array<Int>>,
+    used:Null<Array<ResourceId>>,
     interactions:InteractionStateSnapshot,
     reads:Dependencies,
-    previous:Null<Array<Int>>
+    previous:Null<Array<ResourceId>>
   ) {
     this.input = input;
     this.styleRevision = styleRevision;
@@ -107,7 +108,7 @@ private class EqualChildEntry < T:Equatable > {
     this.reads = reads;
     stateIds = interactions.appendStateIds(this.used, previous);
   }
-  public function refreshStateIds():Array<Int> {
+  public function refreshStateIds():Array<ResourceId> {
     stateIds = interactions.appendStateIds(used, stateIds);
     return stateIds;
   }
