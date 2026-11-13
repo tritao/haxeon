@@ -2436,14 +2436,21 @@ class BodyTyper {
 	 */
 	function expectedEnumAbstractValue(name:String, expectedType:Null<CompilerType>, span:SourceSpan):Null<TypedExpression> {
 		var valueName = lastPathSegment(name), expected = expectedType;
-		if (expected != null) switch expected { case TNullable(inner): expected = inner; default: }
+		if (expected != null)
+			switch expected {
+				case TNullable(inner):
+					expected = inner;
+				default:
+			}
 		var owner = expected == null ? session.enumAbstractConstantOwner : switch expected {
 			case TAbstract(name, _, _) if (session.enumAbstractDecls.exists(name)): name;
 			default: session.enumAbstractConstantOwner;
 		};
 		var declaration = owner == null ? null : session.enumAbstractDecls.get(owner);
-		if (declaration != null) for (value in declaration.values)
-			if (value.name == valueName) return EnumAbstractValues.typed(this, declaration, value);
+		if (declaration != null)
+			for (value in declaration.values)
+				if (value.name == valueName)
+					return EnumAbstractValues.typed(this, declaration, value);
 		return null;
 	}
 

@@ -109,22 +109,31 @@ class CallResolver {
 
 	/** Resolve an abstract's declared @:op method using the semantic operand types. */
 	public function typeAbstractOperator(symbol:String, operands:Array<TypedExpression>, span:SourceSpan, scope:Scope):Null<TypedExpression> {
-		if ((symbol == "|" || symbol == "&") && operands.length == 2) for (operand in operands) switch operand.type {
-			case TAbstract(owner, _, _):
-				var declaration = session.enumAbstractDecls.get(owner);
-				if (declaration != null && FlagsGenerator.conforms(session, declaration)) {
-					if (!sameType(operands[0].type, operand.type) || !sameType(operands[1].type, operand.type))
-						fail("E1010", "Flags operators require two values of the same flags type", span);
-					return new TypedExpression(TCall(FlagsGenerator.request(session, owner, symbol == "|" ? "$or" : "$and", span), operands), operand.type, span);
+		if ((symbol == "|" || symbol == "&") && operands.length == 2)
+			for (operand in operands)
+				switch operand.type {
+					case TAbstract(owner, _, _):
+						var declaration = session.enumAbstractDecls.get(owner);
+						if (declaration != null && FlagsGenerator.conforms(session, declaration)) {
+							if (!sameType(operands[0].type, operand.type) || !sameType(operands[1].type, operand.type))
+								fail("E1010", "Flags operators require two values of the same flags type", span);
+							return new TypedExpression(TCall(FlagsGenerator.request(session, owner, symbol == "|" ? "$or" : "$and", span), operands),
+								operand.type, span);
+						}
+					default:
 				}
-			default:
-		}
 
 		var owners:Array<String> = [];
 		for (operand in operands)
 			switch operand.type {
 				case TAbstract(name, _, underlying):
-					if (((switch (underlying) { case TInt: true; default: false; }) || (switch (underlying) { case TFloat: true; default: false; })) && owners.indexOf(name) < 0)
+					if (((switch (underlying) {
+						case TInt: true;
+						default: false;
+					}) || (switch (underlying) {
+						case TFloat: true;
+						default: false;
+					})) && owners.indexOf(name) < 0)
 						owners.push(name);
 				default:
 			}
@@ -136,7 +145,8 @@ class CallResolver {
 		}> = null, ambiguous:Null<String> = null;
 		for (owner in owners) {
 			var declaration = session.declarations.abstractDeclaration(owner);
-			if (declaration == null) throw 'Missing abstract declaration "$owner"';
+			if (declaration == null)
+				throw 'Missing abstract declaration "$owner"';
 			for (method in declaration.methods) {
 				if (!method.isStatic || method.arguments.length != operands.length || method.metadata == null)
 					continue;
@@ -175,7 +185,10 @@ class CallResolver {
 			fail("E1010", 'Ambiguous abstract operator "$symbol" between "${selected.key}" and "$ambiguous"', span);
 		var resultType = lowerType(selected.method.result);
 		if ((symbol == "<" || symbol == "<=" || symbol == ">" || symbol == ">=" || symbol == "==" || symbol == "!=")
-			&& (switch (resultType) { case TBool: false; default: true; }))
+			&& (switch (resultType) {
+				case TBool: false;
+				default: true;
+			}))
 			fail("E1011", 'Abstract comparison operator "$symbol" must return Bool', selected.method.span);
 		var arguments = [
 			for (index in 0...operands.length)
@@ -390,7 +403,10 @@ class CallResolver {
 				fail("E1022", 'Flat value "$name" has no layout for ABI target "${session.nativeAbiTarget}"', span);
 			return layout.size;
 		}
-		if ((switch (type) { case TDynamic: true; default: false; })) {
+		if ((switch (type) {
+			case TDynamic: true;
+			default: false;
+		})) {
 			var context = session.currentContext, substitutions = [
 				for (parameter in context.typeSubstitutions.keys())
 					'$parameter=${Std.string(context.typeSubstitutions.get(parameter))}'
@@ -516,7 +532,10 @@ class CallResolver {
 			case Lambda(arguments, _, _, _):
 				var annotated = true;
 				for (argument in arguments)
-					if ((switch (argument.type) { case InferredType: true; default: false; }))
+					if ((switch (argument.type) {
+						case InferredType: true;
+						default: false;
+					}))
 						annotated = false;
 				annotated;
 			default:
@@ -600,14 +619,16 @@ class CallResolver {
 		var enumMethod = EnumConformanceMethods.method(session, receiver.type, name);
 		if (enumMethod != null) {
 			if (name == "equals") {
-				if (arguments.length != 1) fail("E1008", 'Method "equals" expects 1 argument, got ${arguments.length}', span);
+				if (arguments.length != 1)
+					fail("E1008", 'Method "equals" expects 1 argument, got ${arguments.length}', span);
 				var other = coerce(typeExpression(arguments[0], scope, receiver.type, false), receiver.type, "enum equality operand", "E1009");
 				EnumEqualityGenerator.request(session, receiver.type, session.currentContext.name, span);
 				session.invalidateUnknownCall(scope);
 				return new TypedExpression(TCall(EnumEqualityGenerator.equalsName(receiver.type), [receiver, other]), TBool, span);
 			}
 			if (name == "hash") {
-				if (arguments.length != 0) fail("E1008", 'Method "hash" expects 0 arguments, got ${arguments.length}', span);
+				if (arguments.length != 0)
+					fail("E1008", 'Method "hash" expects 0 arguments, got ${arguments.length}', span);
 				HashGenerator.request(session, receiver.type, session.currentContext.name, span);
 				session.invalidateUnknownCall(scope);
 				return new TypedExpression(TCall(HashGenerator.hashName(receiver.type), [receiver]), TInt, span);
@@ -616,11 +637,13 @@ class CallResolver {
 			switch receiver.type {
 				case TInstance(NominalKind.Enum, owner, typeArguments):
 					var declaration = session.enumDecls.get(owner);
-					if (declaration == null) throw 'Missing enum declaration "$owner"';
+					if (declaration == null)
+						throw 'Missing enum declaration "$owner"';
 					for (index in 0...declaration.typeParameters.length)
-						substitutions.set(declaration.typeParameters[index], index < typeArguments.length ? typeArguments[index]
-							: TTypeParameter(owner, declaration.typeParameters[index]));
-				default: throw "Enum method without an enum receiver";
+						substitutions.set(declaration.typeParameters[index],
+							index < typeArguments.length ? typeArguments[index] : TTypeParameter(owner, declaration.typeParameters[index]));
+				default:
+					throw "Enum method without an enum receiver";
 			}
 			var typed = typeDeclaredCallArguments(arguments, enumMethod.arguments, scope, name, span, substitutions);
 			var result = session.declarations.resolve(enumMethod.result, enumMethod.span, substitutions);
@@ -697,17 +720,20 @@ class CallResolver {
 		}
 		var rawDeclaration = session.enumAbstractDecls.get(abstractName);
 		if (rawDeclaration != null && FlagsGenerator.conforms(session, rawDeclaration) && FlagsGenerator.isMember(name, false)) {
-			var info = FlagsGenerator.signature(abstractName, name), typed = typeCallArguments(arguments, info.arguments.slice(1), scope, name);
+			var info = FlagsGenerator.signature(abstractName, name),
+				typed = typeCallArguments(arguments, info.arguments.slice(1), scope, name);
 			return new TypedExpression(TCall(FlagsGenerator.request(session, abstractName, name, span), [receiver].concat(typed)), info.result, span);
 		}
 
 		if (name == "rawValue" && rawDeclaration != null && RawRepresentableGenerator.conforms(session, rawDeclaration)) {
-			if (arguments.length != 0) fail("E1008", "rawValue expects no arguments", span);
+			if (arguments.length != 0)
+				fail("E1008", "rawValue expects no arguments", span);
 			return new TypedExpression(TCall(RawRepresentableGenerator.request(session, abstractName, name, span), [receiver]),
 				lowerType(rawDeclaration.underlying), span);
 		}
 		var declaration = session.declarations.abstractDeclaration(abstractName);
-		if (declaration == null) throw 'Missing abstract declaration "$abstractName"';
+		if (declaration == null)
+			throw 'Missing abstract declaration "$abstractName"';
 		var method:Null<AstFunction> = null;
 		for (candidate in declaration.methods)
 			if (candidate.name == name && !candidate.isStatic && candidate.name != "new")
@@ -777,16 +803,20 @@ class CallResolver {
 	public function typeClosureCall(callee:AstExpression, arguments:Array<AstExpression>, span:SourceSpan, scope:Scope, callableName:Null<String> = null,
 			invalidateAllExpressions:Bool = true, ?expectedType:CompilerType):TypedExpression {
 		// A `try` expression is an immediately called lambda; where its value is discarded, its branches may differ in type.
-		var discarded = (switch (expectedType) { case TVoid: true; default: false; }) && arguments.length == 0 && switch callee {
+		var discarded = (switch (expectedType) {
+			case TVoid: true;
+			default: false;
+		}) && arguments.length == 0 && switch callee {
 			case Lambda(lambdaArguments, _, _, _): lambdaArguments.length == 0;
 			default: false;
-		},
-			typedCallee = typeExpression(callee, scope, discarded ? TFunction([], TVoid) : null, false),
-			functionType = switch typedCallee.type {
-				case TFunction(parameters, result): {arguments: parameters, result: result};
-				default: null;
-			};
-		if ((switch (typedCallee.type) { case TDynamic: true; default: false; })) {
+		}, typedCallee = typeExpression(callee, scope, discarded ? TFunction([], TVoid) : null, false), functionType = switch typedCallee.type {
+			case TFunction(parameters, result): {arguments: parameters, result: result};
+			default: null;
+		};
+		if ((switch (typedCallee.type) {
+			case TDynamic: true;
+			default: false;
+		})) {
 			var typedArguments = [
 				for (argument in arguments)
 					coerce(typeExpression(argument, scope, TDynamic, false), TDynamic, "argument to dynamic function", "E1009")
@@ -955,18 +985,24 @@ class CallResolver {
 	public function typeNamedCall(name:String, arguments:Array<AstExpression>, span:SourceSpan, scope:Scope, expectedType:Null<CompilerType>):TypedExpression {
 		var rawOwnerEnd = name.lastIndexOf(".");
 		if (rawOwnerEnd > 0) {
-			var owner = name.substring(0, rawOwnerEnd), member = name.substring(rawOwnerEnd + 1), declaration = session.enumAbstractDecls.get(owner);
+			var owner = name.substring(0, rawOwnerEnd),
+				member = name.substring(rawOwnerEnd + 1),
+				declaration = session.enumAbstractDecls.get(owner);
 			if (declaration != null && FlagsGenerator.conforms(session, declaration) && FlagsGenerator.isMember(member, true)) {
-				var info = FlagsGenerator.signature(owner, member), typed = typeCallArguments(arguments, info.arguments, scope, name);
+				var info = FlagsGenerator.signature(owner, member),
+					typed = typeCallArguments(arguments, info.arguments, scope, name);
 				return new TypedExpression(TCall(FlagsGenerator.request(session, owner, member, span), typed), info.result, span);
 			}
 		}
 
 		if (rawOwnerEnd > 0 && name.substring(rawOwnerEnd + 1) == "fromRaw") {
-			var rawOwner = name.substring(0, rawOwnerEnd), declaration = session.enumAbstractDecls.get(rawOwner);
+			var rawOwner = name.substring(0, rawOwnerEnd),
+				declaration = session.enumAbstractDecls.get(rawOwner);
 			if (declaration != null && RawRepresentableGenerator.conforms(session, declaration)) {
-				if (arguments.length != 1) fail("E1008", "fromRaw expects one argument", span);
-				var raw = lowerType(declaration.underlying), argument = coerce(typeExpression(arguments[0], scope, raw, false), raw, "fromRaw argument", "E1009");
+				if (arguments.length != 1)
+					fail("E1008", "fromRaw expects one argument", span);
+				var raw = lowerType(declaration.underlying),
+					argument = coerce(typeExpression(arguments[0], scope, raw, false), raw, "fromRaw argument", "E1009");
 				return new TypedExpression(TCall(RawRepresentableGenerator.request(session, rawOwner, "fromRaw", span), [argument]),
 					TNullable(TAbstract(rawOwner, [], raw)), span);
 			}
@@ -977,9 +1013,11 @@ class CallResolver {
 		var sourceName = span.isBareReference ? span.referenceName : null;
 		if (sourceName != null && sourceName.indexOf(".") < 0 && sourceName != name) {
 			var fieldCall = typeImplicitFunctionFieldCall(sourceName, arguments, span, scope);
-			if (fieldCall != null) return fieldCall;
+			if (fieldCall != null)
+				return fieldCall;
 			var methodCall = resolveImplicitMethodCall(sourceName, arguments, span, scope, expectedType);
-			if (methodCall != null) return methodCall;
+			if (methodCall != null)
+				return methodCall;
 		}
 		if (scope.resolve(name) != null) {
 			// A local function runs a known body, so a call through it only clears facts when that body might.
@@ -1219,8 +1257,8 @@ class CallResolver {
 			semanticArguments = typeDeclaredCallArguments(arguments, method.arguments, scope, methodKey, span, substitutions),
 			physicalArguments = session.representation.adaptMethodArguments(methodOwnerType, methodInfo.owner, method, semanticArguments),
 			methodResult = session.representation.resolveMethodResult(methodOwnerType, methodInfo.owner, method),
-			call = new TypedExpression(TCall(physicalOwner == null ? methodKey : physicalOwner.name + "." + name,
-				[receiver].concat(physicalArguments)), methodResult.physical, span);
+			call = new TypedExpression(TCall(physicalOwner == null ? methodKey : physicalOwner.name + "." + name, [receiver].concat(physicalArguments)),
+				methodResult.physical, span);
 		return applyCallEffect(session.representation.boundaryCast(call, methodResult.semantic), methodKey, scope);
 	}
 
@@ -1250,8 +1288,8 @@ class CallResolver {
 				right = coerce(typeExpressionValue(arguments[1], scope), left.type, "reference identity operand", "E1002");
 			function isReferenceIdentityType(type:CompilerType):Bool
 				return switch type {
-					case TDynamic, TTypeParameter(_, _), TString, TBytes, THlBytes, TArray(_), TIterator(_), TMap(_, _),
-						TInstance(NominalKind.Interface, _, _): true;
+					case TDynamic, TTypeParameter(_,
+						_), TString, TBytes, THlBytes, TArray(_), TIterator(_), TMap(_, _), TInstance(NominalKind.Interface, _, _): true;
 					case TInstance(NominalKind.Class, _, _): !session.relations.isStruct(type);
 					case TNullable(inner): isReferenceIdentityType(inner);
 					default: false;
@@ -1268,20 +1306,31 @@ class CallResolver {
 			return new TypedExpression(TCall("$value.place", [value]), value.type, span);
 		}
 
-		if (name == "Equality.equals" || name == "haxeon.Equality.equals" || name == "Equality.sameForChange" || name == "haxeon.Equality.sameForChange" || name == "Hashing.keyEquals" || name == "haxeon.Hashing.keyEquals") {
+		if (name == "Equality.equals"
+			|| name == "haxeon.Equality.equals"
+			|| name == "Equality.sameForChange"
+			|| name == "haxeon.Equality.sameForChange"
+			|| name == "Hashing.keyEquals"
+			|| name == "haxeon.Hashing.keyEquals") {
 			if (arguments.length != 2)
 				fail("E1008", 'Function "$name" expects 2 arguments, got ${arguments.length}', span);
 			var left = typeExpressionValue(arguments[0], scope),
 				right = coerce(typeExpression(arguments[1], scope, left.type, false), left.type, "structural equality operand", "E1002");
 			var mapKeyEquality = name == "Hashing.keyEquals" || name == "haxeon.Hashing.keyEquals";
-			if ((name == "Equality.sameForChange" || name == "haxeon.Equality.sameForChange")
-					&& (switch left.type { case TTypeParameter(_, _) | TDynamic: true; default: false; }))
+			if ((name == "Equality.sameForChange" || name == "haxeon.Equality.sameForChange") && (switch left.type {
+				case TTypeParameter(_, _) | TDynamic: true;
+				default: false;
+			}))
 				return new TypedExpression(TCall("$reactive.changeEquals", [left, right]), TBool, span);
 			if (mapKeyEquality && !DeclaredConformance.supportsHash(session, left.type))
 				fail("E1025", 'Type "${compiler.semantic.SemanticSignature.display(left.type)}" does not conform to Hashable', span);
-			if ((mapKeyEquality || name == "Equality.sameForChange" || name == "haxeon.Equality.sameForChange") && isFloatingMapKey(left.type))
+			if ((mapKeyEquality || name == "Equality.sameForChange" || name == "haxeon.Equality.sameForChange")
+				&& isFloatingMapKey(left.type))
 				return new TypedExpression(TCall("$map.floatKeyEquals", [left, right]), TBool, span);
-			if ((switch (left.type) { case TDynamic: true; default: false; }))
+			if ((switch (left.type) {
+				case TDynamic: true;
+				default: false;
+			}))
 				return new TypedExpression(TCall("__dynamic_equal", [left, coerce(right, TDynamic, "dynamic equality operand", "E1002")]), TBool, span);
 			var structType = switch left.type {
 				case TNullable(element) if (session.relations.isStruct(element)): element;
@@ -1320,9 +1369,9 @@ class CallResolver {
 			return new TypedExpression(TCall(HashGenerator.hashName(value.type), [value]), TInt, span);
 		}
 		if (DiffIntrinsics.handles(name))
-			return typeExpression(DiffIntrinsics.expand(session, name, arguments, span,
-				function(argument) return typeExpressionValue(argument, scope).type,
-				function(argument) return typeExpressionValue(argument, scope)), scope, expectedType, false);
+			return typeExpression(DiffIntrinsics.expand(session, name, arguments, span, function(argument) return typeExpressionValue(argument, scope).type,
+				function(argument) return typeExpressionValue(argument, scope)),
+				scope, expectedType, false);
 		if (name == "Type.enumIndex") {
 			if (arguments.length != 1)
 				fail("E1008", 'Function "$name" expects 1 argument, got ${arguments.length}', span);
@@ -1386,7 +1435,8 @@ class CallResolver {
 			if (enumValue) {
 				EnumEqualityGenerator.requestReflective(session, leftValue.type, session.currentContext.name, span);
 				return new TypedExpression(TCall(EnumEqualityGenerator.reflectiveName(leftValue.type),
-					[leftValue, coerce(rightValue, leftValue.type, "Type.enumEq value", "E1002")]), TBool, span);
+					[leftValue, coerce(rightValue, leftValue.type, "Type.enumEq value", "E1002")]),
+					TBool, span);
 			}
 			var left = coerce(leftValue, TDynamic, "Type.enumEq value", "E1002"),
 				right = coerce(rightValue, TDynamic, "Type.enumEq value", "E1002");
@@ -1418,11 +1468,14 @@ class CallResolver {
 						&& !session.enumDecls.exists(targetName))
 						fail("E1007", 'Unknown type "$targetName"', span);
 					// Runtime type tests name a declaration, not an instantiation; generic arguments are erased here.
-					if (session.classDecls.exists(targetName))
-						TInstance(NominalKind.Class, targetName, [for (_ in requiredMapValue(session.classDecls, targetName).typeParameters) TDynamic]);
-					else if (session.interfaceDecls.exists(targetName))
-						TInstance(NominalKind.Interface, targetName, [for (_ in requiredMapValue(session.interfaceDecls, targetName).typeParameters) TDynamic]);
-					else TInstance(NominalKind.Enum, targetName, [for (_ in requiredMapValue(session.enumDecls, targetName).typeParameters) TDynamic]);
+					if (session.classDecls.exists(targetName)) TInstance(NominalKind.Class, targetName,
+						[
+							for (_ in requiredMapValue(session.classDecls, targetName).typeParameters) TDynamic
+						]); else if (session.interfaceDecls.exists(targetName)) TInstance(NominalKind.Interface, targetName, [
+							for (_ in requiredMapValue(session.interfaceDecls, targetName).typeParameters) TDynamic
+					]); else TInstance(NominalKind.Enum, targetName, [
+							for (_ in requiredMapValue(session.enumDecls, targetName).typeParameters) TDynamic
+					]);
 			};
 			var value = coerce(typeExpressionValue(arguments[0], scope), TDynamic, "Std.isOfType value", "E1002"),
 				target = new TypedExpression(TClassRef(targetName), targetType, span);
@@ -1718,21 +1771,29 @@ class CallResolver {
 			TString, span);
 	}
 
-	static function isEnumValue(type:CompilerType):Bool return switch type {
-		case TInstance(NominalKind.Enum, _, _): true;
-		default: false;
-	};
+	static function isEnumValue(type:CompilerType):Bool
+		return switch type {
+			case TInstance(NominalKind.Enum, _, _): true;
+			default: false;
+		};
 
 	function requestArrayValueEquality(element:CompilerType, span:SourceSpan):Void {
-		var value = switch element { case TNullable(inner): inner; default: element; };
-		var enumValue = switch value { case TInstance(NominalKind.Enum, _, _): true; default: false; };
+		var value = switch element {
+			case TNullable(inner): inner;
+			default: element;
+		};
+		var enumValue = switch value {
+			case TInstance(NominalKind.Enum, _, _): true;
+			default: false;
+		};
 		if (enumValue) {
 			if (!DeclaredConformance.has(session, value, "Equatable"))
 				fail("E1025", 'Enum "${compiler.semantic.SemanticSignature.display(value)}" does not conform to Equatable', span);
 			EnumEqualityGenerator.request(session, element, session.currentContext.name, span);
 			return;
 		}
-		if (!session.relations.isValueClass(value)) return;
+		if (!session.relations.isValueClass(value))
+			return;
 		if (!DeclaredConformance.has(session, value, "Equatable"))
 			fail("E1025", 'Struct "${compiler.semantic.SemanticSignature.display(value)}" does not conform to Equatable', span);
 		ValueEqualityGenerator.request(session, element, session.currentContext.name, span);
@@ -1745,8 +1806,13 @@ class CallResolver {
 				scope.invalidateExpressionNamespace("array-entry:");
 			default:
 		}
-		var element = switch receiver.type { case TArray(value): value; default: throw "Not an array"; },
-			value = switch element { case TNullable(inner): inner; default: element; };
+		var element = switch receiver.type {
+			case TArray(value): value;
+			default: throw "Not an array";
+		}, value = switch element {
+			case TNullable(inner): inner;
+			default: element;
+		};
 		if ((name == "indexOf" || name == "contains" || name == "remove") && session.relations.isValueClass(value))
 			session.invalidateUnknownCall(scope);
 		return result;
@@ -1903,16 +1969,30 @@ class CallResolver {
 				fail("E1008", "Array.indexOf expects one argument", span);
 			requestArrayValueEquality(element, span);
 			var value = coerce(typeExpressionValue(arguments[0], scope, element), element, "array element", "E1002");
-			var base = switch element { case TNullable(inner): inner; default: element; };
-			return new TypedExpression(TCollectionCall(receiver, (session.relations.isValueClass(base) || isEnumValue(base) || isDynamicType(base)) ? "value_index_of" : "index_of", [value]), TInt, span);
+			var base = switch element {
+				case TNullable(inner): inner;
+				default: element;
+			};
+			return new TypedExpression(TCollectionCall(receiver,
+				(session.relations.isValueClass(base)
+					|| isEnumValue(base)
+					|| isDynamicType(base)) ? "value_index_of" : "index_of", [value]),
+				TInt, span);
 		}
 		if (name == "contains") {
 			if (arguments.length != 1)
 				fail("E1008", "Array.contains expects one argument", span);
 			requestArrayValueEquality(element, span);
 			var value = coerce(typeExpressionValue(arguments[0], scope, element), element, "array element", "E1002"),
-				base = switch element { case TNullable(inner): inner; default: element; },
-				index = new TypedExpression(TCollectionCall(receiver, (session.relations.isValueClass(base) || isEnumValue(base) || isDynamicType(base)) ? "value_index_of" : "index_of", [value]), TInt, span),
+				base = switch element {
+					case TNullable(inner): inner;
+					default: element;
+				},
+				index = new TypedExpression(TCollectionCall(receiver,
+					(session.relations.isValueClass(base)
+						|| isEnumValue(base)
+						|| isDynamicType(base)) ? "value_index_of" : "index_of", [value]),
+					TInt, span),
 				zero = new TypedExpression(TIntLiteral(0), TInt, span);
 			return new TypedExpression(TLessEqual(zero, index), TBool, span);
 		}
@@ -1929,7 +2009,11 @@ class CallResolver {
 			default: type;
 		};
 
-	static function isDynamicType(type:CompilerType):Bool return switch type { case TDynamic: true; default: false; };
+	static function isDynamicType(type:CompilerType):Bool
+		return switch type {
+			case TDynamic: true;
+			default: false;
+		};
 
 	/** `values.name(arguments)` as `haxeon.ArrayMethods.name(values, arguments)`, when the library defines it. */
 	function typeLibraryArrayMethod(receiver:TypedExpression, name:String, arguments:Array<AstExpression>, span:SourceSpan, scope:Scope):Null<TypedExpression> {
@@ -2250,8 +2334,12 @@ class CallResolver {
 		for (constraint in constraints) {
 			var actual = requiredMapValue(substitutions, constraint.parameter),
 				expected = session.declarations.resolve(constraint.type, constraint.span, substitutions);
-			if ((switch (actual) { case TDynamic: true; default: false; }))
-				fail("E1003", 'Cannot construct "$name" with Dynamic for constrained type parameter "${constraint.parameter}"; its conformance must be known', span);
+			if ((switch (actual) {
+				case TDynamic: true;
+				default: false;
+			}))
+				fail("E1003", 'Cannot construct "$name" with Dynamic for constrained type parameter "${constraint.parameter}"; its conformance must be known',
+					span);
 			if (!session.relations.satisfiesConstraint(actual, expected)) {
 				var detail = session.relations.constraintFailure(actual, expected);
 				fail("E1003",

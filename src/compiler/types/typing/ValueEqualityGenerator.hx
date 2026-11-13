@@ -153,7 +153,8 @@ class ValueEqualityGenerator {
 				throw 'Invalid value equality request for "$type"';
 		}
 		return {
-			name: equalsName(type), role: ProviderFunction(type, Equals),
+			name: equalsName(type),
+			role: ProviderFunction(type, Equals),
 			origin: request.origin,
 			originKind: Helper,
 			typeArguments: null,

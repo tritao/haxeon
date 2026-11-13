@@ -43,16 +43,34 @@ class TypeRelations {
 			return Identity;
 		if (isNativeValue(actual) || isNativeValue(expected))
 			return Incompatible;
-		if ((switch (actual) { case TInt: true; default: false; }) && (switch (expected) { case TFloat: true; default: false; }))
+		if ((switch (actual) {
+			case TInt: true;
+			default: false;
+		}) && (switch (expected) {
+			case TFloat: true;
+			default: false;
+		}))
 			return IntToFloat;
-		if ((switch (actual) { case TInt: true; default: false; }) && (switch (expected) { case TInt64: true; default: false; }))
+		if ((switch (actual) {
+			case TInt: true;
+			default: false;
+		}) && (switch (expected) {
+			case TInt64: true;
+			default: false;
+		}))
 			return IntToInt64;
-		if ((switch (actual) { case TDynamic: true; default: false; }))
+		if ((switch (actual) {
+			case TDynamic: true;
+			default: false;
+		}))
 			return switch expected {
 				case TNull, TVoid, TNever: Incompatible;
 				default: FromDynamic;
 			};
-		if ((switch (actual) { case TNull: true; default: false; }) && acceptsNull(expected))
+		if ((switch (actual) {
+			case TNull: true;
+			default: false;
+		}) && acceptsNull(expected))
 			return WrapNullable;
 		if (abstractConversion(actual, expected))
 			return AbstractCast;
@@ -76,7 +94,7 @@ class TypeRelations {
 						switch actual {
 							case TInstance(actualKind, _, _):
 								switch actualKind {
-								case NominalKind.Class, NominalKind.Interface, NominalKind.Enum: ToInterface(name);
+									case NominalKind.Class, NominalKind.Interface, NominalKind.Enum: ToInterface(name);
 									default: Identity;
 								}
 							default: Identity;
@@ -90,17 +108,24 @@ class TypeRelations {
 	}
 
 	public function isAssignable(actual:CompilerType, expected:CompilerType):Bool {
-		if ((switch (actual) { case TNever: true; default: false; }))
+		if ((switch (actual) {
+			case TNever: true;
+			default: false;
+		}))
 			return true;
 		if (IterationProtocol.name(expected) != null)
-			return (switch (actual) { case TNull: true; default: false; })
-				|| TypeRelations.equals(actual, expected)
-				|| IterationProtocol.conforms(declarations, this, actual, expected);
+			return (switch (actual) {
+				case TNull: true;
+				default: false;
+			}) || TypeRelations.equals(actual, expected) || IterationProtocol.conforms(declarations, this, actual, expected);
 		if (isNativeValue(actual) || isNativeValue(expected))
 			return equals(actual, expected);
 		if (StructProperties.isConstraintType(expected))
 			return false;
-		if ((switch (actual) { case TNull: true; default: false; }) && acceptsNull(expected))
+		if ((switch (actual) {
+			case TNull: true;
+			default: false;
+		}) && acceptsNull(expected))
 			return true;
 		if (equals(actual, expected))
 			return true;
@@ -109,12 +134,18 @@ class TypeRelations {
 				return equals(root, otherRoot) && equals(value, otherValue);
 			default:
 		}
-		if ((switch (actual) { case TDynamic: true; default: false; }))
+		if ((switch (actual) {
+			case TDynamic: true;
+			default: false;
+		}))
 			return switch expected {
 				case TNull, TVoid, TNever: false;
 				default: true;
 			};
-		if ((switch (actual) { case TNull: true; default: false; }) && acceptsNull(expected))
+		if ((switch (actual) {
+			case TNull: true;
+			default: false;
+		}) && acceptsNull(expected))
 			return true;
 		switch actual {
 			case TNullable(element):
@@ -139,8 +170,8 @@ class TypeRelations {
 								}
 							case NominalKind.Interface:
 								switch actualKind {
-								case NominalKind.Class, NominalKind.Interface: nominalReaches(actual, expected);
-								case NominalKind.Enum: satisfiesConstraint(actual, expected);
+									case NominalKind.Class, NominalKind.Interface: nominalReaches(actual, expected);
+									case NominalKind.Enum: satisfiesConstraint(actual, expected);
 									default: false;
 								}
 							default: false;
@@ -188,12 +219,15 @@ class TypeRelations {
 					var matches = true;
 					for (target in expectedFields) {
 						var found = false;
-						for (source in actualFields) if (source.name == target.name) {
-							found = source.optional == target.optional && (!source.isFinal || target.isFinal)
-								&& equals(source.type, target.type);
+						for (source in actualFields)
+							if (source.name == target.name) {
+								found = source.optional == target.optional && (!source.isFinal || target.isFinal) && equals(source.type, target.type);
+								break;
+							}
+						if (!found) {
+							matches = false;
 							break;
 						}
-						if (!found) { matches = false; break; }
 					}
 					matches;
 				}
@@ -211,10 +245,12 @@ class TypeRelations {
 		switch actual {
 			case TAbstract(name, _, _) if (declarations.enumAbstracts.exists(name)):
 				var declaration = declarations.enumAbstracts.get(name);
-				if (declaration.conformances != null) for (conformance in declaration.conformances) {
-					var resolved = declarations.resolve(conformance, declaration.span);
-					if (equals(resolved, expected) || nominalReaches(resolved, expected)) return true;
-				}
+				if (declaration.conformances != null)
+					for (conformance in declaration.conformances) {
+						var resolved = declarations.resolve(conformance, declaration.span);
+						if (equals(resolved, expected) || nominalReaches(resolved, expected))
+							return true;
+					}
 			default:
 		}
 		if (StructProperties.isConstraintType(expected))
@@ -225,37 +261,51 @@ class TypeRelations {
 		};
 		if (valueCapability)
 			switch actual {
-				case TInstance(NominalKind.Class, _, _) if (!isStruct(actual)): return false;
-				case TInstance(NominalKind.Interface, _, _): return false;
-				case TInt, TInt64, TBool, TFloat, TString, TNativeScalar(_), TKeyPath(_, _, _): return true;
+				case TInstance(NominalKind.Class, _, _) if (!isStruct(actual)):
+					return false;
+				case TInstance(NominalKind.Interface, _, _):
+					return false;
+				case TInt, TInt64, TBool, TFloat, TString, TNativeScalar(_), TKeyPath(_, _, _):
+					return true;
 				case TAbstract(name, _, representation) if (declarations.enumAbstracts.exists(name)):
 					return satisfiesConstraint(representation, expected);
-				case TNullable(element): return satisfiesConstraint(element, expected);
+				case TNullable(element):
+					return satisfiesConstraint(element, expected);
 				case TInstance(NominalKind.Enum, name, _):
 					var declaration = declarations.enums.get(name);
-					if (declaration == null) return false;
+					if (declaration == null)
+						return false;
 					var hasPayload = false;
-					for (constructor in declaration.cases) if (constructor.params.length > 0) hasPayload = true;
-					if (!hasPayload) return true;
+					for (constructor in declaration.cases)
+						if (constructor.params.length > 0)
+							hasPayload = true;
+					if (!hasPayload)
+						return true;
 					if (declaration.conformances != null)
 						for (conformance in declaration.conformances) {
 							var resolved = declarations.resolve(conformance, declaration.span);
-							if (equals(resolved, expected) || nominalReaches(resolved, expected)) return true;
+							if (equals(resolved, expected) || nominalReaches(resolved, expected))
+								return true;
 						}
 					return false;
 				default:
 			}
 		switch actual {
-			case TInstance(NominalKind.Enum, name, arguments) if ((switch expected { case TInstance(NominalKind.Interface, _, _): true; default: false; })):
+			case TInstance(NominalKind.Enum, name, arguments) if ((switch expected {
+				case TInstance(NominalKind.Interface, _, _): true;
+				default: false;
+			})):
 				var declaration = declarations.enums.get(name);
-				if (declaration == null || declaration.conformances == null) return false;
+				if (declaration == null || declaration.conformances == null)
+					return false;
 				var substitutions:Map<String, CompilerType> = [];
 				for (index in 0...declaration.typeParameters.length)
-					substitutions.set(declaration.typeParameters[index], index < arguments.length ? arguments[index]
-						: TTypeParameter(name, declaration.typeParameters[index]));
+					substitutions.set(declaration.typeParameters[index],
+						index < arguments.length ? arguments[index] : TTypeParameter(name, declaration.typeParameters[index]));
 				for (conformance in declaration.conformances) {
 					var resolved = declarations.resolve(conformance, declaration.span, substitutions);
-					if (equals(resolved, expected) || nominalReaches(resolved, expected)) return true;
+					if (equals(resolved, expected) || nominalReaches(resolved, expected))
+						return true;
 				}
 				return false;
 			default:
@@ -298,12 +348,16 @@ class TypeRelations {
 			case TInstance(kind, name, arguments):
 				switch expected {
 					case TInstance(expectedKind, expectedName, expectedArguments):
-						if (Std.string(kind) != Std.string(expectedKind) || Std.string(name) != Std.string(expectedName)
+						if (Std.string(kind) != Std.string(expectedKind)
+							|| Std.string(name) != Std.string(expectedName)
 							|| arguments.length != expectedArguments.length)
 							return false;
 						var sawDynamic = false;
 						for (index in 0...arguments.length) {
-							if ((switch (expectedArguments[index]) { case TDynamic: true; default: false; })) {
+							if ((switch (expectedArguments[index]) {
+								case TDynamic: true;
+								default: false;
+							})) {
 								sawDynamic = true;
 								continue;
 							}
@@ -354,10 +408,10 @@ class TypeRelations {
 				}
 			case TFunction(arguments, result): sameFunction(right, arguments, result, visiting);
 			case TKeyPath(root, value, writable): switch right {
-				case TKeyPath(otherRoot, otherValue, otherWritable): writable == otherWritable && equalsWithin(root, otherRoot, visiting)
-					&& equalsWithin(value, otherValue, visiting);
-				default: false;
-			};
+					case TKeyPath(otherRoot, otherValue, otherWritable): writable == otherWritable && equalsWithin(root, otherRoot,
+							visiting) && equalsWithin(value, otherValue, visiting);
+					default: false;
+				};
 			case TAnonymous(_, fields):
 				switch right {
 					case TAnonymous(_, otherFields): sameAnonymousFields(fields, otherFields, visiting);
@@ -449,7 +503,8 @@ class TypeRelations {
 	public static function isReference(type:CompilerType):Bool
 		return switch type {
 			case TAbstract(_, _, representation): isReference(representation);
-			case TString, TBytes, THlBytes, TDynamic, TNativeAbstract(_), TAnonymous(_, _), TArray(_), TIterator(_), TFunction(_, _), TMap(_, _), TKeyPath(_, _, _): true;
+			case TString, TBytes, THlBytes, TDynamic, TNativeAbstract(_), TAnonymous(_, _), TArray(_), TIterator(_), TFunction(_, _), TMap(_, _),
+				TKeyPath(_, _, _): true;
 			case TInstance(kind, _, _): kind != NominalKind.NativeValue;
 			default: false;
 		};
