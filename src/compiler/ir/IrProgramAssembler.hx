@@ -729,7 +729,8 @@ class IrProgramAssembler {
 				}
 		}
 		var beforeReflection = allFunctions.length;
-		natives = ObjectReflection.generate(generator.facts, natives, objects, reflectableObjects, allFunctions, generator.profile.nativeReflectionDispatch);
+		natives = ObjectReflection.generate(generator.facts, natives, objects, reflectableObjects, allFunctions, generator.profile.nativeReflectionDispatch,
+			reachedNativesAfterPrune);
 		// Reflection helpers are generated after the ordinary cast pass. Check their dynamic
 		// stores too, so a bad reflected value throws instead of trapping or corrupting a field.
 		if (objects != null && allFunctions.length > beforeReflection) {

@@ -25,13 +25,25 @@ class ObjectReflection {
 	 * (linear Wasm), which costs the same however many layouts the program has.
 	 */
 	public static function generate(facts:ProgramFacts, natives:Null<Array<IrNative>>, objects:Null<Array<IrObject>>, reflectable:Null<Array<String>>,
-			functions:Array<IrFunction>, tableDispatch:Bool = false):Null<Array<IrNative>> {
+			functions:Array<IrFunction>, tableDispatch:Bool = false, ?reached:Map<String, Bool>):Null<Array<IrNative>> {
 		if (natives == null)
 			return null;
+		var symbols = helperSymbols();
+		var objectTable:Map<String, IrObject> = objects == null ? [] : [for (object in objects) object.name => object];
+		// Check mode: the helpers generated for one native call exactly what its layouts need, and the walk was told at least that.
+		function verify(native:IrNative, used:Array<ReflectedLayout>, start:Int):Void
+			if (IrEntryPrune.checking())
+				checkHelpers(native.symbol, used, functions.slice(start), objectTable, facts.observableFieldBits);
 		var remaining:Array<IrNative> = [],
-			layouts:Null<Array<ReflectedLayout>> = null,
-			firstGenerated = functions.length;
+			layouts:Null<Array<ReflectedLayout>> = null;
 		for (native in natives) {
+			// A helper is generated for a native that reached code calls, which is also the native whose dependencies the walk reached; a native
+			// nothing calls stays a declaration.
+			if (reached != null && symbols.indexOf(native.symbol) >= 0 && !reached.exists(native.name)) {
+				remaining.push(native);
+				continue;
+			}
+			var start = functions.length;
 			// Field listings keep their allocation-free constant names; the native helpers allocate field arrays.
 			var projectValues = switch native.symbol {
 				case "__reflect_field", "__reflect_set_field", "__reflect_field_count", "__reflect_field_name": true;
@@ -51,6 +63,7 @@ class ObjectReflection {
 						result: native.result
 					});
 					functions.push(hashLinkReflection(native, fallback, affected, functions));
+					verify(native, affected, start);
 					continue;
 				}
 			}
@@ -70,6 +83,7 @@ class ObjectReflection {
 					result: native.result,
 					generatedFunctionDependencies: tableLayoutFunctions(native, layouts, functions)
 				});
+				verify(native, layouts, start);
 				continue;
 			}
 			functions.push(switch native.symbol {
@@ -81,27 +95,60 @@ class ObjectReflection {
 				case "__reflect_object_delete_field": deleteField(native.name, layouts, functions);
 				default: throw 'Unknown object reflection native "${native.symbol}"';
 			});
+			verify(native, layouts, start);
 		}
-		if (IrEntryPrune.checking())
-			checkCallees(functions.slice(firstGenerated));
 		return remaining;
 	}
 
-	/** Check mode: a generated helper calls only helpers generated with it, runtime natives and `HELPER_CALLEES`, the functions the walk was told about. */
-	static function checkCallees(generated:Array<IrFunction>):Void {
-		var names:Map<String, Bool> = [for (fn in generated) fn.name => true];
+	/** The functions the helpers of `symbol` call for these layouts: the one definition of what a generated body needs (`guardObservableWrite`, `recordObservableCreation`). */
+	static function expectedCallees(layouts:Array<ReflectedLayout>, symbol:String):Map<String, Bool> {
+		var result:Map<String, Bool> = [];
+		for (layout in layouts) {
+			if (!layout.observable)
+				continue;
+			switch symbol {
+				case "__reflect_copy", "__reflect_object_copy":
+					result.set(RECORD_CREATION, true);
+				case "__reflect_set_field", "__reflect_delete_field", "__reflect_object_set_field", "__reflect_object_delete_field":
+					if (layout.observableBits != null && Lambda.exists(layout.fields, field -> layout.observableBits.exists(field.name)))
+						result.set(WRITE_STATUS, true);
+				default:
+			}
+		}
+		return result;
+	}
+
+	/**
+	 * Check mode: the helpers generated for one native call exactly the functions its layouts need (not one more, not one fewer), nothing but those,
+	 * helpers generated with them and runtime natives, and the walk was told every one of them (`dependencies`), so none is missing at link time.
+	 */
+	static function checkHelpers(symbol:String, used:Array<ReflectedLayout>, generated:Array<IrFunction>, objects:Map<String, IrObject>,
+			observableBits:Map<String, Map<String, Int>>):Void {
+		var names:Map<String, Bool> = [for (fn in generated) fn.name => true], emitted:Map<String, Bool> = [];
 		for (fn in generated)
 			for (block in fn.blocks)
 				for (located in block.instructions)
 					switch located.value {
-						case Call(_, target, _)
-							if (!names.exists(target)
-								&& !StringTools.startsWith(target, "__")
-								&& !StringTools.startsWith(target, OPTIONAL_PREFIX)
-								&& HELPER_CALLEES.indexOf(target) < 0):
-							throw 'reflection helper "${fn.name}" calls "$target", which is not one of its declared dependencies (ObjectReflection.HELPER_CALLEES)';
+						case Call(_, target, _) if (!names.exists(target) && !StringTools.startsWith(target, "__") && !StringTools.startsWith(target, OPTIONAL_PREFIX)):
+							if (HELPER_CALLEES.indexOf(target) < 0)
+								throw 'reflection helper "${fn.name}" calls "$target", which is not one of its declared dependencies (ObjectReflection.HELPER_CALLEES)';
+							emitted.set(target, true);
 						default:
 					}
+		var expected = expectedCallees(used, symbol);
+		for (name in expected.keys())
+			if (!emitted.exists(name))
+				throw 'the "$symbol" helpers should call $name for their layouts but do not';
+		for (name in emitted.keys())
+			if (!expected.exists(name))
+				throw 'the "$symbol" helpers call $name, which their layouts do not need';
+		var declared:Map<String, Bool> = [];
+		for (layout in used)
+			for (name in dependencies(objects, observableBits, layout.name, symbol, _ -> true))
+				declared.set(name, true);
+		for (name in expected.keys())
+			if (!declared.exists(name))
+				throw 'the "$symbol" helpers call $name, which ObjectReflection.dependencies did not tell the walk';
 	}
 
 	/** The name prefix of the native a layout-specific HashLink helper falls back to for any other value. */
@@ -300,14 +347,14 @@ class ObjectReflection {
 				chain.unshift(owner);
 				base = owner.base;
 			}
-			var fields:Array<IrObjectField> = [], observable = false;
+			var fields:Array<IrObjectField> = [];
+			// Observable by the one definition the walk uses too (`isObservableClass`): the class or one it extends, or a box's payload.
+			var observable = isObservableClass(byName, payload == null ? name : payload);
 			var fieldOwners = payload == null ? chain : [byName.get(payload)];
 			for (owner in fieldOwners)
 				if (owner != null)
 					for (field in owner.fields)
-						if (field.name == "$haxeonObservableState")
-							observable = true;
-						else
+						if (field.name != "$haxeonObservableState")
 							fields.push(field);
 			var methods:Map<String, {name:String, functionName:String, type:IrType}> = [];
 			for (owner in chain)
