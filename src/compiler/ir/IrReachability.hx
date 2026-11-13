@@ -94,7 +94,20 @@ class IrReachability {
 	 * stay, and so does every class their types mention.
 	 */
 	public static function trimTables(program:IrProgram, walk:IrReachabilityWalk):Void {
-		program.natives = [for (native in program.natives) if (walk.used.exists(native.name)) native];
+		// An `Unreachable` terminator lowers to a call of the fatal native, which no `Call` instruction names.
+		var fatal = false;
+		for (fn in program.functions)
+			for (block in fn.blocks)
+				if (block.terminator != null)
+					switch block.terminator.value {
+						case Unreachable:
+							fatal = true;
+						default:
+					}
+		program.natives = [
+			for (native in program.natives)
+				if (walk.used.exists(native.name) || (fatal && native.name == "__unreachable")) native
+		];
 		var globals:Map<String, Bool> = [];
 		for (fn in program.functions)
 			for (block in fn.blocks)

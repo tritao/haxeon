@@ -42,7 +42,7 @@ class ObjectReflection {
 					layouts = layoutsOf(facts, objects, reflectable == null ? [] : reflectable, functions);
 				var affected = affectedLayouts(layouts, objects, projectValues);
 				if (affected.length > 0) {
-					var fallback = '$' + 'optional-reflect-native:' + native.name;
+					var fallback = OPTIONAL_PREFIX + native.name;
 					remaining.push({
 						name: fallback,
 						library: native.library,
@@ -94,11 +94,18 @@ class ObjectReflection {
 			for (block in fn.blocks)
 				for (located in block.instructions)
 					switch located.value {
-						case Call(_, target, _) if (!names.exists(target) && !StringTools.startsWith(target, "__") && HELPER_CALLEES.indexOf(target) < 0):
+						case Call(_, target, _)
+							if (!names.exists(target)
+								&& !StringTools.startsWith(target, "__")
+								&& !StringTools.startsWith(target, OPTIONAL_PREFIX)
+								&& HELPER_CALLEES.indexOf(target) < 0):
 							throw 'reflection helper "${fn.name}" calls "$target", which is not one of its declared dependencies (ObjectReflection.HELPER_CALLEES)';
 						default:
 					}
 	}
+
+	/** The name prefix of the native a layout-specific HashLink helper falls back to for any other value. */
+	static inline final OPTIONAL_PREFIX = "$" + "optional-reflect-native:";
 
 	/** What the set and delete helpers of an observable layout call before a write (`guardObservableWrite`). */
 	static inline final WRITE_STATUS = "haxeon.reactive.ReactiveRuntime.observableWriteStatus";
@@ -107,7 +114,7 @@ class ObjectReflection {
 	 * Every function a generated reflection helper calls that is not itself a generated helper or a runtime native: the one list, for the helper
 	 * bodies, for the walk (`dependencies`) and for the check-mode assertion in `generate`.
 	 */
-	static final HELPER_CALLEES = [RECORD_CREATION, WRITE_STATUS];
+	static final HELPER_CALLEES:Array<String> = [RECORD_CREATION, WRITE_STATUS];
 
 	/** What the copy helper of an observable layout calls (`recordObservableCreation`). */
 	static inline final RECORD_CREATION = "haxeon.reactive.ReactiveRuntime.recordObservableCreation";
@@ -115,9 +122,19 @@ class ObjectReflection {
 	/** Every `IrNative.symbol` whose declaration `generate` replaces with generated code. */
 	public static function helperSymbols():Array<String>
 		return [
-			"__reflect_field", "__reflect_set_field", "__reflect_has_field", "__reflect_delete_field", "__reflect_field_count", "__reflect_field_name",
-			"__reflect_copy", "__reflect_object_copy", "__reflect_object_field", "__reflect_object_set_field", "__reflect_object_field_count",
-			"__reflect_object_field_name", "__reflect_object_delete_field"
+			"__reflect_field",
+			"__reflect_set_field",
+			"__reflect_has_field",
+			"__reflect_delete_field",
+			"__reflect_field_count",
+			"__reflect_field_name",
+			"__reflect_copy",
+			"__reflect_object_copy",
+			"__reflect_object_field",
+			"__reflect_object_set_field",
+			"__reflect_object_field_count",
+			"__reflect_object_field_name",
+			"__reflect_object_delete_field"
 		];
 
 	/** Whether the class, or one it extends, has the observable-state field that makes its layout observable. */
