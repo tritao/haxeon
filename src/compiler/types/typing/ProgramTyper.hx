@@ -53,7 +53,8 @@ class ProgramTyper {
 		for (decl in program.enumAbstracts) {
 			RawRepresentableGenerator.validate(session, bodyTyper, decl);
 			FlagsGenerator.validate(session, bodyTyper, decl);
-			for (value in decl.values) EnumAbstractValues.raw(bodyTyper, decl, value);
+			for (value in decl.values)
+				EnumAbstractValues.raw(bodyTyper, decl, value);
 		}
 		session.bindNominalDeclarations();
 		for (declaration in program.enums)
@@ -328,11 +329,14 @@ class ProgramTyper {
 			hashes:Map<String, TypedFunction> = [],
 			enumMethods:Map<String, TypedFunction> = [],
 			enumAdapters:Map<String, TypedClass> = [],
-			codecs:Map<String, TypedFunction> = [], rawMethods:Map<String, TypedFunction> = [], flagMethods:Map<String, TypedFunction> = [];
+			codecs:Map<String, TypedFunction> = [],
+			rawMethods:Map<String, TypedFunction> = [],
+			flagMethods:Map<String, TypedFunction> = [];
 		function requestCount():Int
-			return Lambda.count(session.flagsRequests) + Lambda.count(session.rawRepresentableRequests) + Lambda.count(session.valueEqualityRequests) + Lambda.count(session.enumEqualityRequests) + Lambda.count(session.hashRequests)
-				+ Lambda.count(session.enumMethodRequests) + Lambda.count(session.enumInterfaceAdapters) + Lambda.count(session.wireCodecRequests)
-				+ Lambda.count(session.jsonCodecRequests) + Lambda.count(session.keyPathDefinitions) + session.representation.genericOwnerRequestCount()
+			return Lambda.count(session.flagsRequests) + Lambda.count(session.rawRepresentableRequests) + Lambda.count(session.valueEqualityRequests)
+				+ Lambda.count(session.enumEqualityRequests) + Lambda.count(session.hashRequests) + Lambda.count(session.enumMethodRequests)
+				+ Lambda.count(session.enumInterfaceAdapters) + Lambda.count(session.wireCodecRequests) + Lambda.count(session.jsonCodecRequests)
+				+ Lambda.count(session.keyPathDefinitions) + session.representation.genericOwnerRequestCount()
 				+ session.closureConversion.generatedFunctionCount() + session.enumRepresentations.count();
 		while (true) {
 			drainRuntimeTypes();
@@ -375,10 +379,12 @@ class ProgramTyper {
 		}
 		var flagNames = [for (name in flagMethods.keys()) name];
 		flagNames.sort(Reflect.compare);
-		for (name in flagNames) typedFunctions.push(flagMethods.get(name));
+		for (name in flagNames)
+			typedFunctions.push(flagMethods.get(name));
 		var rawNames = [for (name in rawMethods.keys()) name];
 		rawNames.sort(Reflect.compare);
-		for (name in rawNames) typedFunctions.push(rawMethods.get(name));
+		for (name in rawNames)
+			typedFunctions.push(rawMethods.get(name));
 		var codecNames = [for (name in codecs.keys()) name];
 		codecNames.sort(Reflect.compare);
 		for (name in codecNames)
@@ -643,8 +649,8 @@ class ProgramTyper {
 					if (!field.isStatic)
 						scope.defineReceiver(session.representation.receiverType(classDecl.name, erasedSubstitutions), field.span);
 					try {
-						initializer = bodyTyper.coerce(bodyTyper.typeExpression(parsedInitializer, scope, type),
-							type, (field.isStatic ? 'static field "${classDecl.name}.${field.name}"' : 'field "${classDecl.name}.${field.name}"'), "E1002");
+						initializer = bodyTyper.coerce(bodyTyper.typeExpression(parsedInitializer, scope, type), type,
+							(field.isStatic ? 'static field "${classDecl.name}.${field.name}"' : 'field "${classDecl.name}.${field.name}"'), "E1002");
 					} catch (error:Dynamic) {
 						bodyTyper.leaveBody(initializerContext);
 						throw error;
@@ -1083,7 +1089,8 @@ class ProgramTyper {
 				collectNestedNativeDeclarations(field.type, target, classes, layouts, visiting, nativeDeclarations, field.span);
 		var layout:TypedNativeLayout = try NativeLayout.record(target, name, [
 			for (field in declaration.fields)
-				if (!field.isStatic) {name: field.name, type: compiler.types.StructProperties.isTagEnum(session.declarations, field.type) ? TInt : field.type, span: field.span}
+				if (!field.isStatic) {name: field.name, type: compiler.types.StructProperties.isTagEnum(session.declarations,
+					field.type) ? TInt : field.type, span: field.span}
 		], nativeDeclarations, declaration.span) catch (error:Dynamic) {
 			visiting.remove(key);
 			BodyTyper.fail("E1022", 'Invalid flat value record "$name": ${Std.string(error)}', declaration.span);
