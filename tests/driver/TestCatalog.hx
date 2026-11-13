@@ -55,6 +55,7 @@ class TestCatalog {
 		"ReachabilityPruneMain",
 		"TypedMetadataMergeMain",
 		"WarmRebuildReuseMain",
+		"PackedValuePatchMain",
 		"IrVerifyMemoMain",
 		"InlinerMain",
 		"InlinerSourceIdentityMain",
