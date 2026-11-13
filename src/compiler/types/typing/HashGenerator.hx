@@ -42,7 +42,8 @@ class HashGenerator {
 					var custom = EnumConformanceMethods.method(session, requested.type, "hash");
 					if (custom != null) {
 						var customName = EnumConformanceMethods.name(requested.type, "hash");
-						if (!generated.exists(customName)) generated.set(customName, EnumConformanceMethods.typeMethod(session, typer, requested.type, custom, name));
+						if (!generated.exists(customName))
+							generated.set(customName, EnumConformanceMethods.typeMethod(session, typer, requested.type, custom, name));
 					}
 					session.leaveBody(context);
 				} catch (error:Dynamic) {
@@ -57,7 +58,8 @@ class HashGenerator {
 	}
 
 	static function hashFunction(session:TypingSession, req:EqualityRequest):TypedFunction {
-		var type = req.type, span = req.span,
+		var type = req.type,
+			span = req.span,
 			value = new TypedExpression(TLocal("value"), type, span),
 			statements:Array<TypedStatement> = [];
 		switch type {
@@ -96,27 +98,31 @@ class HashGenerator {
 				if (custom != null) {
 					statements.push(TReturn(new TypedExpression(TCall(EnumConformanceMethods.name(type, "hash"), [value]), TInt, span), span));
 				} else {
-				var index = new TypedExpression(TEnumIndex(value), TInt, span);
-				for (constructorIndex in 0...declaration.cases.length) {
-					var constructor = declaration.cases[constructorIndex],
-						body:Array<TypedStatement> = [], hashName = "$enumHash";
-					body.push(TVar(hashName, new TypedExpression(TIntLiteral(31 + constructorIndex), TInt, span), span));
-					for (fieldIndex in 0...constructor.params.length) {
-						var parameter = constructor.params[fieldIndex],
-							fieldType = session.representation.enumParameterType(declaration.typeParameters, parameter, type),
-							storageType = session.representation.enumStorageType(declaration.typeParameters, parameter, type),
-							fieldValue = session.representation.boundaryCast(new TypedExpression(TEnumField(value, constructorIndex, fieldIndex), storageType, span), fieldType);
-						request(session, fieldType, req.origin, parameter.span);
-						var running = new TypedExpression(TLocal(hashName), TInt, span),
-							mixed = new TypedExpression(TAdd(new TypedExpression(TMul(running,
-								new TypedExpression(TIntLiteral(31), TInt, span)), TInt, span), call(fieldType, fieldValue, span)), TInt, span);
-						body.push(TAssign(hashName, mixed, span));
+					var index = new TypedExpression(TEnumIndex(value), TInt, span);
+					for (constructorIndex in 0...declaration.cases.length) {
+						var constructor = declaration.cases[constructorIndex],
+							body:Array<TypedStatement> = [],
+							hashName = "$enumHash";
+						body.push(TVar(hashName, new TypedExpression(TIntLiteral(31 + constructorIndex), TInt, span), span));
+						for (fieldIndex in 0...constructor.params.length) {
+							var parameter = constructor.params[fieldIndex],
+								fieldType = session.representation.enumParameterType(declaration.typeParameters, parameter, type),
+								storageType = session.representation.enumStorageType(declaration.typeParameters, parameter, type),
+								fieldValue = session.representation.boundaryCast(new TypedExpression(TEnumField(value, constructorIndex, fieldIndex),
+									storageType, span), fieldType);
+							request(session, fieldType, req.origin, parameter.span);
+							var running = new TypedExpression(TLocal(hashName), TInt, span),
+								mixed = new TypedExpression(TAdd(new TypedExpression(TMul(running, new TypedExpression(TIntLiteral(31), TInt, span)), TInt,
+									span),
+									call(fieldType, fieldValue, span)),
+									TInt, span);
+							body.push(TAssign(hashName, mixed, span));
+						}
+						body.push(TReturn(new TypedExpression(TLocal(hashName), TInt, span), span));
+						var selected = new TypedExpression(TEqual(index, new TypedExpression(TIntLiteral(constructorIndex), TInt, span)), TBool, span);
+						statements.push(TIf(selected, body, [], span));
 					}
-					body.push(TReturn(new TypedExpression(TLocal(hashName), TInt, span), span));
-					var selected = new TypedExpression(TEqual(index, new TypedExpression(TIntLiteral(constructorIndex), TInt, span)), TBool, span);
-					statements.push(TIf(selected, body, [], span));
-				}
-				statements.push(TReturn(new TypedExpression(TIntLiteral(0), TInt, span), span));
+					statements.push(TReturn(new TypedExpression(TIntLiteral(0), TInt, span), span));
 				}
 			case TInstance(NominalKind.Class, name, arguments) if (session.relations.isStruct(type)):
 				var declaration = session.classDecls.get(name);
@@ -130,13 +136,15 @@ class HashGenerator {
 					var hashName = "$hashValue";
 					statements.push(TVar(hashName, new TypedExpression(TIntLiteral(17), TInt, span), span));
 					for (entry in DiffIntrinsics.conformanceFields(session, type)) {
-						var field = entry.field, fieldType = entry.type,
+						var field = entry.field,
+							fieldType = entry.type,
 							physical = session.representation.resolveField(type, field.name, field.span).physical,
 							fieldValue = session.representation.boundaryCast(new TypedExpression(TField(value, field.name), physical, span), fieldType);
 						request(session, fieldType, req.origin, field.span);
 						var running = new TypedExpression(TLocal(hashName), TInt, span),
-							mixed = new TypedExpression(TAdd(new TypedExpression(TMul(running,
-								new TypedExpression(TIntLiteral(31), TInt, span)), TInt, span), call(fieldType, fieldValue, span)), TInt, span);
+							mixed = new TypedExpression(TAdd(new TypedExpression(TMul(running, new TypedExpression(TIntLiteral(31), TInt, span)), TInt, span),
+								call(fieldType, fieldValue, span)),
+								TInt, span);
 						statements.push(TAssign(hashName, mixed, span));
 					}
 					statements.push(TReturn(new TypedExpression(TLocal(hashName), TInt, span), span));
@@ -145,21 +153,37 @@ class HashGenerator {
 				BodyTyper.fail("E1025", 'Cannot synthesize Hashable for type "${compiler.semantic.SemanticSignature.display(type)}"', span);
 		}
 		return {
-			name: hashName(type), role: ProviderFunction(type, Hash), origin: req.origin, originKind: Helper, typeArguments: null,
-			owner: null, isStatic: true, isConstructor: false,
-			arguments: [{name: "value", type: type}], result: TInt,
-			statements: statements, cells: [], cellCaptures: [], span: span
+			name: hashName(type),
+			role: ProviderFunction(type, Hash),
+			origin: req.origin,
+			originKind: Helper,
+			typeArguments: null,
+			owner: null,
+			isStatic: true,
+			isConstructor: false,
+			arguments: [
+				{
+					name: "value",
+					type: type
+				}
+			],
+			result: TInt,
+			statements: statements,
+			cells: [],
+			cellCaptures: [],
+			span: span
 		};
 	}
 
 	static function primitiveHash(type:CompilerType, value:TypedExpression, span:SourceSpan):TypedExpression
 		return switch type {
 			case TBool:
-				new TypedExpression(TConditional(value, new TypedExpression(TIntLiteral(1231), TInt, span), new TypedExpression(TIntLiteral(1237), TInt, span)),
-					TInt, span);
+				new TypedExpression(TConditional(value, new TypedExpression(TIntLiteral(1231), TInt, span),
+					new TypedExpression(TIntLiteral(1237), TInt, span)), TInt, span);
 			case TNativeScalar("c_bool"):
 				new TypedExpression(TConditional(new TypedExpression(TCast(value), TBool, span), new TypedExpression(TIntLiteral(1231), TInt, span),
-					new TypedExpression(TIntLiteral(1237), TInt, span)), TInt, span);
+					new TypedExpression(TIntLiteral(1237), TInt, span)),
+					TInt, span);
 			case TNativeScalar(_): new TypedExpression(TCast(value), TInt, span);
 			case _: value;
 		};
@@ -188,8 +212,8 @@ class HashGenerator {
 			hash = new TypedExpression(TLocal("$string-hash"), TInt, span),
 			index = new TypedExpression(TLocal("$string-index"), TInt, span),
 			char = new TypedExpression(TStringCharCodeAt(value, index), TInt, span),
-			nextHash = new TypedExpression(TAdd(new TypedExpression(TMul(hash, new TypedExpression(TIntLiteral(31), TInt, span)), TInt, span),
-				char), TInt, span),
+			nextHash = new TypedExpression(TAdd(new TypedExpression(TMul(hash, new TypedExpression(TIntLiteral(31), TInt, span)), TInt, span), char), TInt,
+				span),
 			nextIndex = new TypedExpression(TAdd(index, new TypedExpression(TIntLiteral(1), TInt, span)), TInt, span);
 		return [
 			TVar("$string-hash", length, span),
