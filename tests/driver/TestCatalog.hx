@@ -42,6 +42,7 @@ class TestCatalog {
 		"EnumTagEqualityMain",
 		"SourceEnumTagMain",
 		"GeneratedDependencyCompletionMain",
+		"RetiredSourceClassMain",
 		"KeyPathTypingMain",
 		"KeyPathSpecMain",
 		"InheritedMethodContractMain",

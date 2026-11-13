@@ -197,7 +197,8 @@ class FrontendCompilation {
 			analysisDoneAt = Sys.time() * 1000.0;
 			var typedResult = Typer.typeAnalyzedMeasured(semantic, selected, context.nativeSignatures(), entryPoint, genericSpecializations,
 				context.nativeLayoutTarget(), canReuseSemantic ? context.lastTypedProgram : null, semanticAssembly.facts, lowerToIr,
-				retainedFromPrevious(context, names, selected, lowerToIr, [for (classDecl in canonicalProgram.classes) classDecl.name => true]));
+				retainedFromPrevious(context, names, selected, lowerToIr, [for (classDecl in canonicalProgram.classes) classDecl.name => true],
+					previousSemantic));
 			allocationAfterProgramTyping = AllocationMeter.sample();
 			typingDoneAt = Sys.time() * 1000.0;
 			typedNew = typedResult.program;
@@ -1010,15 +1011,20 @@ class FrontendCompilation {
 	 * generic owners and the other generated classes (no source declares them) they refer to, and the static fields they read.
 	 */
 	static function retainedFromPrevious(context:CompilationContext, modules:Array<String>, selected:Map<String, Bool>, lowerToIr:Bool,
-			declared:Map<String, Bool>):Null<RetainedFromPrevious> {
+			declared:Map<String, Bool>, previousSemantic:Null<SemanticProgram>):Null<RetainedFromPrevious> {
 		var result:Map<String, Bool> = [],
 			retainedEnums:Map<String, Bool> = [],
 			previous = context.lastTypedProgram;
 		if (previous == null)
 			return null;
+		// A source declaration removed by this edit is not a generated class, even though it is absent from the new program.
+		if (previousSemantic == null)
+			throw "Internal error: previous typed program has no semantic program";
+		var previouslyDeclared:Map<String, Bool> = [for (entry in previousSemantic.program.classes) entry.name => true];
 		var known:Map<String, Bool> = [
 			for (entry in previous.classes)
-				if (entry.specializationOrigin != null || !declared.exists(entry.name)) entry.name => true
+				if (entry.specializationOrigin != null
+					|| (!declared.exists(entry.name) && !previouslyDeclared.exists(entry.name))) entry.name => true
 		], knownEnums:Map<String, Bool> = [
 			for (entry in previous.enums)
 				if (entry.specializationOrigin != null) entry.name => true
