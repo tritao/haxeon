@@ -1,5 +1,6 @@
 package haxeon.ui.widgets.controls;
 
+import haxeon.ui.core.UiEventPhase;
 import haxeon.ui.Insets;
 import haxeon.ui.LayoutAlignmentY;
 
@@ -272,7 +273,7 @@ class Tabs implements View {
         event.stopPropagation();
         var close = item.onClose;
         if (close != null) close();
-      }, "capture");
+      }, UiEventPhase.Capture);
       var headerContent = item.onClose == null ? buttonNode : buildClosableHeader(context, item, buttonNode, rootId);
       header.add(headerContent);
       // Inactive accents are fully transparent and have no layout or hit-test effect.
@@ -424,8 +425,8 @@ class Tabs implements View {
     }
     );
     for (node in [buttonNode, closeNode]) {
-      node.on(UiEventKind.Focus, function(_) setHeaderFlag(context, rootId, focused, true), "capture");
-      node.on(UiEventKind.Blur, function(_) setHeaderFlag(context, rootId, focused, false), "capture");
+      node.on(UiEventKind.Focus, function(_) setHeaderFlag(context, rootId, focused, true), UiEventPhase.Capture);
+      node.on(UiEventKind.Blur, function(_) setHeaderFlag(context, rootId, focused, false), UiEventPhase.Capture);
     }
     slot.add(closeNode);
     row.add(slot);

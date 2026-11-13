@@ -1,3 +1,4 @@
+import haxeon.ui.core.UiEventPhase;
 import haxeon.reactive.Signal;
 import haxeon.ui.LayoutAxis;
 import haxeon.ui.LayoutFrame;
@@ -44,7 +45,7 @@ private class ScopeSubmissionView implements View {
     builds++;
     var root = scope.build(context);
     root.layout.style.zIndex = 7;
-    root.on(UiEventKind.Focus, _ -> focuses++, "capture");
+    root.on(UiEventKind.Focus, _ -> focuses++, UiEventPhase.Capture);
     root.add(context.createNode(context.id("overlay")));
     return root;
   }

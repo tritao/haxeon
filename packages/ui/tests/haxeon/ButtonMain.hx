@@ -1,3 +1,4 @@
+import haxeon.ui.core.UiEventPhase;
 import haxeon.reactive.Signal;
 import haxeon.ui.LayoutAxis;
 import haxeon.ui.LayoutSizing;
@@ -70,8 +71,8 @@ class ButtonMain {
       || !control.focusable || control.semantics != semantics || decoration.builds != 1) return 1;
     var events = new EventDispatcher(new FocusManager(), context.interactionStates);
     events.setRoot(root);
-    root.on(UiEventKind.Focus, function(_) focuses++, "capture");
-    root.on(UiEventKind.Blur, function(_) blurs++, "capture");
+    root.on(UiEventKind.Focus, function(_) focuses++, UiEventPhase.Capture);
+    root.on(UiEventKind.Blur, function(_) blurs++, UiEventPhase.Capture);
     events.focusEvent(control.id, UiEventKind.Focus);
     events.focusEvent(control.id, UiEventKind.Blur);
     if (focuses != 1 || blurs != 1) return 6;

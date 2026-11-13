@@ -1,6 +1,7 @@
 # Event phases
 
-`RenderNode.on(kind, handler, phase)` registers a listener for `capture`, `target`, or the default `bubble` phase.
+`UiEvent.phase` is the closed `UiEventPhase` enum: `Capture`, `Target`, or `Bubble`.
+`RenderNode.on(kind, handler, phase)` takes that enum and defaults to `UiEventPhase.Bubble`.
 Ordinary routed events visit ancestors in capture order from root toward the target, deliver at the target, then
 bubble toward the root. A target's default listener participates in target delivery exactly once.
 
@@ -18,3 +19,7 @@ Dispatch of an already constructed focus event allocates no objects or bytes, in
 Event construction and listener registration precede that interval. `FocusCaptureMain` tests routing and
 `FocusDispatchAllocations` measures dispatch through resolved, transformed nodes on HashLink, Wasm32 and Wasm GC,
 with inlining both disabled and enabled.
+
+Outside-pointer notifications use their separate subscription list and direct `Target` delivery. They retain the
+original pointer target and set `currentTarget` to the subscribed node; they do not traverse capture or bubble listeners.
+The internal target-only bubble listener policy selects listeners; it is not another event phase.

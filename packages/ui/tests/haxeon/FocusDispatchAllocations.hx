@@ -1,3 +1,4 @@
+import haxeon.ui.core.UiEventPhase;
 import haxeon.ui.Rect;
 import haxeon.ui.ResolvedLayoutItem;
 import haxeon.ui.Transform2D;
@@ -37,8 +38,8 @@ import haxeon.ui.core.WidgetId;
       );
     }
     for (kind in [UiEventKind.Focus, UiEventKind.Blur]) {
-      root.on(kind, function(_) deliveries++, "capture");
-      wrapper.on(kind, function(_) deliveries++, "capture");
+      root.on(kind, function(_) deliveries++, UiEventPhase.Capture);
+      wrapper.on(kind, function(_) deliveries++, UiEventPhase.Capture);
       target.on(kind, function(_) deliveries++);
     }
     focused = new UiEvent(UiEventKind.Focus, target.id);

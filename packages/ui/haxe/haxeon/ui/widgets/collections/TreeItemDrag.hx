@@ -1,5 +1,6 @@
 package haxeon.ui.widgets.collections;
 
+import haxeon.ui.core.UiEventPhase;
 import haxeon.ui.Point;
 import haxeon.ui.Rect;
 import haxeon.ui.core.BuildContext;
@@ -136,13 +137,13 @@ class TreeItemDrag implements haxeon.ui.animation.Animation {
         event.preventDefault();
         repaint();
       }
-    }, "capture");
+    }, UiEventPhase.Capture);
     root.on(UiEventKind.Click, function(event) {
       if (suppressClick) {
         event.preventDefault();
         event.stopImmediatePropagation();
       }
-    }, "capture");
+    }, UiEventPhase.Capture);
     for (key => row in rows) if (destination == key) {
       var color = context.theme.tokens.accent;
       row.onPaint(function(canvas, geometry) {

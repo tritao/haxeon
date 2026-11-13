@@ -42,7 +42,6 @@ class RenderNode {
   /** A retained body root can acquire a new logical owner without allocating a replacement node. */
   public function setScopeOwner(owner:RenderScope):Void throw "Only a reserved component root can own a render scope";
 
-  static inline final TargetBubblePhase = "target-bubble";
   public final id:WidgetId;
   public final layout:LayoutNode;
   /** Shared and empty until the first `add`, so leaves allocate no array; change it only through `add`, `remove` and `replaceWith`. */
@@ -589,10 +588,16 @@ class RenderNode {
 
   /** Capture listeners run before target delivery. Non-bubbling focus events still capture root to target;
 	 * a target's default listener runs once, and an ancestor's default listener does not run for them. */
-  public function on(kind:String, handler:UiEvent -> Void, phase:String = "bubble"):RenderNode {
-    if (phase != "capture"
-      && phase != "target" && phase != "bubble") throw "Event handlers require a kind and callback";
-    return addHandler(kind, handler, phase);
+  public function on(kind:String, handler:UiEvent -> Void, phase:UiEventPhase = UiEventPhase.Bubble):RenderNode {
+    var delivery = switch phase {
+      case Capture:
+        CaptureHandler;
+      case Target:
+        TargetHandler;
+      case Bubble:
+        BubbleHandler;
+    };
+    return addHandler(kind, handler, delivery);
   }
 
   /** A target-only bubble listener keeps its normal order after target-phase listeners. */
@@ -600,10 +605,10 @@ class RenderNode {
     kind:String,
     handler:UiEvent -> Void
   ):RenderNode {
-    return addHandler(kind, handler, TargetBubblePhase);
+    return addHandler(kind, handler, TargetBubbleHandler);
   }
 
-  function addHandler(kind:String, handler:UiEvent -> Void, phase:String):RenderNode {
+  function addHandler(kind:String, handler:UiEvent -> Void, phase:HandlerPhase):RenderNode {
     if (kind == null || kind.length == 0 || handler == null) throw "Event handlers require a kind and callback";
     if (handlers == null) handlers = [];
     handlers.push(new HandlerEntry(kind, phase, handler));
@@ -613,7 +618,7 @@ class RenderNode {
   /** Primary pointer clicks and semantic activation (keyboard/accessibility).
 	 * Other mouse buttons remain available to raw Click/context-menu handlers.
 	 */
-  public function onActivate(handler:UiEvent -> Void, phase:String = "bubble"):RenderNode {
+  public function onActivate(handler:UiEvent -> Void, phase:UiEventPhase = UiEventPhase.Bubble):RenderNode {
     if (handler == null) throw "Activation handlers require a callback";
     on(UiEventKind.Click, function(event) {
       if (event.button == 0) handler(event);
@@ -1004,17 +1009,17 @@ class RenderNode {
   }
 
   @:allow(haxeon.ui.core.EventDispatcher) function invoke(event:UiEvent):Void {
-    if (event.phase == "target") {
-      invokePhase(event, "target");
-      if (!event.immediatePropagationStopped) invokePhase(event, "bubble");
+    if (event.phase == UiEventPhase.Target) {
+      invokePhase(event, UiEventPhase.Target);
+      if (!event.immediatePropagationStopped) invokePhase(event, UiEventPhase.Bubble);
     } else invokePhase(event, event.phase);
   }
 
   /** Whether this node can observe the routed event in its position on the path. */
   @:allow(haxeon.ui.core.EventDispatcher) function hasEventHandler(kind:String, target:Bool):Bool {
     var entries = handlers;
-    if (entries != null) for (entry in entries) if (entry.kind == kind
-      && (target ? entry.phase != "capture" : (entry.phase == "capture" || entry.phase == "bubble"))) return true;
+    if (entries != null) for (entry in entries) if (entry.kind == kind && (target
+      ? entry.phase != CaptureHandler : (entry.phase == CaptureHandler || entry.phase == BubbleHandler))) return true;
     return false;
   }
 
@@ -1022,21 +1027,29 @@ class RenderNode {
     if (outsidePointerDownHandlers == null) return;
     for (handler in outsidePointerDownHandlers) {
       event.currentTarget = id;
-      event.phase = "outside";
+      event.phase = UiEventPhase.Target;
       handler(event);
       if (event.propagationStopped) return;
     }
   }
 
-  function invokePhase(event:UiEvent, phase:String):Void {
+  function invokePhase(event:UiEvent, phase:UiEventPhase):Void {
+    var delivery = switch phase {
+      case Capture:
+        CaptureHandler;
+      case Target:
+        TargetHandler;
+      case Bubble:
+        BubbleHandler;
+    };
     var entries = handlers;
     if (entries == null) return;
     // Handlers registered while one runs are visited too, as when each kind and phase had its own list.
     var index = 0;
     while (index < entries.length) {
       var entry = entries[index++];
-      if (entry.kind != event.kind || (entry.phase != phase
-        && !(entry.phase == TargetBubblePhase && phase == "bubble" && event.target.equals(id)))) continue;
+      if (entry.kind != event.kind || (entry.phase != delivery
+        && !(entry.phase == TargetBubbleHandler && phase == UiEventPhase.Bubble && event.target.equals(id)))) continue;
       entry.handler(event);
       if (event.immediatePropagationStopped) return;
     }
@@ -1114,13 +1127,21 @@ class BuiltNode {
 /** One event handler and the kind and phase it listens to; a node has few, so a flat list beats a map per node. */
 private class HandlerEntry {
   public final kind:String;
-  public final phase:String;
+  public final phase:HandlerPhase;
   public final handler:UiEvent -> Void;
 
-  public function new(kind:String, phase:String, handler:UiEvent -> Void) {
+  public function new(kind:String, phase:HandlerPhase, handler:UiEvent -> Void) {
     this.kind = kind;
     this.phase = phase;
     this.handler = handler;
   }
 
+}
+
+/** Listener selection is distinct from the phase observed by an event handler. */
+private enum HandlerPhase {
+  CaptureHandler;
+  TargetHandler;
+  BubbleHandler;
+  TargetBubbleHandler;
 }

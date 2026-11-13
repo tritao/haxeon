@@ -1,3 +1,4 @@
+import haxeon.ui.core.UiEventPhase;
 import Observable;
 import haxeon.ui.Canvas;
 import haxeon.ui.Color;
@@ -92,12 +93,12 @@ private class DecoratedControl implements View {
     events.push("root");
     child.on(UiEventKind.HoverEnter, childEvent -> {if (!childEvent.target.equals(child.id)) return;
     events.push("child");
-    child.on(UiEventKind.HoverEnter, _ -> events.push("added"), "target");
-    }, "target");
-    }, "target");
+    child.on(UiEventKind.HoverEnter, _ -> events.push("added"), UiEventPhase.Target);
+    }, UiEventPhase.Target);
+    }, UiEventPhase.Target);
     root.onTargetBubble(UiEventKind.HoverEnter, _ -> events.push("direct"));
     root.on(UiEventKind.HoverEnter, event -> {if (event.target.equals(child.id)) events.push("capture");
-    }, "capture");
+    }, UiEventPhase.Capture);
     root.on(UiEventKind.HoverEnter, event -> {if (event.target.equals(child.id)) events.push("bubble");
     });
     root.on(UiEventKind.HoverLeave, event -> {if (event.target.equals(child.id)) events.push("leave");

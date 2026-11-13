@@ -1,5 +1,6 @@
 package haxeon.ui.widgets.overlays;
 
+import haxeon.ui.core.UiEventPhase;
 import haxeon.ui.LayoutAxis;
 import haxeon.ui.Rect;
 import haxeon.ui.Insets;
@@ -177,13 +178,13 @@ class Tooltip implements View {
         pointer.suppressed = false;
         focused.update(!context.interactionStates.get(event.target).contains(StyleState.Hovered)
           && (showWhen == null || showWhen()));
-      }, "capture");
+      }, UiEventPhase.Capture);
       anchorNode.on(UiEventKind.Blur, function(_) {
         focused.update(false);
-      }, "capture");
+      }, UiEventPhase.Capture);
       anchorNode.on(UiEventKind.FocusLost, function(_) {
         focused.update(false);
-      }, "capture");
+      }, UiEventPhase.Capture);
       anchorNode.on(UiEventKind.HoverLeave, function(_) {
         state.update(false);
       }
@@ -358,7 +359,7 @@ class Tooltip implements View {
       header.on(UiEventKind.PointerDown, function(_) {
         if (hoverGroup != null) hoverGroup.cancel();
         else delay.cancel();
-      }, "capture");
+      }, UiEventPhase.Capture);
       return root;
     }
     );

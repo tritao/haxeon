@@ -1,5 +1,6 @@
 package inspector;
 
+import haxeon.ui.core.UiEventPhase;
 import haxeon.ui.Canvas;
 import haxeon.ui.LayoutAxis;
 import haxeon.ui.LayoutStyle;
@@ -64,7 +65,7 @@ class InspectionOverlay {
           event.stopPropagation();
         }
       }
-    }, "capture");
+    }, UiEventPhase.Capture);
   }
 
   static function updateHoveredAt(explorer:UiExplorer, x:Float, y:Float):Void {

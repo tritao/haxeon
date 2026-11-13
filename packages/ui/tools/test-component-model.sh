@@ -16,7 +16,7 @@ JSON
 export LD_LIBRARY_PATH="$root/out:$("$root/scripts/hashlink-path.sh")${LD_LIBRARY_PATH:+:$LD_LIBRARY_PATH}"
 fixtures=("$@")
 if [[ ${#fixtures[@]} == 0 ]]; then
-  fixtures=(WidgetIdCacheMain ScopeFullFrameOwnershipMain ScopeLegacyCacheLifetimeMain ScopeLegacyReplacementMain ScopeInstanceLifetimeMain ScopeCachedNestedLifetimeMain ScopeRootStateMain ScopeVariantRootMain ScopeNodeFieldsMain SelectionFocusMain MenuMeasurementMain IdSetMain StateStoreFlatMain ScopeRootBoundaryMain RenderScopeMain TrackedScopeMain EqualChildMain BoundTextMain BoundTextFailureMain BindingLifetimeMain TextIconMain IconButtonMain ButtonMain ScopeInputsMain FocusCaptureMain FocusDispatchAllocations)
+  fixtures=(UiEventPhaseMain WidgetIdCacheMain ScopeFullFrameOwnershipMain ScopeLegacyCacheLifetimeMain ScopeLegacyReplacementMain ScopeInstanceLifetimeMain ScopeCachedNestedLifetimeMain ScopeRootStateMain ScopeVariantRootMain ScopeNodeFieldsMain SelectionFocusMain MenuMeasurementMain IdSetMain StateStoreFlatMain ScopeRootBoundaryMain RenderScopeMain TrackedScopeMain EqualChildMain BoundTextMain BoundTextFailureMain BindingLifetimeMain TextIconMain IconButtonMain ButtonMain ScopeInputsMain FocusCaptureMain FocusDispatchAllocations)
 fi
 for fixture in "${fixtures[@]}"; do
   for inline in 0 1; do
@@ -104,6 +104,30 @@ const fs = require("fs");
   }
 })().catch(error => { console.error(error); process.exit(1); });
 JS
+        fi
+        if [[ $fixture == UiEventPhaseMain ]]; then
+            for invalid in UiEventPhaseAssignment UiEventPhaseRegistration; do
+                if HAXEON_INLINE="$inline" "$hl" "$compiler" "${options[@]}" --output="$tmp/invalid-$target" \
+                    --entry="$invalid" --root="$ui/tests/haxeon/negative" --root="$ui/haxe" \
+                    --root="$ui/bindings/haxe" --root="$root/packages/editor/src" --root="$root/packages/platform/src" \
+                    --ffi-interface="$platform_hxi" --ffi-projection="$root/packages/platform/bindings/nativekit.hxmap" \
+                    --ffi-interface="$net_hxi" --ffi-projection="$root/packages/platform/bindings/nativekit-net.hxmap" \
+                    --ffi-interface="$ui_hxi" --ffi-projection="$ui/bindings/nativekit-ui.hxmap" \
+                    "$ui/tests/haxeon/negative/$invalid.hx" > "$tmp/invalid.log" 2>&1; then
+                    echo "FAIL: $invalid accepted a string phase on $target" >&2
+                    exit 1
+                fi
+                if [[ $invalid == UiEventPhaseAssignment ]]; then
+                    expected='E1002: Type mismatch for field "event.phase"'
+                else
+                    expected='E1009: Type mismatch for argument 3 to "haxeon.ui.core.RenderNode.on"'
+                fi
+                if ! rg -Fq "$expected" "$tmp/invalid.log"; then
+                    cat "$tmp/invalid.log" >&2
+                    exit 1
+                fi
+                echo "PASS: $invalid rejects string phase on $target, inline=$inline"
+            done
         fi
         echo "PASS: $fixture on $target, inline=$inline"
     done

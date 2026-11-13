@@ -1,5 +1,6 @@
 package haxeon.ui.widgets.commands;
 
+import haxeon.ui.core.UiEventPhase;
 import haxeon.ui.Insets;
 import haxeon.ui.LayoutAlignmentY;
 import haxeon.ui.LayoutAxis;
@@ -171,7 +172,7 @@ class SearchPicker implements View {
     root.on(UiEventKind.Scroll, function(_) {
       tooltipDismissRevision++;
       onChanged();
-    }, "capture");
+    }, UiEventPhase.Capture);
     var recheckAfterLayout = geometryChanged;
     root.onResolved(function(_) {
       if (!recheckAfterLayout) return;
@@ -191,8 +192,8 @@ class SearchPicker implements View {
         default:
       }
     };
-    root.on(UiEventKind.KeyDown, navigate, "capture");
-    root.on(UiEventKind.KeyRepeat, navigate, "capture");
+    root.on(UiEventKind.KeyDown, navigate, UiEventPhase.Capture);
+    root.on(UiEventKind.KeyRepeat, navigate, UiEventPhase.Capture);
     return root;
   }
 }

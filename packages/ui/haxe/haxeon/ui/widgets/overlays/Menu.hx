@@ -1,4 +1,6 @@
 package haxeon.ui.widgets.overlays;
+
+import haxeon.ui.core.UiEventPhase;
 import haxeon.ui.widgets.KeyedView;
 import haxeon.ui.widgets.controls.Button;
 import haxeon.ui.widgets.controls.ButtonVariant;
@@ -222,7 +224,7 @@ class Menu implements View {
       }
       // The backdrop and blank menu space clear the previous hover selection.
       context.requestFocus(focusTarget.id);
-    }, "capture");
+    }, UiEventPhase.Capture);
     var navigate = function(event:haxeon.ui.core.UiEvent) {
       if (event.target.equals(root.id) && (event.key == UiKey.Enter || event.key == UiKey.Space)) {
         event.preventDefault();
@@ -255,8 +257,8 @@ class Menu implements View {
       }
       event.preventDefault();
     };
-    root.on(UiEventKind.KeyDown, navigate, "capture");
-    root.on(UiEventKind.KeyRepeat, navigate, "capture");
+    root.on(UiEventKind.KeyDown, navigate, UiEventPhase.Capture);
+    root.on(UiEventKind.KeyRepeat, navigate, UiEventPhase.Capture);
     // Capture visits ancestors only; the neutral menu can itself be the target.
     root.on(UiEventKind.KeyDown, navigate);
     root.on(UiEventKind.KeyRepeat, navigate);

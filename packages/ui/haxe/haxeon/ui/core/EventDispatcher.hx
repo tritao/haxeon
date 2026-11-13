@@ -736,7 +736,7 @@ class EventDispatcher {
   function dispatchPreparedDirect(node:RenderNode, event:UiEvent):Void {
     captureDirect(node, event);
     if (event.propagationStopped) return;
-    event.phase = "target";
+    event.phase = UiEventPhase.Target;
     event.setCurrentTarget(node);
     node.invoke(event);
   }
@@ -747,7 +747,7 @@ class EventDispatcher {
     var parent = node.parent;
     if (parent != null) captureDirect(parent, event);
     if (event.propagationStopped) return;
-    event.phase = "capture";
+    event.phase = UiEventPhase.Capture;
     event.setCurrentTarget(node);
     node.invoke(event);
   }
@@ -789,7 +789,7 @@ class EventDispatcher {
     if (length == 0) return;
     var clickProbe = event.kind == UiEventKind.Click ? pointerUpProbe : null;
     var clickStarted = clickProbe == null ? 0.0 : Sys.time();
-    event.phase = "capture";
+    event.phase = UiEventPhase.Capture;
     for (index in 0...(length - 1)) {
       event.setCurrentTarget(path[index]);
       path[index].invoke(event);
@@ -801,7 +801,7 @@ class EventDispatcher {
       clickStarted = now;
     }
     var targetIndex = length - 1;
-    event.phase = "target";
+    event.phase = UiEventPhase.Target;
     event.setCurrentTarget(path[targetIndex]);
     path[targetIndex].invoke(event);
     if (clickProbe != null) {
@@ -810,7 +810,7 @@ class EventDispatcher {
       clickStarted = now;
     }
     if (event.propagationStopped) return;
-    event.phase = "bubble";
+    event.phase = UiEventPhase.Bubble;
     var index = targetIndex - 1;
     while (index >= 0) {
       event.setCurrentTarget(path[index]);

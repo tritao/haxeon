@@ -1,3 +1,4 @@
+import haxeon.ui.core.UiEventPhase;
 import haxeon.ui.core.EventDispatcher;
 import haxeon.ui.core.FocusManager;
 import haxeon.ui.core.RenderNode;
@@ -14,21 +15,21 @@ class FocusCaptureMain {
     wrapper.add(target);
     for (kind in [UiEventKind.Focus, UiEventKind.Blur]) {
       root.on(kind, function(event) {
-        if (!event.target.equals(target.id)
-          || event.phase != "capture" || !event.currentTarget.equals(root.id)) throw "Invalid captured focus event";
+        if (!event.target.equals(target.id) || event.phase != UiEventPhase.Capture
+          || !event.currentTarget.equals(root.id)) throw "Invalid captured focus event";
         seen.push("root");
         if (detach) wrapper.detach();
-      }, "capture");
+      }, UiEventPhase.Capture);
       wrapper.on(kind, function(event) {
         seen.push("wrapper");
         if (stop) event.stopPropagation();
-      }, "capture");
+      }, UiEventPhase.Capture);
       target.on(kind, function(event) {
-        if (event.phase != "capture") throw "Target capture listener ran in the wrong phase";
+        if (event.phase != UiEventPhase.Capture) throw "Target capture listener ran in the wrong phase";
         seen.push("target-capture");
-      }, "capture");
+      }, UiEventPhase.Capture);
       target.on(kind, function(event) {
-        if (event.phase != "target") throw "Target listener ran outside target delivery";
+        if (event.phase != UiEventPhase.Target) throw "Target listener ran outside target delivery";
         seen.push("target");
       }
       );

@@ -978,6 +978,20 @@ retention scenarios, budgets that may only go down, memory runs, compiler suites
    `evidence/button-7b97-paired-frame-gc.json`; the combined allocation/diagnostic report is
    `evidence/button-7b97-full-census-report.json`. It remains rejected solely for telemetry's +320 bytes.
 
+   **Queued event phase port (implementation under validation).** `UiEventPhase` closes the public event
+   phase to `Capture`, `Target` and `Bubble`; registration takes the same enum, with `Bubble` as the default.
+   The existing target-only bubble subscription is an internal listener-selection policy, represented by a
+   separate private enum in the existing handler field. It adds no per-listener record or field and never
+   appears as an event phase. Outside-pointer notifications remain separate direct subscriptions and report
+   `Target`, with the original pointer target and subscribed node as `currentTarget`; there is no fourth routed
+   phase. Producers, readers, UI/example callers and outer callers are ported together, without string overloads.
+   The routing regression covers listener ordering, target-only selection and outside delivery; negative fixtures
+   reject string assignment and registration. All eighteen runtime target/inlining cases and twelve string-rejection cases pass;
+   dispatch allocation remains zero on all targets. Standalone HashLink pairs with inlining off/on
+   also preserve event-construction bytes (163,680 for the warmed 1,024-event counter window) and listener
+   registration bytes (106,576 for 1,024 listeners). These microbenchmarks do not replace the exact
+   unchanged-census check, which remains pending. This follows the parked Button checkpoint and does not authorize its publication.
+
    **Independent review corrections (local, before renewed gates).** The body-root batch `0892af06d` had four
    reproduced correctness defects. `ScopeRootStateMain` overflowed recursive `StateStore.retain` for a Checkbox
    with `onChange`; the actual TextField fixture with loaded fonts threw "Native scope resource has a different

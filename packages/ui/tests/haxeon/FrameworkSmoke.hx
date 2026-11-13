@@ -1,3 +1,4 @@
+import haxeon.ui.core.UiEventPhase;
 import haxeon.platform.Runtime;
 import haxeon.platform.event.EventPump;
 import haxeon.platform.event.PlatformEvent;
@@ -1994,13 +1995,13 @@ class FrameworkSmoke {
     );
     root.on(UiEventKind.Click, function(_) {
       captured++;
-    }, "capture");
+    }, UiEventPhase.Capture);
     root.on(UiEventKind.PointerDown, function(event) {
       if (suppressNextClick) {
         event.preventDefault();
         event.stopPropagation();
       }
-    }, "capture");
+    }, UiEventPhase.Capture);
     var buttonNode = root.children[0];
     var initialId = buttonNode.id;
     root.hitTestBehavior = HitTestBehavior.ChildrenOnly;
@@ -2021,7 +2022,7 @@ class FrameworkSmoke {
     var buttonLocalX = -1.0;
     root.on(UiEventKind.PointerDown, function(event) {
       if (event.data == "coordinate-test") rootLocalX = event.localX;
-    }, "capture");
+    }, UiEventPhase.Capture);
     buttonNode.on(UiEventKind.PointerDown, function(event) {
       if (event.data == "coordinate-test") {
         buttonLocalX = event.localX;
@@ -2405,16 +2406,16 @@ class FrameworkSmoke {
     var immediateNode = eventRoot.children[1];
     stopNode.on(UiEventKind.Click, function(event) {
       event.stopPropagation();
-    }, "target");
+    }, UiEventPhase.Target);
     stopNode.on(UiEventKind.Click, function(_) {
       sameTargetHandlers++;
-    }, "target");
+    }, UiEventPhase.Target);
     immediateNode.on(UiEventKind.Click, function(event) {
       event.stopImmediatePropagation();
-    }, "target");
+    }, UiEventPhase.Target);
     immediateNode.on(UiEventKind.Click, function(_) {
       immediateTargetHandlers++;
-    }, "target");
+    }, UiEventPhase.Target);
     eventRoot.on(UiEventKind.Click, function(_) {
       parentHandlers++;
     }
@@ -7047,11 +7048,11 @@ class FrameworkSmoke {
     root.on(UiEventKind.PointerDown, function(event) {
       order.push("root-capture");
       rootLocalX = event.localX;
-    }, "capture");
+    }, UiEventPhase.Capture);
     panel.on(UiEventKind.PointerDown, function(event) {
       order.push("panel-capture");
       panelLocalX = event.localX;
-    }, "capture");
+    }, UiEventPhase.Capture);
     target.on(UiEventKind.PointerDown, function(event) {
       order.push("target");
       targetLocalX = event.localX;

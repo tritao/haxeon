@@ -1,5 +1,6 @@
 package haxeon.ui.widgets.settings;
 
+import haxeon.ui.core.UiEventPhase;
 import Observable;
 
 import haxeon.ui.LayoutAlignmentY;
@@ -350,7 +351,7 @@ class SettingsPanel implements View implements Observable {
         event.stopPropagation();
         break;
       }
-    }, "capture");
+    }, UiEventPhase.Capture);
     return root;
   }
 

@@ -25,7 +25,7 @@ class UiEvent {
   public var localX(default, null):Float;
   public var localY(default, null):Float;
   public var currentTarget:Null<WidgetId>;
-  public var phase:String;
+  public var phase:UiEventPhase;
   public var defaultPrevented(default, null):Bool;
   public var propagationStopped(default, null):Bool;
   public var immediatePropagationStopped(default, null):Bool;
@@ -68,7 +68,7 @@ class UiEvent {
     localX = x;
     localY = y;
     currentTarget = null;
-    phase = "target";
+    phase = UiEventPhase.Target;
     defaultPrevented = false;
     propagationStopped = false;
     immediatePropagationStopped = false;
