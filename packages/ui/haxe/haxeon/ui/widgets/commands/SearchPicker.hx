@@ -86,12 +86,19 @@ class SearchPicker implements View {
 		var inputStyle = new LayoutStyle();
 		inputStyle.width = LayoutAxis.grow(); inputStyle.height = LayoutAxis.fixed(34);
 		inputStyle.padding = new Insets(8, 4, 8, 4); inputStyle.background = tokens.selectionField;
-		var input = new TextField("cv-input", query, function(value) { selectQuery = false; model.setQuery(value); }, inputStyle,
+		var input:TextField = null;
+		// The field reads its selection provider again right after an edit, before the next build: drop it at once,
+		// or the first typed character is selected and replaced by the second ("builds" became "uilds").
+		var release = function() {
+			selectQuery = false;
+			if (input != null) { input.selectionProvider = null; input.onSelectionChange = null; }
+		};
+		input = new TextField("cv-input", query, function(value) { release(); model.setQuery(value); }, inputStyle,
 			placeholder, new TextStyle(15), tokens.textPrimary);
 		if (selectQuery) {
 			var end = query.length;
 			input.selectionProvider = function() return new TextSelection(0, end);
-			input.onSelectionChange = function(_) selectQuery = false;
+			input.onSelectionChange = function(_) release();
 		}
 		input.placeholder = placeholder;
 		input.onSubmit = function(_) { model.navigate(UiKey.Enter, 0, 1); onChanged(); };
