@@ -75,6 +75,7 @@ committed; status is `done`, `active` or `queued`. The declaration model it rest
 | Enum-pass consolidation: a phase-order document first (reviewed by dev-71 before code), adapter escapes expressed as typed operations | a1 | `a1-internals` | active: phase-order proposal for dev-71 review |
 | Typed dynamic sites: producer and backend boundary proposal | a1 | `a1-internals` | active (claimed 2026-11-12) |
 | Wasm GC closure adapters as IR | a1 | `a1-enum-producer` | active (claimed 2026-11-12) |
+| Value-constructor destination through the scalar ABI: design note for dev-71 review | a1 | `a1-value-constructor-design` | active (claimed 2026-11-13) |
 | Documentation cleanup into `docs/history/` | a1 | `a1-internals` | done (2026-11-12) |
 | §13 reachability walk over declared providers, pruning before the passes, one frontend pass | dev-c5 | `warm-rebuild-reuse` | queued; waits on the §13 design decisions |
 | Warm-rebuild correctness: the edit sweep, the shared-helper origin (`docs/HELPER_OWNERSHIP.md`) | dev-c5 | `warm-rebuild-reuse` | active |
