@@ -16,7 +16,9 @@ class IrValueDynamicDispatch {
 			case None: false;
 		};
 
-	public static function rewrite(functions:Array<IrFunction>, objects:Array<IrObject>):Array<IrFunction> {
+	/** With `unreached` (the functions a plain build's walk did not reach) and `createdClasses`, only reached equality helpers and structs that can exist register; otherwise every one does. */
+	public static function rewrite(functions:Array<IrFunction>, objects:Array<IrObject>, ?unreached:Map<String, Bool>,
+			?createdClasses:Map<String, Bool>):Array<IrFunction> {
 		var values:Map<String, Bool> = [for (object in objects) if (object.isValue) object.name => true];
 		var names = new IrFunctionIndex("value-dynamic-dispatch", functions);
 		var objectsByName:Map<String, IrObject> = [for (object in objects) object.name => object];
@@ -46,16 +48,16 @@ class IrValueDynamicDispatch {
 		}
 		// Reflection can box a field without a source-level conversion. Its requested
 		// equality function still carries the concrete value type in its signature.
-		for (fn in functions) if (isValueEquality(fn) && fn.arguments.length == 2
+		for (fn in functions) if ((unreached == null || !unreached.exists(fn.name)) && isValueEquality(fn) && fn.arguments.length == 2
 				&& (switch fn.arguments[0].type { case Obj(name): values.exists(name); default: false; }))
 			register(fn.name.substr(EQUALITY_PREFIX.length), fn.arguments[0].type);
-		for (fn in functions) for (block in fn.blocks) for (located in block.instructions) switch located.value {
+		for (fn in functions) if (unreached == null || !unreached.exists(fn.name)) for (block in fn.blocks) for (located in block.instructions) switch located.value {
 			case Call(_, "__dynamic_equal", _): needsEqual = true;
 			default:
 		}
 		// A reflected value need not appear in any explicit Dynamic conversion.
 		// Still reject equality for a nonconforming reflected struct.
-		for (object in objects) if (object.isValue && !registeredValues.exists(object.name))
+		for (object in objects) if (object.isValue && !registeredValues.exists(object.name) && (createdClasses == null || createdClasses.exists(object.name)))
 			register("$reflected:" + object.name, Obj(object.name));
 		var suffixes = [for (suffix in requests.keys()) suffix]; suffixes.sort(Reflect.compare);
 		function replacement(located:Located<IrInstruction>):Null<Array<Located<IrInstruction>>>

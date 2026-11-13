@@ -23,6 +23,13 @@ class UnusedModuleInvarianceMain {
 		return c.compile("Main");
 	}
 
+	static function dump(fn:compiler.ir.IrFunction):String
+		return [
+			for (block in fn.blocks)
+				for (located in block.instructions)
+					Std.string(located.value)
+		].join("\n");
+
 	static function storage(result:compiler.Compiler.CompileResult):String
 		return [
 			for (declaration in result.ir.enums)
@@ -43,7 +50,7 @@ class UnusedModuleInvarianceMain {
 			if (other == null)
 				throw 'The function "$name" is gone when an unused module is present';
 			if (!compiler.ir.codec.IrFunctionStateEquality.same(fn, other))
-				throw 'The function "$name" changed when an unused module is present';
+				throw 'The function "$name" changed when an unused module is present:\n${dump(fn)}\n--\n${dump(other)}';
 		}
 		for (name in right.keys())
 			if (!left.exists(name))

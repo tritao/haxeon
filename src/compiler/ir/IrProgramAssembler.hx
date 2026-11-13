@@ -1,5 +1,6 @@
 package compiler.ir;
 
+import compiler.ir.IrTypeAwareWalk.IrWalkResult;
 import compiler.types.TypedAst.TypedFunctionRole;
 import compiler.ir.IrStaticNullChecks.IrStaticCheckCache;
 import compiler.runtime.RuntimeType;
@@ -594,6 +595,41 @@ class IrProgramAssembler {
 			}
 		var removedByPrune:Map<String, Bool> = [];
 		var reachedNativesAfterPrune:Null<Map<String, Bool>> = null;
+		// What a plain build's prune keeps (docs/REACHABILITY_WALK.md): the roots are the entry function, the initializers `__init` runs and the
+		// exported functions; the reflection helpers are generated after the walk, so what they will call is reached through `pruneDependencies`.
+		var pruneRoots = entryPoint == null ? ["main", "Main.main"] : [entryPoint];
+		if (staticInitializers != null && staticInitializers.length > 0) {
+			pruneRoots.push("__init");
+			for (initializer in staticInitializers)
+				pruneRoots.push(initializer.name);
+		}
+		if (exportedFunctions != null)
+			for (name in exportedFunctions)
+				pruneRoots.push(name);
+		function pruneInputOf(functions:Array<IrFunction>):IrProgram {
+			var input = new IrProgram(entryPoint == null ? "main" : entryPoint);
+			input.objects = objects;
+			input.interfaces = interfaces == null ? [] : interfaces;
+			input.enums = enums == null ? [] : enums;
+			input.staticFields = staticFields == null ? [] : staticFields;
+			input.functions = functions;
+			input.natives = natives == null ? [] : natives;
+			input.cNatives = cNatives == null ? [] : cNatives;
+			return input;
+		}
+		function pruneDependencies(functions:Array<IrFunction>):compiler.ir.IrTypeAwareWalk.IrClassDependencies {
+			var objectTable:Map<String, IrObject> = [for (object in objects) object.name => object],
+				present:Map<String, Bool> = [for (fn in functions) fn.name => true];
+			return {
+				symbols: ObjectReflection.helperSymbols(),
+				of: (className, symbol) -> ObjectReflection.dependencies(objectTable, generator.facts.observableFieldBits, className, symbol,
+					name -> present.exists(name))
+			};
+		}
+		// A plain build decides the Dynamic dispatch of enums and structs from what is reached: an enum or struct that no reached code can have, and
+		// a helper that only unreached code asked for, change nothing (the dispatches rewrite every `__dynamic_equal` site once any type registers).
+		var dispatchWalk:Null<IrWalkResult> = pruneFromEntry && objects != null ? IrEntryPrune.walk(pruneInputOf(allFunctions), pruneRoots, pruneDependencies(allFunctions)) : null;
+		var unreached:Null<Map<String, Bool>> = dispatchWalk == null ? null : [for (fn in allFunctions) if (!dispatchWalk.reached.exists(fn.name)) fn.name => true];
 		if (objects != null) {
 			var reflectionInput = new IrProgram(entryPoint == null ? "main" : entryPoint);
 			reflectionInput.objects = objects;
@@ -603,46 +639,31 @@ class IrProgramAssembler {
 			reflectionInput.functions = allFunctions;
 			reflectionInput.natives = natives == null ? [] : natives;
 			reflectionInput.cNatives = cNatives == null ? [] : cNatives;
+			// The reflection decisions of the enum dispatch read what reached code does, not what every loaded module declares.
+			if (dispatchWalk != null) {
+				reflectionInput.functions = [for (fn in allFunctions) if (dispatchWalk.reached.exists(fn.name)) fn];
+				reflectionInput.natives = [for (native in reflectionInput.natives) if (dispatchWalk.calledNatives.exists(native.name)) native];
+				reflectionInput.cNatives = [for (native in reflectionInput.cNatives) if (dispatchWalk.calledNatives.exists(native.name)) native];
+			}
 			allFunctions = compiler.compilation.IrPassMeter.measure("enum-dynamic-dispatch",
-				() -> IrEnumDynamicDispatch.rewrite(allFunctions, reflectionInput, reflectableObjects));
+				() -> IrEnumDynamicDispatch.rewrite(allFunctions, reflectionInput, reflectableObjects, unreached));
 			if (IrReachabilityReport.enabled()) {
 				reflectionInput.functions = allFunctions;
 				IrReachabilityReport.report("after enum dispatch (the 3a prune point)", reflectionInput);
 			}
 		}
 		if (objects != null)
-			allFunctions = compiler.compilation.IrPassMeter.measure("value-dynamic-dispatch", () -> IrValueDynamicDispatch.rewrite(allFunctions, objects));
+			allFunctions = compiler.compilation.IrPassMeter.measure("value-dynamic-dispatch",
+				() -> IrValueDynamicDispatch.rewrite(allFunctions, objects, unreached,
+					dispatchWalk == null ? null : dispatchWalk.createdClasses));
 		if (objects != null)
 			compiler.compilation.IrPassMeter.measureVoid("generic-owner-erasure", () -> GenericOwnerErasure.generate(generator.facts, allFunctions, objects));
 		// The prune point (docs/REACHABILITY_WALK.md): after the enum providers and generic owner erasure, which settle the class names and
 		// the helpers, and before every later pass. The entry function is created last, so the roots are what it calls: main, and the
 		// initializers `__init` runs.
 		if (pruneFromEntry && objects != null) {
-			var pruneInput = new IrProgram(entryPoint == null ? "main" : entryPoint);
-			pruneInput.objects = objects;
-			pruneInput.interfaces = interfaces == null ? [] : interfaces;
-			pruneInput.enums = enums == null ? [] : enums;
-			pruneInput.staticFields = staticFields == null ? [] : staticFields;
-			pruneInput.functions = allFunctions;
-			pruneInput.natives = natives == null ? [] : natives;
-			pruneInput.cNatives = cNatives == null ? [] : cNatives;
-			var roots = entryPoint == null ? ["main", "Main.main"] : [entryPoint];
-			if (staticInitializers != null && staticInitializers.length > 0) {
-				roots.push("__init");
-				for (initializer in staticInitializers)
-					roots.push(initializer.name);
-			}
-			if (exportedFunctions != null)
-				for (name in exportedFunctions)
-					roots.push(name);
-			// The reflection helpers are generated after the walk: a copy of an observable class will call the creation hook.
-			var objectTable:Map<String, IrObject> = [for (object in objects) object.name => object],
-				present:Map<String, Bool> = [for (fn in allFunctions) fn.name => true];
-			var pruned = IrEntryPrune.run(pruneInput, roots, {
-				symbols: ObjectReflection.helperSymbols(),
-				of: (className, symbol) -> ObjectReflection.dependencies(objectTable, generator.facts.observableFieldBits, className, symbol,
-					name -> present.exists(name))
-			});
+			var pruneInput = pruneInputOf(allFunctions);
+			var pruned = IrEntryPrune.run(pruneInput, pruneRoots, pruneDependencies(allFunctions));
 			removedByPrune = pruned.removed;
 			reachedNativesAfterPrune = pruned.calledNatives;
 			allFunctions = pruneInput.functions;

@@ -9,7 +9,9 @@ class IrEnumDynamicDispatch {
 	public static inline final EQUAL = "$enum-dynamic-equal";
 	public static inline final REFLECT = "$enum-dynamic-reflect";
 
-	public static function rewrite(functions:Array<IrFunction>, ?reflectionProgram:IrProgram, ?reflectableObjects:Array<String>):Array<IrFunction> {
+	/** With `unreached` (the functions a plain build's walk did not reach), only the others register what they need and are rewritten; otherwise every function does. */
+	public static function rewrite(functions:Array<IrFunction>, ?reflectionProgram:IrProgram, ?reflectableObjects:Array<String>,
+			?unreached:Map<String, Bool>):Array<IrFunction> {
 		var requests:Map<String, IrType> = [], boxes:Map<String, Bool> = [], views:Map<String, Bool> = [],
 			equalities:Map<String, String> = [], reflectiveEqualities:Map<String, String> = [],
 			occupied:Map<String, Bool> = [for (fn in functions) fn.name => true],
@@ -23,7 +25,7 @@ class IrEnumDynamicDispatch {
 				(reflective ? reflectiveEqualities : equalities).set(id, fn.name);
 				default:
 			}
-			for (block in fn.blocks) for (located in block.instructions) switch located.value {
+			if (unreached == null || !unreached.exists(fn.name)) for (block in fn.blocks) for (located in block.instructions) switch located.value {
 				case Intrinsic(output, EnumDynamicBox(type), arguments):
 					if (!isEnum(type) || arguments.length != 1 || !IrVerifier.sameType(arguments[0].type, type)
 						|| !IrVerifier.sameType(output.type, Dyn)) throw "Invalid enum Dynamic box signature";
@@ -67,7 +69,7 @@ class IrEnumDynamicDispatch {
 			if (helper != null) reflectiveRoots.push(helper);
 		}
 		functions = pruneReflectiveHelpers(functions, reflectiveRoots);
-		for (fn in functions) switch fn.kind {
+		for (fn in functions) if (unreached == null || !unreached.exists(fn.name)) switch fn.kind {
 			case EnumEquality(true) if (fn.arguments.length == 2 && isEnum(fn.arguments[0].type)): register(fn.arguments[0].type);
 			default:
 		}
@@ -91,6 +93,10 @@ class IrEnumDynamicDispatch {
 		}
 		var rewritten:Array<IrFunction> = [], unboxes:Map<String, IrType> = [], typeTests:Map<String, {type:IrType, exact:Bool}> = [], nextExtraUnbox = 0;
 		for (fn in functions) {
+			if (unreached != null && unreached.exists(fn.name)) {
+				rewritten.push(fn);
+				continue;
+			}
 			var blocks:Array<IrBlock> = [], changed = false, typeValues:Map<Int, IrType> = [];
 			for (block in fn.blocks) for (located in block.instructions) switch located.value {
 				case TypeValue(output, type): typeValues.set(output.id, type);
