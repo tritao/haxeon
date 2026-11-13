@@ -98,12 +98,16 @@ class WatchRun {
 				rotateEvents(events);
 				WatchEvents.emit(events, "rebuild-started", build, null, null, changedPaths(previous, baseline));
 				// The build's output streams into the events file as it prints: its console is not where anyone looks.
-				OutputCapture.begin(line -> WatchEvents.emit(events, "output-line", build, null, line));
+				// Lines are queued under the capture lock and appended in batches (WatchEventLines), all before the result event.
+				var lines = new WatchEventLines(events, build);
+				OutputCapture.begin(lines.add);
 				var updated = try rebuild(change) catch (error:Dynamic) {
 					OutputCapture.end();
+					lines.close();
 					throw error;
 				}
 				OutputCapture.end();
+				lines.close();
 				if (updated == null) {
 					Sys.stderr().writeString("haxeon: build failed; keeping the current app open\n");
 					WatchEvents.emit(events, "build-failed", build);

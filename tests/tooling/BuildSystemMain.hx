@@ -12,6 +12,7 @@ import build.execution.ContentDigestCache;
 import tools.DirectoryWatcher;
 import tools.WatchRun;
 import tools.WatchEvents;
+import tools.WatchEventLines;
 import build.execution.OutputCapture;
 import build.Target;
 import build.TargetLayout;
@@ -800,6 +801,35 @@ class BuildSystemMain {
 			"an event carries its kind, time and fields");
 		expect(events[1].line == "src/A.hx:4:2: E1005: \"quoted\"", "an output line survives JSON quoting");
 		expect(events[2].revision == 3 && events[2].message == "refused" && events[2].build == null, "fields that do not apply are null");
+		// A rebuild's output lines are queued and appended in batches; all of them are in the file, in order, before the
+		// event written after the batch is closed.
+		WatchEvents.reset(path);
+		var batch = new WatchEventLines(path, 2);
+		OutputCapture.begin(batch.add);
+		for (index in 0...500)
+			OutputCapture.record('line $index\n');
+		var waited = 0.0;
+		while (File.getContent(path).split("\n").length - 1 < 500 && waited < 10.0) {
+			Sys.sleep(0.05);
+			waited += 0.05;
+		}
+		expect(File.getContent(path).split("\n").length - 1 == 500, "queued lines reach the file while the build still runs");
+		OutputCapture.record("last\n");
+		OutputCapture.end();
+		batch.close();
+		WatchEvents.emit(path, "build-failed", 2);
+		var batched:Array<Dynamic> = [for (line in File.getContent(path).split("\n")) if (line.length > 0) haxe.Json.parse(line)];
+		expect(batched.length == 502, "every output line is written once, then the result: " + batched.length);
+		var ordered = batched.length == 502 && batched[500].line == "last" && batched[501].kind == "build-failed";
+		if (ordered)
+			for (index in 0...500)
+				if (batched[index].kind != "output-line" || batched[index].build != 2 || batched[index].line != 'line $index')
+					ordered = false;
+		expect(ordered, "batched output lines keep their order and come before the build's result");
+		// A file that cannot be written (its path is a directory) is not the build's problem.
+		var blocked = new WatchEventLines(root, 3);
+		blocked.add("dropped");
+		blocked.close();
 		removeTree(root);
 	}
 

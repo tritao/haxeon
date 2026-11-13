@@ -20,8 +20,9 @@ import sys.io.File;
 	- `patch-rejected` (live host): `revision` refused, `message` why; the app keeps the revision it ran.
 	- `reload`: `revision`, `message`; the watcher restarting the app, or the live host reloading its module.
 
-	The file is emptied when the watch starts, and moved to `<file>.1` once it passes `MAX_BYTES`. Each event is one
-	short append, so the watcher and the live host can both write it.
+	The file is emptied when the watch starts, and moved to `<file>.1` once it passes `MAX_BYTES`. Each write is one
+	append of whole lines, so the watcher and the live host can both write it. A build's `output-line` events are
+	appended in batches (`WatchEventLines`); every other event is its own append.
 **/
 class WatchEvents {
 	public static inline final ENVIRONMENT = "HAXEON_WATCH_EVENTS";
@@ -46,9 +47,14 @@ class WatchEvents {
 
 	public static function emit(path:Null<String>, kind:String, ?build:Int, ?revision:Int, ?line:String, ?changedFiles:Array<String>,
 			?reloadReasons:Array<String>, ?message:String):Void {
-		if (path == null)
-			return;
-		var text = Json.stringify({
+		if (path != null)
+			append(path, encode(kind, build, revision, line, changedFiles, reloadReasons, message));
+	}
+
+	/** One event as its line of the file, newline included. */
+	public static function encode(kind:String, ?build:Int, ?revision:Int, ?line:String, ?changedFiles:Array<String>, ?reloadReasons:Array<String>,
+			?message:String):String
+		return Json.stringify({
 			kind: kind,
 			time: Math.ffloor(Sys.time() * 1000.0),
 			build: build,
@@ -58,6 +64,9 @@ class WatchEvents {
 			reloadReasons: reloadReasons,
 			message: message
 		}) + "\n";
+
+	/** Appends whole event lines in one open, write and close. A failure is swallowed: the events file never breaks a build. */
+	public static function append(path:String, text:String):Void {
 		try {
 			#if haxeon
 			File.appendContent(path, text);
