@@ -435,3 +435,4 @@ struct-inline-store-flow	42
 struct-native-store-forward	42
 struct-native-handler-flow	42
 process-run-batch-file	42
+if-empty-block-branch	42

@@ -46,6 +46,9 @@ class Parser {
 	final tokens:Array<Token>;
 	var position:Int = 0;
 
+	/** Token index of an `if` that opens an expression `tryParseExpression` is trying (see `parseIfValueBranch`), or -1. */
+	var statementIfStart:Int = -1;
+
 	/** Braceless `try` bodies being parsed: their last statement may omit the semicolon before `catch`. */
 	var tryBodyDepth:Int = 0;
 
@@ -1628,14 +1631,18 @@ class Parser {
 			return Lambda(arguments, body, identity, start.merge(body.length == 0 ? previous().span : statementSpan(body[body.length - 1])));
 		}
 		if (match(TokenKind.If)) {
-			var start = previous().span;
+			var start = previous().span,
+				statementForm = position - 1 == statementIfStart;
 			consume(TokenKind.LeftParen);
 			var condition = parseExpression();
 			consume(TokenKind.RightParen);
-			var whenTrue = parseExpressionBranch();
+			var whenTrue = parseIfValueBranch(statementForm);
 			match(TokenKind.Semicolon);
 			consume(TokenKind.Else);
-			var whenFalse = parseExpressionBranch();
+			// `else if` continues the same statement.
+			if (statementForm && check(TokenKind.If))
+				statementIfStart = position;
+			var whenFalse = parseIfValueBranch(statementForm);
 			return Conditional(condition, whenTrue, whenFalse, start.merge(expressionSpan(whenFalse)));
 		}
 		if (match(TokenKind.Minus)) {
@@ -2073,6 +2080,21 @@ class Parser {
 		return ArrayComprehension(keyName, valueName, iterable, condition, value, true, start.merge(expressionSpan(value)));
 	}
 
+	/**
+	 * A branch of a keyword `if` in value position. When the `if` could also be a statement (`statementForm`: it opens
+	 * an expression that `tryParseExpression` is trying), `{}` is the empty block of that statement, not an empty
+	 * object: `if (c) {} else f()` at the end of a switch branch or a value block has no value, so this fails and the
+	 * caller parses the statement form. Anywhere else only a value can stand here and `{}` is an empty object, as in
+	 * `c ? {} : value`.
+	 */
+	function parseIfValueBranch(statementForm:Bool):AstExpression {
+		if (statementForm && check(TokenKind.LeftBrace) && peekKind(1) == TokenKind.RightBrace) {
+			advance();
+			fail(current(), "Expression block requires a result expression");
+		}
+		return parseExpressionBranch();
+	}
+
 	function parseExpressionBranch(comprehensionValue:Bool = false):AstExpression {
 		// `{}`, `{name: ...}` and `{"name": ...}` are object literals; a block here must end in a value.
 		if (!check(TokenKind.LeftBrace)
@@ -2332,10 +2354,15 @@ class Parser {
 		};
 
 	function tryParseExpression():Null<AstExpression> {
-		var saved = position, savedLambdas = lambdaMark();
+		var saved = position, savedLambdas = lambdaMark(), savedIfStart = statementIfStart;
+		// The caller parses a statement when this fails, so an `if` that opens the expression may be a statement `if`.
+		statementIfStart = check(TokenKind.If) ? position : -1;
 		try {
-			return parseExpression();
+			var expression = parseExpression();
+			statementIfStart = savedIfStart;
+			return expression;
 		} catch (_:CompileError) {
+			statementIfStart = savedIfStart;
 			position = saved;
 			rewindLambdas(savedLambdas);
 			return null;
