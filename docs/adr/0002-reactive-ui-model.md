@@ -884,12 +884,13 @@ retention scenarios, budgets that may only go down, memory runs, compiler suites
    The cache and replacement regressions pass all twelve target/inlining configurations. The fresh editor
    passes all three pilot cycles, as recorded below; no final stage-3 census or publication is claimed.
 
-   **Button allocation checkpoint (unpublished, 2026-11-12).** Both control and native pilot panels pass
+   **Button allocation checkpoint (unpublished; renewed on compiler base `7b97c092e`).** Both control and native pilot panels pass
    fresh-build verification for three complete CNC/telemetry cycles, including source replacement and hidden-panel
-   return. The correct control is the previous published UI head `835a2bbc8`, rebuilt against outer `60d9d4c36`
+   return. The correct control is the previous published UI head `835a2bbc8`, rebuilt against outer `e9173b977`
    and the same compiler/runtime as the candidate. These are the exact 15 census actions plus seven pilot actions;
-   this is an allocation checkpoint, not the final stage-3 comparison or a passing batch. Frame-time and GC-pause
-   percentiles, final formatting/rebase and the renewed full gates remain unfinished.
+   this is an allocation checkpoint, not the final stage-3 comparison or a passing batch. The following numbers include the sorted-array cache fix. Formatting, rebase, Tier 1 (895 passed,
+   zero failed), fixed-point self-hosting and all ten native UI gates pass. The renewed full Tier 2 gates
+   remain unfinished; publication still requires the lead decision on telemetry.
 
    | Action | Control objects | Native objects | Control bytes | Native bytes | Objects delta | Bytes delta |
    | --- | ---: | ---: | ---: | ---: | ---: | ---: |
@@ -907,11 +908,11 @@ retention scenarios, budgets that may only go down, memory runs, compiler suites
    | `hover-away` | 257 | 249 | 12,576 | 12,104 | -8 | -472 |
    | `type-char` | 417 | 417 | 16,456 | 16,456 | +0 | +0 |
    | `type-backspace` | 432 | 432 | 17,088 | 17,088 | +0 | +0 |
-   | `selection` | 8,649 | 8,564 | 585,416 | 590,912 | -85 | +5,496 |
+   | `selection` | 8,649 | 8,563 | 585,416 | 589,792 | -86 | +4,376 |
    | `cnc-unchanged` | 19 | 19 | 640 | 640 | +0 | +0 |
    | `cnc-select` | 2,193 | 2,193 | 123,272 | 123,272 | +0 | +0 |
    | `cnc-source` | 4,615 | 4,595 | 268,336 | 267,448 | -20 | -888 |
-   | `cnc-progress` | 5,466 | 5,467 | 278,240 | 278,736 | +1 | +496 |
+   | `cnc-progress` | 5,466 | 5,465 | 278,240 | 277,912 | -1 | -328 |
    | `cnc-hold` | 1,011 | 1,001 | 46,736 | 45,648 | -10 | -1,088 |
    | `cnc-resume` | 1,462 | 1,455 | 76,384 | 76,968 | -7 | +584 |
    | `telemetry-step` | 14,983 | 14,851 | 624,712 | 625,032 | -132 | +320 |
@@ -919,13 +920,13 @@ retention scenarios, budgets that may only go down, memory runs, compiler suites
    Selection and resume meet the structural object rule; their byte increases are measured representation costs.
    Selection includes thirteen additional `LayoutStyle` instances / 4,472 bytes from constructing immutable style
    inputs and copying them in Button. Its forty compiler-gap items contribute 3,040 bytes; the remaining net UI
-   residue is 2,456 bytes. Resume has six compiler-gap items / 456 bytes and 128 net bytes from node/owner, Button
+   residue is 1,336 bytes. Resume has six compiler-gap items / 456 bytes and 128 net bytes from node/owner, Button
    fields and array storage. Complete per-type sums and caller sites are in the DATA1 attribution files.
    Telemetry removes 132 objects but adds 320 bytes: its fourteen interface adapters / 784 bytes and fourteen
    boundary temporaries / 1,344 bytes account for the excess. Arithmetic removal of those compiler items gives
    minus 160 objects / minus 1,808 bytes; this is attribution, not a patched-compiler measurement.
 
-   **New cause requiring a lead report; no publication.** `cnc-progress` adds one object / 496 bytes. The exact
+   **Historical cause, fixed by the cache change below.** Before that fix, `cnc-progress` added one object / 496 bytes. The exact
    byte-site delta is `BuildContext.pruneKeyCaches`, not either compiler gap. A census-window-only native debugger
    breakpoint confirms `hl_freelist_resize`: old capacity 41, head 41, new capacity 62, payload 496 bytes.
    Its backtrace is `hl_freelist_resize` → `hl_freelist_add_range` → `hl_hbremove` →
@@ -940,7 +941,7 @@ retention scenarios, budgets that may only go down, memory runs, compiler suites
    `native-child-ownership-*-type-delta.json`, `instance-body-root-structural-byte-attribution.json`,
    `cnc-progress-freelist-confirmed-gdb.log` and its calibrated census JSON.
 
-   **Lead-directed UI cache fix (implemented; batch gates unfinished, based on `065e0de61`).** The follow-up trace identifies
+   **Lead-directed UI cache fix (implemented and remeasured).** The follow-up trace identifies
    nineteen stale paths ending in `slot:N/row/item:line-N/text`: CNC auto-follow moves a fixed-size virtualized
    window. The slot roots remain, but each recycled slot changes its keyed text child. Removing those old IDs
    is correct; retaining dead IDs or dropping the item key would change identity semantics. Repeated removal and
@@ -953,10 +954,29 @@ retention scenarios, budgets that may only go down, memory runs, compiler suites
    On the freshly built `065e0de61` compiler base and pinned HashLink `7d33c19fb`, the minimal original-map path
    fails after eight warm cycles with "Steady key-cache pruning allocated backing storage: 2736". The new
    alternating-window regression passes on HashLink, Wasm32 and Wasm GC, with inlining off/on: 1,024 frames
-   allocate nothing, retain exactly the live IDs and keep stable backing storage. These focused tests do not
-   establish the editor-action result: the fresh 22-action census and full batch gates remain pending. Evidence is
+   allocate nothing, retain exactly the live IDs and keep stable backing storage. The fresh 22-action census on `7b97c092e` confirms `cnc-progress` at 5,465 objects / 277,912 bytes:
+   one object / 328 bytes below the correct control. Its pruning byte-buffer allocation falls to zero. Selection
+   additionally saves one object / 1,120 bytes versus the pre-fix candidate; no other action increases. Full
+   batch gates remain unfinished. Evidence is
    DATA1 `evidence/cache-old-path-new-base.json` and `evidence/cache-new-base-three-target.log`. Telemetry
    publication still waits for the lead's answer on its two compiler-gap items; no temporary exception is assumed.
+
+   **Paired frame and GC diagnostics.** Seven alternating control/native pairs cover all 22 actions.
+   Frame p50 / p95 / p99 in milliseconds (control → native): selection
+   2.904 / 5.786 / 8.595 → 3.071 / 6.093 / 6.752 (21 samples per side); CNC progress
+   0.897 / 1.489 / 1.642 → 0.944 / 1.436 / 1.819 (672 samples); CNC resume
+   0.495 / 0.806 / 0.898 → 0.530 / 0.668 / 0.690 (21 samples); telemetry step
+   2.664 / 4.414 / 4.543 → 2.767 / 4.654 / 4.849 (63 samples). These are diagnostics,
+   not timing acceptance thresholds. Every action's frame GC-pause p50 / p95 / p99 is zero on both
+   sides: no collection occurred within those measured frame intervals. Frame GC scheduling was enabled;
+   it suppresses automatic collection during rendering and may collect at the end of a frame or during idle.
+   The counters include `endFrame`, so a forced boundary collection would be counted. Process-wide pilot
+   counters record 21 collections on each side across the seven pairs, outside the selected frames; the
+   maximum individual process pauses were 3.362 ms control and 3.561 ms native. These zero-inclusive per-frame percentiles do
+   not describe the distribution of individual GC pauses or establish a GC-free application. Complete raw
+   frame samples, all-action percentiles and process GC counters are in DATA1
+   `evidence/button-7b97-paired-frame-gc.json`; the combined allocation/diagnostic report is
+   `evidence/button-7b97-full-census-report.json`. It remains rejected solely for telemetry's +320 bytes.
 
    **Independent review corrections (local, before renewed gates).** The body-root batch `0892af06d` had four
    reproduced correctness defects. `ScopeRootStateMain` overflowed recursive `StateStore.retain` for a Checkbox

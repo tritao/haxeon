@@ -9,8 +9,9 @@ once to the target's target/default listeners. A target capture listener runs on
 in target delivery. An ancestor's default listener is not invoked. `stopPropagation()` stops the remaining path;
 `stopImmediatePropagation()` also stops the current node's remaining listeners.
 
-A component wrapper observes descendant focus using a capture listener. Its child can then be replaced without
-losing the wrapper's listener. Handlers see the original event target, their own `currentTarget`, and their phase.
+An ancestor observes descendant focus using a capture listener. Components use their body root as their node
+identity; they do not introduce a wrapper for event routing. Handlers see the original event target, their own
+`currentTarget`, and their phase.
 The ancestor path is fixed before capture handlers run, including when a handler detaches a node.
 
 Dispatch of an already constructed focus event allocates no objects or bytes, including traversal storage.
