@@ -133,6 +133,15 @@ class IrReachability {
 				for (argument in method.arguments)
 					pending.push(argument);
 			}
+		// An instruction can name a type without producing a value of it: a type value (the runtime type of a class, for a dispatch on it).
+		for (fn in program.functions)
+			for (block in fn.blocks)
+				for (located in block.instructions)
+					switch located.value {
+						case TypeValue(_, type):
+							pending.push(type);
+						default:
+					}
 		var classes = [for (name in kept.keys()) name];
 		function mention(type:IrType):Void
 			switch type {

@@ -188,6 +188,7 @@ class TestCatalog {
 		"UnreachableTerminatorMain",
 		"ClassIdMain",
 		"UnusedModuleInvarianceMain",
+		"TrimTablesMain",
 		"GenericDelimiterMain",
 		"LoopNarrowingMain",
 		"MapEntryFactsMain",
