@@ -1212,6 +1212,22 @@ retention scenarios, budgets that may only go down, memory runs, compiler suites
    `undo-order-62f64276d-editor-verification-corrected.json`, and `hl-census-stop-race-repro.md`.
    Final mounted-idle parity, allocation acceptance and the remaining gates are still required.
 
+   **Reusable interaction transactions (unpublished undo follow-up).** Correct input routing exposes the old
+   interaction store's per-change boxed flags and temporary change records. The store now keeps one typed
+   record per observed identity and reuses its pending and borrowed change arrays, preserving the first
+   value in a transaction and omitting net-zero changes. The regression fixture fails the old store's
+   allocation assertion and passes on HashLink, Wasm32 and Wasm GC with inlining off/on: 1,024 prepared
+   workloads allocate zero objects/bytes. This is fixture evidence, not action-census acceptance.
+   On compiler base `3d8a96e58`, Tier 1 passes 904/904; the focused store fixture passes all six configurations.
+   Other HashLink UI fixtures encounter the control-reproduced IR verification error
+   `Unknown IR call "haxeon.reactive.ReactiveRuntime.recordObservableCreation"` in
+   `Reflect.reflectCopy.haxeon.editor.TextDocument`; no compiler workaround was added. The remaining focused
+   Wasm checks pass twelve configurations and eight explicit zero-allocation checks. Fresh editor modules,
+   action captures and the remaining gates are still required before publishing the undo batch. Evidence:
+   `interaction-store-regression-control-summary.json`, `interaction-store-3d8a96e58-tier1-summary.json`,
+   `interaction-store-3d8a96e58-focused.log`, `interaction-store-3d8a96e58-remaining-wasm-summary.json`, and
+   `ui-hl-reflect-copy-3d8a96e58-report.md` under the DATA1 evidence directory.
+
    **Independent review corrections (local, before renewed gates).** The body-root batch `0892af06d` had four
    reproduced correctness defects. `ScopeRootStateMain` overflowed recursive `StateStore.retain` for a Checkbox
    with `onChange`; the actual TextField fixture with loaded fonts threw "Native scope resource has a different
