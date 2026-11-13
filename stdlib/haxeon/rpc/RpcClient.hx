@@ -64,6 +64,26 @@ class RpcClient {
 		};
 	}
 
+	/**
+		Retries now instead of waiting out the backoff, for a host that learned the network is back or changed. A client that is
+		waiting to retry (Disconnected) dials at the next poll with the backoff reset. With `redial`, a client that is connecting,
+		handshaking or connected is dropped first, because its socket belongs to the old network and is dead; without it only a
+		client that is waiting is touched, so a healthy connection survives. A closed client stays closed (its error was terminal).
+	**/
+	public function retryNow(redial:Bool = false):Void {
+		if (state == Closed)
+			return;
+		if (state != Disconnected) {
+			if (!redial)
+				return;
+			failed({code: "network_changed", message: "network_changed", ambiguous: false}, true);
+			if (state == Closed)
+				return;
+		}
+		retryStep = baseBackoffMs;
+		retryAt = clock();
+	}
+
 	public function close():Void {
 		if (state == Closed)
 			return;
