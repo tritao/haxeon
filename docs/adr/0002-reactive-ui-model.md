@@ -1013,11 +1013,12 @@ retention scenarios, budgets that may only go down, memory runs, compiler suites
    `panel-flows` stops with "Inspection camera ignored its view label", reproduced on the fresh control with
    verification enabled. The budget runner repeats that same known retention failure; its three performance
    scenario results contain no budget failures. This is a documented outer baseline skip, not a weakened
-   verifier or raised ceiling. The seven final frame/GC pairs are complete and reported above; remaining
-   native UI scripts are still pending.
+   verifier or raised ceiling. All ten native UI scripts pass, including the full framework/dock/input and
+   1,101-node layout transaction gates. The seven final frame/GC pairs are complete and reported above.
    Fresh reports are DATA1 `evidence/publish-9707-exact-22-comparison.json`,
    `publish-9707-enum-comparison.json`, `publish-9707-full-gate-summary.json` and
-   `publish-9707-outer-gate-classification.json`. Publication still requires a final fetch/rebase and Tier 1.
+   `publish-9707-outer-gate-classification.json` and `publish-9707-ten-ui-summary.json`. Publication still
+   requires a final fetch/rebase and Tier 1.
 
    **Independent review corrections (local, before renewed gates).** The body-root batch `0892af06d` had four
    reproduced correctness defects. `ScopeRootStateMain` overflowed recursive `StateStore.retain` for a Checkbox
