@@ -1286,6 +1286,77 @@ retention scenarios, budgets that may only go down, memory runs, compiler suites
    DATA1 evidence: `scope-id-cold-c6da3300b-summary.json`,
    `typed-scope-id-c6da3300b-frozen-inputs.json`, and `typed-scope-id-c6da3300b-component-model-summary.json`.
 
+   **Decorations as inputs — direction approved, implementation deferred until undo publication.** The reviewed inventory
+   contains 69 site groups in 46 files: 40 production UI groups, 10 outer groups (including one test),
+   18 UI-test groups and one example group. Outer references are pinned to the requested `60d9d4c36`;
+   UI references are the formatted local checkpoint plus the typed-ID draft. File/line contributions,
+   alias and post-submit reviews, and synthetic regression requirements are in DATA1
+   `decorations-reviewed-inventory.md` and `decorations-reviewed-sites-c6da3300b.json`. This is a
+   source inventory, not a promise that all mutations are expressible as root style overrides.
+
+   Approved API: one optional immutable `RootInputs` data argument to `View.build(context, ?inputs)`
+   and the scope body protocol. It contains ordinary arrays of existing typed `StyleValue` declarations,
+   typed event/listener records, geometry/paint callbacks and overlay Views, plus typed node-property
+   declarations for semantics, cursor, tab index, command scope, window decoration and hit testing.
+   Presence is explicit: a missing declaration inherits the authored value; a declaration may set the
+   default value or clear a nullable property. No builder DSL, authored-value comparison, binding
+   primitive, wrapper View or layout node is introduced. For example a caller supplies a key listener
+   and width declaration when building a Button instead of mutating the returned RenderNode.
+
+   Each body authors its root from these inputs before resolving child style or mounting overlays.
+   The existing native owner retains the effective input reference for independent refresh; component
+   descriptions do not acquire another nullable field. Forwarding scopes compose outer inputs with
+   their authored root inputs before invoking the inner body, with caller declarations taking precedence
+   and listener order preserved. Composition happens when inputs change, not on unchanged mounted
+   frames. Inputs participate in equal-child decisions. A null input takes a direct path without a new
+   record, array or closure. Production callers cease mutating built nodes in the same port batch;
+   no apply-after-build adapter is introduced at any point.
+
+   `ScopeRootBoundary` then loses its style copy, child copy, authored-field snapshots, override masks,
+   handler counts and transfer operations. Root identity, current-root resolution, focus/capture and
+   resource lifetime stay native. Overlay Views build as body-owned children, with dependencies and
+   resources tracked by that body; ownership checks must stop treating input overlays as foreign roots.
+   Replacement rebuilds from inputs rather than moving old children or handlers.
+
+   Root data alone does not cover the whole inventory. Tooltip placement/lifting becomes authored
+   anchor/content slots with a host-owned overlay tree; WindowTitleBar client/drag regions become
+   authored child inputs; Text/HighlightedText intrinsic rendering and ellipsis feedback remain leaf
+   responsibilities. Row drag paint and option navigation are supplied while creating keyed rows.
+   Built-node registration callbacks become identity/geometry observations without mutation authority.
+   Inspector events and its paint overlay belong to host inputs/host overlay structure supplied before
+   submission. Deliberate verification fault injection remains low-level test code. Tests retain field
+   clearing, listener order, focus identity, forwarding refresh and overlay lifetime coverage.
+
+   Cost evidence rules out simply adding a field to every constructor. The isolated twenty-Button
+   probe on `c6da3300b`, inline off/on, measures an absent nullable field at +0 objects / +0 bytes per
+   mount on HL, but +0 / +8 bytes on Wasm32. A present seven-reference header with null payload arrays
+   adds +1 object / +64 bytes on HL and +1 / +48 bytes on Wasm32 relative to the plain description.
+   Wasm GC reports +0 absent objects and +1 present object; engine byte sizes are unavailable. These
+   are storage measurements with the old boundary still present, not the full payload or net API cost.
+   Proposed owner storage replaces the boundary rather than adding per-description storage; its net
+   absent cost and present declaration costs must be measured on all targets before implementation
+   acceptance. No zero-byte or census claim is inferred from removing snapshots. Evidence:
+   `decoration-header-c6da3300b-hl-summary.json`, `decoration-header-c6da3300b-wasm-driver.log`, and
+   `decorations-input-storage-c6da3300b-findings.md`.
+
+   Lead decision: finish the undo batch's return-tab object increase and full census, and publish that
+   batch before starting this implementation. First land the protocol and native-owner storage alone,
+   before porting callers. Inputs replace boundary state on the existing owner, never add a field to
+   every component description. Measure absent inputs on HL, Wasm32 and Wasm GC: zero additional
+   objects and zero additional bytes per mount are required. Report present-declaration costs per kind;
+   the header-only probes above do not satisfy this gate, including unavailable Wasm GC byte evidence.
+
+   Then port family batches in order: controls; overlays/tooltip; window chrome; collections rows;
+   inspector/host. Each batch removes its family's post-build mutations in the same commit and ports
+   the corresponding outer callers on the local outer branch (10 inventoried outer groups overall).
+   Preserve explicit field clearing, listener order, focus identity, forwarding refresh and overlay
+   lifetime coverage. The last family deletes the remaining ScopeRootBoundary transfer machinery:
+   style/child copies, snapshots, masks and handler counts. All batches meet the census rule:
+   steady-state objects and bytes cannot regress; structural objects cannot regress, and structural
+   byte increases require measured, recorded attribution. The census decides acceptance, not a mount
+   microbenchmark. The non-root-data sites described above remain required scope; stop and report if
+   any requires a new primitive. No decorations production API code has started.
+
    **Independent review corrections (local, before renewed gates).** The body-root batch `0892af06d` had four
    reproduced correctness defects. `ScopeRootStateMain` overflowed recursive `StateStore.retain` for a Checkbox
    with `onChange`; the actual TextField fixture with loaded fonts threw "Native scope resource has a different
