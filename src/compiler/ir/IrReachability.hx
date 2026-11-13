@@ -173,6 +173,57 @@ class IrReachability {
 		program.objects = [for (object in program.objects) if (kept.exists(object.name)) object];
 	}
 
+	/**
+	 * Check mode, after `trimTables`: every class a function of the written program names (an argument, a result, an instruction's output or a type
+	 * value) and every class a kept table names is in the program's class table. Without it a missing class surfaces as a lowering failure in the backend
+	 * ("Object type must be registered before use"); this names the function that mentions it.
+	 */
+	public static function checkTables(program:IrProgram):Void {
+		var present:Map<String, Bool> = [for (object in program.objects) object.name => true];
+		var owner = "";
+		function check(type:IrType):Void
+			switch type {
+				case Obj(name):
+					if (!present.exists(name))
+						throw 'trimmed tables: "$owner" names class "$name", which the module written for this build does not have';
+				case Array(element), Nullable(element), Iterator(element):
+					check(element);
+				case Function(arguments, result):
+					for (argument in arguments)
+						check(argument);
+					check(result);
+				default:
+			}
+		for (fn in program.functions) {
+			owner = fn.name;
+			check(fn.result);
+			for (argument in fn.arguments)
+				check(argument.type);
+			for (block in fn.blocks)
+				for (located in block.instructions) {
+					var output = IrOperands.output(located.value);
+					if (output != null)
+						check(output.type);
+					switch located.value {
+						case TypeValue(_, type):
+							check(type);
+						default:
+					}
+				}
+		}
+		for (object in program.objects) {
+			owner = "class " + object.name;
+			if (object.base != null)
+				check(Obj(object.base));
+			for (field in object.fields)
+				check(field.type);
+		}
+		for (field in program.staticFields) {
+			owner = "global " + field.name;
+			check(field.type);
+		}
+	}
+
 	/** The toString implementation an object of exactly this class uses, if any. */
 	public static function stringMethod(program:IrProgram, objectName:String):Null<String>
 		return IrProgramIndex.of(program).findMethod(objectName, "__string");

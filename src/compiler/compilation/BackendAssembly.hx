@@ -118,6 +118,8 @@ class BackendAssembly {
 				reachable = walk.reachable;
 			compiler.ir.IrReachability.prune(assemblyIr, reachable);
 			compiler.ir.IrReachability.trimTables(assemblyIr, walk);
+			if (compiler.ir.IrEntryPrune.checking())
+				compiler.ir.IrReachability.checkTables(assemblyIr);
 			regenerated = [for (name in regenerated) if (reachable.exists(name)) name];
 			relocated = [for (name in relocated) if (reachable.exists(name)) name];
 		}

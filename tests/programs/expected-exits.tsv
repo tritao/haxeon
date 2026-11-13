@@ -458,6 +458,8 @@ observable-reflect-write	42
 observable-reflect-copy	42
 observable-reflect-copy-called	42
 observable-reflect-copy-unreached	42
+dynamic-equal-unconstructed-struct	42
+is-of-type-unconstructed-class	42
 struct-managed-nullable-narrow	42
 reactive-thread-isolation	42
 reactive-owner-thread	42
