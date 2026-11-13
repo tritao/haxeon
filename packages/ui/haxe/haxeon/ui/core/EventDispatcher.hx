@@ -1,6 +1,6 @@
 package haxeon.ui.core;
-import nativekit.ffi.NativeKitTypes;
 
+import nativekit.ffi.NativeKitTypes;
 import nativekit.ffi.NativeKit;
 import haxeon.ui.core.CursorShape as UiCursorShape;
 import haxeon.ui.style.StyleState;
@@ -24,12 +24,16 @@ class EventDispatcher {
   var hitTestProvider:Null<Float -> Float -> Array<RenderNode>>;
   var pointerCaptureHandler:Null<Bool -> Void>;
   var platformPointerCaptured:Bool;
+
   /** Outcome of the most recent routed command invocation. */
   public var lastCommandResult(default, null):Null<CommandResult>;
+
   /** Accessibility escape from editor Tab shortcuts; widgets retain first refusal. */
   public var tabMovesFocus:Bool = false;
+
   /** Optional host hook for command palettes, status bars, and diagnostics. */
   public var onCommandResult:Null<CommandResult -> Void>;
+
   /** Optional elapsed-time probe for pointer release stages. */
   public var pointerUpProbe:Null<String -> Float -> Void>;
 
@@ -762,17 +766,24 @@ class EventDispatcher {
     if (node != null && (node.enabled || !enabled)) setState(node, state, enabled);
   }
 
+  static final RoutedStates:StyleState = StyleState.Hovered | StyleState.Pressed | StyleState.Focused;
+
   function setState(node:RenderNode, state:StyleState, enabled:Bool):Void {
+    var input = interactionStates.get(node.id) & RoutedStates;
+    var routed = state & RoutedStates;
+    input = enabled ? input.insert(routed) : input.remove(routed);
     var current = nodesById != null ? nodesById.get(node.id.value) : root == null ? null : root.find(node.id);
     if (current != null && current != node) {
-      // Previous hover paths can still point at nodes replaced by this submission.
-      node.routeStates((enabled ? (node.states).insert(state) : (node.states).remove(state)));
+      // Old paths can refer to a replaced body. Its authored flags stay local;
+      // input flags belong to the logical identity shared by both physical instances.
+      var oldFlags = node.states.remove(RoutedStates) | input;
+      if (oldFlags != node.states) node.routeStates(oldFlags);
       node = current;
     }
-    var next = (enabled ? (node.states).insert(state) : (node.states).remove(state));
-    if (next == node.states) return;
-    node.routeStates(next);
-    interactionStates.set(node.id, next);
+    var next = node.states.remove(RoutedStates) | input;
+    if (next != node.states) node.routeStates(next);
+    // A cached body may already carry this flag even though the input store does not.
+    interactionStates.set(node.id, input);
   }
 
   static function interactionOwner(path:Array<RenderNode>):Null<RenderNode> {
@@ -826,7 +837,6 @@ private struct PointerLocation {
   public final pointerId:Int;
   public final x:Float;
   public final y:Float;
-
   public function new(pointerId:Int, x:Float, y:Float) {
     this.pointerId = pointerId;
     this.x = x;

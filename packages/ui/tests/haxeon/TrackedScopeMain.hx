@@ -45,6 +45,9 @@ class TrackedScopeMain {
     root.add(decoration);
     unrelated.value = 1;
     if (context.hasPendingRenderScopes() || runs != 1) return 2;
+    var instances = new Map<Int, RenderNode>();
+    root.walk(node -> instances.set(node.id.value, node));
+    context.beginLayoutSubmission(instances);
     read.value = 2;
     if (!context.hasPendingRenderScopes()) return 3;
     var previousChild = root;

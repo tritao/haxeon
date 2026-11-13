@@ -1,6 +1,5 @@
 import Equatable;
 import haxeon.reactive.Signal;
-import haxeon.reactive.ReactiveRuntime;
 import haxeon.ui.LayoutVisualKind;
 import haxeon.ui.core.BuildContext;
 import haxeon.ui.core.RenderNode;
@@ -108,12 +107,12 @@ class LegacyScopeHost implements View {
     root.walk(node -> mounted.set(node.id.value, node));
     context.retainRenderScopeState(mounted);
     store.endFrame();
-    // The cache hit must retain the leaf's effect beyond the frame that touched it.
+    // The cache hit must retain the leaf's binding owner beyond the frame that touched it.
     context.beginFrame();
     context.retainRenderScopeState(mounted);
     store.endFrame();
     value.value = 1;
-    ReactiveRuntime.flushEffects();
+    context.flushTextBindings(root);
     var valid = value.hasFieldReaders(0) && root.layout.text == "1";
     context.dispose();
     return valid;
@@ -150,7 +149,7 @@ class LegacyScopeHost implements View {
     valid = valid && Leaf.builds == count + 1;
     if (!valid) Sys.println("Native read boundary parent suppression: builds="
       + Leaf.builds + " expected=" + (count + 1));
-    context.applyPatches();
+    context.applyPatches(host);
     context.flushRenderScopes(host);
     valid = valid && Leaf.builds == count + 2 && !context.hasPendingRenderScopes();
     if (!valid) Sys.println("Native read boundary parent commit: builds=" + Leaf.builds + " expected="

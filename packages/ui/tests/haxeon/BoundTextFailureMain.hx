@@ -1,4 +1,3 @@
-import haxeon.reactive.ReactiveRuntime;
 import haxeon.reactive.Signal;
 import haxeon.ui.LayoutFrame;
 import haxeon.ui.LayoutSession;
@@ -10,21 +9,33 @@ import haxeon.ui.core.StateStore;
 import haxeon.ui.theme.Theme;
 
 /** A failed binding must not suppress the next host frame request. */
-@:access(haxeon.ui.LayoutSession)
-class BoundTextFailureMain {
+@:access(haxeon.ui.LayoutSession) @:access(haxeon.ui.core.UiContext) class BoundTextFailureMain {
   static function main():Int {
     var ui = new UiContext(new LayoutSession(cast 0));
     var frame = new LayoutFrame(300, 80), source = new Signal<Int>(1), scheduled = 0;
     ui.onAnimationFrameRequested = () -> scheduled++;
-    var view:View = new BoundText("value", () -> {
-      var value = source.value;
-      if (value == 2) throw "expected binding failure";
-      return Std.string(value);
+    var view:View = new BoundText("value", () -> {var value = source.value;
+    if (value == 2) throw "expected binding failure";
+    return Std.string(value);
     });
+    ui.buildContext.setViewport(frame.width, frame.height);
+    ui.buildContext.setEnvironmentViewport(frame.width, frame.height);
     ui.buildContext.beginFrame();
     var node = ui.buildContext.trackReads(() -> view.build(ui.buildContext));
     ui.buildContext.captureRootDependencies();
     ui.stateStore.endFrame();
+    // Mount the prepared node in the real context, so the retry exercises its binding-only frame.
+    ui.root = node;
+    ui.submittedBuildKey = "cache";
+    ui.submittedNodeCount = 1;
+    ui.submittedFrameWidth = frame.width;
+    ui.submittedFrameHeight = frame.height;
+    ui.submittedInteractionRevision = ui.interactionStates.revision;
+    ui.submittedStyleRevision = ui.buildContext.styleRevision;
+    ui.submittedAnimationRevision = ui.animations.revision;
+    ui.submittedGestureRevision = ui.gestures.revision;
+    ui.submittedTheme = ui.buildContext.theme;
+    ui.submittedStyleSheet = ui.buildContext.styleSheet;
     source.value = 2;
     if (scheduled != 1) return 1;
     var failed = false;
@@ -32,7 +43,7 @@ class BoundTextFailureMain {
     if (!failed) return 2;
     source.value = 3;
     if (scheduled != 2) return 3;
-    ReactiveRuntime.flushEffects();
+    ui.buildContext.flushTextBindings(node);
     if (node.layout.text != "3" || node.semantics == null || node.semantics.label != "3") return 4;
     return rebindFailure() ? 42 : 5;
   }
@@ -46,9 +57,8 @@ class BoundTextFailureMain {
     store.endFrame();
     context.beginFrame();
     var rejectedSource = new Signal<Int>(0);
-    var broken = new BoundText("replace", () -> {
-      var value = rejectedSource.value;
-      throw "expected rebind failure";
+    var broken = new BoundText("replace", () -> {var value = rejectedSource.value;
+    throw "expected rebind failure";
     });
     var failed = false;
     try context.trackReads(() -> broken.build(context)) catch (_:Dynamic) failed = true;
@@ -56,7 +66,7 @@ class BoundTextFailureMain {
     var connected = source.hasFieldReaders(0) && !rejectedSource.hasFieldReaders(0);
     source.value = 2;
     var recovered = true;
-    try ReactiveRuntime.flushEffects() catch (_:Dynamic) recovered = false;
+    try context.flushTextBindings(node) catch (_:Dynamic) recovered = false;
     var valid = failed && connected && recovered && node.layout.text == "2";
     context.dispose();
     return valid;

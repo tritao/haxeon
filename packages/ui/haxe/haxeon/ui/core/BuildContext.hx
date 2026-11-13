@@ -2,9 +2,7 @@ package haxeon.ui.core;
 
 import haxeon.reactive.Derived;
 import haxeon.reactive.ReactiveRuntime;
-
 import haxeon.platform.Surface;
-
 import haxeon.ui.FontCollection;
 import haxeon.ui.LayoutStyle;
 import haxeon.ui.core.RenderNode.BuiltNode;
@@ -28,31 +26,46 @@ class BuildContext {
   public final gestures:GestureArena;
   public final animations:AnimationScheduler;
   public final interactionStates:InteractionStateStore;
+
   /** Application commands available to command-bound widgets. */
   public final commands:CommandRegistry;
+
   /** Invocation context shared by command-bound widgets in this frame. */
   final commandContextState:CommandContextState = new CommandContextState();
+
   final commandFlagEntries:Array<{registry:CommandRegistry, id:String, value:Derived<Int>}> = [];
+
   public var commandContext(get, never):CommandContext;
+
   function get_commandContext():CommandContext return commandContextState.value;
+
   public final styleResolver:StyleResolver;
   public final environment:StyleEnvironment;
+
   /** Optional diagnostic sink for named view builds: name, preparation, build, nodes. */
   public var buildProbe:Null<String -> Float -> Float -> Int -> Void> = null;
+
   public var theme(default, null):Theme;
   public var styleSheet(default, null):StyleSheet;
+
   /** Logical viewport dimensions for frame-local placement decisions. */
   public var viewportWidth(default, null):Float;
+
   public var viewportHeight(default, null):Float;
+
   /** A resolved widget can request another native layout pass in this submit. */
   public var layoutFeedbackRequested(default, null):Bool = false;
+
   var styleParent:Null<ComputedStyle>;
+
   /** Bumped when the theme or application sheet is replaced, so swaps never reuse a fingerprint. */
   var styleEpoch:Int = 0;
+
   var focusRequester:WidgetId -> Bool;
   var deferredFocusRequester:WidgetId -> Void;
   final claimed:IdSet;
   final idsByPath:WidgetIdCache;
+
   static inline var SCOPE_GROWTH_PRUNE = 256;
 
   // What pruneKeyCaches last saw, so it can tell when nothing could have gone stale.
@@ -62,29 +75,43 @@ class BuildContext {
 
   /** How many times pruneKeyCaches walked the caches, rather than finding nothing changed. */
   public var keyCachePrunes(default, null):Int;
+
   var rootScope:KeyScope;
   var scope:KeyScope;
   var textStyleStack:Array<ResolvedTextStyle>;
+
   /**
 	 * When false, pointer and focus changes rebuild every cache that holds the widget, as before widgets updated themselves
 	 * (selfUpdating) and hover that no rule matches was ignored. Tests turn it off to build a reference tree to compare the
 	 * updated one against.
 	 */
   public var updateInPlace:Bool = true;
+
   /** While set, retained caches build their subtree afresh instead of reusing it; UiContext.verifyRetention sets it. */
   public var bypassRetention:Bool = false;
+
   /** Bumped when the retained tree is released, so self-updating builds made before it are not registered again. */
   var updatingEpoch:Int = 0;
+
   /** Widgets that rebuild themselves in place, by widget ID; see selfUpdating. */
   final selfUpdatingBuilds:Map<Int, SelfUpdatingBuild> = new Map();
+
   /** Stable membership storage: iterating the map would copy its keys on every frame. */
   final selfUpdatingIds:Array<Int> = [];
+
   var updatingRegistrations:Int = 0;
   var pendingPatches:Array<SelfUpdatingBuild> = [];
+
   /** True while a patch runs: its IDs are claimed later, when the retained tree that holds them is claimed. */
   var patching:Bool = false;
+
   final patchPriors:Map<Int, RenderNode> = new Map();
+
+  /** Borrowed for this submission; cached instances with equal IDs are not previous-frame nodes. */
+  var submittedInstances:Null<Map<Int, RenderNode>>;
+
   final renderScopes:Array<RenderScope> = [];
+  var textBindings:Null<Array<LiveTextBinding>>;
   var buildingRenderScope:Bool = false;
   var activeRenderScope:Null<RenderScope>;
   var pendingScopeRootId:Null<WidgetId>;
@@ -183,6 +210,7 @@ class BuildContext {
 
   /** Computed inherited style supplied by the nearest composing parent. */
   public var inheritedStyle(get, never):Null<ComputedStyle>;
+
   function get_inheritedStyle():Null<ComputedStyle> return styleParent;
 
   /** Builds descendants with the given computed style as their inheritance source. */
@@ -241,6 +269,7 @@ class BuildContext {
 
   /** The style revision `hoverTypes` was collected at, and the widget types of the rules that match on hover (any, if one names none). */
   var hoverTypesRevision:Int = -1;
+
   final hoverTypes:Map<String, Bool> = new Map();
   var hoverAnyType:Bool = false;
 
@@ -266,6 +295,7 @@ class BuildContext {
 
   /** Revision fingerprint used to classify style work before the next submission. */
   public var styleRevision(get, never):Int;
+
   function get_styleRevision():Int {
     // Swapping the theme or application sheet bumps the epoch, so the fingerprint changes even when
     // the replacement has taken the same number of edits (light to dark) as the sheet it replaced.
@@ -560,20 +590,25 @@ class BuildContext {
 
   /** Pending run-once binding work asks the host for a frame without rebuilding its owner. */
   public var bindingRequestRevision(default, null):Int = 0;
+
   public var onBindingFrameRequested:Null<Void -> Void>;
+
   var bindingFrameRequested:Bool = false;
+
   public function requestBindingFrame():Void {
     if (bindingFrameRequested) return;
     bindingFrameRequested = true;
     bindingRequestRevision++;
     if (onBindingFrameRequested != null) onBindingFrameRequested();
   }
+
   public function consumeBindingFrameRequest():Int {
     bindingFrameRequested = false;
     return bindingRequestRevision;
   }
 
   public var hasPendingPatches(get, never):Bool;
+
   inline function get_hasPendingPatches():Bool return pendingPatches.length > 0;
 
   /** Queues the patch without asking for a frame; the caller already has one running. False when the widget is not self-updating. */
@@ -675,15 +710,15 @@ class BuildContext {
 	 */
   public var onPatched:Null<RenderNode -> Void> = null;
 
-  /** Rebuilds the pending self-updating widgets and reconciles them with the retained tree; runs after beginFrame, before the root builds. */
-  public function applyPatches(?topology:RenderTreeTopology):Void {
+  /** Rebuild only owners still attached after ancestor/root structure has settled. */
+  public function applyPatches(submittedRoot:Null<RenderNode>, ?topology:RenderTreeTopology):Void {
     if (pendingPatches.length == 0) return;
     var work = pendingPatches;
     pendingPatches = [];
     for (entry in work) {
       var old = entry.root;
       // Unmounted since it was asked, or built again by an ancestor's rebuild, which owns it now.
-      if (old == null || selfUpdatingBuilds.get(old.id.value) != entry) {
+      if (old == null || selfUpdatingBuilds.get(old.id.value) != entry || !attachedToRoot(old, submittedRoot)) {
         entry.pending = false;
         entry.reactivePending = false;
         entry.forcePending = false;
@@ -719,7 +754,7 @@ class BuildContext {
         recordPriors(old, old, inPlace);
         if (inPlace) {
           var before = old.reconcile(fresh, entry.built, topology);
-          if (!patchPriors.exists(old.id.value)) patchPriors.set(old.id.value, before);
+          if (wasSubmitted(old) && !patchPriors.exists(old.id.value)) patchPriors.set(old.id.value, before);
         } else {
           // Not possible to reconcile: the new node takes its place, without what callers added to the old one.
           old.replaceWith(fresh);
@@ -740,6 +775,45 @@ class BuildContext {
       var patched = onPatched;
       if (patched != null && entry.root != null) patched(entry.root);
     }
+  }
+
+  @:allow(haxeon.ui.core.RenderScope) @:allow(haxeon.ui.core.LiveTextBinding) function attachedToRoot(
+    node:RenderNode,
+    submittedRoot:Null<RenderNode>
+  ):Bool {
+    if (node == null || submittedRoot == null) return false;
+    while (node.parent != null) node = node.parent;
+    return node == currentRoot(submittedRoot);
+  }
+
+  @:allow(haxeon.ui.core.LiveTextBinding) function registerTextBinding(binding:LiveTextBinding):Void {
+    if (textBindings == null) textBindings = [];
+    textBindings.push(binding);
+  }
+
+  @:allow(haxeon.ui.core.LiveTextBinding) function unregisterTextBinding(binding:LiveTextBinding):Void {
+    if (textBindings != null) textBindings.remove(binding);
+  }
+
+  /** Hidden retained bindings keep dirty dependencies until their nodes are mounted again. */
+  public function flushTextBindings(root:RenderNode):Void {
+    var bindings = textBindings;
+    if (bindings == null) return;
+    var index = 0, failed = false;
+    var firstError:Dynamic = null;
+    while (index < bindings.length) {
+      var binding = bindings[index];
+      try binding.flush(root) catch (error:Dynamic) {
+        if (!failed) firstError = error;
+        failed = true;
+      }
+      if (index < bindings.length && bindings[index] == binding) index++;
+    }
+    if (failed) throw firstError;
+  }
+
+  @:allow(haxeon.ui.core.UiContext) function retryTextBindings():Void {
+    if (textBindings != null) for (binding in textBindings) binding.retryAfterFailedFrame();
   }
 
   /** Each reconciled build owns its current dependencies and resources, even when its enclosing cache stays unchanged. */
@@ -824,20 +898,33 @@ class BuildContext {
   }
 
   /** Keeps the nodes of `node`'s subtree as priors for the frame comparison, except `root` itself when `skipRoot`. */
+  inline function wasSubmitted(node:RenderNode):Bool return submittedInstances != null
+    && submittedInstances.get(node.id.value) == node;
+
   function recordPriors(node:RenderNode, root:RenderNode, skipRoot:Bool):Void {
-    if ((node != root || !skipRoot) && !patchPriors.exists(node.id.value)) patchPriors.set(node.id.value, node);
+    if ((node != root || !skipRoot) && wasSubmitted(node) && !patchPriors.exists(node.id.value)) patchPriors.set(
+      node.id.value,
+      node
+    );
     for (child in node.children) recordPriors(child, root, skipRoot);
   }
 
   /** Nodes of the submitted tree changed directly since it was submitted, with how each looked before; see willEditRetained. */
   final retainedEdits:Array<RenderNode> = [];
-  var retainedEditEpoch:Int = 0;
+
+  @:allow(haxeon.ui.core.RenderScope) @:allow(haxeon.ui.core.UiContext) var retainedEditEpoch:Int = 0;
   final retainedEditCaches:Map<Int, RetainedEditCache> = new Map();
   final retainedEditCacheIds:Array<Int> = [];
 
   /** Start the lifetime of geometry feedback priors after event edits for this submission have been captured. */
-  public function beginLayoutSubmission():Void retainedEditEpoch++;
+  public function beginLayoutSubmission(previousInstances:Map<Int, RenderNode>):Void {
+    if (previousInstances == null) throw "A layout submission requires its previous physical instances";
+    submittedInstances = previousInstances;
+    retainedEditEpoch++;
+  }
+
   final retainedEditPriors:Array<RenderNode> = [];
+
   /** Bumped by each first edit of a node between frames; a different value from the submitted one means a frame is due. */
   public var retainedEditRevision(default, null):Int = 0;
 
@@ -870,6 +957,7 @@ class BuildContext {
   public function editAnnounced(node:RenderNode):Bool return retainedEdits.indexOf(node) >= 0;
 
   public var hasRetainedEdits(get, never):Bool;
+
   inline function get_hasRetainedEdits():Bool return retainedEdits.length > 0;
 
   /** Hands the frame comparison the prior state of edited nodes still in the submitted tree, and forgets the rest. */
@@ -888,7 +976,10 @@ class BuildContext {
   /** The nodes patches replaced this frame, by ID, so the frame comparison can see what changed. */
   public function patchedPriors():Map<Int, RenderNode> return patchPriors;
 
-  public function endPatchFrame():Void patchPriors.clear();
+  public function endPatchFrame():Void {
+    patchPriors.clear();
+    submittedInstances = null;
+  }
 
   function registerSelfUpdatingBuild(id:Int, entry:SelfUpdatingBuild):Void {
     var previous = selfUpdatingBuilds.get(id);
@@ -1154,7 +1245,7 @@ class BuildContext {
     return false;
   }
 
-  public function flushRenderScopes(submittedRoot:Null<RenderNode>):Void {
+  public function flushRenderScopes(submittedRoot:Null<RenderNode>, deferUnmount:Bool = false):Void {
     var previous = buildingRenderScope;
     buildingRenderScope = true;
     try {
@@ -1168,17 +1259,18 @@ class BuildContext {
           if (stateStore.scopeOwner(owner.resourceId) != owner) {
             owner.dispose();
             progressed = true;
-          } else if (owner.mounted && !owner.attached(submittedRoot)) {
-            // Full-frame retention has not run yet. A detached cached variant can
-            // still retain this ticket and its latest descendant resources.
-            if (stateStore.frameActive || buildFeedbackRequested || owner.retainedByParent()) owner.mounted = false;
-            else owner.dispose();
-            progressed = true;
-          } else if (owner.mounted
+          } else if (owner.mounted && owner.attached(submittedRoot)
             && owner.pending && !hasPendingScopeAncestor(owner) && !hasPendingUpdatingAncestor(owner.root)) {
             owner.refresh();
             progressed = true;
           }
+        }
+      }
+      if (!deferUnmount) for (owner in renderScopes) {
+        if (!owner.disposed && owner.mounted && !owner.attached(submittedRoot)) {
+          // Pending ancestors can adopt cached children; sweep only after structure settles.
+          if (stateStore.frameActive || buildFeedbackRequested || owner.retainedByParent()) owner.mounted = false;
+          else owner.dispose();
         }
       }
       buildingRenderScope = previous;
@@ -1288,10 +1380,13 @@ class BuildContext {
 
   /** Signal and observable-field reads captured by the current frame. */
   final observed:Dependencies = new Dependencies(true);
+
   /** A nested read log for self-updating builds; root caches must not subscribe to their local state. */
   final localObserved:Dependencies = new Dependencies(true);
+
   var activeObserved:Dependencies;
   var activeUpdatingBuild:Null<SelfUpdatingBuild>;
+
   /** Root subscription schedules a frame for any signal read in the mounted tree. */
   final rootDependencies:Dependencies = new Dependencies();
 
@@ -1329,7 +1424,6 @@ class BuildContext {
     observed.clear();
     localObserved.clear();
   }
-
 
   /** Returns state IDs touched after a retained subtree build marker. */
   public function stateIdsUsedSince(marker:Int, ?previous:Array<Int>):Array<Int> return stateStore.usedIdsSince(
@@ -1394,10 +1488,13 @@ class SelfUpdatingBuild {
   public var forcePending(get, set):Bool;
   public var buildsFromHover(get, set):Bool;
   public var epoch:Int = 0;
+
   /** Advances for every completed build, including quiet in-place patches. */
   public var buildRevision:Int = 0;
+
   /** What the builder last made on `root`, before callers decorated it: rebuilds replace just that (RenderNode.reconcile). */
   public var built:Null<BuiltNode> = null;
+
   // Low bits hold the four flags and registry ownership; each retained snapshot contributes 32.
   var ownership:Int = 8;
 
@@ -1440,24 +1537,31 @@ class SelfUpdatingBuild {
   }
 
   inline function get_pending():Bool return (ownership & 1) != 0;
+
   inline function set_pending(value:Bool):Bool {
     if (value) ownership |= 1;
     else ownership &= ~1;
     return value;
   }
+
   inline function get_reactivePending():Bool return (ownership & 2) != 0;
+
   inline function set_reactivePending(value:Bool):Bool {
     if (value) ownership |= 2;
     else ownership &= ~2;
     return value;
   }
+
   inline function get_forcePending():Bool return (ownership & 4) != 0;
+
   inline function set_forcePending(value:Bool):Bool {
     if (value) ownership |= 4;
     else ownership &= ~4;
     return value;
   }
+
   inline function get_buildsFromHover():Bool return (ownership & 8) != 0;
+
   inline function set_buildsFromHover(value:Bool):Bool {
     if (value) ownership |= 8;
     else ownership &= ~8;
@@ -1513,6 +1617,7 @@ class UpdatingDependencies {
   public var stateIds:Null<Array<Int>>;
   public var observed:Null<Dependencies>;
   public var children:Null<InteractionStateSnapshot>;
+
   public function new() {
   }
 }

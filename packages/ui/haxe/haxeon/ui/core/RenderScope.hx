@@ -7,19 +7,26 @@ import haxeon.ui.style.ComputedStyle;
 /** A structural computation whose identity is its actual body root. */
 class RenderScope extends ReactiveDependencySet {
   public var root(default, null):RenderNode;
+
   var boundary:ScopeRootBoundary;
   @:allow(haxeon.ui.core.BuildContext) var parentScope:Null<RenderScope>;
+
   public final component:ScopeView;
   public final capturedScope:KeyScope;
   public final capturedParent:Null<ComputedStyle>;
   public final capturedText:Array<ResolvedTextStyle>;
+
   final context:BuildContext;
+
   public final resourceId:Int;
   public final identityId:Int;
+
   @:allow(haxeon.ui.core.BuildContext) var mounted:Bool = true;
+
   public var disposed(default, null):Bool = false;
   public var pending(default, null):Bool = false;
-  var validating:Bool = false;
+
+  @:allow(haxeon.ui.core.UiContext) var builtEpoch:Int = 0;
 
   public function new(
     resourceId:Int,
@@ -80,17 +87,17 @@ class RenderScope extends ReactiveDependencySet {
   function refreshBody(rootId:WidgetId):Void {
     pending = false;
     if (disposed) return;
-    validating = true;
+    pending = true;
     try {
       if (!dirty) {
-        validating = false;
+        pending = false;
         return;
       }
     } catch (error:Dynamic) {
-      validating = false;
+      pending = false;
       throw error;
     }
-    validating = false;
+    pending = false;
     var previous = root;
     var parent = previous == null ? null : previous.parent;
     var slot = parent == null ? -1 : parent.children.indexOf(previous);
@@ -118,6 +125,7 @@ class RenderScope extends ReactiveDependencySet {
       } else if (parent != null && next.parent == null) parent.insertChild(slot, next);
       root = next;
       finishDependencies();
+      builtEpoch = context.retainedEditEpoch;
     } catch (error:Dynamic) {
       if (previous != null && parent != null && previous.parent != parent) {
         previous.detach();
@@ -137,7 +145,7 @@ class RenderScope extends ReactiveDependencySet {
   }
 
   function requestRun():Void {
-    if (disposed || pending || validating) return;
+    if (disposed || pending) return;
     pending = true;
     context.requestBindingFrame();
   }
@@ -162,9 +170,6 @@ class RenderScope extends ReactiveDependencySet {
 
   /** A parent rerun may remove this body before its pending work is visited. */
   public function attached(submittedRoot:Null<RenderNode>):Bool {
-    if (disposed || submittedRoot == null) return false;
-    var node = root;
-    while (node.parent != null) node = node.parent;
-    return node == context.currentRoot(submittedRoot);
+    return !disposed && context.attachedToRoot(root, submittedRoot);
   }
 }

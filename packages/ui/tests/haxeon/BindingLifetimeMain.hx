@@ -1,5 +1,4 @@
 import Equatable;
-import haxeon.reactive.ReactiveRuntime;
 import haxeon.reactive.Signal;
 import haxeon.ui.component.BoundText;
 import haxeon.ui.component.EqualChild;
@@ -13,7 +12,7 @@ struct LifetimeProps implements Equatable {
   public function new(value:Int) this.value = value;
 }
 
-/** Compiles against the old control too: cached mounted text must keep its effect alive. */
+/** Cached mounted text must keep its native dependency owner alive. */
 class BindingLifetimeMain {
   static function main():Int {
     var store = new StateStore();
@@ -35,15 +34,12 @@ class BindingLifetimeMain {
     var root = context.trackReads(() -> view.build(context));
     var ids = context.stateIdsUsedSince(marker);
     store.endFrame();
-    // The old control uses an updater record; native scopes use state-store resource ownership.
-    // Exercise each implementation's retained lifetime without rebuilding the mounted body.
+    // Retain the native owner and its resources without rebuilding the mounted body.
     context.beginFrame();
     context.retainStateIds(ids);
-    var legacyOwner = context.updatingBuild(root);
-    if (legacyOwner != null) context.retainUpdatingState(legacyOwner);
     store.endFrame();
     value.value = 1;
-    ReactiveRuntime.flushEffects();
+    context.flushTextBindings(root);
     var textMatches = false;
     root.walk(node -> {if (node.layout.text == "1") textMatches = true;
     });

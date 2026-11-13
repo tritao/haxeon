@@ -2,17 +2,12 @@ package haxeon.ui.core;
 
 import haxeon.ui.NativeEnums;
 import haxeon.reactive.ReactiveRuntime;
-
 import haxeon.ui.debug.RenderCost;
-
 import haxeon.platform.Surface as PlatformSurface;
 import nativekit.ffi.NativeKitTypes.WindowDecorationRegion as NativeWindowDecorationRegion;
-
 import haxeon.ui.widgets.text.Text;
-
 import nativekit.ffi.NativeKitTypes;
 import nativekit.ffi.NativeKitTypes.CursorShape as NativeCursorShape;
-
 import haxeon.ui.LayoutFrame;
 import haxeon.ui.LayoutSession;
 import haxeon.ui.LayoutChanges;
@@ -50,6 +45,7 @@ class UiContext {
   final session:LayoutSession;
   final layoutChanges:LayoutChanges = new LayoutChanges();
   final comparisonFrame:UiStyleInvalidationFrame;
+
   public final stateStore:StateStore;
   public final clipboard:ClipboardService;
   public final buildContext:BuildContext;
@@ -58,24 +54,33 @@ class UiContext {
   public final gestures:GestureArena;
   public final animations:AnimationScheduler;
   public final interactionStates:InteractionStateStore;
+
   /** Application commands and shortcut scopes owned by this UI context. */
   public final commands:CommandRegistry;
+
   /** Current document/selection context used by command-bound UI. */
   public var commandContext(default, null):CommandContext;
+
   public var root(default, null):Null<RenderNode>;
+
   /** Opt-in developer selection. Drawn after application paint and excluded from hit testing. */
   public var inspectionHighlight(default, set):Int = 0;
+
   /** Optional detailed paint probe. Disabled unless an inspector explicitly subscribes. */
   public var onInspectionPaint:Null<Int -> Float -> Void>;
+
   var inspectionEnabled = false;
   var inspectionNode:Null<RenderNode>;
   var pendingFocus:Null<WidgetId> = null;
   var windowFocused:Bool = true;
   var focusBeforeWindowBlur:Null<WidgetId> = null;
+
   /** Called when an active animation needs another host frame. */
   public var onAnimationFrameRequested:Null<Void -> Void>;
+
   /** Modifier observation independent of keyboard focus (for pointer affordances). */
   public var onModifiersChanged:Null<UiModifier -> Void>;
+
   public var modifiers(default, null):UiModifier = UiModifier.empty();
 
   function updateModifiers(value:UiModifier):Void {
@@ -84,6 +89,7 @@ class UiContext {
     var handler = onModifiersChanged;
     if (handler != null) handler(value);
   }
+
   var submittedInteractionRevision:Int;
   var submittedRetainedEditRevision:Int = 0;
   var submittedPatchRequestRevision:Int = 0;
@@ -98,12 +104,16 @@ class UiContext {
   var submittedTheme:Null<Theme>;
   var submittedStyleSheet:Null<StyleSheet>;
   final hitTestIds:Array<Int>;
+
   /** Reused until releaseRetained, so a frame need not allocate another picker closure. */
   var retainedHitTestProvider:Null<Float -> Float -> Array<RenderNode>> = null;
+
   /** The dispatcher treats paths as immutable; reuse one while all of its node identities still match. */
   var retainedHitPath:Null<Array<RenderNode>> = null;
+
   /** Reuse the resolved-node visitor and counters across submissions. */
   final visitResolvedNode:RenderNode -> Void;
+
   var visitResolved:Array<ResolvedLayoutItem>;
   var visitMissing = false;
   var visitMissingNode:Null<RenderNode>;
@@ -131,8 +141,10 @@ class UiContext {
   final submittedPaintNodes:Array<RenderNode> = [];
   var submittedTopology:RenderTreeTopology = new RenderTreeTopology();
   var nextTopology:RenderTreeTopology = new RenderTreeTopology();
+
   /** Reuses integer storage for the current native result's ID-to-position index. */
   final resolvedById:IntIndex;
+
   var accessibilityBridge:Null<AccessibilityBridge>;
   var accessibilitySurface:Null<PlatformSurface>;
   var decorationWindow:Null<WindowHandle>;
@@ -147,7 +159,9 @@ class UiContext {
   var reusedMetricsHoverNodes:Int = -1;
   var frameNumber:Int;
   var diagnosticStage:Int = 0;
+
   public final textInput:TextInputBridge;
+
   /** Application layout to window logical coordinates for platform geometry. */
   public var platformCoordinateScale:Float = 1.0;
 
@@ -314,8 +328,10 @@ class UiContext {
 	 * it off. The environment variable HAXEON_UI_VERIFY_RETENTION sets it when the context is created.
 	 */
   public var verifyRetentionEvery:Int = 0;
+
   /** Called with the difference when a check fails; by default the check throws it. */
   public var onRetentionMismatch:Null<String -> Void> = null;
+
   var framesSinceVerify:Int = 0;
   var verifying:Bool = false;
 
@@ -455,6 +471,19 @@ class UiContext {
     reconcileNewFocus:Bool = true,
     buildFeedbackPass:Int = 0
   ):RenderNode {
+    try return submitFrame(frame, cacheKey, build, reconcileNewFocus, buildFeedbackPass) catch (error:Dynamic) {
+      buildContext.retryTextBindings();
+      throw error;
+    }
+  }
+
+  function submitFrame(
+    frame:LayoutFrame,
+    cacheKey:Null<String>,
+    build:Void -> View,
+    reconcileNewFocus:Bool = true,
+    buildFeedbackPass:Int = 0
+  ):RenderNode {
     var submitStartedAt = Sys.time();
     diagnosticStage = 1;
     ensureLive();
@@ -508,10 +537,10 @@ class UiContext {
       return cast root;
     }
     var buildCostStartedAt = RenderCost.time();
-    buildContext.beginLayoutSubmission();
     // Building reparents retained children out of the old tree. Preserve that frame's complete membership before it moves.
     previousNodesById.clear();
     for (node in submittedNodes) previousNodesById.set(node.id.value, node);
+    buildContext.beginLayoutSubmission(previousNodesById);
     // A patch-only frame keeps the submitted tree and rebuilds just queued self-updating widgets. Internal feedback can
     // use that path without a cache key because its outer build already ran; a new uncached submission still builds its root.
     buildContext.resetObserved();
@@ -523,9 +552,6 @@ class UiContext {
     }
     // Announced edits precede patches: a composite rebuild must not replace their original priors with edited children.
     buildContext.takeRetainedEdits(currentNodesById);
-    buildContext.flushRenderScopes(root);
-    buildContext.applyPatches(submittedTopology);
-    buildContext.flushRenderScopes(root);
     diagnosticStage = 4;
     var viewStartedAt = Sys.time();
     var viewAllocatedAt = AllocationProbe.now();
@@ -540,6 +566,8 @@ class UiContext {
     if (!patchOnly) buildContext.captureRootDependencies();
     if (next == null
       || (!patchOnly && next.parent != null)) throw "A view must produce one unparented render tree root";
+    next = settleStructure(next);
+    buildContext.flushTextBindings(next);
     if (inspectionEnabled) appendInspectionOverlay(next, frame);
     // Decorations may be assigned by view wrappers after widget construction.
     // Promote those boxes before invalidation compares their native visual kind.
@@ -1346,6 +1374,7 @@ class UiContext {
 
   /** Nodes whose only change is custom paint during a patch-only frame; filled by `planInteractionPatches`. */
   final patchFramePaintNodes:Array<RenderNode> = [];
+
   static final patchInteractionMask:haxeon.ui.style.StyleState = haxeon.ui.style.StyleState.Hovered
     | haxeon.ui.style.StyleState.Pressed;
 
@@ -1361,8 +1390,8 @@ class UiContext {
       var bits = change.before.rawValue() ^ change.after.rawValue();
       var node = currentNodesById.get(change.id);
       if (node == null) return false;
-      // Routing stores the state a node was built with (Selected, Disabled) alongside the pointer bits, so the first pointer
-      // change of a node appears to set those too. Only a pointer bit, or a disagreement with the built state, is a change.
+      // Routed input contains pointer and focus flags. Direct state-store edits must also
+      // agree with authored state before a frame can take the interaction-only path.
       var other = bits & ~patchInteractionMask.rawValue();
       if (other != 0 && (change.after.rawValue() & other) != (node.states.rawValue() & other)) return false;
       bits &= patchInteractionMask.rawValue();
@@ -1402,6 +1431,48 @@ class UiContext {
   }
 
   /** On a full rebuild, retained caches no longer notice pointer changes of self-updating widgets, so they are rebuilt here. */
+  static function findInteractionNode(root:RenderNode, id:Int):Null<RenderNode> {
+    if (root.id.value == id) return root;
+    for (child in root.children) {
+      var found = findInteractionNode(child, id);
+      if (found != null) return found;
+    }
+    return null;
+  }
+
+  function settleStructure(next:RenderNode):RenderNode {
+    var passes = 0;
+    while (true) {
+      buildContext.flushRenderScopes(next, true);
+      next = buildContext.currentRoot(next);
+      buildContext.applyPatches(next, submittedTopology);
+      buildContext.flushRenderScopes(next, true);
+      next = buildContext.currentRoot(next);
+      if (!queueIncomingRenderScopes(next)) {
+        buildContext.flushRenderScopes(next);
+        return next;
+      }
+      if (++ passes >= 8) throw "Interaction scope updates did not settle";
+    }
+    return next;
+  }
+
+  /** A retained incoming body can already carry routed flags without having read them. */
+  function queueIncomingRenderScopes(incomingRoot:RenderNode):Bool {
+    var queued = false;
+    for (change in interactionStates.changes()) {
+      var node = findInteractionNode(incomingRoot, change.id);
+      if (node == null) continue;
+      var owner = buildContext.interactionRenderScope(node);
+      if (owner == null || owner.builtEpoch == buildContext.retainedEditEpoch) continue;
+      var hoverOnly = ((change.before.rawValue()
+        ^ change.after.rawValue()) & ~haxeon.ui.style.StyleState.Hovered.rawValue()) == 0;
+      queueNativeInteraction(node, hoverOnly);
+      if (owner.pending) queued = true;
+    }
+    return queued;
+  }
+
   function queueInteractionPatches():Void {
     patchFramePaintNodes.resize(0);
     for (change in interactionStates.changes()) {
@@ -1422,7 +1493,7 @@ class UiContext {
     var owner = buildContext.interactionRenderScope(node);
     if (owner == null) return false;
     if (node.recordsInteraction && (!hoverOnly || buildContext.hasHoverStyle(node))) owner.markDirty();
-    else if (node.hasPaintHandler()) patchFramePaintNodes.push(node);
+    else if (node.hasPaintHandler() && patchFramePaintNodes.indexOf(node) < 0) patchFramePaintNodes.push(node);
     return true;
   }
 
@@ -1488,6 +1559,7 @@ class UiContext {
   public function isDirty():Bool return dirtyFlags != UiDirtyFlag.None;
 
   public var needsAnimationFrame(get, never):Bool;
+
   inline function get_needsAnimationFrame():Bool return animations.needsFrame;
 
   /** Seconds until animations that are only waiting next need a frame, or -1 for none. */
@@ -1495,6 +1567,7 @@ class UiContext {
 
   /** Reports pending work categories without changing the current full-submit behavior. */
   public var dirtyFlags(get, never):UiDirtyFlag;
+
   function get_dirtyFlags():UiDirtyFlag {
     var result = dirtyFlagsWithoutRootReads();
     // Retained dependencies are validated against their tracked source versions.
@@ -1573,6 +1646,7 @@ class UiContext {
 
   /** Timing and style-cache counters captured during the latest submit/render. */
   public var frameMetrics(get, never):Null<UiFrameMetrics>;
+
   function get_frameMetrics():Null<UiFrameMetrics> {
     if (pendingReusedMetrics) {
       lastFrameMetrics = new UiFrameMetrics(
@@ -1606,6 +1680,7 @@ class UiContext {
 
   /** Returns cumulative native geometric hit-test diagnostics. */
   public var hitTestMetrics(get, never):LayoutHitTestStats;
+
   function get_hitTestMetrics():LayoutHitTestStats return session.hitTestStats();
 
   /** Formats the current render and semantic tree for logs or developer tools. */

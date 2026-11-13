@@ -16,6 +16,11 @@ import haxeon.ui.Insets;
 /** Native structural ownership does not reconcile or redirect removed nodes. */
 class RenderScopeMain {
   static function node(id:Int):RenderNode return new RenderNode(new WidgetId(id));
+  static function publish(context:BuildContext, root:RenderNode):Void {
+    var instances = new Map<Int, RenderNode>();
+    root.walk(node -> instances.set(node.id.value, node));
+    context.beginLayoutSubmission(instances);
+  }
   static function main():Int {
     var primary = new Signal<Bool>(true), first = new Signal<Int>(1), second = new Signal<Int>(2);
     var context = new BuildContext(new StateStore(), null, null, null, Theme.light());
@@ -34,6 +39,7 @@ class RenderScopeMain {
     scope.refresh();
     if (runs != 1
       || context.patchedPriors().get(root.id.value) != null || context.bindingRequestRevision != 0) return 1;
+    publish(context, root);
     first.value = 3;
     if (context.bindingRequestRevision != 1) return 2;
     scope.refresh();
@@ -107,6 +113,7 @@ class RenderScopeMain {
       || elementRoot.layout.style.positionX != 7 || !elementRoot.hitTestSelf
       || elementRoot.children.length != 0 || element.layout.style.padding.left != 4) return 12;
     elementRoot.layout.style.zIndex = 9;
+    publish(context, elementRoot);
     width.value = 100;
     elementScope.refresh();
     var previousElement = elementRoot;

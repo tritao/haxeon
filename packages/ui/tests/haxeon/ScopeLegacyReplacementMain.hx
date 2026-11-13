@@ -46,7 +46,7 @@ class ScopeLegacyReplacementMain implements View {
     view.text.value = "A";
     context.flushRenderScopes(root);
     if (view.nativeBuilds != before) throw "Native child ran before its pending parent";
-    context.applyPatches();
+    context.applyPatches(root);
     context.flushRenderScopes(root);
     if (root.children.length != 1 || root.layout.children.length != 1 || root.children[0] == second
       || second.parent != null) throw "Parent replacement retained a stale authored child";

@@ -1114,6 +1114,104 @@ retention scenarios, budgets that may only go down, memory runs, compiler suites
    outer classification is `workspace-barrier-outer-gate-classification.json`. The final source fetch and
    publication check still precede the push.
 
+   **Undo update-order correction (in progress after the Button push).** The published foundation runs
+   child work before a root build that can remove it. The headless create/create/undo fixture fails with
+   "Unknown scene object: rectangle-2" after mounting the second inspector. A portable UI fixture reproduces
+   stale removed legacy, native-scope and bound-text getters on all three targets with inlining off/on;
+   it also checks that cached dirty children which survive the root build still update.
+
+   Root structure now runs before queued structural work, and legacy patches must supply the current root
+   and validate physical attachment as well as registration identity. The intermediate fixture passes every
+   structural and surviving-child case, but bound text still runs too early in the generic effect queue.
+   Live leaf work must follow root/native/legacy structure and validate attachment before invoking a getter.
+   The chosen internal form is one native dependency owner per existing `BoundText`, replacing its separate
+   `TextBinding` and `ScheduledBindingEffect` records and their scheduling/action closures. The public
+   `BoundText` constructor and getter input remain unchanged; no new authoring binding primitive is added.
+   Model effects continue to settle before the root decision. UI leaf tracking runs after structure, using
+   the same dependency-set protocol and a native context-owned list. Detached cached bindings stay dirty
+   and can update when remounted. Widget state remains alive through blur and normal frame retirement.
+   Low-level binding fixtures must explicitly flush the native leaf phase instead of the generic model
+   effect queue; both scheduling forms will not coexist. A failed root build also re-arms pending leaf
+   dependencies, so a later source write can request another frame even when the leaf phase never ran.
+   The regression fixture caught the lost wake-up before this retry handling was added.
+
+   The fresh editor module now passes all three create/create/undo cycles with a fresh-mount comparison on
+   every frame. The same scenario on the published control fails on its first undo with the exact error
+   above; DATA1 `undo-order-before-editor-summary.json` and `undo-order-after-editor-summary.json` bind the
+   results to module and log hashes. Allocation and full-gate acceptance remain required before this
+   correctness batch can be published. No allocation increase is waived by this design note.
+
+
+   The first exact 22-action capture against published `e6cf9a07d` is not accepted. All steady-state
+   actions are unchanged or lower; selection drops 846 objects / 59,584 B and telemetry-step drops
+   1,292 objects / 89,920 B. Four tab transitions increase: hierarchy→sensors +12 / +1,568 B,
+   sensors→hierarchy +74 / +18,592 B, console→telemetry +1 / +16 B, and telemetry→console
+   +52 / +3,936 B. Site traces put the isolated 16 B at `InteractionStateStore.set`; the larger
+   transitions include another Button body and comparison/key storage. This is attribution to sites,
+   not yet proof of the underlying scheduling cause. The batch stays unpublished while that cause is
+   investigated. DATA1 `undo-order-exact-22-comparison.json` and the initial structural type/site
+   delta reports retain the failed acceptance evidence. No count is subtracted or waived.
+
+   The interaction investigation also reproduced an incoming-owner defect in a portable fixture: a
+   parent brings back a cached physical scope instance with the same logical widget ID, while pending
+   input work still targets the outgoing instance. Routing only before the root build leaves the incoming
+   body stale. After root structure settles, interaction changes are resolved against the incoming tree
+   while structural queues settle. A later fixture disproved using physical identity or matching node
+   flags as evidence that a body read current input: routing can update flags without rebuilding its body.
+   Successful body builds now record the current submission epoch, using the owner storage formerly used
+   by its validation guard. Incoming native owners that did not build this submission receive pending
+   interaction changes, including when a native ancestor replaces its body without a root rebuild.
+   Lookup uses raw numeric IDs without temporary `WidgetId` allocation. The regression checks
+   both retained and fresh incoming bodies, including exactly one body build, and does not change the
+   public component or event APIs. Fresh census acceptance is still outstanding; this diagnosis does not
+   waive the first failed comparison. The intermediate routing snapshot preserved zero managed allocations over
+   1,024 mounted unchanged submissions per component mode (`TrackedScope`, `BoundText`, and their nesting)
+   on HashLink, Wasm32 and Wasm GC, with inlining off/on and verify mode enabled on every frame;
+   DATA1 `undo-rerouted-idle-parity-summary.json` records the source and result hashes.
+
+   Incoming interaction routing alone leaves the same four tab increases in a second exact capture
+   (`undo-order-rerouted-exact-22-comparison.json`). The actual tab-matrix verify run then exposed a
+   distinct candidate defect: `UIKit incremental tree differs from full encode`, followed by
+   `layoutSession.verifyIncrementalTree failed with NativeKit UI status -3`; the published control passes
+   that run. An incoming cached root was recorded as its own prior, overriding the different physical
+   node submitted under the same logical ID. The focused fixture demonstrates a submitted content
+   revision of 20 incorrectly resetting to 2. Comparison overrides now require physical membership in
+   the previous submitted frame. `BuildContext` borrows the existing comparison index for that phase;
+   no new map or per-frame capture is allocated. Standalone owner fixtures explicitly publish their prior
+   instances before checking overrides. The focused fixture covers cached and freshly built incoming
+   bodies, press, hover entry and hover exit; fresh editor verification and census remain required.
+
+   On base `62f64276d`, the nested incoming fixture still failed with
+   `Incoming cached scope missed the pending interaction: flag=2 enter=true nested=true`.
+   The scope sweep disposed a detached cached child before its pending ancestor could adopt it.
+   Native refresh now defers detached-owner cleanup until structural and incoming-input work settle;
+   leaf getters remain after that phase. The expanded incoming fixture passes on all three targets,
+   inlining off/on (`undo-62f64276d-settle-focused-after-sweep.log`). Replacing the validation Boolean
+   with the successful-build epoch preserves the measured HashLink owner size: 1,024 owners allocate
+   1,024 objects / 262,144 bytes before and after on the new toolchain. This microbenchmark is not census
+   acceptance; renewed editor gates and the exact action comparison are still required.
+
+   **Renewed correctness evidence on `62f64276d` (unpublished).** The complete component matrix passes
+   180 positive configurations, 12 negative event-phase configurations, and 16 explicit zero-allocation
+   checks, with unchanged source inputs and matching compiler/runtime hashes. Fresh matched editor modules
+   reproduce the published control's `Unknown scene object: rectangle-2` failure and pass all three undo
+   cycles on the candidate with a fresh-mount comparison on every frame. Both modules pass the tab matrix
+   and CNC/telemetry verification. The telemetry scenario deliberately runs nine steps for three cycles;
+   the report audit was corrected to require all nine after initially expecting three. Original failed
+   audit evidence remains recorded; the editor process itself succeeded.
+
+   The renewed exact census is incomplete: the control's `cnc-progress` capture failed stack/type byte
+   reconciliation. A standalone registered-worker probe demonstrates a HashLink census stop race:
+   one 16-byte allocation contributes 17 sampled bytes when capture completes before stop (the known
+   initial zero-budget byte), but contributes zero sampled bytes when stop occurs during stack capture.
+   The exact original occurrence remains unassigned because the old helper removed its failed temporary
+   window. The shared capture helper now preserves failed raw windows and launch logs; its existing
+   rejection assertions remain unchanged. No successful diagnostic capture replaces the failed census,
+   and no allocation exception or publication is justified by it. DATA1 evidence includes
+   `undo-62f64276d-component-model-summary.json`,
+   `undo-order-62f64276d-editor-verification-corrected.json`, and `hl-census-stop-race-repro.md`.
+   Final mounted-idle parity, allocation acceptance and the remaining gates are still required.
+
    **Independent review corrections (local, before renewed gates).** The body-root batch `0892af06d` had four
    reproduced correctness defects. `ScopeRootStateMain` overflowed recursive `StateStore.retain` for a Checkbox
    with `onChange`; the actual TextField fixture with loaded fonts threw "Native scope resource has a different

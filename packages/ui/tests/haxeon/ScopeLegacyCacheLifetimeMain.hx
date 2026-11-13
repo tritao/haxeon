@@ -34,7 +34,7 @@ class ScopeLegacyCacheLifetimeMain implements View {
     view.choice.value = false;
     context.beginFrame();
     context.flushRenderScopes(root);
-    context.applyPatches();
+    context.applyPatches(root);
     context.flushRenderScopes(root);
     var mounted:Map<Int, RenderNode> = new Map();
     root.walk(node -> mounted.set(node.id.value, node));
@@ -45,7 +45,7 @@ class ScopeLegacyCacheLifetimeMain implements View {
     if (CachedResourceLeaf.released != 0) throw "Hidden legacy variant released live widget state";
     view.choice.value = true;
     context.beginFrame();
-    context.applyPatches();
+    context.applyPatches(root);
     context.flushRenderScopes(root);
     if (root.children.length != 1
       || !first.id.equals(root.children[0].id)) throw "Legacy variant did not restore native body identity";
