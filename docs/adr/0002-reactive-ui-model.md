@@ -960,22 +960,22 @@ retention scenarios, budgets that may only go down, memory runs, compiler suites
    DATA1 `evidence/cache-old-path-new-base.json` and `evidence/cache-new-base-three-target.log`. Telemetry
    has the temporary user approval recorded below for its two compiler-gap items.
 
-   **Paired frame and GC diagnostics.** Seven alternating control/native pairs cover all 22 actions.
+   **Paired frame and GC diagnostics (renewed on `9707f25de`).** Seven alternating control/native pairs cover all 22 actions.
    Frame p50 / p95 / p99 in milliseconds (control → native): selection
-   2.904 / 5.786 / 8.595 → 3.071 / 6.093 / 6.752 (21 samples per side); CNC progress
-   0.897 / 1.489 / 1.642 → 0.944 / 1.436 / 1.819 (672 samples); CNC resume
-   0.495 / 0.806 / 0.898 → 0.530 / 0.668 / 0.690 (21 samples); telemetry step
-   2.664 / 4.414 / 4.543 → 2.767 / 4.654 / 4.849 (63 samples). These are diagnostics,
+   2.882 / 5.826 / 6.307 → 3.206 / 6.028 / 8.172 (21 samples per side); CNC progress
+   0.897 / 1.221 / 1.545 → 0.957 / 1.709 / 1.862 (672 samples); CNC resume
+   0.496 / 0.797 / 0.820 → 0.528 / 0.860 / 0.895 (21 samples); telemetry step
+   2.670 / 3.777 / 4.470 → 2.763 / 3.793 / 4.424 (63 samples). These are diagnostics,
    not timing acceptance thresholds. Every action's frame GC-pause p50 / p95 / p99 is zero on both
    sides: no collection occurred within those measured frame intervals. Frame GC scheduling was enabled;
    it suppresses automatic collection during rendering and may collect at the end of a frame or during idle.
    The counters include `endFrame`, so a forced boundary collection would be counted. Process-wide pilot
    counters record 21 collections on each side across the seven pairs, outside the selected frames; the
-   maximum individual process pauses were 3.362 ms control and 3.561 ms native. These zero-inclusive per-frame percentiles do
+   maximum individual process pauses were 3.404 ms control and 3.551 ms native. These zero-inclusive per-frame percentiles do
    not describe the distribution of individual GC pauses or establish a GC-free application. Complete raw
    frame samples, all-action percentiles and process GC counters are in DATA1
-   `evidence/button-7b97-paired-frame-gc.json`; the combined allocation/diagnostic report is
-   `evidence/button-7b97-full-census-report.json`. The original comparison rejected telemetry's +320 bytes; the temporary user approval follows.
+   `evidence/publish-9707-paired-frame-gc.json`; exact allocations are in
+   `evidence/publish-9707-full-census-report.json` (also available as a 22-row Markdown table). The original checkpoint rejected telemetry's +320 bytes; the temporary user approval follows.
 
    **Temporary telemetry exception approved by the user.** For the Button batch, `telemetry-step`
    changes from 14,983 objects / 624,712 bytes to 14,851 / 625,032: minus 132 objects and plus 320 bytes.
@@ -985,7 +985,7 @@ retention scenarios, budgets that may only go down, memory runs, compiler suites
    a regression to fix, not a continuing exception. This approval does not relax verify mode, budgets, or
    any other action's allocation rule. Publication still requires the remaining full batch gates and rebase.
 
-   **Queued event phase port (implementation under validation).** `UiEventPhase` closes the public event
+   **Closed event phases (ported; final batch gates pending).** `UiEventPhase` closes the public event
    phase to `Capture`, `Target` and `Bubble`; registration takes the same enum, with `Bubble` as the default.
    The existing target-only bubble subscription is an internal listener-selection policy, represented by a
    separate private enum in the existing handler field. It adds no per-listener record or field and never
@@ -996,8 +996,28 @@ retention scenarios, budgets that may only go down, memory runs, compiler suites
    reject string assignment and registration. All eighteen runtime target/inlining cases and twelve string-rejection cases pass;
    dispatch allocation remains zero on all targets. Standalone HashLink pairs with inlining off/on
    also preserve event-construction bytes (163,680 for the warmed 1,024-event counter window) and listener
-   registration bytes (106,576 for 1,024 listeners). These microbenchmarks do not replace the exact
-   unchanged-census check, which remains pending. This follows the parked Button checkpoint and does not authorize its publication.
+   registration bytes (106,576 for 1,024 listeners). The subsequent same-compiler 22-action comparison
+   is exactly unchanged, as recorded below. Final batch gates and rebase still precede publication.
+
+   **Renewed publication evidence on `9707f25de`.** The fresh published-head control, Button-before-enum
+   control and Button-plus-enum modules use the same compiler and runtime. All 22 action counts in the table
+   above are unchanged from the parked checkpoint. The enum-only comparison is exactly equal in objects and
+   bytes for every action. Pilot fresh-mount verification passes on all three modules. The portable component
+   suite passes 162 target/inlining configurations plus twelve string-rejection cases; UI value snapshots pass
+   sixty positive and 702 negative configurations. The full compiler gate passes all eighty integration stages,
+   both 897-test driver runs, Wasm backend/parity, compiler embedding and external-tool checks. The explicit
+   fixed-point check also passes, with identical stage-1/stage-2 hashes. No full-gate baseline skips were needed.
+
+   Outer gates use `e9173b977`, with `MATERIA_ROOT` set to the shared supplier-data checkout and all outputs,
+   caches and temporaries on DATA1. App tests and headless performance pass. Retention passes eight scenarios;
+   `panel-flows` stops with "Inspection camera ignored its view label", reproduced on the fresh control with
+   verification enabled. The budget runner repeats that same known retention failure; its three performance
+   scenario results contain no budget failures. This is a documented outer baseline skip, not a weakened
+   verifier or raised ceiling. The seven final frame/GC pairs are complete and reported above; remaining
+   native UI scripts are still pending.
+   Fresh reports are DATA1 `evidence/publish-9707-exact-22-comparison.json`,
+   `publish-9707-enum-comparison.json`, `publish-9707-full-gate-summary.json` and
+   `publish-9707-outer-gate-classification.json`. Publication still requires a final fetch/rebase and Tier 1.
 
    **Independent review corrections (local, before renewed gates).** The body-root batch `0892af06d` had four
    reproduced correctness defects. `ScopeRootStateMain` overflowed recursive `StateStore.retain` for a Checkbox

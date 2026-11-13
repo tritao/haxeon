@@ -23,8 +23,10 @@ switches. Details: `RETAINED_SUBTREES.md`, `LAYOUT_COST.md`.
 
 ## Input event phases
 
+`UiEvent.phase` uses the closed `UiEventPhase` enum: `Capture`, `Target`, or `Bubble`.
 Focus, blur and focus-lost capture from root through the target, then deliver at the target without bubbling.
-Stable component wrappers observe focus in capture, while each target listener runs exactly once in its phase.
+Ancestors observe descendant focus in capture; a component uses its body root as its node identity. Each target
+listener runs exactly once in its phase.
 See [Event phases](EVENTS.md) for routing, propagation and allocation rules.
 
 ## Declared value conformances
