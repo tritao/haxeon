@@ -105,8 +105,8 @@ class Tooltip implements View {
         var rootComputed = context.resolveStyle(
           new StyleTarget(
             "tooltip-layer",
-            key.value,
-            key.value,
+            key.rawValue(),
+            key.rawValue(),
             null,
             ["tooltip-layer"],
             context.interactionStates.get(rootId)
@@ -114,7 +114,7 @@ class Tooltip implements View {
           rootStyle
         );
         var result = context.createNode(rootId, LayoutVisualKind.Box, rootComputed.toLayoutStyle());
-        result.setStyleIdentity("tooltip-layer", key.value, key.value, null, ["tooltip-layer"]);
+        result.setStyleIdentity("tooltip-layer", key.rawValue(), key.rawValue(), null, ["tooltip-layer"]);
         result.states = context.interactionStates.get(rootId);
         result.computedStyle = rootComputed;
         var anchorNode = context.withStyleParent(
@@ -262,12 +262,19 @@ class Tooltip implements View {
       tipStyle.padding = new Insets(PADDING, 7, PADDING, 7);
       var tipId = context.id("tooltip");
       var computed = context.resolveStyle(
-        new StyleTarget("tooltip", key.value, key.value, null, ["tooltip"], context.interactionStates.get(tipId)),
+        new StyleTarget(
+          "tooltip",
+          key.rawValue(),
+          key.rawValue(),
+          null,
+          ["tooltip"],
+          context.interactionStates.get(tipId)
+        ),
         tipStyle
       );
       var tip = context.createNode(tipId, LayoutVisualKind.Custom, computed.toLayoutStyle());
       tip.computedStyle = computed;
-      tip.setStyleIdentity("tooltip", key.value, key.value, null, ["tooltip"]);
+      tip.setStyleIdentity("tooltip", key.rawValue(), key.rawValue(), null, ["tooltip"]);
       // A hidden tooltip builds no content: showing it rebuilds, and the layout feedback below positions it that frame.
       var label:Null<RenderNode> = null;
       if (tipStyle.visible) {
@@ -346,13 +353,13 @@ class Tooltip implements View {
       header.on(UiEventKind.HoverEnter, function(_) {
         focused.update(false);
         if (showWhen == null || showWhen()) {
-          if (hoverGroup != null) hoverGroup.enter(key.value);
+          if (hoverGroup != null) hoverGroup.enter(key.rawValue());
           else delay.start();
         }
       }
       );
       header.on(UiEventKind.HoverLeave, function(_) {
-        if (hoverGroup != null) hoverGroup.leave(key.value);
+        if (hoverGroup != null) hoverGroup.leave(key.rawValue());
         else delay.cancel();
       }
       );

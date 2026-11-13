@@ -1323,6 +1323,147 @@ retention scenarios, budgets that may only go down, memory runs, compiler suites
    `retained-claim-c6da3300b-vs-pushed-editor-15.json` and
    `retained-claim-old-final-fixture-explicit-root.log`.
 
+   **Key wrappers (port under validation).** Return-tab traces still construct
+   31 and 32 `Key` objects respectively. The class contains only its validated String; scope lookup
+   already uses that value rather than object identity. Use an erased `Key(String)` abstract, with
+   construction still rejecting null/empty input and a single explicit `rawValue()` accessor. No
+   implicit String conversion, old `.value` getter, adapter or fallback remains after the family port.
+   The consumer audit finds 25 typed declarations; fourteen production files read the value and must
+   port together. No outer value reads were found. This uses existing abstract methods, not a new
+   compiler feature: the property-getter prototype was rejected by the current abstract grammar.
+
+   The old class allocates 16,384 bytes over 1,024 scoped calls with an existing callback. The method
+   prototype passes six target/inline configurations with zero measured allocation for those calls;
+   validation, UTF-8 contents and length-prefixed scope boundaries are preserved. A separate cold
+   twenty-holder probe retains Key in ordinary class fields: the port saves twenty objects / 320 bytes
+   on both HL and Wasm32, inline off/on, and twenty objects on Wasm GC (engine bytes unavailable).
+   Preparation is outside the interval and stored keys are inspected afterward. This does not replace
+   native component/action acceptance. See `key-cold-storage-c6da3300b-summary.json`.
+   Two files need formatting first (`Key` and `KeyScope`);
+   their token streams match, and an unchanged EqualChildMain fixture has identical executable bytes
+   on all three targets (HL source-position diagnostics excluded explicitly). Keep that formatting
+   in its own commit before the logical port (`ae3b7c53e`, Tier 1 907/0 and twelve affected fixture
+   configurations). The logical port removes the class and all fourteen files' old value reads in one
+   batch; raw String arguments are rejected in all six target/inline negative configurations. Evidence: `key-value-method-prototype-summary.json`,
+   `key-value-method-prototype-port.json`, `key-format-preface-token-proof.json` and
+   `key-format-preface-c6da3300b-byte-comparison.json`. The prototype editor capture has no object
+   increases across all fifteen actions. Return-tab deltas are -1 object / +2,928 bytes and -2 / +2,912;
+   no other action increases. The initial corrected incoming Button body adds 46 objects / 3,784 bytes,
+   offset by four interaction-bookkeeping objects / 72 bytes. Claim traversal then saves twelve / 288;
+   erasing Key saves 31 / 496 or 32 / 512. These measured steps sum to the reported return-tab deltas.
+   The larger render/layout/text records needed for correct hover paint outweigh the removed small
+   wrappers; this is UI correctness cost, not a blanket attribution to compiler gaps. Fresh ordinary
+   C6 probes with identical UI source hashes confirm the control's stale-hover failure and twelve
+   correct candidate transitions. No count or byte subtraction changes the captures. This records
+   the structural-byte reason under the refined rule. The production component matrix now passes
+   all 210 positive configurations, 36 expected type failures and 48 explicit zero-allocation checks;
+   the complete frozen source/fixture/compiler input set is unchanged. Tier 1 passes 907 tests with
+   zero failures on `c6da3300b`; its completed outputs were hashed before cleanup. The production
+   census, remaining Tier 2 gates and frame/GC diagnostics still precede publication. See
+   `key-value-port-c6da3300b-tier1-summary.json`,
+   `key-value-port-c6da3300b-component-summary.json`,
+   `key-value-method-structural-byte-attribution.json`,
+   `key-value-hover-c6da3300b-ordinary-hover-proof.json`,
+   `key-value-method-c6da3300b-vs-pushed-editor-15.json` and
+   `key-value-method-negative-runtime-corrected-summary.json`.
+
+   **Production undo census on `c6da3300b` (gated, with reproduced baseline failures).**
+   The unchanged published Button UI and candidate use the same compiler/runtime and save-worker
+   idle barrier. All 22 captures pass exact accounting. No action increases objects; all steady-state
+   actions are at or below control in objects and bytes. The two structural byte increases retain
+   the measured hover-correctness reason above. Production type counts match the prototype for all
+   fifteen editor actions; allocation sites match after removing source line numbers only. All 423
+   UI sources match the ordinary-hover regression probe either by SHA-256 (416 files) or identical
+   lexer tokens (seven formatted files). The candidate passes fresh-mount pilot verification.
+
+   | Action | Control objects / B | Candidate objects / B | Delta objects / B |
+   | --- | ---: | ---: | ---: |
+   | `cnc-hold` | 1,001 / 45,648 | 962 / 44,928 | -39 / -720 |
+   | `cnc-progress` | 5,465 / 277,912 | 5,374 / 276,408 | -91 / -1,504 |
+   | `cnc-resume` | 1,452 / 76,680 | 1,385 / 75,472 | -67 / -1,208 |
+   | `cnc-select` | 2,193 / 123,272 | 2,105 / 121,816 | -88 / -1,456 |
+   | `cnc-source` | 4,593 / 267,256 | 4,436 / 264,744 | -157 / -2,512 |
+   | `cnc-unchanged` | 19 / 640 | 19 / 640 | +0 / +0 |
+   | `console->telemetry` | 1,582 / 93,760 | 1,526 / 92,696 | -56 / -1,064 |
+   | `hierarchy->sensors` | 2,080 / 135,648 | 2,017 / 134,320 | -63 / -1,328 |
+   | `hover-away` | 249 / 12,104 | 174 / 10,560 | -75 / -1,544 |
+   | `hover-enter` | 32 / 1,032 | 32 / 1,032 | +0 / +0 |
+   | `hover-field` | 313 / 16,472 | 240 / 14,968 | -73 / -1,504 |
+   | `hover-inside` | 32 / 1,032 | 32 / 1,032 | +0 / +0 |
+   | `hover-other` | 182 / 9,520 | 165 / 9,184 | -17 / -336 |
+   | `idle` | 17 / 584 | 17 / 584 | +0 / +0 |
+   | `idle-focused` | 17 / 584 | 17 / 584 | +0 / +0 |
+   | `scroll-inspector` | 226 / 25,592 | 226 / 25,592 | +0 / +0 |
+   | `selection` | 8,543 / 587,872 | 7,447 / 524,624 | -1,096 / -63,248 |
+   | `sensors->hierarchy` | 1,562 / 96,144 | 1,561 / 99,072 | -1 / +2,928 |
+   | `telemetry->console` | 2,120 / 108,512 | 2,118 / 111,424 | -2 / +2,912 |
+   | `telemetry-step` | 14,837 / 623,688 | 13,435 / 532,312 | -1,402 / -91,376 |
+   | `type-backspace` | 432 / 17,088 | 432 / 17,088 | +0 / +0 |
+   | `type-char` | 417 / 16,456 | 417 / 16,456 | +0 / +0 |
+
+   Seven alternating control/candidate timing pairs use these exact modules in ordinary replay,
+   without allocation-census instrumentation; background workspace saving remains enabled in those
+   frame diagnostics. The idle barriers above isolate allocation windows. Each tree contributes
+   1,155 measured action frames; no GC collection occurred inside those frames, so the in-frame
+   GC-pause p50/p95/p99 are 0 / 0 / 0 ms on both trees for every action. Startup and between-frame
+   collections are outside that distribution. Frame percentiles below are milliseconds, with linear
+   interpolation over all recorded frames (21–672 samples per action):
+
+   | Action | Control p50 / p95 / p99 ms | Candidate p50 / p95 / p99 ms |
+   | --- | ---: | ---: |
+   | `cnc-hold` | 0.446 / 0.731 / 0.743 | 0.466 / 0.806 / 0.831 |
+   | `cnc-progress` | 1.067 / 1.935 / 2.142 | 1.071 / 1.939 / 2.098 |
+   | `cnc-resume` | 0.564 / 1.069 / 1.069 | 0.644 / 1.097 / 1.133 |
+   | `cnc-select` | 0.715 / 1.160 / 1.652 | 0.506 / 2.015 / 2.026 |
+   | `cnc-source` | 1.237 / 2.166 / 2.203 | 1.239 / 2.444 / 2.455 |
+   | `cnc-unchanged` | 0.016 / 0.029 / 0.032 | 0.017 / 0.021 / 0.022 |
+   | `console->telemetry` | 1.614 / 3.177 / 3.288 | 1.539 / 1.901 / 2.055 |
+   | `hierarchy->sensors` | 3.116 / 15.100 / 16.316 | 2.209 / 8.727 / 9.119 |
+   | `hover-away` | 0.494 / 0.743 / 0.744 | 0.516 / 0.980 / 1.034 |
+   | `hover-enter` | 0.003 / 0.301 / 0.325 | 0.004 / 0.383 / 0.404 |
+   | `hover-field` | 0.531 / 0.585 / 0.662 | 0.547 / 1.034 / 1.052 |
+   | `hover-inside` | 0.003 / 0.197 / 0.213 | 0.003 / 0.269 / 0.285 |
+   | `hover-other` | 0.490 / 0.695 / 0.697 | 0.517 / 0.997 / 1.007 |
+   | `idle` | 0.010 / 0.017 / 0.020 | 0.009 / 0.024 / 0.027 |
+   | `idle-focused` | 0.010 / 0.023 / 0.026 | 0.012 / 0.022 / 0.025 |
+   | `scroll-inspector` | 0.754 / 0.886 / 1.232 | 0.754 / 1.331 / 1.383 |
+   | `selection` | 5.953 / 11.987 / 12.926 | 4.308 / 6.292 / 6.856 |
+   | `sensors->hierarchy` | 1.888 / 3.477 / 3.888 | 1.571 / 2.117 / 2.118 |
+   | `telemetry->console` | 1.442 / 2.529 / 2.826 | 1.391 / 1.927 / 2.536 |
+   | `telemetry-step` | 3.333 / 5.504 / 5.733 | 2.643 / 4.403 / 4.675 |
+   | `type-backspace` | 0.479 / 0.690 / 0.737 | 0.544 / 0.880 / 1.077 |
+   | `type-char` | 0.495 / 0.692 / 0.791 | 0.497 / 0.960 / 0.999 |
+
+   These percentiles are diagnostics alongside allocation acceptance; they do not replace the outer
+   budget gate. Nine of ten native UI scripts pass, including dock/framework and layout. Settings
+   reproduces the existing `PointerLocation` lowering failure on unmodified C6 UI. The core Wasm
+   matrix passes 553 fixtures (14 existing skips), then the UI snapshot `cursor-shape` compile hits
+   that same error; its standalone control and candidate both fail identically. All 356 Haxe files in
+   that control snapshot match `c6da3300b` Git blobs. The actual headless undo replay fails on control
+   with `Unknown scene object` and completes three verified cycles on candidate.
+
+   The other nine snapshot groups pass all 54 positive configurations and 690 expected type
+   rejections on HL, Wasm32 and Wasm GC, inlining off/on. `test-wasm-backend.sh` passes. The outer
+   app suite passes on `e9173b977` plus local test commits `057ad4d4c` and `fa2861de9`. Outer retention
+   passes nine scenarios, including undo; `panel-flows` fails with the known camera assertion,
+   reproduced identically by control and candidate. All three numeric budget scenarios pass; the
+   budget command exits nonzero only because it also checks that retention scenario. Three sustained
+   500-cycle captures pass, with flat retained counts (178 widget resources, one workspace listener),
+   frame p95 1.81–1.87 ms, and RSS after warmup growth 8.12–8.44 MiB within the unchanged ceilings.
+   No verify check or budget was weakened. Final fetch/rebase and fast-forward publication checks
+   remain. Timing and gate evidence: `key-value-port-c6da3300b-paired-frame-gc.json`,
+   `key-value-port-c6da3300b-ui-final-summary.json`,
+   `cursor-shape-c6da3300b-lowering-control.json`,
+   `cursor-shape-c6da3300b-control-source-audit.json`,
+   `key-value-port-c6da3300b-undo-replay.json`,
+   `key-value-port-c6da3300b-unmasked-snapshots-summary.json`,
+   `key-value-port-c6da3300b-outer-final-summary.json` and
+   `key-value-port-c6da3300b-panel-baseline.json`.
+   Allocation evidence: `key-value-port-c6da3300b-exact-22-comparison.json`,
+   `key-value-port-c6da3300b-structural-byte-reasons.json`,
+   `key-value-port-c6da3300b-production-attribution-link.json` and
+   `key-value-port-c6da3300b-built-input-and-control-audit.json`.
+
    **Decorations as inputs — direction approved, implementation deferred until undo publication.** The reviewed inventory
    contains 69 site groups in 46 files: 40 production UI groups, 10 outer groups (including one test),
    18 UI-test groups and one example group. Outer references are pinned to the requested `60d9d4c36`;

@@ -101,11 +101,18 @@ class SplitView implements View {
         var dividerId = context.id("divider");
         var dividerStates = context.interactionStates.get(dividerId);
         var dividerComputed = context.resolveStyle(
-          new StyleTarget("split-divider", key.value, key.value + ":divider", null, ["split-divider"], dividerStates),
+          new StyleTarget(
+            "split-divider",
+            key.rawValue(),
+            key.rawValue() + ":divider",
+            null,
+            ["split-divider"],
+            dividerStates
+          ),
           dividerLayoutStyle(horizontal)
         );
         var divider = context.createNode(dividerId, LayoutVisualKind.Box, dividerComputed.toLayoutStyle());
-        divider.setStyleIdentity("split-divider", key.value, key.value + ":divider", null, ["split-divider"]);
+        divider.setStyleIdentity("split-divider", key.rawValue(), key.rawValue() + ":divider", null, ["split-divider"]);
         divider.states = dividerStates;
         divider.computedStyle = dividerComputed;
         if (dividerHairline) {

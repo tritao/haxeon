@@ -32,11 +32,11 @@ class Column implements View {
   public function buildWithId(context:BuildContext, id:haxeon.ui.core.WidgetId):RenderNode {
     return context.withScope(key, function() {
       var computed = context.resolveStyle(
-        new StyleTarget("column", key.value, key.value, null, ["column"], context.interactionStates.get(id)),
+        new StyleTarget("column", key.rawValue(), key.rawValue(), null, ["column"], context.interactionStates.get(id)),
         style
       );
       var node = context.createNode(id, LayoutVisualKind.Box, computed.toLayoutStyle());
-      node.setStyleIdentity("column", key.value, key.value, null, ["column"]);
+      node.setStyleIdentity("column", key.rawValue(), key.rawValue(), null, ["column"]);
       node.states = context.interactionStates.get(id);
       node.computedStyle = computed;
       for (child in children) node.add(context.withStyleParent(computed, function() return child.build(context)));

@@ -76,11 +76,11 @@ class ScrollView implements View {
       var id = context.rootId("scroll");
       var flags = context.interactionStates.get(id);
       var computed = context.resolveStyle(
-        new StyleTarget("scroll-view", key.value, key.value, null, ["scroll-view"], flags),
+        new StyleTarget("scroll-view", key.rawValue(), key.rawValue(), null, ["scroll-view"], flags),
         viewportStyle
       );
       var viewport = context.createNode(id, LayoutVisualKind.Box, computed.toLayoutStyle());
-      viewport.setStyleIdentity("scroll-view", key.value, key.value, null, ["scroll-view"]);
+      viewport.setStyleIdentity("scroll-view", key.rawValue(), key.rawValue(), null, ["scroll-view"]);
       viewport.states = flags;
       viewport.computedStyle = computed;
       viewport.focusable = true;
@@ -323,13 +323,13 @@ class ScrollView implements View {
     trackStyle.radiusTopLeft = trackStyle.radiusTopRight = ScrollbarHitWidth * 0.5;
     trackStyle.radiusBottomLeft = trackStyle.radiusBottomRight = ScrollbarHitWidth * 0.5;
     var track = context.createNode(context.rootId(name + "-scrollbar-track"), LayoutVisualKind.Box, trackStyle);
-    track.setStyleIdentity("scrollbar-track", key.value, key.value, null, ["scrollbar", name]);
+    track.setStyleIdentity("scrollbar-track", key.rawValue(), key.rawValue(), null, ["scrollbar", name]);
     var thumbStyle = new LayoutStyle();
     thumbStyle.positioning = LayoutPositioning.Absolute;
     thumbStyle.zIndex = 5;
     var thumbId = context.id(name + "-scrollbar-thumb");
     var thumb = context.createNode(thumbId, LayoutVisualKind.Box, thumbStyle);
-    thumb.setStyleIdentity("scrollbar-thumb", key.value, key.value, null, ["scrollbar", name]);
+    thumb.setStyleIdentity("scrollbar-thumb", key.rawValue(), key.rawValue(), null, ["scrollbar", name]);
     var semantics = new Semantics(
       AccessibilityRole.Slider,
       vertical ? "Vertical scroll position" : "Horizontal scroll position"

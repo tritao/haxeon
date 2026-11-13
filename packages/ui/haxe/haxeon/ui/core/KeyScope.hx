@@ -26,11 +26,11 @@ class KeyScope {
       children = new Map();
       childScopes = [];
     }
-    var cached = children.get(key.value);
+    var cached = children.get(key.rawValue());
     if (cached != null) return cached;
-    var result = new KeyScope(path + key.value.length + ":" + key.value + "|", root);
-    result.childKey = key.value;
-    children.set(key.value, result);
+    var result = new KeyScope(path + key.rawValue().length + ":" + key.rawValue() + "|", root);
+    result.childKey = key.rawValue();
+    children.set(key.rawValue(), result);
     childScopes.push(result);
     root.entries++;
     return result;

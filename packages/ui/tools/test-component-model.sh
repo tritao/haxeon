@@ -16,7 +16,7 @@ JSON
 export LD_LIBRARY_PATH="$root/out:$("$root/scripts/hashlink-path.sh")${LD_LIBRARY_PATH:+:$LD_LIBRARY_PATH}"
 fixtures=("$@")
 if [[ ${#fixtures[@]} == 0 ]]; then
-  fixtures=(UiEventPhaseMain RetainedClaimMain ScopeResourceIdMain WidgetIdCacheMain RetainedWidgetIdMain InteractionStateStoreMain ScopeFullFrameOwnershipMain ScopeLegacyCacheLifetimeMain ScopeLegacyReplacementMain ScopeInstanceLifetimeMain ScopeCachedNestedLifetimeMain ScopeRootStateMain ScopeVariantRootMain ScopeNodeFieldsMain ScopePatchOrderMain ScopeIncomingInteractionMain RoutingStateMain SelectionFocusMain MenuMeasurementMain IdSetMain StateStoreFlatMain ScopeRootBoundaryMain RenderScopeMain TrackedScopeMain EqualChildMain BoundTextMain BoundTextFailureMain BindingLifetimeMain TextIconMain IconButtonMain ButtonMain ScopeInputsMain FocusCaptureMain FocusDispatchAllocations)
+  fixtures=(UiEventPhaseMain KeyValueMain RetainedClaimMain ScopeResourceIdMain WidgetIdCacheMain RetainedWidgetIdMain InteractionStateStoreMain ScopeFullFrameOwnershipMain ScopeLegacyCacheLifetimeMain ScopeLegacyReplacementMain ScopeInstanceLifetimeMain ScopeCachedNestedLifetimeMain ScopeRootStateMain ScopeVariantRootMain ScopeNodeFieldsMain ScopePatchOrderMain ScopeIncomingInteractionMain RoutingStateMain SelectionFocusMain MenuMeasurementMain IdSetMain StateStoreFlatMain ScopeRootBoundaryMain RenderScopeMain TrackedScopeMain EqualChildMain BoundTextMain BoundTextFailureMain BindingLifetimeMain TextIconMain IconButtonMain ButtonMain ScopeInputsMain FocusCaptureMain FocusDispatchAllocations)
 fi
 for fixture in "${fixtures[@]}"; do
   for inline in 0 1; do
@@ -38,6 +38,7 @@ for fixture in "${fixtures[@]}"; do
             InteractionStateStoreMain) census_class=InteractionStateStoreMain ;;
             RetainedWidgetIdMain) census_class=RetainedWidgetIdMain ;;
             RetainedClaimMain) census_class=RetainedClaimMain ;;
+            KeyValueMain) census_class=KeyValueMain ;;
         esac
         if [[ -n $census_class && $target != hl ]]; then
             options+=("--export=$census_class.prepare" "--export=$census_class.perform")
@@ -89,7 +90,7 @@ const fs = require("fs");
   try { result = instance.exports.main(); }
   catch (error) { if (error instanceof ExitSignal) result = error.code; else throw error; }
   if (result !== 42) throw new Error(`${target} inline=${inline} returned ${result}`);
-  if (fixture === "FocusDispatchAllocations" || fixture === "WidgetIdCacheMain" || fixture === "InteractionStateStoreMain" || fixture === "RetainedWidgetIdMain" || fixture === "RetainedClaimMain") {
+  if (fixture === "FocusDispatchAllocations" || fixture === "WidgetIdCacheMain" || fixture === "InteractionStateStoreMain" || fixture === "RetainedWidgetIdMain" || fixture === "RetainedClaimMain" || fixture === "KeyValueMain") {
     const exports = instance.exports;
     const census = fixture === "FocusDispatchAllocations" ? "FocusDispatchCensus" :
       fixture === "WidgetIdCacheMain" ? "WidgetIdCacheCensus" : fixture;
@@ -108,6 +109,27 @@ const fs = require("fs");
   }
 })().catch(error => { console.error(error); process.exit(1); });
 JS
+        fi
+        if [[ $fixture == KeyValueMain ]]; then
+            negative_options=(--target="$target")
+            if [[ $target != hl ]]; then
+                negative_options+=(--wasm-import-memory --wasm-memory-contract="$tmp/memory.json")
+            fi
+            if HAXEON_INLINE="$inline" "$hl" "$compiler" "${negative_options[@]}" --output="$tmp/invalid-$target" \
+                    --entry=KeyScopeString --root="$ui/tests/haxeon/negative" --root="${HAXEON_UI_SOURCE:-"$ui/haxe"}" \
+                    --root="$ui/bindings/haxe" --root="$root/packages/editor/src" --root="$root/packages/platform/src" \
+                    --ffi-interface="$platform_hxi" --ffi-projection="$root/packages/platform/bindings/nativekit.hxmap" \
+                    --ffi-interface="$net_hxi" --ffi-projection="$root/packages/platform/bindings/nativekit-net.hxmap" \
+                    --ffi-interface="$ui_hxi" --ffi-projection="$ui/bindings/nativekit-ui.hxmap" \
+                    "$ui/tests/haxeon/negative/KeyScopeString.hx" > "$tmp/invalid.log" 2>&1; then
+                echo "FAIL: KeyScopeString accepted an unvalidated String on $target" >&2
+                exit 1
+            fi
+            if ! rg -Fq 'E1009: Type mismatch for argument 1 to "haxeon.ui.core.KeyScope.child"' "$tmp/invalid.log"; then
+                cat "$tmp/invalid.log" >&2
+                exit 1
+            fi
+            echo "PASS: KeyScopeString rejects raw String on $target, inline=$inline"
         fi
         if [[ $fixture == UiEventPhaseMain ]]; then
             for invalid in UiEventPhaseAssignment UiEventPhaseRegistration; do

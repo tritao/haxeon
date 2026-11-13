@@ -1,11 +1,11 @@
 package haxeon.ui.core;
 
-/** Caller-chosen stable key that scopes widget identity. */
-class Key {
-  public final value:String;
-
-  public function new(value:String) {
+/** Caller-chosen stable key; the validated string is the complete identity value. */
+abstract Key(String) {
+  public inline function new(value:String) {
     if (value == null || value.length == 0) throw "Widget keys must not be empty";
-    this.value = value;
+    this = value;
   }
+
+  public inline function rawValue():String return this;
 }

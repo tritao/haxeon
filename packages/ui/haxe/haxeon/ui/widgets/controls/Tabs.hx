@@ -149,7 +149,7 @@ class Tabs implements View {
 
     var rootFlags = context.interactionStates.get(rootId);
     var rootComputed = context.styleResolver.resolve(
-      new StyleTarget("tabs", key.value, key.value, null, ["tabs"], rootFlags),
+      new StyleTarget("tabs", key.rawValue(), key.rawValue(), null, ["tabs"], rootFlags),
       context.inheritedStyle,
       context.theme.styles,
       context.styleSheet,
@@ -157,7 +157,7 @@ class Tabs implements View {
       context.environment
     );
     var root = context.createNode(rootId, LayoutVisualKind.Box, rootComputed.toLayoutStyle());
-    root.setStyleIdentity("tabs", key.value, key.value, null, ["tabs"]);
+    root.setStyleIdentity("tabs", key.rawValue(), key.rawValue(), null, ["tabs"]);
     root.states = rootFlags;
     root.computedStyle = rootComputed;
     var tabsSemantics = new Semantics(AccessibilityRole.TabList, "Tabs");

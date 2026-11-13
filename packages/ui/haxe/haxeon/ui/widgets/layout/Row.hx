@@ -27,11 +27,11 @@ class Row implements View {
     return context.withScope(key, function() {
       var id = context.rootId("row");
       var computed = context.resolveStyle(
-        new StyleTarget("row", key.value, key.value, null, ["row"], context.interactionStates.get(id)),
+        new StyleTarget("row", key.rawValue(), key.rawValue(), null, ["row"], context.interactionStates.get(id)),
         style
       );
       var node = context.createNode(id, LayoutVisualKind.Box, computed.toLayoutStyle());
-      node.setStyleIdentity("row", key.value, key.value, null, ["row"]);
+      node.setStyleIdentity("row", key.rawValue(), key.rawValue(), null, ["row"]);
       node.states = context.interactionStates.get(id);
       node.computedStyle = computed;
       for (child in children) node.add(context.withStyleParent(computed, function() return child.build(context)));
