@@ -11,10 +11,12 @@ class IrValuePhiScalarization {
 	public static function rewrite(program:IrProgram):Void {
 		var objects:Map<String, IrObject> = [for (object in program.objects) object.name => object];
 		var table = IrObjectTable.of(objects), layouts = new IrInlineValueLayout(table), packets = [
-			for (declaration in program.enums) if (declaration.inlineStorage != null) declaration.inlineStorage => true
+			for (declaration in program.enums)
+				if (declaration.inlineStorage != null) declaration.inlineStorage => true
 		];
 		program.functions = [
-			for (fn in program.functions) rewriteFunction(fn, objects, table, layouts, packets)
+			for (fn in program.functions)
+				rewriteFunction(fn, objects, table, layouts, packets)
 		];
 	}
 

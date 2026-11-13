@@ -167,11 +167,13 @@ class ObjectReflection {
 	/** Preserve logical fields when HashLink storage uses inline values or scalar closure ABIs. */
 	static function hashLinkReflection(native:IrNative, fallback:String, layouts:Array<ReflectedLayout>, functions:Array<IrFunction>):IrFunction {
 		var builder = new IrBuilder(), object = builder.argument("object", Dyn), arguments = [
-			for (index in 1...native.arguments.length) builder.argument('argument$index', native.arguments[index])
+			for (index in 1...native.arguments.length)
+				builder.argument('argument$index', native.arguments[index])
 		];
 		forEachLayout(builder, object, layouts, (layout, typed) -> {
 			var parameters = [
-				for (index in 1...native.arguments.length) {name: 'argument$index', type: native.arguments[index]}
+				for (index in 1...native.arguments.length)
+					{name: 'argument$index', type: native.arguments[index]}
 			];
 			var body:(IrBuilder, ReflectedLayout, IrValue, Array<IrValue>) -> Void = switch native.symbol {
 				case "__reflect_field": fieldBody;
@@ -252,14 +254,17 @@ class ObjectReflection {
 				}
 			var names = [for (name in methods.keys()) name];
 			names.sort(Reflect.compare);
-			result.push({layout: {
-				name: name,
-				fields: fields,
-				methods: [for (name in names) methods.get(name)],
-				payload: payload,
-				observable: observable,
-				observableBits: facts.observableFieldBits.get(name)
-			}, depth: chain.length});
+			result.push({
+				layout: {
+					name: name,
+					fields: fields,
+					methods: [for (name in names) methods.get(name)],
+					payload: payload,
+					observable: observable,
+					observableBits: facts.observableFieldBits.get(name)
+				},
+				depth: chain.length
+			});
 		}
 		result.sort((left, right) -> right.depth - left.depth);
 		return [for (entry in result) entry.layout];

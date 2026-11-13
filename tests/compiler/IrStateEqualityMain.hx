@@ -36,9 +36,12 @@ class IrStateEqualityMain {
 
 	static function main():Void {
 		var body = fn(ConstInt(new IrValue(0, "v", I32), 1));
-		var adapter = new IrFunction(body.name, body.arguments, body.result, body.blocks, ClosureAdapter(Function([I32], I32), Function([Dyn], Dyn)), body.debugBindings, false, Reachable);
-		var castFunction = new IrFunction(body.name, body.arguments, body.result, body.blocks, ClosureCast(Function([Dyn], Dyn)), body.debugBindings, false, Reachable);
-		var otherAdapter = new IrFunction(body.name, body.arguments, body.result, body.blocks, ClosureAdapter(Function([I64], I32), Function([Dyn], Dyn)), body.debugBindings, false, Reachable);
+		var adapter = new IrFunction(body.name, body.arguments, body.result, body.blocks, ClosureAdapter(Function([I32], I32), Function([Dyn], Dyn)),
+			body.debugBindings, false, Reachable);
+		var castFunction = new IrFunction(body.name, body.arguments, body.result, body.blocks, ClosureCast(Function([Dyn], Dyn)), body.debugBindings, false,
+			Reachable);
+		var otherAdapter = new IrFunction(body.name, body.arguments, body.result, body.blocks, ClosureAdapter(Function([I64], I32), Function([Dyn], Dyn)),
+			body.debugBindings, false, Reachable);
 		var retained = new IrFunction(body.name, body.arguments, body.result, body.blocks, adapter.kind, body.debugBindings, true, Keep);
 		if (!IrFunctionStateEquality.same(retained, retained.withBlocks(retained.blocks)))
 			throw "Replacing blocks must preserve function metadata";
@@ -46,24 +49,50 @@ class IrStateEqualityMain {
 		compare(adapter, castFunction);
 		compare(adapter, otherAdapter);
 		compare(body, adapter);
-		for (kind in [GenericSpecialization, SourceLambda, Provider(compiler.ir.TypeKey.of(I32), compiler.Provides.ProviderOperation.Equals), Provider(compiler.ir.TypeKey.of(I32), compiler.Provides.ProviderOperation.Hash), Provider(compiler.ir.TypeKey.of(I32), compiler.Provides.ProviderOperation.KeyPath), IterationAdapter,
-			GeneratedHelper, ScalarArguments, Provider(compiler.ir.TypeKey.of(I32), compiler.Provides.ProviderOperation.InlineEnumHelper), Provider(compiler.ir.TypeKey.of(I32), compiler.Provides.ProviderOperation.TypedInterfaceEntry), Provider(compiler.ir.TypeKey.of(I32), compiler.Provides.ProviderOperation.InterfaceUnbox), Provider(compiler.ir.TypeKey.of(I32), compiler.Provides.ProviderOperation.GenericMethodReference),
-			OptionalScalar(null), OptionalScalar("owner.method"), Provider(compiler.ir.TypeKey.of(I32), compiler.Provides.ProviderOperation.OptionalBox), NullableScalarArguments,
-			Provider(compiler.ir.TypeKey.of(I32), compiler.Provides.ProviderOperation.ValueArrayElement), WasmClosureRestore, EnumEquality(true), EnumEquality(false), EnumDynamicUnbox(Enum("Example")),
-			EnumTagAdapter(EnumTag("Example"), true), EnumTagAdapter(EnumTag("Example"), false)]) {
+		for (kind in [
+			GenericSpecialization,
+			SourceLambda,
+			Provider(compiler.ir.TypeKey.of(I32), compiler.Provides.ProviderOperation.Equals),
+			Provider(compiler.ir.TypeKey.of(I32), compiler.Provides.ProviderOperation.Hash),
+			Provider(compiler.ir.TypeKey.of(I32), compiler.Provides.ProviderOperation.KeyPath),
+			IterationAdapter,
+			GeneratedHelper,
+			ScalarArguments,
+			Provider(compiler.ir.TypeKey.of(I32), compiler.Provides.ProviderOperation.InlineEnumHelper),
+			Provider(compiler.ir.TypeKey.of(I32), compiler.Provides.ProviderOperation.TypedInterfaceEntry),
+			Provider(compiler.ir.TypeKey.of(I32), compiler.Provides.ProviderOperation.InterfaceUnbox),
+			Provider(compiler.ir.TypeKey.of(I32), compiler.Provides.ProviderOperation.GenericMethodReference),
+			OptionalScalar(null),
+			OptionalScalar("owner.method"),
+			Provider(compiler.ir.TypeKey.of(I32), compiler.Provides.ProviderOperation.OptionalBox),
+			NullableScalarArguments,
+			Provider(compiler.ir.TypeKey.of(I32), compiler.Provides.ProviderOperation.ValueArrayElement),
+			WasmClosureRestore,
+			EnumEquality(true),
+			EnumEquality(false),
+			EnumDynamicUnbox(Enum("Example")),
+			EnumTagAdapter(EnumTag("Example"), true),
+			EnumTagAdapter(EnumTag("Example"), false)
+		]) {
 			var functionWithKind = new IrFunction(body.name, body.arguments, body.result, body.blocks, kind, body.debugBindings);
 			if (!IrFunctionStateEquality.same(functionWithKind, IrFunctionStateCodec.decode(IrFunctionStateCodec.encode(functionWithKind))))
 				throw 'Function role failed to round-trip: $kind';
 		}
-		for (operation in [Read(2, ["a", "b"], true), Write(3, ["a"], false), Check(["a"], true),
-			OptionalWrite(["b"], I32), RequireScalar(F64)]) {
+		for (operation in [
+			Read(2, ["a", "b"], true),
+			Write(3, ["a"], false),
+			Check(["a"], true),
+			OptionalWrite(["b"], I32),
+			RequireScalar(F64)
+		]) {
 			var slot = new IrFunction(body.name, body.arguments, body.result, body.blocks, ValueArraySlot(3, Obj("Element"), operation));
 			if (!IrFunctionStateEquality.same(slot, IrFunctionStateCodec.decode(IrFunctionStateCodec.encode(slot))))
 				throw 'Value-array slot operation failed to round-trip: $operation';
 		}
 		var slotA = new IrFunction(body.name, body.arguments, body.result, body.blocks, ValueArraySlot(3, Obj("Element"), Read(2, ["a"], true)));
 		var slotB = new IrFunction(body.name, body.arguments, body.result, body.blocks, ValueArraySlot(3, Obj("Element"), Read(2, ["b"], true)));
-		if (IrFunctionStateEquality.same(slotA, slotB)) throw "Distinct slot paths must differ";
+		if (IrFunctionStateEquality.same(slotA, slotB))
+			throw "Distinct slot paths must differ";
 		compare(slotA, slotB);
 		var renamedSlot = new IrFunction(body.name, body.arguments, body.result, body.blocks, ValueArraySlot(4, Obj("Element"), Read(2, ["a"], true)));
 		if (IrFunctionStateCodec.codeFingerprint(slotA) != IrFunctionStateCodec.codeFingerprint(renamedSlot))

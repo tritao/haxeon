@@ -155,8 +155,10 @@ class IrCopyElision {
 		if (callPosition < lastWrite || !nothingRunsBetween(block, lastWrite + 1, callPosition))
 			return false;
 		var callee = calleeOf(block.instructions[callPosition].value, argument);
-		if (callee == null || resultDependsOnParameter(callee.name, callee.parameter, [], 0)
-			|| !readsOnly(callee.name, callee.parameter, [], 0) || !storesNothing(callee.name, false, [], 0))
+		if (callee == null
+			|| resultDependsOnParameter(callee.name, callee.parameter, [], 0)
+			|| !readsOnly(callee.name, callee.parameter, [], 0)
+			|| !storesNothing(callee.name, false, [], 0))
 			return false;
 		// Pass the source itself, and drop the copy with the reads that fed it.
 		var rewritten:Array<Located<IrInstruction>> = [];
@@ -189,7 +191,9 @@ class IrCopyElision {
 			return true;
 		consult(name);
 		visiting.push(key);
-		var parameter = fn.arguments[index], tainted:Map<Int, Bool> = [], fresh:Map<Int, Bool> = [];
+		var parameter = fn.arguments[index],
+			tainted:Map<Int, Bool> = [],
+			fresh:Map<Int, Bool> = [];
 		tainted.set(parameter.id, true);
 		var changed = true, rounds = 0;
 		while (changed && rounds++ < fn.blocks.length + 1) {
@@ -229,7 +233,8 @@ class IrCopyElision {
 										found;
 									case MethodCall(_, receiver, method, arguments, _):
 										var target = valueMethod(receiver, method), found = target == null && tainted.exists(receiver.id);
-										if (target != null && tainted.exists(receiver.id)
+										if (target != null
+											&& tainted.exists(receiver.id)
 											&& resultDependsOnParameter(target, 0, visiting, depth + 1))
 											found = true;
 										for (argument in 0...arguments.length)
@@ -259,7 +264,8 @@ class IrCopyElision {
 				continue;
 			switch terminator.value {
 				case Return(value), Throw(value), Rethrow(value):
-					if (tainted.exists(value.id)) depends = true;
+					if (tainted.exists(value.id))
+						depends = true;
 				case Branch(condition, _, _):
 				case Jump(_), Unreachable:
 			}

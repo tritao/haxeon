@@ -132,14 +132,17 @@ class WasmFunctionLower {
 			placement = context.placement,
 			valueLocals = context.valueLocals,
 			locals = context.locals;
-		var rootLocals:Array<Int> = [],
-			rootIds:Map<Int, Bool> = [],
-			live:Map<Int, Map<Int, Array<Int>>> = [], scalarRoots:Map<Int, Array<Int>> = [], synthetic = -1;
+		var rootLocals:Array<Int> = [], rootIds:Map<Int, Bool> = [], live:Map<Int, Map<Int, Array<Int>>> = [], scalarRoots:Map<Int, Array<Int>> = [],
+			synthetic = -1;
 		if (Std.isOfType(context.representation.values, compiler.backend.wasm.linear.WasmLinearRepresentation)) {
 			var linear:compiler.backend.wasm.linear.WasmLinearRepresentation = cast context.representation.values;
 			for (owner => locals in linear.scalarReferenceLocals()) {
 				var ids:Array<Int> = [];
-				for (local in locals) { var id = synthetic--; valueLocals.set(id, local); ids.push(id); }
+				for (local in locals) {
+					var id = synthetic--;
+					valueLocals.set(id, local);
+					ids.push(id);
+				}
 				scalarRoots.set(owner, ids);
 			}
 		}
@@ -151,8 +154,11 @@ class WasmFunctionLower {
 			}
 			var references:Array<Int> = [];
 			for (valueId in point.liveReferences)
-				if (scalarRoots.exists(valueId)) for (id in scalarRoots.get(valueId)) references.push(id);
-				else references.push(valueId);
+				if (scalarRoots.exists(valueId))
+					for (id in scalarRoots.get(valueId))
+						references.push(id);
+				else
+					references.push(valueId);
 			blockLive.set(point.instruction, references);
 			for (valueId in references) {
 				rootIds.set(valueId, true);
@@ -228,14 +234,16 @@ class WasmFunctionLower {
 		if (Std.isOfType(context.representation.values, WasmGcRepresentation)) {
 			var gc:WasmGcRepresentation = cast context.representation.values,
 				wrapped = gc.scalarExceptionWrapper(fn, body, valueLocals, context.exceptionTag);
-			if (wrapped != null) body = wrapped;
+			if (wrapped != null)
+				body = wrapped;
 		}
 		if (Std.isOfType(context.representation.values, compiler.backend.wasm.linear.WasmLinearRepresentation)) {
 			var linear:compiler.backend.wasm.linear.WasmLinearRepresentation = cast context.representation.values,
 				cleanup:Array<WasmInstruction> = [];
 			restoreRoots(cleanup);
 			var wrapped = linear.scalarExceptionWrapper(fn, body, valueLocals, context.exceptionTag, cleanup);
-			if (wrapped != null) body = wrapped;
+			if (wrapped != null)
+				body = wrapped;
 		}
 		body = WasmOptimizer.optimize(body);
 		return new WasmFunction(fn.name, type, locals, body);
@@ -251,7 +259,10 @@ class WasmFunctionLower {
 		for (block in fn.blocks)
 			for (located in block.instructions)
 				switch located.value {
-					case Phi(output, _) if ((switch (output.type) { case Void: false; default: true; })):
+					case Phi(output, _) if ((switch (output.type) {
+						case Void: false;
+						default: true;
+					})):
 						state.phiBlocks.set(block.id, true);
 					default:
 				}
@@ -263,60 +274,74 @@ class WasmFunctionLower {
 	/** Emit the dominator tree without consuming the compiler host's call stack. */
 	function structuredTree(body:Array<WasmInstruction>, state:StructuredEmission, id:Int):Void {
 		var pending:Array<StructureWork> = [Tree(id)];
-		while (pending.length > 0) switch pending.pop() {
-			case Tree(blockId):
-				if (state.structurer.isLoopHeader(blockId)) {
-					body.push(Loop(null));
-					state.frames.push(LoopFrame(blockId));
-					pending.push(Close);
-				}
-				var children = state.structurer.mergeChildrenOf(blockId);
-				pending.push(Within(blockId, children, children.length));
-			case Within(blockId, children, count):
-				if (count > 0) {
-					var last = children[count - 1];
-					body.push(Block(null));
-					state.frames.push(BlockFrame(last));
-					pending.push(Tree(last));
-					pending.push(Close);
-					pending.push(Within(blockId, children, count - 1));
-				} else {
-					var block = state.structurer.analysis.graph.block(blockId);
-					emitBlockInstructions(body, block, state.values, state.functions, state.predecessor, state.layout, state.allocator, state.globals,
-						state.strings, state.methods, state.closureTypes);
-					if (block.terminator == null) throw 'Reachable block $blockId has no terminator';
-					switch block.terminator.value {
-						case Unreachable: body.push(Unreachable);
-						case Return(value):
-							restoreRoots(body);
-							if ((switch (value.type) { case Void: false; default: true; })) body.push(LocalGet(requiredLocal(state.values, value.id)));
-							body.push(Return);
-						case Throw(value), Rethrow(value): emitThrow(body, requiredLocal(state.values, value.id));
-						case Jump(target): pending.push(Edge(blockId, target));
-						case Branch(condition, yes, no):
-							if (yes == no) pending.push(Edge(blockId, yes));
-							else {
-								emit(body, [LocalGet(requiredLocal(state.values, condition.id)), If(null)]);
-								state.frames.push(IfFrame);
-								pending.push(Close);
-								pending.push(Edge(blockId, no));
-								pending.push(Otherwise);
-								pending.push(Edge(blockId, yes));
-							}
+		while (pending.length > 0)
+			switch pending.pop() {
+				case Tree(blockId):
+					if (state.structurer.isLoopHeader(blockId)) {
+						body.push(Loop(null));
+						state.frames.push(LoopFrame(blockId));
+						pending.push(Close);
 					}
-				}
-			case Edge(source, target):
-				if (state.phiBlocks.exists(target)) setPredecessor(body, state.predecessor, source);
-				if (state.structurer.isBackEdge(source, target))
-					body.push(Br(state.depthOf(frame -> switch frame { case LoopFrame(header): header == target; default: false; })));
-				else if (state.structurer.isMergeNode(target))
-					body.push(Br(state.depthOf(frame -> switch frame { case BlockFrame(followedBy): followedBy == target; default: false; })));
-				else pending.push(Tree(target));
-			case Close:
-				state.frames.pop();
-				body.push(End);
-			case Otherwise: body.push(Else);
-		}
+					var children = state.structurer.mergeChildrenOf(blockId);
+					pending.push(Within(blockId, children, children.length));
+				case Within(blockId, children, count):
+					if (count > 0) {
+						var last = children[count - 1];
+						body.push(Block(null));
+						state.frames.push(BlockFrame(last));
+						pending.push(Tree(last));
+						pending.push(Close);
+						pending.push(Within(blockId, children, count - 1));
+					} else {
+						var block = state.structurer.analysis.graph.block(blockId);
+						emitBlockInstructions(body, block, state.values, state.functions, state.predecessor, state.layout, state.allocator, state.globals,
+							state.strings, state.methods, state.closureTypes);
+						if (block.terminator == null)
+							throw 'Reachable block $blockId has no terminator';
+						switch block.terminator.value {
+							case Unreachable: body.push(Unreachable);
+							case Return(value):
+								restoreRoots(body);
+								if ((switch (value.type) {
+									case Void: false;
+									default: true;
+								}))
+									body.push(LocalGet(requiredLocal(state.values, value.id)));
+								body.push(Return);
+							case Throw(value), Rethrow(value): emitThrow(body, requiredLocal(state.values, value.id));
+							case Jump(target): pending.push(Edge(blockId, target));
+							case Branch(condition, yes, no):
+								if (yes == no) pending.push(Edge(blockId, yes)); else {
+									emit(body, [LocalGet(requiredLocal(state.values, condition.id)), If(null)]);
+									state.frames.push(IfFrame);
+									pending.push(Close);
+									pending.push(Edge(blockId, no));
+									pending.push(Otherwise);
+									pending.push(Edge(blockId, yes));
+								}
+						}
+					}
+				case Edge(source, target):
+					if (state.phiBlocks.exists(target))
+						setPredecessor(body, state.predecessor, source);
+					if (state.structurer.isBackEdge(source, target))
+						body.push(Br(state.depthOf(frame -> switch frame {
+							case LoopFrame(header): header == target;
+							default: false;
+						})));
+					else if (state.structurer.isMergeNode(target))
+						body.push(Br(state.depthOf(frame -> switch frame {
+							case BlockFrame(followedBy): followedBy == target;
+							default: false;
+						})));
+					else
+						pending.push(Tree(target));
+				case Close:
+					state.frames.pop();
+					body.push(End);
+				case Otherwise:
+					body.push(Else);
+			}
 	}
 
 	function emitBlockInstructions(body:Array<WasmInstruction>, block:IrBlock, values:Map<Int, Int>, functions:Map<String, Int>, predecessor:Int,
@@ -330,7 +355,8 @@ class WasmFunctionLower {
 			switch located.value {
 				case Phi(_, _):
 				default:
-					lowerInstruction(body, located.value, values, functions, layout, allocator, globals, strings, methods, closureTypes, nonNull.has(block.id, index));
+					lowerInstruction(body, located.value, values, functions, layout, allocator, globals, strings, methods, closureTypes,
+						nonNull.has(block.id, index));
 			}
 		}
 	}
@@ -340,7 +366,10 @@ class WasmFunctionLower {
 		for (located in block.instructions)
 			switch located.value {
 				// A Void join (branches whose results are discarded) carries no value; placement gives it no local.
-				case Phi(output, _) if ((switch (output.type) { case Void: true; default: false; })):
+				case Phi(output, _) if ((switch (output.type) {
+					case Void: true;
+					default: false;
+				})):
 				case Phi(output, inputs):
 					var temporary = context.placement.allocate(context.representation.values.valueType(output.type));
 					WasmPhiLower.capture(body, inputs, values, predecessor, temporary);
@@ -421,16 +450,20 @@ class WasmFunctionLower {
 		body.push(If(null));
 		emit(body, [LocalGet(exceptionState.handler), I32Const(-1), I32Eq, If(null)]);
 		restoreRoots(body);
-		var linear:Null<compiler.backend.wasm.linear.WasmLinearRepresentation> =
-			Std.isOfType(context.representation.values, compiler.backend.wasm.linear.WasmLinearRepresentation) ? cast context.representation.values : null,
+		var linear:Null<compiler.backend.wasm.linear.WasmLinearRepresentation> = Std.isOfType(context.representation.values,
+			compiler.backend.wasm.linear.WasmLinearRepresentation) ? cast context.representation.values : null,
 			signature = linear == null ? null : linear.scalarSignature(fn.name);
 		if (signature != null && signature.throwsReceiver) {
-			emit(body, [GlobalGet(requiredPendingExceptionValue()), LocalSet(exceptionState.exception), I32Const(0),
-				GlobalSet(requiredPendingExceptionFlag()), I32Const(0), GlobalSet(requiredPendingExceptionValue())]);
+			emit(body, [
+				GlobalGet(requiredPendingExceptionValue()), LocalSet(exceptionState.exception),                              I32Const(0),
+				 GlobalSet(requiredPendingExceptionFlag()),                        I32Const(0), GlobalSet(requiredPendingExceptionValue())
+			]);
 			emit(body, linear.scalarExceptionResult(fn, context.valueLocals, exceptionState.exception));
 		} else if (signature != null) {
-			for (type in linear.scalarReturnTypes(signature)) emit(body, context.representation.values.zeroValue(type));
-		} else emit(body, context.representation.values.zeroValue(fn.result));
+			for (type in linear.scalarReturnTypes(signature))
+				emit(body, context.representation.values.zeroValue(type));
+		} else
+			emit(body, context.representation.values.zeroValue(fn.result));
 		body.push(Return);
 		body.push(Else);
 		emit(body, [
@@ -498,7 +531,8 @@ class WasmFunctionLower {
 				case Phi(_, _):
 				default:
 					var start = body.length;
-					lowerInstruction(body, located.value, values, functions, layout, allocator, globals, strings, methods, closureTypes, nonNull.has(block.id, index));
+					lowerInstruction(body, located.value, values, functions, layout, allocator, globals, strings, methods, closureTypes,
+						nonNull.has(block.id, index));
 					if (context.runtimeNeutral && context.exceptionState != null && containsCall(body.slice(start)))
 						emitPendingCallBranch(body, dispatchIndex);
 			}
@@ -506,10 +540,14 @@ class WasmFunctionLower {
 		if (block.terminator == null)
 			throw 'Missing terminator in Wasm block ${block.id}';
 		switch block.terminator.value {
-			case Unreachable: body.push(Unreachable);
+			case Unreachable:
+				body.push(Unreachable);
 			case Return(value):
 				restoreRoots(body);
-				if ((switch (value.type) { case Void: false; default: true; }))
+				if ((switch (value.type) {
+					case Void: false;
+					default: true;
+				}))
 					body.push(LocalGet(requiredLocal(values, value.id)));
 				body.push(Return);
 			case Throw(value), Rethrow(value):
@@ -599,13 +637,20 @@ class WasmFunctionLower {
 			allocator:Int, globals:Map<String, Int>, strings:Map<String, Int>, methods:Map<String, String>, closureTypes:Map<String, WasmClosureTypes>,
 			?knownNonNull:Bool = false):Void {
 		if (Std.isOfType(context.representation.values, WasmGcRepresentation)) {
-			var gc:WasmGcRepresentation = cast context.representation.values, scalar = gc.scalarLocal(instruction, values);
-			if (scalar != null) { emit(body, scalar); return; }
+			var gc:WasmGcRepresentation = cast context.representation.values,
+				scalar = gc.scalarLocal(instruction, values);
+			if (scalar != null) {
+				emit(body, scalar);
+				return;
+			}
 		}
 		if (Std.isOfType(context.representation.values, compiler.backend.wasm.linear.WasmLinearRepresentation)) {
 			var linear:compiler.backend.wasm.linear.WasmLinearRepresentation = cast context.representation.values,
 				scalar = linear.scalarLocal(instruction, values);
-			if (scalar != null) { emit(body, scalar); return; }
+			if (scalar != null) {
+				emit(body, scalar);
+				return;
+			}
 		}
 		var exceptionState = context.exceptionState;
 		switch instruction {
@@ -650,14 +695,21 @@ class WasmFunctionLower {
 				].concat(store));
 			case ConstInt(output, value):
 				emit(body, [
-					(switch (output.type) { case I64: true; default: false; }) ? I64Const(value) : I32Const(value),
+					(switch (output.type) {
+						case I64: true;
+						default: false;
+					})
+					? I64Const(value) : I32Const(value),
 					LocalSet(requiredLocal(values, output.id))
 				]);
 			case ConstBool(output, value):
 				emit(body, [I32Const(value ? 1 : 0), LocalSet(requiredLocal(values, output.id))]);
 			case ConstFloat(output, value):
 				emit(body, [F64Const(value), LocalSet(requiredLocal(values, output.id))]);
-			case ConstNull(output) if (switch output.type { case EnumTag(_): true; default: false; }):
+			case ConstNull(output) if (switch output.type {
+					case EnumTag(_): true;
+					default: false;
+				}):
 				emit(body, [I32Const(0), LocalSet(requiredLocal(values, output.id))]);
 			case ConstNull(output):
 				emit(body, context.representation.values.nullValue(output.type, requiredLocal(values, output.id)));
@@ -672,21 +724,28 @@ class WasmFunctionLower {
 				var represented = context.representation.values.safeCast(output, value, requiredLocal(values, output.id), requiredLocal(values, value.id));
 				if (emitIfHandled(body, represented)) {} else
 					switch output.type {
-						case Function(_, _) if (Std.isOfType(context.representation.values, WasmLinearRepresentation)
-							&& functions.exists((cast context.representation.values:WasmLinearRepresentation).closureAdapters.castName(output.type))):
+						case Function(_, _)
+							if (Std.isOfType(context.representation.values, WasmLinearRepresentation)
+								&& functions.exists((cast context.representation.values : WasmLinearRepresentation).closureAdapters.castName(output.type))):
 							// A closure created with another representation is adapted (WasmLinearClosureAdapters).
 							emit(body, [
 								LocalGet(requiredLocal(values, value.id)),
 								Call(WasmModuleSupport.requiredFunctionIndex(functions,
-									(cast context.representation.values:WasmLinearRepresentation).closureAdapters.castName(output.type))),
+									(cast context.representation.values : WasmLinearRepresentation).closureAdapters.castName(output.type))),
 								LocalSet(requiredLocal(values, output.id))
 							]);
 						case Function(_, _) if (Std.isOfType(context.representation.values, WasmLinearRepresentation)):
 							throw 'Missing reachable Wasm32 closure cast helper for ${Std.string(output.type)}';
-						case I32, F64 if ((switch (value.type) { case Dyn: true; default: false; })):
+						case I32, F64 if ((switch (value.type) {
+							case Dyn: true;
+							default: false;
+						})):
 							// Any boxed number converts to Int or Float, as on HashLink: JSON gives an Int box for a whole number.
 							emit(body, dynamicNumber(output.type, requiredLocal(values, value.id), requiredLocal(values, output.id)));
-						case Bool, I64 if ((switch (value.type) { case Dyn: true; default: false; })):
+						case Bool, I64 if ((switch (value.type) {
+							case Dyn: true;
+							default: false;
+						})):
 							emit(body, [
 								LocalGet(requiredLocal(values, value.id)),
 								I32Load(0),
@@ -700,13 +759,35 @@ class WasmFunctionLower {
 								Unreachable,
 								End
 							]);
-						case RawPtr | TypeRef | Abstract("native_callback") if ((switch (value.type) { case Dyn: true; default: false; })):
-							var source = requiredLocal(values, value.id), destination = requiredLocal(values, output.id);
-							emit(body, [LocalGet(source), I32Eqz, If(null), I32Const(0), LocalSet(destination), Else,
-								LocalGet(source), I32Const(1), I32And, If(null)].concat(trapOrThrow(2))
-								.concat([End, LocalGet(source), I32Load(0), I32Const(typeId(output.type)), I32Eq, If(null),
-									LocalGet(source), I32Load(WasmLayout.DYN_PAYLOAD_OFFSET), LocalSet(destination), Else])
-								.concat(trapOrThrow(2)).concat([End, End]));
+						case RawPtr | TypeRef | Abstract("native_callback") if ((switch (value.type) {
+							case Dyn: true;
+							default: false;
+						})):
+							var source = requiredLocal(values, value.id),
+								destination = requiredLocal(values, output.id);
+							emit(body, [
+								LocalGet(source),
+								I32Eqz,
+								If(null),
+								I32Const(0),
+								LocalSet(destination),
+								Else,
+								LocalGet(source),
+								I32Const(1),
+								I32And,
+								If(null)
+							].concat(trapOrThrow(2)).concat([
+								End,
+								LocalGet(source),
+								I32Load(0),
+								I32Const(typeId(output.type)),
+								I32Eq,
+								If(null),
+								LocalGet(source),
+								I32Load(WasmLayout.DYN_PAYLOAD_OFFSET),
+								LocalSet(destination),
+								Else
+								]).concat(trapOrThrow(2)).concat([End, End]));
 						default:
 							emit(body, [
 								LocalGet(requiredLocal(values, value.id)),
@@ -754,35 +835,48 @@ class WasmFunctionLower {
 					represented = calls == null ? UseDefault : calls.staticClosure(name, output.type, context.tableSlots, requiredLocal(values, output.id));
 				if (emitIfHandled(body, represented)) {} else {
 					var linear:WasmLinearRepresentation = cast context.representation.values;
-					var descriptor = linear.staticClosureDescriptors.get(compiler.backend.wasm.linear.WasmLinearClosureAdapters.staticDescriptorKey(name, output.type));
-					if (descriptor == null) throw 'Missing static closure descriptor for $name';
+					var descriptor = linear.staticClosureDescriptors.get(compiler.backend.wasm.linear.WasmLinearClosureAdapters.staticDescriptorKey(name,
+						output.type));
+					if (descriptor == null)
+						throw 'Missing static closure descriptor for $name';
 					emit(body, [I32Const(descriptor | 1), LocalSet(requiredLocal(values, output.id))]);
 				}
 			case CallClosure(output, closure, arguments):
 				var typeInfo = closureTypes.get(Std.string(closure.type));
 				if (typeInfo == null)
 					throw 'Wasm closure type ${Std.string(closure.type)} has no indirect signature';
-				var scalarGc:Null<WasmGcRepresentation> = Std.isOfType(context.representation.values, WasmGcRepresentation) ?
-					cast(context.representation.values, WasmGcRepresentation) : null;
+				var scalarGc:Null<WasmGcRepresentation> = Std.isOfType(context.representation.values,
+					WasmGcRepresentation) ? cast(context.representation.values, WasmGcRepresentation) : null;
 				if (scalarGc != null && scalarGc.hasScalarClosure(closure.type)) {
-					if (typeInfo.instanceType == null) throw "Scalar closure has no instance ABI";
-					emit(body, scalarGc.scalarClosureCall(closure.type, typeInfo.staticType, typeInfo.instanceType,
-						requiredLocal(values, closure.id), output, (switch (output.type) { case Void: true; default: false; }) ? -1 : requiredLocal(values, output.id),
-						[for (argument in arguments) requiredLocal(values, argument.id)]));
+					if (typeInfo.instanceType == null)
+						throw "Scalar closure has no instance ABI";
+					emit(body,
+						scalarGc.scalarClosureCall(closure.type, typeInfo.staticType, typeInfo.instanceType, requiredLocal(values, closure.id), output,
+							(switch (output.type) {
+								case Void: true;
+								default: false;
+							}) ? -1 : requiredLocal(values, output.id), [for (argument in arguments) requiredLocal(values, argument.id)]));
 					return;
 				}
-				var scalarLinear:Null<WasmLinearRepresentation> = Std.isOfType(context.representation.values, WasmLinearRepresentation) ?
-					cast(context.representation.values, WasmLinearRepresentation) : null;
+				var scalarLinear:Null<WasmLinearRepresentation> = Std.isOfType(context.representation.values,
+					WasmLinearRepresentation) ? cast(context.representation.values, WasmLinearRepresentation) : null;
 				if (scalarLinear != null && scalarLinear.hasScalarClosure(closure.type)) {
-					if (typeInfo.instanceType == null) throw "Scalar closure has no instance ABI";
-					emit(body, scalarLinear.scalarClosureCall(closure.type, typeInfo.staticType, typeInfo.instanceType,
-						requiredLocal(values, closure.id), output, (switch (output.type) { case Void: true; default: false; }) ? -1 : requiredLocal(values, output.id),
-						[for (argument in arguments) requiredLocal(values, argument.id)]));
+					if (typeInfo.instanceType == null)
+						throw "Scalar closure has no instance ABI";
+					emit(body,
+						scalarLinear.scalarClosureCall(closure.type, typeInfo.staticType, typeInfo.instanceType, requiredLocal(values, closure.id), output,
+							(switch (output.type) {
+								case Void: true;
+								default: false;
+							}) ? -1 : requiredLocal(values, output.id), [for (argument in arguments) requiredLocal(values, argument.id)]));
 					return;
 				}
 				var calls = context.representation.calls,
 					instanceType = typeInfo.instanceType,
-					destination = (switch (output.type) { case Void: true; default: false; }) ? -1 : requiredLocal(values, output.id),
+					destination = (switch (output.type) {
+						case Void: true;
+						default: false;
+					}) ? -1 : requiredLocal(values, output.id),
 					represented = calls == null ? UseDefault : calls.callClosure(typeInfo.staticType, instanceType, arguments,
 						requiredLocal(values, closure.id), destination, [for (argument in arguments) requiredLocal(values, argument.id)]);
 				if (emitIfHandled(body, represented)) {} else if (instanceType == null) {
@@ -793,7 +887,10 @@ class WasmFunctionLower {
 					body.push(I32And);
 					body.push(I32Load(WasmLayout.STATIC_CLOSURE_FUNCTION_OFFSET));
 					body.push(CallIndirect(typeInfo.staticType));
-					if ((switch (output.type) { case Void: false; default: true; }))
+					if ((switch (output.type) {
+						case Void: false;
+						default: true;
+					}))
 						body.push(LocalSet(requiredLocal(values, output.id)));
 				} else {
 					body.push(LocalGet(requiredLocal(values, closure.id)));
@@ -807,7 +904,10 @@ class WasmFunctionLower {
 					body.push(I32And);
 					body.push(I32Load(WasmLayout.STATIC_CLOSURE_FUNCTION_OFFSET));
 					body.push(CallIndirect(typeInfo.staticType));
-					if ((switch (output.type) { case Void: false; default: true; }))
+					if ((switch (output.type) {
+						case Void: false;
+						default: true;
+					}))
 						body.push(LocalSet(requiredLocal(values, output.id)));
 					body.push(Else);
 					body.push(LocalGet(requiredLocal(values, closure.id)));
@@ -817,7 +917,10 @@ class WasmFunctionLower {
 					body.push(LocalGet(requiredLocal(values, closure.id)));
 					body.push(I32Load(WasmLayout.CLOSURE_FUNCTION_OFFSET));
 					body.push(CallIndirect(instanceType));
-					if ((switch (output.type) { case Void: false; default: true; }))
+					if ((switch (output.type) {
+						case Void: false;
+						default: true;
+					}))
 						body.push(LocalSet(requiredLocal(values, output.id)));
 					body.push(End);
 				}
@@ -833,7 +936,8 @@ class WasmFunctionLower {
 						requiredLocal(values, receiver.id), requiredLocal(values, output.id));
 				if (emitIfHandled(body, represented)) {} else {
 					var linear:WasmLinearRepresentation = cast context.representation.values;
-					if (linear.closureAdapters == null) throw "Missing Wasm32 closure signatures";
+					if (linear.closureAdapters == null)
+						throw "Missing Wasm32 closure signatures";
 					emit(body, [
 						I32Const(WasmLayout.CLOSURE_SIZE),
 						Call(allocator),
@@ -866,23 +970,29 @@ class WasmFunctionLower {
 					]);
 			case MethodCall(output, object, methodName, arguments, _):
 				// Dispatch must fail as a Haxe exception before reading the receiver's type or calling its method.
-				var receiverCheck:Array<WasmInstruction> = [LocalGet(requiredLocal(values, object.id)),
-					Std.isOfType(context.representation.values, WasmGcRepresentation) ? RefIsNull : I32Eqz, If(null)];
-				if (!knownNonNull) emit(body, receiverCheck.concat(trapOrThrow(1)).concat([End]));
-				var scalarGc:Null<WasmGcRepresentation> = Std.isOfType(context.representation.values, WasmGcRepresentation) ?
-					cast(context.representation.values, WasmGcRepresentation) : null;
+				var receiverCheck:Array<WasmInstruction> = [
+					LocalGet(requiredLocal(values, object.id)),
+					Std.isOfType(context.representation.values, WasmGcRepresentation) ? RefIsNull : I32Eqz,
+					If(null)
+				];
+				if (!knownNonNull)
+					emit(body, receiverCheck.concat(trapOrThrow(1)).concat([End]));
+				var scalarGc:Null<WasmGcRepresentation> = Std.isOfType(context.representation.values,
+					WasmGcRepresentation) ? cast(context.representation.values, WasmGcRepresentation) : null;
 				if (scalarGc != null && scalarGc.hasScalarVirtual(object.type, methodName)) {
-					emit(body, scalarGc.scalarVirtualCall(object, methodName, requiredLocal(values, object.id), output,
-						(switch (output.type) { case Void: true; default: false; }) ? -1 : requiredLocal(values, output.id), arguments,
-						[for (argument in arguments) requiredLocal(values, argument.id)]));
+					emit(body, scalarGc.scalarVirtualCall(object, methodName, requiredLocal(values, object.id), output, (switch (output.type) {
+						case Void: true;
+						default: false;
+					}) ? -1 : requiredLocal(values, output.id), arguments, [for (argument in arguments) requiredLocal(values, argument.id)]));
 					return;
 				}
-				var scalarLinear:Null<compiler.backend.wasm.linear.WasmLinearRepresentation> =
-					Std.isOfType(context.representation.values, compiler.backend.wasm.linear.WasmLinearRepresentation) ? cast context.representation.values : null;
+				var scalarLinear:Null<compiler.backend.wasm.linear.WasmLinearRepresentation> = Std.isOfType(context.representation.values,
+					compiler.backend.wasm.linear.WasmLinearRepresentation) ? cast context.representation.values : null;
 				if (scalarLinear != null && scalarLinear.hasScalarVirtual(object.type, methodName)) {
-					emit(body, scalarLinear.scalarVirtualCall(object, methodName, requiredLocal(values, object.id), output,
-						(switch (output.type) { case Void: true; default: false; }) ? -1 : requiredLocal(values, output.id), arguments,
-						[for (argument in arguments) requiredLocal(values, argument.id)]));
+					emit(body, scalarLinear.scalarVirtualCall(object, methodName, requiredLocal(values, object.id), output, (switch (output.type) {
+						case Void: true;
+						default: false;
+					}) ? -1 : requiredLocal(values, output.id), arguments, [for (argument in arguments) requiredLocal(values, argument.id)]));
 					return;
 				}
 				switch object.type {
@@ -891,8 +1001,10 @@ class WasmFunctionLower {
 							calls = context.representation.calls,
 							represented = targets.length == 0
 								|| calls == null ? UseDefault : calls.virtualCall(output, object, arguments, targets, requiredLocal(values, object.id),
-									(switch (output.type) { case Void: true; default: false; }) ? -1 : requiredLocal(values, output.id),
-									[for (argument in arguments) requiredLocal(values, argument.id)]);
+									(switch (output.type) {
+										case Void: true;
+										default: false;
+									}) ? -1 : requiredLocal(values, output.id), [for (argument in arguments) requiredLocal(values, argument.id)]);
 						if (emitIfHandled(body, represented)) {} else if (targets.length == 0) {
 							var functionName = findMethod(context.program, objectName, methodName),
 								functionIndex = functionName == null ? null : functions.get(functionName);
@@ -905,7 +1017,10 @@ class WasmFunctionLower {
 								for (argument in arguments)
 									body.push(LocalGet(requiredLocal(values, argument.id)));
 								body.push(Call(functionIndex));
-								if ((switch (output.type) { case Void: false; default: true; }))
+								if ((switch (output.type) {
+									case Void: false;
+									default: true;
+								}))
 									body.push(LocalSet(requiredLocal(values, output.id)));
 							}
 						} else {
@@ -922,7 +1037,10 @@ class WasmFunctionLower {
 								for (argument in arguments)
 									body.push(LocalGet(requiredLocal(values, argument.id)));
 								body.push(Call(target.functionIndex));
-								if ((switch (output.type) { case Void: false; default: true; }))
+								if ((switch (output.type) {
+									case Void: false;
+									default: true;
+								}))
 									body.push(LocalSet(requiredLocal(values, output.id)));
 								if (index < targets.length - 1)
 									body.push(Else);
@@ -942,7 +1060,10 @@ class WasmFunctionLower {
 						}
 						var calls = context.representation.calls,
 							represented = calls == null ? UseDefault : calls.virtualCall(output, object, arguments, targets, requiredLocal(values, object.id),
-								(switch (output.type) { case Void: true; default: false; }) ? -1 : requiredLocal(values, output.id), [for (argument in arguments) requiredLocal(values, argument.id)]);
+								(switch (output.type) {
+									case Void: true;
+									default: false;
+								}) ? -1 : requiredLocal(values, output.id), [for (argument in arguments) requiredLocal(values, argument.id)]);
 						if (emitIfHandled(body, represented)) {} else {
 							for (index in 0...targets.length) {
 								var target = targets[index];
@@ -959,7 +1080,10 @@ class WasmFunctionLower {
 										adaptInterfaceValue(arguments[argumentIndex].type, target.argumentTypes[argumentIndex + 1],
 											requiredLocal(values, arguments[argumentIndex].id), allocator, index + 1));
 								body.push(Call(target.functionIndex));
-								if ((switch (output.type) { case Void: false; default: true; })) {
+								if ((switch (output.type) {
+									case Void: false;
+									default: true;
+								})) {
 									var result = context.placement.allocate(WasmModuleSupport.requireValueType(target.resultType));
 									body.push(LocalSet(result));
 									emit(body, adaptInterfaceValue(target.resultType, output.type, result, allocator, index + 1));
@@ -989,15 +1113,18 @@ class WasmFunctionLower {
 				if (address == null)
 					throw "Wasm static data address was not placed in the data section";
 				emit(body, [I32Const(address), LocalSet(requiredLocal(values, output.id))]);
-			case MakeEnum(output, _, constructor, _) if (switch output.type { case EnumTag(_): true; default: false; }):
+			case MakeEnum(output, _, constructor, _) if (switch output.type {
+					case EnumTag(_): true;
+					default: false;
+				}):
 				emit(body, [I32Const(constructor + 1), LocalSet(requiredLocal(values, output.id))]);
 			case MakeEnum(output, typeName, constructor, arguments):
 				var represented = context.representation.aggregates.makeEnum(typeName, constructor, arguments, requiredLocal(values, output.id),
 					[for (argument in arguments) requiredLocal(values, argument.id)]);
 				if (emitIfHandled(body, represented)) {} else {
 					var enumLayout = layout.enumType(typeName);
-					var cache:Null<Int> = arguments.length == 0
-						? WasmModuleSupport.requiredGlobal(globals, WasmModuleSupport.enumCaseKey(typeName, constructor)) : null;
+					var cache:Null<Int> = arguments.length == 0 ? WasmModuleSupport.requiredGlobal(globals,
+						WasmModuleSupport.enumCaseKey(typeName, constructor)) : null;
 					if (cache != null) {
 						emit(body, [GlobalGet(cache), LocalTee(requiredLocal(values, output.id)), I32Eqz, If(null)]);
 					}
@@ -1026,9 +1153,17 @@ class WasmFunctionLower {
 					if (cache != null)
 						emit(body, [LocalGet(requiredLocal(values, output.id)), GlobalSet(cache), End]);
 				}
-			case EnumIndex(output, value) if (switch value.type { case EnumTag(_): true; default: false; }):
+			case EnumIndex(output, value) if (switch value.type {
+					case EnumTag(_): true;
+					default: false;
+				}):
 				emit(body, [LocalGet(requiredLocal(values, value.id)), I32Eqz, If(null)].concat(trapOrThrow(1)).concat([
-					End, LocalGet(requiredLocal(values, value.id)), I32Const(1), I32Sub, LocalSet(requiredLocal(values, output.id))]));
+					End,
+					LocalGet(requiredLocal(values, value.id)),
+					I32Const(1),
+					I32Sub,
+					LocalSet(requiredLocal(values, output.id))
+				]));
 			case EnumIndex(output, value):
 				var represented = context.representation.aggregates.enumIndex(value, requiredLocal(values, output.id), requiredLocal(values, value.id));
 				if (emitIfHandled(body, represented)) {} else
@@ -1057,7 +1192,11 @@ class WasmFunctionLower {
 			case IntToFloat(output, value):
 				emit(body, [
 					LocalGet(requiredLocal(values, value.id)),
-					(switch (value.type) { case I64: true; default: false; }) ? F64ConvertI64S : F64ConvertI32S,
+					(switch (value.type) {
+						case I64: true;
+						default: false;
+					})
+					? F64ConvertI64S : F64ConvertI32S,
 					LocalSet(requiredLocal(values, output.id))
 				]);
 			case IntToInt64(output, value):
@@ -1073,13 +1212,19 @@ class WasmFunctionLower {
 					LocalSet(requiredLocal(values, output.id))
 				]);
 			case FloatToFloat(output, value):
-				var conversion:Array<WasmInstruction> = (switch (value.type) { case F64: true; default: false; }) ? [F32DemoteF64, F64PromoteF32] : [];
+				var conversion:Array<WasmInstruction> = (switch (value.type) {
+					case F64: true;
+					default: false;
+				}) ? [F32DemoteF64, F64PromoteF32] : [];
 				emit(body, [LocalGet(requiredLocal(values, value.id))].concat(conversion).concat([LocalSet(requiredLocal(values, output.id))]));
 			case NewObject(output, typeName):
 				emit(body, context.representation.aggregates.newObject(typeName, requiredLocal(values, output.id)));
 			case FieldGet(output, object, fieldName) if (fieldName == compiler.backend.wasm.WasmFlattenValueFields.CHECK_FIELD):
-				var check:Array<WasmInstruction> = [LocalGet(requiredLocal(values, object.id)),
-					Std.isOfType(context.representation.values, WasmGcRepresentation) ? RefIsNull : I32Eqz, If(null)];
+				var check:Array<WasmInstruction> = [
+					LocalGet(requiredLocal(values, object.id)),
+					Std.isOfType(context.representation.values, WasmGcRepresentation) ? RefIsNull : I32Eqz,
+					If(null)
+				];
 				check = check.concat(trapOrThrow(1)).concat([End, I32Const(0), LocalSet(requiredLocal(values, output.id))]);
 				emit(body, check);
 			case FieldGet(output, object, fieldName):
@@ -1197,8 +1342,16 @@ class WasmFunctionLower {
 						I32Const(stride),
 						I32Mul,
 						I32Add,
-						(switch (element) { case F64: true; default: false; }) ? F64Const(0.0) : I32Const(0),
-						(switch (element) { case F64: true; default: false; }) ? F64Store(0) : I32Store(0),
+						(switch (element) {
+							case F64: true;
+							default: false;
+						})
+						? F64Const(0.0) : I32Const(0),
+						(switch (element) {
+							case F64: true;
+							default: false;
+						})
+						? F64Store(0) : I32Store(0),
 						LocalGet(context.arrayTemps.len),
 						I32Const(1),
 						I32Add,
@@ -1305,7 +1458,10 @@ class WasmFunctionLower {
 						If(null)
 					]);
 					// Dynamic iterators may walk storage of any element type; read it like Array<Dynamic>.
-					var readAny = (switch (output.type) { case Dyn: true; default: false; }) ? functions.get("__array_get_any") : null;
+					var readAny = (switch (output.type) {
+						case Dyn: true;
+						default: false;
+					}) ? functions.get("__array_get_any") : null;
 					iteratorBody = iteratorBody.concat(readAny != null ? [
 						LocalGet(iteratorLocal),
 						I32Load(arrayOffset),
@@ -1367,31 +1523,47 @@ class WasmFunctionLower {
 				emit(body,
 					context.representation.values.equal(requiredLocal(values, output.id), left, right, requiredLocal(values, left.id),
 						requiredLocal(values, right.id)));
-			case Intrinsic(_, _, _): throw "Unlowered IR intrinsic reached Wasm";
+			case Intrinsic(_, _, _):
+				throw "Unlowered IR intrinsic reached Wasm";
 			case Call(output, name, arguments):
-				var gcRepresentation:Null<WasmGcRepresentation> = Std.isOfType(context.representation.values, WasmGcRepresentation) ?
-					cast(context.representation.values, WasmGcRepresentation) : null;
+				var gcRepresentation:Null<WasmGcRepresentation> = Std.isOfType(context.representation.values,
+					WasmGcRepresentation) ? cast(context.representation.values, WasmGcRepresentation) : null;
 				if (name == compiler.ir.IrReferenceIdentity.NAME) {
 					for (argument in arguments) {
-						body.push(LocalGet(requiredLocal(values,argument.id)));
-						if (gcRepresentation != null) body.push(RefCast({nullable:true,heap:Eq}));
+						body.push(LocalGet(requiredLocal(values, argument.id)));
+						if (gcRepresentation != null)
+							body.push(RefCast({nullable: true, heap: Eq}));
 					}
 					body.push(gcRepresentation == null ? I32Eq : RefEq);
-					body.push(LocalSet(requiredLocal(values,output.id))); return;
+					body.push(LocalSet(requiredLocal(values, output.id)));
+					return;
 				}
 				if (name == compiler.ir.IrReceiverCheck.NAME) {
-					var check:Array<WasmInstruction> = [LocalGet(requiredLocal(values, arguments[0].id)),
-						gcRepresentation == null || (switch arguments[0].type { case EnumTag(_): true; default: false; }) ? I32Eqz : RefIsNull, If(null)];
-					if (!knownNonNull) emit(body, check.concat(trapOrThrow(1)).concat([End]));
+					var check:Array<WasmInstruction> = [
+						LocalGet(requiredLocal(values, arguments[0].id)),
+						gcRepresentation == null || (switch arguments[0].type {
+							case EnumTag(_): true;
+							default: false;
+						}) ? I32Eqz : RefIsNull,
+						If(null)
+					];
+					if (!knownNonNull)
+						emit(body, check.concat(trapOrThrow(1)).concat([End]));
 					return;
 				}
 				if (compiler.ir.IrScalarWordBits.matches(name)) {
-					if (arguments.length != 1 || !compiler.ir.IrScalarWordBits.valid(name,arguments[0].type,output.type)) throw "Invalid scalar word transport signature";
-					body.push(LocalGet(requiredLocal(values,arguments[0].id)));
-					if (!((switch output.type { case I32, EnumTag(_): true; default: false; })
-						&& (switch arguments[0].type { case I32, EnumTag(_): true; default: false; })))
+					if (arguments.length != 1 || !compiler.ir.IrScalarWordBits.valid(name, arguments[0].type, output.type))
+						throw "Invalid scalar word transport signature";
+					body.push(LocalGet(requiredLocal(values, arguments[0].id)));
+					if (!((switch output.type {
+						case I32, EnumTag(_): true;
+						default: false;
+					}) && (switch arguments[0].type {
+						case I32, EnumTag(_): true;
+						default: false;
+					})))
 						body.push(name == compiler.ir.IrScalarWordBits.PACK ? I64ExtendI32U : I32WrapI64);
-					body.push(LocalSet(requiredLocal(values,output.id)));
+					body.push(LocalSet(requiredLocal(values, output.id)));
 					return;
 				}
 				if (name == compiler.ir.IrValueLaneReference.PACK || name == compiler.ir.IrValueLaneReference.UNPACK) {
@@ -1411,7 +1583,8 @@ class WasmFunctionLower {
 					return;
 				}
 				if (name == compiler.backend.wasm.WasmScalarAbi.RETURN_MARKER) {
-					for (argument in arguments) body.push(LocalGet(requiredLocal(values, argument.id)));
+					for (argument in arguments)
+						body.push(LocalGet(requiredLocal(values, argument.id)));
 					return;
 				}
 				if (name == compiler.backend.wasm.WasmScalarAbi.RETHROW_MARKER) {
@@ -1419,25 +1592,35 @@ class WasmFunctionLower {
 					body.push(If(null));
 					if (context.runtimeNeutral && context.exceptionState != null)
 						emitNeutralThrow(body, requiredLocal(values, arguments[0].id), context.exceptionDispatchIndex + 1);
-					else if (context.exceptionTag == null) body.push(Unreachable);
-					else { body.push(LocalGet(requiredLocal(values, arguments[0].id))); body.push(Throw(context.exceptionTag)); }
+					else if (context.exceptionTag == null)
+						body.push(Unreachable);
+					else {
+						body.push(LocalGet(requiredLocal(values, arguments[0].id)));
+						body.push(Throw(context.exceptionTag));
+					}
 					body.push(End);
 					return;
 				}
 				if (gcRepresentation != null && gcRepresentation.hasScalarCall(name)) {
 					var index = functions.get(name);
-					if (index == null) throw 'Missing scalar Wasm GC function "$name"';
-					emit(body, gcRepresentation.scalarCall(name, output, arguments, (switch (output.type) { case Void: true; default: false; }) ? -1 : requiredLocal(values, output.id),
-						[for (argument in arguments) requiredLocal(values, argument.id)], index));
+					if (index == null)
+						throw 'Missing scalar Wasm GC function "$name"';
+					emit(body, gcRepresentation.scalarCall(name, output, arguments, (switch (output.type) {
+						case Void: true;
+						default: false;
+					}) ? -1 : requiredLocal(values, output.id), [for (argument in arguments) requiredLocal(values, argument.id)], index));
 					return;
 				}
-				var linearScalar:Null<compiler.backend.wasm.linear.WasmLinearRepresentation> =
-					Std.isOfType(context.representation.values, compiler.backend.wasm.linear.WasmLinearRepresentation) ? cast context.representation.values : null;
+				var linearScalar:Null<compiler.backend.wasm.linear.WasmLinearRepresentation> = Std.isOfType(context.representation.values,
+					compiler.backend.wasm.linear.WasmLinearRepresentation) ? cast context.representation.values : null;
 				if (linearScalar != null && linearScalar.hasScalarCall(name)) {
 					var index = functions.get(name);
-					if (index == null) throw 'Missing scalar Wasm function "$name"';
-					emit(body, linearScalar.scalarCall(name, output, arguments, (switch (output.type) { case Void: true; default: false; }) ? -1 : requiredLocal(values, output.id),
-						[for (argument in arguments) requiredLocal(values, argument.id)], index));
+					if (index == null)
+						throw 'Missing scalar Wasm function "$name"';
+					emit(body, linearScalar.scalarCall(name, output, arguments, (switch (output.type) {
+						case Void: true;
+						default: false;
+					}) ? -1 : requiredLocal(values, output.id), [for (argument in arguments) requiredLocal(values, argument.id)], index));
 					return;
 				}
 				var host = WasmModuleSupport.hostCNative(context.program, name);
@@ -1450,43 +1633,70 @@ class WasmFunctionLower {
 						if (native.name == name)
 							runtimeName = native.symbol;
 					if (runtimeName == "__value_iterator_new") {
-						lowerInstruction(body, IteratorNew(output, arguments[0]), values, functions, layout, allocator, globals, strings, methods, closureTypes);
+						lowerInstruction(body, IteratorNew(output, arguments[0]), values, functions, layout, allocator, globals, strings, methods,
+							closureTypes);
 						return;
 					}
 					if (runtimeName == "__value_iterator_array" || runtimeName == "__value_iterator_advance") {
-						var iterator = arguments[0], iteratorLocal = requiredLocal(values, iterator.id), destination = requiredLocal(values, output.id);
+						var iterator = arguments[0],
+							iteratorLocal = requiredLocal(values, iterator.id),
+							destination = requiredLocal(values, output.id);
 						if (Std.isOfType(context.representation.values, WasmGcRepresentation)) {
 							var gc:WasmGcRepresentation = cast context.representation.values;
-							emit(body, runtimeName == "__value_iterator_array" ? gc.valueIteratorArray(iterator, destination, iteratorLocal)
-								: gc.valueIteratorAdvance(iterator, destination, iteratorLocal));
+							emit(body,
+								runtimeName == "__value_iterator_array" ? gc.valueIteratorArray(iterator, destination,
+									iteratorLocal) : gc.valueIteratorAdvance(iterator, destination, iteratorLocal));
 						} else if (runtimeName == "__value_iterator_array") {
-							emit(body, [LocalGet(iteratorLocal), I32Load(WasmLayout.ITERATOR_ARRAY_OFFSET), LocalSet(destination)]);
+							emit(body, [
+								LocalGet(iteratorLocal),
+								I32Load(WasmLayout.ITERATOR_ARRAY_OFFSET),
+								LocalSet(destination)
+							]);
 						} else {
-							var sequence:Array<WasmInstruction> = [LocalGet(iteratorLocal), I32Load(WasmLayout.ITERATOR_POSITION_OFFSET),
-								LocalGet(iteratorLocal), I32Load(WasmLayout.ITERATOR_ARRAY_OFFSET), I32Load(WasmLayout.ARRAY_LENGTH_OFFSET), I32LtS, If(null),
-								LocalGet(iteratorLocal), I32Load(WasmLayout.ITERATOR_POSITION_OFFSET), LocalSet(destination),
-								LocalGet(iteratorLocal), LocalGet(destination), I32Const(1), I32Add, I32Store(WasmLayout.ITERATOR_POSITION_OFFSET), Else];
-							sequence = sequence.concat(trapOrThrow(1)); sequence.push(End); emit(body, sequence);
+							var sequence:Array<WasmInstruction> = [
+								LocalGet(iteratorLocal),
+								I32Load(WasmLayout.ITERATOR_POSITION_OFFSET),
+								LocalGet(iteratorLocal),
+								I32Load(WasmLayout.ITERATOR_ARRAY_OFFSET),
+								I32Load(WasmLayout.ARRAY_LENGTH_OFFSET),
+								I32LtS,
+								If(null),
+								LocalGet(iteratorLocal),
+								I32Load(WasmLayout.ITERATOR_POSITION_OFFSET),
+								LocalSet(destination),
+								LocalGet(iteratorLocal),
+								LocalGet(destination),
+								I32Const(1),
+								I32Add,
+								I32Store(WasmLayout.ITERATOR_POSITION_OFFSET),
+								Else
+							];
+							sequence = sequence.concat(trapOrThrow(1));
+							sequence.push(End);
+							emit(body, sequence);
 						}
 						return;
 					}
-					var outputLocal = (switch (output.type) { case Void: true; default: false; }) ? -1 : requiredLocal(values, output.id),
-						interop = context.representation.interop,
-						represented = interop == null ? UseDefault : interop.lowerRuntimeCall(runtimeName, output, arguments, outputLocal,
-							[for (argument in arguments) requiredLocal(values, argument.id)]);
+					var outputLocal = (switch (output.type) {
+						case Void: true;
+						default: false;
+					}) ? -1 : requiredLocal(values,
+						output.id), interop = context.representation.interop, represented = interop == null ? UseDefault : interop.lowerRuntimeCall(runtimeName,
+							output, arguments, outputLocal, [for (argument in arguments) requiredLocal(values, argument.id)]);
 					if (emitIfHandled(body, represented)) {} else {
 						var gcRuntime:WasmLoweringResult = Std.isOfType(context.representation.values,
-							WasmGcRepresentation) ? cast(context.representation.values, WasmGcRepresentation).lowerRuntimeCall(
-								StringTools.startsWith(name, "$wasm:closure-receiver:") ? name : runtimeName, output, arguments,
-								outputLocal, [for (argument in arguments) requiredLocal(values, argument.id)]) : UseDefault;
+							WasmGcRepresentation) ? cast(context.representation.values, WasmGcRepresentation).lowerRuntimeCall(StringTools.startsWith(name,
+								"$wasm:closure-receiver:") ? name : runtimeName, output, arguments, outputLocal,
+								[for (argument in arguments) requiredLocal(values, argument.id)]) : UseDefault;
 						if (!emitIfHandled(body, gcRuntime) && !lowerInt64Native(body, output, name, arguments, values)) {
 							for (argument in arguments)
 								body.push(LocalGet(requiredLocal(values, argument.id)));
 							var functionIndex = functions.get(name);
 							var mapParts = WasmModuleSupport.mapNativeParts(name);
-							if (mapParts != null
-								&& (switch (output.type) { case Void: false; default: true; })
-								&& (mapParts.operation == "keys" || mapParts.operation == "values")) {
+							if (mapParts != null && (switch (output.type) {
+								case Void: false;
+								default: true;
+							}) && (mapParts.operation == "keys" || mapParts.operation == "values")) {
 								var projectionIndex = functions.get(WasmGcMaps.projectionName(name, output.type));
 								if (projectionIndex != null)
 									functionIndex = projectionIndex;
@@ -1494,7 +1704,10 @@ class WasmFunctionLower {
 							if (functionIndex == null)
 								throw 'Wasm call to unsupported native or missing function "$name"';
 							body.push(Call(functionIndex));
-							if ((switch (output.type) { case Void: false; default: true; }))
+							if ((switch (output.type) {
+								case Void: false;
+								default: true;
+							}))
 								body.push(LocalSet(requiredLocal(values, output.id)));
 						}
 					}
@@ -1511,10 +1724,16 @@ class WasmFunctionLower {
 					throw 'Wasm C native call "$name" has no declared import contract';
 				var pointerLengthImportIndex = -1,
 					pointerReleaseImportIndex = -1;
-				if (((switch (native.result) { case ManagedBytes: true; default: false; }) && native.pointerLength != null)
-					|| (WasmModuleSupport.isGcNativePointerType(native.result) && native.pointerOwnership == "owned")) {
+				if (((switch (native.result) {
+					case ManagedBytes: true;
+					default: false;
+				}) && native.pointerLength != null) || (WasmModuleSupport.isGcNativePointerType(native.result)
+					&& native.pointerOwnership == "owned")) {
 					var lengthNative:Null<IrCNative> = null;
-					if ((switch (native.result) { case ManagedBytes: true; default: false; }) && native.pointerLength != null) {
+					if ((switch (native.result) {
+						case ManagedBytes: true;
+						default: false;
+					}) && native.pointerLength != null) {
 						for (candidate in context.program.cNatives)
 							if (candidate.symbol == native.pointerLength)
 								lengthNative = candidate;
@@ -1532,10 +1751,13 @@ class WasmFunctionLower {
 									pointerReleaseImportIndex = importedRelease;
 							}
 				}
-				var outputLocal = (switch (output.type) { case Void: true; default: false; }) ? -1 : requiredLocal(values, output.id),
-					interop = context.representation.interop,
-					represented = interop == null ? UseDefault : interop.lowerCNativeCall(native, arguments, outputLocal,
-						[for (argument in arguments) requiredLocal(values, argument.id)], importIndex, pointerLengthImportIndex, pointerReleaseImportIndex);
+				var outputLocal = (switch (output.type) {
+					case Void: true;
+					default: false;
+				}) ? -1 : requiredLocal(values,
+					output.id), interop = context.representation.interop, represented = interop == null ? UseDefault : interop.lowerCNativeCall(native,
+						arguments, outputLocal, [for (argument in arguments) requiredLocal(values, argument.id)], importIndex, pointerLengthImportIndex,
+						pointerReleaseImportIndex);
 				if (emitIfHandled(body, represented)) {} else {
 					var bytesDataPointer = functions.get("__haxeon_bytes_data_pointer");
 					if (bytesDataPointer == null)
@@ -1543,7 +1765,10 @@ class WasmFunctionLower {
 					for (argument in arguments)
 						nativeArgument(body, argument, values, bytesDataPointer);
 					body.push(Call(importIndex));
-					if ((switch (output.type) { case Void: false; default: true; }))
+					if ((switch (output.type) {
+						case Void: false;
+						default: true;
+					}))
 						body.push(LocalSet(requiredLocal(values, output.id)));
 				}
 		}
@@ -1551,7 +1776,13 @@ class WasmFunctionLower {
 
 	static function lowerInt64Native(body:Array<WasmInstruction>, output:IrValue, name:String, arguments:Array<IrValue>, values:Map<Int, Int>):Bool {
 		if (name == "haxe.Int64.ofInt") {
-			if (arguments.length != 1 || (switch (arguments[0].type) { case I32: false; default: true; }) || (switch (output.type) { case I64: false; default: true; }))
+			if (arguments.length != 1 || (switch (arguments[0].type) {
+				case I32: false;
+				default: true;
+			}) || (switch (output.type) {
+				case I64: false;
+				default: true;
+			}))
 				throw "Invalid haxe.Int64.ofInt Wasm native signature";
 			body.push(LocalGet(requiredLocal(values, arguments[0].id)));
 			body.push(I64ExtendI32S);
@@ -1559,7 +1790,13 @@ class WasmFunctionLower {
 			return true;
 		}
 		if (name == "haxe.Int64.fromFloat") {
-			if (arguments.length != 1 || (switch (arguments[0].type) { case F64: false; default: true; }) || (switch (output.type) { case I64: false; default: true; }))
+			if (arguments.length != 1 || (switch (arguments[0].type) {
+				case F64: false;
+				default: true;
+			}) || (switch (output.type) {
+				case I64: false;
+				default: true;
+			}))
 				throw "Invalid haxe.Int64.fromFloat Wasm native signature";
 			// HashLink's C cast is undefined outside the Int64 range; Wasm saturates instead of trapping.
 			body.push(LocalGet(requiredLocal(values, arguments[0].id)));
@@ -1568,7 +1805,10 @@ class WasmFunctionLower {
 			return true;
 		}
 		if (name == "haxe.Int64.toInt") {
-			if (arguments.length != 1 || (switch (output.type) { case I32: false; default: true; }))
+			if (arguments.length != 1 || (switch (output.type) {
+				case I32: false;
+				default: true;
+			}))
 				throw "Invalid haxe.Int64.toInt Wasm native signature";
 			body.push(LocalGet(requiredLocal(values, arguments[0].id)));
 			body.push(I32WrapI64);
@@ -1576,7 +1816,10 @@ class WasmFunctionLower {
 			return true;
 		}
 		if (name == "haxe.Int64.compare") {
-			if (arguments.length != 2 || (switch (output.type) { case I32: false; default: true; }))
+			if (arguments.length != 2 || (switch (output.type) {
+				case I32: false;
+				default: true;
+			}))
 				throw "Invalid haxe.Int64.compare Wasm native signature";
 			var outputLocal = requiredLocal(values, output.id),
 				leftLocal = requiredLocal(values, arguments[0].id),
@@ -1602,7 +1845,10 @@ class WasmFunctionLower {
 			return true;
 		}
 		if (name == "haxe.Int64.shl" || name == "haxe.Int64.shr" || name == "haxe.Int64.ushr") {
-			if (arguments.length != 2 || (switch (output.type) { case I64: false; default: true; }))
+			if (arguments.length != 2 || (switch (output.type) {
+				case I64: false;
+				default: true;
+			}))
 				throw 'Invalid $name Wasm native signature';
 			var valueLocal = requiredLocal(values, arguments[0].id),
 				shiftLocal = requiredLocal(values, arguments[1].id),
@@ -1649,7 +1895,10 @@ class WasmFunctionLower {
 			case _: null;
 		};
 		if (name == "haxe.Int64.neg") {
-			if (arguments.length != 1 || (switch (output.type) { case I64: false; default: true; }))
+			if (arguments.length != 1 || (switch (output.type) {
+				case I64: false;
+				default: true;
+			}))
 				throw "Invalid haxe.Int64.neg Wasm native signature";
 			body.push(I64Const(0));
 			body.push(LocalGet(requiredLocal(values, arguments[0].id)));
@@ -1658,7 +1907,10 @@ class WasmFunctionLower {
 			return true;
 		}
 		if (name == "haxe.Int64.make") {
-			if (arguments.length != 2 || (switch (output.type) { case I64: false; default: true; }))
+			if (arguments.length != 2 || (switch (output.type) {
+				case I64: false;
+				default: true;
+			}))
 				throw "Invalid haxe.Int64.make Wasm native signature";
 			body.push(LocalGet(requiredLocal(values, arguments[0].id)));
 			body.push(I64ExtendI32S);
@@ -1672,7 +1924,10 @@ class WasmFunctionLower {
 		}
 		if (operation == null)
 			return false;
-		if (arguments.length != 2 || (switch (output.type) { case I64: false; default: true; }))
+		if (arguments.length != 2 || (switch (output.type) {
+			case I64: false;
+			default: true;
+		}))
 			throw 'Invalid $name Wasm native signature';
 		body.push(LocalGet(requiredLocal(values, arguments[0].id)));
 		body.push(LocalGet(requiredLocal(values, arguments[1].id)));
@@ -1730,7 +1985,8 @@ class WasmFunctionLower {
 			store(type, WasmLayout.DYN_PAYLOAD_OFFSET)
 		];
 		return switch type {
-			case RawPtr, TypeRef, Abstract("native_callback"): [LocalGet(source), I32Eqz, If(null), I32Const(0), LocalSet(destination), Else].concat(box).concat([End]);
+			case RawPtr, TypeRef, Abstract("native_callback"): [LocalGet(source), I32Eqz, If(null), I32Const(0), LocalSet(destination), Else].concat(box)
+					.concat([End]);
 			default: box;
 		};
 	}
@@ -1748,19 +2004,56 @@ class WasmFunctionLower {
 	function adaptInterfaceValue(sourceType:IrType, targetType:IrType, source:Int, allocator:Int, dispatchDepth:Int):Array<WasmInstruction> {
 		if (compiler.ir.IrVerifier.sameType(sourceType, targetType))
 			return [LocalGet(source)];
-		if (isBoxedPrimitive(sourceType) && (switch (targetType) { case Dyn: true; default: false; })) {
+		if (isBoxedPrimitive(sourceType) && (switch (targetType) {
+			case Dyn: true;
+			default: false;
+		})) {
 			var boxed = context.placement.allocate(I32);
 			return boxedValue(sourceType, source, boxed, allocator).concat([LocalGet(boxed)]);
 		}
-		if ((switch (sourceType) { case Dyn: true; default: false; }) && (switch (targetType) { case RawPtr | TypeRef | Abstract("native_callback"): true; default: false; })) {
+		if ((switch (sourceType) {
+			case Dyn: true;
+			default: false;
+		}) && (switch (targetType) {
+			case RawPtr | TypeRef | Abstract("native_callback"): true;
+			default: false;
+		})) {
 			var pointer = context.placement.allocate(I32);
-			return [LocalGet(source), I32Eqz, If(null), I32Const(0), LocalSet(pointer), Else,
-				LocalGet(source), I32Const(1), I32And, If(null)].concat(trapOrThrow(dispatchDepth + 2))
-				.concat([End, LocalGet(source), I32Load(0), I32Const(typeId(targetType)), I32Eq, I32Eqz, If(null)])
+			return [
+				LocalGet(source),
+				I32Eqz,
+				If(null),
+				I32Const(0),
+				LocalSet(pointer),
+				Else,
+				LocalGet(source),
+				I32Const(1),
+				I32And,
+				If(null)
+			].concat(trapOrThrow(dispatchDepth + 2))
+				.concat([
+					End,
+					LocalGet(source),
+					I32Load(0),
+					I32Const(typeId(targetType)),
+					I32Eq,
+					I32Eqz,
+					If(null)
+				])
 				.concat(trapOrThrow(dispatchDepth + 2))
-				.concat([End, LocalGet(source), I32Load(WasmLayout.DYN_PAYLOAD_OFFSET), LocalSet(pointer), End, LocalGet(pointer)]);
+				.concat([
+					End,
+					LocalGet(source),
+					I32Load(WasmLayout.DYN_PAYLOAD_OFFSET),
+					LocalSet(pointer),
+					End,
+					LocalGet(pointer)
+				]);
 		}
-		if ((switch (sourceType) { case Dyn: true; default: false; }) && isBoxedPrimitive(targetType))
+		if ((switch (sourceType) {
+			case Dyn: true;
+			default: false;
+		}) && isBoxedPrimitive(targetType))
 			return [LocalGet(source), load(targetType, WasmLayout.DYN_PAYLOAD_OFFSET)];
 		return switch [sourceType, targetType] {
 			case [I32, F64]: [LocalGet(source), F64ConvertI32S];
@@ -1877,7 +2170,13 @@ class WasmFunctionLower {
 	static function shift(body:Array<WasmInstruction>, output:IrValue, left:IrValue, right:IrValue, values:Map<Int, Int>, op:WasmInstruction):Void {
 		body.push(LocalGet(requiredLocal(values, left.id)));
 		body.push(LocalGet(requiredLocal(values, right.id)));
-		if ((switch (left.type) { case I64: true; default: false; }) && (switch (right.type) { case I32: true; default: false; }))
+		if ((switch (left.type) {
+			case I64: true;
+			default: false;
+		}) && (switch (right.type) {
+			case I32: true;
+			default: false;
+		}))
 			body.push(I64ExtendI32U);
 		body.push(op);
 		body.push(LocalSet(requiredLocal(values, output.id)));
@@ -1984,25 +2283,32 @@ class WasmFunctionLower {
 			case Phi(output, _), ConstVoid(output), ConstInt(output, _), ConstFloat(output, _), ConstString(output, _), StaticDataAddress(output, _),
 				ConstBool(output, _), PointerOffset(output, _, _), MemoryLoad(output, _, _, _), ConstNull(output), TypeValue(output, _), ToDyn(output, _),
 				IntToFloat(output, _), IntToInt64(output, _), FloatToInt(output, _), FloatToFloat(output, _), SafeCast(output, _), Catch(output),
-				GlobalGet(output, _), Intrinsic(output, _, _), Add(output, _, _), Sub(output, _, _), Mul(output, _, _), Div(output, _, _), Mod(output, _, _), BitAnd(output, _, _),
-				BitXor(output, _, _), BitOr(output, _, _), ShiftLeft(output, _, _), ShiftRight(output, _, _), UnsignedShiftRight(output, _, _),
-				Less(output, _, _), LessEqual(output, _, _), Equal(output, _, _), Call(output, _, _), CNativeCall(output, _, _), StaticClosure(output, _),
-				InstanceClosure(output, _, _), CallClosure(output, _, _), ToVirtual(output, _), Upcast(output, _), ClassId(output, _), MethodCall(output, _, _, _, _), NewObject(output, _),
-				FieldGet(output, _, _), ArrayGet(output, _, _), ArraySize(output, _), IteratorNew(output, _), IteratorHasNext(output, _),
-				IteratorNext(output, _), MakeEnum(output, _, _, _), EnumIndex(output, _), EnumField(output, _, _, _): output;
+				GlobalGet(output, _), Intrinsic(output, _, _), Add(output, _, _), Sub(output, _, _), Mul(output, _, _), Div(output, _, _), Mod(output, _, _),
+				BitAnd(output, _, _), BitXor(output, _, _), BitOr(output, _, _), ShiftLeft(output, _, _), ShiftRight(output, _, _),
+				UnsignedShiftRight(output, _, _), Less(output, _, _), LessEqual(output, _, _), Equal(output, _, _), Call(output, _, _),
+				CNativeCall(output, _, _), StaticClosure(output, _), InstanceClosure(output, _, _), CallClosure(output, _, _), ToVirtual(output, _),
+				Upcast(output, _), ClassId(output, _), MethodCall(output, _, _, _, _), NewObject(output, _), FieldGet(output, _, _), ArrayGet(output, _, _),
+				ArraySize(output, _), IteratorNew(output, _), IteratorHasNext(output, _), IteratorNext(output, _), MakeEnum(output, _, _, _),
+				EnumIndex(output, _), EnumField(output, _, _, _): output;
 			case BeginTry(_, _, _), EndTry(_, _), GlobalSet(_, _), FieldSet(_, _, _), ArraySet(_, _, _), MemoryStore(_, _, _): null;
 		};
 
 	/** Converts a boxed Int, Float, Bool or Int64 at `value` to `target` (I32 or F64); null gives zero. */
 	function dynamicNumber(target:IrType, value:Int, output:Int):Array<WasmInstruction> {
-		var sources:Array<IrType> = (switch (target) { case F64: true; default: false; }) ? [F64, I32, Bool, I64] : [I32, F64, Bool, I64],
-			instructions:Array<WasmInstruction> = [
-				LocalGet(value),
-				I32Eqz,
-				If(null),
-				(switch (target) { case F64: true; default: false; }) ? F64Const(0) : I32Const(0),
-				LocalSet(output),
-				Else
+		var sources:Array<IrType> = (switch (target) {
+			case F64: true;
+			default: false;
+		}) ? [F64, I32, Bool, I64] : [I32, F64, Bool, I64], instructions:Array<WasmInstruction> = [
+			LocalGet(value),
+			I32Eqz,
+			If(null),
+			(switch (target) {
+				case F64: true;
+				default: false;
+			})
+			? F64Const(0) : I32Const(0),
+			LocalSet(output),
+			Else
 			];
 		for (source in sources) {
 			var convert:Array<WasmInstruction> = switch [source, target] {

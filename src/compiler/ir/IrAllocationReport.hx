@@ -79,7 +79,8 @@ class IrAllocationReport {
 
 	/** How a runtime native relates to the heap, or null when it never allocates. */
 	public static function classifyNative(name:String):Null<{kind:String, what:String}> {
-		if (IrScalarWordBits.matches(name) || name == IrHlScalarRef.ADDRESS || name == IrHlScalarRef.LOAD || name == IrHlScalarRef.STORE || name == IrReceiverCheck.NAME || name == IrReferenceIdentity.NAME)
+		if (IrScalarWordBits.matches(name) || name == IrHlScalarRef.ADDRESS || name == IrHlScalarRef.LOAD || name == IrHlScalarRef.STORE
+			|| name == IrReceiverCheck.NAME || name == IrReferenceIdentity.NAME)
 			return null;
 		if (!StringTools.startsWith(name, "__"))
 			return {kind: Unknown, what: "unresolved call " + name};
@@ -96,11 +97,18 @@ class IrAllocationReport {
 			};
 		if (StringTools.startsWith(body, "array_")) {
 			var operation = body.substr(6);
-			if (StringTools.startsWith(operation, "alloc_") || StringTools.startsWith(operation, "concat_") || StringTools.startsWith(operation, "copy_")
-				|| StringTools.startsWith(operation, "slice_") || StringTools.startsWith(operation, "splice_") || StringTools.startsWith(operation, "join_"))
+			if (StringTools.startsWith(operation, "alloc_")
+				|| StringTools.startsWith(operation, "concat_")
+				|| StringTools.startsWith(operation, "copy_")
+				|| StringTools.startsWith(operation, "slice_")
+				|| StringTools.startsWith(operation, "splice_")
+				|| StringTools.startsWith(operation, "join_"))
 				return {kind: Alloc, what: name};
-			if (StringTools.startsWith(operation, "push_") || StringTools.startsWith(operation, "insert_") || StringTools.startsWith(operation, "unshift_")
-				|| StringTools.startsWith(operation, "resize_") || operation == "set_any")
+			if (StringTools.startsWith(operation, "push_")
+				|| StringTools.startsWith(operation, "insert_")
+				|| StringTools.startsWith(operation, "unshift_")
+				|| StringTools.startsWith(operation, "resize_")
+				|| operation == "set_any")
 				return {kind: Grow, what: name};
 			return null;
 		}
@@ -122,19 +130,25 @@ class IrAllocationReport {
 		if (StringTools.startsWith(body, "bytes_"))
 			return switch body {
 				case "bytes_get", "bytes_get_i32", "bytes_get_data", "bytes_set", "bytes_set_i32", "bytes_length", "bytes_compare", "bytes_blit": null;
-				default: {kind: StringTools.startsWith(body, "bytes_input_") || StringTools.startsWith(body, "bytes_output_") ? Unknown : Alloc, what: name};
+				default: {
+						kind: StringTools.startsWith(body, "bytes_input_")
+						|| StringTools.startsWith(body, "bytes_output_") ? Unknown : Alloc,
+						what: name
+					};
 			};
 		if (StringTools.startsWith(body, "math_"))
 			return null;
 		if (StringTools.startsWith(body, "int64_"))
-			return body == "int64_compare" || body == "int64_unsigned_compare" ? null : {kind: Unknown, what: name + " (Int64 representation not checked)"};
+			return body == "int64_compare"
+				|| body == "int64_unsigned_compare" ? null : {kind: Unknown, what: name + " (Int64 representation not checked)"};
 		if (body == "iterator_new")
 			return {kind: Alloc, what: name};
 		if (body == "iterator_has_next" || body == "iterator_next_i32" || body == "iterator_next_f64")
 			return null;
 		switch body {
-			case "exit", "dynamic_equal", "f64_to_i64_bits", "i64_to_f64_bits", "f32_to_i32_bits", "i32_to_f32_bits", "std_int_f64", "std_int_dynamic", "std_is_exact_type", "std_is_of_type",
-				"std_parse_float", "std_parse_int", "std_random", "exception_matches", "sys_profile_counter", "sys_profile_frame", "sys_profile_span":
+			case "exit", "dynamic_equal", "f64_to_i64_bits", "i64_to_f64_bits", "f32_to_i32_bits", "i32_to_f32_bits", "std_int_f64", "std_int_dynamic",
+				"std_is_exact_type", "std_is_of_type", "std_parse_float", "std_parse_int", "std_random", "exception_matches", "sys_profile_counter",
+				"sys_profile_frame", "sys_profile_span":
 				return null;
 			default:
 		}
@@ -212,7 +226,8 @@ private class Walker {
 					switch located.value {
 						case NewObject(_, typeName):
 							var object = objects.get(typeName);
-							found(IrAllocationReport.Alloc, object != null && object.isValue ? "value-class temporary " + typeName : "new " + typeName);
+							found(IrAllocationReport.Alloc, object != null
+								&& object.isValue ? "value-class temporary " + typeName : "new " + typeName);
 						case MakeEnum(_, typeName, _, arguments):
 							if (arguments.length > 0)
 								found(IrAllocationReport.Alloc, "enum " + typeName + " with payload");
@@ -302,7 +317,9 @@ private class Walker {
 	}
 
 	function withDescendants(start:Array<String>):Array<String> {
-		var seen:Map<String, Bool> = [], order:Array<String> = [], work = start.copy();
+		var seen:Map<String, Bool> = [],
+			order:Array<String> = [],
+			work = start.copy();
 		while (work.length > 0) {
 			var name = work.pop();
 			if (seen.exists(name))

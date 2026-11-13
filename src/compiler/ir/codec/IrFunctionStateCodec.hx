@@ -104,7 +104,8 @@ class IrFunctionStateCodec {
 		output.writeByte(fn.inlineHint ? 1 : 0);
 		output.writeByte(fn.retention);
 		switch fn.kind {
-			case Ordinary: output.writeByte(0);
+			case Ordinary:
+				output.writeByte(0);
 			case ClosureAdapter(source, target):
 				output.writeByte(1);
 				IrTypeCodec.writeType(output, source, 0, erase);
@@ -115,26 +116,41 @@ class IrFunctionStateCodec {
 			case ClosureVarargs(target):
 				output.writeByte(3);
 				IrTypeCodec.writeType(output, target, 0, erase);
-			case GenericSpecialization: output.writeByte(4);
-			case SourceLambda: output.writeByte(5);
-			case IterationAdapter: output.writeByte(9);
-			case GeneratedHelper: output.writeByte(10);
+			case GenericSpecialization:
+				output.writeByte(4);
+			case SourceLambda:
+				output.writeByte(5);
+			case IterationAdapter:
+				output.writeByte(9);
+			case GeneratedHelper:
+				output.writeByte(10);
 			case OptionalScalar(original):
 				output.writeByte(15);
 				output.writeByte(original == null ? 0 : 1);
-				if (original != null) IrTypeCodec.writeString(output, original);
-			case NullableScalarArguments: output.writeByte(17);
-			case WasmClosureRestore: output.writeByte(19);
-			case ScalarArguments: output.writeByte(20);
+				if (original != null)
+					IrTypeCodec.writeString(output, original);
+			case NullableScalarArguments:
+				output.writeByte(17);
+			case WasmClosureRestore:
+				output.writeByte(19);
+			case ScalarArguments:
+				output.writeByte(20);
 			case ValueArraySlot(namespace, element, operation):
 				output.writeByte(22);
 				// The namespace is a linkage identifier, not part of the helper's behavior.
 				output.writeInt32(identified ? namespace : 0);
 				IrTypeCodec.writeType(output, element, 0, erase);
 				writeSlotOperation(output, operation, erase);
-			case EnumEquality(reflective): output.writeByte(23); output.writeByte(reflective ? 1 : 0);
-			case EnumDynamicUnbox(type): output.writeByte(24); IrTypeCodec.writeType(output, type, 0, erase);
-			case EnumTagAdapter(type, box): output.writeByte(25); IrTypeCodec.writeType(output, type, 0, erase); output.writeByte(box ? 1 : 0);
+			case EnumEquality(reflective):
+				output.writeByte(23);
+				output.writeByte(reflective ? 1 : 0);
+			case EnumDynamicUnbox(type):
+				output.writeByte(24);
+				IrTypeCodec.writeType(output, type, 0, erase);
+			case EnumTagAdapter(type, box):
+				output.writeByte(25);
+				IrTypeCodec.writeType(output, type, 0, erase);
+				output.writeByte(box ? 1 : 0);
 			case Provider(subject, operation):
 				output.writeByte(26);
 				IrTypeCodec.writeString(output, subject.toString());
@@ -220,23 +236,27 @@ class IrFunctionStateCodec {
 				case 10: GeneratedHelper;
 				case 15:
 					var present = input.readByte();
-					if (present != 0 && present != 1) throw "Invalid optional scalar origin";
+					if (present != 0 && present != 1)
+						throw "Invalid optional scalar origin";
 					OptionalScalar(present == 0 ? null : IrTypeCodec.readString(input, bytes.length));
 				case 17: NullableScalarArguments;
 				case 19: WasmClosureRestore;
 				case 20: ScalarArguments;
 				case 22:
 					var namespace = input.readInt32();
-					if (namespace < 0) throw "Invalid value-array slot namespace";
+					if (namespace < 0)
+						throw "Invalid value-array slot namespace";
 					ValueArraySlot(namespace, IrTypeCodec.readType(input, bytes.length, 0), readSlotOperation(input, bytes.length));
 				case 23:
 					var flag = input.readByte();
-					if (flag != 0 && flag != 1) throw "Invalid enum equality role";
+					if (flag != 0 && flag != 1)
+						throw "Invalid enum equality role";
 					EnumEquality(flag == 1);
 				case 24: EnumDynamicUnbox(IrTypeCodec.readType(input, bytes.length, 0));
 				case 25:
 					var type = IrTypeCodec.readType(input, bytes.length, 0), flag = input.readByte();
-					if (flag != 0 && flag != 1) throw "Invalid enum tag adapter role";
+					if (flag != 0 && flag != 1)
+						throw "Invalid enum tag adapter role";
 					EnumTagAdapter(type, flag == 1);
 				case 26:
 					var subject = compiler.ir.TypeKey.fromPersisted(IrTypeCodec.readString(input, bytes.length));
@@ -383,8 +403,9 @@ class IrFunctionStateCodec {
 				collectValue(output, values);
 				collectValue(pointer, values);
 			case ToDyn(output, value), IntToFloat(output, value), IntToInt64(output, value), FloatToInt(output, value), FloatToFloat(output, value),
-				SafeCast(output, value), InstanceClosure(output, _, value), ToVirtual(output, value), Upcast(output, value), ClassId(output, value), ArraySize(output, value), IteratorNew(output, value),
-				IteratorHasNext(output, value), IteratorNext(output, value), EnumIndex(output, value), EnumField(output, value, _, _):
+				SafeCast(output, value), InstanceClosure(output, _, value), ToVirtual(output, value), Upcast(output, value), ClassId(output, value),
+				ArraySize(output, value), IteratorNew(output, value), IteratorHasNext(output, value), IteratorNext(output, value), EnumIndex(output, value),
+				EnumField(output, value, _, _):
 				collectValue(output, values);
 				collectValue(value, values);
 			case Add(output, left, right), Sub(output, left, right), Mul(output, left, right), Div(output, left, right), Mod(output, left, right),
@@ -394,8 +415,8 @@ class IrFunctionStateCodec {
 				collectValue(output, values);
 				collectValue(left, values);
 				collectValue(right, values);
-			case Call(output, _, arguments), CNativeCall(output, _, arguments), Intrinsic(output, _, arguments), CallClosure(output, _, arguments), MethodCall(output, _, _, arguments, _),
-				MakeEnum(output, _, _, arguments):
+			case Call(output, _, arguments), CNativeCall(output, _, arguments), Intrinsic(output, _, arguments), CallClosure(output, _, arguments),
+				MethodCall(output, _, _, arguments, _), MakeEnum(output, _, _, arguments):
 				collectValue(output, values);
 				for (argument in arguments)
 					collectValue(argument, values);
@@ -443,34 +464,45 @@ class IrFunctionStateCodec {
 
 	static function writeSlotPath(output:BytesOutput, path:Array<String>):Void {
 		output.writeInt32(path.length);
-		for (part in path) IrTypeCodec.writeString(output, part);
+		for (part in path)
+			IrTypeCodec.writeString(output, part);
 	}
 
 	static function readSlotPath(input:BytesInput, limit:Int):Array<String> {
 		var count = input.readInt32();
-		if (count < 0 || count > Std.int((limit - input.position) / 4)) throw "Invalid value-array slot path";
+		if (count < 0 || count > Std.int((limit - input.position) / 4))
+			throw "Invalid value-array slot path";
 		return [for (_ in 0...count) IrTypeCodec.readString(input, limit)];
 	}
 
 	static function writeSlotOperation(output:BytesOutput, operation:IrValueArraySlotOperation, erase:Bool):Void {
 		switch operation {
 			case Read(slot, path, carrier), Write(slot, path, carrier):
-				output.writeByte(switch operation { case Read(_, _, _): 0; default: 1; });
+				output.writeByte(switch operation {
+					case Read(_, _, _): 0;
+					default: 1;
+				});
 				output.writeInt32(slot);
 				writeSlotPath(output, path);
 				output.writeByte(carrier ? 1 : 0);
 			case Check(path, includeSelf):
-				output.writeByte(2); writeSlotPath(output, path); output.writeByte(includeSelf ? 1 : 0);
+				output.writeByte(2);
+				writeSlotPath(output, path);
+				output.writeByte(includeSelf ? 1 : 0);
 			case OptionalWrite(path, type):
-				output.writeByte(3); writeSlotPath(output, path); IrTypeCodec.writeType(output, type, 0, erase);
+				output.writeByte(3);
+				writeSlotPath(output, path);
+				IrTypeCodec.writeType(output, type, 0, erase);
 			case RequireScalar(type):
-				output.writeByte(4); IrTypeCodec.writeType(output, type, 0, erase);
+				output.writeByte(4);
+				IrTypeCodec.writeType(output, type, 0, erase);
 		}
 	}
 
 	static function readSlotBool(input:BytesInput):Bool {
 		var value = input.readByte();
-		if (value != 0 && value != 1) throw "Invalid value-array slot flag";
+		if (value != 0 && value != 1)
+			throw "Invalid value-array slot flag";
 		return value == 1;
 	}
 
@@ -479,8 +511,10 @@ class IrFunctionStateCodec {
 		return switch tag {
 			case 0, 1:
 				var slot = input.readInt32();
-				if (slot < 0) throw "Invalid value-array slot";
-				var path = readSlotPath(input, limit), carrier = readSlotBool(input);
+				if (slot < 0)
+					throw "Invalid value-array slot";
+				var path = readSlotPath(input, limit),
+					carrier = readSlotBool(input);
 				tag == 0 ? Read(slot, path, carrier) : Write(slot, path, carrier);
 			case 2: Check(readSlotPath(input, limit), readSlotBool(input));
 			case 3: OptionalWrite(readSlotPath(input, limit), IrTypeCodec.readType(input, limit, 0));

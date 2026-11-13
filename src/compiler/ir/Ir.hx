@@ -31,8 +31,10 @@ enum IrType {
 	TypeRef;
 	Array(element:IrType);
 	Enum(name:String);
+
 	/** Payload-free enum storage: constructor index + 1 in I32; zero is the null value. */
 	EnumTag(name:String);
+
 	Obj(name:String);
 	Abstract(name:String);
 	Virtual(name:String);
@@ -60,14 +62,19 @@ typedef IrPhiInput = {final block:Int; final value:IrValue;}
 enum IrIntrinsic {
 	/** Answered by ProviderOperation.BoxDynamic. */
 	EnumDynamicBox(type:IrType);
+
 	/** Answered by ProviderOperation.ViewDynamic. */
 	EnumDynamicView(type:IrType);
+
 	/** Answered by ProviderOperation.EnumTagBox. */
 	EnumTagBox(type:IrType);
+
 	/** Answered by ProviderOperation.EnumTagUnbox. */
 	EnumTagUnbox(type:IrType);
+
 	/** Answered by ProviderOperation.InlineEnumHelper(box); type is the logical enum and the operand uses its inline storage. */
 	InlineEnumBox(type:IrType);
+
 	/** Answered by ProviderOperation.InlineEnumHelper(unbox); type is the logical enum and the result uses its inline storage. */
 	InlineEnumUnbox(type:IrType);
 }
@@ -92,8 +99,10 @@ enum IrInstruction {
 	FloatToInt(output:IrValue, value:IrValue);
 	FloatToFloat(output:IrValue, value:IrValue);
 	SafeCast(output:IrValue, value:IrValue);
+
 	/** A cleanup guard preserves the pending exception stack across the protected code. */
 	BeginTry(catchBlock:Int, afterBlock:Int, preserveExceptionStack:Bool);
+
 	EndTry(catchBlock:Int, preserveExceptionStack:Bool);
 	Catch(output:IrValue);
 	GlobalGet(output:IrValue, name:String);
@@ -118,15 +127,19 @@ enum IrInstruction {
 	InstanceClosure(output:IrValue, functionName:String, receiver:IrValue);
 	CallClosure(output:IrValue, closure:IrValue, arguments:Array<IrValue>);
 	ToVirtual(output:IrValue, value:IrValue);
+
 	/** The same object as an instance of one of its base classes: a reinterpretation, never checked or copied. */
 	Upcast(output:IrValue, value:IrValue);
+
 	/**
 	 * The dense class id of the object's class (`IrProgram.classIds`): an I32 that indexes the dispatch tables of interface calls. The object's class
 	 * must be one that has an id (a constructed class); each backend reads it as it likes (a class method, the struct's runtime type, a field).
 	 */
 	ClassId(output:IrValue, object:IrValue);
+
 	/** Terminal receiver means this compiler-owned value place is dead after this call, including on its exception edge. */
 	MethodCall(output:IrValue, object:IrValue, methodName:String, arguments:Array<IrValue>, terminalReceiver:Bool);
+
 	NewObject(output:IrValue, typeName:String);
 	FieldGet(output:IrValue, object:IrValue, fieldName:String);
 	FieldSet(object:IrValue, fieldName:String, value:IrValue);
@@ -149,6 +162,7 @@ enum IrTerminator {
 	 * not an exception: Haxe code cannot catch it. Wasm lowers it to `unreachable`; HashLink to the fatal runtime native `__unreachable`.
 	 */
 	Unreachable;
+
 	Return(value:IrValue);
 	Throw(value:IrValue);
 	Rethrow(value:IrValue);
@@ -236,6 +250,7 @@ typedef IrObjectField = {
 	final type:IrType;
 	@:optional final nativeLayout:Null<IrObjectFieldNativeLayout>;
 	@:optional final scalarStorage:Null<IrScalarStorage>;
+
 	/** Width of a boxed nullable primitive's payload, independent of the nullable reference's storage. */
 	@:optional final nullableScalarStorage:Null<IrScalarStorage>;
 }
@@ -277,6 +292,7 @@ typedef IrEnum = {
 	final name:String;
 	final cases:Array<IrEnumCase>;
 	final ?isRecursive:Bool;
+
 	/** Private value record used by typed storage; the public enum descriptor remains nominal. */
 	final ?inlineStorage:String;
 }
