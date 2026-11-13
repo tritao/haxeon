@@ -1323,7 +1323,7 @@ class CallResolver {
 			}))
 				return new TypedExpression(TCall("$reactive.changeEquals", [left, right]), TBool, span);
 			if (mapKeyEquality && !DeclaredConformance.supportsHash(session, left.type))
-				fail("E1025", 'Type "${compiler.semantic.SemanticSignature.display(left.type)}" does not conform to Hashable', span);
+				fail("E1025", DeclaredConformance.capabilityError(session, left.type, "Hashable"), span);
 			if ((mapKeyEquality || name == "Equality.sameForChange" || name == "haxeon.Equality.sameForChange")
 				&& isFloatingMapKey(left.type))
 				return new TypedExpression(TCall("$map.floatKeyEquals", [left, right]), TBool, span);
@@ -1334,9 +1334,9 @@ class CallResolver {
 				return new TypedExpression(TCall("__dynamic_equal", [left, coerce(right, TDynamic, "dynamic equality operand", "E1002")]), TBool, span);
 			var explicitEquality = name == "Equality.equals" || name == "haxeon.Equality.equals";
 			if (explicitEquality && !DeclaredConformance.supportsEquality(session, left.type))
-				fail("E1025", 'Type "${compiler.semantic.SemanticSignature.display(left.type)}" does not conform to Equatable', span);
-			if (!explicitEquality && (switch left.type {
-				case TArray(_) | TNullable(TArray(_)): true;
+				fail("E1025", DeclaredConformance.capabilityError(session, left.type, "Equatable"), span);
+			if (!explicitEquality && !mapKeyEquality && (switch left.type {
+				case TArray(_) | TNullable(TArray(_)) | TAnonymous(_, _) | TNullable(TAnonymous(_, _)): true;
 				default: false;
 			}))
 				return new TypedExpression(TEqual(left, right), TBool, span);
@@ -1372,7 +1372,7 @@ class CallResolver {
 				fail("E1008", 'Function "$name" expects 1 argument, got ${arguments.length}', span);
 			var value = typeExpressionValue(arguments[0], scope);
 			if (!DeclaredConformance.supportsHash(session, value.type))
-				fail("E1025", 'Type "${compiler.semantic.SemanticSignature.display(value.type)}" does not conform to Hashable', span);
+				fail("E1025", DeclaredConformance.capabilityError(session, value.type, "Hashable"), span);
 			HashGenerator.request(session, value.type, session.currentContext.name, span);
 			return new TypedExpression(TCall(HashGenerator.hashName(value.type), [value]), TInt, span);
 		}
@@ -2353,7 +2353,7 @@ class CallResolver {
 					span);
 			if (!session.relations.satisfiesConstraint(actual, expected)) {
 				var detail = session.relations.constraintFailure(actual, expected);
-				fail("E1003",
+				fail(session.relations.recursiveCapabilityFailure(actual, expected) ? "E1025" : "E1003",
 					'Type argument for "${constraint.parameter}" on "$name" does not satisfy constraint "${SemanticSignature.type(expected)}"' +
 					(detail == null ? "" : ': $detail'),
 					span);

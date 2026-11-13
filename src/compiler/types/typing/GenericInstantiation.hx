@@ -69,7 +69,7 @@ class GenericInstantiation {
 					expected = session.declarations.resolve(constraint.type, constraint.span, substitutions);
 				if (!session.relations.satisfiesConstraint(actual, expected)) {
 					var detail = session.relations.constraintFailure(actual, expected);
-					fail("E1003",
+					fail(session.relations.recursiveCapabilityFailure(actual, expected) ? "E1025" : "E1003",
 						'Type argument for "${constraint.parameter}" does not satisfy constraint "${SemanticSignature.type(expected)}"' +
 						(detail == null ? "" : ': $detail'),
 						span);
@@ -104,8 +104,14 @@ class GenericInstantiation {
 			var argument = arguments[index],
 				expected = semanticExpected[index];
 			if (IterationProtocol.name(expected) != null
-				&& (switch (argument.type) { case TNull: false; default: true; })
-				&& (switch (argument.type) { case TNever: false; default: true; })
+				&& (switch (argument.type) {
+					case TNull: false;
+					default: true;
+				})
+				&& (switch (argument.type) {
+					case TNever: false;
+					default: true;
+				})
 				&& !mutableAliases.exists(compiler.types.analysis.BindingWalker.key(fn.arguments[index].name, fn.arguments[index].span))) {
 				if (!session.relations.isAssignable(argument.type, expected))
 					fail("E1009", 'Type mismatch for iterable argument ${index + 1} to "$baseName"', argument.span);
@@ -146,10 +152,13 @@ class GenericInstantiation {
 				statements: fn.statements,
 				span: fn.span
 			};
-		var constants:Map<String, String> = [], constantIndices:Map<Int, Bool> = [], constantPolicies:Array<String> = [],
+		var constants:Map<String, String> = [],
+			constantIndices:Map<Int, Bool> = [],
+			constantPolicies:Array<String> = [],
 			assigned = compiler.types.analysis.AssignedDeclarations.ofFunction(fn.arguments, fn.statements).declarations;
 		for (index in 0...semanticArguments.length) {
-			var definition = KeyPathTyping.known(session, semanticArguments[index]), parameter = fn.arguments[index];
+			var definition = KeyPathTyping.known(session, semanticArguments[index]),
+				parameter = fn.arguments[index];
 			if (definition != null && !assigned.exists(compiler.types.analysis.BindingWalker.key(parameter.name, parameter.span))) {
 				constants.set(parameter.name, definition.name);
 				constantIndices.set(index, true);
@@ -157,14 +166,13 @@ class GenericInstantiation {
 			}
 		}
 		var genericCall = session.representation.resolveGenericCall(fn, substitutions, semanticArguments, argumentType),
-			genericRepresentation = genericCall.representation,
-			representationSubstitutions = genericRepresentation.substitutions,
-			specializationPolicies = genericRepresentation.policies.concat(constantPolicies),
-			representationResult = genericCall.result.physical,
+			genericRepresentation = genericCall.representation, representationSubstitutions = genericRepresentation.substitutions,
+			specializationPolicies = genericRepresentation.policies.concat(constantPolicies), representationResult = genericCall.result.physical,
 			representationArguments = genericCall.typeArguments.concat(concrete),
 			specialization = session.genericSpecializations.request(baseName, representationArguments, specializationPolicies),
-			result = genericCall.result.semantic,
-			typed = [for (index in 0...genericCall.arguments.length) if (!constantIndices.exists(index)) genericCall.arguments[index]];
+			result = genericCall.result.semantic, typed = [
+				for (index in 0...genericCall.arguments.length) if (!constantIndices.exists(index)) genericCall.arguments[index]
+			];
 		session.keyPathParameters.set(specialization.name, constants);
 		var representationReceiver:Null<CompilerType> = null;
 		if (receiver != null)
@@ -192,9 +200,15 @@ class GenericInstantiation {
 			case NamedType(name) if (parameters.indexOf(name) >= 0):
 				if (substitutions.exists(name)) {
 					var previous = requiredMapValue(substitutions, name);
-					if ((switch (previous) { case TDynamic: true; default: false; }))
+					if ((switch (previous) {
+						case TDynamic: true;
+						default: false;
+					}))
 						substitutions.set(name, actual);
-					else if ((switch (actual) { case TDynamic: false; default: true; }) && !TypeRelations.equals(previous, actual)) {
+					else if ((switch (actual) {
+						case TDynamic: false;
+						default: true;
+					}) && !TypeRelations.equals(previous, actual)) {
 						if (session.relations.isAssignable(actual, previous))
 							substitutions.set(name, actual);
 						else if (!session.relations.isAssignable(previous, actual))

@@ -149,7 +149,7 @@ class StructProperties {
 		return false;
 	}
 
-	static function hasStorage(field:AstField):Bool {
+	public static function hasStorage(field:AstField):Bool {
 		if (hasDirectAccess(field.readAccess) || hasDirectAccess(field.writeAccess))
 			return true;
 		for (metadata in field.metadata)

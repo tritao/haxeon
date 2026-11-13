@@ -82,6 +82,12 @@ class ValueEqualityGenerator {
 					requests.set(name, {type: type, origin: root.origin, span: root.span});
 				if (needsHelper(session, element))
 					collect(session, element, root, requests, seen);
+			case TAnonymous(_, fields) if (DeclaredConformance.supportsEquality(session, type)):
+				if (!requests.exists(name))
+					requests.set(name, {type: type, origin: root.origin, span: root.span});
+				for (field in fields)
+					if (needsHelper(session, field.type))
+						collect(session, field.type, root, requests, seen);
 			case TInstance(NominalKind.Class, className, arguments)
 				if (session.relations.isStruct(type) && DeclaredConformance.has(session, type, "Equatable")):
 				var declaration = session.classDecls.get(className);
@@ -105,6 +111,7 @@ class ValueEqualityGenerator {
 			case TKeyPath(_, _, _): true;
 			case TNullable(element): DeclaredConformance.has(session, element, "Equatable") || DeclaredConformance.usesEquality(session, element);
 			case TArray(element): DeclaredConformance.supportsEquality(session, element);
+			case TAnonymous(_, _): DeclaredConformance.supportsEquality(session, type);
 			case TInstance(NominalKind.Class, _, _): session.relations.isStruct(type) && DeclaredConformance.has(session, type, "Equatable");
 			default: false;
 		};
@@ -159,6 +166,21 @@ class ValueEqualityGenerator {
 					TIf(new TypedExpression(TNot(comparison), TBool, span), [TReturn(new TypedExpression(TBoolLiteral(false), TBool, span), span)], [], span),
 					TAssign("$array-equality-index", new TypedExpression(TAdd(index, new TypedExpression(TIntLiteral(1), TInt, span)), TInt, span), span)
 				], span));
+				statements.push(TReturn(new TypedExpression(TBoolLiteral(true), TBool, span), span));
+			case TAnonymous(_, fields) if (DeclaredConformance.supportsEquality(session, type)):
+				new AnonymousTypeRegistry(session).register(type);
+				var nil = new TypedExpression(TNullableWrap(new TypedExpression(TNullLiteral, TNull, span)), type, span),
+					leftAbsent = new TypedExpression(TEqual(left, nil), TBool, span),
+					rightAbsent = new TypedExpression(TEqual(right, nil), TBool, span);
+				statements.push(TIf(leftAbsent, [TReturn(rightAbsent, span)], [], span));
+				statements.push(TIf(rightAbsent, [TReturn(new TypedExpression(TBoolLiteral(false), TBool, span), span)], [], span));
+				for (field in fields) {
+					var leftField = new TypedExpression(TField(left, field.name), field.type, span),
+						rightField = new TypedExpression(TField(right, field.name), field.type, span),
+						comparison = compareValue(session, leftField, rightField, span, compare);
+					statements.push(TIf(new TypedExpression(TNot(comparison), TBool, span),
+						[TReturn(new TypedExpression(TBoolLiteral(false), TBool, span), span)], [], span));
+				}
 				statements.push(TReturn(new TypedExpression(TBoolLiteral(true), TBool, span), span));
 			case TInstance(NominalKind.Class, name, arguments) if (session.relations.isStruct(type)
 				&& DeclaredConformance.has(session, type, "Equatable")):

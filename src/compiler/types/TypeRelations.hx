@@ -235,6 +235,176 @@ class TypeRelations {
 		};
 	}
 
+	/** Check whether a type occurs inside another type's arguments without expanding nominal declarations. */
+	static function isProperTypeSubterm(needle:CompilerType, haystack:CompilerType):Bool {
+		var children:Array<CompilerType> = switch haystack {
+			case TInstance(_, _, arguments) | TAbstract(_, arguments, _): arguments;
+			case TArray(element) | TNullable(element) | TIterator(element): [element];
+			case TMap(key, value): [key, value];
+			case TKeyPath(root, value, _): [root, value];
+			case TFunction(arguments, result): arguments.concat([result]);
+			default: [];
+		};
+		for (child in children)
+			if (equals(needle, child) || isProperTypeSubterm(needle, child))
+				return true;
+		return false;
+	}
+
+	/** Stop an expanding generic recursion when each old argument is embedded in its replacement. */
+	static function typeArgumentsExpand(previous:CompilerType, current:CompilerType):Bool {
+		return switch [previous, current] {
+			case [TInstance(oldKind, oldName, oldArgs), TInstance(newKind, newName, newArgs)]
+				if (oldKind == newKind && oldName == newName && oldArgs.length == newArgs.length):
+				var expands = true;
+				for (i in 0...oldArgs.length)
+					if (!equals(oldArgs[i], newArgs[i]) && !isProperTypeSubterm(oldArgs[i], newArgs[i])) {
+						expands = false;
+						break;
+					}
+				expands;
+			default: false;
+		};
+	}
+
+	static function requiredDepth(depths:Map<String, Int>, key:String):Int {
+		if (!depths.exists(key))
+			throw 'Missing recursion depth "$key"';
+		return depths.get(key);
+	}
+
+	/** Find the field closing a recursion through an anonymous structure. */
+	public function recursiveAnonymousField(type:CompilerType, visiting:Map<String, Int>, field:Null<String>, anonymousDepth:Int = 0,
+			nominalTypes:Null<Map<String, CompilerType>> = null):Null<String> {
+		if (nominalTypes == null)
+			nominalTypes = [];
+		return switch type {
+			case TNullable(element) | TArray(element): recursiveAnonymousField(element, visiting, field, anonymousDepth, nominalTypes);
+			case TAnonymous(name, fields):
+				var key = "anonymous:" + name;
+				if (visiting.exists(key)) field; else {
+					visiting.set(key, anonymousDepth);
+					var found:Null<String> = null;
+					for (entry in fields) {
+						found = recursiveAnonymousField(entry.type, visiting, entry.name, anonymousDepth + 1, nominalTypes);
+						if (found != null)
+							break;
+					}
+					visiting.remove(key);
+					found;
+				}
+			case TInstance(NominalKind.Class, name, arguments) if (isStruct(type)):
+				var declaration = declarations.classes.get(name);
+				var key = "struct:" + name,
+					exactKey = key + ":" + compiler.semantic.SemanticSignature.type(type);
+				if (declaration == null) null; else if (visiting.exists(exactKey)) anonymousDepth > requiredDepth(visiting,
+					exactKey) ? field : null; else if (nominalTypes.exists(key)
+					&& typeArgumentsExpand(nominalTypes.get(key), type)) anonymousDepth > requiredDepth(visiting, key) ? field : null; else {
+					var priorDepth = visiting.get(key),
+						priorType = nominalTypes.get(key);
+					visiting.set(key, anonymousDepth);
+					nominalTypes.set(key, type);
+					visiting.set(exactKey, anonymousDepth);
+					var substitutions:Map<String, CompilerType> = [];
+					for (index in 0...declaration.typeParameters.length) {
+						var parameter = declaration.typeParameters[index],
+							argument = index < arguments.length ? arguments[index] : TTypeParameter(name, parameter);
+						substitutions.set(parameter, argument);
+						substitutions.set(name + "." + parameter, argument);
+					}
+					var found:Null<String> = declaration.base == null ? null : recursiveAnonymousField(declarations.resolve(declaration.base,
+						declaration.span, substitutions), visiting, field, anonymousDepth, nominalTypes);
+					if (found == null)
+						for (entry in declaration.fields)
+							if (!entry.isStatic && StructProperties.hasStorage(entry)) {
+								var fieldType = declarations.resolve(declarations.resolvedFieldType(name, entry), entry.span, substitutions);
+								found = recursiveAnonymousField(fieldType, visiting, entry.name, anonymousDepth, nominalTypes);
+								if (found != null)
+									break;
+							}
+					visiting.remove(exactKey);
+					if (priorDepth == null) {
+						visiting.remove(key);
+						nominalTypes.remove(key);
+					} else {
+						visiting.set(key, priorDepth);
+						nominalTypes.set(key, priorType);
+					}
+					found;
+				}
+			case TInstance(NominalKind.Enum, name, arguments):
+				var declaration = declarations.enums.get(name);
+				var key = "enum:" + name,
+					exactKey = key + ":" + compiler.semantic.SemanticSignature.type(type);
+				if (declaration == null) null; else if (visiting.exists(exactKey)) anonymousDepth > requiredDepth(visiting,
+					exactKey) ? field : null; else if (nominalTypes.exists(key)
+					&& typeArgumentsExpand(nominalTypes.get(key), type)) anonymousDepth > requiredDepth(visiting, key) ? field : null; else {
+					var priorDepth = visiting.get(key),
+						priorType = nominalTypes.get(key);
+					visiting.set(key, anonymousDepth);
+					nominalTypes.set(key, type);
+					visiting.set(exactKey, anonymousDepth);
+					var substitutions:Map<String, CompilerType> = [];
+					for (index in 0...declaration.typeParameters.length) {
+						var parameter = declaration.typeParameters[index],
+							argument = index < arguments.length ? arguments[index] : TTypeParameter(name, parameter);
+						substitutions.set(parameter, argument);
+						substitutions.set(name + "." + parameter, argument);
+					}
+					var found:Null<String> = null;
+					for (constructor in declaration.cases) {
+						for (parameter in constructor.params) {
+							found = recursiveAnonymousField(declarations.resolve(parameter.type, parameter.span, substitutions), visiting,
+								parameter.name == null ? "payload" : parameter.name, anonymousDepth, nominalTypes);
+							if (found != null)
+								break;
+						}
+						if (found != null)
+							break;
+					}
+					visiting.remove(exactKey);
+					if (priorDepth == null) {
+						visiting.remove(key);
+						nominalTypes.remove(key);
+					} else {
+						visiting.set(key, priorDepth);
+						nominalTypes.set(key, priorType);
+					}
+					found;
+				}
+			default: null;
+		};
+	}
+
+	/** Check each field of a non-recursive anonymous structure. */
+	function structuralCapability(actual:CompilerType, expected:CompilerType, visiting:Map<String, Bool>):Bool {
+		return switch actual {
+			case TAnonymous(name, fields):
+				if (visiting.exists(name)) {
+					switch expected {
+						case TInstance(NominalKind.Interface, "Hashable", _): false;
+						default: true;
+					}
+				} else {
+					visiting.set(name, true);
+					var valid = true;
+					for (field in fields)
+						if (!structuralCapability(field.type, expected, visiting)) {
+							valid = false;
+							break;
+						}
+					visiting.remove(name);
+					valid;
+				}
+			case TNullable(element): structuralCapability(element, expected, visiting);
+			case TArray(element): (switch expected {
+					case TInstance(NominalKind.Interface, "Equatable", _): true;
+					default: false;
+				}) && structuralCapability(element, expected, visiting);
+			default: satisfiesConstraint(actual, expected);
+		};
+	}
+
 	/** Struct conformance in a generic constraint selects the specialized implementation. */
 	public function satisfiesConstraint(actual:CompilerType, expected:CompilerType):Bool {
 		switch actual {
@@ -259,6 +429,15 @@ class TypeRelations {
 			case TInstance(NominalKind.Interface, name, _) if (name == "Equatable" || name == "Hashable"): true;
 			default: false;
 		};
+		if (valueCapability && (switch actual {
+			case TAnonymous(_, _): true;
+			case TInstance(NominalKind.Class, _, _) | TInstance(NominalKind.Enum, _, _): switch expected {
+					case TInstance(NominalKind.Interface, "Hashable", _): true;
+					default: false;
+				};
+			default: false;
+		}) && recursiveAnonymousField(actual, [], null) != null)
+			return false;
 		if (valueCapability)
 			switch actual {
 				case TInstance(NominalKind.Class, _, _) if (!isStruct(actual)):
@@ -271,6 +450,8 @@ class TypeRelations {
 					return satisfiesConstraint(representation, expected);
 				case TNullable(element):
 					return satisfiesConstraint(element, expected);
+				case TAnonymous(_, _):
+					return structuralCapability(actual, expected, []);
 				case TArray(element):
 					return (switch expected {
 						case TInstance(NominalKind.Interface, "Equatable", _): true;
@@ -325,6 +506,10 @@ class TypeRelations {
 	}
 
 	public function constraintFailure(actual:CompilerType, expected:CompilerType):Null<String> {
+		if (recursiveCapabilityFailure(actual, expected)) {
+			var recursive = recursiveAnonymousField(actual, [], null);
+			return 'recursive field "$recursive"; use a struct or class with explicit equals';
+		}
 		if (!StructProperties.isConstraintType(expected)
 			|| StructProperties.satisfies(declarations, actual, representationConstraintName(expected)))
 			return null;
@@ -332,6 +517,14 @@ class TypeRelations {
 			property = constraintName == StructProperties.FLAT_TYPE_NAME ? "Flat" : "Portable",
 			fieldPath = StructProperties.failurePath(declarations, actual, constraintName);
 		return fieldPath == null ? 'type ${compiler.semantic.SemanticSignature.type(actual)} is not $property' : 'field "$fieldPath" is not $property';
+	}
+
+	public function recursiveCapabilityFailure(actual:CompilerType, expected:CompilerType):Bool {
+		var capability = switch expected {
+			case TInstance(NominalKind.Interface, name, _) if (name == "Equatable" || name == "Hashable"): true;
+			default: false;
+		};
+		return capability && recursiveAnonymousField(actual, [], null) != null;
 	}
 
 	static function representationConstraintName(type:CompilerType):String

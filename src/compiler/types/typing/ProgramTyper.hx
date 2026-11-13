@@ -871,7 +871,11 @@ class ProgramTyper {
 				} else {
 					hasHash = true;
 					if (!hashable)
-						BodyTyper.fail("E1025", 'Enum "${declaration.name}" must declare Hashable to define hash', method.span);
+						BodyTyper.fail("E1025",
+							session.relations.recursiveAnonymousField(type, [],
+								null) == null ? 'Enum "${declaration.name}" must declare Hashable to define hash' : DeclaredConformance.capabilityError(session,
+									type, "Hashable"),
+							method.span);
 					if (method.isStatic
 						|| method.arguments.length != 0
 						|| (method.typeParameters != null && method.typeParameters.length > 0)

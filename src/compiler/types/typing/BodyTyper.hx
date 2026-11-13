@@ -1176,7 +1176,7 @@ class BodyTyper {
 								default: elementType;
 							};
 							var needsConformance = session.relations.isStruct(valueType) || (switch valueType {
-								case TArray(_): true;
+								case TArray(_) | TAnonymous(_, _): true;
 								default: false;
 							});
 							if (needsConformance && !DeclaredConformance.supportsEquality(session, elementType))

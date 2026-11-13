@@ -2212,7 +2212,7 @@ class ExpressionTyper {
 
 	function usesOperatorEquality(type:CompilerType):Bool
 		return switch type {
-			case TArray(_): false;
+			case TArray(_) | TAnonymous(_, _): false;
 			default: DeclaredConformance.usesEquality(session, type);
 		};
 

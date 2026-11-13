@@ -847,6 +847,12 @@ compare equal only to null. This applies through a generic `T:Equatable` bound a
 identity comparison, including for arrays whose elements conform. Arrays are mutable and do not
 implicitly conform to `Hashable`, so they cannot serve as map keys. `Null<T>` retains the conformance of `T`.
 
+Anonymous structures and their typedefs are reference types: `==` compares identity. They conform to `Equatable`
+or `Hashable` when every field has the respective conformance. `Equality.equals` and hashing compare or hash fields
+in canonical field-name order; structurally equal anonymous keys therefore address the same map entry.
+Recursive anonymous structures are neither `Equatable` nor `Hashable`; use a struct or class with explicit equality.
+Equality on cyclic data is unsupported.
+
 A handwritten `equals(other:T):Bool` on a `Hashable` type requires a handwritten `hash():Int`. The compiler cannot
 infer which distinctions the custom equality ignores, so a hash synthesized from all fields could give unequal hashes
 to equal values. The author is responsible for keeping the two methods consistent. A handwritten hash may accompany

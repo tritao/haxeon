@@ -14,6 +14,7 @@ class DeclaredConformance {
 		return switch type {
 			case TKeyPath(_, _, _): true;
 			case TArray(element): supportsEquality(session, element);
+			case TAnonymous(_, _): has(session, type, "Equatable");
 			case TNullable(element): usesEquality(session, element);
 			case TInstance(NominalKind.Class, _, _): session.relations.isStruct(type) && has(session, type, "Equatable");
 			default: false;
@@ -26,6 +27,7 @@ class DeclaredConformance {
 			case TAbstract(name, _, representation) if (session.declarations.enumAbstracts.exists(name)): supportsEquality(session, representation);
 			case TNullable(element): supportsEquality(session, element);
 			case TArray(element): supportsEquality(session, element);
+			case TAnonymous(_, _): has(session, type, "Equatable");
 			case TInstance(NominalKind.Class, _, _): session.relations.isStruct(type) && has(session, type, "Equatable");
 			case TInstance(NominalKind.Enum, _, _), TTypeParameter(_, _): has(session, type, "Equatable");
 			default: false;
@@ -36,16 +38,23 @@ class DeclaredConformance {
 			case TInt, TInt64, TFloat, TBool, TString, TNativeScalar(_), TKeyPath(_, _, _): true;
 			case TAbstract(name, _, representation) if (session.declarations.enumAbstracts.exists(name)): supportsHash(session, representation);
 			case TNullable(element): supportsHash(session, element);
+			case TAnonymous(_, _): has(session, type, "Hashable");
 			case TInstance(NominalKind.Class, _, _): session.relations.isStruct(type) && has(session, type, "Hashable");
 			case TInstance(NominalKind.Enum, _, _), TTypeParameter(_, _): has(session, type, "Hashable");
 			default: false;
 		};
 
+	public static function capabilityError(session:TypingSession, type:CompilerType, capability:String):String {
+		var field = session.relations.recursiveAnonymousField(type, [], null);
+		var message = 'Type "${compiler.semantic.SemanticSignature.display(type)}" does not conform to $capability';
+		return field == null ? message : message + ' (recursive field "$field"; use a struct or class with explicit equals)';
+	}
+
 	/** Map operations need the same generated equality/hash helpers as ordinary value operations. */
 	public static function requestHashableMapKey(session:TypingSession, type:CompilerType, span:SourceSpan):Void {
 		if (session.isPayloadEnumKey(type)) {
 			if (!has(session, type, "Hashable"))
-				BodyTyper.fail("E1025", 'Type "${compiler.semantic.SemanticSignature.display(type)}" does not conform to Hashable', span);
+				BodyTyper.fail("E1025", capabilityError(session, type, "Hashable"), span);
 			HashGenerator.request(session, type, session.currentContext.name, span);
 			EnumEqualityGenerator.request(session, type, session.currentContext.name, span);
 			return;
@@ -56,7 +65,7 @@ class DeclaredConformance {
 				if (usesEquality(session, type))
 					ValueEqualityGenerator.request(session, type, session.currentContext.name, span);
 			} else
-				BodyTyper.fail("E1025", 'Type "${compiler.semantic.SemanticSignature.display(type)}" does not conform to Hashable', span);
+				BodyTyper.fail("E1025", capabilityError(session, type, "Hashable"), span);
 		}
 	}
 }

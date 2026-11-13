@@ -58,3 +58,28 @@ for suffix in "" ".functions"; do
 	fi
 done
 echo "PASS: the compiler builds itself to a fixed point"
+
+# Run the same equality semantics through a stock-Haxe-built compiler and the self-hosted compiler.
+echo "equality guard: building the compiler with stock Haxe"
+"$haxe" --cwd "$root_dir" common.hxml -hl "$work/haxe-built-compiler.hl" -main compiler.tools.HaxeonCompiler
+fixture="$root_dir/tests/programs/equality-self-hosting-guard.hx"
+for compiler in "$work/haxe-built-compiler.hl" "$work/stage-1.hl"; do
+ for inline in 0 1; do
+  for target in hl wasm32 wasm-gc; do
+   output="$work/equality-$(basename "$compiler")-$target-$inline.bin"
+   (cd "$root_dir" && HAXEON_INLINE="$inline" "$hl" "$compiler" --target="$target" --entry=equality-self-hosting-guard --root=tests/programs --output="$output" "$fixture") >"$work/equality-guard.log" 2>&1 || {
+    tail -n 20 "$work/equality-guard.log" >&2
+    echo "FAIL: equality guard did not compile ($compiler, $target, inline=$inline)" >&2
+    exit 1
+   }
+   if [[ $target == hl ]]; then
+    status=0
+    "$hl" "$output" || status=$?
+    [[ $status == 42 ]] || { echo "FAIL: equality guard returned $status ($compiler, $target, inline=$inline)" >&2; exit 1; }
+   else
+    node "$root_dir/tests/runtime/run-equality-guard.js" "$output" || { echo "FAIL: equality guard ($compiler, $target, inline=$inline)" >&2; exit 1; }
+   fi
+  done
+ done
+done
+echo "PASS: Haxe-built and self-hosted compilers agree on equality across all targets"

@@ -67,19 +67,29 @@ class DeclarationIndex {
 
 	public final aliasList:Array<compiler.syntax.Ast.AstTypeAlias> = [];
 	public final abstracts:Map<String, compiler.syntax.Ast.AstAbstract> = [];
+
 	final enumAbstractViews:Map<String, compiler.syntax.Ast.AstAbstract> = [];
 
 	/** Both abstract declaration forms share conversion and method lookup. */
 	public function abstractDeclaration(name:String):Null<compiler.syntax.Ast.AstAbstract> {
 		var ordinary = abstracts.get(name);
-		if (ordinary != null) return ordinary;
+		if (ordinary != null)
+			return ordinary;
 		var known = enumAbstractViews.get(name);
-		if (known != null) return known;
+		if (known != null)
+			return known;
 		var declaration = enumAbstracts.get(name);
-		if (declaration == null) return null;
+		if (declaration == null)
+			return null;
 		var view:compiler.syntax.Ast.AstAbstract = {
-			name: name, metadata: declaration.metadata, typeParameters: [], underlying: declaration.underlying,
-			fromTypes: declaration.fromTypes, toTypes: declaration.toTypes, methods: [], span: declaration.span
+			name: name,
+			metadata: declaration.metadata,
+			typeParameters: [],
+			underlying: declaration.underlying,
+			fromTypes: declaration.fromTypes,
+			toTypes: declaration.toTypes,
+			methods: [],
+			span: declaration.span
 		};
 		enumAbstractViews.set(name, view);
 		return view;
@@ -87,10 +97,12 @@ class DeclarationIndex {
 
 	public function abstractNames():Array<String> {
 		var names = [for (name in abstracts.keys()) name];
-		for (name in enumAbstracts.keys()) names.push(name);
+		for (name in enumAbstracts.keys())
+			names.push(name);
 		names.sort(Reflect.compare);
 		return names;
 	}
+
 	public final interfaces:Map<String, AstInterface> = [];
 	public final classes:Map<String, AstClass> = [];
 	public final symbols:Map<String, DeclarationSymbol> = [];
@@ -337,8 +349,8 @@ class DeclarationIndex {
 				if (name == "KeyPath" || name == "WritableKeyPath") {
 					if (arguments.length != 2)
 						fail('Type "$name" expects 2 type arguments, got ${arguments.length}', span);
-					TKeyPath(resolveInner(arguments[0], span, resolving, substitutions),
-						resolveInner(arguments[1], span, resolving, substitutions), name == "WritableKeyPath");
+					TKeyPath(resolveInner(arguments[0], span, resolving, substitutions), resolveInner(arguments[1], span, resolving, substitutions),
+						name == "WritableKeyPath");
 				} else if (name == "List") {
 					if (arguments.length != 1)
 						fail('Type "List" expects 1 type argument, got ${arguments.length}', span);
@@ -412,7 +424,10 @@ class DeclarationIndex {
 			case MapType(key, value): TMap(resolveInner(key, span, resolving, substitutions), resolveInner(value, span, resolving, substitutions));
 			case NullableType(element):
 				var resolved = resolveInner(element, span, resolving, substitutions);
-				switch resolved { case TNullable(_): resolved; default: TNullable(resolved); }
+				switch resolved {
+					case TNullable(_): resolved;
+					default: TNullable(resolved);
+				}
 			case FunctionType(arguments, result):
 				TFunction([
 					for (argument in arguments)
@@ -458,6 +473,8 @@ class DeclarationIndex {
 				expected = resolve(constraint.type, constraint.span, substitutions);
 			if (actual == null || !relations.satisfiesConstraint(actual, expected)) {
 				var detail = actual == null ? null : relations.constraintFailure(actual, expected);
+				if (actual != null && relations.recursiveCapabilityFailure(actual, expected))
+					throw new CompileError(new Diagnostic("E1025", 'Type argument for "${constraint.parameter}" does not satisfy constraint: $detail', span));
 				fail('Type argument for "${constraint.parameter}" on "$name" does not satisfy constraint "${compiler.semantic.SemanticSignature.type(expected)}"'
 					+ (detail == null ? "" : ': $detail'),
 					span);
@@ -791,7 +808,8 @@ class DeclarationIndex {
 			visitClass(name, []);
 			if (!classes.exists(name))
 				throw 'Class "$name" disappeared during cycle validation';
-			var decl = classes.get(name), substitutions:Map<String, CompilerType> = [];
+			var decl = classes.get(name),
+				substitutions:Map<String, CompilerType> = [];
 			for (parameter in decl.typeParameters)
 				substitutions.set(parameter, TTypeParameter(decl.name, parameter));
 			for (interfaceType in decl.interfaces) {

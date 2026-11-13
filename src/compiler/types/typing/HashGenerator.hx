@@ -90,6 +90,23 @@ class HashGenerator {
 				request(session, element, req.origin, span);
 				statements.push(TIf(absent, [TReturn(new TypedExpression(TIntLiteral(0), TInt, span), span)], [], span));
 				statements.push(TReturn(call(element, present, span), span));
+			case TAnonymous(_, fields):
+				new AnonymousTypeRegistry(session).register(type);
+				var nil = new TypedExpression(TNullableWrap(new TypedExpression(TNullLiteral, TNull, span)), type, span),
+					absent = new TypedExpression(TEqual(value, nil), TBool, span),
+					hashName = "$anonymousHash";
+				statements.push(TIf(absent, [TReturn(new TypedExpression(TIntLiteral(0), TInt, span), span)], [], span));
+				statements.push(TVar(hashName, new TypedExpression(TIntLiteral(17), TInt, span), span));
+				for (field in fields) {
+					var fieldValue = new TypedExpression(TField(value, field.name), field.type, span);
+					request(session, field.type, req.origin, span);
+					var running = new TypedExpression(TLocal(hashName), TInt, span),
+						mixed = new TypedExpression(TAdd(new TypedExpression(TMul(running, new TypedExpression(TIntLiteral(31), TInt, span)), TInt, span),
+							call(field.type, fieldValue, span)),
+							TInt, span);
+					statements.push(TAssign(hashName, mixed, span));
+				}
+				statements.push(TReturn(new TypedExpression(TLocal(hashName), TInt, span), span));
 			case TInstance(NominalKind.Enum, name, _):
 				var declaration = session.enumDecls.get(name);
 				if (declaration == null)
