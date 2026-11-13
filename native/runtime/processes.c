@@ -51,6 +51,20 @@ static vstring *realtime_process_read(void *process, bool stdout_stream) {
 #ifdef HL_WIN
 static size_t realtime_child_quote_size(const wchar_t *value);
 static wchar_t *realtime_child_quote(wchar_t *out, const wchar_t *value);
+
+// CreateProcess runs a .cmd or .bat file through cmd.exe, which parses the whole command line a second time with its
+// own rules (&, |, ^, %VAR%, and quotes that do not nest like CommandLineToArgvW's). The quoting below cannot make an
+// argument safe for that, so such a target is refused. Windows drops trailing dots and spaces from a file name, so
+// "run.bat." and "run.cmd " name batch files too.
+static bool realtime_process_is_batch_file(const wchar_t *program) {
+	size_t length = wcslen(program);
+	while (length > 0 && (program[length - 1] == L'.' || program[length - 1] == L' '))
+		length--;
+	if (length < 4 || program[length - 4] != L'.')
+		return false;
+	wchar_t a = (wchar_t)(program[length - 3] | 0x20), b = (wchar_t)(program[length - 2] | 0x20), c = (wchar_t)(program[length - 1] | 0x20);
+	return (a == L'c' && b == L'm' && c == L'd') || (a == L'b' && b == L'a' && c == L't');
+}
 #endif
 
 HL_PRIM void *HL_NAME(__process_run)(vstring *command, varray *arguments) {
@@ -61,6 +75,8 @@ HL_PRIM void *HL_NAME(__process_run)(vstring *command, varray *arguments) {
 	// CommandLineToArgvW splits them back, as the streaming spawn does.
 	int count = arguments == NULL ? 0 : arguments->size;
 	const wchar_t *program = (const wchar_t *)command->bytes;
+	if (realtime_process_is_batch_file(program))
+		hl_error("Process.run cannot start a .cmd or .bat file: cmd.exe would parse its arguments again. Start an executable instead");
 	size_t size = realtime_child_quote_size(program) + 1;
 	for (int index = 0; index < count; index++) {
 		vstring *argument = hl_aptr(arguments, vstring *)[index];
