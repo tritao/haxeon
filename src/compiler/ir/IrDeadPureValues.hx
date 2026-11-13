@@ -5,7 +5,7 @@ import compiler.ir.Ir;
 /** Remove unused computations that cannot observe memory, allocate, call, or throw. */
 class IrDeadPureValues {
 	public static function removable(instruction:IrInstruction):Bool return switch instruction {
-		case Phi(_, _), ConstVoid(_), ConstInt(_, _), ConstFloat(_, _), ConstBool(_, _), ConstNull(_),
+		case ValueInit(_), Phi(_, _), ConstVoid(_), ConstInt(_, _), ConstFloat(_, _), ConstBool(_, _), ConstNull(_),
 			Add(_, _, _), Sub(_, _, _), Mul(_, _, _), BitAnd(_, _, _), BitOr(_, _, _), BitXor(_, _, _),
 			ShiftLeft(_, _, _), ShiftRight(_, _, _), UnsignedShiftRight(_, _, _): true;
 		default: false;

@@ -12,8 +12,9 @@ class IrOperands {
 				Div(out, _, _), Mod(out, _, _), BitAnd(out, _, _), BitXor(out, _, _), BitOr(out, _, _), ShiftLeft(out, _, _), ShiftRight(out, _, _),
 				UnsignedShiftRight(out, _, _), Less(out, _, _), LessEqual(out, _, _), Equal(out, _, _), Call(out, _, _), CNativeCall(out, _, _),
 				StaticClosure(out, _), InstanceClosure(out, _, _), CallClosure(out, _, _), ToVirtual(out, _), Upcast(out, _), ClassId(out, _),
-				MethodCall(out, _, _, _, _), NewObject(out, _), FieldGet(out, _, _), ArrayGet(out, _, _), ArraySize(out, _), IteratorNew(out, _),
-				IteratorHasNext(out, _), Intrinsic(out, _, _), IteratorNext(out, _), MakeEnum(out, _, _, _), EnumIndex(out, _), EnumField(out, _, _, _): out;
+				MethodCall(out, _, _, _, _), NewObject(out, _), ValueInit(out), FieldGet(out, _, _), ArrayGet(out, _, _), ArraySize(out, _),
+				IteratorNew(out, _), IteratorHasNext(out, _), Intrinsic(out, _, _), IteratorNext(out, _), MakeEnum(out, _, _, _), EnumIndex(out, _),
+				EnumField(out, _, _, _): out;
 			case BeginTry(_, _, _), EndTry(_, _), GlobalSet(_, _), FieldSet(_, _, _), ArraySet(_, _, _), MemoryStore(_, _, _): null;
 		};
 
@@ -46,7 +47,7 @@ class IrOperands {
 					found ? matchedInputs : noInputs;
 				}
 			case ConstVoid(_), ConstInt(_, _), ConstFloat(_, _), ConstString(_, _), StaticDataAddress(_, _), ConstBool(_, _), ConstNull(_), TypeValue(_, _),
-				BeginTry(_, _, _), EndTry(_, _), Catch(_), GlobalGet(_, _), StaticClosure(_, _), NewObject(_, _): noInputs;
+				BeginTry(_, _, _), EndTry(_, _), Catch(_), GlobalGet(_, _), StaticClosure(_, _), NewObject(_, _), ValueInit(_): noInputs;
 			case ToDyn(_, value), IntToFloat(_, value), IntToInt64(_, value), FloatToInt(_, value), FloatToFloat(_, value), SafeCast(_, value),
 				GlobalSet(_, value), InstanceClosure(_, _, value), ToVirtual(_, value), Upcast(_, value), ClassId(_, value), FieldGet(_, value, _),
 				ArraySize(_, value), IteratorNew(_, value), IteratorHasNext(_, value), IteratorNext(_, value), EnumIndex(_, value), EnumField(_, value, _, _),
@@ -85,7 +86,7 @@ class IrOperands {
 	public static function count(instruction:IrInstruction):Int
 		return switch instruction {
 			case Phi(_, _), ConstVoid(_), ConstInt(_, _), ConstFloat(_, _), ConstString(_, _), StaticDataAddress(_, _), ConstBool(_, _), ConstNull(_),
-				TypeValue(_, _), BeginTry(_, _, _), EndTry(_, _), Catch(_), GlobalGet(_, _), StaticClosure(_, _), NewObject(_, _): 0;
+				TypeValue(_, _), BeginTry(_, _, _), EndTry(_, _), Catch(_), GlobalGet(_, _), StaticClosure(_, _), NewObject(_, _), ValueInit(_): 0;
 			case ToDyn(_, _), IntToFloat(_, _), IntToInt64(_, _), FloatToInt(_, _), FloatToFloat(_, _), SafeCast(_, _), GlobalSet(_, _),
 				InstanceClosure(_, _, _), ToVirtual(_, _), Upcast(_, _), ClassId(_, _), FieldGet(_, _, _), ArraySize(_, _), IteratorNew(_, _),
 				IteratorHasNext(_, _), IteratorNext(_, _), EnumIndex(_, _), EnumField(_, _, _, _), MemoryLoad(_, _, _, _): 1;

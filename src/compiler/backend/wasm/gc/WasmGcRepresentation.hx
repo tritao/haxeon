@@ -192,7 +192,7 @@ class WasmGcRepresentation implements WasmValueRepresentation implements WasmAgg
 		for (block in fn.blocks)
 			for (located in block.instructions)
 				switch located.value {
-					case NewObject(out, _) if (out.id == signature.receiverId):
+					case ValueInit(out) if (out.id == signature.receiverId):
 						receiver = out;
 					default:
 				}
@@ -406,7 +406,7 @@ class WasmGcRepresentation implements WasmValueRepresentation implements WasmAgg
 	/** Use mutable scalar locals for nonescaping value places even across handler edges. */
 	public function scalarLocal(instruction:IrInstruction, locals:Map<Int, Int>):Null<Array<WasmInstruction>> {
 		return switch instruction {
-			case NewObject(out, _):
+			case ValueInit(out):
 				var candidate = functionState().scalarLocals.get(out);
 				if (candidate == null) null; else {
 					var body:Array<WasmInstruction> = [];

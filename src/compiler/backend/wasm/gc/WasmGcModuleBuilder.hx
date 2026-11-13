@@ -502,9 +502,10 @@ class WasmGcModuleBuilder {
 						case Phi(_, _), ConstVoid(_), ConstInt(_, _), ConstFloat(_, _), ConstBool(_, _), ConstNull(_), TypeValue(_, _), GlobalGet(_, _),
 							GlobalSet(_, _), Add(_, _, _), Sub(_, _, _), Mul(_, _, _), Div(_, _, _), Mod(_, _, _), BitAnd(_, _, _), BitXor(_, _, _),
 							BitOr(_, _, _), ShiftLeft(_, _, _), ShiftRight(_, _, _), UnsignedShiftRight(_, _, _), Less(_, _, _), LessEqual(_, _, _),
-							Equal(_, _, _), NewObject(_, _), FieldGet(_, _, _), FieldSet(_, _, _), ArrayGet(_, _, _), ArraySet(_, _, _), ArraySize(_, _),
-							IteratorNew(_, _), IteratorHasNext(_, _), IteratorNext(_, _), MakeEnum(_, _, _, _), EnumIndex(_, _), EnumField(_, _, _, _),
-							IntToFloat(_, _), IntToInt64(_, _), FloatToInt(_, _), FloatToFloat(_, _), BeginTry(_, _, _), EndTry(_, _), Catch(_):
+							Equal(_, _, _), NewObject(_, _), ValueInit(_), FieldGet(_, _, _), FieldSet(_, _, _), ArrayGet(_, _, _), ArraySet(_, _, _),
+							ArraySize(_, _), IteratorNew(_, _), IteratorHasNext(_, _), IteratorNext(_, _), MakeEnum(_, _, _, _), EnumIndex(_, _),
+							EnumField(_, _, _, _), IntToFloat(_, _), IntToInt64(_, _), FloatToInt(_, _), FloatToFloat(_, _), BeginTry(_, _, _), EndTry(_, _),
+							Catch(_):
 						case ConstString(_, _), StaticDataAddress(_, _), PointerOffset(_, _, _), MemoryLoad(_, _, _, _), MemoryStore(_, _, _):
 						case ToDyn(_, _), SafeCast(_, _), ToVirtual(_, _), Upcast(_, _):
 						case Call(_, name, _)

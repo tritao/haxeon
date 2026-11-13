@@ -15,7 +15,10 @@ class HlScalarValueLocals {
 		for (block in fn.blocks)
 			for (located in block.instructions)
 				switch located.value {
-					case NewObject(out, name) if (objects.hasObject(name) && scalarFields(objects.object(name), objects)):
+					case ValueInit(out)
+						if (objects.hasObject(compiler.ir.IrTypeTools.valueObjectName(out.type))
+							&& scalarFields(objects.object(compiler.ir.IrTypeTools.valueObjectName(out.type)), objects)):
+						var name = compiler.ir.IrTypeTools.valueObjectName(out.type);
 						roots.set(out.id, name);
 						valid.set(out.id, true);
 					default:
@@ -53,7 +56,8 @@ class HlScalarValueLocals {
 		for (block in fn.blocks)
 			for (located in block.instructions)
 				switch located.value {
-					case NewObject(out, name) if (roots.exists(out.id) && valid.get(out.id) == true):
+					case ValueInit(out) if (roots.exists(out.id) && valid.get(out.id) == true):
+						var name = compiler.ir.IrTypeTools.valueObjectName(out.type);
 						var fields:Map<String, Int> = [],
 							declaration:IrObject = cast objects.object(name),
 							declarations = declaration.fields;

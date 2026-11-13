@@ -236,6 +236,12 @@ class IrBuilder {
 		return out;
 	}
 
+	public function valueInit(typeName:String):IrValue {
+		var out = temporary(Obj(typeName));
+		emit(ValueInit(out));
+		return out;
+	}
+
 	public function newObject(typeName:String):IrValue {
 		var out = temporary(Obj(typeName));
 		emit(NewObject(out, typeName));

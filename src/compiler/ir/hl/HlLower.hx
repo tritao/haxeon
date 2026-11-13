@@ -97,7 +97,6 @@ class HlLower {
 	public final lowered:Map<String, compiler.hl.incremental.HlLoweredFunction> = [];
 
 	/** The owner `Class.field` was found on, by `Class.field`, for the field slot request. */
-
 	final interfaceBases:Map<String, Array<String>> = [];
 
 	final enumTypeIndices:Map<String, Int> = [];
@@ -351,7 +350,8 @@ class HlLower {
 		var runtimeEnums = developmentMetadata ? program.enums : compiler.ir.IrEnumRuntimeTypes.declarations(program);
 		var boxedEnums = [for (declaration in runtimeEnums) declaration.name => true];
 		for (declaration in program.enums)
-			if (!boxedEnums.exists(declaration.name)) symbols.internScalarEnumTag(declaration.name);
+			if (!boxedEnums.exists(declaration.name))
+				symbols.internScalarEnumTag(declaration.name);
 		for (enumDecl in runtimeEnums)
 			symbols.reserveEnum(enumDecl);
 		for (interfaceDecl in program.interfaces) {
@@ -976,7 +976,8 @@ class HlLower {
 					case Equal(output, left, right):
 						lowerComparison(output, left, right, 2, nullValues.exists(left.id), nullValues.exists(right.id), registers, registerTypes,
 							instructions);
-					case Intrinsic(_, _, _): throw "Unlowered IR intrinsic reached HashLink";
+					case Intrinsic(_, _, _):
+						throw "Unlowered IR intrinsic reached HashLink";
 					case Call(output, functionName, arguments):
 						if (functionName == compiler.ir.IrReceiverCheck.NAME && nonNull.has(block.id, instructionIndex)) {
 							// A previous successful dereference or check already proved this SSA receiver non-null.
@@ -1128,7 +1129,7 @@ class HlLower {
 						} else
 							instructions.push(HlInstruction.CallMethod(defineRegister(output, registers, registerTypes),
 								requireObjectMethod(object, methodName), methodArguments));
-					case NewObject(output, _) if (scalarOptionals.get(output) != null):
+					case ValueInit(output) if (scalarOptionals.get(output) != null):
 						var local:HlScalarValueLocal = cast scalarOptionals.get(output);
 						for (field in local.declarations) {
 							var target:Int = cast local.fields.get(field.name);
@@ -1141,6 +1142,8 @@ class HlLower {
 						}
 					case NewObject(output, typeName):
 						instructions.push(HlInstruction.New(defineRegister(output, registers, registerTypes), requireObjectType(typeName), 0));
+					case ValueInit(output):
+						instructions.push(HlInstruction.New(defineRegister(output, registers, registerTypes), requireObjectType(compiler.ir.IrTypeTools.valueObjectName(output.type)), 0));
 					case FieldGet(output, object, fieldName) if (scalarOptionals.get(object) != null):
 						var local:HlScalarValueLocal = cast scalarOptionals.get(object);
 						var source:Int = cast local.fields.get(fieldName);
@@ -1209,7 +1212,10 @@ class HlLower {
 							requireRegister(value, registers)));
 					case ArraySize(output, array):
 						instructions.push(HlInstruction.ArraySize(defineRegister(output, registers, registerTypes), requireRegister(array, registers)));
-					case MakeEnum(output, _, constructor, _) if (switch output.type { case EnumTag(_): true; default: false; }):
+					case MakeEnum(output, _, constructor, _) if (switch output.type {
+							case EnumTag(_): true;
+							default: false;
+						}):
 						instructions.push(HlInstruction.LoadInt(defineRegister(output, registers, registerTypes), internInt(constructor + 1)));
 					case MakeEnum(output, typeName, constructor, arguments):
 						var destination = defineRegister(output, registers, registerTypes),
@@ -1219,7 +1225,10 @@ class HlLower {
 							lowerEnumConstant(destination, typeName, enumConstructor, instructions);
 						else
 							instructions.push(HlInstruction.MakeEnum(destination, enumConstructor, args));
-					case EnumIndex(output, value) if (switch value.type { case EnumTag(_): true; default: false; }):
+					case EnumIndex(output, value) if (switch value.type {
+							case EnumTag(_): true;
+							default: false;
+						}):
 						var one = temporaryRegister(IrType.I32, registerTypes);
 						instructions.push(HlInstruction.LoadInt(one, internInt(1)));
 						instructions.push(HlInstruction.Sub(defineRegister(output, registers, registerTypes), requireRegister(value, registers), one));
@@ -1382,7 +1391,8 @@ class HlLower {
 	static function scopeEndPosition(binding:compiler.ir.IrFunction.IrDebugBinding, locations:Array<HlDebugLocation>, position:Int, instructionCount:Int,
 			lastByScope:Map<String, Int>):Int {
 		var key = binding.identity + ":" + binding.scopeStart + ":" + binding.scopeEnd,
-			cached = lastByScope.get(key), lastInScope:Int;
+			cached = lastByScope.get(key),
+			lastInScope:Int;
 		if (cached == null) {
 			lastInScope = -1;
 			var index = locations.length - 1;
@@ -1491,7 +1501,8 @@ class HlLower {
 	}
 
 	/** The phi moves on the edge `from` to `to`, or null when it has none. */
-	static function edgeMoves(edges:Map<Int, Map<Int, Array<{destination:IrValue, source:IrValue}>>>, from:Int, to:Int):Null<Array<{destination:IrValue, source:IrValue}>> {
+	static function edgeMoves(edges:Map<Int, Map<Int, Array<{destination:IrValue, source:IrValue}>>>, from:Int,
+			to:Int):Null<Array<{destination:IrValue, source:IrValue}>> {
 		var targets = edges.get(from);
 		return targets == null ? null : targets.get(to);
 	}
@@ -1979,7 +1990,8 @@ class HlLower {
 	 * the IR: the IR declares the field's owner, the type its slot.
 	 */
 	function requireObjectFieldByType(typeName:String, name:String):Int {
-		var byName = fieldSlots.get(typeName), cached = byName == null ? null : byName.get(name);
+		var byName = fieldSlots.get(typeName),
+			cached = byName == null ? null : byName.get(name);
 		if (cached != null) {
 			if (requests != null)
 				requests.push(FieldSlot(cached.owner, name, cached.index));

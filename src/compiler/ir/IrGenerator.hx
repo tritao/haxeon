@@ -46,6 +46,7 @@ import compiler.ir.Ir.IrStaticField;
 
 /** Resolved key and value types of a map operation being lowered. */
 private typedef MapTypes = {final key:CompilerType; final value:CompilerType;}
+
 private typedef OptionalFieldPlace = {final owner:TypedExpression; final field:String; final path:Array<String>; @:optional final checkedDepth:Int;}
 private typedef ArrayValuePath = {final name:String; final type:CompilerType;}
 private typedef ArrayValuePlace = {final array:TypedExpression; final index:TypedExpression; final root:TypedExpression; final elementType:CompilerType; final path:Array<ArrayValuePath>;}
@@ -60,6 +61,7 @@ private class FunctionScratch {
 
 	public var observableAccessSerial = 0;
 	public var observableConstructorInitialization:Bool;
+	public var valueConstructor:Null<String>;
 
 	public function new(isConstructor:Bool)
 		observableConstructorInitialization = isConstructor;
@@ -153,14 +155,18 @@ class IrGenerator {
 
 	function specializedMapOwner(key:CompilerType, value:CompilerType):String {
 		var owner = facts.genericOwnerAliases.get(compiler.semantic.SemanticSignature.type(TMap(key, value)));
-		if (owner == null) throw 'Missing specialized generic map owner for $key -> $value';
+		if (owner == null)
+			throw 'Missing specialized generic map owner for $key -> $value';
 		return owner;
 	}
 
 	/** Operands of a chain of string `+`, in evaluation order, with adjacent literals folded into one. */
 	function collectStringConcatOperands(expression:TypedExpression, into:Array<TypedExpression>):Void {
 		switch expression.expression {
-			case TAdd(left, right) if ((switch (lowerType(expression.type)) { case Bytes: true; default: false; })):
+			case TAdd(left, right) if ((switch (lowerType(expression.type)) {
+				case Bytes: true;
+				default: false;
+			})):
 				collectStringConcatOperands(left, into);
 				collectStringConcatOperands(right, into);
 			case TStringLiteral(text):
@@ -253,7 +259,8 @@ class IrGenerator {
 				case ProviderFunction(type, operation):
 					switch lowerType(type) {
 						// The enum equality helpers keep the structured role the tag-storage passes read.
-						case Enum(_) if (operation == ProviderOperation.Equals || operation == ProviderOperation.ReflectEquals): EnumEquality(operation == ProviderOperation.ReflectEquals);
+						case Enum(_) if (operation == ProviderOperation.Equals
+							|| operation == ProviderOperation.ReflectEquals): EnumEquality(operation == ProviderOperation.ReflectEquals);
 						case lowered: Provider(TypeKey.of(lowered), ProviderOperations.detailed(operation, compiler.semantic.SemanticSignature.type(type)));
 					}
 			};
@@ -267,10 +274,12 @@ class IrGenerator {
 	 * Every function is generated with scratch state of its own (`FunctionScratch`): its IR must not depend on how many functions were
 	 * generated before it, or a function generated again would never equal its earlier IR.
 	 */
-
 	public function generateCfg(fn:TypedFunction):CfgFunction {
 		var outer = scratch;
 		scratch = new FunctionScratch(fn.isConstructor);
+		var owner = fn.physicalOwner == null ? fn.owner : fn.physicalOwner;
+		if (fn.isConstructor && owner != null && facts.valueClasses.exists(owner))
+			scratch.valueConstructor = owner;
 		try {
 			var cfg = generateFunctionCfg(fn);
 			scratch = outer;
@@ -298,6 +307,11 @@ class IrGenerator {
 				{name: argument.name, type: argument.type};
 			}
 		];
+		if (scratch.valueConstructor != null) {
+			var valueType:IrType = Obj(scratch.valueConstructor);
+			localTypes.set("this", valueType);
+			builder.store("this", builder.valueInit(scratch.valueConstructor));
+		}
 		for (argument in fn.arguments) {
 			var type = lowerType(argument.type);
 			localTypes.set(argument.name, type);
@@ -313,12 +327,18 @@ class IrGenerator {
 				}
 		lowerStatements(fn.statements, builder, localTypes, fn.span.end);
 		if (!builder.isTerminated()) {
-			if ((switch (lowerType(fn.result)) { case Void: true; default: false; }))
+			if (scratch.valueConstructor != null)
+				builder.returnValue(builder.load("this", Obj(scratch.valueConstructor)));
+			else if ((switch (lowerType(fn.result)) {
+				case Void: true;
+				default: false;
+			}))
 				builder.returnVoid();
 			else
 				throw 'Function ${fn.name} does not return on every path';
 		}
-		return new CfgFunction(fn.name, arguments, lowerType(fn.result), builder.blocks, localTypes, builder.valueCount(), builder.debugLocals);
+		return new CfgFunction(fn.name, arguments, scratch.valueConstructor == null ? lowerType(fn.result) : Obj(scratch.valueConstructor), builder.blocks,
+			localTypes, builder.valueCount(), builder.debugLocals);
 	}
 
 	function initializeLocal(name:String, value:CfgValue, builder:CfgBuilder, localTypes:Map<String, IrType>):Void {
@@ -339,22 +359,30 @@ class IrGenerator {
 	}
 
 	/** Protect the remaining statements from the registration point through block exit. */
-	function lowerCleanupBody(body:Array<TypedStatement>, span:compiler.Source.SourceSpan, scopedDisposal:Bool,
-			builder:CfgBuilder, localTypes:Map<String, IrType>):Void {
+	function lowerCleanupBody(body:Array<TypedStatement>, span:compiler.Source.SourceSpan, scopedDisposal:Bool, builder:CfgBuilder,
+			localTypes:Map<String, IrType>):Void {
 		var previous = scratch.loweringScopedDisposal;
 		scratch.loweringScopedDisposal = scopedDisposal;
-		try lowerStatements(body, builder, localTypes, span.end) catch (error:Dynamic) {
+		try
+			lowerStatements(body, builder, localTypes, span.end)
+		catch (error:Dynamic) {
 			scratch.loweringScopedDisposal = previous;
 			throw error;
 		}
 		scratch.loweringScopedDisposal = previous;
 	}
 
-	function lowerCleanupRegion(body:Array<TypedStatement>, remainder:Array<TypedStatement>, span:compiler.Source.SourceSpan,
-			scopedDisposal:Bool, builder:CfgBuilder, localTypes:Map<String, IrType>, scopeEnd:Int):Void {
+	function lowerCleanupRegion(body:Array<TypedStatement>, remainder:Array<TypedStatement>, span:compiler.Source.SourceSpan, scopedDisposal:Bool,
+			builder:CfgBuilder, localTypes:Map<String, IrType>, scopeEnd:Int):Void {
 		var handler = builder.createBlock(), after = builder.createBlock();
 		builder.beginTry(handler, after);
-		var region:CleanupRegion = {body: body, span: span, trapDepth: builder.trapDepth(), loopDepth: builder.loopContexts.length, scopedDisposal: scopedDisposal};
+		var region:CleanupRegion = {
+			body: body,
+			span: span,
+			trapDepth: builder.trapDepth(),
+			loopDepth: builder.loopContexts.length,
+			scopedDisposal: scopedDisposal
+		};
 		scratch.cleanupRegions.push(region);
 		lowerStatements(remainder, builder, localTypes, scopeEnd);
 		scratch.cleanupRegions.pop();
@@ -374,7 +402,8 @@ class IrGenerator {
 		var primary = '$' + 'cleanup-exception:${handler.id}';
 		localTypes.set(primary, Dyn);
 		builder.store(primary, builder.catchValue());
-		var suppressed = builder.createBlock(), rethrow = builder.createBlock();
+		var suppressed = builder.createBlock(),
+			rethrow = builder.createBlock();
 		builder.beginTry(suppressed, rethrow, true);
 		lowerCleanupBody(body, span, scopedDisposal, builder, localTypes);
 		if (builder.isTerminated())
@@ -395,7 +424,9 @@ class IrGenerator {
 
 	/** Emit the applicable cleanups on a return or loop exit, closing only traps crossed by that exit. */
 	function emitExitCleanups(builder:CfgBuilder, localTypes:Map<String, IrType>, loopDepth:Int, destinationTrapDepth:Int):Void {
-		var original = scratch.cleanupRegions, depth = builder.trapDepth(), index = original.length;
+		var original = scratch.cleanupRegions,
+			depth = builder.trapDepth(),
+			index = original.length;
 		while (index > 0) {
 			index--;
 			var region = original[index];
@@ -444,19 +475,26 @@ class IrGenerator {
 						default: null;
 					};
 					if (arrayPlace != null && simpleArrayValuePath(arrayPlace)) {
-						var inner = switch initializer.expression { case TCall(_, [value]): value; default: throw "Invalid array place binding"; };
+						var inner = switch initializer.expression {
+							case TCall(_, [value]): value;
+							default: throw "Invalid array place binding";
+						};
 						initializeLocal(name, lowerArrayValueReceiver(inner, arrayPlace, builder, localTypes), builder, localTypes);
 					} else if (place == null)
 						initializeLocal(name, lowerExpression(initializer, builder, localTypes), builder, localTypes);
 					else {
-						var owner = prepareOptionalFieldPlace(place, builder, localTypes), declaring = optionalFieldOwner(owner.type, place.field),
+						var owner = prepareOptionalFieldPlace(place, builder, localTypes),
+							declaring = optionalFieldOwner(owner.type, place.field),
 							receiver = builder.load(owner.name, owner.type);
-						if (!sameIrType(owner.type, Obj(declaring))) receiver = builder.upcast(receiver, Obj(declaring));
+						if (!sameIrType(owner.type, Obj(declaring)))
+							receiver = builder.upcast(receiver, Obj(declaring));
 						var getter = optionalPlaceGetter(place, declaring, lowerType(initializer.type));
 						initializeLocal(name, builder.call(getter, [receiver], lowerType(initializer.type)), builder, localTypes);
 						scratch.localOptionalPlaces.set(name, {
 							owner: new TypedExpression(TLocal(owner.name), place.owner.type, place.owner.span),
-							field: place.field, path: place.path, checkedDepth: place.path.length + 1
+							field: place.field,
+							path: place.path,
+							checkedDepth: place.path.length + 1
 						});
 					}
 				case TAssign(name, value, _):
@@ -479,9 +517,13 @@ class IrGenerator {
 					if (isErasedGenericOwner(object.type) && observableBit == null) {
 						var operands = lowerOperands([object, value], builder, localTypes, true);
 						if (!builder.isTerminated()) {
-							if ((switch (operands[0].type) { case Dyn: true; default: false; }))
+							if ((switch (operands[0].type) {
+								case Dyn: true;
+								default: false;
+							}))
 								builder.call(erasedOwnerOperation(object.type, "set", name), operands, Void);
-							else builder.fieldSet(operands[0], name, operands[1]);
+							else
+								builder.fieldSet(operands[0], name, operands[1]);
 						}
 					} else if (observableBit != null) {
 						var operands = lowerOperands([object, value], builder, localTypes);
@@ -494,106 +536,120 @@ class IrGenerator {
 							}
 						}
 					} else {
-					var arrayPlace = arrayValuePlace(object), projection = flatRawPointerProjection(object), optionalPlace = optionalFieldPlace(object),
-						copy = optionalFieldCopy(value), targetOwner = optionalStoredFieldOwner(lowerType(object.type), name);
-					if (arrayPlace != null && simpleArrayValuePath(arrayPlace)) {
-						var operands = lowerOperands([arrayPlace.array, arrayPlace.index], builder, localTypes),
-							arrayName = '$' + 'array-value-place-array:${scratch.arrayValuePlaceSerial}',
-							indexName = '$' + 'array-value-place-index:${scratch.arrayValuePlaceSerial}',
-							rootName = '$' + 'array-value-place-value:${scratch.arrayValuePlaceSerial}',
-							rootObjectName = '$' + 'array-value-place-object:${scratch.arrayValuePlaceSerial++}',
-							rootType = lowerType(arrayPlace.elementType),
-							valueType = switch arrayPlace.elementType {
-								case TNullable(inner): inner;
-								default: arrayPlace.elementType;
-							}, rootClass = switch valueType {
-								case TInstance(NominalKind.Class, className, _): className;
-								default: throw "Array value place requires a struct element";
-							}, rootObjectType = Obj(rootClass),
-							rootCompilerType = valueType;
-						localTypes.set(arrayName, operands[0].type);
-						localTypes.set(indexName, operands[1].type);
-						localTypes.set(rootName, rootType);
-						localTypes.set(rootObjectName, rootObjectType);
-						builder.store(arrayName, operands[0]);
-						builder.store(indexName, operands[1]);
-						var placeOrigin = builder.beginGenerated(ArrayValuePlaceReason);
-						var rawRoot = elementGet(builder, builder.load(arrayName, operands[0].type),
-							builder.load(indexName, operands[1].type), rootType);
-						builder.restoreSource(placeOrigin);
-						builder.store(rootName, rawRoot);
-						switch rootType {
-							case Nullable(_):
-								var missing = builder.createBlock(), present = builder.createBlock();
-								builder.branch(builder.equal(builder.load(rootName, rootType), builder.constNull(rootType)), missing, present);
-								builder.select(missing);
-								builder.throwValue(builder.toDyn(builder.constString("Null access")));
-								builder.select(present);
-								builder.store(rootObjectName, builder.safeCast(builder.load(rootName, rootType), rootObjectType));
-							default:
-								builder.store(rootObjectName, builder.load(rootName, rootType));
-						}
-						var replacement = new TypedExpression(TLocal(rootObjectName), rootCompilerType, arrayPlace.root.span),
-							target = replaceArrayValueRoot(object, arrayPlace, replacement),
-							receiver = lowerExpression(target, builder, localTypes),
-							receiverName = '$' + 'array-value-place-receiver:${scratch.arrayValuePlaceSerial - 1}';
-						localTypes.set(receiverName, receiver.type);
-						builder.store(receiverName, receiver);
-						var assigned = lowerExpression(value, builder, localTypes);
-						if (!builder.isTerminated()) {
-							builder.fieldSet(builder.load(receiverName, receiver.type), name, assigned);
-							elementSet(builder, builder.load(arrayName, operands[0].type), builder.load(indexName, operands[1].type),
-								sameIrType(rootType, rootObjectType) ? builder.load(rootObjectName, rootObjectType)
-									: builder.toDyn(builder.load(rootObjectName, rootObjectType), rootType));
-						}
-					} else if (projection == null && optionalPlace == null && copy != null && targetOwner != null
-						&& sameIrType(lowerType(value.type), lowerType(copy.value.type))) {
-						var sourceOwner = optionalStoredFieldOwner(lowerType(copy.owner.type), copy.field);
-						if (sourceOwner != null && optionalFieldPlace(copy.owner) == null && flatRawPointerProjection(copy.owner) == null) {
-							var operands = lowerOperands([object, copy.owner], builder, localTypes);
-							if (!builder.isTerminated())
-								builder.call(IrOptionalFieldStorage.copyName(targetOwner, name, sourceOwner, copy.field), operands, Void);
+						var arrayPlace = arrayValuePlace(object),
+							projection = flatRawPointerProjection(object),
+							optionalPlace = optionalFieldPlace(object),
+							copy = optionalFieldCopy(value),
+							targetOwner = optionalStoredFieldOwner(lowerType(object.type), name);
+						if (arrayPlace != null && simpleArrayValuePath(arrayPlace)) {
+							var operands = lowerOperands([arrayPlace.array, arrayPlace.index], builder, localTypes),
+								arrayName = '$' + 'array-value-place-array:${scratch.arrayValuePlaceSerial}',
+								indexName = '$' + 'array-value-place-index:${scratch.arrayValuePlaceSerial}',
+								rootName = '$' + 'array-value-place-value:${scratch.arrayValuePlaceSerial}',
+								rootObjectName = '$' + 'array-value-place-object:${scratch.arrayValuePlaceSerial++}',
+								rootType = lowerType(arrayPlace.elementType),
+								valueType = switch arrayPlace.elementType {
+									case TNullable(inner): inner;
+									default: arrayPlace.elementType;
+								},
+								rootClass = switch valueType {
+									case TInstance(NominalKind.Class, className, _): className;
+									default: throw "Array value place requires a struct element";
+								},
+								rootObjectType = Obj(rootClass),
+								rootCompilerType = valueType;
+							localTypes.set(arrayName, operands[0].type);
+							localTypes.set(indexName, operands[1].type);
+							localTypes.set(rootName, rootType);
+							localTypes.set(rootObjectName, rootObjectType);
+							builder.store(arrayName, operands[0]);
+							builder.store(indexName, operands[1]);
+							var placeOrigin = builder.beginGenerated(ArrayValuePlaceReason);
+							var rawRoot = elementGet(builder, builder.load(arrayName, operands[0].type), builder.load(indexName, operands[1].type), rootType);
+							builder.restoreSource(placeOrigin);
+							builder.store(rootName, rawRoot);
+							switch rootType {
+								case Nullable(_):
+									var missing = builder.createBlock(),
+										present = builder.createBlock();
+									builder.branch(builder.equal(builder.load(rootName, rootType), builder.constNull(rootType)), missing, present);
+									builder.select(missing);
+									builder.throwValue(builder.toDyn(builder.constString("Null access")));
+									builder.select(present);
+									builder.store(rootObjectName, builder.safeCast(builder.load(rootName, rootType), rootObjectType));
+								default:
+									builder.store(rootObjectName, builder.load(rootName, rootType));
+							}
+							var replacement = new TypedExpression(TLocal(rootObjectName), rootCompilerType, arrayPlace.root.span),
+								target = replaceArrayValueRoot(object, arrayPlace, replacement),
+								receiver = lowerExpression(target, builder, localTypes),
+								receiverName = '$' + 'array-value-place-receiver:${scratch.arrayValuePlaceSerial - 1}';
+							localTypes.set(receiverName, receiver.type);
+							builder.store(receiverName, receiver);
+							var assigned = lowerExpression(value, builder, localTypes);
+							if (!builder.isTerminated()) {
+								builder.fieldSet(builder.load(receiverName, receiver.type), name, assigned);
+								elementSet(builder, builder.load(arrayName, operands[0].type), builder.load(indexName, operands[1].type),
+									sameIrType(rootType,
+										rootObjectType) ? builder.load(rootObjectName,
+											rootObjectType) : builder.toDyn(builder.load(rootObjectName, rootObjectType), rootType));
+							}
+						} else if (projection == null
+							&& optionalPlace == null
+							&& copy != null
+							&& targetOwner != null
+							&& sameIrType(lowerType(value.type), lowerType(copy.value.type))) {
+							var sourceOwner = optionalStoredFieldOwner(lowerType(copy.owner.type), copy.field);
+							if (sourceOwner != null
+								&& optionalFieldPlace(copy.owner) == null
+								&& flatRawPointerProjection(copy.owner) == null) {
+								var operands = lowerOperands([object, copy.owner], builder, localTypes);
+								if (!builder.isTerminated())
+									builder.call(IrOptionalFieldStorage.copyName(targetOwner, name, sourceOwner, copy.field), operands, Void);
+							} else {
+								var operands = lowerOperands([object, value], builder, localTypes);
+								if (!builder.isTerminated())
+									builder.fieldSet(operands[0], name, operands[1]);
+							}
+						} else if (optionalPlace != null) {
+							var owner = prepareOptionalFieldPlace(optionalPlace, builder, localTypes),
+								assigned = lowerExpression(value, builder, localTypes);
+							if (!builder.isTerminated()) {
+								var path = optionalPlace.path.concat([name]),
+									target = builder.load(owner.name, owner.type);
+								if (isInlineAtomic(lowerType(value.type)))
+									builder.fieldSet(target, optionalSlotName(optionalPlace.field, path, false), assigned);
+								else {
+									var declaring = optionalFieldOwner(owner.type, optionalPlace.field);
+									if (!sameIrType(owner.type, Obj(declaring)))
+										target = builder.upcast(target, Obj(declaring));
+									builder.call(IrOptionalFieldStorage.placeSetterName(declaring, optionalPlace.field, path), [target, assigned], Void);
+								}
+							}
+						} else if (projection != null) {
+							var field = flatFieldAtPath(projection.recordName, projection.path.concat([name])),
+								layout = field.field.nativeLayout;
+							if (layout == null)
+								throw 'Missing Flat field layout for "${field.field.name}"';
+							var operands = lowerOperands([projection.pointer, value], builder, localTypes);
+							if (!builder.isTerminated()) {
+								var address = flatFieldPointer(operands[0], field.offset, builder);
+								if (layout.inlineRecord) {
+									var nested = flatObjectName(field.field.type);
+									if (nested == null)
+										throw 'Flat inline field "${field.field.name}" has no Flat value type';
+									lowerFlatValueStore(nested, address, operands[1], builder, []);
+								} else {
+									if (layout.size != 1 && layout.size != 2 && layout.size != 4 && layout.size != 8)
+										throw 'Unsupported scalar field width ${layout.size} in Flat value "${projection.recordName}"';
+									builder.memoryStore(address, operands[1], layout.size);
+								}
+							}
 						} else {
 							var operands = lowerOperands([object, value], builder, localTypes);
-							if (!builder.isTerminated()) builder.fieldSet(operands[0], name, operands[1]);
+							if (!builder.isTerminated())
+								builder.fieldSet(operands[0], name, operands[1]);
 						}
-					} else if (optionalPlace != null) {
-						var owner = prepareOptionalFieldPlace(optionalPlace, builder, localTypes),
-							assigned = lowerExpression(value, builder, localTypes);
-						if (!builder.isTerminated()) {
-							var path = optionalPlace.path.concat([name]), target = builder.load(owner.name, owner.type);
-							if (isInlineAtomic(lowerType(value.type)))
-								builder.fieldSet(target, optionalSlotName(optionalPlace.field, path, false), assigned);
-							else {
-								var declaring = optionalFieldOwner(owner.type, optionalPlace.field);
-								if (!sameIrType(owner.type, Obj(declaring))) target = builder.upcast(target, Obj(declaring));
-								builder.call(IrOptionalFieldStorage.placeSetterName(declaring, optionalPlace.field, path), [target, assigned], Void);
-							}
-						}
-					} else if (projection != null) {
-						var field = flatFieldAtPath(projection.recordName, projection.path.concat([name])),
-							layout = field.field.nativeLayout;
-						if (layout == null)
-							throw 'Missing Flat field layout for "${field.field.name}"';
-						var operands = lowerOperands([projection.pointer, value], builder, localTypes);
-						if (!builder.isTerminated()) {
-							var address = flatFieldPointer(operands[0], field.offset, builder);
-							if (layout.inlineRecord) {
-								var nested = flatObjectName(field.field.type);
-								if (nested == null)
-									throw 'Flat inline field "${field.field.name}" has no Flat value type';
-								lowerFlatValueStore(nested, address, operands[1], builder, []);
-							} else {
-								if (layout.size != 1 && layout.size != 2 && layout.size != 4 && layout.size != 8)
-									throw 'Unsupported scalar field width ${layout.size} in Flat value "${projection.recordName}"';
-								builder.memoryStore(address, operands[1], layout.size);
-							}
-						}
-					} else {
-						var operands = lowerOperands([object, value], builder, localTypes);
-						if (!builder.isTerminated())
-							builder.fieldSet(operands[0], name, operands[1]);
-					}
 					}
 				case TStaticFieldAssign(name, field, value, _):
 					var loweredValue = lowerExpression(value, builder, localTypes);
@@ -627,7 +683,12 @@ class IrGenerator {
 					}
 				case TReturnVoid(_):
 					emitExitCleanups(builder, localTypes, 0, 0);
-					if (!builder.isTerminated()) builder.returnVoid();
+					if (!builder.isTerminated()) {
+						if (scratch.valueConstructor == null)
+							builder.returnVoid();
+						else
+							builder.returnValue(builder.load("this", Obj(scratch.valueConstructor)));
+					}
 				case TThrow(expression, _):
 					builder.throwValue(builder.toDyn(lowerExpression(expression, builder, localTypes)));
 				case TTry(tryBranch, catches, span):
@@ -654,7 +715,10 @@ class IrGenerator {
 						var catchClause = catches[i],
 							catchIrType = lowerType(catchClause.type),
 							nextDispatch:Null<CfgBlock> = null;
-						if ((switch (catchClause.type) { case TDynamic: false; default: true; })) {
+						if ((switch (catchClause.type) {
+							case TDynamic: false;
+							default: true;
+						})) {
 							var handlerBlock = builder.createBlock(),
 								mismatchBlock = builder.createBlock();
 							nextDispatch = mismatchBlock;
@@ -666,7 +730,10 @@ class IrGenerator {
 						localTypes.set(catchClause.name, catchIrType);
 						builder.debugLocal(catchClause.name, catchClause.span, catchClause.span.end);
 						var caught = builder.load(exceptionLocal, Dyn);
-						initializeLocal(catchClause.name, (switch (catchClause.type) { case TDynamic: true; default: false; }) ? caught : builder.safeCast(caught, catchIrType), builder, localTypes);
+						initializeLocal(catchClause.name, (switch (catchClause.type) {
+							case TDynamic: true;
+							default: false;
+						}) ? caught : builder.safeCast(caught, catchIrType), builder, localTypes);
 						lowerStatements(catchClause.statements, builder, localTypes, catchClause.span.end);
 						if (!builder.isTerminated()) {
 							catchActive = true;
@@ -685,7 +752,8 @@ class IrGenerator {
 						throw "break outside loop";
 					var loop = loops[loops.length - 1];
 					emitExitCleanups(builder, localTypes, loops.length, loop.trapDepth);
-					if (builder.isTerminated()) break;
+					if (builder.isTerminated())
+						break;
 					loop.breakUsed = true;
 					builder.store(loop.breakFlag, builder.constBool(true));
 					builder.jump(loop.continueBlock);
@@ -694,22 +762,32 @@ class IrGenerator {
 						throw "continue outside loop";
 					var loop = loops[loops.length - 1];
 					emitExitCleanups(builder, localTypes, loops.length, loop.trapDepth);
-					if (builder.isTerminated()) break;
+					if (builder.isTerminated())
+						break;
 					builder.jump(loop.continueBlock);
 				case TIncrement(name, delta, _):
 					var type = requireLocalType(localTypes, name, 'Missing increment local "$name"');
-					var one = (switch (type) { case I32: true; default: false; }) ? builder.constInt(1) : builder.constFloat(1.0);
+					var one = (switch (type) {
+						case I32: true;
+						default: false;
+					}) ? builder.constInt(1) : builder.constFloat(1.0);
 					builder.store(name, delta > 0 ? builder.add(builder.load(name, type), one) : builder.sub(builder.load(name, type), one));
 				case TCellIncrement(name, cellClass, valueType, delta, _):
 					var cell = builder.load('$' + 'cell:$name', Obj(cellClass)),
 						value = builder.fieldGet(cell, "value", lowerType(valueType)),
-						one = (switch (valueType) { case TInt: true; default: false; }) ? builder.constInt(1) : builder.constFloat(1.0);
+						one = (switch (valueType) {
+							case TInt: true;
+							default: false;
+						}) ? builder.constInt(1) : builder.constFloat(1.0);
 					builder.fieldSet(cell, "value", delta > 0 ? builder.add(value, one) : builder.sub(value, one));
 				case TCellCapturedIncrement(name, cellClass, valueType, delta, _):
 					var owner = requireLocalType(localTypes, "this", 'Captured increment "$name" has no environment');
 					var cell = builder.fieldGet(builder.load("this", owner), name, Obj(cellClass)),
 						value = builder.fieldGet(cell, "value", lowerType(valueType)),
-						one = (switch (valueType) { case TInt: true; default: false; }) ? builder.constInt(1) : builder.constFloat(1.0);
+						one = (switch (valueType) {
+							case TInt: true;
+							default: false;
+						}) ? builder.constInt(1) : builder.constFloat(1.0);
 					builder.fieldSet(cell, "value", delta > 0 ? builder.add(value, one) : builder.sub(value, one));
 				case TIf(condition, thenBranch, elseBranch, span) if (isBoolLiteral(condition)):
 					// A bare block `{ ... }` is an `if (true)` without an `else`: only the branch that runs is lowered, so the
@@ -953,8 +1031,10 @@ class IrGenerator {
 								builder.jump(predicateBlock);
 							else {
 								var matches = if (isNullExpression(switchCase.value)) builder.equal(switchValue,
-									builder.constNull(switchType)); else if ((switch (switchType) { case Bytes: true; default: false; })) builder.call("__string_equal", [switchValue, caseValue],
-									Bool); else builder.equal(switchValue, caseValue);
+									builder.constNull(switchType)); else if ((switch (switchType) {
+									case Bytes: true;
+									default: false;
+								})) builder.call("__string_equal", [switchValue, caseValue], Bool); else builder.equal(switchValue, caseValue);
 								builder.branch(matches, predicateBlock, nextBlock);
 							}
 							if (switchCase.predicates.length > 0)
@@ -1005,7 +1085,10 @@ class IrGenerator {
 					}
 				case TExpression(expression, _):
 					lowerExpression(expression, builder, localTypes);
-					if ((switch (expression.type) { case TNever: true; default: false; }))
+					if ((switch (expression.type) {
+						case TNever: true;
+						default: false;
+					}))
 						builder.markUnreachable();
 			}
 		}
@@ -1021,8 +1104,8 @@ class IrGenerator {
 		return switch statement {
 			case TDeclare(_, _, span), TVar(_, _, span), TAssign(_, _, span), TCellAssign(_, _, _, span), TCellCapturedAssign(_, _, _, span),
 				TFieldAssign(_, _, _, span), TStaticFieldAssign(_, _, _, span), TIndexAssign(_, _, _, span), TMapAssign(_, _, _, span), TReturn(_, span),
-				TReturnVoid(span), TThrow(_, span), TDefer(_, span, _), TTry(_, _, span), TIf(_, _, _, span), TWhile(_, _, span), TDoWhile(_, _, span), TForIn(_, _, _, _, span),
-				TBreak(span), TContinue(span), TSwitch(_, _, _, _, span), TIncrement(_, _, span), TCellIncrement(_, _, _, _, span),
+				TReturnVoid(span), TThrow(_, span), TDefer(_, span, _), TTry(_, _, span), TIf(_, _, _, span), TWhile(_, _, span), TDoWhile(_, _, span),
+				TForIn(_, _, _, _, span), TBreak(span), TContinue(span), TSwitch(_, _, _, _, span), TIncrement(_, _, span), TCellIncrement(_, _, _, _, span),
 				TCellCapturedIncrement(_, _, _, _, span), TExpression(_, span):
 				span;
 		};
@@ -1034,7 +1117,8 @@ class IrGenerator {
 		var temporaries:Array<{name:String, type:IrType}> = [];
 		for (index in 0...expressions.length) {
 			var expression = expressions[index],
-				value = firstOwner && index == 0 ? lowerOwnerReceiver(expression, builder, localTypes) : lowerExpression(expression, builder, localTypes),
+				value = firstOwner
+					&& index == 0 ? lowerOwnerReceiver(expression, builder, localTypes) : lowerExpression(expression, builder, localTypes),
 				name = '$' + 'operand:${expression.span.start}:${value.id}';
 			if (builder.isTerminated())
 				return [];
@@ -1092,13 +1176,14 @@ class IrGenerator {
 	}
 
 	function lowerSpecializedMapAllocation(builder:CfgBuilder, key:CompilerType, value:CompilerType):CfgValue {
-		var owner = specializedMapOwner(key, value), map = builder.newObject(owner);
+		var owner = specializedMapOwner(key, value),
+			map = builder.newObject(owner);
 		builder.call(owner + ".new", [map], Void);
 		return map;
 	}
 
-	function lowerSpecializedMapCall(builder:CfgBuilder, map:CfgValue, operation:String, arguments:Array<CfgValue>,
-			key:CompilerType, value:CompilerType, result:IrType):CfgValue {
+	function lowerSpecializedMapCall(builder:CfgBuilder, map:CfgValue, operation:String, arguments:Array<CfgValue>, key:CompilerType, value:CompilerType,
+			result:IrType):CfgValue {
 		return builder.call(specializedMapOwner(key, value) + "." + operation, [map].concat(arguments), result);
 	}
 
@@ -1146,8 +1231,6 @@ class IrGenerator {
 		return sameIrType(value.type, target) ? value : abiBoundaryCast(builder, value, target);
 	}
 
-
-
 	function mapEnumName(type:CompilerType):Null<String>
 		return switch type {
 			case TAbstract(_, _, representation): mapEnumName(representation);
@@ -1171,19 +1254,21 @@ class IrGenerator {
 
 	/** Convert an int-backed enum key array back to source-level enum values. */
 	function lowerMapKeys(builder:CfgBuilder, localTypes:Map<String, IrType>, map:CfgValue, keyType:CompilerType, valueType:CompilerType):CfgValue {
-		var specialized = isSpecializedMap(keyType, valueType), nativeKeyArrayType:IrType = Array(I32),
+		var specialized = isSpecializedMap(keyType, valueType),
+			nativeKeyArrayType:IrType = Array(I32),
 			sourceKeyArrayType:IrType = Array(lowerType(keyType));
 		if (mapEnumName(keyType) == null || isPayloadEnumKey(keyType))
-			return specialized ? lowerSpecializedMapCall(builder, map, "keys", [], keyType, valueType, sourceKeyArrayType)
-				: builder.call(RuntimeType.mapNative(keyType, valueType, "keys"), [map], sourceKeyArrayType);
+			return specialized ? lowerSpecializedMapCall(builder, map, "keys", [], keyType, valueType,
+				sourceKeyArrayType) : builder.call(RuntimeType.mapNative(keyType, valueType, "keys"), [map], sourceKeyArrayType);
 
-		var enumName = requireMapEnumName(keyType), runtimeName = compiler.types.typing.EnumRuntimeType.name(keyType),
+		var enumName = requireMapEnumName(keyType),
+			runtimeName = compiler.types.typing.EnumRuntimeType.name(keyType),
 			enumConstructorCount = facts.enumConstructorCounts.get(enumName);
 		if (enumConstructorCount == null || enumConstructorCount == 0)
 			throw 'Missing non-empty enum layout for map key "$enumName"';
 		var sourceKeyType = lowerType(keyType),
-			rawArray = specialized ? lowerSpecializedMapCall(builder, map, "keys", [], keyType, valueType, nativeKeyArrayType)
-				: builder.call(RuntimeType.mapNative(keyType, valueType, "keys"), [map], nativeKeyArrayType),
+			rawArray = specialized ? lowerSpecializedMapCall(builder, map, "keys", [], keyType, valueType,
+				nativeKeyArrayType) : builder.call(RuntimeType.mapNative(keyType, valueType, "keys"), [map], nativeKeyArrayType),
 			rawName = '$' + 'map-enum-keys-raw:${rawArray.id}',
 			resultName = '$' + 'map-enum-keys-result:${rawArray.id}',
 			indexName = '$' + 'map-enum-keys-index:${rawArray.id}',
@@ -1260,7 +1345,10 @@ class IrGenerator {
 	function abiBoundaryCast(builder:CfgBuilder, value:CfgValue, target:IrType):CfgValue {
 		if (sameIrType(value.type, target))
 			return value;
-		if ((switch (target) { case Dyn: true; default: false; }))
+		if ((switch (target) {
+			case Dyn: true;
+			default: false;
+		}))
 			return builder.toDyn(value);
 		var nullableTarget = IrTypeTools.nullableElement(target);
 		if (nullableTarget != null) {
@@ -1375,13 +1463,21 @@ class IrGenerator {
 					case TField(owner, field) if (isNullableValueType(inner.type)):
 						var parent = optionalFieldPlace(owner);
 						parent == null ? {owner: owner, field: field, path: []} : {
-							owner: parent.owner, field: parent.field, path: parent.path.concat([field]), checkedDepth: parent.checkedDepth
+							owner: parent.owner,
+							field: parent.field,
+							path: parent.path.concat([field]),
+							checkedDepth: parent.checkedDepth
 						};
 					default: optionalFieldPlace(inner);
 				}
 			case TField(parent, field) if (isValueType(expression.type) || isNullableValueType(expression.type)):
 				var place = optionalFieldPlace(parent);
-				place == null ? null : {owner: place.owner, field: place.field, path: place.path.concat([field]), checkedDepth: place.checkedDepth};
+				place == null ? null : {
+					owner: place.owner,
+					field: place.field,
+					path: place.path.concat([field]),
+					checkedDepth: place.checkedDepth
+				};
 			default: null;
 		};
 	}
@@ -1389,15 +1485,29 @@ class IrGenerator {
 	/** A nested value reached from an array slot needs the changed value written back to that slot. */
 	function arrayValuePlace(expression:TypedExpression):Null<ArrayValuePlace>
 		return switch expression.expression {
-			case TIndex(array, index):
-				var element = switch array.type { case TArray(value): value; default: null; };
-				element != null && (isValueType(element) || isNullableValueType(element))
-					? {array: array, index: index, root: expression, elementType: element, path: []} : null;
+			case TIndex(array, index): var element = switch array.type {
+					case TArray(value): value;
+					default: null;
+				}; element != null && (isValueType(element) || isNullableValueType(element)) ? {
+					array: array,
+					index: index,
+					root: expression,
+					elementType: element,
+					path: []
+				} : null;
 			case TField(parent, field) if (isValueType(expression.type)):
 				var parentPlace = arrayValuePlace(parent);
 				parentPlace == null ? null : {
-					array: parentPlace.array, index: parentPlace.index, root: parentPlace.root, elementType: parentPlace.elementType,
-					path: parentPlace.path.concat([{name: field, type: expression.type}])
+					array: parentPlace.array,
+					index: parentPlace.index,
+					root: parentPlace.root,
+					elementType: parentPlace.elementType,
+					path: parentPlace.path.concat([
+						{
+							name: field,
+							type: expression.type
+						}
+					])
 				};
 			case TCast(inner), TAbiCast(inner): arrayValuePlace(inner);
 			case TCall("$value.place", [inner]): arrayValuePlace(inner);
@@ -1410,40 +1520,49 @@ class IrGenerator {
 				case TInstance(NominalKind.Class, name, _): facts.valueClasses.exists(Std.string(name));
 				default: false;
 			};
-			if (!valid) return false;
+			if (!valid)
+				return false;
 		}
 		return switch place.elementType {
-			case TNullable(TInstance(NominalKind.Class, name, _)), TInstance(NominalKind.Class, name, _) : facts.valueClasses.exists(Std.string(name));
+			case TNullable(TInstance(NominalKind.Class, name, _)), TInstance(NominalKind.Class, name, _): facts.valueClasses.exists(Std.string(name));
 			default: false;
 		};
 	}
 
-	function replaceArrayValueRoot(expression:TypedExpression, place:ArrayValuePlace,
-			replacement:TypedExpression):TypedExpression
+	function replaceArrayValueRoot(expression:TypedExpression, place:ArrayValuePlace, replacement:TypedExpression):TypedExpression
 		return switch expression.expression {
 			case TIndex(array, index) if (array == place.array && index == place.index): replacement;
 			case TField(parent, field): new TypedExpression(TField(replaceArrayValueRoot(parent, place, replacement), field), expression.type, expression.span);
 			case TCast(inner): new TypedExpression(TCast(replaceArrayValueRoot(inner, place, replacement)), expression.type, expression.span);
 			case TAbiCast(inner): new TypedExpression(TAbiCast(replaceArrayValueRoot(inner, place, replacement)), expression.type, expression.span);
-			case TCall("$value.place", [inner]): new TypedExpression(TCall("$value.place", [replaceArrayValueRoot(inner, place, replacement)]), expression.type, expression.span);
+			case TCall("$value.place",
+				[inner]): new TypedExpression(TCall("$value.place", [replaceArrayValueRoot(inner, place, replacement)]), expression.type, expression.span);
 			default: expression;
 		};
 
 	/** Evaluate an array-backed receiver once and keep its root marked as a writable place. */
-	function lowerArrayValueReceiver(expression:TypedExpression, place:ArrayValuePlace, builder:CfgBuilder,
-			localTypes:Map<String, IrType>):CfgValue {
-		var operands = lowerOperands([place.array, place.index], builder, localTypes), rootType = lowerType(place.elementType),
-			valueType = switch place.elementType { case TNullable(inner): inner; default: place.elementType; },
+	function lowerArrayValueReceiver(expression:TypedExpression, place:ArrayValuePlace, builder:CfgBuilder, localTypes:Map<String, IrType>):CfgValue {
+		var operands = lowerOperands([place.array, place.index], builder, localTypes),
+			rootType = lowerType(place.elementType),
+			valueType = switch place.elementType {
+				case TNullable(inner): inner;
+				default: place.elementType;
+			},
 			rootName = '$' + 'array-place-binding:${scratch.arrayValuePlaceSerial++}';
 		var previous = builder.beginGenerated(ArrayValuePlaceReason);
 		var root = elementGet(builder, operands[0], operands[1], rootType);
 		builder.restoreSource(previous);
 		if (!sameIrType(rootType, lowerType(valueType))) {
-			var missing = builder.createBlock(), present = builder.createBlock(), rawName = rootName + ":nullable";
-			localTypes.set(rawName, rootType); builder.store(rawName, root);
+			var missing = builder.createBlock(),
+				present = builder.createBlock(),
+				rawName = rootName + ":nullable";
+			localTypes.set(rawName, rootType);
+			builder.store(rawName, root);
 			builder.branch(builder.equal(builder.load(rawName, rootType), builder.constNull(rootType)), missing, present);
-			builder.select(missing); builder.throwValue(builder.toDyn(builder.constString("Null access")));
-			builder.select(present); root = builder.safeCast(builder.load(rawName, rootType), lowerType(valueType));
+			builder.select(missing);
+			builder.throwValue(builder.toDyn(builder.constString("Null access")));
+			builder.select(present);
+			root = builder.safeCast(builder.load(rawName, rootType), lowerType(valueType));
 		}
 		localTypes.set(rootName, root.type);
 		builder.store(rootName, root);
@@ -1483,12 +1602,20 @@ class IrGenerator {
 
 	/** A logical optional field that will be represented by inline slots. */
 	function optionalStoredFieldOwner(type:IrType, field:String):Null<String> {
-		var name = switch type { case Obj(value): value; default: return null; };
+		var name = switch type {
+			case Obj(value): value;
+			default: return null;
+		};
 		while (name != null) {
 			var object = inlineValueObjects.get(name);
-			if (object == null) return null;
-			for (candidate in object.fields) if (candidate.name == field)
-				return switch candidate.type { case Nullable(Obj(value)) if (facts.valueClasses.exists(value)): name; default: null; };
+			if (object == null)
+				return null;
+			for (candidate in object.fields)
+				if (candidate.name == field)
+					return switch candidate.type {
+						case Nullable(Obj(value)) if (facts.valueClasses.exists(value)): name;
+						default: null;
+					};
 			name = object.base;
 		}
 		return null;
@@ -1512,33 +1639,52 @@ class IrGenerator {
 		};
 
 	function optionalSlotName(field:String, path:Array<String>, presence:Bool):String
-		return IrInlineValueLayout.slotName(field, {path: path, type: presence ? Bool : Void, isPresence: presence, nativeLayout: null});
+		return IrInlineValueLayout.slotName(field, {
+			path: path,
+			type: presence ? Bool : Void,
+			isPresence: presence,
+			nativeLayout: null
+		});
 
 	function optionalFieldOwner(type:IrType, field:String):String {
-		var name = switch type { case Obj(value): value; default: throw 'Optional field owner must be an object'; };
+		var name = switch type {
+			case Obj(value): value;
+			default: throw 'Optional field owner must be an object';
+		};
 		while (name != null) {
 			var object = inlineValueObjects.get(name);
-			if (object == null) break;
+			if (object == null)
+				break;
 			for (candidate in object.fields)
-				if (candidate.name == field) return name;
+				if (candidate.name == field)
+					return name;
 			name = object.base;
 		}
 		throw 'Unknown optional field "$field"';
 	}
 
 	function optionalPlaceGetter(place:OptionalFieldPlace, declaring:String, requested:IrType):String {
-		if (place.path.length == 0) return IrOptionalFieldStorage.placeGetterName(declaring, place.field, []);
-		var owner = inlineValueObjects.get(declaring), type:Null<IrType> = null;
-		if (owner == null) throw 'Missing optional field owner "$declaring"';
-		for (field in owner.fields) if (field.name == place.field) type = field.type;
+		if (place.path.length == 0)
+			return IrOptionalFieldStorage.placeGetterName(declaring, place.field, []);
+		var owner = inlineValueObjects.get(declaring),
+			type:Null<IrType> = null;
+		if (owner == null)
+			throw 'Missing optional field owner "$declaring"';
+		for (field in owner.fields)
+			if (field.name == place.field)
+				type = field.type;
 		for (part in place.path) {
 			var name = switch type {
 				case Obj(value), Nullable(Obj(value)): value;
 				default: throw 'Invalid optional place path';
 			}, object = inlineValueObjects.get(name), next:Null<IrType> = null;
-			if (object == null) throw 'Missing optional place value "$name"';
-			for (field in object.fields) if (field.name == part) next = field.type;
-			if (next == null) throw 'Missing optional place field "$name.$part"';
+			if (object == null)
+				throw 'Missing optional place value "$name"';
+			for (field in object.fields)
+				if (field.name == part)
+					next = field.type;
+			if (next == null)
+				throw 'Missing optional place field "$name.$part"';
 			type = next;
 		}
 		return switch [type, requested] {
@@ -1550,20 +1696,27 @@ class IrGenerator {
 
 	/** Evaluate and validate the receiver before evaluating a write's right-hand side. */
 	function prepareOptionalFieldPlace(place:OptionalFieldPlace, builder:CfgBuilder, localTypes:Map<String, IrType>):{name:String, type:IrType} {
-		var owner = lowerExpression(place.owner, builder, localTypes), ownerName = '$' + 'optional-place-owner:${owner.id}';
+		var owner = lowerExpression(place.owner, builder, localTypes),
+			ownerName = '$' + 'optional-place-owner:${owner.id}';
 		localTypes.set(ownerName, owner.type);
 		builder.store(ownerName, owner);
-		var declaring = inlineValueObjects.get(optionalFieldOwner(owner.type, place.field)), fieldType:Null<IrType> = null;
-		if (declaring == null) throw 'Missing optional field owner';
-		for (field in declaring.fields) if (field.name == place.field) fieldType = field.type;
-		if (fieldType == null) throw 'Missing optional field "${place.field}"';
+		var declaring = inlineValueObjects.get(optionalFieldOwner(owner.type, place.field)),
+			fieldType:Null<IrType> = null;
+		if (declaring == null)
+			throw 'Missing optional field owner';
+		for (field in declaring.fields)
+			if (field.name == place.field)
+				fieldType = field.type;
+		if (fieldType == null)
+			throw 'Missing optional field "${place.field}"';
 		var path:Array<String> = [];
 		for (index in 0...place.path.length + 1) {
 			switch fieldType {
 				case Nullable(Obj(name)) if (facts.valueClasses.exists(name)):
 					if (place.checkedDepth == null || index >= place.checkedDepth) {
 						var flag = builder.fieldGet(builder.load(ownerName, owner.type), optionalSlotName(place.field, path, true), Bool),
-							present = builder.createBlock(), missing = builder.createBlock();
+							present = builder.createBlock(),
+							missing = builder.createBlock();
 						builder.branch(flag, present, missing);
 						builder.select(missing);
 						builder.throwValue(builder.toDyn(builder.constString("Null access")));
@@ -1573,11 +1726,17 @@ class IrGenerator {
 				default:
 			}
 			if (index < place.path.length) {
-				var name = switch fieldType { case Obj(value): value; default: throw "Invalid optional field path"; },
-					object = inlineValueObjects.get(name), component = place.path[index], next:Null<IrType> = null;
-				if (object == null || !object.isValue) throw 'Invalid optional value path through "$name"';
-				for (field in object.fields) if (field.name == component) next = field.type;
-				if (next == null) throw 'Unknown optional value field "$name.$component"';
+				var name = switch fieldType {
+					case Obj(value): value;
+					default: throw "Invalid optional field path";
+				}, object = inlineValueObjects.get(name), component = place.path[index], next:Null<IrType> = null;
+				if (object == null || !object.isValue)
+					throw 'Invalid optional value path through "$name"';
+				for (field in object.fields)
+					if (field.name == component)
+						next = field.type;
+				if (next == null)
+					throw 'Unknown optional value field "$name.$component"';
 				path.push(component);
 				fieldType = next;
 			}
@@ -1629,7 +1788,7 @@ class IrGenerator {
 		var object = flatValueObjects.get(name);
 		if (object == null)
 			throw 'Missing Flat value layout for "$name"';
-		var result = builder.newObject(name),
+		var result = builder.valueInit(name),
 			nextVisiting = visiting.concat([name]);
 		for (field in object.fields) {
 			var layout = field.nativeLayout;
@@ -1692,6 +1851,7 @@ class IrGenerator {
 	/** A new instance with the same field values; nested value classes that need copying are copied in turn. */
 	/** Origin reason on the instructions of a value copy, so a later pass can recognize and drop unneeded ones. */
 	public static inline var ValueCopyReason = "value-copy";
+
 	/** Distinguishes a mutable element receiver from a value copied out of an array. */
 	public static inline var ArrayValuePlaceReason = "array-value-place";
 
@@ -1704,7 +1864,7 @@ class IrGenerator {
 
 	function copyFields(builder:CfgBuilder, source:CfgValue, layout:ValueCopyLayout, localTypes:Map<String, IrType>):CfgValue {
 		if (!copyMayBranch(layout)) {
-			var direct = builder.newObject(layout.name);
+			var direct = builder.valueInit(layout.name);
 			for (field in layout.fields) {
 				var value = builder.fieldGet(source, field.name, lowerType(field.type));
 				if (field.nested != null)
@@ -1713,20 +1873,28 @@ class IrGenerator {
 			}
 			return direct;
 		}
-		var copy = builder.newObject(layout.name), sourceName = '$' + 'copy-source:${source.id}',
-			copyName = '$' + 'copy-result:${copy.id}', objectType:IrType = Obj(layout.name);
+		var copy = builder.valueInit(layout.name),
+			sourceName = '$' + 'copy-source:${source.id}',
+			copyName = '$' + 'copy-result:${copy.id}',
+			objectType:IrType = Obj(layout.name);
 		localTypes.set(sourceName, objectType);
 		localTypes.set(copyName, objectType);
 		builder.store(sourceName, source);
 		builder.store(copyName, copy);
 		for (field in layout.fields) {
-			var fieldType = lowerType(field.type), value = builder.fieldGet(builder.load(sourceName, objectType), field.name, fieldType),
+			var fieldType = lowerType(field.type),
+				value = builder.fieldGet(builder.load(sourceName, objectType), field.name, fieldType),
 				nested = field.nested;
 			if (nested != null) {
-				var nullable = switch field.type { case TNullable(_): true; default: false; };
+				var nullable = switch field.type {
+					case TNullable(_): true;
+					default: false;
+				};
 				if (nullable) {
-					var valueName = '$' + 'copy-nullable:${value.id}', missing = builder.createBlock(),
-						present = builder.createBlock(), done = builder.createBlock();
+					var valueName = '$' + 'copy-nullable:${value.id}',
+						missing = builder.createBlock(),
+						present = builder.createBlock(),
+						done = builder.createBlock();
 					localTypes.set(valueName, fieldType);
 					builder.store(valueName, value);
 					builder.branch(builder.equal(value, builder.constNull(fieldType)), missing, present);
@@ -1752,7 +1920,8 @@ class IrGenerator {
 		for (field in layout.fields)
 			if (field.nested != null) {
 				switch field.type {
-					case TNullable(_): return true;
+					case TNullable(_):
+						return true;
 					default:
 				}
 				if (copyMayBranch(field.nested))
@@ -1775,7 +1944,8 @@ class IrGenerator {
 			case TRuntimeDataAddress(bytes): builder.staticDataAddress(bytes);
 			case TBoolLiteral(value): builder.constBool(value);
 			case TEnumLiteral(name, index): builder.makeEnum(compiler.types.typing.EnumRuntimeType.name(expression.type), index, []);
-			case TEnumConstruct(name, index, arguments): builder.makeEnum(compiler.types.typing.EnumRuntimeType.name(expression.type), index, lowerOperands(arguments, builder, localTypes));
+			case TEnumConstruct(name, index,
+				arguments): builder.makeEnum(compiler.types.typing.EnumRuntimeType.name(expression.type), index, lowerOperands(arguments, builder, localTypes));
 			case TEnumIndex(value): builder.enumIndex(lowerExpression(value, builder, localTypes));
 			case TEnumField(value, constructor,
 				field): builder.enumField(lowerExpression(value, builder, localTypes), constructor, field, lowerType(expression.type));
@@ -1819,7 +1989,8 @@ class IrGenerator {
 			case TEnumDynamicBox(value, enumType):
 				builder.intrinsic(compiler.ir.Ir.IrIntrinsic.EnumDynamicBox(lowerType(enumType)), [lowerExpression(value, builder, localTypes)], Dyn);
 			case TEnumDynamicView(array, enumType):
-				builder.intrinsic(compiler.ir.Ir.IrIntrinsic.EnumDynamicView(lowerType(enumType)), [lowerExpression(array, builder, localTypes)], lowerType(expression.type));
+				builder.intrinsic(compiler.ir.Ir.IrIntrinsic.EnumDynamicView(lowerType(enumType)), [lowerExpression(array, builder, localTypes)],
+					lowerType(expression.type));
 			case TLocal(name):
 				var type = requireLocalType(localTypes, name, 'Missing typed local "$name"');
 				abiBoundaryCast(builder, builder.load(name, type), lowerType(expression.type));
@@ -1841,7 +2012,9 @@ class IrGenerator {
 					lowerType(expression.type));
 			case TFunctionRef(name): builder.staticClosure(name, lowerType(expression.type));
 			case TMethodRef(object, name):
-				var separator = lastSeparator(name), owner = name.substring(0, separator), member = name.substring(separator + 1),
+				var separator = lastSeparator(name),
+					owner = name.substring(0, separator),
+					member = name.substring(separator + 1),
 					closureType = lowerType(expression.type);
 				var typedDispatch:Null<String> = null;
 				switch closureType {
@@ -1850,10 +2023,11 @@ class IrGenerator {
 						if (interfaceName != null) typedDispatch = IrTypedInterfaceDispatch.callName(interfaceName, member, arguments, result);
 					default:
 				}
-				var target = typedDispatch != null ? typedDispatch : facts.genericClasses.exists(owner)
-						? '$' + 'generic-method-reference:$owner:$member:' + compiler.semantic.SemanticSignature.type(object.type) + ':'
-							+ compiler.semantic.SemanticSignature.type(expression.type)
-						: name;
+				var target = typedDispatch != null ? typedDispatch : facts.genericClasses.exists(owner) ? '$'
+					+ 'generic-method-reference:$owner:$member:'
+					+ compiler.semantic.SemanticSignature.type(object.type)
+					+ ':'
+					+ compiler.semantic.SemanticSignature.type(expression.type) : name;
 				builder.instanceClosure(target, lowerExpression(object, builder, localTypes), lowerType(expression.type));
 			case TLambda(name, environment, captures):
 				if (environment == null) builder.staticClosure(name, lowerType(expression.type)); else {
@@ -1887,7 +2061,10 @@ class IrGenerator {
 					}
 					builder.instanceClosure(name, object, lowerType(expression.type));
 				}
-			case TAdd(a, b) if ((switch (lowerType(expression.type)) { case Bytes: true; default: false; })):
+			case TAdd(a, b) if ((switch (lowerType(expression.type)) {
+				case Bytes: true;
+				default: false;
+			})):
 				lowerStringConcat(expression, builder, localTypes);
 			case TAdd(a, b):
 				var operands = lowerOperands([a, b], builder, localTypes);
@@ -1940,15 +2117,16 @@ class IrGenerator {
 			case TOr(left, right): lowerLogical(left, right, false, builder, localTypes);
 			case TEqual(a, b) if (nullableFieldComparedWithNull(a, b) != null):
 				var field = nullableFieldComparedWithNull(a, b);
-				if (field == null) throw "Missing nullable field comparison";
+				if (field == null)
+					throw "Missing nullable field comparison";
 				var place = optionalFieldPlace(field.owner), present:CfgValue;
 				if (place == null) {
 					var owner = lowerExpression(field.owner, builder, localTypes);
 					present = builder.fieldGet(owner, optionalSlotName(field.field, [], true), Bool);
 				} else {
 					var owner = prepareOptionalFieldPlace(place, builder, localTypes);
-					present = builder.fieldGet(builder.load(owner.name, owner.type),
-						optionalSlotName(place.field, place.path.concat([field.field]), true), Bool);
+					present = builder.fieldGet(builder.load(owner.name, owner.type), optionalSlotName(place.field, place.path.concat([field.field]), true),
+						Bool);
 				}
 				builder.equal(present, builder.constBool(false));
 			case TEqual(a, b) if (nullableScalarEquality(a, b)):
@@ -1962,17 +2140,18 @@ class IrGenerator {
 					right = builder.enumIndex(right);
 				} // A test against a literal null is a pointer test, not a call into the runtime's equality: it lowers to one
 				// OJNull whatever the other side's reference type (a boxed Null<Int>, a Dynamic, a String).
-				if (!isNullExpression(a) && !isNullExpression(b) && isIdentityReference(a.type) && isIdentityReference(b.type))
-					return builder.call(IrReferenceIdentity.NAME, [left,right], Bool);
-				isNullExpression(a) || isNullExpression(b) ? builder.equal(left,
-					right) : (switch (lowerType(a.type)) { case Bytes: true; default: false; }) ? builder.call("__string_equal", [left, right],
+				if (!isNullExpression(a) && !isNullExpression(b) && isIdentityReference(a.type) && isIdentityReference(b.type)) return builder.call(IrReferenceIdentity.NAME,
+					[left, right],
+					Bool); isNullExpression(a) || isNullExpression(b) ? builder.equal(left, right) : (switch (lowerType(a.type)) {
+					case Bytes: true;
+					default: false;
+				}) ? builder.call("__string_equal", [left, right],
 					Bool) : IrTypeTools.isDynamic(lowerType(a.type))
-				|| IrTypeTools.isDynamic(lowerType(b.type)) ? builder.call("__dynamic_equal", [left, right], Bool) : builder.equal(left, right);
+					|| IrTypeTools.isDynamic(lowerType(b.type)) ? builder.call("__dynamic_equal", [left, right], Bool) : builder.equal(left, right);
 			case TCall("$reactive.changeEquals", [left, right]):
 				var operands = lowerOperands([left, right], builder, localTypes);
-				if (IrTypeTools.isDynamic(operands[0].type))
-					lowerDynamicChangeEquality(operands[0], operands[1], builder, localTypes);
-				else builder.equal(observableFieldChanged(left.type, operands[0], operands[1], builder, localTypes), builder.constBool(false));
+				if (IrTypeTools.isDynamic(operands[0].type)) lowerDynamicChangeEquality(operands[0], operands[1], builder,
+					localTypes); else builder.equal(observableFieldChanged(left.type, operands[0], operands[1], builder, localTypes), builder.constBool(false));
 			case TCall("$rawptr.isNull", [pointer]):
 				var value = lowerExpression(pointer, builder, localTypes);
 				builder.equal(value, builder.constNull(RawPtr));
@@ -1986,12 +2165,16 @@ class IrGenerator {
 				};
 				builder.memoryLoad(lowerExpression(pointer, builder, localTypes), lowerType(expression.type), width, isSigned);
 			case TCall("$optional-cell-local", [marker]):
-				var name = switch marker.expression { case TLocal(value): value; default: throw "Invalid local cell place"; },
-					type = lowerType(expression.type);
+				var name = switch marker.expression {
+					case TLocal(value): value;
+					default: throw "Invalid local cell place";
+				}, type = lowerType(expression.type);
 				builder.load('$' + 'cell:$name', type);
 			case TCall("$optional-cell-captured", [marker]):
-				var name = switch marker.expression { case TLocal(value): value; default: throw "Invalid captured cell place"; },
-					owner = requireLocalType(localTypes, "this", 'Captured cell "$name" has no environment');
+				var name = switch marker.expression {
+					case TLocal(value): value;
+					default: throw "Invalid captured cell place";
+				}, owner = requireLocalType(localTypes, "this", 'Captured cell "$name" has no environment');
 				builder.fieldGet(builder.load("this", owner), name, lowerType(expression.type));
 			case TCall("$value.place", [value]):
 				lowerExpression(value, builder, localTypes);
@@ -2033,7 +2216,10 @@ class IrGenerator {
 				var primitive = stringifiedPrimitive(argument);
 				if (primitive == null)
 					throw "The Std.string fast path lost its primitive operand";
-				builder.call((switch (primitive.type) { case TInt: true; default: false; }) ? "__string_from_int" : "__string_from_f64", [lowerExpression(primitive, builder, localTypes)], Bytes);
+				builder.call((switch (primitive.type) {
+					case TInt: true;
+					default: false;
+				}) ? "__string_from_int" : "__string_from_f64", [lowerExpression(primitive, builder, localTypes)], Bytes);
 			case TCall("$map.floatKeyEquals", [left, right]):
 				var operands = lowerOperands([left, right], builder, localTypes);
 				lowerFloatMapKeyEquality(operands[0], operands[1], builder, localTypes);
@@ -2055,13 +2241,18 @@ class IrGenerator {
 					};
 					builder.call(intrinsic, [input, builder.typeValue(target)], Bool);
 				} else builder.call(GenericOwnerErasure.typeTestName(origin, intrinsic == "__std_is_exact_type"), [input], Bool);
-			case TCall(name, args) if (StringTools.startsWith(name, "$generic:") && args.length > 0 && optionalFieldPlace(args[0]) != null):
+			case TCall(name, args) if (StringTools.startsWith(name, "$generic:")
+				&& args.length > 0
+				&& optionalFieldPlace(args[0]) != null):
 				var place = optionalFieldPlace(args[0]);
-				if (place == null) throw "Missing optional generic receiver";
+				if (place == null)
+					throw "Missing optional generic receiver";
 				var owner = prepareOptionalFieldPlace(place, builder, localTypes),
-					arguments = lowerOperands(args.slice(1), builder, localTypes), declaring = optionalFieldOwner(owner.type, place.field),
+					arguments = lowerOperands(args.slice(1), builder, localTypes),
+					declaring = optionalFieldOwner(owner.type, place.field),
 					receiver = builder.load(owner.name, owner.type);
-				if (!sameIrType(owner.type, Obj(declaring))) receiver = builder.upcast(receiver, Obj(declaring));
+				if (!sameIrType(owner.type, Obj(declaring)))
+					receiver = builder.upcast(receiver, Obj(declaring));
 				builder.call(IrOptionalFieldStorage.placeMethodName(declaring, place.field, place.path, name), [receiver].concat(arguments),
 					lowerType(expression.type));
 			case TCall(name, args):
@@ -2083,19 +2274,27 @@ class IrGenerator {
 					operands.push(argument);
 				var lowered = lowerOperands(operands, builder, localTypes);
 				switch receiver.type {
-					case TArray(element) if (operation == "value_index_of" && (arrayValueElement(lowerType(element)) || isEnumType(element) || isSemanticDynamic(element))):
+					case TArray(element)
+						if (operation == "value_index_of"
+							&& (arrayValueElement(lowerType(element)) || isEnumType(element) || isSemanticDynamic(element))):
 						lowerValueArrayIndexOf(builder, localTypes, element, lowered);
-					case TArray(element) if (operation == "remove" && (arrayValueElement(lowerType(element)) || isEnumType(element) || isSemanticDynamic(element))):
+					case TArray(element)
+						if (operation == "remove"
+							&& (arrayValueElement(lowerType(element)) || isEnumType(element) || isSemanticDynamic(element))):
 						lowerValueArrayRemove(builder, localTypes, element, lowered);
 					case TArray(element): lowerArrayNativeCall(builder, element, operation, lowered, lowerType(expression.type));
 					case TMap(key, value) if (operation == "set"): lowerMapSet(builder, localTypes, lowered[0], lowered[1], lowered[2], key, value);
 					case TMap(key, value) if (operation == "keys"):
 						lowerMapKeys(builder, localTypes, lowered[0], key, value);
-					case TMap(key, value) if (operation == "values" && !customMap
-						&& StringTools.endsWith(RuntimeType.requireMapName(key, value), "_ref") && requiresDynamicBox(lowerType(value))):
+					case TMap(key, value)
+						if (operation == "values"
+							&& !customMap
+							&& StringTools.endsWith(RuntimeType.requireMapName(key, value), "_ref")
+							&& requiresDynamicBox(lowerType(value))):
 						// Reference maps box headerless native values. Retype their Dynamic snapshot before
 						// indexed iteration reads those values as native references.
-						var element = lowerType(value), raw = builder.call(nativeName, lowered, Array(Dyn));
+						var element = lowerType(value),
+							raw = builder.call(nativeName, lowered, Array(Dyn));
 						var checked = builder.call("__array_check_cast", [raw, builder.typeValue(element)], Array(Dyn));
 						builder.safeCast(builder.toDyn(checked), Array(element));
 					case TMap(key, value) if (customMap):
@@ -2147,14 +2346,14 @@ class IrGenerator {
 				// non-null value must raise a language exception before reading it: linear memory address zero
 				// can be readable and a Wasm GC null dereference is an uncatchable engine trap.
 				var unwrapValue = switch value.type {
-					case TNullable(TInstance(NominalKind.Class, name, _)):
-						facts.valueClasses.exists(name) && sameIrType(target, Obj(name));
+					case TNullable(TInstance(NominalKind.Class, name, _)): facts.valueClasses.exists(name) && sameIrType(target, Obj(name));
 					default: false;
 				};
 				if (unwrapValue) {
 					var sourceName = '$' + 'nullable-unwrapped:${source.id}',
 						sourceType = source.type,
-						missing = builder.createBlock(), present = builder.createBlock();
+						missing = builder.createBlock(),
+						present = builder.createBlock();
 					localTypes.set(sourceName, sourceType);
 					builder.store(sourceName, source);
 					builder.branch(builder.equal(source, builder.constNull(source.type)), missing, present);
@@ -2165,24 +2364,59 @@ class IrGenerator {
 				}
 				if (sameIrType(source.type,
 					target)) source; else if (IrTypeTools.nullableElement(source.type) != null
-					|| IrTypeTools.nullableElement(target) != null) abiBoundaryCast(builder, source,
-						target); else if ((switch (source.type) { case Dyn: true; default: false; })) checkedCast(builder, source,
-					target); else if ((switch (target) { case Dyn: true; default: false; })) builder.toDyn(source); else if (isUpcast(source.type, target)) builder.upcast(source,
-					target); else if (referenceCastType(source.type) && referenceCastType(target))
-					checkedCast(builder, builder.toDyn(source),
-					target); else if ((switch (source.type) { case I64: true; default: false; }) && (switch (target) { case I32: true; default: false; })) builder.call("haxe.Int64.toInt", [source], I32);
-				else if ((switch (source.type) { case I32: true; default: false; }) && (switch (target) { case I64: true; default: false; })) {
+					|| IrTypeTools.nullableElement(target) != null) abiBoundaryCast(builder, source, target); else if ((switch (source.type) {
+					case Dyn: true;
+					default: false;
+				})) checkedCast(builder, source, target); else if ((switch (target) {
+					case Dyn: true;
+					default: false;
+				})) builder.toDyn(source); else if (isUpcast(source.type,
+					target)) builder.upcast(source,
+						target); else if (referenceCastType(source.type) && referenceCastType(target)) checkedCast(builder, builder.toDyn(source),
+					target); else if ((switch (source.type) {
+					case I64: true;
+					default: false;
+				}) && (switch (target) {
+					case I32: true;
+					default: false;
+				})) builder.call("haxe.Int64.toInt", [source], I32); else if ((switch (source.type) {
+					case I32: true;
+					default: false;
+				}) && (switch (target) {
+					case I64: true;
+					default: false;
+				})) {
 					var extended = builder.intToInt64(source);
 					if (isUnsigned32(value.type))
 						builder.bitAnd(extended, builder.unsignedShiftRight(builder.constInt(-1, I64), builder.constInt(32)));
 					else
 						extended;
-				}
-				else if ((switch (source.type) { case F64: true; default: false; }) && (switch (target) { case I32: true; default: false; })) builder.floatToInt(source); else if ((switch (source.type) { case I32: true; default: false; }) && (switch (target) { case F64: true; default: false; }))
-					builder.intToFloat(source); else if (((switch (source.type) { case F64: true; default: false; })
-					&& (switch (target) { case F32: true; default: false; }))
-					|| ((switch (source.type) { case F32: true; default: false; }) && (switch (target) { case F64: true; default: false; }))) builder.floatToFloat(source,
-						target); else throw 'Unsupported cast from ${source.type} to $target at ${expression.span.file.path}:${expression.span.start}';
+				} else if ((switch (source.type) {
+					case F64: true;
+					default: false;
+				}) && (switch (target) {
+					case I32: true;
+					default: false;
+				})) builder.floatToInt(source); else if ((switch (source.type) {
+					case I32: true;
+					default: false;
+				}) && (switch (target) {
+					case F64: true;
+					default: false;
+				})) builder.intToFloat(source); else if (((switch (source.type) {
+					case F64: true;
+					default: false;
+				}) && (switch (target) {
+					case F32: true;
+					default: false;
+				})) || ((switch (source.type) {
+					case F32: true;
+					default: false;
+				}) && (switch (target) {
+					case F64: true;
+					default: false;
+				}))) builder.floatToFloat(source,
+					target); else throw 'Unsupported cast from ${source.type} to $target at ${expression.span.file.path}:${expression.span.start}';
 			case TSwitchExpression(subject, cases, defaultExpression):
 				var subjectName = '$' + 'switch-expression-subject:${expression.span.start}',
 					resultName = '$' + 'switch-expression-result:${expression.span.start}',
@@ -2239,8 +2473,10 @@ class IrGenerator {
 						var caseValue = switchCase.constructorIndex >= 0 ? builder.constInt(switchCase.constructorIndex) : lowerExpression(switchCase.value,
 							builder, localTypes),
 							matches = if (isNullExpression(switchCase.value)) builder.equal(comparisonValue,
-								builder.constNull(subjectType)); else if ((switch (subjectType) { case Bytes: true; default: false; })) builder.call("__string_equal", [comparisonValue, caseValue],
-								Bool); else builder.equal(comparisonValue, caseValue);
+								builder.constNull(subjectType)); else if ((switch (subjectType) {
+								case Bytes: true;
+								default: false;
+							})) builder.call("__string_equal", [comparisonValue, caseValue], Bool); else builder.equal(comparisonValue, caseValue);
 						if (switchCase.isCatchAll || switchCase.subjectBinding != null || isExhaustiveFinalCase)
 							builder.jump(bodyBlock);
 						else {
@@ -2300,23 +2536,39 @@ class IrGenerator {
 			case TToInterface(value, name):
 				builder.toVirtual(lowerExpression(value, builder, localTypes), Virtual(name));
 			case TNew(typeName, args, hasConstructor):
-				var resultType = lowerType(expression.type), physicalName = switch resultType { case Obj(name): name; default: typeName; },
-					object = builder.newObject(physicalName),
-					objectType:IrType = Obj(physicalName),
-					objectName = '$' + 'new-object:${expression.span.start}:${object.id}';
-				localTypes.set(objectName, objectType);
-				builder.store(objectName, object);
-				if (facts.observableStateOwner(physicalName) != null)
-					builder.call(ReactiveRuntimeClass + ".recordObservableCreation", [builder.toDyn(builder.load(objectName, objectType))], Void);
-				if (hasConstructor) {
-					var loweredArguments = lowerOperands(args, builder, localTypes),
-						constructorArgs:Array<CfgValue> = [builder.load(objectName, objectType)];
-					for (argument in loweredArguments)
-						constructorArgs.push(argument);
-					builder.call('$physicalName.new', constructorArgs, Void);
+				var resultType = lowerType(expression.type),
+					physicalName = switch resultType {
+						case Obj(name): name;
+						default: typeName;
+					};
+				if (facts.valueClasses.exists(physicalName)) {
+					var constructed = hasConstructor ? builder.call('$physicalName.new', lowerOperands(args, builder, localTypes),
+						Obj(physicalName)) : builder.valueInit(physicalName);
+					switch resultType {
+						case Dyn: builder.toDyn(constructed);
+						default: constructed;
+					}
+				} else {
+					var object = builder.newObject(physicalName),
+						objectType:IrType = Obj(physicalName),
+						objectName = '$' + 'new-object:${expression.span.start}:${object.id}';
+					localTypes.set(objectName, objectType);
+					builder.store(objectName, object);
+					if (facts.observableStateOwner(physicalName) != null)
+						builder.call(ReactiveRuntimeClass + ".recordObservableCreation", [builder.toDyn(builder.load(objectName, objectType))], Void);
+					if (hasConstructor) {
+						var loweredArguments = lowerOperands(args, builder, localTypes),
+							constructorArgs:Array<CfgValue> = [builder.load(objectName, objectType)];
+						for (argument in loweredArguments)
+							constructorArgs.push(argument);
+						builder.call('$physicalName.new', constructorArgs, Void);
+					}
+					var constructed = builder.load(objectName, objectType);
+					(switch (resultType) {
+						case Dyn: true;
+						default: false;
+					}) ? builder.toDyn(constructed) : constructed;
 				}
-				var constructed = builder.load(objectName, objectType);
-				(switch (resultType) { case Dyn: true; default: false; }) ? builder.toDyn(constructed) : constructed;
 			case TObjectLiteral(typeName, fields, isDynamic):
 				if (isDynamic && profile.dynamicObjectLiterals) {
 					var object = builder.call("__reflect_dynamic_object", [], IrType.Dyn),
@@ -2352,7 +2604,7 @@ class IrGenerator {
 					var physicalName = switch expression.type {
 						case TAnonymous(name, _): name;
 						default: typeName;
-					}, object = builder.newObject(physicalName), objectType:IrType = Obj(physicalName), objectName = '$'
+					}, object = facts.valueClasses.exists(physicalName) ? builder.valueInit(physicalName) : builder.newObject(physicalName), objectType:IrType = Obj(physicalName), objectName = '$'
 						+ 'object-literal:${expression.span.start}:${object.id}';
 					localTypes.set(objectName, objectType);
 					builder.store(objectName, object);
@@ -2381,10 +2633,10 @@ class IrGenerator {
 				var types = switch expression.type {
 					case TMap(key, value): {key: key, value: value};
 					default: throw "Map literal requires a map type";
-				}, resultType = lowerType(expression.type), map = isSpecializedMap(types.key, types.value)
-					? lowerSpecializedMapAllocation(builder, types.key, types.value)
-					: builder.call(RuntimeType.mapNative(types.key, types.value, "alloc"), [], resultType),
-					mapName = '$' + 'map-literal:${expression.span.start}:${map.id}';
+				}, resultType = lowerType(expression.type), map = isSpecializedMap(types.key,
+					types.value) ? lowerSpecializedMapAllocation(builder, types.key,
+						types.value) : builder.call(RuntimeType.mapNative(types.key, types.value, "alloc"), [],
+							resultType), mapName = '$' + 'map-literal:${expression.span.start}:${map.id}';
 				localTypes.set(mapName, resultType);
 				builder.store(mapName, map);
 				for (entry in entries) {
@@ -2640,30 +2892,38 @@ class IrGenerator {
 			case TNewArray(element, length):
 				lowerArrayAllocation(builder, element, lowerExpression(length, builder, localTypes));
 			case TNewMap(key, value):
-				if (isSpecializedMap(key, value)) lowerSpecializedMapAllocation(builder, key, value);
-				else builder.call(RuntimeType.mapNative(key, value, "alloc"), [], lowerType(expression.type));
+				if (isSpecializedMap(key,
+					value)) lowerSpecializedMapAllocation(builder, key,
+						value); else builder.call(RuntimeType.mapNative(key, value, "alloc"), [], lowerType(expression.type));
 			case TField(object, name):
 				var observableBit = observableFieldBit(object.type, name);
-				if (observableBit != null)
-					lowerObservableFieldRead(object, name, observableBit, lowerType(expression.type), builder, localTypes);
-				else {
+				if (observableBit != null) lowerObservableFieldRead(object, name, observableBit, lowerType(expression.type), builder, localTypes); else {
 					var receiver = lowerOwnerReceiver(object, builder, localTypes);
-					if ((switch (receiver.type) { case Dyn: true; default: false; }) && isErasedGenericOwner(object.type))
+					if ((switch (receiver.type) {
+						case Dyn: true;
+						default: false;
+					}) && isErasedGenericOwner(object.type))
 						builder.call(erasedOwnerOperation(object.type, "get", name), [receiver], lowerType(expression.type));
-					else builder.fieldGet(receiver, name, lowerType(expression.type));
+					else
+						builder.fieldGet(receiver, name, lowerType(expression.type));
 				}
 			case TMethodCall(object, name, args):
-				var place = optionalFieldPlace(object), arrayPlace = arrayValuePlace(object);
+				var place = optionalFieldPlace(object),
+					arrayPlace = arrayValuePlace(object);
 				if (place != null) {
-					var owner = prepareOptionalFieldPlace(place, builder, localTypes), arguments = lowerOperands(args, builder, localTypes),
-						declaring = optionalFieldOwner(owner.type, place.field), receiver = builder.load(owner.name, owner.type);
-					if (!sameIrType(owner.type, Obj(declaring))) receiver = builder.upcast(receiver, Obj(declaring));
+					var owner = prepareOptionalFieldPlace(place, builder, localTypes),
+						arguments = lowerOperands(args, builder, localTypes),
+						declaring = optionalFieldOwner(owner.type, place.field),
+						receiver = builder.load(owner.name, owner.type);
+					if (!sameIrType(owner.type, Obj(declaring)))
+						receiver = builder.upcast(receiver, Obj(declaring));
 					builder.call(IrOptionalFieldStorage.placeMethodName(declaring, place.field, place.path, name), [receiver].concat(arguments),
 						lowerType(expression.type));
 				} else if (arrayPlace != null && simpleArrayValuePath(arrayPlace)) {
 					// Preserve the evaluated array and index as the receiver's place, before evaluating method arguments.
 					var operands = lowerOperands([arrayPlace.array, arrayPlace.index], builder, localTypes),
-						rootType = lowerType(arrayPlace.root.type), rootName = '$' + 'array-method-place-root:${scratch.arrayValuePlaceSerial++}',
+						rootType = lowerType(arrayPlace.root.type),
+						rootName = '$' + 'array-method-place-root:${scratch.arrayValuePlaceSerial++}',
 						receiverName = '$' + 'array-method-place-receiver:${scratch.arrayValuePlaceSerial - 1}';
 					var previous = builder.beginGenerated(ArrayValuePlaceReason);
 					var root = elementGet(builder, operands[0], operands[1], rootType);
@@ -2674,7 +2934,8 @@ class IrGenerator {
 						receiver = lowerExpression(replaceArrayValueRoot(object, arrayPlace, replacement), builder, localTypes);
 					localTypes.set(receiverName, receiver.type);
 					builder.store(receiverName, receiver);
-					var arguments = lowerOperands(args, builder, localTypes), separator = IrGenerator.lastSeparator(name);
+					var arguments = lowerOperands(args, builder, localTypes),
+						separator = IrGenerator.lastSeparator(name);
 					builder.methodCall(builder.load(receiverName, receiver.type), name.substring(separator + 1, name.length), arguments,
 						lowerType(expression.type));
 				} else {
@@ -2688,23 +2949,30 @@ class IrGenerator {
 						callArgs.push(loweredOperands[index]);
 					var separator = IrGenerator.lastSeparator(name);
 					var method = name.substring(separator + 1, name.length);
-					if ((switch (receiver.type) { case Dyn: true; default: false; }) && isErasedGenericOwner(object.type))
+					if ((switch (receiver.type) {
+						case Dyn: true;
+						default: false;
+					}) && isErasedGenericOwner(object.type))
 						builder.call(erasedOwnerOperation(object.type, "call", method), [receiver].concat(callArgs), lowerType(expression.type));
 					else {
 						var typedInterface = typedInterfaceForCall(object.type, method, lowerType(expression.type), [for (argument in callArgs) argument.type]);
-						if (typedInterface == null) builder.methodCall(receiver, method, callArgs, lowerType(expression.type),
-							scratch.loweringScopedDisposal || temporaryValueCopy(object));
-						else builder.call(IrTypedInterfaceDispatch.callName(typedInterface, method, [for (argument in callArgs) argument.type],
-							lowerType(expression.type)), [receiver].concat(callArgs), lowerType(expression.type));
+						if (typedInterface == null)
+							builder.methodCall(receiver, method, callArgs,
+								lowerType(expression.type), scratch.loweringScopedDisposal || temporaryValueCopy(object));
+						else
+							builder.call(IrTypedInterfaceDispatch.callName(typedInterface, method, [for (argument in callArgs) argument.type],
+								lowerType(expression.type)),
+								[receiver].concat(callArgs), lowerType(expression.type));
 					}
 				}
 			case TSuperCall(owner, args):
 				// Arguments may branch; load `this` in the block that performs the call.
 				var loweredArguments = lowerOperands(args, builder, localTypes);
-				var receiverType = localTypes.get("this"), physicalBase = switch receiverType {
-					case Obj(name) if (facts.classBases.exists(name)): facts.classBases.get(name);
-					default: owner;
-				};
+				var receiverType = localTypes.get("this"),
+					physicalBase = switch receiverType {
+						case Obj(name) if (facts.classBases.exists(name)): facts.classBases.get(name);
+						default: owner;
+					};
 				builder.call(physicalBase + ".new", [builder.load("this", receiverType)].concat(loweredArguments), Void);
 			case TIndex(array, index):
 				var operands = lowerOperands([array, index], builder, localTypes);
@@ -2734,34 +3002,46 @@ class IrGenerator {
 				builder.globalSet(owner + "." + name, delta > 0 ? builder.add(oldValue, one) : builder.sub(oldValue, one));
 				oldValue;
 			case TPostfixField(object, name, delta):
-					var observableBit = observableFieldBit(object.type, name),
-						projection = flatRawPointerProjection(object), optionalPlace = optionalFieldPlace(object), arrayPlace = arrayValuePlace(object);
-					if (isErasedGenericOwner(object.type) && observableBit == null) {
-						var receiver = lowerOwnerReceiver(object, builder, localTypes), type = lowerType(expression.type),
-							oldValue = (switch (receiver.type) { case Dyn: true; default: false; }) ? builder.call(erasedOwnerOperation(object.type, "get", name), [receiver], type)
-								: builder.fieldGet(receiver, name, type),
-							one = incrementOne(expression.type, builder), after = delta > 0 ? builder.add(oldValue, one) : builder.sub(oldValue, one);
-						if ((switch (receiver.type) { case Dyn: true; default: false; })) builder.call(erasedOwnerOperation(object.type, "set", name), [receiver, after], Void);
-						else builder.fieldSet(receiver, name, after);
-						oldValue;
-					} else if (observableBit != null) {
-						var receiver = lowerExpression(object, builder, localTypes),
-							before = builder.fieldGet(receiver, name, lowerType(expression.type)),
-							one = incrementOne(expression.type, builder),
-							after = delta > 0 ? builder.add(before, one) : builder.sub(before, one);
-						lowerObservableFieldWrite(receiver, name, observableBit, expression.type, before, after, builder, localTypes);
-					} else if (optionalPlace != null) {
+				var observableBit = observableFieldBit(object.type, name),
+					projection = flatRawPointerProjection(object),
+					optionalPlace = optionalFieldPlace(object),
+					arrayPlace = arrayValuePlace(object);
+				if (isErasedGenericOwner(object.type) && observableBit == null) {
+					var receiver = lowerOwnerReceiver(object, builder, localTypes),
+						type = lowerType(expression.type),
+						oldValue = (switch (receiver.type) {
+							case Dyn: true;
+							default: false;
+						}) ? builder.call(erasedOwnerOperation(object.type, "get", name), [receiver], type) : builder.fieldGet(receiver, name, type),
+						one = incrementOne(expression.type, builder),
+						after = delta > 0 ? builder.add(oldValue, one) : builder.sub(oldValue, one);
+					if ((switch (receiver.type) {
+						case Dyn: true;
+						default: false;
+					}))
+						builder.call(erasedOwnerOperation(object.type, "set", name), [receiver, after], Void);
+					else
+						builder.fieldSet(receiver, name, after);
+					oldValue;
+				} else if (observableBit != null) {
+					var receiver = lowerExpression(object, builder, localTypes),
+						before = builder.fieldGet(receiver, name, lowerType(expression.type)),
+						one = incrementOne(expression.type, builder),
+						after = delta > 0 ? builder.add(before, one) : builder.sub(before, one);
+					lowerObservableFieldWrite(receiver, name, observableBit, expression.type, before, after, builder, localTypes);
+				} else if (optionalPlace != null) {
 					var owner = prepareOptionalFieldPlace(optionalPlace, builder, localTypes),
 						field = optionalSlotName(optionalPlace.field, optionalPlace.path.concat([name]), false),
 						oldValue = builder.fieldGet(builder.load(owner.name, owner.type), field, lowerType(expression.type)),
 						one = incrementOne(expression.type, builder);
-					builder.fieldSet(builder.load(owner.name, owner.type), field,
-						delta > 0 ? builder.add(oldValue, one) : builder.sub(oldValue, one));
+					builder.fieldSet(builder.load(owner.name, owner.type), field, delta > 0 ? builder.add(oldValue, one) : builder.sub(oldValue, one));
 					oldValue;
 				} else if (projection != null) {
 					var field = flatFieldAtPath(projection.recordName, projection.path.concat([name])),
 						layout = field.field.nativeLayout;
-					if (layout == null || layout.inlineRecord || (layout.size != 1 && layout.size != 2 && layout.size != 4 && layout.size != 8))
+					if (layout == null
+						|| layout.inlineRecord
+						|| (layout.size != 1 && layout.size != 2 && layout.size != 4 && layout.size != 8))
 						throw 'Unsupported Flat increment field "${projection.recordName}.${name}"';
 					var pointer = lowerExpression(projection.pointer, builder, localTypes),
 						address = flatFieldPointer(pointer, field.offset, builder),
@@ -2770,8 +3050,9 @@ class IrGenerator {
 					builder.memoryStore(address, delta > 0 ? builder.add(oldValue, one) : builder.sub(oldValue, one), layout.size);
 					oldValue;
 				} else {
-					var receiver = arrayPlace != null && simpleArrayValuePath(arrayPlace)
-						? lowerArrayValueReceiver(object, arrayPlace, builder, localTypes) : lowerExpression(object, builder, localTypes),
+					var receiver = arrayPlace != null
+						&& simpleArrayValuePath(arrayPlace) ? lowerArrayValueReceiver(object, arrayPlace, builder,
+							localTypes) : lowerExpression(object, builder, localTypes),
 						oldValue = builder.fieldGet(receiver, name, lowerType(expression.type)),
 						one = incrementOne(expression.type, builder);
 					builder.fieldSet(receiver, name, delta > 0 ? builder.add(oldValue, one) : builder.sub(oldValue, one));
@@ -3030,7 +3311,7 @@ class IrGenerator {
 
 	function implicitArguments(fn:TypedFunction):Array<CfgArgument> {
 		var owner = fn.owner;
-		if (owner == null || fn.isStatic)
+		if (owner == null || fn.isStatic || scratch.valueConstructor != null)
 			return [];
 		return [{name: "this", type: Obj(fn.physicalOwner == null ? owner : fn.physicalOwner)}];
 	}
@@ -3127,8 +3408,8 @@ class IrGenerator {
 		}
 	}
 
-	function lowerSwitchArrayPatternBindings(pattern:TypedSwitchArrayPattern, subjectName:String, subjectType:IrType,
-			caseSpan:compiler.Source.SourceSpan, builder:CfgBuilder, localTypes:Map<String, IrType>):Void {
+	function lowerSwitchArrayPatternBindings(pattern:TypedSwitchArrayPattern, subjectName:String, subjectType:IrType, caseSpan:compiler.Source.SourceSpan,
+			builder:CfgBuilder, localTypes:Map<String, IrType>):Void {
 		for (index in 0...pattern.elements.length) {
 			var elementPattern = pattern.elements[index],
 				elementValue = elementGet(builder, builder.load(subjectName, subjectType), builder.constInt(index), lowerType(elementPattern.type));
@@ -3146,8 +3427,8 @@ class IrGenerator {
 		}
 	}
 
-	function lowerEnumPredicates(subjectName:String, subjectType:IrType, constructorIndex:Int, predicates:Array<TypedSwitchPredicate>,
-			firstBlock:CfgBlock, matchBlock:CfgBlock, nextBlock:CfgBlock, builder:CfgBuilder, localTypes:Map<String, IrType>):Void {
+	function lowerEnumPredicates(subjectName:String, subjectType:IrType, constructorIndex:Int, predicates:Array<TypedSwitchPredicate>, firstBlock:CfgBlock,
+			matchBlock:CfgBlock, nextBlock:CfgBlock, builder:CfgBuilder, localTypes:Map<String, IrType>):Void {
 		var checkBlock = firstBlock;
 		for (index in 0...predicates.length) {
 			var predicate = predicates[index];
@@ -3244,7 +3525,6 @@ class IrGenerator {
 			default: false;
 		};
 
-
 	function lowerNullableEnumEquality(a:TypedExpression, b:TypedExpression, left:CfgValue, right:CfgValue, builder:CfgBuilder,
 			localTypes:Map<String, IrType>):CfgValue {
 		var leftName = '$' + 'nullable-enum-left:${left.id}',
@@ -3298,11 +3578,12 @@ class IrGenerator {
 		};
 
 	/** A copy used directly as a receiver has no surviving place to receive its writes. */
-	function temporaryValueCopy(value:TypedExpression):Bool return switch value.expression {
-		case TCopy(_, _): true;
-		case TCast(inner), TAbiCast(inner): temporaryValueCopy(inner);
-		default: false;
-	};
+	function temporaryValueCopy(value:TypedExpression):Bool
+		return switch value.expression {
+			case TCopy(_, _): true;
+			case TCast(inner), TAbiCast(inner): temporaryValueCopy(inner);
+			default: false;
+		};
 
 	function iteratorArraySource(source:TypedExpression):TypedExpression {
 		var unwrapped = switch source.expression {
@@ -3329,30 +3610,43 @@ class IrGenerator {
 			case TNullable(inner), TAbstract(_, _, inner): return typedInterfaceForCall(inner, method, result, arguments);
 			default: null;
 		};
-		if (name == null) return null;
+		if (name == null)
+			return null;
 		function find(current:String, visited:Map<String, Bool>):Null<compiler.types.TypedAst.TypedInterfaceMethod> {
-			if (visited.exists(current)) return null;
+			if (visited.exists(current))
+				return null;
 			visited.set(current, true);
 			var declaration = facts.typedInterfaceContracts.get(current);
-			if (declaration == null) return null;
-			for (candidate in declaration.methods) if (candidate.name == method) return candidate;
-			for (base in declaration.bases) { var candidate = find(base, visited); if (candidate != null) return candidate; }
+			if (declaration == null)
+				return null;
+			for (candidate in declaration.methods)
+				if (candidate.name == method)
+					return candidate;
+			for (base in declaration.bases) {
+				var candidate = find(base, visited);
+				if (candidate != null)
+					return candidate;
+			}
 			return null;
 		}
 		var contract = find(name, []);
-		if (contract == null || contract.arguments.length != arguments.length) return null;
-		if (!IrVerifier.sameType(lowerType(contract.result), result)) return name;
+		if (contract == null || contract.arguments.length != arguments.length)
+			return null;
+		if (!IrVerifier.sameType(lowerType(contract.result), result))
+			return name;
 		for (index in 0...arguments.length)
-			if (!IrVerifier.sameType(lowerType(contract.arguments[index]), arguments[index])) return name;
+			if (!IrVerifier.sameType(lowerType(contract.arguments[index]), arguments[index]))
+				return name;
 		return null;
 	}
 
-	function isIdentityReference(type:CompilerType):Bool return switch type {
-		case TNullable(inner): isIdentityReference(inner);
-		case TInstance(NominalKind.Class,name,_): !facts.valueClasses.exists(name);
-		case TInstance(NominalKind.Interface,_,_): true;
-		default: false;
-	};
+	function isIdentityReference(type:CompilerType):Bool
+		return switch type {
+			case TNullable(inner): isIdentityReference(inner);
+			case TInstance(NominalKind.Class, name, _): !facts.valueClasses.exists(name);
+			case TInstance(NominalKind.Interface, _, _): true;
+			default: false;
+		};
 
 	public function lowerType(type:CompilerType):IrType
 		return switch type {
@@ -3378,10 +3672,11 @@ class IrGenerator {
 			case TTypeParameter(owner, name): throw 'Unsubstituted type parameter "$owner.$name" reached IR lowering';
 			case TInstance(kind, name, arguments):
 				switch kind {
-					case NominalKind.Class:
-						// An owner alias is made only for a generic class with type arguments, so a class without any needs no signature string.
+					case NominalKind.Class: // An owner alias is made only for a generic class with type arguments, so a class without any needs no signature string.
 						var physical = arguments.length == 0 ? null : facts.genericOwnerAliases.get(compiler.semantic.SemanticSignature.type(type));
-						Std.string(name) == "haxe.io.Eof" || physical == null && isErasedGenericOwner(type) ? Dyn : Obj(physical == null ? name : physical);
+						Std.string(name) == "haxe.io.Eof"
+						|| physical == null
+						&& isErasedGenericOwner(type) ? Dyn : Obj(physical == null ? name : physical);
 					case NominalKind.Interface: Virtual(name);
 					case NominalKind.Enum: Enum(compiler.types.typing.EnumRuntimeType.name(type));
 					case NominalKind.NativeValue: throw 'Native value record "$name" cannot be lowered as a managed value';
@@ -3407,7 +3702,12 @@ class IrGenerator {
 		return switch type {
 			case TInstance(NominalKind.Class, name, arguments) if (facts.genericClasses.exists(name)):
 				var erased = false;
-				for (argument in arguments) if ((switch (argument) { case TDynamic: true; default: false; })) erased = true;
+				for (argument in arguments)
+					if ((switch (argument) {
+						case TDynamic: true;
+						default: false;
+					}))
+						erased = true;
 				erased;
 			default: false;
 		};
@@ -3419,10 +3719,14 @@ class IrGenerator {
 		};
 
 	function directBaseMethod(name:String, localTypes:Map<String, IrType>):Bool {
-		var current = switch localTypes.get("this") { case Obj(value): value; default: null; };
+		var current = switch localTypes.get("this") {
+			case Obj(value): value;
+			default: null;
+		};
 		while (current != null && facts.classBases.exists(current)) {
 			current = facts.classBases.get(current);
-			if (StringTools.startsWith(name, current + ".")) return true;
+			if (StringTools.startsWith(name, current + "."))
+				return true;
 		}
 		return false;
 	}
@@ -3455,10 +3759,13 @@ class IrGenerator {
 		};
 
 	function incrementOne(type:CompilerType, builder:CfgBuilder):CfgValue
-		return (switch (type) { case TInt: true; default: false; }) ? builder.constInt(1) : builder.constFloat(1.0);
+		return (switch (type) {
+			case TInt: true;
+			default: false;
+		}) ? builder.constInt(1) : builder.constFloat(1.0);
 
-	function lowerObservableFieldRead(object:TypedExpression, field:String, fieldBit:Int, resultType:IrType,
-			builder:CfgBuilder, localTypes:Map<String, IrType>):CfgValue {
+	function lowerObservableFieldRead(object:TypedExpression, field:String, fieldBit:Int, resultType:IrType, builder:CfgBuilder,
+			localTypes:Map<String, IrType>):CfgValue {
 		var serial = scratch.observableAccessSerial++,
 			receiverValue = lowerExpression(object, builder, localTypes),
 			receiverName = '$' + 'observable-read-owner:$serial',
@@ -3472,7 +3779,8 @@ class IrGenerator {
 		builder.branch(builder.call(ReactiveRuntimeClass + ".isTracking", [], Bool), trackingBlock, readBlock);
 		builder.select(trackingBlock);
 		builder.store(sourceName, builder.fieldGet(builder.load(receiverName, receiverValue.type), ObservableStateField, sourceType));
-		var initializeBlock = builder.createBlock(), recordBlock = builder.createBlock();
+		var initializeBlock = builder.createBlock(),
+			recordBlock = builder.createBlock();
 		builder.branch(builder.equal(builder.load(sourceName, sourceType), builder.constNull(sourceType)), initializeBlock, recordBlock);
 		builder.select(initializeBlock);
 		var count = builder.methodCall(builder.load(receiverName, receiverValue.type), "$haxeonObservableFieldCount", [], I32);
@@ -3494,7 +3802,10 @@ class IrGenerator {
 		};
 
 	function observableFieldChanged(type:CompilerType, before:CfgValue, after:CfgValue, builder:CfgBuilder, localTypes:Map<String, IrType>):CfgValue {
-		if (switch before.type { case F32 | F64 | Nullable(F32 | F64): true; default: false; })
+		if (switch before.type {
+				case F32 | F64 | Nullable(F32 | F64): true;
+				default: false;
+			})
 			return builder.equal(lowerFloatMapKeyEquality(before, after, builder, localTypes), builder.constBool(false));
 		if (usesDeclaredEquality(type))
 			return builder.equal(builder.call(ValueEqualityGenerator.equalsName(type), [before, after], Bool), builder.constBool(false));
@@ -3504,21 +3815,24 @@ class IrGenerator {
 			case TDynamic:
 				builder.equal(builder.call("__dynamic_equal", [builder.toDyn(before), builder.toDyn(after)], Bool), builder.constBool(false));
 			case TInstance(NominalKind.Enum, name, _) | TNullable(TInstance(NominalKind.Enum, name, _)):
-				if (facts.enumEquatableTypes.exists(name))
-					builder.equal(builder.call(compiler.types.typing.EnumEqualityGenerator.equalsName(type), [before, after], Bool), builder.constBool(false));
-				else builder.constBool(true);
-		case TString, TNullable(TString):
+				if (facts.enumEquatableTypes.exists(name)) builder.equal(builder.call(compiler.types.typing.EnumEqualityGenerator.equalsName(type),
+					[before, after], Bool),
+					builder.constBool(false)); else builder.constBool(true);
+			case TString, TNullable(TString):
 				builder.equal(builder.call("__string_equal", [before, after], Bool), builder.constBool(false));
 			case _:
 				builder.equal(builder.equal(before, after), builder.constBool(false));
 		};
 	}
 
-	function lowerObservableFieldWrite(receiver:CfgValue, field:String, fieldBit:Int, fieldType:CompilerType,
-			before:CfgValue, after:CfgValue, builder:CfgBuilder, localTypes:Map<String, IrType>):CfgValue {
-		var serial = scratch.observableAccessSerial++, receiverName = '$' + 'observable-write-owner:$serial',
-			beforeName = '$' + 'observable-write-before:$serial', afterName = '$' + 'observable-write-after:$serial',
-			beforeType = before.type, afterType = after.type;
+	function lowerObservableFieldWrite(receiver:CfgValue, field:String, fieldBit:Int, fieldType:CompilerType, before:CfgValue, after:CfgValue,
+			builder:CfgBuilder, localTypes:Map<String, IrType>):CfgValue {
+		var serial = scratch.observableAccessSerial++,
+			receiverName = '$' + 'observable-write-owner:$serial',
+			beforeName = '$' + 'observable-write-before:$serial',
+			afterName = '$' + 'observable-write-after:$serial',
+			beforeType = before.type,
+			afterType = after.type;
 		localTypes.set(receiverName, receiver.type);
 		localTypes.set(beforeName, beforeType);
 		localTypes.set(afterName, afterType);
@@ -3526,7 +3840,8 @@ class IrGenerator {
 		builder.store(beforeName, before);
 		builder.store(afterName, after);
 		var changed = observableFieldChanged(fieldType, builder.load(beforeName, beforeType), builder.load(afterName, afterType), builder, localTypes),
-			changedName = '$' + 'observable-write-changed:$serial', doneBlock = builder.createBlock();
+			changedName = '$' + 'observable-write-changed:$serial',
+			doneBlock = builder.createBlock();
 		localTypes.set(changedName, Bool);
 		builder.store(changedName, changed);
 		var sourceType:IrType = Obj(ObservableSourceClass),
@@ -3535,20 +3850,26 @@ class IrGenerator {
 		builder.store(sourceName, builder.fieldGet(builder.load(receiverName, receiver.type), ObservableStateField, sourceType));
 		var statusName = '$' + 'observable-write-status:$serial';
 		localTypes.set(statusName, I32);
-		builder.store(statusName, builder.call(ReactiveRuntimeClass + ".observableWriteStatus",
-			[builder.load(sourceName, sourceType), builder.constInt(fieldBit),
-			 builder.toDyn(builder.load(receiverName, receiver.type))], I32));
-		var blockedBlock = builder.createBlock(), allowedBlock = builder.createBlock(), wrongThreadBlock = builder.createBlock(), trackingBlock = builder.createBlock();
+		builder.store(statusName, builder.call(ReactiveRuntimeClass + ".observableWriteStatus", [
+			builder.load(sourceName, sourceType),
+			builder.constInt(fieldBit),
+			builder.toDyn(builder.load(receiverName, receiver.type))
+		], I32));
+		var blockedBlock = builder.createBlock(),
+			allowedBlock = builder.createBlock(),
+			wrongThreadBlock = builder.createBlock(),
+			trackingBlock = builder.createBlock();
 		builder.branch(builder.equal(builder.load(statusName, I32), builder.constInt(0)), allowedBlock, blockedBlock);
 		builder.select(blockedBlock);
 		builder.branch(builder.equal(builder.load(statusName, I32), builder.constInt(2)), wrongThreadBlock, trackingBlock);
 		builder.select(wrongThreadBlock);
-		var sourceLabel = switch receiver.type { case Obj(name): name + "." + field; default: field; };
-		builder.throwValue(builder.toDyn(builder.constString("Cannot write Observable field " + sourceLabel +
-			" from a non-owner thread")));
+		var sourceLabel = switch receiver.type {
+			case Obj(name): name + "." + field;
+			default: field;
+		};
+		builder.throwValue(builder.toDyn(builder.constString("Cannot write Observable field " + sourceLabel + " from a non-owner thread")));
 		builder.select(trackingBlock);
-		builder.throwValue(builder.toDyn(builder.constString("Cannot write Observable field " + field +
-			" inside a reactive tracking scope")));
+		builder.throwValue(builder.toDyn(builder.constString("Cannot write Observable field " + field + " inside a reactive tracking scope")));
 		builder.select(allowedBlock);
 		builder.fieldSet(builder.load(receiverName, receiver.type), field, builder.load(afterName, afterType));
 		var invalidateBlock = builder.createBlock();
@@ -3645,13 +3966,11 @@ class IrGenerator {
 		return "__array_alloc_" + RuntimeType.requireArrayName(element);
 
 	/** Whether an array operation needs the element's declared value semantics. */
-	function arrayValueElement(type:IrType):Bool return switch type {
-		case Obj(name), Nullable(Obj(name)):
-			var object = inlineValueObjects.get(name);
-			object != null && object.isValue;
-		default: false;
-	};
-
+	function arrayValueElement(type:IrType):Bool
+		return switch type {
+			case Obj(name), Nullable(Obj(name)): var object = inlineValueObjects.get(name); object != null && object.isValue;
+			default: false;
+		};
 
 	function lowerArrayAllocation(builder:CfgBuilder, element:CompilerType, length:CfgValue):CfgValue {
 		var elementType = lowerType(element),
@@ -3688,7 +4007,10 @@ class IrGenerator {
 			return builder.arrayGet(array, index, type);
 		if (IrTypeTools.isDynamic(element)) {
 			var value = builder.call("__array_get_any", [array, index], Dyn);
-			return (switch (type) { case Dyn: true; default: false; }) ? value : abiBoundaryCast(builder, value, type);
+			return (switch (type) {
+				case Dyn: true;
+				default: false;
+			}) ? value : abiBoundaryCast(builder, value, type);
 		}
 		var value = builder.arrayGet(array, index, type);
 		return switch type {
@@ -3709,22 +4031,36 @@ class IrGenerator {
 		return profile.nativeArrayChecks
 			&& IrTypeTools.isDynamic(lowerType(element)) ? '__array_${operation}_any' : RuntimeType.arrayNative(element, operation);
 
-
 	function nullableScalarEquality(left:TypedExpression, right:TypedExpression):Bool {
-		if (isNullExpression(left) || isNullExpression(right)) return false;
+		if (isNullExpression(left) || isNullExpression(right))
+			return false;
 		var leftType = lowerType(left.type), rightType = lowerType(right.type);
-		if (!Type.enumEq(leftType, rightType)) return false;
-		return switch leftType { case Nullable(I32 | I64 | F32 | F64 | Bool): true; default: false; };
+		if (!Type.enumEq(leftType, rightType))
+			return false;
+		return switch leftType {
+			case Nullable(I32 | I64 | F32 | F64 | Bool): true;
+			default: false;
+		};
 	}
 
 	/** Dynamic reactive values use ordinary dynamic equality, with a reflexive Float NaN case. */
 	function lowerDynamicChangeEquality(left:CfgValue, right:CfgValue, builder:CfgBuilder, localTypes:Map<String, IrType>):CfgValue {
-		var id = scratch.arrayValuePlaceSerial++, leftName = '$' + 'change-left:$id', rightName = '$' + 'change-right:$id',
-			resultName = '$' + 'change-result:$id', equalBlock = builder.createBlock(), leftTypeBlock = builder.createBlock(),
-			rightTypeBlock = builder.createBlock(), leftNanBlock = builder.createBlock(), rightNanBlock = builder.createBlock(),
-			unequalBlock = builder.createBlock(), done = builder.createBlock();
-		localTypes.set(leftName, left.type); localTypes.set(rightName, right.type); localTypes.set(resultName, Bool);
-		builder.store(leftName, left); builder.store(rightName, right);
+		var id = scratch.arrayValuePlaceSerial++,
+			leftName = '$' + 'change-left:$id',
+			rightName = '$' + 'change-right:$id',
+			resultName = '$' + 'change-result:$id',
+			equalBlock = builder.createBlock(),
+			leftTypeBlock = builder.createBlock(),
+			rightTypeBlock = builder.createBlock(),
+			leftNanBlock = builder.createBlock(),
+			rightNanBlock = builder.createBlock(),
+			unequalBlock = builder.createBlock(),
+			done = builder.createBlock();
+		localTypes.set(leftName, left.type);
+		localTypes.set(rightName, right.type);
+		localTypes.set(resultName, Bool);
+		builder.store(leftName, left);
+		builder.store(rightName, right);
 		function eq(a:String, b:String):CfgValue
 			return builder.call("__dynamic_equal", [builder.load(a, left.type), builder.load(b, right.type)], Bool);
 		builder.branch(eq(leftName, rightName), equalBlock, leftTypeBlock);
@@ -3738,86 +4074,149 @@ class IrGenerator {
 		builder.select(rightNanBlock);
 		var rightFloat = builder.safeCast(builder.load(rightName, right.type), F64);
 		builder.branch(builder.equal(rightFloat, rightFloat), unequalBlock, equalBlock);
-		builder.select(equalBlock); builder.store(resultName, builder.constBool(true)); builder.jump(done);
-		builder.select(unequalBlock); builder.store(resultName, builder.constBool(false)); builder.jump(done);
-		builder.select(done); return builder.load(resultName, Bool);
+		builder.select(equalBlock);
+		builder.store(resultName, builder.constBool(true));
+		builder.jump(done);
+		builder.select(unequalBlock);
+		builder.store(resultName, builder.constBool(false));
+		builder.jump(done);
+		builder.select(done);
+		return builder.load(resultName, Bool);
 	}
 
 	/** Map Float equivalence includes NaNs while preserving null and signed-zero behavior. */
 	function lowerFloatMapKeyEquality(left:CfgValue, right:CfgValue, builder:CfgBuilder, localTypes:Map<String, IrType>):CfgValue {
-		var id = scratch.arrayValuePlaceSerial++, resultName = '$' + 'float-map-key-equality:$id',
-			leftName = '$' + 'float-map-key-left:$id', rightName = '$' + 'float-map-key-right:$id',
-			equalBlock = builder.createBlock(), checkLeft = builder.createBlock(), checkRight = builder.createBlock(),
-			unequalBlock = builder.createBlock(), done = builder.createBlock();
-		localTypes.set(resultName, Bool); localTypes.set(leftName, left.type); localTypes.set(rightName, right.type);
-		builder.store(leftName, left); builder.store(rightName, right);
+		var id = scratch.arrayValuePlaceSerial++,
+			resultName = '$' + 'float-map-key-equality:$id',
+			leftName = '$' + 'float-map-key-left:$id',
+			rightName = '$' + 'float-map-key-right:$id',
+			equalBlock = builder.createBlock(),
+			checkLeft = builder.createBlock(),
+			checkRight = builder.createBlock(),
+			unequalBlock = builder.createBlock(),
+			done = builder.createBlock();
+		localTypes.set(resultName, Bool);
+		localTypes.set(leftName, left.type);
+		localTypes.set(rightName, right.type);
+		builder.store(leftName, left);
+		builder.store(rightName, right);
 		function equal(a:String, b:String):CfgValue {
-			var first = builder.load(a, left.type), second = builder.load(b, right.type);
+			var first = builder.load(a, left.type),
+				second = builder.load(b, right.type);
 			return switch first.type {
 				case Nullable(_): lowerNullableScalarEquality(first, second, builder, localTypes);
 				default: builder.equal(first, second);
 			};
 		}
 		builder.branch(equal(leftName, rightName), equalBlock, checkLeft);
-		builder.select(checkLeft); builder.branch(equal(leftName, leftName), unequalBlock, checkRight);
-		builder.select(checkRight); builder.branch(equal(rightName, rightName), unequalBlock, equalBlock);
-		builder.select(equalBlock); builder.store(resultName, builder.constBool(true)); builder.jump(done);
-		builder.select(unequalBlock); builder.store(resultName, builder.constBool(false)); builder.jump(done);
-		builder.select(done); return builder.load(resultName, Bool);
+		builder.select(checkLeft);
+		builder.branch(equal(leftName, leftName), unequalBlock, checkRight);
+		builder.select(checkRight);
+		builder.branch(equal(rightName, rightName), unequalBlock, equalBlock);
+		builder.select(equalBlock);
+		builder.store(resultName, builder.constBool(true));
+		builder.jump(done);
+		builder.select(unequalBlock);
+		builder.store(resultName, builder.constBool(false));
+		builder.jump(done);
+		builder.select(done);
+		return builder.load(resultName, Bool);
 	}
 
 	/** Typed nullable scalar equality compares payloads, preserving IEEE float equality and null semantics. */
 	function lowerNullableScalarEquality(left:CfgValue, right:CfgValue, builder:CfgBuilder, localTypes:Map<String, IrType>):CfgValue {
-		var inner = switch left.type { case Nullable(value): value; default: throw "Expected nullable scalar"; },
-			id = scratch.arrayValuePlaceSerial++, resultName = '$' + 'nullable-equality:$id',
-			leftName = '$' + 'nullable-equality-left:$id', rightName = '$' + 'nullable-equality-right:$id',
-			absent = builder.createBlock(), present = builder.createBlock(), compare = builder.createBlock(),
-			missing = builder.createBlock(), done = builder.createBlock();
-		localTypes.set(resultName, Bool); localTypes.set(leftName, left.type); localTypes.set(rightName, right.type);
-		builder.store(leftName, left); builder.store(rightName, right);
+		var inner = switch left.type {
+			case Nullable(value): value;
+			default: throw "Expected nullable scalar";
+		}, id = scratch.arrayValuePlaceSerial++, resultName = '$' + 'nullable-equality:$id', leftName = '$' + 'nullable-equality-left:$id', rightName = '$'
+			+ 'nullable-equality-right:$id', absent = builder.createBlock(), present = builder.createBlock(), compare = builder.createBlock(), missing = builder.createBlock(), done = builder.createBlock();
+		localTypes.set(resultName, Bool);
+		localTypes.set(leftName, left.type);
+		localTypes.set(rightName, right.type);
+		builder.store(leftName, left);
+		builder.store(rightName, right);
 		builder.branch(builder.equal(builder.load(leftName, left.type), builder.constNull(left.type)), absent, present);
-		builder.select(absent); builder.store(resultName, builder.equal(builder.load(rightName, right.type), builder.constNull(right.type))); builder.jump(done);
-		builder.select(present); builder.branch(builder.equal(builder.load(rightName, right.type), builder.constNull(right.type)), missing, compare);
-		builder.select(missing); builder.store(resultName, builder.constBool(false)); builder.jump(done);
-		builder.select(compare); builder.store(resultName, builder.equal(builder.safeCast(builder.load(leftName, left.type), inner),
-			builder.safeCast(builder.load(rightName, right.type), inner))); builder.jump(done);
-		builder.select(done); return builder.load(resultName, Bool);
+		builder.select(absent);
+		builder.store(resultName, builder.equal(builder.load(rightName, right.type), builder.constNull(right.type)));
+		builder.jump(done);
+		builder.select(present);
+		builder.branch(builder.equal(builder.load(rightName, right.type), builder.constNull(right.type)), missing, compare);
+		builder.select(missing);
+		builder.store(resultName, builder.constBool(false));
+		builder.jump(done);
+		builder.select(compare);
+		builder.store(resultName,
+			builder.equal(builder.safeCast(builder.load(leftName, left.type), inner), builder.safeCast(builder.load(rightName, right.type), inner)));
+		builder.jump(done);
+		builder.select(done);
+		return builder.load(resultName, Bool);
 	}
 
-	function isSemanticDynamic(type:CompilerType):Bool return switch type { case TDynamic: true; default: false; };
+	function isSemanticDynamic(type:CompilerType):Bool
+		return switch type {
+			case TDynamic: true;
+			default: false;
+		};
 
 	/** Compare typed struct elements with their declared equality, without entering a dynamic array view. */
-	function lowerValueArrayIndexOf(builder:CfgBuilder, localTypes:Map<String, IrType>, element:CompilerType,
-			arguments:Array<CfgValue>):CfgValue {
-		var array = arguments[0], needle = arguments[1], id = scratch.arrayValuePlaceSerial++,
-			arrayName = '$' + 'value-index-array:$id', needleName = '$' + 'value-index-needle:$id',
-			indexName = '$' + 'value-index-position:$id', resultName = '$' + 'value-index-result:$id',
-			check = builder.createBlock(), body = builder.createBlock(), found = builder.createBlock(),
-			next = builder.createBlock(), done = builder.createBlock(), valueType = lowerType(element);
-		localTypes.set(arrayName, array.type); localTypes.set(needleName, needle.type);
-		localTypes.set(indexName, I32); localTypes.set(resultName, I32);
-		builder.store(arrayName, array); builder.store(needleName, needle);
-		builder.store(indexName, builder.constInt(0)); builder.store(resultName, builder.constInt(-1));
-		builder.jump(check); builder.select(check);
+	function lowerValueArrayIndexOf(builder:CfgBuilder, localTypes:Map<String, IrType>, element:CompilerType, arguments:Array<CfgValue>):CfgValue {
+		var array = arguments[0],
+			needle = arguments[1],
+			id = scratch.arrayValuePlaceSerial++,
+			arrayName = '$' + 'value-index-array:$id',
+			needleName = '$' + 'value-index-needle:$id',
+			indexName = '$' + 'value-index-position:$id',
+			resultName = '$' + 'value-index-result:$id',
+			check = builder.createBlock(),
+			body = builder.createBlock(),
+			found = builder.createBlock(),
+			next = builder.createBlock(),
+			done = builder.createBlock(),
+			valueType = lowerType(element);
+		localTypes.set(arrayName, array.type);
+		localTypes.set(needleName, needle.type);
+		localTypes.set(indexName, I32);
+		localTypes.set(resultName, I32);
+		builder.store(arrayName, array);
+		builder.store(needleName, needle);
+		builder.store(indexName, builder.constInt(0));
+		builder.store(resultName, builder.constInt(-1));
+		builder.jump(check);
+		builder.select(check);
 		builder.branch(builder.less(builder.load(indexName, I32), builder.arraySize(builder.load(arrayName, array.type))), body, done);
 		builder.select(body);
-		var source = builder.load(arrayName, array.type), index = builder.load(indexName, I32),
+		var source = builder.load(arrayName, array.type),
+			index = builder.load(indexName, I32),
 			value = isSemanticDynamic(element) ? builder.call("__array_get_any", [source, index], Dyn) : elementGet(builder, source, index, valueType),
-			needleValue = builder.load(needleName, needle.type), previous = builder.beginGenerated("value-array-index-equality"),
-			equal = builder.call(isSemanticDynamic(element) ? "__dynamic_equal" : isEnumType(element) ? compiler.types.typing.EnumEqualityGenerator.equalsName(element) : ValueEqualityGenerator.equalsName(element), [value, needleValue], Bool);
+			needleValue = builder.load(needleName, needle.type),
+			previous = builder.beginGenerated("value-array-index-equality"),
+			equal = builder.call(isSemanticDynamic(element) ? "__dynamic_equal" : isEnumType(element) ? compiler.types.typing.EnumEqualityGenerator.equalsName(element) : ValueEqualityGenerator.equalsName(element),
+				[value, needleValue], Bool);
 		builder.restoreSource(previous);
 		builder.branch(equal, found, next);
-		builder.select(found); builder.store(resultName, builder.load(indexName, I32)); builder.jump(done);
-		builder.select(next); builder.store(indexName, builder.add(builder.load(indexName, I32), builder.constInt(1))); builder.jump(check);
-		builder.select(done); return builder.load(resultName, I32);
+		builder.select(found);
+		builder.store(resultName, builder.load(indexName, I32));
+		builder.jump(done);
+		builder.select(next);
+		builder.store(indexName, builder.add(builder.load(indexName, I32), builder.constInt(1)));
+		builder.jump(check);
+		builder.select(done);
+		return builder.load(resultName, I32);
 	}
 
-	function lowerValueArrayRemove(builder:CfgBuilder, localTypes:Map<String, IrType>, element:CompilerType,
-			arguments:Array<CfgValue>):CfgValue {
-		var array = arguments[0], id = scratch.arrayValuePlaceSerial++, arrayName = '$' + 'value-remove-array:$id',
-			foundName = '$' + 'value-remove-position:$id', resultName = '$' + 'value-remove-result:$id',
-			found = builder.createBlock(), inBounds = builder.createBlock(), missing = builder.createBlock(), done = builder.createBlock();
-		localTypes.set(arrayName, array.type); localTypes.set(foundName, I32); localTypes.set(resultName, Bool);
+	function lowerValueArrayRemove(builder:CfgBuilder, localTypes:Map<String, IrType>, element:CompilerType, arguments:Array<CfgValue>):CfgValue {
+		var array = arguments[0],
+			id = scratch.arrayValuePlaceSerial++,
+			arrayName = '$' + 'value-remove-array:$id',
+			foundName = '$' + 'value-remove-position:$id',
+			resultName = '$' + 'value-remove-result:$id',
+			found = builder.createBlock(),
+			inBounds = builder.createBlock(),
+			missing = builder.createBlock(),
+			done = builder.createBlock();
+		localTypes.set(arrayName, array.type);
+		localTypes.set(foundName, I32);
+		localTypes.set(resultName, Bool);
 		builder.store(arrayName, array);
 		builder.store(foundName, lowerValueArrayIndexOf(builder, localTypes, element, arguments));
 		builder.branch(builder.less(builder.constInt(-1), builder.load(foundName, I32)), found, missing);
@@ -3830,14 +4229,21 @@ class IrGenerator {
 			// Keep the storage representation and uninitialized value-array slots intact.
 			builder.call("__array_remove_at_any", [builder.load(arrayName, array.type), builder.load(foundName, I32)], Void);
 		} else if (isEnumType(element))
-			lowerArrayNativeCall(builder, element, "splice", [builder.load(arrayName, array.type), builder.load(foundName, I32), builder.constInt(1)], lowerType(TArray(element)));
+			lowerArrayNativeCall(builder, element, "splice", [
+				builder.load(arrayName, array.type),
+				builder.load(foundName, I32),
+				builder.constInt(1)
+			], lowerType(TArray(element)));
 		else
 			builder.call("__value_array_remove_at", [builder.load(arrayName, array.type), builder.load(foundName, I32)], Void);
-		builder.store(resultName, builder.constBool(true)); builder.jump(done);
-		builder.select(missing); builder.store(resultName, builder.constBool(false)); builder.jump(done);
-		builder.select(done); return builder.load(resultName, Bool);
+		builder.store(resultName, builder.constBool(true));
+		builder.jump(done);
+		builder.select(missing);
+		builder.store(resultName, builder.constBool(false));
+		builder.jump(done);
+		builder.select(done);
+		return builder.load(resultName, Bool);
 	}
-
 
 	function lowerArrayNativeCall(builder:CfgBuilder, element:CompilerType, operation:String, arguments:Array<CfgValue>, resultType:IrType):CfgValue {
 		var nativeName = arrayNativeName(element, operation);

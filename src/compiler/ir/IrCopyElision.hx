@@ -54,7 +54,7 @@ class IrCopyElision {
 				var located = block.instructions[position];
 				if (isValueCopy(located)) {
 					switch located.value {
-						case NewObject(copy, _):
+						case ValueInit(copy):
 							if (tryElide(blocks, block, position, copy))
 								continue;
 						default:
@@ -76,7 +76,7 @@ class IrCopyElision {
 
 	static function isValueCopy(located:Located<IrInstruction>):Bool {
 		switch located.value {
-			case NewObject(_, _):
+			case ValueInit(_):
 			default:
 				return false;
 		}
@@ -155,8 +155,10 @@ class IrCopyElision {
 		if (callPosition < lastWrite || !nothingRunsBetween(block, lastWrite + 1, callPosition))
 			return false;
 		var callee = calleeOf(block.instructions[callPosition].value, argument);
-		if (callee == null || resultDependsOnParameter(callee.name, callee.parameter, [], 0)
-			|| !readsOnly(callee.name, callee.parameter, [], 0) || !storesNothing(callee.name, false, [], 0))
+		if (callee == null
+			|| resultDependsOnParameter(callee.name, callee.parameter, [], 0)
+			|| !readsOnly(callee.name, callee.parameter, [], 0)
+			|| !storesNothing(callee.name, false, [], 0))
 			return false;
 		// Pass the source itself, and drop the copy with the reads that fed it.
 		var rewritten:Array<Located<IrInstruction>> = [];
@@ -189,7 +191,9 @@ class IrCopyElision {
 			return true;
 		consult(name);
 		visiting.push(key);
-		var parameter = fn.arguments[index], tainted:Map<Int, Bool> = [], fresh:Map<Int, Bool> = [];
+		var parameter = fn.arguments[index],
+			tainted:Map<Int, Bool> = [],
+			fresh:Map<Int, Bool> = [];
 		tainted.set(parameter.id, true);
 		var changed = true, rounds = 0;
 		while (changed && rounds++ < fn.blocks.length + 1) {
@@ -198,7 +202,7 @@ class IrCopyElision {
 				for (located in block.instructions) {
 					var instruction = located.value;
 					switch instruction {
-						case NewObject(out, _):
+						case NewObject(out, _) | ValueInit(out):
 							fresh.set(out.id, true);
 						case FieldSet(target, _, value) if (fresh.exists(target.id) && tainted.exists(value.id)):
 							if (!tainted.exists(target.id)) {
@@ -229,7 +233,8 @@ class IrCopyElision {
 										found;
 									case MethodCall(_, receiver, method, arguments, _):
 										var target = valueMethod(receiver, method), found = target == null && tainted.exists(receiver.id);
-										if (target != null && tainted.exists(receiver.id)
+										if (target != null
+											&& tainted.exists(receiver.id)
 											&& resultDependsOnParameter(target, 0, visiting, depth + 1))
 											found = true;
 										for (argument in 0...arguments.length)
@@ -259,7 +264,8 @@ class IrCopyElision {
 				continue;
 			switch terminator.value {
 				case Return(value), Throw(value), Rethrow(value):
-					if (tainted.exists(value.id)) depends = true;
+					if (tainted.exists(value.id))
+						depends = true;
 				case Branch(condition, _, _):
 				case Jump(_), Unreachable:
 			}
@@ -298,7 +304,7 @@ class IrCopyElision {
 		for (position in 0...block.instructions.length) {
 			var instruction = block.instructions[position].value;
 			switch instruction {
-				case NewObject(out, _):
+				case NewObject(out, _) | ValueInit(out):
 					fresh.set(out.id, true);
 				default:
 			}
@@ -434,7 +440,7 @@ class IrCopyElision {
 		for (block in fn.blocks)
 			for (located in block.instructions)
 				switch located.value {
-					case NewObject(out, _):
+					case NewObject(out, _) | ValueInit(out):
 						fresh.set(out.id, true);
 					default:
 				}
@@ -448,7 +454,15 @@ class IrCopyElision {
 					case ArraySet(_, _, _), GlobalSet(_, _), MemoryStore(_, _, _), CNativeCall(_, _, _), CallClosure(_, _, _):
 						ok = false;
 					case Call(_, callee, arguments):
-						var constructor = StringTools.endsWith(callee, ".new") && arguments.length > 0 && fresh.exists(arguments[0].id);
+						var target = byName.get(callee);
+						var constructor = target != null
+							&& (switch target.result {
+								case Void: true;
+								default: false;
+							})
+							&& StringTools.endsWith(callee, ".new")
+							&& arguments.length > 0
+							&& fresh.exists(arguments[0].id);
 						if (!storesNothing(callee, constructor, visiting, depth + 1))
 							ok = false;
 					case MethodCall(_, receiverValue, method, _, _):

@@ -20,8 +20,7 @@ class InlinerMain {
 		IrVerifier.verify(scalarCalls);
 		expect(allocations(programFunction(scalarCalls, "loop")) == 0,
 			"a direct scalar argument does not allocate a temporary when ordinary inlining is disabled");
-		expect(allocations(programFunction(scalarCalls, "$scalar-arguments:read")) == 0,
-			"the specialized callee keeps its value argument in scalar slots");
+		expect(allocations(programFunction(scalarCalls, "$scalar-arguments:read")) == 0, "the specialized callee keeps its value argument in scalar slots");
 		var nestedCalls = Frontend.compile("struct Inner { public var n:Int; public var label:String; "
 			+ "public function new(n:Int, label:String) { this.n = n; this.label = label; } } "
 			+ "struct Outer { public var inner:Inner; public var extra:Int; "
@@ -32,8 +31,7 @@ class InlinerMain {
 		IrScalarArguments.rewrite(nestedCalls);
 		IrInliner.run(nestedCalls, new IrInlineCache(), compiler.ir.TargetProfile.hashLink, false);
 		IrVerifier.verify(nestedCalls);
-		expect(allocations(programFunction(nestedCalls, "$scalar-arguments:read")) == 0,
-			"a nested managed value argument stays scalar across a branch");
+		expect(allocations(programFunction(nestedCalls, "$scalar-arguments:read")) == 0, "a nested managed value argument stays scalar across a branch");
 		var receiverProgram = Frontend.compile("struct Value { public final n:Int; public function new(n:Int) this.n = n; "
 			+ "public function doubled():Int return n * 2; public function inspect():Int return observe(doubled()); } "
 			+ "function observe(n:Int):Int return n; function make():Value return new Value(21); "
@@ -44,12 +42,10 @@ class InlinerMain {
 		compiler.ir.IrValuePhiScalarization.rewrite(receiverProgram);
 		IrInliner.run(receiverProgram, new IrInlineCache(), compiler.ir.TargetProfile.hashLink, false);
 		IrVerifier.verify(receiverProgram);
-		expect(allocations(programFunction(receiverProgram, "read")) == 0,
-			"a fresh receiver stays scalar through a read-only method that calls out");
+		expect(allocations(programFunction(receiverProgram, "read")) == 0, "a fresh receiver stays scalar through a read-only method that calls out");
 		expect(allocations(programFunction(receiverProgram, "$scalar-arguments:Value.inspect")) == 0,
 			"a read-only receiver stays scalar through its own nested method");
-		expect(new compiler.ir.IrInterpreter(receiverProgram).run("main") == 42,
-			"a scalar fresh receiver preserves its result");
+		expect(new compiler.ir.IrInterpreter(receiverProgram).run("main") == 42, "a scalar fresh receiver preserves its result");
 		var nestedConstructors = Frontend.compile("struct Child { public final text:String; public function new(text:String) this.text = text; } "
 			+ "struct Parent { public final child:Child; public function new(text:String) child = new Child(text); } "
 			+ "function make():Parent return new Parent('managed'); function main():Int return make().child.text.length;");
@@ -74,8 +70,7 @@ class InlinerMain {
 		IrVerifier.verify(equality);
 		expect(allocations(programFunction(equality, "same")) == 0,
 			"generated equality accepts scalar getter results without allocating with inlining disabled");
-		expect(new compiler.ir.IrInterpreter(equality).run("main") == 42,
-			"scalar generated equality preserves its result");
+		expect(new compiler.ir.IrInterpreter(equality).run("main") == 42, "scalar generated equality preserves its result");
 		var capturedValue = Frontend.compile("struct Child { public final text:String; public function new(text:String) this.text = text; } "
 			+ "struct Value { public final child:Child; public final number:Int; public function new(text:String, number:Int) { "
 			+ "child = new Child(text); this.number = number; } } "
@@ -94,8 +89,7 @@ class InlinerMain {
 		IrVerifier.verify(capturedValue);
 		expect(allocations(programFunction(capturedValue, "capture")) == 2,
 			"a value copied into either escaping closure remains scalar; only the closure environments allocate");
-		expect(allocations(programFunction(capturedValue, "escape")) >= 2,
-			"a value returned through Dynamic still allocates at its escape boundary");
+		expect(allocations(programFunction(capturedValue, "escape")) >= 2, "a value returned through Dynamic still allocates at its escape boundary");
 		var nativeHandler = Frontend.compile("struct Full { public final x:Float; public function new(x:Float) this.x = x; } "
 			+ "struct Narrow { public var n:Int16; public function new() n = 0; } "
 			+ "class Handler { public function new() {} "
@@ -109,8 +103,10 @@ class InlinerMain {
 		IrVerifier.verify(nativeHandler);
 		var nativeClone = false, narrowClone = false;
 		for (fn in nativeHandler.functions) {
-			if (fn.name == "$scalar-arguments:Handler.read") nativeClone = true;
-			if (fn.name == "$scalar-arguments:Handler.narrow") narrowClone = true;
+			if (fn.name == "$scalar-arguments:Handler.read")
+				nativeClone = true;
+			if (fn.name == "$scalar-arguments:Handler.narrow")
+				narrowClone = true;
 		}
 		expect(nativeClone, "full-width native value arguments stay scalar across exception handlers");
 		expect(!narrowClone, "narrow native fields keep their stored representation across exception handlers");
@@ -197,8 +193,7 @@ class InlinerMain {
 		var nestedSlotProgram = Frontend.compile(nestedSlotSource);
 		IrInliner.run(nestedSlotProgram, new IrInlineCache(), compiler.ir.TargetProfile.hashLink);
 		IrVerifier.verify(nestedSlotProgram);
-		expect(allocations(programFunction(nestedSlotProgram, "Holder.set")) == 0,
-			"constructing a nested value into an inline field should not allocate");
+		expect(allocations(programFunction(nestedSlotProgram, "Holder.set")) == 0, "constructing a nested value into an inline field should not allocate");
 		var boxedProgram = Frontend.compile(slotSource);
 		IrInliner.run(boxedProgram, new IrInlineCache(), compiler.ir.TargetProfile.wasm);
 		expect(allocations(programFunction(boxedProgram, "H.set")) == 1, "a target without inline value fields keeps the allocation");
@@ -248,11 +243,13 @@ class InlinerMain {
 		var tailEdit = IrInliner.run(Frontend.compile(editBase + " function extra():Int return 5;"), editCache, compiler.ir.TargetProfile.wasm);
 		expect(tailEdit.indexOf("stay") < 0 && tailEdit.indexOf("edit") < 0, "an edit after a function leaves it unchanged");
 		expect(tailEdit.indexOf("extra") >= 0, "an added function is reported as changed");
-		var bodyEdit = IrInliner.run(Frontend.compile(StringTools.replace(editBase, "x + 2", "x + 3") + " function extra():Int return 5;"), editCache, compiler.ir.TargetProfile.wasm);
+		var bodyEdit = IrInliner.run(Frontend.compile(StringTools.replace(editBase, "x + 2", "x + 3") + " function extra():Int return 5;"), editCache,
+			compiler.ir.TargetProfile.wasm);
 		expect(bodyEdit.indexOf("edit") >= 0, "a function whose code changed is reported as changed");
 		expect(bodyEdit.indexOf("stay") < 0, "a function before the edit stays unchanged");
 		var shifted = IrInliner.run(Frontend.compile("function pad():Int return 0; " + StringTools.replace(editBase, "x + 2", "x + 3")
-			+ " function extra():Int return 5;"), editCache, compiler.ir.TargetProfile.wasm);
+			+ " function extra():Int return 5;"),
+			editCache, compiler.ir.TargetProfile.wasm);
 		expect(shifted.indexOf("stay") >= 0, "a function whose positions shifted is reported as changed so its line information is refreshed");
 		// Lengthening an earlier line moves every later byte offset but no later line or column, which leaves those functions unchanged.
 		var linesFor = (comment:String) -> comment + "
@@ -339,18 +336,33 @@ function main():Int return stay(1);
 			+ 'public function new() { text = "x"; value = 0; } } '
 			+ 'function writeAndRead(v:NarrowValue, n:Int):Int { v.value = cast n; return cast v.value; } '
 			+ 'function main():Int return writeAndRead(new NarrowValue(), 257);'),
-			narrowFunctions = narrowProgram.functions.copy(), narrowObjects = narrowProgram.objects.copy(), narrowCache = new IrInlineCache();
+			narrowFunctions = narrowProgram.functions.copy(),
+			narrowObjects = narrowProgram.objects.copy(),
+			narrowCache = new IrInlineCache();
 		IrInliner.run(narrowProgram, narrowCache, compiler.ir.TargetProfile.wasm);
 		var narrowMemo = narrowCache.memo.get("writeAndRead");
 		expect(narrowMemo != null, "the narrow-field function should be memoized");
 		narrowProgram.functions = narrowFunctions.copy();
-		narrowProgram.objects = [for (object in narrowObjects) if (object.name != "NarrowValue") object else {
-			name: object.name, isValue: object.isValue, nativeLayout: object.nativeLayout, base: object.base,
-			interfaces: object.interfaces, methods: object.methods,
-			fields: [for (field in object.fields) if (field.name != "value") field else {
-				name: field.name, type: field.type, nativeLayout: field.nativeLayout, scalarStorage: {size: 1, signed: true}
-			}]
-		}];
+		narrowProgram.objects = [
+			for (object in narrowObjects)
+				if (object.name != "NarrowValue") object else {
+					name: object.name,
+					isValue: object.isValue,
+					nativeLayout: object.nativeLayout,
+					base: object.base,
+					interfaces: object.interfaces,
+					methods: object.methods,
+					fields: [
+						for (field in object.fields)
+							if (field.name != "value") field else {
+								name: field.name,
+								type: field.type,
+								nativeLayout: field.nativeLayout,
+								scalarStorage: {size: 1, signed: true}
+							}
+					]
+				}
+		];
 		IrInliner.run(narrowProgram, narrowCache, compiler.ir.TargetProfile.wasm);
 		expect(narrowCache.memo.get("writeAndRead") != narrowMemo, "a width or signedness change must invalidate forwarding");
 
@@ -372,7 +384,8 @@ function main():Int return stay(1);
 		expect(grownCache.memo.get("viaLeaf") == memosBefore.get("viaLeaf"), "a function that never looked at the base is not redone");
 		expect(overridden.indexOf("viaLeaf") < 0, "a function that never looked at the base is not reported");
 		// Unchanged input: every function keeps its inlined identity and nothing is reported as changed.
-		var inlinedMain = after.get("main"), cleanedMain = cache.cleaned.get("main");
+		var inlinedMain = after.get("main"),
+			cleanedMain = cache.cleaned.get("main");
 		program.functions = originals.copy();
 		expect(IrInliner.run(program, cache, compiler.ir.TargetProfile.wasm).length == 0, "an unchanged program must report no changed functions");
 		expect(programFunction(program, "main") == inlinedMain, "an unchanged caller keeps its inlined identity");
@@ -417,7 +430,7 @@ function main():Int return stay(1);
 		for (block in fn.blocks)
 			for (located in block.instructions)
 				switch located.value {
-					case NewObject(_, _):
+					case NewObject(_, _) | ValueInit(_):
 						count++;
 					default:
 				}
