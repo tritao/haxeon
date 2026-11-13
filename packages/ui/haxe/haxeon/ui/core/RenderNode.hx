@@ -37,347 +37,353 @@ import haxeon.ui.semantics.Semantics;
 
 /** One Haxe-owned node joins visual layout, interaction, focus, and state identity. */
 class RenderNode {
-	static inline final TargetBubblePhase = "target-bubble";
-	public final id:WidgetId;
-	public final layout:LayoutNode;
-	/** Shared and empty until the first `add`, so leaves allocate no array; change it only through `add`, `remove` and `replaceWith`. */
-	public var children(default, null):Array<RenderNode>;
-	static final NoChildren:Array<RenderNode> = [];
-	public var parent(default, null):Null<RenderNode>;
-	public var resolved:Null<ResolvedLayoutItem>;
-	public var focusable:Bool;
-	public var focusTrap:Bool;
-	public var hitTestSelf:Bool;
-	public var hitTestBehavior:HitTestBehavior;
-	/** Controls GPU raster reuse for this node's custom paint. */
-	public var cachePolicy:CachePolicy;
-	public var enabled:Bool;
-	/** Generic pseudo-state flags maintained by the routed interaction system. */
-	/** Interaction state (hover, press, focus) the widget saw when it built this node. */
-	public var states(default, set):StyleState;
-	/**
+  /** Ordinary nodes carry no scope field; only component body roots override this method. */
+  public function scopeOwner():Null<RenderScope> return null;
+  /** A retained body root can acquire a new logical owner without allocating a replacement node. */
+  public function setScopeOwner(owner:RenderScope):Void throw "Only a reserved component root can own a render scope";
+
+  public final id:WidgetId;
+  public final layout:LayoutNode;
+  /** Shared and empty until the first `add`, so leaves allocate no array; change it only through `add`, `remove` and `replaceWith`. */
+  public var children(default, null):Array<RenderNode>;
+  static final NoChildren:Array<RenderNode> = [];
+  public var parent(default, null):Null<RenderNode>;
+  public var resolved:Null<ResolvedLayoutItem>;
+  public var focusable:Bool;
+  public var focusTrap:Bool;
+  public var hitTestSelf:Bool;
+  public var hitTestBehavior:HitTestBehavior;
+  /** Controls GPU raster reuse for this node's custom paint. */
+  public var cachePolicy:CachePolicy;
+  public var enabled:Bool;
+  /** Generic pseudo-state flags maintained by the routed interaction system. */
+  /** Interaction state (hover, press, focus) the widget saw when it built this node. */
+  public var states(default, set):StyleState;
+  /**
 	 * Whether a widget recorded interaction state on this node. Structural nodes that never read it have no reason to rebuild
 	 * when the pointer moves over them, so cache validation ignores them.
 	 */
-	public var recordsInteraction(default, null):Bool = false;
+  public var recordsInteraction(default, null):Bool = false;
 
-	/** Invalidate a retained custom display list without changing geometry or text. */
-	public function invalidatePaint():Void {
-		paintKeyResolved = false;
-		paintRevision++;
-		invalidationFlags = UiDirtyFlag.NeedsPaint;
-	}
+  /** Invalidate a retained custom display list without changing geometry or text. */
+  public function invalidatePaint():Void {
+    paintKeyResolved = false;
+    paintRevision++;
+    invalidationFlags = UiDirtyFlag.NeedsPaint;
+  }
 
-	inline function set_states(value:StyleState):StyleState {
-		if (states != value || !recordsInteraction) paintKeyResolved = false;
-		recordsInteraction = true;
-		return states = value;
-	}
+  inline function set_states(value:StyleState):StyleState {
+    if (states != value || !recordsInteraction) paintKeyResolved = false;
+    recordsInteraction = true;
+    return states = value;
+  }
 
-	/** Keeps the routed state on the node without claiming that a widget built from it: that is what `recordsInteraction` says. */
-	@:allow(haxeon.ui.core.EventDispatcher)
-	function routeStates(value:StyleState):Void {
-		var recorded = recordsInteraction;
-		states = value;
-		recordsInteraction = recorded;
-	}
-	public var styleType:Null<String>;
-	public var styleKey:Null<String>;
-	public var styleId:Null<String>;
-	public var styleClasses:Array<String>;
-	public var styleTags:Array<String>;
-	/** Optional command scope contributed by this node and its focused subtree. */
-	public var commandScope:Null<String>;
-	/** Focused input widgets may route selected commands before consuming their keys.
+  /** Keeps the routed state on the node without claiming that a widget built from it: that is what `recordsInteraction` says. */
+  @:allow(haxeon.ui.core.EventDispatcher) function routeStates(value:StyleState):Void {
+    var recorded = recordsInteraction;
+    states = value;
+    recordsInteraction = recorded;
+  }
+  public var styleType:Null<String>;
+  public var styleKey:Null<String>;
+  public var styleId:Null<String>;
+  public var styleClasses:Array<String>;
+  public var styleTags:Array<String>;
+  /** Optional command scope contributed by this node and its focused subtree. */
+  public var commandScope:Null<String>;
+  /** Focused input widgets may route selected commands before consuming their keys.
 	 * The predicate receives the winning command ID, after scope and binding resolution.
 	 * Other keys still reach the widget; modal focus traps suppress this routing.
 	 */
-	public var commandShortcutFilter:Null<String->Bool> = null;
-	public var computedStyle:Null<ComputedStyle>;
-	public var tabIndex:Int;
-	/** Cursor intent used while this node is hovered or holds pointer capture. */
-	public var cursor:Null<CursorShape>;
-	/** Native hit-test behavior assigned to this node's resolved bounds. */
-	public var windowDecoration:Null<WindowDecorationRegionKind>;
-	/** Optional native cursor override for this node's window-chrome region. */
-	public var windowDecorationCursor:Null<CursorShape>;
-	public var semantics:Null<Semantics>;
-	/** Revision of paint/text content consumed by retained scene caches. */
-	public var contentRevision(default, null):Int;
-	/** Display-list invalidation independent of native layout content. */
-	public var paintRevision(default, null):Int;
-	/** Revision of resolved bounds, transforms, clips, and paint order. */
-	public var geometryRevision(default, null):Int;
-	/** Revision of opacity/effects and other compositing inputs. */
-	public var compositeRevision(default, null):Int;
-	/** Categories raised while this node was compared with its prior frame. */
-	public var invalidationFlags(default, null):UiDirtyFlag;
-	/** Most nodes never take handlers, custom paint or decorations, so these are allocated on first use. */
-	var handlers:Null<Array<HandlerEntry>>;
-	var outsidePointerDownHandlers:Null<Array<UiEvent->Void>>;
-	var resolvedHandlers:Null<Array<ResolvedLayoutItem->Void>>;
-	var paintHandlers:Null<Array<Canvas->ResolvedLayoutItem->Void>>;
-	var paintCacheKeys:Null<Array<Null<String>>>;
-	var paintKey:Null<String>;
-	var paintKeyResolved:Bool = false;
-	var decorations:Null<Array<Decoration>>;
-	var decorationCacheKeys:Null<Array<Null<String>>>;
-	/** Shared by every node without classes or tags; never mutated. */
-	static final NoStrings:Array<String> = [];
+  public var commandShortcutFilter:Null<String -> Bool> = null;
+  public var computedStyle:Null<ComputedStyle>;
+  public var tabIndex:Int;
+  /** Cursor intent used while this node is hovered or holds pointer capture. */
+  public var cursor:Null<CursorShape>;
+  /** Native hit-test behavior assigned to this node's resolved bounds. */
+  public var windowDecoration:Null<WindowDecorationRegionKind>;
+  /** Optional native cursor override for this node's window-chrome region. */
+  public var windowDecorationCursor:Null<CursorShape>;
+  public var semantics:Null<Semantics>;
+  /** Revision of paint/text content consumed by retained scene caches. */
+  public var contentRevision(default, null):Int;
+  /** Display-list invalidation independent of native layout content. */
+  public var paintRevision(default, null):Int;
+  /** Revision of resolved bounds, transforms, clips, and paint order. */
+  public var geometryRevision(default, null):Int;
+  /** Revision of opacity/effects and other compositing inputs. */
+  public var compositeRevision(default, null):Int;
+  /** Categories raised while this node was compared with its prior frame. */
+  public var invalidationFlags(default, null):UiDirtyFlag;
+  /** Most nodes never take handlers, custom paint or decorations, so these are allocated on first use. */
+  var handlers:Null<Array<HandlerEntry>>;
+  var outsidePointerDownHandlers:Null<Array<UiEvent -> Void>>;
+  var resolvedHandlers:Null<Array<ResolvedLayoutItem -> Void>>;
+  var paintHandlers:Null<Array<Canvas -> ResolvedLayoutItem -> Void>>;
+  var paintCacheKeys:Null<Array<Null<String>>>;
+  var paintKey:Null<String>;
+  var paintKeyResolved:Bool = false;
+  var decorations:Null<Array<Decoration>>;
+  var decorationCacheKeys:Null<Array<Null<String>>>;
+  /** Shared by every node without classes or tags; never mutated. */
+  static final NoStrings:Array<String> = [];
 
-	/** `sharedLayout` is for stand-ins that compare as the node they stand for (snapshotForCompare); it is never submitted. */
-	public function new(id:WidgetId, kind:LayoutVisualKind = LayoutVisualKind.Box, ?style:LayoutStyle, ?sharedLayout:LayoutNode) {
-		if (id == null)
-			throw "Render nodes require a stable widget ID";
-		this.id = id;
-		layout = sharedLayout != null ? sharedLayout : new LayoutNode(id.value, kind, style);
-		children = NoChildren;
-		parent = null;
-		resolved = null;
-		focusable = false;
-		focusTrap = false;
-		hitTestSelf = true;
-		hitTestBehavior = HitTestBehavior.Auto;
-		cachePolicy = CachePolicy.None;
-		enabled = true;
-		states = StyleState.empty();
-		recordsInteraction = false;
-		styleType = null;
-		styleKey = null;
-		styleId = null;
-		styleClasses = NoStrings;
-		styleTags = NoStrings;
-		commandScope = null;
-		computedStyle = null;
-		tabIndex = 0;
-		cursor = null;
-		windowDecoration = null;
-		windowDecorationCursor = null;
-		semantics = null;
-		contentRevision = 1;
-		paintRevision = 1;
-		geometryRevision = 1;
-		compositeRevision = 1;
-		invalidationFlags = UiDirtyFlag.NeedsBuild | UiDirtyFlag.NeedsStyle |
-			UiDirtyFlag.NeedsTextLayout | UiDirtyFlag.NeedsLayout | UiDirtyFlag.NeedsPaint |
-			UiDirtyFlag.NeedsComposite | UiDirtyFlag.NeedsSemantics | UiDirtyFlag.NeedsHitGeometry;
-		handlers = null;
-		outsidePointerDownHandlers = null;
-		resolvedHandlers = null;
-		paintHandlers = null;
-		paintCacheKeys = null;
-		decorations = null;
-		decorationCacheKeys = null;
-	}
+  /** `sharedLayout` is for stand-ins that compare as the node they stand for (snapshotForCompare); it is never submitted. */
+  public function new(
+    id:WidgetId,
+    kind:LayoutVisualKind = LayoutVisualKind.Box,
+    ?style:LayoutStyle,
+    ?sharedLayout:LayoutNode
+  ) {
+    if (id == null) throw "Render nodes require a stable widget ID";
+    this.id = id;
+    layout = sharedLayout != null ? sharedLayout : new LayoutNode(id.value, kind, style);
+    children = NoChildren;
+    parent = null;
+    resolved = null;
+    focusable = false;
+    focusTrap = false;
+    hitTestSelf = true;
+    hitTestBehavior = HitTestBehavior.Auto;
+    cachePolicy = CachePolicy.None;
+    enabled = true;
+    states = StyleState.empty();
+    recordsInteraction = false;
+    styleType = null;
+    styleKey = null;
+    styleId = null;
+    styleClasses = NoStrings;
+    styleTags = NoStrings;
+    commandScope = null;
+    computedStyle = null;
+    tabIndex = 0;
+    cursor = null;
+    windowDecoration = null;
+    windowDecorationCursor = null;
+    semantics = null;
+    contentRevision = 1;
+    paintRevision = 1;
+    geometryRevision = 1;
+    compositeRevision = 1;
+    invalidationFlags = UiDirtyFlag.NeedsBuild
+      | UiDirtyFlag.NeedsStyle | UiDirtyFlag.NeedsTextLayout | UiDirtyFlag.NeedsLayout
+      | UiDirtyFlag.NeedsPaint | UiDirtyFlag.NeedsComposite | UiDirtyFlag.NeedsSemantics | UiDirtyFlag.NeedsHitGeometry;
+    handlers = null;
+    outsidePointerDownHandlers = null;
+    resolvedHandlers = null;
+    paintHandlers = null;
+    paintCacheKeys = null;
+    decorations = null;
+    decorationCacheKeys = null;
+  }
 
-	/** Publishes the typed selector identity associated with this render node. */
-	public function setStyleIdentity(type:String, ?key:String, ?id:String,
-			?classes:Array<String>, ?tags:Array<String>):RenderNode {
-		if (type == null || type.length == 0)
-			throw "Styled render nodes require a type";
-		styleType = type;
-		styleKey = key;
-		styleId = id;
-		styleClasses = classes == null || classes.length == 0 ? NoStrings : haxeon.ui.style.StyleTarget.shared(classes);
-		styleTags = tags == null || tags.length == 0 ? NoStrings : haxeon.ui.style.StyleTarget.shared(tags);
-		return this;
-	}
+  /** Publishes the typed selector identity associated with this render node. */
+  public function setStyleIdentity(type:String,
+    ?key:String, ?id:String, ?classes:Array<String>, ?tags:Array<String>):RenderNode {
+    if (type == null || type.length == 0) throw "Styled render nodes require a type";
+    styleType = type;
+    styleKey = key;
+    styleId = id;
+    styleClasses = classes == null || classes.length == 0 ? NoStrings : haxeon.ui.style.StyleTarget.shared(classes);
+    styleTags = tags == null || tags.length == 0 ? NoStrings : haxeon.ui.style.StyleTarget.shared(tags);
+    return this;
+  }
 
-	/** Takes an independently built class list; the style resolver already owns a separate snapshot. */
-	@:allow(haxeon.ui.widgets.controls.Button)
-	function setStyleIdentityWithOwnedClasses(type:String, key:String, id:String,
-			classes:Array<String>, tags:Array<String>):Void {
-		styleType = type;
-		styleKey = key;
-		styleId = id;
-		styleClasses = classes;
-		styleTags = tags == null || tags.length == 0 ? NoStrings : haxeon.ui.style.StyleTarget.shared(tags);
-	}
+  /** Takes an independently built class list; the style resolver already owns a separate snapshot. */
+  @:allow(haxeon.ui.widgets.controls.Button) function setStyleIdentityWithOwnedClasses(
+    type:String,
+    key:String,
+    id:String,
+    classes:Array<String>,
+    tags:Array<String>
+  ):Void {
+    styleType = type;
+    styleKey = key;
+    styleId = id;
+    styleClasses = classes;
+    styleTags = tags == null || tags.length == 0 ? NoStrings : haxeon.ui.style.StyleTarget.shared(tags);
+  }
 
-	public function add(child:RenderNode):RenderNode {
-		if (child == null || child == this || child.parent != null)
-			throw "A render node must have one parent and cannot contain itself";
-		var ancestor:Null<RenderNode> = this;
-		while (ancestor != null) {
-			if (ancestor == child)
-				throw "Render tree contains a cycle";
-			ancestor = ancestor.parent;
-		}
-		child.parent = this;
-		if (children == NoChildren)
-			children = [];
-		children.push(child);
-		layout.add(child.layout);
-		return child;
-	}
+  public function add(child:RenderNode):RenderNode {
+    if (child == null
+      || child == this || child.parent != null) throw "A render node must have one parent and cannot contain itself";
+    var ancestor:Null<RenderNode> = this;
+    while (ancestor != null) {
+      if (ancestor == child) throw "Render tree contains a cycle";
+      ancestor = ancestor.parent;
+    }
+    child.parent = this;
+    if (children == NoChildren) children = [];
+    children.push(child);
+    layout.add(child.layout);
+    return child;
+  }
 
-	/** Inserts an unparented child at a stable slot in both render and layout trees. */
-	public function insertChild(index:Int, child:RenderNode):RenderNode {
-		if (index < 0 || index > children.length)
-			throw "A child insertion requires a valid slot";
-		if (child == null || child == this || child.parent != null)
-			throw "A render node must have one parent and cannot contain itself";
-		var ancestor:Null<RenderNode> = this;
-		while (ancestor != null) {
-			if (ancestor == child) throw "Render tree contains a cycle";
-			ancestor = ancestor.parent;
-		}
-		if (children == NoChildren) children = [];
-		children.insert(index, child);
-		layout.children.insert(index, child.layout);
-		child.parent = this;
-		return child;
-	}
+  /** Inserts an unparented child at a stable slot in both render and layout trees. */
+  public function insertChild(index:Int, child:RenderNode):RenderNode {
+    if (index < 0 || index > children.length) throw "A child insertion requires a valid slot";
+    if (child == null
+      || child == this || child.parent != null) throw "A render node must have one parent and cannot contain itself";
+    var ancestor:Null<RenderNode> = this;
+    while (ancestor != null) {
+      if (ancestor == child) throw "Render tree contains a cycle";
+      ancestor = ancestor.parent;
+    }
+    if (children == NoChildren) children = [];
+    children.insert(index, child);
+    layout.children.insert(index, child.layout);
+    child.parent = this;
+    return child;
+  }
 
-	/** Detaches this node from its current parent so a retained subtree can move. */
-	public function detach():RenderNode {
-		if (parent == null)
-			return this;
-		var previous = parent;
-		previous.children.remove(this);
-		previous.layout.remove(layout);
-		parent = null;
-		return this;
-	}
+  /** Detaches this node from its current parent so a retained subtree can move. */
+  public function detach():RenderNode {
+    if (parent == null) return this;
+    var previous = parent;
+    previous.children.remove(this);
+    previous.layout.remove(layout);
+    parent = null;
+    return this;
+  }
 
-	/** The canonical instance for this identity, after replacement or reconciliation; caches and callbacks follow it. */
-	public var replacedBy:Null<RenderNode> = null;
+  /** The canonical instance for this identity, after replacement or reconciliation; caches and callbacks follow it. */
+  public var replacedBy:Null<RenderNode> = null;
 
-	/** This node's live instance. A callback may capture a build root and resolve it here when it runs. */
-	public static function latest(node:RenderNode):RenderNode {
-		var current = node;
-		var next = current.replacedBy;
-		while (next != null) {
-			current = next;
-			next = current.replacedBy;
-		}
-		return current;
-	}
+  /** This node's live instance. A callback may capture a build root and resolve it here when it runs. */
+  public static function latest(node:RenderNode):RenderNode {
+    var current = node;
+    var next = current.replacedBy;
+    while (next != null) {
+      current = next;
+      next = current.replacedBy;
+    }
+    return current;
+  }
 
-	/** Puts `next` where this node is in its parent, in the render tree and the layout tree, and detaches this node. */
-	public function replaceWith(next:RenderNode):RenderNode {
-		var owner = parent;
-		if (owner == null)
-			throw "Only a node with a parent can be replaced in place";
-		owner.replaceChild(this, next);
-		replacedBy = next;
-		return next;
-	}
+  /** Puts `next` where this node is in its parent, in the render tree and the layout tree, and detaches this node. */
+  public function replaceWith(next:RenderNode):RenderNode {
+    var owner = parent;
+    if (owner == null) throw "Only a node with a parent can be replaced in place";
+    owner.replaceChild(this, next);
+    replacedBy = next;
+    return next;
+  }
 
-	/** Replaces one child without redirecting references to the removed node. */
-	public function replaceChild(previous:RenderNode, next:RenderNode):RenderNode {
-		if (previous == null || previous.parent != this)
-			throw "A replaced child must belong to this render node";
-		if (next == null || next == this || next.parent != null)
-			throw "A replacement render node must be a fresh, unparented node";
-		var ancestor:Null<RenderNode> = this;
-		while (ancestor != null) {
-			if (ancestor == next) throw "Render tree contains a cycle";
-			ancestor = ancestor.parent;
-		}
-		var index = children.indexOf(previous);
-		if (index < 0)
-			throw "Render tree is inconsistent: node is missing from its parent";
-		children[index] = next;
-		layout.children[index] = next.layout;
-		next.parent = this;
-		previous.parent = null;
-		return next;
-	}
+  /** Replaces one child without redirecting references to the removed node. */
+  public function replaceChild(previous:RenderNode, next:RenderNode):RenderNode {
+    if (previous == null || previous.parent != this) throw "A replaced child must belong to this render node";
+    if (next == null
+      || next == this || next.parent != null) throw "A replacement render node must be a fresh, unparented node";
+    var ancestor:Null<RenderNode> = this;
+    while (ancestor != null) {
+      if (ancestor == next) throw "Render tree contains a cycle";
+      ancestor = ancestor.parent;
+    }
+    var index = children.indexOf(previous);
+    if (index < 0) throw "Render tree is inconsistent: node is missing from its parent";
+    children[index] = next;
+    layout.children[index] = next.layout;
+    next.parent = this;
+    previous.parent = null;
+    return next;
+  }
 
-	static final fingerprintHash:KeyHash = new KeyHash();
+  static final fingerprintHash:KeyHash = new KeyHash();
 
-	/**
+  /**
 	 * A hash of what this node shows and how it lays out, from what the frame comparison reads. A debug check compares it
 	 * across frames to find changes to the submitted tree that nobody announced (UiContext.verifyRetentionEvery).
 	 */
-	public function fingerprint():Int {
-		return fingerprintText(layout.text, semantics == null ? null : semantics.label);
-	}
+  public function fingerprint():Int {
+    return fingerprintText(layout.text, semantics == null ? null : semantics.label);
+  }
 
-	/** Inputs before a leaf's explicitly owned live updates; other inputs remain fully checked. */
-	public function submittedFingerprint():Int return fingerprint();
+  /** Inputs before a leaf's explicitly owned live updates; other inputs remain fully checked. */
+  public function submittedFingerprint():Int return fingerprint();
 
-	function fingerprintText(text:Null<String>, label:Null<String>):Int {
-		var hash = fingerprintHash.reset();
-		hash.addInt(haxeon.Diff.fingerprint(layout.style)).addInt(Type.enumIndex(layout.visualKind)).addString(text)
-			.addInt(layout.measureVersion).addBool(hitTestSelf).addBool(focusable).addBool(enabled)
-			.addString(label);
-		var color = layout.textColor;
-		if (color != null) hash.addInt(haxeon.Hashing.hash(color));
-		hash.addInt(children.length);
-		return hash.a ^ (hash.b * 31);
-	}
+  function fingerprintText(text:Null<String>, label:Null<String>):Int {
+    var hash = fingerprintHash.reset();
+    hash.addInt(haxeon.Diff.fingerprint(layout.style)).addInt(Type.enumIndex(layout.visualKind)).addString(text)
+      .addInt(layout.measureVersion).addBool(hitTestSelf).addBool(focusable).addBool(enabled).addString(label);
+    var color = layout.textColor;
+    if (color != null) hash.addInt(haxeon.Hashing.hash(color));
+    hash.addInt(children.length);
+    return hash.a ^ (hash.b * 31);
+  }
 
-	/**
+  /**
 	 * A detached copy of what the frame comparison reads from this node (style, layout inputs, hit testing, semantics, revisions,
 	 * parent and child order), taken before the node is changed in place so the change is still seen as one.
 	 */
-	public function snapshotForCompare(shareLayout:Bool = false, ?reuse:RenderNode):RenderNode {
-		var reusable = reuse != null && (reuse.layout == layout) == shareLayout;
-		var prior:RenderNode = reusable ? cast reuse : shareLayout
-			? new RenderNode(id, layout.visualKind, null, layout) : new RenderNode(id, layout.visualKind, layout.style.copy());
-		if (reusable && !shareLayout) {
-			haxeon.Diff.apply(prior.layout.style, prior.layout.style, layout.style);
-			prior.layout.visualKind = layout.visualKind;
-		}
-		prior.computedStyle = computedStyle;
-		prior.states = states;
-		if (!shareLayout) {
-			prior.layout.text = layout.text;
-			prior.layout.textColor = layout.textColor;
-			prior.layout.measureVersion = layout.measureVersion;
-			prior.layout.intrinsicContent = layout.intrinsicContent;
-			layout.copyTextStylesTo(prior.layout);
-		}
-		prior.parent = parent;
-		if (prior.children == NoChildren) prior.children = [];
-		prior.children.resize(children.length);
-		for (index in 0...children.length)
-			prior.children[index] = children[index];
-		prior.contentRevision = contentRevision;
-		prior.paintRevision = paintRevision;
-		prior.geometryRevision = geometryRevision;
-		prior.compositeRevision = compositeRevision;
-		prior.hitTestSelf = hitTestSelf;
-		prior.hitTestBehavior = hitTestBehavior;
-		prior.semantics = semantics;
-		prior.enabled = enabled;
-		prior.focusable = focusable;
-		prior.focusTrap = focusTrap;
-		prior.tabIndex = tabIndex;
-		prior.resolved = resolved;
-		return prior;
-	}
+  public function snapshotForCompare(shareLayout:Bool = false, ?reuse:RenderNode):RenderNode {
+    var reusable = reuse != null && (reuse.layout == layout) == shareLayout;
+    var prior:RenderNode = reusable ? cast reuse : shareLayout ? new RenderNode(id,
+      layout.visualKind, null, layout) : new RenderNode(
+        id,
+        layout.visualKind,
+        layout.style.copy()
+      );
+    if (reusable && !shareLayout) {
+      haxeon.Diff.apply(prior.layout.style, prior.layout.style, layout.style);
+      prior.layout.visualKind = layout.visualKind;
+    }
+    prior.computedStyle = computedStyle;
+    prior.states = states;
+    if (!shareLayout) {
+      prior.layout.text = layout.text;
+      prior.layout.textColor = layout.textColor;
+      prior.layout.measureVersion = layout.measureVersion;
+      prior.layout.intrinsicContent = layout.intrinsicContent;
+      layout.copyTextStylesTo(prior.layout);
+    }
+    prior.parent = parent;
+    if (prior.children == NoChildren) prior.children = [];
+    prior.children.resize(children.length);
+    for (index in 0...children.length) prior.children[index] = children[index];
+    prior.contentRevision = contentRevision;
+    prior.paintRevision = paintRevision;
+    prior.geometryRevision = geometryRevision;
+    prior.compositeRevision = compositeRevision;
+    prior.hitTestSelf = hitTestSelf;
+    prior.hitTestBehavior = hitTestBehavior;
+    prior.semantics = semantics;
+    prior.enabled = enabled;
+    prior.focusable = focusable;
+    prior.focusTrap = focusTrap;
+    prior.tabIndex = tabIndex;
+    prior.resolved = resolved;
+    return prior;
+  }
 
-	/**
+  /**
 	 * What a builder made on this node when it returned it, to be taken before callers decorate the node: a later rebuild
 	 * (reconcile) replaces just that and leaves the listeners, paint callbacks, children and style changes callers add after.
 	 */
-	public function snapshotBuilt():BuiltNode {
-		var built = new BuiltNode(layout.style.copy(), children.copy(), semantics);
-		countCallbacks(built);
-		return built;
-	}
+  public function snapshotBuilt():BuiltNode {
+    var built = new BuiltNode(layout.style.copy(), children.copy(), semantics);
+    countCallbacks(built);
+    return built;
+  }
 
-	function countCallbacks(built:BuiltNode):Void {
-		built.handlers = handlers == null ? 0 : handlers.length;
-		built.outsidePointerDownHandlers = outsidePointerDownHandlers == null ? 0 : outsidePointerDownHandlers.length;
-		built.resolvedHandlers = resolvedHandlers == null ? 0 : resolvedHandlers.length;
-		built.paintHandlers = paintHandlers == null ? 0 : paintHandlers.length;
-		built.decorations = decorations == null ? 0 : decorations.length;
-	}
+  function countCallbacks(built:BuiltNode):Void {
+    built.handlers = handlers == null ? 0 : handlers.length;
+    built.outsidePointerDownHandlers = outsidePointerDownHandlers == null ? 0 : outsidePointerDownHandlers.length;
+    built.resolvedHandlers = resolvedHandlers == null ? 0 : resolvedHandlers.length;
+    built.paintHandlers = paintHandlers == null ? 0 : paintHandlers.length;
+    built.decorations = decorations == null ? 0 : decorations.length;
+  }
 
-	/**
+  /**
 	 * Whether `fresh`, a new build of this node, can be applied to it in place. A box a caller or the frame promoted to a custom
 	 * one (decorations, paint) still takes a box build; any other change of kind needs a replacement.
 	 */
-	public function canReconcile(fresh:RenderNode):Bool {
-		var kind = layout.visualKind, next = fresh.layout.visualKind;
-		return fresh.id.value == id.value && (kind == next || (kind == LayoutVisualKind.Custom && next == LayoutVisualKind.Box));
-	}
+  public function canReconcile(fresh:RenderNode):Bool {
+    var kind = layout.visualKind, next = fresh.layout.visualKind;
+    return fresh.id.value == id.value
+      && (kind == next || (kind == LayoutVisualKind.Custom && next == LayoutVisualKind.Box));
+  }
 
-	/**
+  /**
 	 * The one way a widget's rebuild reaches the node it built before. Applies `fresh`, the node the builder just made, to this
 	 * one, which stays in the tree with everything callers attached after `built` was taken:
 	 *
@@ -390,770 +396,752 @@ class RenderNode {
 	 * Properties of the node other than these (focusable, enabled, cursor, tab index, command scope) come from the widget
 	 * instance, which a rebuild keeps. Returns a stand-in for the node as it was, for the frame comparison.
 	 */
-	public function reconcile(fresh:RenderNode, built:BuiltNode, ?topology:RenderTreeTopology):RenderNode {
-		if (fresh == this || fresh.replacedBy != null)
-			throw "A reconcile requires a fresh render node";
-		// A rebuild that changed nothing the frame comparison reads (typing in a field whose appearance stays) is compared with the node itself.
-		var styleChanged = haxeon.Diff.mask(built.style, fresh.layout.style) != 0;
-		// The layout is only shared with the stand-in when the rebuild leaves the style as it is.
-		var prior = this;
-		if (styleChanged || appearanceChanged(fresh, built)) {
-			prior = snapshotForCompare(!styleChanged, built.prior);
-			built.prior = prior;
-		}
-		computedStyle = fresh.computedStyle;
-		states = fresh.states;
-		haxeon.Diff.apply(layout.style, built.style, fresh.layout.style);
-		haxeon.Diff.apply(built.style, built.style, fresh.layout.style);
-		if (semantics == built.semantics) semantics = fresh.semantics;
-		built.semantics = fresh.semantics;
-		// The counts of the new build, taken before its lists take what callers added to this node.
-		var madeHandlers = built.handlers, madeOutside = built.outsidePointerDownHandlers, madeResolved = built.resolvedHandlers;
-		var madePaint = built.paintHandlers, madeDecorations = built.decorations;
-		fresh.countCallbacks(built);
-		handlers = swapBuilt(handlers, madeHandlers, fresh.handlers);
-		outsidePointerDownHandlers = swapBuilt(outsidePointerDownHandlers, madeOutside, fresh.outsidePointerDownHandlers);
-		resolvedHandlers = swapBuilt(resolvedHandlers, madeResolved, fresh.resolvedHandlers);
-		paintCacheKeys = swapBuilt(paintCacheKeys, madePaint, fresh.paintCacheKeys);
-		paintHandlers = swapBuilt(paintHandlers, madePaint, fresh.paintHandlers);
-		decorationCacheKeys = swapBuilt(decorationCacheKeys, madeDecorations, fresh.decorationCacheKeys);
-		decorations = swapBuilt(decorations, madeDecorations, fresh.decorations);
-		paintKeyResolved = false;
-		swapChildren(fresh, built.children, topology);
-		// New callbacks may have captured their build root; it now resolves to the instance kept in the tree.
-		fresh.replacedBy = this;
-		return prior;
-	}
+  public function reconcile(fresh:RenderNode, built:BuiltNode, ?topology:RenderTreeTopology):RenderNode {
+    if (fresh == this || fresh.replacedBy != null) throw "A reconcile requires a fresh render node";
+    // Native scopes replace their body root independently. The authored child remains the
+    // same child of this build, even when its original physical node has been detached.
+    for (index in 0...built.children.length) {
+      var child = built.children[index];
+      var owner = child.scopeOwner();
+      if (owner != null) built.children[index] = owner.currentRoot(child);
+    }
+    // A rebuild that changed nothing the frame comparison reads (typing in a field whose appearance stays) is compared with the node itself.
+    var styleChanged = haxeon.Diff.mask(built.style, fresh.layout.style) != 0;
+    // The layout is only shared with the stand-in when the rebuild leaves the style as it is.
+    var prior = this;
+    if (styleChanged || appearanceChanged(fresh, built)) {
+      prior = snapshotForCompare(!styleChanged, built.prior);
+      built.prior = prior;
+    }
+    computedStyle = fresh.computedStyle;
+    states = fresh.states;
+    haxeon.Diff.apply(layout.style, built.style, fresh.layout.style);
+    haxeon.Diff.apply(built.style, built.style, fresh.layout.style);
+    if (semantics == built.semantics) semantics = fresh.semantics;
+    built.semantics = fresh.semantics;
+    // The counts of the new build, taken before its lists take what callers added to this node.
+    var madeHandlers = built.handlers,
+      madeOutside = built.outsidePointerDownHandlers, madeResolved = built.resolvedHandlers;
+    var madePaint = built.paintHandlers, madeDecorations = built.decorations;
+    fresh.countCallbacks(built);
+    handlers = swapBuilt(handlers, madeHandlers, fresh.handlers);
+    outsidePointerDownHandlers = swapBuilt(outsidePointerDownHandlers, madeOutside, fresh.outsidePointerDownHandlers);
+    resolvedHandlers = swapBuilt(resolvedHandlers, madeResolved, fresh.resolvedHandlers);
+    paintCacheKeys = swapBuilt(paintCacheKeys, madePaint, fresh.paintCacheKeys);
+    paintHandlers = swapBuilt(paintHandlers, madePaint, fresh.paintHandlers);
+    decorationCacheKeys = swapBuilt(decorationCacheKeys, madeDecorations, fresh.decorationCacheKeys);
+    decorations = swapBuilt(decorations, madeDecorations, fresh.decorations);
+    paintKeyResolved = false;
+    swapChildren(fresh, built.children, topology);
+    // New callbacks may have captured their build root; it now resolves to the instance kept in the tree.
+    fresh.replacedBy = this;
+    return prior;
+  }
 
-	/** Whether `fresh` differs from this node in anything but style the root of a reconcile takes from it (callbacks aside). */
-	function appearanceChanged(fresh:RenderNode, built:BuiltNode):Bool {
-		if (computedStyle != fresh.computedStyle || states != fresh.states || !Semantics.same(semantics, fresh.semantics) ||
-			built.children.length != fresh.children.length)
-			return true;
-		for (index in 0...built.children.length)
-			if (built.children[index].parent != this || built.children[index].id.value != fresh.children[index].id.value)
-				return true;
-		return false;
-	}
+  /** Whether `fresh` differs from this node in anything but style the root of a reconcile takes from it (callbacks aside). */
+  function appearanceChanged(fresh:RenderNode, built:BuiltNode):Bool {
+    if (computedStyle != fresh.computedStyle || states != fresh.states || !Semantics.same(semantics,
+      fresh.semantics) || built.children.length != fresh.children.length) return true;
+    for (index in 0...built.children.length) if (built.children[index].parent != this
+      || built.children[index].id.value != fresh.children[index].id.value) return true;
+    return false;
+  }
 
-	/** `current` with the first `count` entries, which the builder made, replaced by `fresh`: what is left of `current` was added by callers. */
-	static function swapBuilt<T>(current:Null<Array<T>>, count:Int, fresh:Null<Array<T>>):Null<Array<T>> {
-		var total = current == null ? 0 : current.length;
-		if (total <= count)
-			return fresh;
-		var result:Array<T> = fresh == null ? [] : fresh;
-		var source:Array<T> = cast current;
-		for (index in count...total)
-			result.push(source[index]);
-		return result;
-	}
+  /** `current` with the first `count` entries, which the builder made, replaced by `fresh`: what is left of `current` was added by callers. */
+  static function swapBuilt<T>(current:Null<Array<T>>, count:Int, fresh:Null<Array<T>>):Null<Array<T>> {
+    var total = current == null ? 0 : current.length;
+    if (total <= count) return fresh;
+    var result:Array<T> = fresh == null ? [] : fresh;
+    var source:Array<T> = cast current;
+    for (index in count...total) result.push(source[index]);
+    return result;
+  }
 
-	/**
+  /**
 	 * Replaces the children the builder made (`built`) by those of `fresh`, each in the place of the one before it; children
 	 * callers added stay where they are. `built` becomes the new build's children.
 	 */
-	function swapChildren(fresh:RenderNode, built:Array<RenderNode>, topology:Null<RenderTreeTopology>):Void {
-		var movedEarlier = false;
-		for (index in 0...built.length) {
-			var child = built[index];
-			if (child.parent != this) {
-				var next = fresh.children.indexOf(child);
-				if (next >= 0 && next < index) { movedEarlier = true; break; }
-			}
-		}
-		if (!movedEarlier) { swapChildrenUnmoved(fresh, built, topology); return; }
-		var count = fresh.children.length;
-		var slots:Array<Int> = [];
-		for (index in 0...built.length) {
-			var old = built[index];
-			var slot = topology == null ? children.indexOf(old) : topology.childPosition(id.value, old.id.value);
-			slots.push(slot < 0 ? index : slot);
-		}
-		// Remove the old builder-owned children before placing any replacements. A retained
-		// child can be moved to an earlier slot and must not then be removed as its old self.
-		for (old in built) if (old.parent == this) old.detach();
-		var position = -1;
-		for (index in 0...count) {
-			var child = fresh.children[0].detach();
-			if (index < built.length) built[index] = child; else built.push(child);
-			if (children == NoChildren) children = [];
-			var slot = index < slots.length ? slots[index] : position + 1;
-			position = Std.int(Math.max(0, Math.min(slot, children.length)));
-			child.parent = this;
-			children.insert(position, child);
-			layout.children.insert(position, child.layout);
-		}
-		built.resize(count);
-	}
+  function swapChildren(fresh:RenderNode, built:Array<RenderNode>, topology:Null<RenderTreeTopology>):Void {
+    var movedEarlier = false;
+    for (index in 0...built.length) {
+      var child = built[index];
+      if (child.parent != this) {
+        var next = fresh.children.indexOf(child);
+        if (next >= 0 && next < index) {
+          movedEarlier = true;
+          break;
+        }
+      }
+    }
+    if (!movedEarlier) {
+      swapChildrenUnmoved(fresh, built, topology);
+      return;
+    }
+    var count = fresh.children.length;
+    var slots:Array<Int> = [];
+    for (index in 0...built.length) {
+      var old = built[index];
+      var slot = topology == null ? children.indexOf(old) : topology.childPosition(id.value, old.id.value);
+      slots.push(slot < 0 ? index : slot);
+    }
+    // Remove the old builder-owned children before placing any replacements. A retained
+    // child can be moved to an earlier slot and must not then be removed as its old self.
+    for (old in built) if (old.parent == this) old.detach();
+    var position = -1;
+    for (index in 0...count) {
+      var child = fresh.children[0].detach();
+      if (index < built.length) built[index] = child;
+      else built.push(child);
+      if (children == NoChildren) children = [];
+      var slot = index < slots.length ? slots[index] : position + 1;
+      position = Std.int(Math.max(0, Math.min(slot, children.length)));
+      child.parent = this;
+      children.insert(position, child);
+      layout.children.insert(position, child.layout);
+    }
+    built.resize(count);
+  }
 
 
-	function swapChildrenUnmoved(fresh:RenderNode, built:Array<RenderNode>, topology:Null<RenderTreeTopology>):Void {
-		var count = fresh.children.length;
-		var position = -1;
-		// Each new child is taken from the front of the new build's list as it is detached, and recorded in `built` over the
-		// old one it replaces.
-		for (index in 0...built.length) {
-			var old = built[index];
-			if (index < count) {
-				var child = fresh.children[0].detach();
-				built[index] = child;
-				if (old.parent == this) {
-					old.replaceWith(child);
-					position = children.indexOf(child);
-				} else {
-					// A retained child can already be in the fresh build; its committed slot still belongs to the builder.
-					var slot = topology == null ? index : topology.childPosition(id.value, old.id.value);
-					if (slot < 0) continue;
-					if (children == NoChildren) children = [];
-					position = Std.int(Math.min(slot, children.length));
-					child.parent = this;
-					children.insert(position, child);
-					layout.children.insert(position, child.layout);
-				}
-			} else if (old.parent == this) {
-				position = children.indexOf(old) - 1;
-				old.detach();
-			}
-		}
-		for (index in built.length...count) {
-			var child = fresh.children[0].detach();
-			built.push(child);
-			if (children == NoChildren) {
-				add(child);
-				position = children.length - 1;
-			} else {
-				position++;
-				child.parent = this;
-				children.insert(position, child);
-				layout.children.insert(position, child.layout);
-			}
-		}
-		built.resize(count);
-	}
+  function swapChildrenUnmoved(fresh:RenderNode, built:Array<RenderNode>, topology:Null<RenderTreeTopology>):Void {
+    var count = fresh.children.length;
+    var position = -1;
+    // Each new child is taken from the front of the new build's list as it is detached, and recorded in `built` over the
+    // old one it replaces.
+    for (index in 0...built.length) {
+      var old = built[index];
+      if (index < count) {
+        var child = fresh.children[0].detach();
+        built[index] = child;
+        if (old.parent == this) {
+          old.replaceWith(child);
+          position = children.indexOf(child);
+        } else {
+          // A retained child can already be in the fresh build; its committed slot still belongs to the builder.
+          var slot = topology == null ? index : topology.childPosition(id.value, old.id.value);
+          if (slot < 0) continue;
+          if (children == NoChildren) children = [];
+          position = Std.int(Math.min(slot, children.length));
+          child.parent = this;
+          children.insert(position, child);
+          layout.children.insert(position, child.layout);
+        }
+      } else if (old.parent == this) {
+        position = children.indexOf(old) - 1;
+        old.detach();
+      }
+    }
+    for (index in built.length...count) {
+      var child = fresh.children[0].detach();
+      built.push(child);
+      if (children == NoChildren) {
+        add(child);
+        position = children.length - 1;
+      } else {
+        position++;
+        child.parent = this;
+        children.insert(position, child);
+        layout.children.insert(position, child.layout);
+      }
+    }
+    built.resize(count);
+  }
 
-	/** Converts a point in this node's local space into viewport/global space. */
-	public function localToGlobal(point:Point):Point
-		return requireResolved().localToViewport(point);
+  /** Converts a point in this node's local space into viewport/global space. */
+  public function localToGlobal(point:Point):Point return requireResolved().localToViewport(point);
 
-	/** Converts a viewport/global point into this node's local space. */
-	public function globalToLocal(point:Point):Point
-		return requireResolved().viewportToLocal(point);
+  /** Converts a viewport/global point into this node's local space. */
+  public function globalToLocal(point:Point):Point return requireResolved().viewportToLocal(point);
 
-	/** Converts a point from this node's local space into another node's local space. */
-	public function localToNode(point:Point, other:RenderNode):Point {
-		if (other == null)
-			throw "Coordinate conversion requires another render node";
-		return other.globalToLocal(localToGlobal(point));
-	}
+  /** Converts a point from this node's local space into another node's local space. */
+  public function localToNode(point:Point, other:RenderNode):Point {
+    if (other == null) throw "Coordinate conversion requires another render node";
+    return other.globalToLocal(localToGlobal(point));
+  }
 
-	public function localBounds():Rect
-		return requireResolved().localBounds();
+  public function localBounds():Rect return requireResolved().localBounds();
 
-	public function globalBounds():Rect
-		return requireResolved().viewportBounds();
+  public function globalBounds():Rect return requireResolved().viewportBounds();
 
-	public function containsGlobalPoint(point:Point):Bool {
-		if (point == null)
-			throw "Global points cannot be null";
-		return requireResolved().hitTest(point.x, point.y);
-	}
+  public function containsGlobalPoint(point:Point):Bool {
+    if (point == null) throw "Global points cannot be null";
+    return requireResolved().hitTest(point.x, point.y);
+  }
 
-	/** Copies resolved typography onto this node's concrete layout payload. */
-	public function applyTextStyle(style:ResolvedTextStyle):RenderNode {
-		if (style == null)
-			throw "Render text styles cannot be null";
-		return applyTextComponents(style.textStyle, style.paragraphStyle, style.textColor);
-	}
+  /** Copies resolved typography onto this node's concrete layout payload. */
+  public function applyTextStyle(style:ResolvedTextStyle):RenderNode {
+    if (style == null) throw "Render text styles cannot be null";
+    return applyTextComponents(style.textStyle, style.paragraphStyle, style.textColor);
+  }
 
-	/** Copy complete typography without constructing a temporary ResolvedTextStyle. */
-	@:allow(haxeon.ui.widgets.text.TextField)
-	function applyTextComponents(text:TextStyle, paragraph:ParagraphStyle, color:Color):RenderNode {
-		layout.textColor = color;
-		layout.textStyle = text;
-		layout.paragraphStyle = paragraph;
-		return this;
-	}
+  /** Copy complete typography without constructing a temporary ResolvedTextStyle. */
+  @:allow(haxeon.ui.widgets.text.TextField) function applyTextComponents(
+    text:TextStyle,
+    paragraph:ParagraphStyle,
+    color:Color
+  ):RenderNode {
+    layout.textColor = color;
+    layout.textStyle = text;
+    layout.paragraphStyle = paragraph;
+    return this;
+  }
 
-	public function on(kind:String, handler:UiEvent->Void, phase:String = "bubble"):RenderNode {
-		if (phase != "capture" && phase != "target" && phase != "bubble")
-			throw "Event handlers require a kind and callback";
-		return addHandler(kind, handler, phase);
-	}
+  /** Capture listeners run before target delivery. Non-bubbling focus events still capture root to target;
+	 * a target's default listener runs once, and an ancestor's default listener does not run for them. */
+  public function on(kind:String, handler:UiEvent -> Void, phase:UiEventPhase = UiEventPhase.Bubble):RenderNode {
+    var delivery = switch phase {
+      case Capture:
+        CaptureHandler;
+      case Target:
+        TargetHandler;
+      case Bubble:
+        BubbleHandler;
+    };
+    return addHandler(kind, handler, delivery);
+  }
 
-	/** A target-only bubble listener keeps its normal order after target-phase listeners. */
-	@:allow(haxeon.ui.widgets.scroll.ScrollView)
-	@:allow(haxeon.ui.widgets.controls.Tabs)
-	function onTargetBubble(kind:String, handler:UiEvent->Void):RenderNode {
-		return addHandler(kind, handler, TargetBubblePhase);
-	}
+  /** A target-only bubble listener keeps its normal order after target-phase listeners. */
+  @:allow(haxeon.ui.widgets.scroll.ScrollView) @:allow(haxeon.ui.widgets.controls.Tabs) function onTargetBubble(
+    kind:String,
+    handler:UiEvent -> Void
+  ):RenderNode {
+    return addHandler(kind, handler, TargetBubbleHandler);
+  }
 
-	function addHandler(kind:String, handler:UiEvent->Void, phase:String):RenderNode {
-		if (kind == null || kind.length == 0 || handler == null)
-			throw "Event handlers require a kind and callback";
-		if (handlers == null)
-			handlers = [];
-		handlers.push(new HandlerEntry(kind, phase, handler));
-		return this;
-	}
+  function addHandler(kind:String, handler:UiEvent -> Void, phase:HandlerPhase):RenderNode {
+    if (kind == null || kind.length == 0 || handler == null) throw "Event handlers require a kind and callback";
+    if (handlers == null) handlers = [];
+    handlers.push(new HandlerEntry(kind, phase, handler));
+    return this;
+  }
 
-	/** Primary pointer clicks and semantic activation (keyboard/accessibility).
+  /** Primary pointer clicks and semantic activation (keyboard/accessibility).
 	 * Other mouse buttons remain available to raw Click/context-menu handlers.
 	 */
-	public function onActivate(handler:UiEvent->Void, phase:String = "bubble"):RenderNode {
-		if (handler == null) throw "Activation handlers require a callback";
-		on(UiEventKind.Click, function(event) {
-			if (event.button == 0) handler(event);
-		}, phase);
-		return on(UiEventKind.Activate, handler, phase);
-	}
+  public function onActivate(handler:UiEvent -> Void, phase:UiEventPhase = UiEventPhase.Bubble):RenderNode {
+    if (handler == null) throw "Activation handlers require a callback";
+    on(UiEventKind.Click, function(event) {
+      if (event.button == 0) handler(event);
+    }, phase);
+    return on(UiEventKind.Activate, handler, phase);
+  }
 
-	/** Runs when a pointer press targets a node outside this node's subtree. */
-	public function onPointerDownOutside(handler:UiEvent->Void):RenderNode {
-		if (handler == null)
-			throw "Outside pointer handlers require a callback";
-		if (outsidePointerDownHandlers == null)
-			outsidePointerDownHandlers = [];
-		outsidePointerDownHandlers.push(handler);
-		return this;
-	}
+  /** Runs when a pointer press targets a node outside this node's subtree. */
+  public function onPointerDownOutside(handler:UiEvent -> Void):RenderNode {
+    if (handler == null) throw "Outside pointer handlers require a callback";
+    if (outsidePointerDownHandlers == null) outsidePointerDownHandlers = [];
+    outsidePointerDownHandlers.push(handler);
+    return this;
+  }
 
-	public function onResolved(handler:ResolvedLayoutItem->Void):RenderNode {
-		if (handler == null)
-			throw "Resolved geometry handlers cannot be null";
-		if (resolvedHandlers == null)
-			resolvedHandlers = [];
-		resolvedHandlers.push(handler);
-		return this;
-	}
+  public function onResolved(handler:ResolvedLayoutItem -> Void):RenderNode {
+    if (handler == null) throw "Resolved geometry handlers cannot be null";
+    if (resolvedHandlers == null) resolvedHandlers = [];
+    resolvedHandlers.push(handler);
+    return this;
+  }
 
-	/** Assigns this node's bounds to the native window-chrome hit-test map. */
-	public function setWindowDecoration(kind:WindowDecorationRegionKind,
-			?decorationCursor:CursorShape):RenderNode {
-		if (kind == null)
-			throw "Window decoration regions require a kind";
-		windowDecoration = kind;
-		windowDecorationCursor = decorationCursor;
-		if (decorationCursor != null)
-			cursor = decorationCursor;
-		if (cursor == null)
-			cursor = cursorForWindowDecoration(kind);
-		return this;
-	}
+  /** Assigns this node's bounds to the native window-chrome hit-test map. */
+  public function setWindowDecoration(kind:WindowDecorationRegionKind, ?decorationCursor:CursorShape):RenderNode {
+    if (kind == null) throw "Window decoration regions require a kind";
+    windowDecoration = kind;
+    windowDecorationCursor = decorationCursor;
+    if (decorationCursor != null) cursor = decorationCursor;
+    if (cursor == null) cursor = cursorForWindowDecoration(kind);
+    return this;
+  }
 
-	static function cursorForWindowDecoration(kind:WindowDecorationRegionKind):CursorShape {
-		return switch kind {
-			// A drag region behaves like a native title bar: the platform owns
-			// the move cursor during the active drag, not while hovering.
-			case WindowDecorationRegionKind.Drag: CursorShape.Arrow;
-			case WindowDecorationRegionKind.ResizeNorth | WindowDecorationRegionKind.ResizeSouth:
-				CursorShape.VerticalResize;
-			case WindowDecorationRegionKind.ResizeWest | WindowDecorationRegionKind.ResizeEast:
-				CursorShape.HorizontalResize;
-			case WindowDecorationRegionKind.ResizeNorthwest | WindowDecorationRegionKind.ResizeSoutheast:
-				CursorShape.DiagonalResize;
-			case WindowDecorationRegionKind.ResizeNortheast | WindowDecorationRegionKind.ResizeSouthwest:
-				CursorShape.DiagonalResizeNesw;
-			case WindowDecorationRegionKind.Client: CursorShape.Arrow;
-			case _: CursorShape.Arrow;
-		};
-	}
+  static function cursorForWindowDecoration(kind:WindowDecorationRegionKind):CursorShape {
+    return switch kind {
+      // A drag region behaves like a native title bar: the platform owns
+      // the move cursor during the active drag, not while hovering.
+      case WindowDecorationRegionKind.Drag:
+        CursorShape.Arrow;
+      case WindowDecorationRegionKind.ResizeNorth | WindowDecorationRegionKind.ResizeSouth:
+        CursorShape.VerticalResize;
+      case WindowDecorationRegionKind.ResizeWest | WindowDecorationRegionKind.ResizeEast:
+        CursorShape.HorizontalResize;
+      case WindowDecorationRegionKind.ResizeNorthwest | WindowDecorationRegionKind.ResizeSoutheast:
+        CursorShape.DiagonalResize;
+      case WindowDecorationRegionKind.ResizeNortheast | WindowDecorationRegionKind.ResizeSouthwest:
+        CursorShape.DiagonalResizeNesw;
+      case WindowDecorationRegionKind.Client:
+        CursorShape.Arrow;
+      case _:
+        CursorShape.Arrow;
+    };
+  }
 
-	/**
+  /**
 	 * Adds a custom paint callback. The callback draws in node-local coordinates
 	 * with (0, 0) at the node's top-left corner; native layout owns placement,
 	 * transforms, and ancestor clipping. A cache key opts the callback into
 	 * retained display-list reuse and must change whenever its local output can
 	 * change for reasons other than size or computed style.
 	 */
-	public function onPaint(handler:Canvas->ResolvedLayoutItem->Void,
-			?cacheKey:String):RenderNode {
-		if (layout.visualKind != LayoutVisualKind.Custom)
-			throw "Custom paint handlers require a Custom render node";
-		if (handler == null)
-			throw "Render paint handlers cannot be null";
-		if (cacheKey != null && cacheKey.length == 0)
-			throw "Render paint cache keys cannot be empty";
-		if (paintHandlers == null) {
-			paintHandlers = [];
-			paintCacheKeys = [];
-		}
-		paintHandlers.push(handler);
-		paintCacheKeys.push(cacheKey);
-		paintKeyResolved = false;
-		return this;
-	}
+  public function onPaint(handler:Canvas -> ResolvedLayoutItem -> Void, ?cacheKey:String):RenderNode {
+    if (layout.visualKind != LayoutVisualKind.Custom) throw "Custom paint handlers require a Custom render node";
+    if (handler == null) throw "Render paint handlers cannot be null";
+    if (cacheKey != null && cacheKey.length == 0) throw "Render paint cache keys cannot be empty";
+    if (paintHandlers == null) {
+      paintHandlers = [];
+      paintCacheKeys = [];
+    }
+    paintHandlers.push(handler);
+    paintCacheKeys.push(cacheKey);
+    paintKeyResolved = false;
+    return this;
+  }
 
-	/**
+  /**
 	 * Adds a decoration. Supplying a cache key opts it into retained display
 	 * list reuse; the key must include any external inputs read by the
 	 * decoration that are not represented by computed style or geometry.
 	 */
-	public function addDecoration(decoration:Decoration, ?cacheKey:String):RenderNode {
-		if (layout.visualKind != LayoutVisualKind.Custom)
-			throw "Render decorations require a Custom render node";
-		if (decoration == null)
-			throw "Render decorations cannot be null";
-		if (cacheKey != null && cacheKey.length == 0)
-			throw "Render decoration cache keys cannot be empty";
-		if (decorations == null) {
-			decorations = [];
-			decorationCacheKeys = [];
-		}
-		decorations.push(decoration);
-		decorationCacheKeys.push(cacheKey);
-		paintKeyResolved = false;
-		return this;
-	}
+  public function addDecoration(decoration:Decoration, ?cacheKey:String):RenderNode {
+    if (layout.visualKind != LayoutVisualKind.Custom) throw "Render decorations require a Custom render node";
+    if (decoration == null) throw "Render decorations cannot be null";
+    if (cacheKey != null && cacheKey.length == 0) throw "Render decoration cache keys cannot be empty";
+    if (decorations == null) {
+      decorations = [];
+      decorationCacheKeys = [];
+    }
+    decorations.push(decoration);
+    decorationCacheKeys.push(cacheKey);
+    paintKeyResolved = false;
+    return this;
+  }
 
-	@:allow(haxeon.ui.core.UiContext)
-	function hasPaintHandler():Bool
-		return paintHandlers != null || decorations != null || hasStyleDecorations();
+  @:allow(haxeon.ui.core.UiContext) function hasPaintHandler():Bool return paintHandlers != null
+    || decorations != null || hasStyleDecorations();
 
-	/** Normalize styled boxes before comparing or submitting native layout. */
-	@:allow(haxeon.ui.core.UiContext)
-	function syncPaintKind():Void {
-		if (!hasPaintHandler() || layout.visualKind == LayoutVisualKind.Custom) return;
-		if (layout.visualKind != LayoutVisualKind.Box)
-			throw "Custom decorations require a Box or Custom render node (" + styleKey + ")";
-		layout.visualKind = LayoutVisualKind.Custom;
-	}
+  /** Normalize styled boxes before comparing or submitting native layout. */
+  @:allow(haxeon.ui.core.UiContext) function syncPaintKind():Void {
+    if (!hasPaintHandler() || layout.visualKind == LayoutVisualKind.Custom) return;
+    if (layout.visualKind
+      != LayoutVisualKind.Box) throw "Custom decorations require a Box or Custom render node (" + styleKey + ")";
+    layout.visualKind = LayoutVisualKind.Custom;
+  }
 
-	/** Copies the framework hit policy into the native transaction payload. */
-	@:allow(haxeon.ui.core.UiContext)
-	function syncHitTestPolicy():Void {
-		switch hitTestBehavior {
-			case HitTestBehavior.None:
-				layout.hitSelf = false;
-				layout.hitChildren = false;
-			case HitTestBehavior.SelfOnly:
-				layout.hitSelf = hitTestSelf;
-				layout.hitChildren = false;
-			case HitTestBehavior.ChildrenOnly:
-				layout.hitSelf = false;
-				layout.hitChildren = true;
-			case HitTestBehavior.Auto:
-				layout.hitSelf = hitTestSelf;
-				layout.hitChildren = true;
-		}
-	}
+  /** Copies the framework hit policy into the native transaction payload. */
+  @:allow(haxeon.ui.core.UiContext) function syncHitTestPolicy():Void {
+    switch hitTestBehavior {
+      case HitTestBehavior.None:
+        layout.hitSelf = false;
+        layout.hitChildren = false;
+      case HitTestBehavior.SelfOnly:
+        layout.hitSelf = hitTestSelf;
+        layout.hitChildren = false;
+      case HitTestBehavior.ChildrenOnly:
+        layout.hitSelf = false;
+        layout.hitChildren = true;
+      case HitTestBehavior.Auto:
+        layout.hitSelf = hitTestSelf;
+        layout.hitChildren = true;
+    }
+  }
 
-	/** Synchronize the complete native input tree without allocating a visitor closure for each frame. */
-	@:allow(haxeon.ui.core.UiContext)
-	function syncLayoutInputs(changes:LayoutChanges):Void {
-		syncHitTestPolicy();
-		syncSceneRevisions();
-		if ((invalidationFlags & UiDirtyFlag.NativeInputs) != UiDirtyFlag.empty()) changes.inputs.set(id.value, 0);
-		for (child in children) child.syncLayoutInputs(changes);
-	}
+  /** Synchronize the complete native input tree without allocating a visitor closure for each frame. */
+  @:allow(haxeon.ui.core.UiContext) function syncLayoutInputs(changes:LayoutChanges):Void {
+    syncHitTestPolicy();
+    syncSceneRevisions();
+    if ((invalidationFlags & UiDirtyFlag.NativeInputs) != UiDirtyFlag.empty()) changes.inputs.set(id.value, 0);
+    for (child in children) child.syncLayoutInputs(changes);
+  }
 
-	/** Copies retained scene revisions into the native layout transaction payload. */
-	@:allow(haxeon.ui.core.UiContext)
-	@:allow(haxeon.ui.debug.UiStyleInvalidationMetrics)
-	function syncSceneRevisions():Void {
-		layout.contentRevision = contentRevision;
-		layout.geometryRevision = geometryRevision;
-		layout.compositeRevision = compositeRevision;
-	}
+  /** Copies retained scene revisions into the native layout transaction payload. */
+  @:allow(haxeon
+    .ui.core.UiContext) @:allow(haxeon.ui.debug.UiStyleInvalidationMetrics) function syncSceneRevisions():Void {
+    layout.contentRevision = contentRevision;
+    layout.geometryRevision = geometryRevision;
+    layout.compositeRevision = compositeRevision;
+  }
 
-	/** Returns the complete opt-in fingerprint for safe retained paint reuse. */
-	@:allow(haxeon.ui.core.UiContext)
-	function retainedPaintKey():Null<String> {
-		if (paintKeyResolved) return paintKey;
-		paintKeyResolved = true;
-		paintKey = null;
-		if (!hasPaintHandler()) return null;
-		var base = buildBasePaintKey();
-		if (base == null) return null;
-		var style = computedStyle == null ? null : computedStyle.getDecorationsReadOnly();
-		var result = style != null && style.decorations.length > 0
-			? base + "|style-decorations:" + style.key() : base;
-		// Existing content revisions and routed states invalidate the complete local fingerprint.
-		paintKey = recordsInteraction ? result + "|hover:" + (states & haxeon.ui.style.StyleState.Hovered).rawValue() : result;
-		return paintKey;
-	}
+  /** Returns the complete opt-in fingerprint for safe retained paint reuse. */
+  @:allow(haxeon.ui.core.UiContext) function retainedPaintKey():Null<String> {
+    if (paintKeyResolved) return paintKey;
+    paintKeyResolved = true;
+    paintKey = null;
+    if (!hasPaintHandler()) return null;
+    var base = buildBasePaintKey();
+    if (base == null) return null;
+    var style = computedStyle == null ? null : computedStyle.getDecorationsReadOnly();
+    var result = style != null && style.decorations.length > 0 ? base + "|style-decorations:" + style.key() : base;
+    // Existing content revisions and routed states invalidate the complete local fingerprint.
+    paintKey = recordsInteraction
+      ? result + "|hover:" + (states & haxeon.ui.style.StyleState.Hovered).rawValue() : result;
+    return paintKey;
+  }
 
-	function buildBasePaintKey():Null<String> {
-		var result = "paint";
-		if (paintCacheKeys != null) for (key in paintCacheKeys) {
-			if (key == null) return null;
-			result += "|handler:" + key;
-		}
-		if (decorationCacheKeys != null) for (key in decorationCacheKeys) {
-			if (key == null) return null;
-			result += "|decoration:" + key;
-		}
-		return result;
-	}
+  function buildBasePaintKey():Null<String> {
+    var result = "paint";
+    if (paintCacheKeys != null) for (key in paintCacheKeys) {
+      if (key == null) return null;
+      result += "|handler:" + key;
+    }
+    if (decorationCacheKeys != null) for (key in decorationCacheKeys) {
+      if (key == null) return null;
+      result += "|decoration:" + key;
+    }
+    return result;
+  }
 
-	/** Fingerprint for local compositor metadata; transforms are native placement. */
-	@:allow(haxeon.ui.core.UiContext)
-	function retainedCompositeKey():Null<String> {
-		if (!hasCompositePaint())
-			return null;
-		var style = computedStyle == null ? new ComputedStyle() : computedStyle;
-		var effects = style.getEffectsReadOnly(StyleProperty.Effects);
-		var backdropEffects = style.getEffectsReadOnly(StyleProperty.BackdropEffects);
-		var mask = style.getMaskReadOnly();
-		var maskKey = mask == null ? "" : mask.describe();
-		if (mask != null && mask.image != null)
-			maskKey += ":image=" + mask.image.identity;
-		return "opacity:" + Std.string(style.getNumber(StyleProperty.Opacity)) +
-			"|effects:" + (effects == null ? "" : effects.key()) +
-			"|backdrop:" + (backdropEffects == null ? "" : backdropEffects.key()) +
-			"|mask:" + maskKey;
-	}
+  /** Fingerprint for local compositor metadata; transforms are native placement. */
+  @:allow(haxeon.ui.core.UiContext) function retainedCompositeKey():Null<String> {
+    if (!hasCompositePaint()) return null;
+    var style = computedStyle == null ? new ComputedStyle() : computedStyle;
+    var effects = style.getEffectsReadOnly(StyleProperty.Effects);
+    var backdropEffects = style.getEffectsReadOnly(StyleProperty.BackdropEffects);
+    var mask = style.getMaskReadOnly();
+    var maskKey = mask == null ? "" : mask.describe();
+    if (mask != null && mask.image != null) maskKey += ":image=" + mask.image.identity;
+    return "opacity:" + Std.string(style.getNumber(StyleProperty.Opacity)) + "|effects:" + (effects == null ? ""
+      : effects.key()) + "|backdrop:" + (backdropEffects == null ? "" : backdropEffects.key()) + "|mask:" + maskKey;
+  }
 
-	@:allow(haxeon.ui.core.UiContext)
-	function setResolved(item:Null<ResolvedLayoutItem>):Void {
-		resolved = item;
-	}
+  @:allow(haxeon.ui.core.UiContext) function setResolved(item:Null<ResolvedLayoutItem>):Void {
+    resolved = item;
+  }
 
-	/** Runs after every node in the submitted tree has received this layout pass's geometry. */
-	@:allow(haxeon.ui.core.UiContext)
-	function didResolve():Void {
-		var item = resolved;
-		if (item != null && resolvedHandlers != null)
-			for (handler in resolvedHandlers)
-				ReactiveRuntime.withoutTracking1(handler, item);
-	}
+  /** Runs after every node in the submitted tree has received this layout pass's geometry. */
+  @:allow(haxeon.ui.core.UiContext) function didResolve():Void {
+    var item = resolved;
+    if (item != null && resolvedHandlers != null) for (handler in resolvedHandlers) ReactiveRuntime.withoutTracking1(
+      handler,
+      item
+    );
+  }
 
-	@:allow(haxeon.ui.core.UiContext)
-	function paintContent(canvas:Canvas):Bool {
-		if (resolved == null || !resolved.visible || !hasPaintHandler())
-			return false;
-		var started = RenderCost.time(), encodedBefore = RenderCost.encode;
-		var style = computedStyle;
-		var styleDecorations = style == null ? null : style.getDecorationsReadOnly();
-		if (styleDecorations != null)
-			for (decoration in styleDecorations.decorations)
-				decoration.paint(canvas, resolved, style);
-		if (decorations != null && decorations.length > 0) {
-			var decorationStyle = style == null ? new ComputedStyle() : style;
-			for (decoration in decorations)
-				decoration.paint(canvas, resolved, decorationStyle);
-		}
-		if (paintHandlers != null)
-			for (handler in paintHandlers)
-				handler(canvas, resolved);
-		if (RenderCost.enabled) RenderCost.callbacks += Sys.time() - started - (RenderCost.encode - encodedBefore);
-		return true;
-	}
+  @:allow(haxeon.ui.core.UiContext) function paintContent(canvas:Canvas):Bool {
+    if (resolved == null || !resolved.visible || !hasPaintHandler()) return false;
+    var started = RenderCost.time(), encodedBefore = RenderCost.encode;
+    var style = computedStyle;
+    var styleDecorations = style == null ? null : style.getDecorationsReadOnly();
+    if (styleDecorations != null) for (decoration in styleDecorations.decorations) decoration.paint(
+      canvas,
+      resolved,
+      style
+    );
+    if (decorations != null && decorations.length > 0) {
+      var decorationStyle = style == null ? new ComputedStyle() : style;
+      for (decoration in decorations) decoration.paint(canvas, resolved, decorationStyle);
+    }
+    if (paintHandlers != null) for (handler in paintHandlers) handler(canvas, resolved);
+    if (RenderCost.enabled) RenderCost.callbacks += Sys.time() - started - (RenderCost.encode - encodedBefore);
+    return true;
+  }
 
-	@:allow(haxeon.ui.core.UiContext)
-	function hasCompositePaint():Bool {
-		if (computedStyle == null || resolved == null || !resolved.visible || !hasPaintHandler())
-			return false;
-		var style = computedStyle;
-		var opacity = style.getNumber(StyleProperty.Opacity);
-		var effects = style.getEffectsReadOnly(StyleProperty.Effects);
-		var hasEffects = effects != null && effects.effects.length > 0;
-		var backdropEffects = style.getEffectsReadOnly(StyleProperty.BackdropEffects);
-		var hasBackdropEffects = backdropEffects != null && backdropEffects.effects.length > 0;
-		var mask = style.getMaskReadOnly();
-		return opacity < 1.0 || hasEffects || hasBackdropEffects || mask != null;
-	}
+  @:allow(haxeon.ui.core.UiContext) function hasCompositePaint():Bool {
+    if (computedStyle == null || resolved == null || !resolved.visible || !hasPaintHandler()) return false;
+    var style = computedStyle;
+    var opacity = style.getNumber(StyleProperty.Opacity);
+    var effects = style.getEffectsReadOnly(StyleProperty.Effects);
+    var hasEffects = effects != null && effects.effects.length > 0;
+    var backdropEffects = style.getEffectsReadOnly(StyleProperty.BackdropEffects);
+    var hasBackdropEffects = backdropEffects != null && backdropEffects.effects.length > 0;
+    var mask = style.getMaskReadOnly();
+    return opacity < 1.0 || hasEffects || hasBackdropEffects || mask != null;
+  }
 
-	/** Emits only the framework-owned layer metadata; it has no draw commands. */
-	@:allow(haxeon.ui.core.UiContext)
-	function paintComposite(canvas:Canvas):Bool {
-		if (!hasCompositePaint())
-			return false;
-		var style = computedStyle == null ? new ComputedStyle() : computedStyle;
-		var opacity = style.getNumber(StyleProperty.Opacity);
-		var effects = style.getEffects(StyleProperty.Effects);
-		var hasEffects = effects != null && effects.effects.length > 0;
-		var backdropEffects = style.getEffects(StyleProperty.BackdropEffects);
-		var hasBackdropEffects = backdropEffects != null && backdropEffects.effects.length > 0;
-		var mask = style.getMask();
-		canvas.beginLayer(opacity, CompositeMode.SourceOver, resolved.localBounds(),
-			hasEffects ? effects : null, mask, hasBackdropEffects ? backdropEffects : null);
-		canvas.endLayer();
-		return true;
-	}
+  /** Emits only the framework-owned layer metadata; it has no draw commands. */
+  @:allow(haxeon.ui.core.UiContext) function paintComposite(canvas:Canvas):Bool {
+    if (!hasCompositePaint()) return false;
+    var style = computedStyle == null ? new ComputedStyle() : computedStyle;
+    var opacity = style.getNumber(StyleProperty.Opacity);
+    var effects = style.getEffects(StyleProperty.Effects);
+    var hasEffects = effects != null && effects.effects.length > 0;
+    var backdropEffects = style.getEffects(StyleProperty.BackdropEffects);
+    var hasBackdropEffects = backdropEffects != null && backdropEffects.effects.length > 0;
+    var mask = style.getMask();
+    canvas.beginLayer(
+      opacity,
+      CompositeMode.SourceOver,
+      resolved.localBounds(),
+      hasEffects ? effects : null,
+      mask,
+      hasBackdropEffects ? backdropEffects : null
+    );
+    canvas.endLayer();
+    return true;
+  }
 
-	@:allow(haxeon.ui.core.UiContext)
-	function paint(canvas:Canvas):Bool {
-		if (!hasPaintHandler() || resolved == null || !resolved.visible)
-			return false;
-		if (hasCompositePaint()) {
-			var content:Canvas->Void = function(target:Canvas) {
-				paintContent(target);
-			};
-			var style = computedStyle == null ? new ComputedStyle() : computedStyle;
-			var effects = style.getEffects(StyleProperty.Effects);
-			var backdropEffects = style.getEffects(StyleProperty.BackdropEffects);
-			var mask = style.getMask();
-			canvas.withLayer(style.getNumber(StyleProperty.Opacity), content, CompositeMode.SourceOver,
-				resolved.bounds(), effects != null && effects.effects.length > 0 ? effects : null,
-				mask, backdropEffects != null && backdropEffects.effects.length > 0 ? backdropEffects : null);
-		} else {
-			paintContent(canvas);
-		}
-		return true;
-	}
+  @:allow(haxeon.ui.core.UiContext) function paint(canvas:Canvas):Bool {
+    if (!hasPaintHandler() || resolved == null || !resolved.visible) return false;
+    if (hasCompositePaint()) {
+      var content:Canvas -> Void = function(target:Canvas) {
+        paintContent(target);
+      };
+      var style = computedStyle == null ? new ComputedStyle() : computedStyle;
+      var effects = style.getEffects(StyleProperty.Effects);
+      var backdropEffects = style.getEffects(StyleProperty.BackdropEffects);
+      var mask = style.getMask();
+      canvas.withLayer(
+        style.getNumber(StyleProperty.Opacity),
+        content,
+        CompositeMode.SourceOver,
+        resolved.bounds(),
+        effects != null && effects.effects.length > 0 ? effects : null,
+        mask,
+        backdropEffects != null && backdropEffects.effects.length > 0 ? backdropEffects : null
+      );
+    } else {
+      paintContent(canvas);
+    }
+    return true;
+  }
 
-	function hasStyleDecorations():Bool {
-		if (computedStyle == null)
-			return false;
-		var value = computedStyle.getDecorationsReadOnly();
-		return value != null && value.decorations.length > 0;
-	}
+  function hasStyleDecorations():Bool {
+    if (computedStyle == null) return false;
+    var value = computedStyle.getDecorationsReadOnly();
+    return value != null && value.decorations.length > 0;
+  }
 
-	/**
+  /**
 	 * Carries retained-scene revisions across freshly built trees. The view
 	 * layer still submits a complete layout transaction, but downstream work
 	 * can now distinguish content, geometry, and composition changes.
 	 */
-	@:allow(haxeon.ui.debug.UiStyleInvalidationMetrics)
-	function syncRevisions(previous:Null<RenderNode>, diff:StyleDiff, accumulate:Bool = false):Void {
-		var preserved = accumulate ? invalidationFlags : UiDirtyFlag.None;
-		if (previous == null) {
-			invalidationFlags = UiDirtyFlag.NeedsBuild | UiDirtyFlag.NeedsStyle |
-				UiDirtyFlag.NeedsTextLayout | UiDirtyFlag.NeedsLayout | UiDirtyFlag.NeedsPaint |
-				UiDirtyFlag.NeedsComposite | UiDirtyFlag.NeedsSemantics | UiDirtyFlag.NeedsHitGeometry;
-			return;
-		}
+  @:allow(haxeon.ui.debug.UiStyleInvalidationMetrics) function syncRevisions(
+    previous:Null<RenderNode>,
+    diff:StyleDiff,
+    accumulate:Bool = false
+  ):Void {
+    var preserved = accumulate ? invalidationFlags : UiDirtyFlag.None;
+    if (previous == null) {
+      invalidationFlags = UiDirtyFlag.NeedsBuild
+        | UiDirtyFlag.NeedsStyle | UiDirtyFlag.NeedsTextLayout | UiDirtyFlag.NeedsLayout | UiDirtyFlag.NeedsPaint
+        | UiDirtyFlag.NeedsComposite | UiDirtyFlag.NeedsSemantics | UiDirtyFlag.NeedsHitGeometry;
+      return;
+    }
 
-		contentRevision = previous.contentRevision;
-		paintRevision = previous.paintRevision;
-		geometryRevision = previous.geometryRevision;
-		compositeRevision = previous.compositeRevision;
-		invalidationFlags = UiDirtyFlag.None;
-		var contentChanged = false;
-		var geometryChanged = false;
-		var compositeChanged = false;
-		if (diff.changed) {
-			invalidationFlags = UiDirtyFlag.NeedsStyle | styleDirtyFlags(diff.impact);
-			if (diff.impact.contains(StyleImpact.Paint) || diff.impact.contains(StyleImpact.TextLayout))
-				contentChanged = true;
-			if (diff.impact.contains(StyleImpact.Layout) || diff.impact.contains(StyleImpact.TextLayout) || diff.impact.contains(StyleImpact.HitGeometry))
-				geometryChanged = true;
-			if (diff.impact.contains(StyleImpact.Composite))
-				compositeChanged = true;
-		}
+    contentRevision = previous.contentRevision;
+    paintRevision = previous.paintRevision;
+    geometryRevision = previous.geometryRevision;
+    compositeRevision = previous.compositeRevision;
+    invalidationFlags = UiDirtyFlag.None;
+    var contentChanged = false;
+    var geometryChanged = false;
+    var compositeChanged = false;
+    if (diff.changed) {
+      invalidationFlags = UiDirtyFlag.NeedsStyle | styleDirtyFlags(diff.impact);
+      if (diff.impact.contains(StyleImpact.Paint)
+        || diff.impact.contains(StyleImpact.TextLayout)) contentChanged = true;
+      if (diff.impact.contains(StyleImpact.Layout) || diff.impact.contains(StyleImpact.TextLayout)
+        || diff.impact.contains(StyleImpact.HitGeometry)) geometryChanged = true;
+      if (diff.impact.contains(StyleImpact.Composite)) compositeChanged = true;
+    }
 
-		var rawFlags = layoutInputDiffFlags(previous);
-		invalidationFlags |= rawFlags;
-		if (rawFlags.contains(UiDirtyFlag.NeedsPaint) || rawFlags.contains(UiDirtyFlag.NeedsTextLayout))
-			contentChanged = true;
-		if (rawFlags.contains(UiDirtyFlag.NeedsLayout) || rawFlags.contains(UiDirtyFlag.NeedsTextLayout) || rawFlags.contains(UiDirtyFlag.NeedsHitGeometry))
-			geometryChanged = true;
-		if (rawFlags.contains(UiDirtyFlag.NeedsComposite))
-			compositeChanged = true;
+    var rawFlags = layoutInputDiffFlags(previous);
+    invalidationFlags |= rawFlags;
+    if (rawFlags.contains(UiDirtyFlag.NeedsPaint)
+      || rawFlags.contains(UiDirtyFlag.NeedsTextLayout)) contentChanged = true;
+    if (rawFlags.contains(UiDirtyFlag.NeedsLayout) || rawFlags.contains(UiDirtyFlag.NeedsTextLayout)
+      || rawFlags.contains(UiDirtyFlag.NeedsHitGeometry)) geometryChanged = true;
+    if (rawFlags.contains(UiDirtyFlag.NeedsComposite)) compositeChanged = true;
 
-		// Text and external intrinsic content are not represented by computed
-		// style, so classify them explicitly as both content and geometry.
-		if (layout.visualKind != previous.layout.visualKind || layout.text != previous.layout.text ||
-			layout.measureVersion != previous.layout.measureVersion ||
-			layout.intrinsicContent != previous.layout.intrinsicContent) {
-			contentChanged = true;
-			geometryChanged = true;
-			invalidationFlags |= UiDirtyFlag.NeedsTextLayout | UiDirtyFlag.NeedsLayout |
-				UiDirtyFlag.NeedsPaint;
-		}
+    // Text and external intrinsic content are not represented by computed
+    // style, so classify them explicitly as both content and geometry.
+    if (layout.visualKind != previous.layout.visualKind || layout.text != previous.layout.text || layout.measureVersion
+      != previous.layout.measureVersion || layout.intrinsicContent != previous.layout.intrinsicContent) {
+      contentChanged = true;
+      geometryChanged = true;
+      invalidationFlags |= UiDirtyFlag.NeedsTextLayout | UiDirtyFlag.NeedsLayout | UiDirtyFlag.NeedsPaint;
+    }
 
-		if (hitTestSelf != previous.hitTestSelf || hitTestBehavior != previous.hitTestBehavior) {
-			geometryChanged = true;
-			invalidationFlags |= UiDirtyFlag.NeedsHitGeometry;
-		}
-		if (!Semantics.same(semantics, previous.semantics) || enabled != previous.enabled ||
-			focusable != previous.focusable || focusTrap != previous.focusTrap ||
-			tabIndex != previous.tabIndex)
-			invalidationFlags |= UiDirtyFlag.NeedsSemantics;
-		if (contentChanged) {
-			paintKeyResolved = false;
-			contentRevision++;
-			paintRevision++;
-		}
-		if (geometryChanged)
-			geometryRevision++;
-		if (compositeChanged)
-			compositeRevision++;
-		invalidationFlags |= preserved;
-	}
+    if (hitTestSelf != previous.hitTestSelf || hitTestBehavior != previous.hitTestBehavior) {
+      geometryChanged = true;
+      invalidationFlags |= UiDirtyFlag.NeedsHitGeometry;
+    }
+    if (!Semantics.same(semantics,
+      previous.semantics) || enabled != previous.enabled || focusable != previous.focusable || focusTrap
+      != previous.focusTrap || tabIndex != previous.tabIndex) invalidationFlags |= UiDirtyFlag.NeedsSemantics;
+    if (contentChanged) {
+      paintKeyResolved = false;
+      contentRevision++;
+      paintRevision++;
+    }
+    if (geometryChanged) geometryRevision++;
+    if (compositeChanged) compositeRevision++;
+    invalidationFlags |= preserved;
+  }
 
-	/** LayoutStyle fields by what a change to them invalidates; every field is in at least one (styleFieldsClassified). */
-	static final StyleLayoutFields:Int = haxeon.Diff.bit(\LayoutStyle.width) | haxeon.Diff.bit(\LayoutStyle.height)
-		| haxeon.Diff.bit(\LayoutStyle.aspectRatio) | haxeon.Diff.bit(\LayoutStyle.direction)
-		| haxeon.Diff.bit(\LayoutStyle.childAlignX) | haxeon.Diff.bit(\LayoutStyle.childAlignY)
-		| haxeon.Diff.bit(\LayoutStyle.childDistribution) | haxeon.Diff.bit(\LayoutStyle.positioning)
-		| haxeon.Diff.bit(\LayoutStyle.wrapMode) | haxeon.Diff.bit(\LayoutStyle.rowGap)
-		| haxeon.Diff.bit(\LayoutStyle.columnGap) | haxeon.Diff.bit(\LayoutStyle.alignSelf)
-		| haxeon.Diff.bit(\LayoutStyle.positionX) | haxeon.Diff.bit(\LayoutStyle.positionY)
-		| haxeon.Diff.bit(\LayoutStyle.padding) | haxeon.Diff.bit(\LayoutStyle.childGap);
-	static final StyleHitFields:Int = haxeon.Diff.bit(\LayoutStyle.zIndex) | haxeon.Diff.bit(\LayoutStyle.clipToParent)
-		| haxeon.Diff.bit(\LayoutStyle.overlay) | haxeon.Diff.bit(\LayoutStyle.clipHorizontal)
-		| haxeon.Diff.bit(\LayoutStyle.clipVertical) | haxeon.Diff.bit(\LayoutStyle.visible);
-	static final StylePaintFields:Int = StyleHitFields | haxeon.Diff.bit(\LayoutStyle.background)
-		| haxeon.Diff.bit(\LayoutStyle.radiusTopLeft) | haxeon.Diff.bit(\LayoutStyle.radiusTopRight)
-		| haxeon.Diff.bit(\LayoutStyle.radiusBottomRight) | haxeon.Diff.bit(\LayoutStyle.radiusBottomLeft);
-	static final StyleTransformFields:Int = haxeon.Diff.bit(\LayoutStyle.transform)
-		| haxeon.Diff.bit(\LayoutStyle.transformOriginX) | haxeon.Diff.bit(\LayoutStyle.transformOriginY);
+  /** LayoutStyle fields by what a change to them invalidates; every field is in at least one (styleFieldsClassified). */
+  static final StyleLayoutFields:Int = haxeon.Diff.bit(\LayoutStyle.width) | haxeon.Diff.bit(\LayoutStyle.height)
+    | haxeon.Diff.bit(\LayoutStyle.aspectRatio) | haxeon.Diff.bit(\LayoutStyle.direction)
+    | haxeon.Diff.bit(\LayoutStyle.childAlignX) | haxeon.Diff.bit(\LayoutStyle.childAlignY)
+    | haxeon.Diff.bit(\LayoutStyle.childDistribution) | haxeon.Diff.bit(\LayoutStyle.positioning)
+    | haxeon.Diff.bit(\LayoutStyle.wrapMode) | haxeon.Diff.bit(\LayoutStyle.rowGap)
+    | haxeon.Diff.bit(\LayoutStyle.columnGap) | haxeon.Diff.bit(\LayoutStyle.alignSelf)
+    | haxeon.Diff.bit(\LayoutStyle.positionX) | haxeon.Diff.bit(\LayoutStyle.positionY)
+    | haxeon.Diff.bit(\LayoutStyle.padding) | haxeon.Diff.bit(\LayoutStyle.childGap);
+  static final StyleHitFields:Int = haxeon.Diff.bit(\LayoutStyle.zIndex) | haxeon.Diff.bit(\LayoutStyle.clipToParent)
+    | haxeon.Diff.bit(\LayoutStyle.overlay) | haxeon.Diff.bit(\LayoutStyle.clipHorizontal)
+    | haxeon.Diff.bit(\LayoutStyle.clipVertical) | haxeon.Diff.bit(\LayoutStyle.visible);
+  static final StylePaintFields:Int = StyleHitFields | haxeon.Diff.bit(\LayoutStyle.background)
+    | haxeon.Diff.bit(\LayoutStyle.radiusTopLeft) | haxeon.Diff.bit(\LayoutStyle.radiusTopRight)
+    | haxeon.Diff.bit(\LayoutStyle.radiusBottomRight) | haxeon.Diff.bit(\LayoutStyle.radiusBottomLeft);
+  static final StyleTransformFields:Int = haxeon.Diff.bit(\LayoutStyle.transform)
+    | haxeon.Diff.bit(\LayoutStyle.transformOriginX) | haxeon.Diff.bit(\LayoutStyle.transformOriginY);
 
-	/** Whether every LayoutStyle field invalidates something when it changes: a new field must join a group above. */
-	public static function styleFieldsClassified():Bool
-		return (StyleLayoutFields | StylePaintFields | StyleHitFields | StyleTransformFields) == haxeon.Diff.all(LayoutStyle);
+  /** Whether every LayoutStyle field invalidates something when it changes: a new field must join a group above. */
+  public static function styleFieldsClassified():Bool return (StyleLayoutFields
+    | StylePaintFields | StyleHitFields | StyleTransformFields) == haxeon.Diff.all(LayoutStyle);
 
-	/** Classifies concrete LayoutNode mutations that bypass computed styles. */
-	function layoutInputDiffFlags(previous:RenderNode):UiDirtyFlag {
-		var before = previous.layout;
-		var after = layout;
-		var flags = UiDirtyFlag.empty();
-		var beforeStyle = before.style;
-		var afterStyle = layout.style;
-		// Generated from LayoutStyle's fields (haxeon.Diff); styleFieldsClassified checks each is in a group below.
-		var changed = beforeStyle == afterStyle ? 0 : haxeon.Diff.mask(beforeStyle, afterStyle);
-		if ((changed & StyleLayoutFields) != 0)
-			flags |= UiDirtyFlag.NeedsLayout;
-		if ((changed & StylePaintFields) != 0 || !haxeon.Equality.equals(before.textColor, after.textColor))
-			flags |= UiDirtyFlag.NeedsPaint;
-		if ((changed & StyleHitFields) != 0)
-			flags |= UiDirtyFlag.NeedsHitGeometry;
-		if ((changed & StyleTransformFields) != 0)
-			flags |= UiDirtyFlag.NeedsComposite | UiDirtyFlag.NeedsHitGeometry;
-		if (!haxeon.Equality.equals(before.peekTextStyle(), after.peekTextStyle()) ||
-			!haxeon.Equality.equals(before.peekParagraphStyle(), after.peekParagraphStyle()))
-			flags |= UiDirtyFlag.NeedsTextLayout | UiDirtyFlag.NeedsPaint | UiDirtyFlag.NeedsLayout;
-		return flags;
-	}
+  /** Classifies concrete LayoutNode mutations that bypass computed styles. */
+  function layoutInputDiffFlags(previous:RenderNode):UiDirtyFlag {
+    var before = previous.layout;
+    var after = layout;
+    var flags = UiDirtyFlag.empty();
+    var beforeStyle = before.style;
+    var afterStyle = layout.style;
+    // Generated from LayoutStyle's fields (haxeon.Diff); styleFieldsClassified checks each is in a group below.
+    var changed = beforeStyle == afterStyle ? 0 : haxeon.Diff.mask(beforeStyle, afterStyle);
+    if ((changed & StyleLayoutFields) != 0) flags |= UiDirtyFlag.NeedsLayout;
+    if ((changed & StylePaintFields) != 0 || !haxeon.Equality.equals(before.textColor,
+      after.textColor)) flags |= UiDirtyFlag.NeedsPaint;
+    if ((changed & StyleHitFields) != 0) flags |= UiDirtyFlag.NeedsHitGeometry;
+    if ((changed & StyleTransformFields) != 0) flags |= UiDirtyFlag.NeedsComposite | UiDirtyFlag.NeedsHitGeometry;
+    if (!haxeon.Equality.equals(before.peekTextStyle(), after.peekTextStyle()) || !haxeon.Equality.equals(
+      before.peekParagraphStyle(),
+      after.peekParagraphStyle()
+    )) flags |= UiDirtyFlag.NeedsTextLayout | UiDirtyFlag.NeedsPaint | UiDirtyFlag.NeedsLayout;
+    return flags;
+  }
 
-	@:allow(haxeon.ui.core.EventDispatcher)
-	function invoke(event:UiEvent):Void {
-		if (event.phase == "target") {
-			invokePhase(event, "target");
-			if (!event.immediatePropagationStopped)
-				invokePhase(event, "bubble");
-		} else
-			invokePhase(event, event.phase);
-	}
+  @:allow(haxeon.ui.core.EventDispatcher) function invoke(event:UiEvent):Void {
+    if (event.phase == UiEventPhase.Target) {
+      invokePhase(event, UiEventPhase.Target);
+      if (!event.immediatePropagationStopped) invokePhase(event, UiEventPhase.Bubble);
+    } else invokePhase(event, event.phase);
+  }
 
-	/** Whether this node can observe the routed event in its position on the path. */
-	@:allow(haxeon.ui.core.EventDispatcher)
-	function hasEventHandler(kind:String, target:Bool):Bool {
-		var entries = handlers;
-		if (entries != null)
-			for (entry in entries)
-				if (entry.kind == kind && (target ? entry.phase != "capture" :
-					(entry.phase == "capture" || entry.phase == "bubble"))) return true;
-		return false;
-	}
+  /** Whether this node can observe the routed event in its position on the path. */
+  @:allow(haxeon.ui.core.EventDispatcher) function hasEventHandler(kind:String, target:Bool):Bool {
+    var entries = handlers;
+    if (entries != null) for (entry in entries) if (entry.kind == kind && (target
+      ? entry.phase != CaptureHandler : (entry.phase == CaptureHandler || entry.phase == BubbleHandler))) return true;
+    return false;
+  }
 
-	@:allow(haxeon.ui.core.EventDispatcher)
-	function invokePointerDownOutside(event:UiEvent):Void {
-		if (outsidePointerDownHandlers == null)
-			return;
-		for (handler in outsidePointerDownHandlers) {
-			event.currentTarget = id;
-			event.phase = "outside";
-			handler(event);
-			if (event.propagationStopped)
-				return;
-		}
-	}
+  @:allow(haxeon.ui.core.EventDispatcher) function invokePointerDownOutside(event:UiEvent):Void {
+    if (outsidePointerDownHandlers == null) return;
+    for (handler in outsidePointerDownHandlers) {
+      event.currentTarget = id;
+      event.phase = UiEventPhase.Target;
+      handler(event);
+      if (event.propagationStopped) return;
+    }
+  }
 
-	function invokePhase(event:UiEvent, phase:String):Void {
-		var entries = handlers;
-		if (entries == null)
-			return;
-		// Handlers registered while one runs are visited too, as when each kind and phase had its own list.
-		var index = 0;
-		while (index < entries.length) {
-			var entry = entries[index++];
-			if (entry.kind != event.kind || (entry.phase != phase &&
-				!(entry.phase == TargetBubblePhase && phase == "bubble" && event.target.equals(id))))
-				continue;
-			entry.handler(event);
-			if (event.immediatePropagationStopped)
-				return;
-		}
-	}
+  function invokePhase(event:UiEvent, phase:UiEventPhase):Void {
+    var delivery = switch phase {
+      case Capture:
+        CaptureHandler;
+      case Target:
+        TargetHandler;
+      case Bubble:
+        BubbleHandler;
+    };
+    var entries = handlers;
+    if (entries == null) return;
+    // Handlers registered while one runs are visited too, as when each kind and phase had its own list.
+    var index = 0;
+    while (index < entries.length) {
+      var entry = entries[index++];
+      if (entry.kind != event.kind || (entry.phase != delivery
+        && !(entry.phase == TargetBubbleHandler && phase == UiEventPhase.Bubble && event.target.equals(id)))) continue;
+      entry.handler(event);
+      if (event.immediatePropagationStopped) return;
+    }
+  }
 
-	public function find(id:WidgetId):Null<RenderNode> {
-		if (id == null)
-			return null;
-		return findFrom(this, id, ++findCounter);
-	}
+  public function find(id:WidgetId):Null<RenderNode> {
+    if (id == null) return null;
+    return findFrom(this, id, ++ findCounter);
+  }
 
-	/** Identifies one find() call, so a node reached twice (a cycle, or two parents) is searched once. */
-	static var findCounter:Int = 0;
-	var findStamp:Int = 0;
+  /** Identifies one find() call, so a node reached twice (a cycle, or two parents) is searched once. */
+  static var findCounter:Int = 0;
+  var findStamp:Int = 0;
 
-	/** Pre-order search that allocates nothing: each node carries the stamp of the last search that visited it. */
-	static function findFrom(node:RenderNode, id:WidgetId, stamp:Int):Null<RenderNode> {
-		if (node.findStamp == stamp)
-			return null;
-		node.findStamp = stamp;
-		if (node.id.equals(id))
-			return node;
-		var children = node.children;
-		for (index in 0...children.length) {
-			var child = children[index];
-			if (child == null)
-				continue;
-			var found = findFrom(child, id, stamp);
-			if (found != null)
-				return found;
-		}
-		return null;
-	}
+  /** Pre-order search that allocates nothing: each node carries the stamp of the last search that visited it. */
+  static function findFrom(node:RenderNode, id:WidgetId, stamp:Int):Null<RenderNode> {
+    if (node.findStamp == stamp) return null;
+    node.findStamp = stamp;
+    if (node.id.equals(id)) return node;
+    var children = node.children;
+    for (index in 0...children.length) {
+      var child = children[index];
+      if (child == null) continue;
+      var found = findFrom(child, id, stamp);
+      if (found != null) return found;
+    }
+    return null;
+  }
 
-	public function walk(visit:RenderNode->Void):Void {
-		visit(this);
-		for (child in children)
-			child.walk(visit);
-	}
+  public function walk(visit:RenderNode -> Void):Void {
+    visit(this);
+    for (child in children) child.walk(visit);
+  }
 
-	function requireResolved():ResolvedLayoutItem {
-		if (resolved == null)
-			throw "Render node has no resolved geometry; submit the UI first";
-		return cast resolved;
-	}
-	static function styleDirtyFlags(impact:StyleImpact):UiDirtyFlag {
-		var result = UiDirtyFlag.empty();
-		if (impact.contains(StyleImpact.Layout)) result |= UiDirtyFlag.NeedsLayout;
-		if (impact.contains(StyleImpact.TextLayout)) result |= UiDirtyFlag.NeedsTextLayout;
-		if (impact.contains(StyleImpact.Paint)) result |= UiDirtyFlag.NeedsPaint;
-		if (impact.contains(StyleImpact.Composite)) result |= UiDirtyFlag.NeedsComposite;
-		if (impact.contains(StyleImpact.Semantics)) result |= UiDirtyFlag.NeedsSemantics;
-		if (impact.contains(StyleImpact.HitGeometry)) result |= UiDirtyFlag.NeedsHitGeometry;
-		return result;
-	}
+  function requireResolved():ResolvedLayoutItem {
+    if (resolved == null) throw "Render node has no resolved geometry; submit the UI first";
+    return cast resolved;
+  }
+  static function styleDirtyFlags(impact:StyleImpact):UiDirtyFlag {
+    var result = UiDirtyFlag.empty();
+    if (impact.contains(StyleImpact.Layout)) result |= UiDirtyFlag.NeedsLayout;
+    if (impact.contains(StyleImpact.TextLayout)) result |= UiDirtyFlag.NeedsTextLayout;
+    if (impact.contains(StyleImpact.Paint)) result |= UiDirtyFlag.NeedsPaint;
+    if (impact.contains(StyleImpact.Composite)) result |= UiDirtyFlag.NeedsComposite;
+    if (impact.contains(StyleImpact.Semantics)) result |= UiDirtyFlag.NeedsSemantics;
+    if (impact.contains(StyleImpact.HitGeometry)) result |= UiDirtyFlag.NeedsHitGeometry;
+    return result;
+  }
 
 }
 
 /** What a builder made on a node, as taken by RenderNode.snapshotBuilt and kept up to date by RenderNode.reconcile. */
 class BuiltNode {
-	/** Reused by later patches; comparison consumes it before the next patch takes another snapshot. */
-	public var prior:Null<RenderNode> = null;
-	/** The style as the builder left it, before callers changed the node: the base of the next build's difference. */
-	public final style:LayoutStyle;
-	/** The children the builder made; others may have added more. */
-	public final children:Array<RenderNode>;
-	public var semantics:Null<Semantics>;
-	/** How many of each list of callbacks the builder made; callers append theirs after. */
-	public var handlers:Int = 0;
-	public var outsidePointerDownHandlers:Int = 0;
-	public var resolvedHandlers:Int = 0;
-	public var paintHandlers:Int = 0;
-	public var decorations:Int = 0;
+  /** Reused by later patches; comparison consumes it before the next patch takes another snapshot. */
+  public var prior:Null<RenderNode> = null;
+  /** The style as the builder left it, before callers changed the node: the base of the next build's difference. */
+  public final style:LayoutStyle;
+  /** The children the builder made; others may have added more. */
+  public final children:Array<RenderNode>;
+  public var semantics:Null<Semantics>;
+  /** How many of each list of callbacks the builder made; callers append theirs after. */
+  public var handlers:Int = 0;
+  public var outsidePointerDownHandlers:Int = 0;
+  public var resolvedHandlers:Int = 0;
+  public var paintHandlers:Int = 0;
+  public var decorations:Int = 0;
 
-	public function new(style:LayoutStyle, children:Array<RenderNode>, semantics:Null<Semantics>) {
-		this.style = style;
-		this.children = children;
-		this.semantics = semantics;
-	}
+  public function new(style:LayoutStyle, children:Array<RenderNode>, semantics:Null<Semantics>) {
+    this.style = style;
+    this.children = children;
+    this.semantics = semantics;
+  }
 }
 
 /** One event handler and the kind and phase it listens to; a node has few, so a flat list beats a map per node. */
 private class HandlerEntry {
-	public final kind:String;
-	public final phase:String;
-	public final handler:UiEvent->Void;
+  public final kind:String;
+  public final phase:HandlerPhase;
+  public final handler:UiEvent -> Void;
 
-	public function new(kind:String, phase:String, handler:UiEvent->Void) {
-		this.kind = kind;
-		this.phase = phase;
-		this.handler = handler;
-	}
+  public function new(kind:String, phase:HandlerPhase, handler:UiEvent -> Void) {
+    this.kind = kind;
+    this.phase = phase;
+    this.handler = handler;
+  }
 
+}
+
+/** Listener selection is distinct from the phase observed by an event handler. */
+private enum HandlerPhase {
+  CaptureHandler;
+  TargetHandler;
+  BubbleHandler;
+  TargetBubbleHandler;
 }

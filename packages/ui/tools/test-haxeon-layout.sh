@@ -25,6 +25,7 @@ fi
 	--entry=LayoutSessionSmoke \
 	--root="$module_dir/tests/haxeon" \
 	--root="$module_dir/haxe" \
+	--root="$editor_dir/src" \
 	--root="$module_dir/bindings/haxe" \
 	--root="$haxeon_dir/packages/platform/src" \
 	--ffi-interface="$haxeon_dir/packages/platform/bindings/nativekit.hxi" \

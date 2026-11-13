@@ -77,7 +77,10 @@ class WasmDynamicCalls {
 							emit(InstanceClosure(closure, VARARGS_TARGET, capture));
 							emit(ToDyn(out, closure));
 						case CallClosure(out, closure, args):
-							var dynamicCall = (switch (closure.type) { case Dyn: true; default: false; });
+							var dynamicCall = (switch (closure.type) {
+								case Dyn: true;
+								default: false;
+							});
 							if (dynamicCall)
 								needsFunctionTest = true;
 							var signature:IrType = dynamicCall ? Function([for (a in args) a.type], out.type) : closure.type;
@@ -86,8 +89,7 @@ class WasmDynamicCalls {
 							var key = (dynamicCall ? "dynamic:" : "typed:") + Std.string(signature);
 							if (!helpers.exists(key)) {
 								var privateAbi = !dynamicCall && compiler.ir.IrScalarArguments.isPrivateClosureType(signature),
-									prefix = privateAbi
-									? compiler.ir.IrScalarArguments.PREFIX + "$wasm:closure-check:" : "__haxeon_invoke_";
+									prefix = privateAbi ? compiler.ir.IrScalarArguments.PREFIX + "$wasm:closure-check:" : "__haxeon_invoke_";
 								helpers.set(key, callHelper(prefix + [for (_ in helpers.keys()) 1].length, signature, dynamicCall, isFunction, privateAbi));
 							}
 							var callee = closure;
@@ -155,18 +157,25 @@ class WasmDynamicCalls {
 
 	/** Dependencies introduced by generated closure bodies belong to the same adapter plan. */
 	public static function missingVarargsAdapters(functions:Array<IrFunction>, enums:Array<IrEnum>):Array<IrFunction> {
-		if (!Lambda.exists(functions, fn -> fn.name == VARARGS_TARGET)) return [];
-		var names = [for (fn in functions) fn.name => true], targets:Map<String, IrType> = [];
-		for (fn in functions) for (block in fn.blocks) for (located in block.instructions) switch located.value {
-			case SafeCast(out, _): switch out.type {
-				case Function(_, _):
-					var name = varargsAdapterName(out.type);
-					if (!names.exists(name)) targets.set(name, out.type);
-				default:
-			}
-			default:
-		}
-		var ordered = [for (name in targets.keys()) name]; ordered.sort(Reflect.compare);
+		if (!Lambda.exists(functions, fn -> fn.name == VARARGS_TARGET))
+			return [];
+		var names = [for (fn in functions) fn.name => true],
+			targets:Map<String, IrType> = [];
+		for (fn in functions)
+			for (block in fn.blocks)
+				for (located in block.instructions)
+					switch located.value {
+						case SafeCast(out, _):
+							switch out.type {
+								case Function(_, _):
+									var name = varargsAdapterName(out.type);
+									if (!names.exists(name)) targets.set(name, out.type);
+								default:
+							}
+						default:
+					}
+		var ordered = [for (name in targets.keys()) name];
+		ordered.sort(Reflect.compare);
 		return [for (name in ordered) varargsAdapter(name, targets.get(name), enums)];
 	}
 
@@ -179,20 +188,23 @@ class WasmDynamicCalls {
 			params:Array<IrType> = [],
 			result:IrType = Void,
 			inlineEnums:Map<String, String> = [];
-	for (declaration in enums) if (declaration.inlineStorage != null)
-		inlineEnums.set(declaration.inlineStorage, declaration.name);
-	function toDynamic(value:IrValue):IrValue return switch value.type {
-		case EnumTag(name): b.intrinsic(EnumTagBox(EnumTag(name)), [value], Dyn);
-		case Obj(storage) if (inlineEnums.exists(storage)):
-			b.call(compiler.ir.IrInlineEnumEscapes.boxName(inlineEnums.get(storage)), [value], Dyn);
-		default: b.toDyn(value);
-	};
-	function fromDynamic(value:IrValue, target:IrType):IrValue return switch target {
-		case EnumTag(name): b.intrinsic(EnumTagUnbox(EnumTag(name)), [value], target);
-		case Obj(storage) if (inlineEnums.exists(storage)):
-			b.call(compiler.ir.IrInlineEnumEscapes.unboxName(inlineEnums.get(storage)), [value], target);
-		default: b.safeCast(value, target);
-	};
+		for (declaration in enums)
+			if (declaration.inlineStorage != null)
+				inlineEnums.set(declaration.inlineStorage, declaration.name);
+		function toDynamic(value:IrValue):IrValue
+			return switch value.type {
+				case EnumTag(name): b.intrinsic(EnumTagBox(EnumTag(name)), [value], Dyn);
+				case Obj(storage) if (inlineEnums.exists(storage)):
+					b.intrinsic(InlineEnumBox(Enum(inlineEnums.get(storage))), [value], Dyn);
+				default: b.toDyn(value);
+			};
+		function fromDynamic(value:IrValue, target:IrType):IrValue
+			return switch target {
+				case EnumTag(name): b.intrinsic(EnumTagUnbox(EnumTag(name)), [value], target);
+				case Obj(storage) if (inlineEnums.exists(storage)):
+					b.intrinsic(InlineEnumUnbox(Enum(inlineEnums.get(storage))), [value], target);
+				default: b.safeCast(value, target);
+			};
 		switch type {
 			case Function(a, r):
 				params = a;
@@ -203,12 +215,20 @@ class WasmDynamicCalls {
 		var values = [for (i in 0...params.length) b.argument("argument" + i, params[i])];
 		var array = b.call("__array_alloc_ref", [b.constInt(values.length)], Array(Dyn));
 		for (i in 0...values.length) {
-			var index = b.constInt(i),
-				value = (switch (values[i].type) { case Dyn: true; default: false; }) ? values[i] : toDynamic(values[i]);
+			var index = b.constInt(i), value = (switch (values[i].type) {
+				case Dyn: true;
+				default: false;
+			}) ? values[i] : toDynamic(values[i]);
 			b.currentBlock().instructions.push(new Located(ArraySet(array, index, value), SourceProvenance.generated("wasm-varargs")));
 		}
 		var called = b.call(VARARGS_CALL, [original, array], Dyn);
-		b.returnValue((switch (result) { case Void: true; default: false; }) ? b.constVoid() : (switch (result) { case Dyn: true; default: false; }) ? called : fromDynamic(called, result));
+		b.returnValue((switch (result) {
+			case Void: true;
+			default: false;
+		}) ? b.constVoid() : (switch (result) {
+			case Dyn: true;
+			default: false;
+		}) ? called : fromDynamic(called, result));
 		return new IrFunction(name, b.arguments, result, b.blocks, ClosureVarargs(type), null, false, Keep);
 	}
 

@@ -9,12 +9,12 @@ import compiler.ir.IrValueLaneLayout.IrValueLaneTarget;
 
 /** Select one program-wide representation, then lower eligible enum values to their lane packets. */
 class IrInlineEnumLowering {
-	public static function run(program:IrProgram, target:IrValueLaneTarget, ?reflectableObjects:Array<String>):IrProgram {
-		var planner = new IrInlineEnumLayout(program.enums, program.objects, target == HashLink ? 64 : 32, target);
+	public static function run(program:IrProgram, target:IrValueLaneTarget, canonicalObjects:Array<IrObject>, ?reflectableObjects:Array<String>):IrProgram {
+		var planner = new IrInlineEnumLayout(program.enums, program.objects, target == HashLink ? 64 : 32, target, canonicalObjects);
 		var eligibility = new IrInlineEnumEligibility(program, planner, reflectableObjects);
 		if (!eligibility.allowed.keys().hasNext())
 			return program;
-		planner = new IrInlineEnumLayout(program.enums, program.objects, target == HashLink ? 64 : 32, target, null, false, eligibility.allowed);
+		planner = new IrInlineEnumLayout(program.enums, program.objects, target == HashLink ? 64 : 32, target, canonicalObjects, false, eligibility.allowed);
 		function storage(name:String):compiler.ir.IrInlineEnumLayout.IrInlineEnumShape {
 			var shape = planner.shape(name);
 			if (shape == null)
@@ -144,7 +144,9 @@ class IrInlineEnumLowering {
 					value = access.field(b, input, constructor, field);
 			}
 			b.returnValue(value);
-			helpers.set(name, new IrFunction(name, b.arguments, value.type, b.blocks, Provider(TypeKey.of(Enum(enumName)), ProviderOperations.detailed(ProviderOperation.InlineEnumHelper, name))));
+			helpers.set(name,
+				new IrFunction(name, b.arguments, value.type, b.blocks,
+					Provider(TypeKey.of(Enum(enumName)), ProviderOperations.detailed(ProviderOperation.InlineEnumHelper, name))));
 			return name;
 		}
 		// Every rewrite below starts from a value whose type is, or contains, an inline enum; so does every check that throws.
@@ -308,14 +310,19 @@ class IrInlineEnumLowering {
 							}):
 						case ToDyn(_, value) if (eligibility.supportsCallableEscape(value.type)):
 							// Scalar closure lowering boxes enum arguments only in this Dynamic boundary adapter.
-						case SafeCast(output, value) if ((switch value.type { case Dyn: true; default: false; })
-							&& eligibility.supportsCallableEscape(output.type)):
+						case SafeCast(output, value) if ((switch value.type {
+							case Dyn: true;
+							default: false;
+						}) && eligibility.supportsCallableEscape(output.type)):
 							// The paired closure adapter restores the physical enum packet after its logical signature check.
 						case ToDyn(_, value), SafeCast(_, value), Equal(_, value, _):
 							var output = IrOperands.output(located.value);
 							var supported = switch located.value {
 								case ToDyn(_, input): eligibility.supportsCallableEscape(input.type);
-								case SafeCast(out, input): (switch input.type { case Dyn: true; default: false; }) && eligibility.supportsCallableEscape(out.type);
+								case SafeCast(out, input): (switch input.type {
+										case Dyn: true;
+										default: false;
+									}) && eligibility.supportsCallableEscape(out.type);
 								default: false;
 							};
 							if (!supported && (containsMapped(value.type) || (output != null && containsMapped(output.type))))

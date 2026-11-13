@@ -155,6 +155,8 @@ class TestCatalog {
 		"IrProgramAssemblerMain",
 		"EnumInterpreterTypeMain",
 		"EnumDynamicOrderMain",
+		"InlineRequestModelMain",
+		"InlinerResolvedEnumCallMain",
 		"NullaryEnumCacheMain",
 		"NativeEnumProjectionMain",
 		"ValueInterfaceHelperReuseMain",

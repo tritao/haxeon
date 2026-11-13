@@ -1,3 +1,4 @@
+import haxeon.ui.core.UiEventPhase;
 import Observable;
 import haxeon.ui.Canvas;
 import haxeon.ui.Color;
@@ -47,9 +48,9 @@ private class DecoratedControl implements View {
   public var presses = 0;
   public var builtNode(default, null):Null<RenderNode> = null;
   public final key:String;
-  final make:BuildContext->RenderNode;
+  final make:BuildContext -> RenderNode;
 
-  public function new(key:String, make:BuildContext->RenderNode) {
+  public function new(key:String, make:BuildContext -> RenderNode) {
     this.key = key;
     this.make = make;
   }
@@ -69,30 +70,39 @@ private class DecoratedControl implements View {
 }
 
 /** Registers listeners during routing to exercise hover preflight and the dispatcher snapshot. */
-@:access(haxeon.ui.core.RenderNode)
-private class HoverRoutingProbe implements View {
+@:access(haxeon.ui.core.RenderNode) private class HoverRoutingProbe implements View {
   public final events:Array<String> = [];
   public var alternate:Bool = false;
-  public function new() {}
+  public function new() {
+  }
   public function build(context:BuildContext):RenderNode {
-    var rootStyle = new LayoutStyle(); rootStyle.width = LayoutAxis.fixed(160); rootStyle.height = LayoutAxis.fixed(80);
-    var childStyle = new LayoutStyle(); childStyle.width = LayoutAxis.fixed(80); childStyle.height = LayoutAxis.fixed(40);
+    var rootStyle = new LayoutStyle();
+    rootStyle.width = LayoutAxis.fixed(160);
+    rootStyle.height = LayoutAxis.fixed(80);
+    var childStyle = new LayoutStyle();
+    childStyle.width = LayoutAxis.fixed(80);
+    childStyle.height = LayoutAxis.fixed(40);
     var root = new RenderNode(context.id("hover-root"), LayoutVisualKind.Box, rootStyle);
-    var child = new RenderNode(context.id("hover-child"), alternate ? LayoutVisualKind.Custom : LayoutVisualKind.Box, childStyle);
+    var child = new RenderNode(
+      context.id("hover-child"),
+      alternate ? LayoutVisualKind.Custom : LayoutVisualKind.Box,
+      childStyle
+    );
     root.add(child);
-    root.on(UiEventKind.HoverEnter, event -> {
-      if (!event.target.equals(root.id)) return;
-      events.push("root");
-      child.on(UiEventKind.HoverEnter, childEvent -> {
-        if (!childEvent.target.equals(child.id)) return;
-        events.push("child");
-        child.on(UiEventKind.HoverEnter, _ -> events.push("added"), "target");
-      }, "target");
-    }, "target");
+    root.on(UiEventKind.HoverEnter, event -> {if (!event.target.equals(root.id)) return;
+    events.push("root");
+    child.on(UiEventKind.HoverEnter, childEvent -> {if (!childEvent.target.equals(child.id)) return;
+    events.push("child");
+    child.on(UiEventKind.HoverEnter, _ -> events.push("added"), UiEventPhase.Target);
+    }, UiEventPhase.Target);
+    }, UiEventPhase.Target);
     root.onTargetBubble(UiEventKind.HoverEnter, _ -> events.push("direct"));
-    root.on(UiEventKind.HoverEnter, event -> { if (event.target.equals(child.id)) events.push("capture"); }, "capture");
-    root.on(UiEventKind.HoverEnter, event -> { if (event.target.equals(child.id)) events.push("bubble"); });
-    root.on(UiEventKind.HoverLeave, event -> { if (event.target.equals(child.id)) events.push("leave"); });
+    root.on(UiEventKind.HoverEnter, event -> {if (event.target.equals(child.id)) events.push("capture");
+    }, UiEventPhase.Capture);
+    root.on(UiEventKind.HoverEnter, event -> {if (event.target.equals(child.id)) events.push("bubble");
+    });
+    root.on(UiEventKind.HoverLeave, event -> {if (event.target.equals(child.id)) events.push("leave");
+    });
     return root;
   }
 }
@@ -104,12 +114,14 @@ private class VariantProbe implements View implements Observable {
   @:unobservable public var aBuilds:Int = 0;
   @:unobservable public var bBuilds:Int = 0;
   public var capacity:Int = 4;
-  public function new() {}
+  public function new() {
+  }
   public function build(context:BuildContext):RenderNode {
     var selected = variant;
     return new haxeon.ui.core.RetainedVariants("variant-probe", selected, function(ctx) {
       var revision = selected == "a" ? aRevision : bRevision;
-      if (selected == "a") aBuilds++; else bBuilds++;
+      if (selected == "a") aBuilds++;
+      else bBuilds++;
       return new Text(selected + ":" + revision);
     }, null, capacity).build(context);
   }
@@ -131,22 +143,31 @@ private class StrictVariantProbe implements View {
   public var presses:Int = 0;
   public var patchAccepted:Bool = false;
   public var counterBuilds:Int = 0;
-  public function new() {}
+  public function new() {
+  }
   public function build(context:BuildContext):RenderNode {
-    return new haxeon.ui.core.RetainedVariants("strict-variant-probe", variant,
-      function(_) return new StrictVariantCounter(this), null, 2, true).build(context);
+    return new haxeon.ui.core.RetainedVariants(
+      "strict-variant-probe",
+      variant,
+      function(_) return new StrictVariantCounter(this),
+      null,
+      2,
+      true
+    ).build(context);
   }
 }
 
 private class SiblingVariantProbe implements View {
-  public function new() {}
+  public function new() {
+  }
   public function build(context:BuildContext):RenderNode {
     var root = new RenderNode(context.id("siblings"), LayoutVisualKind.Box);
     for (name in ["first", "second"]) {
       var variant = new haxeon.ui.core.RetainedVariants(name, "same", function(ctx) {
         var id = ctx.id("child");
         return new StrictVariantLeaf(id);
-      });
+      }
+      );
       root.add(variant.build(context));
     }
     return root;
@@ -170,7 +191,9 @@ private class StrictVariantCounter implements View {
     return context.selfUpdating(id, function() {
       owner.counterBuilds++;
       var state = context.state(id, 0);
-      var style = new LayoutStyle(); style.width = LayoutAxis.fixed(80); style.height = LayoutAxis.fixed(40);
+      var style = new LayoutStyle();
+      style.width = LayoutAxis.fixed(80);
+      style.height = LayoutAxis.fixed(40);
       var node = new RenderNode(id, LayoutVisualKind.Box, style);
       var label = new RenderNode(context.id("label"), LayoutVisualKind.Text);
       label.layout.text = Std.string(state.value);
@@ -180,14 +203,17 @@ private class StrictVariantCounter implements View {
         state.update(state.value + 1);
         owner.patchAccepted = context.requestPatch(id);
         if (!owner.patchAccepted) state.update(state.value);
-      });
+      }
+      );
       return node;
-    });
+    }
+    );
   }
 }
 
 private class WindowItems implements haxeon.ui.widgets.collections.ListViewModel {
-  public function new() {}
+  public function new() {
+  }
   public function count():Int return 40;
   public function keyAt(index:Int):String return "row-" + index;
   public function estimatedExtent():Float return 20;
@@ -200,22 +226,22 @@ private class WindowItems implements haxeon.ui.widgets.collections.ListViewModel
 }
 
 private class UpdatingReadModel implements Observable {
-	public var value:Int = 0;
+  public var value:Int = 0;
 }
 
 private class ListInputs implements Observable {
-	public var height:Int;
-	public var fractional:Bool = false;
-	public function new(height:Int) this.height = height;
+  public var height:Int;
+  public var fractional:Bool = false;
+  public function new(height:Int) this.height = height;
 }
 
 private class EnabledInput implements Observable {
-	public var enabled:Bool = true;
+  public var enabled:Bool = true;
 }
 
 private class TextInput implements Observable {
-	public var title:String;
-	public function new(title:String) this.title = title;
+  public var title:String;
+  public function new(title:String) this.title = title;
 }
 
 /** Records the controls' actual drawing, including caller paint, without depending on native resource IDs. */
@@ -229,9 +255,11 @@ private class PaintTrace extends Canvas {
   }
   public function same(other:PaintTrace):Bool {
     if (rectangles.length != other.rectangles.length) return false;
-    for (index in 0...rectangles.length)
-      if (!haxeon.Equality.equals(rectangles[index], other.rectangles[index]) ||
-          !haxeon.Equality.equals(colors[index], other.colors[index])) return false;
+    for (index in 0...rectangles.length) if (!haxeon.Equality.equals(rectangles[index],
+      other.rectangles[index]) || !haxeon.Equality.equals(
+        colors[index],
+        other.colors[index]
+      )) return false;
     return true;
   }
 }
@@ -257,22 +285,23 @@ private class MotionRig {
     slider = new Slider("live-slider", "Live slider", 0.0, 0.0, 1.0, 0.05);
     progress = new ProgressBar("live-progress", 0.0);
     progress.animationDuration = 0.3;
-    decorated = [
-      new DecoratedControl("slider-host", function(context) {
-        var node = slider.build(context);
-        sliderBuilt = node;
-        return decorate(node);
-      }),
-      new DecoratedControl("progress-host", function(context) {
-        var node = progress.build(context);
-        progressBuilt = node;
-        return decorate(node);
-      })
-    ];
+    decorated = [new DecoratedControl("slider-host", function(context) {
+      var node = slider.build(context);
+      sliderBuilt = node;
+      return decorate(node);
+    }
+    ), new DecoratedControl("progress-host", function(context) {
+      var node = progress.build(context);
+      progressBuilt = node;
+      return decorate(node);
+    }
+    )];
     view = new RetainedView("motion-panel", function(_) {
       panelBuilds++;
-      return new Column("motion-column", [new KeyedView("slider-host", decorated[0]),
-        new KeyedView("progress-host", decorated[1])]);
+      return new Column(
+        "motion-column",
+        [new KeyedView("slider-host", decorated[0]), new KeyedView("progress-host", decorated[1])]
+      );
     }, patched ? null : function() return Std.string(panelBuilds));
   }
 
@@ -310,25 +339,47 @@ private class Rig {
     ui.buildContext.updateInPlace = restyleInPlace;
     frame = new LayoutFrame(240.0, controls ? 460.0 : 200.0);
     var rig = this;
-    decorated = controls ? [
-      new DecoratedControl("decorated-icon", function(context) return new IconButton("decorated-icon", IconName.Search, "Decorated icon", function() rig.clicks++).build(context)),
-      new DecoratedControl("decorated-check", function(context) {
-        var checkbox:View = new Checkbox("decorated-check", "Decorated check", false, function(_) rig.clicks++);
-        return checkbox.build(context);
-      }),
-      new DecoratedControl("decorated-radio", function(context) return new Radio("decorated-radio", "Decorated radio", "d", false, function(_) rig.clicks++).build(context)),
-    ] : [
-      new DecoratedControl("decorated", function(context) return new Button("Decorated", null, null, "decorated").build(context)),
+    decorated = controls ? [new DecoratedControl(
+      "decorated-icon",
+      function(context) return new IconButton(
+        "decorated-icon",
+        IconName.Search,
+        "Decorated icon",
+        function() rig.clicks++
+      ).build(context)
+    ), new DecoratedControl("decorated-check", function(context) {
+      var checkbox:View = new Checkbox("decorated-check", "Decorated check", false, function(_) rig.clicks++);
+      return checkbox.build(context);
+    }
+    ), new DecoratedControl(
+      "decorated-radio",
+      function(context) return new Radio("decorated-radio",
+      "Decorated radio", "d", false, function(_) rig.clicks++).build(context)
+    ),]:[
+      new DecoratedControl(
+        "decorated",
+        function(context) return new Button("Decorated", null, null, "decorated").build(context)
+      ),
     ];
     var panel = new RetainedView("panel", function(_) {
       rig.panelBuilds++;
       var items:Array<KeyedView> = controls ? [
         new KeyedView("icon", new IconButton("icon", IconName.Close, "Close", function() rig.clicks++)),
-        new KeyedView("check", new Checkbox("check", "Check", rig.checked.value, function(value) rig.checked.value = value)),
+        new KeyedView(
+          "check",
+          new Checkbox("check", "Check", rig.checked.value, function(value) rig.checked.value = value)
+        ),
         new KeyedView("toggle", new Toggle("toggle", "Toggle", rig.toggled, function(value) rig.toggled = value)),
         new KeyedView("radio", new Radio("radio", "Radio", "r", false, function(_) rig.clicks++)),
-        new KeyedView("group", new RadioGroup("group", [new RadioOption("alpha", "Alpha", "a"), new RadioOption("beta", "Beta", "b")], "a",
-          function(value) rig.chosen = value)),
+        new KeyedView(
+          "group",
+          new RadioGroup(
+            "group",
+            [new RadioOption("alpha", "Alpha", "a"), new RadioOption("beta", "Beta", "b")],
+            "a",
+            function(value) rig.chosen = value
+          )
+        ),
         new KeyedView("disabled", new Radio("disabled", "Disabled", "x", false, function(_) rig.clicks++, null, false)),
       ] : [
         new KeyedView("one", new Button("One", null, function() rig.clicks++, "one")),
@@ -345,7 +396,7 @@ private class Rig {
       style.width = LayoutAxis.fixed(200.0);
       style.height = LayoutAxis.fixed(90.0);
       return new ScrollView("scroll", column, style, ScrollAxis.Vertical);
-    // The reference never reuses its panel, so everything in it, the scrollbar too, is built from scratch on every frame.
+      // The reference never reuses its panel, so everything in it, the scrollbar too, is built from scratch on every frame.
     }, restyleInPlace ? null : function() return Std.string(rig.panelBuilds));
     view = panel;
   }
@@ -368,7 +419,8 @@ private class Gauge implements View {
   public var labelNode:Null<RenderNode>;
   public var id:Null<haxeon.ui.core.WidgetId> = null;
 
-  public function new() {}
+  public function new() {
+  }
 
   public function build(context:BuildContext):RenderNode {
     return context.withScope(new Key("gauge"), function() {
@@ -390,17 +442,19 @@ private class Gauge implements View {
         labelNode = label;
         node.add(label);
         return node;
-      });
-    });
+      }
+      );
+    }
+    );
   }
 }
 
 /** A text field given a listener by its caller. */
 private class FieldDecoration implements View {
   final field:TextField;
-  final onPress:Void->Void;
+  final onPress:Void -> Void;
 
-  public function new(field:TextField, onPress:Void->Void) {
+  public function new(field:TextField, onPress:Void -> Void) {
     this.field = field;
     this.onPress = onPress;
   }
@@ -445,8 +499,16 @@ private class TabsRig {
     ui = new UiContext(null, fonts);
     ui.buildContext.updateInPlace = patched;
     ui.buildContext.environment.reducedMotion = true;
-    var first = new haxeon.ui.widgets.controls.TabItem("first", "First", new RetainedView("first-page", _ -> new Text("First page")));
-    var second = new haxeon.ui.widgets.controls.TabItem("second", "Second", new RetainedView("second-page", _ -> new Text("Second page")));
+    var first = new haxeon.ui.widgets.controls.TabItem(
+      "first",
+      "First",
+      new RetainedView("first-page", _ -> new Text("First page"))
+    );
+    var second = new haxeon.ui.widgets.controls.TabItem(
+      "second",
+      "Second",
+      new RetainedView("second-page", _ -> new Text("Second page"))
+    );
     var disabled = new haxeon.ui.widgets.controls.TabItem("disabled", "Disabled", new Text("Disabled page"), false);
     first.onClose = () -> closes++;
     second.onClose = () -> closes++;
@@ -456,10 +518,15 @@ private class TabsRig {
     tabs = new haxeon.ui.widgets.controls.Tabs("local-tabs", [first, disabled, second], "first", _ -> changes++, style);
     tabs.headerRevision = () -> "headers";
     decorated = new DecoratedControl("tabs-host", context -> tabs.build(context));
-    view = new RetainedView("tabs-panel", _ -> {panelBuilds++; return decorated;},
-      patched ? null : () -> Std.string(panelBuilds));
+    view = new RetainedView("tabs-panel", _ -> {panelBuilds++;
+    return decorated;
+    }, patched ? null : () -> Std.string(panelBuilds));
   }
-  public function submit():RenderNode return ui.submitCached(() -> view, frame, patched ? "tabs" : "tabs:" + submissions++);
+  public function submit():RenderNode return ui.submitCached(
+    () -> view,
+    frame,
+    patched ? "tabs" : "tabs:" + submissions++
+  );
 }
 
 private class PopupRig implements View {
@@ -483,8 +550,13 @@ private class PopupRig implements View {
     ui = new UiContext(null, fonts);
     ui.buildContext.updateInPlace = patched;
     ui.buildContext.environment.reducedMotion = true;
-    var options:Array<haxeon.ui.widgets.controls.SelectOption<Dynamic>> = [for (index in 0...24)
-      new haxeon.ui.widgets.controls.SelectOption<Dynamic>("option-" + index, "Option " + index, index, index != 3)];
+    var options:Array<haxeon.ui.widgets.controls.SelectOption<Dynamic
+      >> = [for (index in 0...24) new haxeon.ui.widgets.controls.SelectOption<Dynamic>(
+        "option-" + index,
+        "Option " + index,
+        index,
+        index != 3
+      )];
     var next = function(index:Int, direction:Int):Int {
       var candidate = index;
       for (_ in 0...options.length) {
@@ -493,12 +565,15 @@ private class PopupRig implements View {
       }
       return index;
     };
-    popup = new haxeon.ui.widgets.controls.SelectionPopup(options, [for (index in 0...24) index], 0, 0,
-      0, 0, 8, 8, 150, 36, 150, 36,
-      index -> {chosen = index; active = index; selections++;}, () -> closes++, index -> active = index,
-      index -> index >= 0 && index < options.length && options[index].enabled, next);
-    view = new RetainedView("popup-panel", _ -> {panelBuilds++; return this;},
-      patched ? null : () -> Std.string(panelBuilds));
+    popup = new haxeon.ui.widgets.controls.SelectionPopup(options,
+      [for (index in 0...24) index], 0, 0, 0, 0, 8, 8, 150, 36, 150, 36, index -> {chosen = index;
+    active = index;
+    selections++;
+    }, () -> closes++,
+      index -> active = index, index -> index >= 0 && index < options.length && options[index].enabled, next);
+    view = new RetainedView("popup-panel", _ -> {panelBuilds++;
+    return this;
+    }, patched ? null : () -> Std.string(panelBuilds));
   }
   public function build(context:BuildContext):RenderNode {
     var style = new LayoutStyle();
@@ -511,7 +586,10 @@ private class PopupRig implements View {
     result = menu;
     menu.node.layout.style.zIndex = 11;
     menu.node.on(UiEventKind.PointerDown, _ -> presses++);
-    menu.node.onPaint((canvas, _) -> canvas.fillRect(new Rect(1, 1, 2, 2), Color.rgba(0.2, 0.3, 0.4, 1)), "caller-popup");
+    menu.node.onPaint(
+      (canvas, _) -> canvas.fillRect(new Rect(1, 1, 2, 2), Color.rgba(0.2, 0.3, 0.4, 1)),
+      "caller-popup"
+    );
     var overlay = new LayoutStyle();
     overlay.width = LayoutAxis.fixed(3);
     overlay.height = LayoutAxis.fixed(3);
@@ -525,7 +603,11 @@ private class PopupRig implements View {
     if (value == null) throw "Popup is not built";
     return value;
   }
-  public function submit():RenderNode return ui.submitCached(() -> view, frame, patched ? "popup" : "popup:" + submissions++);
+  public function submit():RenderNode return ui.submitCached(
+    () -> view,
+    frame,
+    patched ? "popup" : "popup:" + submissions++
+  );
 }
 
 private class UpdatingResources implements View {
@@ -537,185 +619,231 @@ private class UpdatingResources implements View {
   public var rootId:Null<haxeon.ui.core.WidgetId>;
   public var childId:Null<haxeon.ui.core.WidgetId>;
   public var value:Null<haxeon.ui.core.State<Int>>;
-  public function new() {}
-  public function build(context:BuildContext):RenderNode return context.withScope(new Key("updating-resources"), () -> {
-    var id = context.id("owner");
-    rootId = id;
-    return context.selfUpdating(id, () -> {
-      var root = new RenderNode(id, LayoutVisualKind.Box);
-      if (enabled) root.add(new RetainedView("nested", _ -> new DecoratedControl("inner", context -> {
-        var child = context.id("child");
-        childId = child;
-        return context.selfUpdating(child, () -> {
-          var resource = context.resourceState(context.id("resource-" + generation), () -> {created++; return generation;}, _ -> disposed++);
-          var state = context.state(context.id("value"), 0);
-          value = state;
-          var seen = reading.value;
-          var node = new RenderNode(child, LayoutVisualKind.Box);
-          var label = new RenderNode(context.id("label"), LayoutVisualKind.Text);
-          label.layout.text = resource.value + ":" + state.value + ":" + seen;
-          node.add(label);
-          return node;
-        });
-      })).build(context));
-      return root;
-    });
+  public function new() {
+  }
+  public function build(context:BuildContext):RenderNode return context.withScope(new Key("updating-resources"),
+    () -> {var id = context.id("owner");
+  rootId = id;
+  return context.selfUpdating(id, () -> {var root = new RenderNode(id, LayoutVisualKind.Box);
+  if (enabled) root.add(new RetainedView("nested",
+    _ -> new DecoratedControl("inner", context -> {var child = context.id("child");
+  childId = child;
+  return context.selfUpdating(child,
+    () -> {var resource = context.resourceState(context.id("resource-" + generation), () -> {created++;
+  return generation;
+  }, _ -> disposed++);
+  var state = context.state(context.id("value"), 0);
+  value = state;
+  var seen = reading.value;
+  var node = new RenderNode(child, LayoutVisualKind.Box);
+  var label = new RenderNode(context.id("label"), LayoutVisualKind.Text);
+  label.layout.text = resource.value + ":" + state.value + ":" + seen;
+  node.add(label);
+  return node;
+  });
+  })).build(context));
+  return root;
+  });
   });
 }
 
-@:access(haxeon.ui.core.UiContext)
-@:access(haxeon.ui.debug.UiInspector)
-class RestyleInPlaceTests {
-	static function retainedVariants(fonts:FontCollection):Void {
-		var ui = new UiContext(null, fonts), view = new VariantProbe(), frame = new LayoutFrame(200, 100);
-		var first = ui.submit(view, frame);
-		view.variant = "b"; ui.submit(view, frame);
-		view.variant = "a"; var restored = ui.submit(view, frame);
-		check(first == restored && view.aBuilds == 1 && view.bBuilds == 1, "A retained variant was rebuilt or lost its root");
-		view.variant = "b"; ui.submit(view, frame);
-		view.aRevision++;
-		view.variant = "a"; var changed = ui.submit(view, frame);
-		check(view.aBuilds == 2 && changed.layout.text == "a:1", "An inactive variant ignored an observed change");
-		ui.dispose();
+@:access(haxeon.ui.core.UiContext) @:access(haxeon.ui.debug.UiInspector) class RestyleInPlaceTests {
+  static function retainedVariants(fonts:FontCollection):Void {
+    var ui = new UiContext(null, fonts), view = new VariantProbe(), frame = new LayoutFrame(200, 100);
+    var first = ui.submit(view, frame);
+    view.variant = "b";
+    ui.submit(view, frame);
+    view.variant = "a";
+    var restored = ui.submit(view, frame);
+    check(
+      first == restored && view.aBuilds == 1 && view.bBuilds == 1,
+      "A retained variant was rebuilt or lost its root"
+    );
+    view.variant = "b";
+    ui.submit(view, frame);
+    view.aRevision++;
+    view.variant = "a";
+    var changed = ui.submit(view, frame);
+    check(view.aBuilds == 2 && changed.layout.text == "a:1", "An inactive variant ignored an observed change");
+    ui.dispose();
 
-		var limited = new VariantProbe(), one = new UiContext(null, fonts), other = new UiContext(null, fonts);
-		limited.capacity = 1;
-		one.submit(limited, frame);
-		other.submit(limited, frame);
-		check(limited.aBuilds == 2, "Different UI contexts shared a retained variant");
-		limited.variant = "b"; one.submit(limited, frame);
-		limited.variant = "a"; one.submit(limited, frame);
-		check(limited.aBuilds == 3, "A variant outside the capacity was not evicted");
-		other.submit(limited, frame);
-		check(limited.aBuilds == 3, "Eviction in one context affected another context");
-		one.dispose(); other.dispose();
-		var siblings = new UiContext(null, fonts);
-		var siblingRoot = siblings.submit(new SiblingVariantProbe(), frame);
-		check(siblingRoot.children[0].id.value != siblingRoot.children[1].id.value,
-			"Sibling variant caches used the same state scope");
-		siblings.dispose();
+    var limited = new VariantProbe(), one = new UiContext(null, fonts), other = new UiContext(null, fonts);
+    limited.capacity = 1;
+    one.submit(limited, frame);
+    other.submit(limited, frame);
+    check(limited.aBuilds == 2, "Different UI contexts shared a retained variant");
+    limited.variant = "b";
+    one.submit(limited, frame);
+    limited.variant = "a";
+    one.submit(limited, frame);
+    check(limited.aBuilds == 3, "A variant outside the capacity was not evicted");
+    other.submit(limited, frame);
+    check(limited.aBuilds == 3, "Eviction in one context affected another context");
+    one.dispose();
+    other.dispose();
+    var siblings = new UiContext(null, fonts);
+    var siblingRoot = siblings.submit(new SiblingVariantProbe(), frame);
+    check(
+      siblingRoot.children[0].id.value != siblingRoot.children[1].id.value,
+      "Sibling variant caches used the same state scope"
+    );
+    siblings.dispose();
 
-		var strict = new StrictVariantProbe(), patched = new UiContext(null, fonts);
-		var build:Void->View = function() return strict;
-		var root = patched.submitCached(build, frame, "strict");
-		check(root.children[0].layout.text == "0", "Strict variant did not start from its initial state");
-		patched.pointerDown(10, 10, 0);
-		check(strict.presses == 1, "The updating widget did not receive its pointer event");
-		root = patched.submitCached(build, frame, "strict");
-		check(root.children[0].layout.text == "1", "The quiet updating widget did not patch: text=" + root.children[0].layout.text +
-			" accepted=" + strict.patchAccepted);
-		var changedId = root.id.value;
-		strict.variant = "b"; patched.submit(strict, frame);
-		strict.variant = "a"; root = patched.submit(strict, frame);
-		check(root.children[0].layout.text == "0", "A changed detached variant restored its old quiet widget state: text=" +
-			root.children[0].layout.text + " builds=" + strict.counterBuilds + " old=" + changedId + " new=" + root.id.value);
-		patched.dispose();
-	}
-	static function inlineAxisSnapshots():Void {
-		var width = haxeon.ui.style.StyleProperty.Width;
-		var height = haxeon.ui.style.StyleProperty.Height;
-		var original = new haxeon.ui.style.ComputedStyle();
-		original.setAxis(width, LayoutAxis.fixed(7), null);
-		original.setAxis(height, LayoutAxis.grow(), null);
-		var fork = original.fork();
-		original.setAxis(width, LayoutAxis.fixed(9), null);
-		check(fork.getAxis(width).value == 7 && original.getAxis(width).value == 9, "Inline axes leaked across a fork");
-		var constructed = new haxeon.ui.style.ComputedStyle(fork);
-		fork.setAxis(height, LayoutAxis.fixed(11), null);
-		check(constructed.getAxis(height).sizing == haxeon.ui.LayoutSizing.Grow, "Constructed style lost its axis snapshot");
-		var copy = constructed.copy();
-		check(!haxeon.ui.style.StyleDiff.compare(constructed, copy).changed, "Copied inline axes compare differently");
-		var dynamicStyle = new haxeon.ui.style.ComputedStyle();
-		dynamicStyle.setAxis(width, LayoutAxis.fixed(7), null);
-		dynamicStyle.setAxis(height, LayoutAxis.grow(), null);
-		check(!haxeon.ui.style.StyleDiff.compare(constructed, dynamicStyle).changed,
-			"Inline and dynamically stored axes compare differently");
-		copy.setAxis(width, LayoutAxis.fixed(3), null);
-		check(copy.getAxis(width).value == 3 && constructed.getAxis(width).value == 7 &&
-			haxeon.ui.style.StyleDiff.compare(constructed, copy).changed, "Dynamic axis replacement lost value or isolation");
-		var entries = constructed.entries();
-		check(entries.length == 2, "Inline axis inspection omitted a property");
-		var description = entries[0].describe();
-		constructed.setAxis(width, LayoutAxis.fixed(13), null);
-		var inspected:LayoutAxis = cast entries[0].value;
-		var reflected:Null<LayoutAxis> = cast Reflect.field(entries[0], "value");
-		check(inspected.value == 7 && constructed.getAxis(width).value == 13 && entries[0].describe() == description,
-			"Changing an inline axis mutated an existing inspection snapshot");
-		check(Reflect.hasField(entries[0], "value") && Reflect.fields(entries[0]).indexOf("value") >= 0 &&
-			reflected != null && reflected.value == 7, "Reflection lost the inspected axis value");
-		var node = new RenderNode(new WidgetId(723), LayoutVisualKind.Box);
-		constructed.setDecorations(
-			new haxeon.ui.style.DecorationChain([new InspectionDecoration()]), null);
-		node.computedStyle = constructed;
-		InspectionDecoration.copies = 0;
-		var snapshots = haxeon.ui.debug.UiInspector.snapshot(node, null);
-		var snapshotCopies = InspectionDecoration.copies;
-		check(snapshots.length == 1 && snapshots[0].styleEntries.length == 3 && snapshotCopies == 1,
-			"A public inspection snapshot lost style entries");
-		InspectionDecoration.copies = 0;
-		check(haxeon.ui.debug.UiInspector.dump(node, null) ==
-			haxeon.ui.debug.UiInspector.formatDump(snapshots, haxeon.ui.style.StyleState.empty()), "A tree dump changed when unused inspection data was skipped");
-		check(InspectionDecoration.copies == snapshotCopies, "A tree dump skipped an inspection copy hook");
-		InspectionDecoration.fail = true;
-		var snapshotFailed = false, dumpFailed = false;
-		try haxeon.ui.debug.UiInspector.snapshot(node, null) catch (_:Dynamic) snapshotFailed = true;
-		try haxeon.ui.debug.UiInspector.dump(node, null) catch (_:Dynamic) dumpFailed = true;
-		InspectionDecoration.fail = false;
-		check(snapshotFailed && dumpFailed, "A tree dump swallowed an inspection copy failure");
-		var undisturbed = new haxeon.ui.style.ComputedStyle();
-		undisturbed.setAxis(width, LayoutAxis.fixed(23), null);
-		node.computedStyle = undisturbed;
-		haxeon.ui.debug.UiInspector.dump(node, null);
-		var detailed = haxeon.ui.debug.UiInspector.snapshot(node, null);
-		var detailedAxis:LayoutAxis = cast detailed[0].styleEntries[0].value;
-		check(detailedAxis.value == 23, "Detailed inspection lost its axis value");
-	}
-	static function inlineLocalSnapshots():Void {
-		var padding = haxeon.ui.style.StyleProperty.Padding, background = haxeon.ui.style.StyleProperty.Background;
-		var transform = haxeon.ui.style.StyleProperty.Transform;
-		var local = new LayoutStyle();
-		local.padding = new haxeon.ui.Insets(1, 2, 3, 4);
-		local.background = Color.rgba(0.1, 0.2, 0.3, 1);
-		local.transform = haxeon.ui.Transform2D.translation(5, 6);
-		var resolver = new haxeon.ui.style.StyleResolver();
-		var target = new haxeon.ui.style.StyleTarget("local-snapshot");
-		var computed = resolver.resolve(target, null, null, null, local), fork = computed.fork();
-		resolver.clearCache();
-		local.padding = new haxeon.ui.Insets(8, 8, 8, 8);
-		local.background = Color.rgba(0.8, 0.8, 0.8, 1);
-		local.transform = haxeon.ui.Transform2D.translation(9, 9);
-		var materialized = computed.toLayoutStyle(), forked = fork.toLayoutStyle();
-		check(materialized.padding.left == 1 && materialized.background.red == 0.1 && materialized.transform.tx == 5 &&
-			forked.padding.left == 1 && forked.background.red == 0.1 && forked.transform.tx == 5,
-			"A local struct snapshot changed when its input style was edited");
-		var clone = computed.copy();
-		check(!haxeon.ui.style.StyleDiff.compare(computed, clone).changed, "Copying lazy local values changed their style");
-		var typedStyle = new haxeon.ui.style.ComputedStyle();
-		typedStyle.setInsets(padding, materialized.padding, null);
-		typedStyle.setColor(background, materialized.background, null);
-		typedStyle.setMatrix(transform, materialized.transform, null);
-		var oldFork = typedStyle.fork();
-		typedStyle.setInsets(padding, new haxeon.ui.Insets(11, 12, 13, 14), null);
-		var after = typedStyle.toLayoutStyle(), oldAfter = oldFork.toLayoutStyle();
-		check(after.padding.left == 11 && after.background.red == 0.1 && after.transform.tx == 5 &&
-			oldAfter.padding.left == 1 && oldAfter.background.red == 0.1 && oldAfter.transform.tx == 5,
-			"Replacing a typed value lost untouched values");
-		var zero = 0.0, minusZero = zero * -1.0;
+    var strict = new StrictVariantProbe(), patched = new UiContext(null, fonts);
+    var build:Void -> View = function() return strict;
+    var root = patched.submitCached(build, frame, "strict");
+    check(root.children[0].layout.text == "0", "Strict variant did not start from its initial state");
+    patched.pointerDown(10, 10, 0);
+    check(strict.presses == 1, "The updating widget did not receive its pointer event");
+    root = patched.submitCached(build, frame, "strict");
+    check(
+      root.children[0].layout.text == "1",
+      "The quiet updating widget did not patch: text="
+      + root.children[0].layout.text + " accepted=" + strict.patchAccepted
+    );
+    var changedId = root.id.value;
+    strict.variant = "b";
+    patched.submit(strict, frame);
+    strict.variant = "a";
+    root = patched.submit(strict, frame);
+    check(
+      root.children[0].layout.text == "0",
+      "A changed detached variant restored its old quiet widget state: text="
+      + root.children[0].layout.text + " builds=" + strict.counterBuilds + " old=" + changedId + " new=" + root.id.value
+    );
+    patched.dispose();
+  }
+  static function inlineAxisSnapshots():Void {
+    var width = haxeon.ui.style.StyleProperty.Width;
+    var height = haxeon.ui.style.StyleProperty.Height;
+    var original = new haxeon.ui.style.ComputedStyle();
+    original.setAxis(width, LayoutAxis.fixed(7), null);
+    original.setAxis(height, LayoutAxis.grow(), null);
+    var fork = original.fork();
+    original.setAxis(width, LayoutAxis.fixed(9), null);
+    check(fork.getAxis(width).value == 7 && original.getAxis(width).value == 9, "Inline axes leaked across a fork");
+    var constructed = new haxeon.ui.style.ComputedStyle(fork);
+    fork.setAxis(height, LayoutAxis.fixed(11), null);
+    check(constructed.getAxis(height).sizing == haxeon.ui.LayoutSizing.Grow,
+      "Constructed style lost its axis snapshot");
+    var copy = constructed.copy();
+    check(!haxeon.ui.style.StyleDiff.compare(constructed, copy).changed, "Copied inline axes compare differently");
+    var dynamicStyle = new haxeon.ui.style.ComputedStyle();
+    dynamicStyle.setAxis(width, LayoutAxis.fixed(7), null);
+    dynamicStyle.setAxis(height, LayoutAxis.grow(), null);
+    check(
+      !haxeon.ui.style.StyleDiff.compare(constructed, dynamicStyle).changed,
+      "Inline and dynamically stored axes compare differently"
+    );
+    copy.setAxis(width, LayoutAxis.fixed(3), null);
+    check(
+      copy.getAxis(width).value == 3 && constructed.getAxis(width).value == 7 && haxeon.ui.style.StyleDiff.compare(
+        constructed,
+        copy
+      ).changed,
+      "Dynamic axis replacement lost value or isolation"
+    );
+    var entries = constructed.entries();
+    check(entries.length == 2, "Inline axis inspection omitted a property");
+    var description = entries[0].describe();
+    constructed.setAxis(width, LayoutAxis.fixed(13), null);
+    var inspected:LayoutAxis = cast entries[0].value;
+    var reflected:Null<LayoutAxis> = cast Reflect.field(entries[0], "value");
+    check(
+      inspected.value == 7 && constructed.getAxis(width).value == 13 && entries[0].describe() == description,
+      "Changing an inline axis mutated an existing inspection snapshot"
+    );
+    check(
+      Reflect.hasField(entries[0],
+      "value") && Reflect.fields(entries[0]).indexOf("value") >= 0 && reflected != null && reflected.value == 7,
+      "Reflection lost the inspected axis value"
+    );
+    var node = new RenderNode(new WidgetId(723), LayoutVisualKind.Box);
+    constructed.setDecorations(new haxeon.ui.style.DecorationChain([new InspectionDecoration()]), null);
+    node.computedStyle = constructed;
+    InspectionDecoration.copies = 0;
+    var snapshots = haxeon.ui.debug.UiInspector.snapshot(node, null);
+    var snapshotCopies = InspectionDecoration.copies;
+    check(
+      snapshots.length == 1 && snapshots[0].styleEntries.length == 3 && snapshotCopies == 1,
+      "A public inspection snapshot lost style entries"
+    );
+    InspectionDecoration.copies = 0;
+    check(
+      haxeon.ui.debug.UiInspector.dump(node, null) == haxeon.ui.debug.UiInspector.formatDump(
+        snapshots,
+        haxeon.ui.style.StyleState.empty()
+      ),
+      "A tree dump changed when unused inspection data was skipped"
+    );
+    check(InspectionDecoration.copies == snapshotCopies, "A tree dump skipped an inspection copy hook");
+    InspectionDecoration.fail = true;
+    var snapshotFailed = false, dumpFailed = false;
+    try haxeon.ui.debug.UiInspector.snapshot(node, null) catch (_:Dynamic) snapshotFailed = true;
+    try haxeon.ui.debug.UiInspector.dump(node, null) catch (_:Dynamic) dumpFailed = true;
+    InspectionDecoration.fail = false;
+    check(snapshotFailed && dumpFailed, "A tree dump swallowed an inspection copy failure");
+    var undisturbed = new haxeon.ui.style.ComputedStyle();
+    undisturbed.setAxis(width, LayoutAxis.fixed(23), null);
+    node.computedStyle = undisturbed;
+    haxeon.ui.debug.UiInspector.dump(node, null);
+    var detailed = haxeon.ui.debug.UiInspector.snapshot(node, null);
+    var detailedAxis:LayoutAxis = cast detailed[0].styleEntries[0].value;
+    check(detailedAxis.value == 23, "Detailed inspection lost its axis value");
+  }
+  static function inlineLocalSnapshots():Void {
+    var padding = haxeon.ui.style.StyleProperty.Padding, background = haxeon.ui.style.StyleProperty.Background;
+    var transform = haxeon.ui.style.StyleProperty.Transform;
+    var local = new LayoutStyle();
+    local.padding = new haxeon.ui.Insets(1, 2, 3, 4);
+    local.background = Color.rgba(0.1, 0.2, 0.3, 1);
+    local.transform = haxeon.ui.Transform2D.translation(5, 6);
+    var resolver = new haxeon.ui.style.StyleResolver();
+    var target = new haxeon.ui.style.StyleTarget("local-snapshot");
+    var computed = resolver.resolve(target, null, null, null, local), fork = computed.fork();
+    resolver.clearCache();
+    local.padding = new haxeon.ui.Insets(8, 8, 8, 8);
+    local.background = Color.rgba(0.8, 0.8, 0.8, 1);
+    local.transform = haxeon.ui.Transform2D.translation(9, 9);
+    var materialized = computed.toLayoutStyle(), forked = fork.toLayoutStyle();
+    check(
+      materialized.padding.left == 1 && materialized.background.red == 0.1 && materialized.transform.tx == 5
+      && forked.padding.left == 1 && forked.background.red == 0.1 && forked.transform.tx == 5,
+      "A local struct snapshot changed when its input style was edited"
+    );
+    var clone = computed.copy();
+    check(!haxeon.ui.style.StyleDiff.compare(computed, clone).changed, "Copying lazy local values changed their style");
+    var typedStyle = new haxeon.ui.style.ComputedStyle();
+    typedStyle.setInsets(padding, materialized.padding, null);
+    typedStyle.setColor(background, materialized.background, null);
+    typedStyle.setMatrix(transform, materialized.transform, null);
+    var oldFork = typedStyle.fork();
+    typedStyle.setInsets(padding, new haxeon.ui.Insets(11, 12, 13, 14), null);
+    var after = typedStyle.toLayoutStyle(), oldAfter = oldFork.toLayoutStyle();
+    check(
+      after.padding.left == 11 && after.background.red == 0.1 && after.transform.tx == 5
+      && oldAfter.padding.left == 1 && oldAfter.background.red == 0.1 && oldAfter.transform.tx == 5,
+      "Replacing a typed value lost untouched values"
+    );
+    var zero = 0.0, minusZero = zero * -1.0;
 
-		var positive = new LayoutStyle(), negative = new LayoutStyle();
-		positive.padding = new haxeon.ui.Insets(0.0, 1.0, 0.0, 0.0);
-		negative.padding = new haxeon.ui.Insets(minusZero, 1.0, 0.0, 0.0);
-		positive.background = Color.rgba(0.0, 0.2, 0.3, 1.0);
-		negative.background = Color.rgba(minusZero, 0.2, 0.3, 1.0);
-		positive.transform = haxeon.ui.Transform2D.translation(0.0, 5.0);
-		negative.transform = haxeon.ui.Transform2D.translation(minusZero, 5.0);
-		var signs = new haxeon.ui.style.StyleResolver();
-		signs.resolve(new haxeon.ui.style.StyleTarget("sign", "positive"), null, null, null, positive);
-		var signed = signs.resolve(new haxeon.ui.style.StyleTarget("sign", "negative"), null, null, null, negative).toLayoutStyle();
-		check(1.0 / signed.padding.left == Math.NEGATIVE_INFINITY &&
-			1.0 / signed.background.red == Math.NEGATIVE_INFINITY &&
-			1.0 / signed.transform.tx == Math.NEGATIVE_INFINITY, "A cached local snapshot changed a signed zero");
-	}
+    var positive = new LayoutStyle(), negative = new LayoutStyle();
+    positive.padding = new haxeon.ui.Insets(0.0, 1.0, 0.0, 0.0);
+    negative.padding = new haxeon.ui.Insets(minusZero, 1.0, 0.0, 0.0);
+    positive.background = Color.rgba(0.0, 0.2, 0.3, 1.0);
+    negative.background = Color.rgba(minusZero, 0.2, 0.3, 1.0);
+    positive.transform = haxeon.ui.Transform2D.translation(0.0, 5.0);
+    negative.transform = haxeon.ui.Transform2D.translation(minusZero, 5.0);
+    var signs = new haxeon.ui.style.StyleResolver();
+    signs.resolve(new haxeon.ui.style.StyleTarget("sign", "positive"), null, null, null, positive);
+    var signed = signs.resolve(new haxeon.ui.style.StyleTarget("sign",
+      "negative"), null, null, null, negative).toLayoutStyle();
+    check(
+      1.0 / signed.padding.left == Math.NEGATIVE_INFINITY
+      && 1.0 / signed.background.red == Math.NEGATIVE_INFINITY && 1.0 / signed.transform.tx == Math.NEGATIVE_INFINITY,
+      "A cached local snapshot changed a signed zero"
+    );
+  }
   static function check(value:Bool, message:String):Void if (!value) throw message;
 
   /** Everything a user could see or interact with, per node. */
@@ -724,13 +852,15 @@ class RestyleInPlaceTests {
     root.walk(function(node) {
       var style = node.layout.style, color = style.background, text = node.layout.textColor;
       // State routed onto a node that no widget built from is invisible; a rebuilt node starts without it.
-      out.add(node.id.value + "|" + node.styleType + "|" + (node.recordsInteraction ? node.states.rawValue() : -1) + "|" + color.red + "," + color.green + "," + color.blue + "," + color.alpha
-        + "|" + (text == null ? "-" : text.red + "," + text.green + "," + text.blue + "," + text.alpha) + "|" + style.visible + "|" + style.zIndex
-        + "|" + node.layout.text + "|" + node.children.length + "|");
+      out.add(node.id.value + "|" + node.styleType + "|" + (node.recordsInteraction ? node.states.rawValue()
+        : -1) + "|" + color.red + "," + color.green + "," + color.blue + "," + color.alpha + "|" + (text
+        == null ? "-" : text.red + "," + text.green + "," + text.blue + "," + text.alpha)
+        + "|" + style.visible + "|" + style.zIndex + "|" + node.layout.text + "|" + node.children.length + "|");
       var bounds = node.resolved == null ? null : node.globalBounds();
       out.add(bounds == null ? "-" : bounds.x + "," + bounds.y + "," + bounds.width + "," + bounds.height);
       out.add("\n");
-    });
+    }
+    );
     return out.toString();
   }
 
@@ -738,14 +868,15 @@ class RestyleInPlaceTests {
   static function control(root:RenderNode, key:String):RenderNode {
     var found:Null<RenderNode> = null;
     root.walk(function(node) {
-      if (node.styleKey == key && (node.styleType == "button" || node.styleType == "checkbox" || node.styleType == "toggle"
-        || node.styleType == "radio")) found = node;
-    });
+      if (node.styleKey == key && (node.styleType == "button"
+        || node.styleType == "checkbox" || node.styleType == "toggle" || node.styleType == "radio")) found = node;
+    }
+    );
     check(found != null, "No control " + key);
     return cast found;
   }
 
-  static function center(root:RenderNode, key:String):{x:Float, y:Float} {
+  static function center(root:RenderNode, key:String): {x: Float, y: Float} {
     var bounds = control(root, key).globalBounds();
     return {x: bounds.x + bounds.width / 2, y: bounds.y + bounds.height / 2};
   }
@@ -754,7 +885,14 @@ class RestyleInPlaceTests {
    * Drives both rigs through `script`, requiring the patched tree to match the full rebuild after every frame.
    * `rebuilds` is how many times the retained panel may build in the patched rig: once, plus once per step that changes what it shows.
    */
-  static function run(fonts:FontCollection, name:String, scrolling:Bool, controls:Bool, rebuilds:Int, script:Array<{action:String, key:String}>):Void {
+  static function run(
+    fonts:FontCollection,
+    name:String,
+    scrolling:Bool,
+    controls:Bool,
+    rebuilds:Int,
+    script:Array<{action:String, key:String}>
+  ):Void {
     var patched = new Rig(fonts, true, scrolling, controls), reference = new Rig(fonts, false, scrolling, controls);
     var patchedRoot = patched.submit(), referenceRoot = reference.submit();
     check(signature(patchedRoot) == signature(referenceRoot), "The first frames differ");
@@ -766,59 +904,89 @@ class RestyleInPlaceTests {
       for (rig in [patched, reference]) {
         var at = center(rig == patched ? patchedRoot : referenceRoot, step.key);
         switch step.action {
-          case "move": rig.ui.pointerMove(at.x, at.y);
-          case "down": rig.ui.pointerDown(at.x, at.y, 0);
-          case "up": rig.ui.pointerUp(at.x, at.y, 0);
-          // Released away from the control it was pressed on: nothing activates.
-          case "release": rig.ui.pointerUp(-20.0, -20.0, 0);
+          case "move":
+            rig.ui.pointerMove(at.x, at.y);
+          case "down":
+            rig.ui.pointerDown(at.x, at.y, 0);
+          case "up":
+            rig.ui.pointerUp(at.x, at.y, 0);
+            // Released away from the control it was pressed on: nothing activates.
+          case "release":
+            rig.ui.pointerUp(-20.0, -20.0, 0);
           case "wait":
-          default: rig.ui.pointerMove(-20.0, -20.0);
+          default:
+            rig.ui.pointerMove(-20.0, -20.0);
         }
         var root = rig.submit();
-        if (rig == patched) patchedRoot = root; else referenceRoot = root;
+        if (rig == patched) patchedRoot = root;
+        else referenceRoot = root;
       }
-      check(signature(patchedRoot) == signature(referenceRoot),
-        "Step " + index + " (" + step.action + " " + step.key + ") differs from the full rebuild:\n--- patched\n" + signature(patchedRoot)
-        + "--- reference\n" + signature(referenceRoot));
+      check(
+        signature(patchedRoot) == signature(referenceRoot),
+        "Step " + index + " (" + step.action + " " + step.key + ") differs from the full rebuild:\n--- patched\n"
+        + signature(patchedRoot) + "--- reference\n" + signature(referenceRoot)
+      );
       if (signature(patchedRoot) != before) {
         changed++;
         if (step.action == "wait") waitsChanged++;
       }
-      if (Sys.args().indexOf("--trace") >= 0) Sys.println(step.action + " " + step.key + ": panel builds +" + (patched.panelBuilds - buildsBefore));
+      if (Sys.args().indexOf("--trace")
+        >= 0) Sys.println(step.action + " " + step.key + ": panel builds +" + (patched.panelBuilds - buildsBefore));
     }
     check(changed >= 6, name + ": pointer changes did not restyle anything (" + changed + ")");
     if (scrolling) check(waitsChanged >= 3, "The scrollbar did not fade frame by frame (" + waitsChanged + ")");
     check(patched.clicks == reference.clicks, "Clicks differ: " + patched.clicks + " vs " + reference.clicks);
-    check(patched.checked.value == reference.checked.value && patched.toggled == reference.toggled && patched.chosen == reference.chosen,
-      name + ": activations differ from the full rebuild");
+    check(
+      patched.checked.value == reference.checked.value
+      && patched.toggled == reference.toggled && patched.chosen == reference.chosen,
+      name + ": activations differ from the full rebuild"
+    );
     for (index in 0...patched.decorated.length) {
       var key = patched.decorated[index].key;
-      check(patched.decorated[index].presses == reference.decorated[index].presses,
-        "A listener added after build was lost on " + key + ": " + patched.decorated[index].presses + " vs " + reference.decorated[index].presses);
-      // Decorations belong to the node returned to the caller, which may own a scoped control body.
-      // The activation target located by control() can be a replaceable descendant of that node.
+      check(
+        patched.decorated[index].presses == reference.decorated[index].presses,
+        "A listener added after build was lost on "
+        + key + ": " + patched.decorated[index].presses + " vs " + reference.decorated[index].presses
+      );
+      // Component roots can be replaced under one stable widget ID. Follow their native owner and
+      // require every caller contribution to remain on the mounted body.
       var built = patched.decorated[index].builtNode;
       check(built != null, "The decorated control was never built: " + key);
-      var decoratedNode:RenderNode = cast built;
+      var previousNode:RenderNode = cast built;
+      var decoratedNode = patched.ui.buildContext.currentRoot(previousNode);
+      check(decoratedNode.id.equals(previousNode.id), "The decorated control changed its widget identity: " + key);
       var attached = false;
-      patchedRoot.walk(function(node) { if (node == decoratedNode) attached = true; });
+      patchedRoot.walk(function(node) {
+        if (node == decoratedNode) attached = true;
+      }
+      );
       check(attached, "The node decorated by the caller was removed on " + key);
       check(decoratedNode.layout.style.zIndex == 3, "A style change made after build was lost on " + key);
       var overlays = 0;
-      decoratedNode.walk(function(node) { if (node.layout.style.width.value == 5.5 && node.layout.style.height.value == 7.5) overlays++; });
+      decoratedNode.walk(function(node) {
+        if (node.layout.style.width.value == 5.5 && node.layout.style.height.value == 7.5) overlays++;
+      }
+      );
       check(overlays == 1, "A child added after build was lost or duplicated on " + key + " (" + overlays + ")");
     }
-    check(patched.panelBuilds == rebuilds, name + ": the retained panel built " + patched.panelBuilds + " times, expected " + rebuilds);
+    check(
+      patched.panelBuilds == rebuilds,
+      name + ": the retained panel built " + patched.panelBuilds + " times, expected " + rebuilds
+    );
     check(reference.panelBuilds > patched.panelBuilds, name + ": the reference did not rebuild the panel");
-    Sys.println("PASS " + name + ": " + script.length + " steps match a full rebuild (" + changed + " changed the tree); panel builds patched="
-      + patched.panelBuilds + " reference=" + reference.panelBuilds);
-    patched.ui.dispose(); reference.ui.dispose();
+    Sys.println("PASS " + name + ": " + script.length + " steps match a full rebuild (" + changed
+      + " changed the tree); panel builds patched=" + patched.panelBuilds + " reference=" + reference.panelBuilds);
+    patched.ui.dispose();
+    reference.ui.dispose();
   }
 
 
   static function find(root:RenderNode, text:String):Null<RenderNode> {
     var found:Null<RenderNode> = null;
-    root.walk(function(node) { if (node.layout.text == text) found = node; });
+    root.walk(function(node) {
+      if (node.layout.text == text) found = node;
+    }
+    );
     return found;
   }
 
@@ -831,7 +999,10 @@ class RestyleInPlaceTests {
     var gauge = new Gauge(), decorated = new DecoratedGauge(gauge);
     var frame = new LayoutFrame(240.0, 120.0);
     // Retained, so that only the gauge itself builds again.
-    var view:View = new RetainedView("gauge-panel", function(_) return new Column("gauge-column", [new KeyedView("gauge", decorated)]));
+    var view:View = new RetainedView(
+      "gauge-panel",
+      function(_) return new Column("gauge-column", [new KeyedView("gauge", decorated)])
+    );
     var submit = function() return ui.submitCached(function() return view, frame, "gauge");
     var column = submit();
     var root = column.children[0];
@@ -843,23 +1014,33 @@ class RestyleInPlaceTests {
       var next = submit().children[0];
       check(next == root && RenderNode.latest(root) == root, "A rebuild replaced the node instead of reconciling it");
       check(gauge.builds == level, "The gauge built " + gauge.builds + " times");
-      check(find(root, "level " + level) != null && find(root, "level " + (level - 1)) == null, "The builder's child was not replaced");
+      check(
+        find(root, "level " + level) != null && find(root, "level " + (level - 1)) == null,
+        "The builder's child was not replaced"
+      );
       check(root.layout.style.zIndex == level, "The builder's style change was not applied");
       check(root.layout.style.positionX == 4.0, "The caller's style change was lost");
       check(root.semantics == semantics, "Semantics the caller replaced were taken back");
       var callerChildren = 0;
-      for (child in root.children) if (child.styleType == null && child.layout.visualKind == LayoutVisualKind.Box) callerChildren++;
+      for (child in root.children) if (child.styleType == null
+        && child.layout.visualKind == LayoutVisualKind.Box) callerChildren++;
       check(callerChildren == 1 && root.children.length == 2, "A child added by the caller was lost or duplicated");
       var bounds = root.globalBounds();
       ui.pointerDown(bounds.x + 5, bounds.y + 5, 0);
       ui.pointerUp(bounds.x + 5, bounds.y + 5, 0);
-      check(gauge.clicked == "level " + level, "The listener of the first build ran instead of the new one: " + gauge.clicked);
+      check(
+        gauge.clicked == "level " + level,
+        "The listener of the first build ran instead of the new one: " + gauge.clicked
+      );
       check(decorated.presses == level - 1, "The caller's listener ran " + decorated.presses + " times");
       var paint:Array<Dynamic> = Reflect.field(root, "paintHandlers");
       check(paint != null && paint.length == 1, "The paint callbacks were not replaced one for one");
       var paintGauge:Dynamic = paint[0];
       paintGauge(null, null);
-      check(gauge.painted == "level " + level, "The paint callback of the first build ran instead of the new one: " + gauge.painted);
+      check(
+        gauge.painted == "level " + level,
+        "The paint callback of the first build ran instead of the new one: " + gauge.painted
+      );
     }
     // A build that changes the node's kind cannot be reconciled: its node is replaced.
     gauge.asText = true;
@@ -868,7 +1049,8 @@ class RestyleInPlaceTests {
     check(replaced != root && RenderNode.latest(root) == replaced, "A change of kind did not replace the node");
     check(ui.buildContext.requestPatch(cast gauge.id), "The replacement was not registered as self-updating");
     ui.dispose();
-    Sys.println("PASS reconcile: a rebuild keeps the node and what callers added, takes the new build's style, children, listeners and paint, and is replaced only when its kind changes");
+    Sys
+      .println("PASS reconcile: a rebuild keeps the node and what callers added, takes the new build's style, children, listeners and paint, and is replaced only when its kind changes");
     textField(fonts);
   }
 
@@ -877,7 +1059,7 @@ class RestyleInPlaceTests {
     var handlers:Array<Dynamic> = Reflect.field(node, "paintHandlers");
     check(handlers != null && handlers.length == 2, "Builder or caller paint was lost or duplicated");
     for (handler in handlers) {
-      var paint:Canvas->ResolvedLayoutItem->Void = cast handler;
+      var paint:Canvas -> ResolvedLayoutItem -> Void = cast handler;
       paint(trace, cast node.resolved);
     }
     return trace;
@@ -891,31 +1073,43 @@ class RestyleInPlaceTests {
     var overlaySlider = slider.children[0], overlayProgress = progress.children[0];
     var previousPaint = paintTrace(progress), animatedSteps = 0, steps = 0;
     var compare = function() {
-      left = patched.submit(); right = reference.submit(); steps++;
+      left = patched.submit();
+      right = reference.submit();
+      steps++;
       check(left.children[0] == slider && left.children[1] == progress, "A motion control was replaced");
-      check(RenderNode.latest(cast patched.sliderBuilt) == slider && RenderNode.latest(cast patched.progressBuilt) == progress,
-        "A build root did not resolve to the live node");
-      check(slider.children[0] == overlaySlider && progress.children[0] == overlayProgress,
-        "The caller's child was replaced");
+      check(
+        RenderNode.latest(cast patched.sliderBuilt) == slider
+        && RenderNode.latest(cast patched.progressBuilt) == progress,
+        "A build root did not resolve to the live node"
+      );
+      check(
+        slider.children[0] == overlaySlider && progress.children[0] == overlayProgress,
+        "The caller's child was replaced"
+      );
       check(signature(left) == signature(right), "Motion step " + steps + " differs from a full rebuild");
       check(patched.slider.value == reference.slider.value, "Slider values differ after a drag");
       var sliderSemantics:Semantics = cast slider.semantics, otherSlider:Semantics = cast right.children[0].semantics;
-      var progressSemantics:Semantics = cast progress.semantics, otherProgress:Semantics = cast right.children[1].semantics;
-      check(Semantics.same(sliderSemantics, otherSlider) &&
-        Semantics.same(progressSemantics, otherProgress), "Motion semantics differ at step " + steps
-          + ": slider=" + sliderSemantics.value + "/" + otherSlider.value
-          + " progress=" + progressSemantics.value + "/" + otherProgress.value
-          + " targets=" + patched.progress.value + "/" + reference.progress.value);
+      var progressSemantics:Semantics = cast progress.semantics,
+        otherProgress:Semantics = cast right.children[1].semantics;
+      check(
+        Semantics.same(sliderSemantics, otherSlider) && Semantics.same(progressSemantics, otherProgress),
+        "Motion semantics differ at step "
+        + steps + ": slider=" + sliderSemantics.value + "/" + otherSlider.value + " progress=" + progressSemantics.value
+        + "/" + otherProgress.value + " targets=" + patched.progress.value + "/" + reference.progress.value
+      );
       check(paintTrace(slider).same(paintTrace(right.children[0])), "Slider paint differs at step " + steps);
       var painted = paintTrace(progress);
       check(painted.same(paintTrace(right.children[1])), "Progress paint differs at step " + steps);
       if (!painted.same(previousPaint)) animatedSteps++;
       previousPaint = painted;
-      for (node in [slider, progress])
-        check(node.layout.style.zIndex == 3 && node.layout.style.width.value == 180.0 && node.children.length == 1,
-          "Caller style or children were lost or duplicated");
-      for (index in 0...2)
-        check(patched.decorated[index].presses == reference.decorated[index].presses, "Caller listeners differ");
+      for (node in [slider, progress]) check(
+        node.layout.style.zIndex == 3 && node.layout.style.width.value == 180.0 && node.children.length == 1,
+        "Caller style or children were lost or duplicated"
+      );
+      for (index in 0...2) check(
+        patched.decorated[index].presses == reference.decorated[index].presses,
+        "Caller listeners differ"
+      );
     };
     for (fraction in [0.1, 0.3, 0.7, 0.95, 0.2, 0.6]) {
       for (rig in [patched, reference]) {
@@ -931,7 +1125,9 @@ class RestyleInPlaceTests {
     for (rig in [patched, reference]) rig.ui.pointerUp(-10.0, -10.0, 0);
     compare();
     for (key in [UiKey.Right, UiKey.End, UiKey.Home]) {
-      patched.ui.key(UiEventKind.KeyDown, key); reference.ui.key(UiEventKind.KeyDown, key); compare();
+      patched.ui.key(UiEventKind.KeyDown, key);
+      reference.ui.key(UiEventKind.KeyDown, key);
+      compare();
     }
     for (value in [0.2, 0.6, 0.9, 0.1, 1.0]) {
       patched.progress.value = reference.progress.value = value;
@@ -947,10 +1143,14 @@ class RestyleInPlaceTests {
     compare();
     check(patched.decorated[0].presses > 0 && patched.decorated[1].presses > 0, "Caller listeners never ran");
     check(animatedSteps >= 10, "Progress paint did not advance through the animation");
-    check(patched.panelBuilds == 1 && reference.panelBuilds > patched.panelBuilds,
-      'Motion did not keep the patched panel stable: patched=${patched.panelBuilds} reference=${reference.panelBuilds}');
-    patched.ui.dispose(); reference.ui.dispose();
-    Sys.println("PASS motion: " + steps + " decorated slider/progress steps keep nodes, caller additions and match rebuilt geometry, semantics and paint");
+    check(
+      patched.panelBuilds == 1 && reference.panelBuilds > patched.panelBuilds,
+      'Motion did not keep the patched panel stable: patched=${patched.panelBuilds} reference=${reference.panelBuilds}'
+    );
+    patched.ui.dispose();
+    reference.ui.dispose();
+    Sys.println("PASS motion: " + steps
+      + " decorated slider/progress steps keep nodes, caller additions and match rebuilt geometry, semantics and paint");
   }
 
   /** A text field patches itself while typing: its node stays, with what its caller attached, and matches a full rebuild. */
@@ -977,7 +1177,10 @@ class RestyleInPlaceTests {
       node = root;
     }
     var typed:Null<RenderNode> = null;
-    root.walk(function(child) { if (child.layout.text != null && child.layout.text.length == 6) typed = child; });
+    root.walk(function(child) {
+      if (child.layout.text != null && child.layout.text.length == 6) typed = child;
+    }
+    );
     check(typed != null, "The typed text is not shown");
     var bounds = root.globalBounds();
     ui.pointerDown(bounds.x + 2, bounds.y + 2, 0);
@@ -991,29 +1194,34 @@ class RestyleInPlaceTests {
     var ui = new UiContext(null, fonts), frame = new LayoutFrame(240, 120);
     ui.verifyRetentionEvery = 1;
     var revealed = false, target = 0;
-    var view:View = new DecoratedControl("feedback-focus", context -> {
-      var root = new RenderNode(context.id("feedback-root"), LayoutVisualKind.Box);
-      var id = context.id("late-target");
-      target = id.value;
-      if (revealed) {
-        var style = new LayoutStyle();
-        style.width = LayoutAxis.fixed(20); style.height = LayoutAxis.fixed(20);
-        var child = new RenderNode(id, LayoutVisualKind.Box, style);
-        child.focusable = true;
-        child.states = context.interactionStates.get(id);
-        root.add(child);
-      } else {
-        context.requestFocusAfterLayout(id);
-        root.onResolved(_ -> {
-          revealed = true;
-          context.requestBuildFeedback();
-        });
-      }
-      return root;
+    var view:View = new DecoratedControl("feedback-focus", context -> {var root = new RenderNode(
+      context.id("feedback-root"),
+      LayoutVisualKind.Box
+    );
+    var id = context.id("late-target");
+    target = id.value;
+    if (revealed) {
+      var style = new LayoutStyle();
+      style.width = LayoutAxis.fixed(20);
+      style.height = LayoutAxis.fixed(20);
+      var child = new RenderNode(id, LayoutVisualKind.Box, style);
+      child.focusable = true;
+      child.states = context.interactionStates.get(id);
+      root.add(child);
+    } else {
+      context.requestFocusAfterLayout(id);
+      root.onResolved(_ -> {revealed = true;
+      context.requestBuildFeedback();
+      });
+    }
+    return root;
     });
     ui.submitCached(() -> view, frame, "feedback-focus");
     var focused = ui.focus.focusedId;
-    check(focused != null && focused.value == target, "Build feedback consumed deferred focus before its target was built");
+    check(
+      focused != null && focused.value == target,
+      "Build feedback consumed deferred focus before its target was built"
+    );
     check(ui.verifyRetention(() -> view, frame) == null, "Focus after build feedback differs from a fresh build");
     ui.dispose();
     Sys.println("PASS feedback: deferred focus waits until resolved build feedback has materialized its target");
@@ -1023,41 +1231,49 @@ class RestyleInPlaceTests {
     var ui = new UiContext(null, fonts), frame = new LayoutFrame(240, 600);
     ui.buildContext.environment.reducedMotion = true;
     ui.verifyRetentionEvery = 1;
-    var controller = new ScrollController(), inputs = new ListInputs(480), selected = new haxeon.reactive.Signal<Int>(-1), notifications = 0;
-    var view:View = new RetainedView("resolved-list", context -> {
-      var style = new LayoutStyle();
-      style.width = LayoutAxis.grow();
-      var requested = inputs.height;
-      style.height = LayoutAxis.fixed(inputs.fractional ? requested / 3.14159 : requested);
-      var list = new haxeon.ui.widgets.collections.ListView("rows", new WindowItems(), style, controller, 300);
-      list.selectionProvider = () -> selected.value;
-      list.onSelectionChanged = index -> {selected.value = index; notifications++;};
-      return list;
+    var controller = new ScrollController(),
+      inputs = new ListInputs(480), selected = new haxeon.reactive.Signal<Int>(-1), notifications = 0;
+    var view:View = new RetainedView("resolved-list", context -> {var style = new LayoutStyle();
+    style.width = LayoutAxis.grow();
+    var requested = inputs.height;
+    style.height = LayoutAxis.fixed(inputs.fractional ? requested / 3.14159 : requested);
+    var list = new haxeon.ui.widgets.collections.ListView("rows", new WindowItems(), style, controller, 300);
+    list.selectionProvider = () -> selected.value;
+    list.onSelectionChanged = index -> {selected.value = index;
+    notifications++;
+    };
+    return list;
     });
     var build = () -> view;
     for (nextHeight in [480, 137, 341, 1, 480]) {
       inputs.height = nextHeight;
       ui.submitCached(build, frame, "list-height-" + inputs.height);
-      check(controller.viewportHeight == inputs.height, "List did not settle its resolved height: actual=" + controller.viewportHeight + " requested=" + inputs.height);
+      check(
+        controller.viewportHeight == inputs.height,
+        "List did not settle its resolved height: actual=" + controller.viewportHeight + " requested=" + inputs.height
+      );
       check(ui.verifyRetention(build, frame) == null, "Resolved list window differs from a fresh build");
     }
     inputs.fractional = true;
     ui.submitCached(build, frame, "fractional-list");
-    check(controller.viewportHeight > 0 && ui.verifyRetention(build, frame) == null, "Fractional list viewport did not settle");
+    check(
+      controller.viewportHeight > 0 && ui.verifyRetention(build, frame) == null,
+      "Fractional list viewport did not settle"
+    );
     inputs.fractional = false;
     ui.submitCached(build, frame, "list-height-480");
     controller.jumpTo(0, 240);
     var scrolled = ui.submitCached(build, frame, "list-height-480"), found = false;
-    scrolled.walk(node -> {if (node.layout.text == "row-30") found = true;});
+    scrolled.walk(node -> {if (node.layout.text == "row-30") found = true;
+    });
     check(found, "A retained list did not materialize the newly scrolled window");
     controller.jumpTo(0, 0);
     ui.submitCached(build, frame, "list-height-480");
     for (next in [8, -1, 1000, 3]) {
       selected.value = next;
       var root = ui.submitCached(build, frame, "list-selection-" + selected.value), count = 0;
-      root.walk(node -> {
-        if (node.semantics != null && node.semantics.role == AccessibilityRole.CollectionItem &&
-          node.semantics.states.contains(haxeon.ui.semantics.AccessibilityState.Selected)) count++;
+      root.walk(node -> {if (node.semantics != null && node.semantics.role == AccessibilityRole.CollectionItem
+        && node.semantics.states.contains(haxeon.ui.semantics.AccessibilityState.Selected)) count++;
       });
       check(count == (selected.value < 0 || selected.value >= 40 ? 0 : 1), "Controlled list selection is stale");
       check(notifications == 0, "External list selection notified its owner");
@@ -1065,8 +1281,8 @@ class RestyleInPlaceTests {
     var root = ui.root;
     if (root == null) throw "Missing controlled list";
     var row:Null<RenderNode> = null;
-    root.walk(node -> {
-      if (node.semantics != null && node.semantics.role == AccessibilityRole.CollectionItem && node.semantics.positionInSet == 1) row = node;
+    root.walk(node -> {if (node.semantics != null
+      && node.semantics.role == AccessibilityRole.CollectionItem && node.semantics.positionInSet == 1) row = node;
     });
     var target = row;
     if (target == null) throw "Missing first list row";
@@ -1077,38 +1293,47 @@ class RestyleInPlaceTests {
     check(selected.value == 0 && notifications == 1, "Controlled list input did not notify its owner exactly once");
     check(ui.verifyRetention(build, frame) == null, "Controlled list input differs from a fresh build");
     ui.dispose();
-    Sys.println("PASS list: resolved windows settle before publication through grow, shrink and a one-pixel viewport; controlled selection matches fresh builds");
+    Sys
+      .println("PASS list: resolved windows settle before publication through grow, shrink and a one-pixel viewport; controlled selection matches fresh builds");
   }
 
   static function verifyDisabledFocus(fonts:FontCollection):Void {
     var ui = new UiContext(null, fonts), frame = new LayoutFrame(240, 120), input = new EnabledInput();
     ui.verifyRetentionEvery = 1;
-    var view:View = new RetainedView("focus-disabling", context -> {
-      var button = new Button("Focus", null, () -> {});
-      button.enabled = input.enabled;
-      return button;
+    var view:View = new RetainedView("focus-disabling", context -> {var button = new Button(
+      "Focus",
+      null,
+      () -> {},
+      null,
+      input.enabled
+    );
+    return button;
     });
     var build = () -> view;
     var root = ui.submitCached(build, frame, "focus-initial");
-    ui.focusWidget(root.id);
+    check(ui.focusWidget(root.id), "Enabled Button did not accept focus");
     ui.submitCached(build, frame, "focus-settled");
     input.enabled = false;
     root = ui.submitCached(build, frame, "focus-disabled");
     check(!root.enabled && ui.focus.focusedId == null, "Disabling a retained focus target did not clear focus");
     check(ui.verifyRetention(build, frame) == null, "A committed focus pass differs from a full rebuild");
     ui.dispose();
-    Sys.println("PASS verification: a focus pass compares against its committed nodes, including fresh disabled controls");
+    Sys
+      .println("PASS verification: a focus pass compares against its committed nodes, including fresh disabled controls");
   }
 
   static function verifyPointerFlags(fonts:FontCollection):Void {
     var ui = new UiContext(null, fonts), frame = new LayoutFrame(240, 120);
     var flags:haxeon.ui.style.StyleState = haxeon.ui.style.StyleState.Checked;
     var label = "hovered pressed";
-    var view:View = new RetainedView("flag-verification", _ -> new DecoratedControl("flags", context -> {
-      var node = new RenderNode(context.id("flags"), LayoutVisualKind.Box);
-      node.states = flags;
-      node.semantics = new Semantics(AccessibilityRole.Checkbox, label);
-      return node;
+    var view:View = new RetainedView("flag-verification",
+      _ -> new DecoratedControl("flags", context -> {var node = new RenderNode(
+        context.id("flags"),
+        LayoutVisualKind.Box
+      );
+    node.states = flags;
+    node.semantics = new Semantics(AccessibilityRole.Checkbox, label);
+    return node;
     }));
     var build = () -> view;
     var root = ui.submitCached(build, frame, "flags");
@@ -1130,8 +1355,11 @@ class RestyleInPlaceTests {
     var frame = new LayoutFrame(240.0, 120.0);
     var label = "first";
     var honest = true;
-    var view:View = new RetainedView("labelled", function(_) return new haxeon.ui.widgets.text.Text(label),
-      function() return honest ? label : "always the same");
+    var view:View = new RetainedView(
+      "labelled",
+      function(_) return new haxeon.ui.widgets.text.Text(label),
+      function() return honest ? label : "always the same"
+    );
     var build = function() return view;
     ui.submitCached(build, frame, "verify");
     check(ui.verifyRetention(build, frame) == null, "An honest cache failed verification");
@@ -1143,8 +1371,10 @@ class RestyleInPlaceTests {
     label = "third";
     ui.submitCached(build, frame, "verify-4");
     var difference = ui.verifyRetention(build, frame);
-    check(difference != null && difference.indexOf("third") >= 0,
-      "Verification missed a cache whose key leaves out what it shows: " + difference);
+    check(
+      difference != null && difference.indexOf("third") >= 0,
+      "Verification missed a cache whose key leaves out what it shows: " + difference
+    );
     // The automatic mode reports through the callback.
     var reported:Null<String> = null;
     ui.onRetentionMismatch = function(text) reported = text;
@@ -1165,13 +1395,17 @@ class RestyleInPlaceTests {
     var inner:View = new RetainedView("inner", function(context) {
       builds++;
       return new haxeon.ui.widgets.text.Text(input.title);
-    });
+    }
+    );
     // An outer retained view around the inner one must notice the inner read too.
     var view:View = new RetainedView("outer", function(_) return inner);
     var build = function() return view;
     var shown = function():String {
       var found = "";
-      ui.submitCached(build, frame, "observed-" + (frameNumber++)).walk(function(node) { if (node.layout.text != null) found = node.layout.text; });
+      ui.submitCached(build, frame, "observed-" + (frameNumber++)).walk(function(node) {
+        if (node.layout.text != null) found = node.layout.text;
+      }
+      );
       return found;
     };
     check(shown() == "first" && builds == 1, "The first build did not show the observed value");
@@ -1181,17 +1415,28 @@ class RestyleInPlaceTests {
     check(ui.verifyRetention(build, frame) == null, "Observed reads left the retained tree stale");
     ui.dispose();
     var siblings = new UiContext(null, fonts), shared = new TextInput("a"), leftBuilds = 0, rightBuilds = 0;
-    var left:View = new RetainedView("left", _ -> {leftBuilds++; return new haxeon.ui.widgets.text.Text(shared.title);});
-    var right:View = new RetainedView("right", _ -> {rightBuilds++; return new haxeon.ui.widgets.text.Text(shared.title);});
-    var pair:View = new haxeon.ui.widgets.layout.Row("observed-siblings", [new KeyedView("left", left), new KeyedView("right", right)]);
+    var left:View = new RetainedView("left", _ -> {leftBuilds++;
+    return new haxeon.ui.widgets.text.Text(shared.title);
+    });
+    var right:View = new RetainedView("right", _ -> {rightBuilds++;
+    return new haxeon.ui.widgets.text.Text(shared.title);
+    });
+    var pair:View = new haxeon.ui.widgets.layout.Row(
+      "observed-siblings",
+      [new KeyedView("left", left), new KeyedView("right", right)]
+    );
     siblings.submit(pair, frame);
     shared.title = "b";
     var pairRoot = siblings.submit(pair, frame), changedLabels = 0;
-    pairRoot.walk(node -> {if (node.layout.text == "b") changedLabels++;});
-    check(leftBuilds == 2 && rightBuilds == 2 && changedLabels == 2,
-      "Sibling retained views did not independently subscribe to the same Observable field");
+    pairRoot.walk(node -> {if (node.layout.text == "b") changedLabels++;
+    });
+    check(
+      leftBuilds == 2 && rightBuilds == 2 && changedLabels == 2,
+      "Sibling retained views did not independently subscribe to the same Observable field"
+    );
     siblings.dispose();
-    Sys.println("PASS observable: a keyless retained view rebuilds exactly when a tracked field changes, through an outer cache");
+    Sys
+      .println("PASS observable: a keyless retained view rebuilds exactly when a tracked field changes, through an outer cache");
     unannouncedEdits(fonts);
   }
 
@@ -1199,7 +1444,11 @@ class RestyleInPlaceTests {
   static function unannouncedEdits(fonts:FontCollection):Void {
     var ui = new UiContext(null, fonts);
     var frame = new LayoutFrame(240.0, 120.0);
-    var view:View = new RetainedView("edited", function(_) return new haxeon.ui.widgets.text.Text("label"), function() return "fixed");
+    var view:View = new RetainedView(
+      "edited",
+      function(_) return new haxeon.ui.widgets.text.Text("label"),
+      function() return "fixed"
+    );
     var build = function() return view;
     var reported:Null<String> = null;
     ui.onRetentionMismatch = function(text) reported = text;
@@ -1207,12 +1456,18 @@ class RestyleInPlaceTests {
     var frameNumber = 0;
     var submit = function() return ui.submitCached(build, frame, "edits-" + (frameNumber++));
     var text:Null<RenderNode> = null;
-    submit().walk(function(node) { if (node.layout.text == "label") text = node; });
+    submit().walk(function(node) {
+      if (node.layout.text == "label") text = node;
+    }
+    );
     check(text != null, "No text node");
     var node:RenderNode = cast text;
     node.layout.style.positionX = 7.0;
     submit();
-    check(reported != null && reported.indexOf("without willEditRetained") >= 0, "An unannounced edit was not reported: " + reported);
+    check(
+      reported != null && reported.indexOf("without willEditRetained") >= 0,
+      "An unannounced edit was not reported: " + reported
+    );
     reported = null;
     ui.buildContext.willEditRetained(node);
     node.layout.style.positionX = 9.0;
@@ -1237,37 +1492,120 @@ class RestyleInPlaceTests {
     changedParagraph = paragraph.withLineHeight(20.0);
     check(!haxeon.Equality.equals(paragraph, changedParagraph), "ParagraphStyle equality ignores the line height");
 
-    check(haxeon.Equality.equals(new haxeon.ui.Rect(1.0, 2.0, 3.0, 4.0), new haxeon.ui.Rect(1.0, 2.0, 3.0, 4.0))
-      && !haxeon.Equality.equals(new haxeon.ui.Rect(1.0, 2.0, 3.0, 4.0), new haxeon.ui.Rect(1.0, 2.0, 3.0, 5.0)), "Rect equality is wrong");
+    check(
+      haxeon.Equality.equals(new haxeon.ui.Rect(1.0,
+      2.0, 3.0, 4.0), new haxeon.ui.Rect(1.0, 2.0, 3.0, 4.0)) && !haxeon.Equality.equals(
+        new haxeon.ui.Rect(1.0, 2.0, 3.0, 4.0),
+        new haxeon.ui.Rect(1.0, 2.0, 3.0, 5.0)
+      ),
+      "Rect equality is wrong"
+    );
     var caret = new haxeon.ui.TextLayout.TextCaret(1, 2, -3, 4, 0.5, haxeon.ui.TextDirection.Ltr);
-    check(haxeon.Equality.equals(caret, new haxeon.ui.TextLayout.TextCaret(1, 2, -3, 4, 0.5, haxeon.ui.TextDirection.Ltr))
-      && !haxeon.Equality.equals(caret, new haxeon.ui.TextLayout.TextCaret(1, 2, -3, 4, 0.5, haxeon.ui.TextDirection.Rtl)),
-      "Caret geometry equality ignores a field");
+    check(
+      haxeon.Equality.equals(caret,
+      new haxeon.ui.TextLayout.TextCaret(1, 2, -3, 4, 0.5, haxeon.ui.TextDirection.Ltr)) && !haxeon.Equality.equals(
+        caret,
+        new haxeon.ui.TextLayout.TextCaret(1, 2, -3, 4, 0.5, haxeon.ui.TextDirection.Rtl)
+      ),
+      "Caret geometry equality ignores a field"
+    );
     var metrics = new haxeon.ui.TextLayout.TextMetrics(1, 2, 3, 4);
-    check(haxeon.Equality.equals(metrics, new haxeon.ui.TextLayout.TextMetrics(1, 2, 3, 4))
-      && !haxeon.Equality.equals(metrics, new haxeon.ui.TextLayout.TextMetrics(1, 2, 3, 5)),
-      "Text metrics equality ignores a field");
-    check(new haxeon.ui.core.Shortcut(65, haxeon.ui.core.UiModifier.Control) == new haxeon.ui.core.Shortcut(65, haxeon.ui.core.UiModifier.Control)
-      && new haxeon.ui.core.Shortcut(65, haxeon.ui.core.UiModifier.Control) != new haxeon.ui.core.Shortcut(65, haxeon.ui.core.UiModifier.Alt),
-      "Shortcut equality is wrong");
-    check(haxeon.ui.style.EffectParameter.vec2(1.0, 2.0) == haxeon.ui.style.EffectParameter.vec2(1.0, 2.0)
-      && haxeon.ui.style.EffectParameter.vec2(1.0, 2.0) != haxeon.ui.style.EffectParameter.vec2(1.0, 3.0)
-      && haxeon.ui.style.EffectParameter.scalar(1.0) != haxeon.ui.style.EffectParameter.vec2(1.0, 0.0),
-      "EffectParameter equality is wrong");
+    check(
+      haxeon.Equality.equals(metrics, new haxeon.ui.TextLayout.TextMetrics(1, 2, 3, 4)) && !haxeon.Equality.equals(
+        metrics,
+        new haxeon.ui.TextLayout.TextMetrics(1, 2, 3, 5)
+      ),
+      "Text metrics equality ignores a field"
+    );
+    check(
+      new haxeon.ui.core.Shortcut(65, haxeon.ui.core.UiModifier.Control) == new haxeon.ui.core.Shortcut(
+        65,
+        haxeon.ui.core.UiModifier.Control
+      ) && new haxeon.ui.core.Shortcut(
+        65,
+        haxeon.ui.core.UiModifier.Control
+      ) != new haxeon.ui.core.Shortcut(
+        65,
+        haxeon.ui.core.UiModifier.Alt
+      ),
+      "Shortcut equality is wrong"
+    );
+    check(
+      haxeon.ui.style.EffectParameter.vec2(1.0,
+      2.0) == haxeon.ui.style.EffectParameter.vec2(1.0, 2.0) && haxeon.ui.style.EffectParameter.vec2(
+        1.0,
+        2.0
+      ) != haxeon.ui.style.EffectParameter.vec2(
+        1.0,
+        3.0
+      ) && haxeon.ui.style.EffectParameter.scalar(1.0) != haxeon.ui.style.EffectParameter.vec2(
+        1.0,
+        0.0
+      ),
+      "EffectParameter equality is wrong"
+    );
 
-    check(new haxeon.ui.style.InkOverflow(1.0, 2.0, 3.0, 4.0) == new haxeon.ui.style.InkOverflow(1.0, 2.0, 3.0, 4.0)
-      && new haxeon.ui.style.InkOverflow(1.0, 2.0, 3.0, 4.0) != new haxeon.ui.style.InkOverflow(1.0, 2.0, 3.0, 5.0),
-      "InkOverflow equality is wrong");
-    var definition = function(id:Int, overflow:Float, types:Array<haxeon.ui.style.EffectParameterType>)
-      return new haxeon.ui.style.CustomEffectDefinition(id, "effect", types, new haxeon.ui.style.InkOverflow(overflow, 0.0, 0.0, 0.0));
-    check(definition(1, 1.0, [haxeon.ui.style.EffectParameterType.Float]) == definition(1, 1.0, [haxeon.ui.style.EffectParameterType.Float])
-      && definition(1, 1.0, [haxeon.ui.style.EffectParameterType.Float]) != definition(2, 1.0, [haxeon.ui.style.EffectParameterType.Float])
-      && definition(1, 1.0, [haxeon.ui.style.EffectParameterType.Float]) != definition(1, 2.0, [haxeon.ui.style.EffectParameterType.Float])
-      && definition(1, 1.0, [haxeon.ui.style.EffectParameterType.Float]) != definition(1, 1.0, [haxeon.ui.style.EffectParameterType.Vec2]),
-      "CustomEffectDefinition equality is wrong");
-    check(haxeon.ui.style.StyleResolver.valueKeysComplete(), "A Color, LayoutAxis, Insets or Transform2D field is missing from the style cache's value keys");
+    check(
+      new haxeon.ui.style.InkOverflow(1.0,
+      2.0, 3.0, 4.0) == new haxeon.ui.style.InkOverflow(1.0, 2.0, 3.0, 4.0) && new haxeon.ui.style.InkOverflow(
+        1.0,
+        2.0,
+        3.0,
+        4.0
+      ) != new haxeon.ui.style.InkOverflow(
+        1.0,
+        2.0,
+        3.0,
+        5.0
+      ),
+      "InkOverflow equality is wrong"
+    );
+    var definition = function(id:Int, overflow:Float,
+      types:Array<haxeon.ui.style.EffectParameterType>) return new haxeon.ui.style.CustomEffectDefinition(
+        id,
+        "effect",
+        types,
+        new haxeon.ui.style.InkOverflow(overflow, 0.0, 0.0, 0.0)
+      );
+    check(
+      definition(1, 1.0, [haxeon.ui.style.EffectParameterType.Float]) == definition(
+        1,
+        1.0,
+        [haxeon.ui.style.EffectParameterType.Float]
+      ) && definition(
+        1,
+        1.0,
+        [haxeon.ui.style.EffectParameterType.Float]
+      ) != definition(
+        2,
+        1.0,
+        [haxeon.ui.style.EffectParameterType.Float]
+      ) && definition(
+        1,
+        1.0,
+        [haxeon.ui.style.EffectParameterType.Float]
+      ) != definition(
+        1,
+        2.0,
+        [haxeon.ui.style.EffectParameterType.Float]
+      ) && definition(
+        1,
+        1.0,
+        [haxeon.ui.style.EffectParameterType.Float]
+      ) != definition(
+        1,
+        1.0,
+        [haxeon.ui.style.EffectParameterType.Vec2]
+      ),
+      "CustomEffectDefinition equality is wrong"
+    );
+    check(
+      haxeon.ui.style.StyleResolver.valueKeysComplete(),
+      "A Color, LayoutAxis, Insets or Transform2D field is missing from the style cache's value keys"
+    );
     semanticsFields();
-    Sys.println("PASS values: text, paragraph, rectangle, shortcut and effect parameter equality is generated; hand-written keys and Semantics.same name every field");
+    Sys
+      .println("PASS values: text, paragraph, rectangle, shortcut and effect parameter equality is generated; hand-written keys and Semantics.same name every field");
   }
 
   /** Semantics.same is written by hand (its value compares through sameValue); changing any other field in turn must show. */
@@ -1281,12 +1619,14 @@ class RestyleInPlaceTests {
       var changed = new Semantics(AccessibilityRole.Button, "label", "value");
       var current:Dynamic = Reflect.field(changed, name), next:Dynamic;
       if (Std.isOfType(current, AccessibilityRole)) next = AccessibilityRole.Text;
-      else if (Std.isOfType(current, haxeon.ui.semantics.AccessibilityOrientation)) next = haxeon.ui.semantics.AccessibilityOrientation.Horizontal;
+      else if (Std.isOfType(current,
+        haxeon.ui.semantics.AccessibilityOrientation)) next = haxeon.ui.semantics.AccessibilityOrientation.Horizontal;
       else if (Std.isOfType(current, String)) next = current + "!";
       else if (Std.isOfType(current, Bool)) next = !current;
       else if (Std.isOfType(current, Int)) next = current + 1;
       else if (Std.isOfType(current, Float)) next = current + 1.0;
-      else throw "Semantics gained the field " + name + " of a type this test cannot change; extend it, and Semantics.same";
+      else throw "Semantics gained the field "
+        + name + " of a type this test cannot change; extend it, and Semantics.same";
       Reflect.setField(changed, name, next);
       check(!Semantics.same(base, changed), "Semantics.same ignores " + name);
       compared++;
@@ -1300,40 +1640,58 @@ class RestyleInPlaceTests {
     var retained = new RetainedView("membership", function(_) {
       builds++;
       return new Text("kept child");
-    });
+    }
+    );
     var frame = new LayoutFrame(240, 160);
-    var build = function() return new Column("membership-host", [
-      new KeyedView("kept", retained), new KeyedView("other", new Text("other child"))]);
+    var build = function() return new Column(
+      "membership-host",
+      [new KeyedView("kept", retained), new KeyedView("other", new Text("other child"))]
+    );
     var first = ui.submit(build(), frame), child = first.children[0];
     for (index in 0...4) {
       var next = ui.submit(build(), frame), metrics = ui.frameMetrics;
-      check(next != first && next.children[0] == child && builds == 1, "The membership fixture did not reparent a retained child");
-      check(metrics != null && metrics.styleChangedNodes == 0 && metrics.nativeLayoutReused,
-        "Reparenting while rebuilding treated unchanged nodes as new inputs or changed topology");
+      check(
+        next != first && next.children[0] == child && builds == 1,
+        "The membership fixture did not reparent a retained child"
+      );
+      check(
+        metrics != null && metrics.styleChangedNodes == 0 && metrics.nativeLayoutReused,
+        "Reparenting while rebuilding treated unchanged nodes as new inputs or changed topology"
+      );
     }
-    var reordered = function() return new Column("membership-host", [
-      new KeyedView("other", new Text("other child")), new KeyedView("kept", retained)]);
+    var reordered = function() return new Column(
+      "membership-host",
+      [new KeyedView("other", new Text("other child")), new KeyedView("kept", retained)]
+    );
     var moved = ui.submit(reordered(), frame), metrics = ui.frameMetrics;
-    check(moved.children[1] == child && metrics != null && metrics.nativeLayoutSubmitted && metrics.styleChangedNodes == 0,
-      "An actual child reordering was lost or invalidated unchanged styles");
+    check(
+      moved.children[1] == child && metrics != null && metrics.nativeLayoutSubmitted && metrics.styleChangedNodes == 0,
+      "An actual child reordering was lost or invalidated unchanged styles"
+    );
     check(ui.verifyRetention(reordered, frame) == null, "Reordered retained children differ from a full build");
     ui.dispose();
-    Sys.println("PASS membership: rebuilding reparents retained nodes without false input changes; a real reordering still submits and verifies");
+    Sys
+      .println("PASS membership: rebuilding reparents retained nodes without false input changes; a real reordering still submits and verifies");
   }
 
   static function tabsAndPopup(fonts:FontCollection):Void {
     var patched = new TabsRig(fonts, true), reference = new TabsRig(fonts, false);
-    var root = patched.submit(); reference.submit();
+    var root = patched.submit();
+    reference.submit();
     var caller = root.children[root.children.length - 1], steps = 0;
     function compareTabs():Void {
       var left = patched.submit(), right = reference.submit();
       steps++;
-      check(left == root && left.children.indexOf(caller) >= 0 && left.layout.style.zIndex == 3,
-        "Tabs lost their root or caller additions at step " + steps);
+      check(
+        left == root && left.children.indexOf(caller) >= 0 && left.layout.style.zIndex == 3,
+        "Tabs lost their root or caller additions at step " + steps
+      );
       check(signature(left) == signature(right), "Tabs differ from a full rebuild at step " + steps);
-      check(patched.tabs.selectedKey == reference.tabs.selectedKey && patched.changes == reference.changes
+      check(
+        patched.tabs.selectedKey == reference.tabs.selectedKey && patched.changes == reference.changes
         && patched.closes == reference.closes && patched.decorated.presses == reference.decorated.presses,
-        "Tab callbacks or selection differ at step " + steps);
+        "Tab callbacks or selection differ at step " + steps
+      );
     }
     for (name in ["second", "first", "second"]) {
       for (rig in [patched, reference]) {
@@ -1353,31 +1711,47 @@ class RestyleInPlaceTests {
       compareTabs();
     }
     for (key in [UiKey.Right, UiKey.Left, UiKey.Right]) {
-      for (rig in [patched, reference]) {rig.ui.key(UiEventKind.KeyDown, key); rig.ui.key(UiEventKind.KeyUp, key);}
+      for (rig in [patched, reference]) {
+        rig.ui.key(UiEventKind.KeyDown, key);
+        rig.ui.key(UiEventKind.KeyUp, key);
+      }
       compareTabs();
     }
     check(patched.panelBuilds == 1, "Local tabs rebuilt their enclosing panel");
     check(patched.decorated.presses > 0, "Tabs did not invoke the caller listener");
-    patched.ui.dispose(); reference.ui.dispose();
+    patched.ui.dispose();
+    reference.ui.dispose();
 
     var popup = new PopupRig(fonts, true), rebuilt = new PopupRig(fonts, false);
-    popup.submit(); rebuilt.submit();
+    popup.submit();
+    rebuilt.submit();
     var node = popup.menu().node, added = popup.caller, popupSteps = 0;
     function comparePopup():Void {
       var left = popup.submit(), right = rebuilt.submit();
       popupSteps++;
-      check(popup.menu().node == node && node.children.indexOf(cast added) >= 0 && node.layout.style.zIndex == 11,
-        "Popup lost its root or caller additions at step " + popupSteps);
-      check(signature(left) == signature(right), "Popup differs from a full rebuild at step " + popupSteps
-        + ":\n--- patched\n" + signature(left) + "--- reference\n" + signature(right));
+      check(
+        popup.menu().node == node && node.children.indexOf(cast added) >= 0 && node.layout.style.zIndex == 11,
+        "Popup lost its root or caller additions at step " + popupSteps
+      );
+      check(
+        signature(left) == signature(right),
+        "Popup differs from a full rebuild at step "
+        + popupSteps + ":\n--- patched\n" + signature(left) + "--- reference\n" + signature(right)
+      );
       check(paintTrace(node).same(paintTrace(rebuilt.menu().node)), "Popup caller paint differs at step " + popupSteps);
-      check(popup.active == rebuilt.active && popup.chosen == rebuilt.chosen && popup.selections == rebuilt.selections
-        && popup.closes == rebuilt.closes && popup.presses == rebuilt.presses, "Popup callbacks differ at step " + popupSteps);
+      check(
+        popup.active == rebuilt.active && popup.chosen == rebuilt.chosen
+        && popup.selections == rebuilt.selections && popup.closes == rebuilt.closes && popup.presses == rebuilt.presses,
+        "Popup callbacks differ at step " + popupSteps
+      );
     }
     for (rig in [popup, rebuilt]) rig.ui.focusWidget(rig.menu().optionNodes[0].id);
     comparePopup();
     for (key in [UiKey.Down, UiKey.Down, UiKey.Down, UiKey.End, UiKey.Up, UiKey.Home]) {
-      for (rig in [popup, rebuilt]) {rig.ui.key(UiEventKind.KeyDown, key); rig.ui.key(UiEventKind.KeyUp, key);}
+      for (rig in [popup, rebuilt]) {
+        rig.ui.key(UiEventKind.KeyDown, key);
+        rig.ui.key(UiEventKind.KeyUp, key);
+      }
       comparePopup();
     }
     for (rig in [popup, rebuilt]) {
@@ -1399,24 +1773,58 @@ class RestyleInPlaceTests {
     for (rig in [popup, rebuilt]) rig.ui.key(UiEventKind.KeyDown, UiKey.Escape);
     comparePopup();
     check(popup.panelBuilds == 1, "Popup navigation rebuilt its enclosing panel");
-    popup.ui.dispose(); rebuilt.ui.dispose();
-    Sys.println("PASS tabs/popup: switching retained tabs and navigating, selecting and scrolling a popup keep roots and caller additions and match fresh builds");
+    popup.ui.dispose();
+    rebuilt.ui.dispose();
+    Sys
+      .println("PASS tabs/popup: switching retained tabs and navigating, selecting and scrolling a popup keep roots and caller additions and match fresh builds");
   }
 
   static function buttonIdentityOwnership(fonts:FontCollection):Void {
-    var ui = new UiContext(null, fonts), left = new Button("Left"), right = new Button("Right");
-    left.classes = ["owned-class"];
-    right.classes = ["owned-class"];
-    left.variant = haxeon.ui.widgets.controls.ButtonVariant.Navigation;
-    right.variant = haxeon.ui.widgets.controls.ButtonVariant.Navigation;
+    var ui = new UiContext(null, fonts), callerClasses = ["owned-class"];
+    var left = new Button(
+      "Left",
+      null,
+      null,
+      null,
+      null,
+      haxeon.ui.widgets.controls.ButtonVariant.Navigation,
+      null,
+      callerClasses
+    );
+    var right = new Button(
+      "Right",
+      null,
+      null,
+      null,
+      null,
+      haxeon.ui.widgets.controls.ButtonVariant.Navigation,
+      null,
+      callerClasses
+    );
+    callerClasses[0] = "caller-change";
     var column = new Column("identity-test", [new KeyedView("left", left), new KeyedView("right", right)]);
     var frame = new LayoutFrame(300, 100), root = ui.submit(column, frame);
-    left.classes[0] = "caller-change";
-    check(root.children[0].styleClasses[0] == "owned-class", "Button did not snapshot its caller's classes");
+    check(root.children[0].styleClasses[0] == "owned-class", "Button did not snapshot its constructor classes");
     root.children[0].styleClasses[0] = "node-change";
     check(root.children[1].styleClasses[0] == "owned-class", "Buttons shared a mutable class list");
-    root = ui.submit(column, frame);
-    check(root.children[0].styleClasses[0] == "caller-change", "Button reused an obsolete selector snapshot");
+    var replacement = new Button(
+      "Left",
+      null,
+      null,
+      null,
+      null,
+      haxeon.ui.widgets.controls.ButtonVariant.Navigation,
+      null,
+      callerClasses
+    );
+    root = ui.submit(
+      new Column("identity-test", [new KeyedView("left", replacement), new KeyedView("right", right)]),
+      frame
+    );
+    check(
+      root.children[0].styleClasses[0] == "caller-change",
+      "Replacement Button reused an obsolete selector snapshot"
+    );
     ui.dispose();
   }
 
@@ -1424,7 +1832,10 @@ class RestyleInPlaceTests {
     var ui = new UiContext(null, fonts), probe = new HoverRoutingProbe();
     ui.submit(probe, new LayoutFrame(200, 100));
     ui.pointerMove(10, 10);
-    check(probe.events.join(",") == "root,direct,capture,child,added,bubble", "Hover routing lost a phase or a newly added listener");
+    check(
+      probe.events.join(",") == "root,direct,capture,child,added,bubble",
+      "Hover routing lost a phase or a newly added listener"
+    );
     var firstPath = ui.retainedHitPath;
     ui.pointerMove(11, 11);
     check(firstPath != null && ui.retainedHitPath == firstPath, "Unchanged hit paths were not retained");
@@ -1437,7 +1848,10 @@ class RestyleInPlaceTests {
     check(ui.retainedHitPath == null, "Releasing the tree retained its hit path");
     ui.submit(probe, new LayoutFrame(200, 100));
     ui.pointerMove(10, 10);
-    check(ui.retainedHitPath != null && ui.retainedHitPath != firstPath, "A rebuilt tree reused nodes from its old hit path");
+    check(
+      ui.retainedHitPath != null && ui.retainedHitPath != firstPath,
+      "A rebuilt tree reused nodes from its old hit path"
+    );
     ui.dispose();
   }
 
@@ -1455,63 +1869,82 @@ class RestyleInPlaceTests {
     ui.submitCached(build, frame, "edited-composite");
     check(ui.verifyRetention(build, frame) == null, "Announced child edit was lost when its owner reconciled");
     ui.dispose();
-    Sys.println("PASS editing: an announced child edit keeps its original native prior when its composite owner also patches");
+    Sys
+      .println("PASS editing: an announced child edit keeps its original native prior when its composite owner also patches");
   }
 
   static function updatingResources(fonts:FontCollection):Void {
     var ui = new UiContext(null, fonts), widget = new UpdatingResources(), caller = new UpdatingResources(), builds = 0;
     caller.enabled = true;
-    var view:View = new RetainedView("resource-panel", _ -> {
-      builds++;
-      return new DecoratedControl("resource-host", context -> {
-        var node = widget.build(context);
-        node.add(context.withScope(new Key("caller"), () -> caller.build(context)));
-        return node;
-      });
+    var view:View = new RetainedView("resource-panel", _ -> {builds++;
+    return new DecoratedControl("resource-host", context -> {var node = widget.build(context);
+    node.add(context.withScope(new Key("caller"), () -> caller.build(context)));
+    return node;
+    });
     });
     var frame = new LayoutFrame(200, 100), key = "resources";
     var factories = 0;
-    function submit():RenderNode return ui.submitCached(() -> {factories++; return view;}, frame, key);
+    function submit():RenderNode return ui.submitCached(() -> {factories++;
+    return view;
+    }, frame, key);
     var root = submit();
     widget.enabled = true;
     check(ui.buildContext.requestPatch(cast widget.rootId), "Resource owner was not registered");
     submit();
     check(ui.buildContext.requestPatch(cast widget.rootId), "Composite owner was not rearmed");
     submit();
-    check(ui.root != null && ui.root.children.length == 3 && ui.root.children[0].id.equals(cast widget.childId),
-      "A newly materialized retained child displaced its caller decoration");
+    check(
+      ui.root != null && ui.root.children.length == 3 && ui.root.children[0].id.equals(cast widget.childId),
+      "A newly materialized retained child displaced its caller decoration"
+    );
     key = "resources-next";
     submit();
-    check(builds == 1 && widget.created == 1 && widget.disposed == 0, "Patched resources were not retained independently");
+    check(
+      builds == 1 && widget.created == 1 && widget.disposed == 0,
+      "Patched resources were not retained independently"
+    );
     widget.generation++;
     check(ui.buildContext.requestPatch(cast widget.childId), "Nested updater was not registered");
     submit();
     key = "resources-again";
     submit();
-        check(builds == 1 && widget.created == 2 && widget.disposed == 1, "Replaced nested resources did not settle their lifetime");
+    check(
+      builds == 1 && widget.created == 2 && widget.disposed == 1,
+      "Replaced nested resources did not settle their lifetime"
+    );
     widget.reading.value++;
     key = "external-reading";
     var refreshed = submit();
-    check(builds == 1 && refreshed.children[0].children[0].layout.text == "1:0:1", "Tracked nested reads did not patch their updater in place");
+    check(
+      builds == 1 && refreshed.children[0].children[0].layout.text == "1:0:1",
+      "Tracked nested reads did not patch their updater in place"
+    );
     var value = widget.value;
     if (value == null) throw "Missing owned state";
     value.update(7);
     refreshed = submit();
-    check(builds == 1 && refreshed.children[0].children[0].layout.text == "1:7:1",
-      "A tracked state update rebuilt its owning updater or failed to refresh its retained node");
+    check(
+      builds == 1 && refreshed.children[0].children[0].layout.text == "1:7:1",
+      "A tracked state update rebuilt its owning updater or failed to refresh its retained node"
+    );
     check(widget.value == value, "A live state handle changed across patches and complete builds");
     widget.enabled = false;
     key = "resources-remove";
     var previousFactories = factories;
     check(ui.buildContext.requestPatch(cast widget.rootId), "Resource owner was lost after a rebuild");
     submit();
-    check(factories == previousFactories + 1, "A complete frame repeated its build to settle already tracked resource membership");
+    check(
+      factories == previousFactories + 1,
+      "A complete frame repeated its build to settle already tracked resource membership"
+    );
     check(widget.disposed == 2, "Removed child resources were not disposed");
-    check(caller.created == 1 && caller.disposed == 0, "A caller-owned updater lost its resources across owner patches");
+    check(caller.created == 1 && caller.disposed == 0,
+      "A caller-owned updater lost its resources across owner patches");
     ui.dispose();
     check(caller.created == caller.disposed, "A caller-owned updater leaked resources");
     check(widget.created == widget.disposed, "Composite updater leaked resources");
-    Sys.println("PASS updating resources: nested patches retain current dependencies, replace and dispose resources, and invalidate on observed and widget-state changes");
+    Sys
+      .println("PASS updating resources: nested patches retain current dependencies, replace and dispose resources, and invalidate on observed and widget-state changes");
   }
 
   public static function main():Int {
@@ -1534,62 +1967,146 @@ class RestyleInPlaceTests {
     reconcile(fonts);
     submittedIndex(fonts);
     motion(fonts);
-    run(fonts, "buttons", false, false, 1, [
-      {action: "move", key: "one"}, {action: "move", key: "two"}, {action: "move", key: "decorated"},
-      {action: "down", key: "decorated"}, {action: "up", key: "decorated"}, {action: "move", key: "one"},
-      {action: "down", key: "one"}, {action: "move", key: "two"}, {action: "up", key: "two"},
-      {action: "move", key: "decorated"}, {action: "away", key: "one"}, {action: "move", key: "two"},
-      {action: "down", key: "two"}, {action: "up", key: "two"},
-    ]);
+    run(
+      fonts,
+      "buttons",
+      false,
+      false,
+      1,
+      [
+        {action: "move", key: "one"},
+        {action: "move", key: "two"},
+        {action: "move", key: "decorated"},
+        {action: "down", key: "decorated"},
+        {action: "up", key: "decorated"},
+        {action: "move", key: "one"},
+        {action: "down", key: "one"},
+        {action: "move", key: "two"},
+        {action: "up", key: "two"},
+        {action: "move", key: "decorated"},
+        {action: "away", key: "one"},
+        {action: "move", key: "two"},
+        {action: "down", key: "two"},
+        {action: "up", key: "two"},
+      ]
+    );
     // The scrollbar fades in on hover, waits, and fades out once the pointer leaves: every frame of it must match.
     var wait = {action: "wait", key: "one"};
-    run(fonts, "scrolling", true, false, 1, [
-      {action: "move", key: "one"}, wait, wait, wait, wait, {action: "move", key: "two"}, wait,
-      {action: "down", key: "two"}, {action: "up", key: "two"}, wait,
-      {action: "away", key: "one"}, wait, wait, wait, wait, wait, wait, wait, wait, wait,
-      {action: "move", key: "one"}, wait, wait,
-    ]);
+    run(
+      fonts,
+      "scrolling",
+      true,
+      false,
+      1,
+      [
+        {action: "move", key: "one"},
+        wait,
+        wait,
+        wait,
+        wait,
+        {action: "move", key: "two"},
+        wait,
+        {action: "down", key: "two"},
+        {action: "up", key: "two"},
+        wait,
+        {action: "away", key: "one"},
+        wait,
+        wait,
+        wait,
+        wait,
+        wait,
+        wait,
+        wait,
+        wait,
+        wait,
+        {action: "move", key: "one"},
+        wait,
+        wait,
+      ]
+    );
     // Icon buttons, checkboxes, switches and radio options follow hover and press without rebuilding the panel. Pressing and
     // releasing elsewhere activates nothing; only the last click, on a checkbox, changes what the panel shows, so it builds twice.
     // The group's keyed options and the disabled option are covered as well.
-    run(fonts, "controls", false, true, 2, [
-      {action: "move", key: "icon"}, {action: "move", key: "check"}, {action: "move", key: "toggle"}, {action: "move", key: "radio"},
-      {action: "move", key: "alpha"}, {action: "move", key: "beta"}, {action: "move", key: "disabled"}, {action: "move", key: "decorated-icon"},
-      {action: "down", key: "decorated-icon"}, {action: "release", key: "decorated-icon"}, {action: "move", key: "decorated-check"},
-      {action: "down", key: "decorated-check"}, {action: "release", key: "decorated-check"}, {action: "move", key: "decorated-radio"},
-      {action: "down", key: "decorated-radio"}, {action: "release", key: "decorated-radio"},
-      {action: "move", key: "check"}, {action: "down", key: "check"}, {action: "release", key: "check"},
-      {action: "move", key: "toggle"}, {action: "down", key: "toggle"}, {action: "release", key: "toggle"},
-      {action: "move", key: "beta"}, {action: "down", key: "beta"}, {action: "release", key: "beta"}, {action: "away", key: "icon"},
-      {action: "move", key: "icon"}, {action: "down", key: "icon"}, {action: "up", key: "icon"}, {action: "move", key: "radio"},
-      {action: "down", key: "radio"}, {action: "up", key: "radio"}, {action: "move", key: "decorated-icon"},
-      {action: "down", key: "decorated-icon"}, {action: "up", key: "decorated-icon"}, {action: "move", key: "decorated-radio"},
-      {action: "down", key: "decorated-radio"}, {action: "up", key: "decorated-radio"}, {action: "move", key: "decorated-check"},
-      {action: "down", key: "decorated-check"}, {action: "up", key: "decorated-check"},
-    ]);
+    run(
+      fonts,
+      "controls",
+      false,
+      true,
+      2,
+      [
+        {action: "move", key: "icon"},
+        {action: "move", key: "check"},
+        {action: "move", key: "toggle"},
+        {action: "move", key: "radio"},
+        {action: "move", key: "alpha"},
+        {action: "move", key: "beta"},
+        {action: "move", key: "disabled"},
+        {action: "move", key: "decorated-icon"},
+        {action: "down", key: "decorated-icon"},
+        {action: "release", key: "decorated-icon"},
+        {action: "move", key: "decorated-check"},
+        {action: "down", key: "decorated-check"},
+        {action: "release", key: "decorated-check"},
+        {action: "move", key: "decorated-radio"},
+        {action: "down", key: "decorated-radio"},
+        {action: "release", key: "decorated-radio"},
+        {action: "move", key: "check"},
+        {action: "down", key: "check"},
+        {action: "release", key: "check"},
+        {action: "move", key: "toggle"},
+        {action: "down", key: "toggle"},
+        {action: "release", key: "toggle"},
+        {action: "move", key: "beta"},
+        {action: "down", key: "beta"},
+        {action: "release", key: "beta"},
+        {action: "away", key: "icon"},
+        {action: "move", key: "icon"},
+        {action: "down", key: "icon"},
+        {action: "up", key: "icon"},
+        {action: "move", key: "radio"},
+        {action: "down", key: "radio"},
+        {action: "up", key: "radio"},
+        {action: "move", key: "decorated-icon"},
+        {action: "down", key: "decorated-icon"},
+        {action: "up", key: "decorated-icon"},
+        {action: "move", key: "decorated-radio"},
+        {action: "down", key: "decorated-radio"},
+        {action: "up", key: "decorated-radio"},
+        {action: "move", key: "decorated-check"},
+        {action: "down", key: "decorated-check"},
+        {action: "up", key: "decorated-check"},
+      ]
+    );
     // The frame comparison and local style resolution name LayoutStyle fields by hand; each must name every one.
-    check(RenderNode.styleFieldsClassified(), "A LayoutStyle field is in no invalidation group of the frame comparison");
-    check(haxeon.ui.style.StyleResolver.localFieldsHandled == haxeon.Diff.all(LayoutStyle),
-      "A LayoutStyle field has no style property in local style resolution");
+    check(RenderNode.styleFieldsClassified(),
+      "A LayoutStyle field is in no invalidation group of the frame comparison");
+    check(
+      haxeon.ui.style.StyleResolver.localFieldsHandled == haxeon.Diff.all(LayoutStyle),
+      "A LayoutStyle field has no style property in local style resolution"
+    );
     var style = new LayoutStyle();
     style.padding = new haxeon.ui.Insets(1.0, 2.0, 3.0, 4.0);
     var copied = style.copy();
     var styleFingerprint = haxeon.Diff.fingerprint(style);
-    check(copied != style && haxeon.Diff.mask(copied, style) == 0 && styleFingerprint == haxeon.Diff.fingerprint(copied),
-      "LayoutStyle.copy is not an equal copy");
+    check(
+      copied != style && haxeon.Diff.mask(copied, style) == 0 && styleFingerprint == haxeon.Diff.fingerprint(copied),
+      "LayoutStyle.copy is not an equal copy"
+    );
     var resolver = new haxeon.ui.style.StyleResolver();
     var target = new haxeon.ui.style.StyleTarget("box", "snapshot-content");
     resolver.resolve(target, null, null, null, style);
     resolver.resolve(target, null, null, null, copied);
-    check(resolver.cacheMisses == 1 && resolver.cacheHits == 1,
-      "Equal LayoutStyle snapshots must share the style cache despite different identities");
+    check(
+      resolver.cacheMisses == 1 && resolver.cacheHits == 1,
+      "Equal LayoutStyle snapshots must share the style cache despite different identities"
+    );
     copied.childGap = 17.0;
     check(style.childGap == 0.0, "LayoutStyle.copy shares mutable fields with its source");
-    check(styleFingerprint != haxeon.Diff.fingerprint(copied),
-      "LayoutStyle cache fingerprint ignored a changed field");
+    check(styleFingerprint != haxeon.Diff.fingerprint(copied), "LayoutStyle cache fingerprint ignored a changed field");
     Sys.println("PASS structural: every LayoutStyle field is copied, compared, fingerprinted, classified and resolved");
     structuralValues();
-    fonts.dispose(); runtime.dispose();
+    fonts.dispose();
+    runtime.dispose();
     return 0;
   }
 }

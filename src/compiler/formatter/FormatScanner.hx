@@ -1,6 +1,7 @@
 package compiler.formatter;
 
 import compiler.Source.SourceFile;
+import compiler.syntax.ConditionalCompilation;
 import compiler.syntax.Token.TokenKind;
 import compiler.formatter.FormatToken.FormatTokenKind;
 
@@ -58,10 +59,8 @@ class FormatScanner {
 				position = whitespaceEnd;
 				continue;
 			}
-			if (isDirectiveStart(position)) {
-				var directiveEnd = position;
-				while (directiveEnd < source.length && source.get(directiveEnd) != "\r".code && source.get(directiveEnd) != "\n".code)
-					directiveEnd++;
+			var directiveEnd = code == "#".code ? ConditionalCompilation.directiveEnd(file, position) : position;
+			if (directiveEnd > position) {
 				push(result, FormatTokenKind.Directive, position, directiveEnd);
 				position = directiveEnd;
 				continue;
@@ -364,19 +363,6 @@ class FormatScanner {
 			index++;
 		}
 		return {off: off, on: on, blockComment: blockComment};
-	}
-
-	function isDirectiveStart(offset:Int):Bool {
-		if (source.get(offset) != "#".code)
-			return false;
-		var cursor = offset - 1;
-		while (cursor >= 0 && source.get(cursor) != "\n".code) {
-			var code = source.get(cursor);
-			if (code != " ".code && code != "\t".code && code != "\r".code)
-				return false;
-			cursor--;
-		}
-		return true;
 	}
 
 	/** Returns the directive keyword without its condition or surrounding trivia. */

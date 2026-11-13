@@ -561,6 +561,610 @@ retention scenarios, budgets that may only go down, memory runs, compiler suites
    Against the pushed text/icon head, telemetry step falls from 15,078 objects / 630,336 bytes to
    14,983 / 624,712; the fifteen standard actions and six CNC pilot actions are identical. No exception is used.
 
+   **Focus capture before widget ports.** Focus, blur and focus-lost follow capture from root through the target,
+   followed by target dispatch, with no ancestor bubbling. Each registered target listener runs in its selected phase
+   exactly once. Stable component wrappers can therefore observe focus without attaching callbacks to replaceable
+   body nodes or adding Button-specific callback props. Recursive traversal fixes the ancestor path before handlers
+   run without allocating an array. Dispatch of a prepared event allocates zero; construction of the existing
+   `UiEvent` remains outside that interval. The portable routing and allocation fixtures cover all three targets.
+   The event phases are documented in `packages/ui/docs/EVENTS.md`. The exact fifteen standard and seven pilot actions
+   are unchanged against `835a2bbc8` / outer `7eff0a036`; pilot fresh-mount verification passes. The routing regression
+   fails against the old control on HashLink (exit 1), and passes on all three targets with inlining off/on.
+
+   **Button constructor and composition port (in progress).** Presentation inputs are a sparse, typed constructor
+   record stored in final fields. Composites supply their complete `Semantics` description as data rather than
+   editing a replaceable body after mount; the control owns that description. Default semantics and activation
+   forwarding are made once from immutable inputs. Decorations compose through existing child-view slots, where
+   they inherit the control's computed style. The stable structural wrapper keeps caller listeners; focus uses the
+   semantic control's widget ID. This uses ordinary values and `View` composition, not a decorator hook, patch
+   fallback or new binding primitive. Existing mutable property setters are removed as their callers are ported.
+   A styled terminal element projects its resolved outer layout (axes, positioning, visibility, clipping and transform)
+   onto the stable scope wrapper; its content node fills that box and retains padding and paint. This keeps CSS layout
+   and caller wrapper edits valid across reruns without adding fields to every scope owner. A changed projection records
+   its prior before mutation; unchanged projections need no style snapshot. Portable scope and Button fixtures cover
+   projection changes, caller overrides and accessible metadata/decorations across interaction reruns.
+   Topology snapshots stop at a native scope's owned body, and interaction snapshots leave native-owned flags to the
+   scope. Otherwise leaf hover/focus or an independent body replacement invalidates the enclosing cache even though
+   its own inputs did not change. Interaction traversal keeps existing lifetime records for unported descendant
+   updaters. Caller-added wrapper children still participate in interaction and topology checks. Native membership queries reuse
+   the registered owner and its existing body pointer; no owner fields, caches or binding primitives are added.
+   Portable regressions fail before the interaction (exit 8) and topology (exit 12) ownership checks. They verify native
+   hover/focus refresh without rebuilding the parent, constructor-input changes that do rebuild it, and removal of a
+   caller-added child that invalidates the cached variant.
+   Focus-dependent composition uses capture listeners on the stable wrapper, following the independent event-model
+   change above; Button has no focus-specific callback props.
+
+
+   **Button allocation stop (2026-11-12; draft remains uncommitted).** The previous pushed head is
+   `835a2bbc8`, with outer control `7eff0a036`. The final measured draft uses the independently committed focus
+   capture change, native scope ownership/topology fixes, and hover-selector identity matching without temporary
+   style targets. Scope and Button regressions pass on all three targets, inlining off/on. Pilot verification
+   still compares against a fresh mount every frame and passes. These checks do not accept the allocation gate.
+   The fifteen standard actions and seven pilot actions are:
+
+   | Action | Control objects / bytes | Button draft objects / bytes | Delta objects / bytes |
+   | --- | ---: | ---: | ---: |
+   | hierarchy->sensors | 1,672 / 121,720 | 1,685 / 125,040 | +13 / +3,320 |
+   | sensors->hierarchy | 1,145 / 80,904 | 1,105 / 79,048 | -40 / -1,856 |
+   | console->telemetry | 1,174 / 79,288 | 1,174 / 79,152 | +0 / -136 |
+   | telemetry->console | 1,708 / 93,680 | 1,647 / 89,280 | -61 / -4,400 |
+   | scroll-inspector | 227 / 25,784 | 232 / 26,744 | +5 / +960 |
+   | hover-enter | 32 / 1,032 | 32 / 1,032 | +0 / +0 |
+   | hover-inside | 32 / 1,032 | 32 / 1,032 | +0 / +0 |
+   | idle | 17 / 584 | 17 / 584 | +0 / +0 |
+   | idle-focused | 17 / 584 | 17 / 584 | +0 / +0 |
+   | hover-other | 187 / 9,760 | 188 / 9,848 | +1 / +88 |
+   | hover-field | 323 / 17,432 | 321 / 16,928 | -2 / -504 |
+   | hover-away | 257 / 12,576 | 257 / 12,552 | +0 / -24 |
+   | type-char | 417 / 16,456 | 417 / 16,456 | +0 / +0 |
+   | type-backspace | 432 / 17,088 | 432 / 17,088 | +0 / +0 |
+   | selection | 8,565 / 581,608 | 8,836 / 608,160 | +271 / +26,552 |
+   | cnc-unchanged | 19 / 640 | 19 / 640 | +0 / +0 |
+   | cnc-select | 2,193 / 123,272 | 2,193 / 123,272 | +0 / +0 |
+   | cnc-source | 4,615 / 268,336 | 4,615 / 268,336 | +0 / +0 |
+   | cnc-progress | 5,467 / 278,736 | 5,470 / 278,544 | +3 / -192 |
+   | cnc-hold | 1,011 / 46,736 | 1,003 / 45,880 | -8 / -856 |
+   | cnc-resume | 1,462 / 76,384 | 1,502 / 81,552 | +40 / +5,168 |
+   | telemetry-step | 14,983 / 624,712 | 15,104 / 639,816 | +121 / +15,104 |
+
+   The inspector-scroll increase is entirely five additional immutable `ResolvedLayoutItem` snapshots, one per
+   added structural wrapper whose geometry moves. Interaction flag and topology ownership fixes removed the large
+   accidental enclosing-cache rebuilds, but native Button mounts and wrapper geometry still exceed the old form.
+   The remaining selection, resume and telemetry increases are not demonstrated correctness costs, so the foundation's
+   telemetry exception does not apply. A value-type terminal body was also measured and rejected: returning it through
+   `View` still boxed it and slightly increased bytes; the draft retains the class form. No budget or verification
+   change is accepted. This stops the Button family under the stage's allocation rule, rather than publishing a
+   regressing batch or introducing another retained-update path.
+   The framework gate also fails with `Uncaught exception: Dock workspace contract failed at line 6519`:
+   Escape cancellation uses the focused inner Button ID while the stable tab wrapper owns pointer capture. That
+   interaction defect remains unfinished in this rejected draft. Tier 1 and the remaining Tier 2 checks have not been
+   run on this final draft; it is not eligible for commit or push. The independent focus commit is local and still
+   awaits its remaining Tier 2 gates. The queued closed event-phase enum port has not started.
+   Machine-readable counts, source hashes, allocation stacks and gate output remain on DATA1 under
+   `button-allocation-stop.json`, `button-selector-{all,pilot}-census.json`,
+   `candidate-button-selector-source-hashes.json` and `button-selector-framework.log`.
+
+   **Lead-directed allocation attribution before changing scope identity (2026-11-12).** The lead requested
+   measurement before removing scope wrappers, and a report before changing direction if non-wrapper costs were
+   responsible. A new control capture reproduces selection at 8,565 objects / 581,608 bytes and telemetry step at
+   14,983 / 624,712, exactly matching the previous control. The final rejected native draft measures 8,836 / 608,160
+   and 15,104 / 639,816. Exact per-type object counts and every-byte site weights reconcile to both complete deltas;
+   allocation-site byte samples are not interpreted as object counts.
+
+   | Cause | Selection delta objects / bytes | Telemetry delta objects / bytes |
+   | --- | ---: | ---: |
+   | Render nodes and element projection storage | +20 / +9,280 | +14 / +6,496 |
+   | Layout nodes | +20 / +2,400 | +14 / +1,680 |
+   | Resolved geometry | +6 / +1,152 | +0 / +0 |
+   | Layout styles | +13 / +4,472 | +12 / +4,128 |
+   | Native scope ownership records | +20 / +3,840 | +14 / +2,688 |
+   | Removed legacy ownership records | -40 / -3,040 | -28 / -2,128 |
+   | Scope/body descriptions | +40 / +1,280 | +28 / +896 |
+   | Interface adapters | +40 / +1,440 | +28 / +1,008 |
+   | Closures and environments | +72 / +2,704 | +46 / +1,776 |
+   | Constructor input records | +20 / +2,400 | +14 / +1,680 |
+   | Arrays | +34 / -1,056 | -25 / -3,328 |
+   | Reactive edges | +10 / +720 | +0 / +0 |
+   | Other types and object size changes | +16 / +960 | +4 / +208 |
+   | Total | +271 / +26,552 | +121 / +15,104 |
+
+   `TrackedScope.build` creates the extra plain root, and `RenderNode.new` creates its `LayoutNode`.
+   Twenty selection and fourteen telemetry Button mounts explain the additional render/layout node pairs. The
+   render-node byte delta also includes 184 extra bytes per styled body in `ComponentElement`, allocated at
+   `Button.buildButton`, for projecting its outer layout onto the wrapper. `ResolvedLayoutItem.decode` accounts
+   for six additional geometry objects in selection and none in telemetry; the telemetry increase is not extra
+   geometry snapshots. Layout-style counts are net of the old updater's removed style copies.
+   Native ownership records allocate at `BuildContext.mountRenderScope`: twenty / fourteen `RenderScope` instances.
+   They replace twenty / fourteen each of `SelfUpdatingBuild` and `BuiltNode`; ownership records therefore save
+   twenty / fourteen objects in aggregate, despite increasing bytes. The `TrackedScope` plus `ButtonBody`
+   descriptions add forty / twenty-eight objects, and the `View` plus reactive-tracking interface adapters add
+   another forty / twenty-eight. Closure/environment sites include `captureBuild`, `mountRenderScope` and
+   `TrackedScope.build`; all closure types together add seventy-two / forty-six objects after subtracting removed
+   legacy closures. Sparse constructor-input records add twenty / fourteen more objects.
+   Thus wrapper render/layout nodes account for 40 of the +271 selection objects and 28 of the +121 telemetry
+   objects. Scope descriptions, adapters, constructor inputs and closures are material independent costs; this is
+   not a wrapper/geometry-only increase. Per the lead's step 3, report this attribution before changing representation.
+   No wrapper-free implementation, native decoration transfer, or alternative retained-update path has been added.
+   Detailed type deltas and allocation-site byte deltas are in DATA1 `evidence/button-lead-attribution.json`; the
+   fresh control allocation stacks are in `evidence/button-direction-control-stacks.json`.
+
+   **Lead-directed mount overhead reductions (in progress, 2026-11-12).** Stateful controls implement
+   `ScopeView` directly: their own key, final-input equality and native `buildBody` method form one component description.
+   Button and IconButton no longer manufacture a `TrackedScope` description and a separate body view. Function-based
+   scopes implement the same protocol. Equality reads final fields and compares authored class names by content;
+   accessible descriptions use the existing deferred-value-safe semantic comparison. A portable input-contract
+   fixture checks equal presentation, changed callback ownership, style, classes and accessibility, with zero allocation
+   for repeated comparisons on HashLink.
+   Step 1's controlled twenty-mount comparison, including component construction and cold state registrations after
+   warming runtime/theme metadata, reduces Button from 3,422 objects / 242,912 bytes to 3,362 / 241,632, and IconButton
+   from 3,437 / 234,752 to 3,377 / 233,632. This saves three objects per mount; it does not yet accept the editor census.
+   Step-zero sources were reconstructed and SHA-checked against the rejected draft. Exact counts are retained in
+   DATA1 `evidence/component-description-step1-measurement.json` and `scope-mount-step{0,1}-{button,icon}-raw.json`.
+   The next reduction stores inherited key/style/text inputs on the native owner and calls the component method directly,
+   rather than allocating captured build functions. Tracking entry/exit will share the existing read/creation-log
+   bookkeeping through a value frame; this changes no subscription or observable-creation rule and introduces no
+   widget binding API. Native lifetime cleanup will belong to the existing state handle, avoiding per-mount resource
+   cleanup closures or a second owner-holder object. Failure recovery and retained hidden-resource lifetime must retain
+   their current tests on all three targets. The wrapper remains until the lead's final identity/decorations step.
+   Step 2's direct mount path reduces the same twenty Button mounts from 3,362 objects / 241,632 bytes to
+   3,104 / 233,256, and IconButton from 3,377 / 233,632 to 3,119 / 225,256. The complete type census contains no
+   BuildContext mount-path closure environments or mutable result cells. Content/paint callbacks within the widgets
+   are unchanged. The state handle now directly releases its native scope; no native lifetime-holder object or
+   per-owner cleanup callback is created. Only that state subtype gains an owner field; normal state handles gain no
+   instance fields. Existing per-frame state reachability and hidden-panel resource ownership remain the mechanism.
+   Native bodies use the existing local read capture, transferring reads to the owner on both success and failure;
+   the redundant outer collector is removed. This also removes the per-owner reactive interface adapter. A recovery
+   regression caught the missing failed-read transfer and now retries when the failed body's dependency changes.
+   The shared tracking entry/exit value frame preserves nested collector and observable-creation bookkeeping.
+   An initially mutable try result allocated a cell, while a try-expression allocated a captured thunk; both measured
+   forms were rejected. The final direct helper keeps its immutable result inside the try statement and allocates
+   neither. Exact measurement is DATA1 `evidence/component-direct-mount-step2-measurement.json`.
+   A minimal non-generic reference-class reproduction already isolates the interface issue: converting 1,024 existing
+   instances to a one-method and a two-method interface allocates 2,048 HashLink virtual adapters / 73,728 bytes
+   (32,768 + 40,960). No value-type boxing or generic erasure is involved. `TToInterface` lowers to `ToVirtual`, and
+   HashLink emits its allocating virtual-view operation; both Wasm lowerings preserve the reference for these classes.
+   The reproduction is DATA1 `interface-mount-repro/InterfaceMountRepro.hx`, with exact HashLink census in
+   `evidence/interface-mount-repro-raw.json`. This compiler gap is reported to the lead; no compiler sources or
+   interface-avoidance workaround have been changed. Cross-target counters confirm the gap: both Wasm targets allocate zero for 8 / 1,024 instances, inlining off/on; HashLink allocates 2,048 adapters / 73,728 bytes for 1,024 instances with either inline setting. The full reproduction and compiler-owner report are DATA1 `evidence/reference-interface-gap.{json,md}`.
+
+   Step 4 removes the sparse `ButtonOptions` heap record entirely. All presentation inputs are direct optional
+   constructor arguments stored in the component's final fields; the equality check reads those fields. The first
+   four constructor arguments retain their roles. Highly customized composites have a longer argument list, but
+   this uses ordinary Haxe without a second props object, a builder API, forced inlining or a compiler feature.
+   Authored mutable styles/class arrays retain their existing defensive ownership rules. No record compatibility
+   overload or alias remains. Controlled twenty-mount input-record/direct-input builds with identical enabled,
+   variant, classes, icon size and accessible name reduce 3,134 objects / 235,576 bytes to 3,094 / 232,856:
+   forty objects / 2,720 bytes saved, comprising the input records and their optional numeric boxes. Exact evidence
+   is DATA1 `evidence/component-direct-inputs-step4-measurement.json`. Button and input-contract fixtures pass
+   on all three targets with both inline settings. The representation still contains the structural wrapper;
+   removing it and transferring caller ownership remain unfinished, and no editor allocation gate is accepted.
+
+   **Body-root prototype and remaining mount cost (unpublished, 2026-11-12).** The next prototype removes
+   `ComponentElement` and the render/layout wrapper. A scope reserves the actual body's ID before interaction and
+   style reads; primitive roots use `BuildContext.rootId` and `createNode`. Only actual scope roots carry an owner
+   reference (`ScopeRootNode`, or `ScopeTextRootNode` for live text); ordinary descendants and live text leaves gain
+   no instance fields. Native owners resolve replaced roots through their logical resource lifetime, rather than
+   `RenderNode.replacedBy`, `latest`, or a global numeric-ID redirect. The native root registry map is removed.
+   A value boundary records authored layout, semantics, callback counts and owned children. Replacement transfers
+   caller overrides, listeners, paint/resolution callbacks and overlays to the new body. Caller style ownership
+   survives an authored default temporarily matching its value. Forwarding scopes can share one physical root;
+   their declared boundaries advance together when an inner scope replaces it. None of this uses `BuiltNode` or
+   reconciliation. Equal-input retention still uses `EqualChild`; the protocol's field comparison is present, but
+   automatic component-mount skipping is not implemented in this draft.
+   HashLink regressions pass for replacement identity, throwing-body recovery, caller decoration transfer,
+   forwarding boundaries, retained reparenting, live binding lifetime, Button and IconButton. Replaced native children
+   retain their authored ownership instead of becoming caller overlays. An equal-child hit that temporarily detaches
+   the body root restores its parent slot. Scheduled ancestors take precedence even after scope storage order changes.
+   Removing a caller overlay still invalidates the retained variant; that assertion is preserved. Focus and dock
+   assertions now address the actual Button root, but the full dock/framework gate has not run on this prototype.
+   A real cached-submission regression, with fresh verification enabled every changed frame, fails on the old
+   top-level submission selection (80-pixel old root versus 120-pixel new root), and passes when submission resolves
+   the native owner's current root. It is included in the layout-session gate. A separate duplicate-key regression
+   preserves rejection of two fresh mounts in one build while allowing independent mounted-body refreshes.
+   The three-target gates are unfinished; these HashLink checks are not a batch acceptance.
+
+   Step 5's same-input twenty-mount comparison reduces 3,094 objects / 232,856 bytes to 2,680 / 204,328
+   (minus 414 / 28,528). A separate fresh control using the published `835a2bbc8` Button and its old constructor/setter
+   API, with identical enabled, variant, classes, icon size and accessible name, measures 2,672 / 198,296.
+   Presentation parity passes for all twenty controls: authored root/label layout fingerprints, selector classes,
+   enabled/focusable state, semantic role/name/actions/states and label typography/color. Thus this control is correct;
+   there is no correctness exception for the remaining **plus 8 objects / 6,032 bytes**.
+   Default-input Buttons independently reproduce the same excess: 2,682 / 198,696 control versus
+   2,690 / 204,728 native. IconButton uses the same body-root form and improves its twenty-mount published control
+   from 3,437 / 234,752 to 2,705 / 200,088 (minus 732 objects / 34,664 bytes).
+
+   | Remaining twenty-mount difference | Objects | Bytes |
+   | --- | ---: | ---: |
+   | Body root owner reference, replacing ordinary roots | 0 | +160 |
+   | `RenderScope` + `ScopeState`, replacing `SelfUpdatingBuild` + `BuiltNode` | 0 | +3,200 |
+   | Button instance storage | 0 | +640 |
+   | Scope protocol interface adapters | +20 | +1,120 |
+   | Boxed value-boundary constructor temporaries | +20 | +1,120 |
+   | Removed infrastructure closure functions and environments | -80 | -2,400 |
+   | Arrays, scalar boxes and allocation buffers | +48 | +2,192 |
+   | Total | +8 | +6,032 |
+
+   These are exact aggregated type counts; equal printed type names are summed rather than overwritten. Site
+   evidence is byte weighted, not interpreted as object counts. The native lifetime registration additionally appears
+   at `StateStore.scopeLifetime` (including twenty Boolean boxes), with usage arrays at `StateStore.markUsed`.
+   The ownership/lifetime record storage is a remaining cost beyond the five directed description/closure/interface/
+   input-copy/wrapper causes. Per the lead's stop rule, do not change that representation further or publish this
+   prototype before reporting the attribution. No current 22-action census or final stage-3 comparison is claimed.
+
+   The boundary temporary also exposes a second compiler limitation, separate from reference-interface adapters.
+   A minimal struct with six conditional scalar assignments, stored in an existing class field, allocates 1,024
+   temporary values / 24,576 bytes for 1,024 operations on HashLink, with inlining both off and on. Five conditional
+   assignments plus one direct assignment produce identical results and allocate zero. The existing value-constructor
+   expansion is bounded to sixteen blocks and sixty-four instructions (`IrValueConstructors`); the reproduction
+   crosses its block bound: five-branch construction has sixteen blocks / thirty-nine instructions, while six has
+   nineteen / forty-three. The actual boundary constructor has nineteen blocks / sixty-three instructions and is
+   left as a constructor call. Report this compiler gap at its cause rather than splitting the UI constructor, forcing
+   inlining or raising expansion limits. No compiler/IR or HashLink edits, new binding primitive, verify-mode change
+   or budget change have been made. Source, exact counters and the owner report remain on DATA1 under
+   `evidence/{scope-root-native-vs-control-types,scope-root-lifetime-site-bytes,scope-root-input-parity,bounded-constructor-hl}.json`
+   and `interface-mount-repro/bounded-constructor/BoundedConstructorRepro.hx`.
+
+   **Lead-directed ownership storage reductions (2026-11-12, unpublished).** Native scopes now have one owner
+   record. `StateStore` stores `RenderScope` directly in a typed registry; `ScopeState` and the unused
+   `State.releaseResource` hook are deleted. A successful mount installs the owner after its body succeeds, preserving
+   the previous installed computation when a replacement throws. Managed membership uses the existing flat integer
+   `IdSet`, with allocation-free cluster repair on deletion, instead of boxed Boolean map values. Per-frame usage
+   IDs and persistent managed-resource IDs use reusable integer storage with logical lengths; nested captures and
+   resource compaction no longer resize their backing storage down. State-usage arrays belong to the store's existing
+   ownership table rather than being duplicated on each owner. Logical resource IDs are integers; the body root holds
+   its own widget identity, and initial build identity lives only in context scratch while construction runs. Packing
+   the owner's scalar fields reduces `RenderScope` from 256 to 224 bytes.
+
+   | Twenty same-input Button mounts | Objects | Bytes |
+   | --- | ---: | ---: |
+   | Correct published control | 2,672 | 198,296 |
+   | Body-root prototype before storage changes | 2,680 | 204,328 |
+   | Single native owner | 2,660 | 203,208 |
+   | Flat managed membership | 2,622 | 201,872 |
+   | Reusable usage and managed ID storage | 2,612 | 201,168 |
+   | Compact owner without duplicated identity/usage data | 2,612 | 200,528 |
+
+   The actual remaining difference is **minus 60 objects / plus 2,232 bytes**. Both compiler-gap items remain
+   unchanged: twenty scope-interface adapters / 1,120 bytes and twenty boundary-constructor value temporaries /
+   1,120 bytes. Arithmetic subtraction of those measured items gives 2,572 / 198,288, eight bytes below control;
+   this is attribution, not a claim that a patched compiler has been measured. No UI workaround for either compiler
+   gap, forced inlining, expanded constructor limit, or verify/budget change is introduced. Per the lead's updated
+   condition, stop and report while the excess is accounted for only by these compiler gaps. Full dock/framework
+   gates, the 22-action census and publication wait for the compiler-side fixes. The next outer gate must use local
+   outer main `60d9d4c36`, superseding `771c20b61`; no outer gate has run on either base during this batch.
+   Exact counters are DATA1 `evidence/scope-mount-{single-owner,flat-managed,flat-usage,compact-owner}-button-raw.json`.
+   Focused validation passes: nine HashLink fixtures covering ownership, binding lifetime, inputs and controls;
+   `IdSetMain` and `StateStoreFlatMain` on all three targets with inlining off/on (twelve configurations); and
+   the real `UiContext` root-replacement submission regression on HashLink with fresh-build verification.
+
+   **Updated lead acceptance direction.** Preserve the Button batch locally and run full three-target,
+   dock/framework and exact 22-action gates despite the twenty-mount residue. Publication is decided per measured
+   action, under the user's 2026-11-12 refined acceptance rule. Steady-state actions (`idle`, `idle-focused`,
+   `hover-*`, `scroll-inspector`, `type-*`, `telemetry-step`, `cnc-unchanged`, `cnc-progress`) must not increase
+   objects or bytes against the correct control. Structural actions (tab switches, selection, `cnc-select`,
+   `cnc-source`, `cnc-hold`, `cnc-resume`) must not increase objects; additional bytes require measured,
+   per-action attribution recorded here. The two owned compiler gaps qualify only when their contribution is
+   demonstrated: dev-c5 owns HashLink interface adapters and a1 owns value-constructor destination construction.
+   No UI workaround is authorized. Report frame-time and GC-pause percentiles alongside allocations. The
+   twenty-mount microbenchmark is attribution, not the per-action publication decision. A failing correctness
+   gate still prevents publication; neither fresh-build verification nor budget ceilings may be weakened.
+   If the batch cannot be published, preserve its named branch and continue the approved independent queue.
+
+   Stage 5 additionally requires a collections checkpoint at the composites stage: keyed row scopes,
+   zero-allocation scrolling and correct reorder for ListView, TreeView, TableView and VirtualGrid, with
+   measurements. Before removing old update machinery, test live patches that change inputs and structure while
+   preserving component identity and state. Finish with a short `packages/ui/docs` guide, "Writing a Haxeon UI
+   component", separate from this decision history. The decorations-as-input inventory and proposal follows the
+   Button batch's publication or parking; implementation waits for the lead's decision on that proposal.
+
+   **Nested scope ownership regression (unpublished).** A native body replacement detached the physical child
+   stored in its legacy parent's authored `BuiltNode.children` snapshot. Rebuilding that parent then inserted the
+   new child without removing the current one; a focused regression failed with "Layout node IDs must be unique".
+   Reconciliation now resolves each native authored child through its own owner before comparing or replacing it.
+   With that corrected, a simultaneous parent and child invalidation exposed a second failure: "A removed native
+   body ran after its legacy parent replaced it: 2". Native scheduling had treated every owner without a native
+   parent as attached. `flushRenderScopes` now requires the submitted root, and attachment follows the actual
+   parent chain to that tree's current root. Every producer and test caller is ported; no zero-argument fallback
+   remains. This adds no per-component storage or mount allocation. The native reproduction passes both fixes
+   and a fresh-build comparison. The additional lifetime regressions and allocation checkpoint below extend
+   this evidence; final family gates still require a fresh post-rebase run.
+   The existing failed-replacement test also failed at check 21 on an isolated `93e399bca` source snapshot:
+   the original mounted scope lost its subscription when the replacement threw and the frame swept unused
+   resources. Distinct instance tickets had stopped a failed mount from touching the previous live ticket.
+   Mount rollback now retains the mounted owner of the same logical slot on the failure path only. This adds
+   no successful-mount allocation or per-owner field. The regression and six existing ownership/control checks
+   pass on HashLink after correction. `ScopeLegacyReplacementMain` also passes all three targets with
+   inlining off/on, and the full native framework/dock/input gate passes. The fresh editor now passes the former
+   `cnc-source` revision mismatch, but fails later at `cnc-returned` with "Widget state has not been initialized
+   for 954415806". A focused hidden-variant test reproduced premature native-owner disposal while full-frame
+   retention was still in progress. Detached scopes now stop scheduling immediately, while an active or requested
+   full-frame resource sweep decides whether cached owners remain live. Patch-only removals without such a sweep
+   still release obsolete owners immediately. The focused test checks stable widget IDs and that returning cached
+   variants do not recreate their retained widget state; it and four existing ownership checks pass on HashLink.
+   The cache and replacement regressions pass all twelve target/inlining configurations. The fresh editor
+   passes all three pilot cycles, as recorded below; no final stage-3 census or publication is claimed.
+
+   **Button allocation checkpoint (unpublished; renewed on compiler base `7b97c092e`).** Both control and native pilot panels pass
+   fresh-build verification for three complete CNC/telemetry cycles, including source replacement and hidden-panel
+   return. The correct control is the previous published UI head `835a2bbc8`, rebuilt against outer `e9173b977`
+   and the same compiler/runtime as the candidate. These are the exact 15 census actions plus seven pilot actions;
+   this is an allocation checkpoint, not the final stage-3 comparison or a passing batch. The following numbers include the sorted-array cache fix. Formatting, rebase, Tier 1 (895 passed,
+   zero failed), fixed-point self-hosting and all ten native UI gates pass. The renewed full Tier 2 gates
+   remain unfinished; telemetry has the temporary approval recorded below.
+
+   | Action | Control objects | Native objects | Control bytes | Native bytes | Objects delta | Bytes delta |
+   | --- | ---: | ---: | ---: | ---: | ---: | ---: |
+   | `hierarchy->sensors` | 1,672 | 1,660 | 121,720 | 120,200 | -12 | -1,520 |
+   | `sensors->hierarchy` | 1,145 | 1,142 | 80,904 | 80,664 | -3 | -240 |
+   | `console->telemetry` | 1,174 | 1,162 | 79,288 | 78,272 | -12 | -1,016 |
+   | `telemetry->console` | 1,708 | 1,700 | 93,680 | 93,056 | -8 | -624 |
+   | `scroll-inspector` | 227 | 226 | 25,784 | 25,592 | -1 | -192 |
+   | `hover-enter` | 32 | 32 | 1,032 | 1,032 | +0 | +0 |
+   | `hover-inside` | 32 | 32 | 1,032 | 1,032 | +0 | +0 |
+   | `idle` | 17 | 17 | 584 | 584 | +0 | +0 |
+   | `idle-focused` | 17 | 17 | 584 | 584 | +0 | +0 |
+   | `hover-other` | 187 | 182 | 9,760 | 9,520 | -5 | -240 |
+   | `hover-field` | 323 | 313 | 17,432 | 16,472 | -10 | -960 |
+   | `hover-away` | 257 | 249 | 12,576 | 12,104 | -8 | -472 |
+   | `type-char` | 417 | 417 | 16,456 | 16,456 | +0 | +0 |
+   | `type-backspace` | 432 | 432 | 17,088 | 17,088 | +0 | +0 |
+   | `selection` | 8,649 | 8,563 | 585,416 | 589,792 | -86 | +4,376 |
+   | `cnc-unchanged` | 19 | 19 | 640 | 640 | +0 | +0 |
+   | `cnc-select` | 2,193 | 2,193 | 123,272 | 123,272 | +0 | +0 |
+   | `cnc-source` | 4,615 | 4,595 | 268,336 | 267,448 | -20 | -888 |
+   | `cnc-progress` | 5,466 | 5,465 | 278,240 | 277,912 | -1 | -328 |
+   | `cnc-hold` | 1,011 | 1,001 | 46,736 | 45,648 | -10 | -1,088 |
+   | `cnc-resume` | 1,462 | 1,455 | 76,384 | 76,968 | -7 | +584 |
+   | `telemetry-step` | 14,983 | 14,851 | 624,712 | 625,032 | -132 | +320 |
+
+   Selection and resume meet the structural object rule; their byte increases are measured representation costs.
+   Selection includes thirteen additional `LayoutStyle` instances / 4,472 bytes from constructing immutable style
+   inputs and copying them in Button. Its forty compiler-gap items contribute 3,040 bytes; the remaining net UI
+   residue is 1,336 bytes. Resume has six compiler-gap items / 456 bytes and 128 net bytes from node/owner, Button
+   fields and array storage. Complete per-type sums and caller sites are in the DATA1 attribution files.
+   Telemetry removes 132 objects but adds 320 bytes: its fourteen interface adapters / 784 bytes and fourteen
+   boundary temporaries / 1,344 bytes account for the excess. Arithmetic removal of those compiler items gives
+   minus 160 objects / minus 1,808 bytes; this is attribution, not a patched-compiler measurement.
+
+   **Historical cause, fixed by the cache change below.** Before that fix, `cnc-progress` added one object / 496 bytes. The exact
+   byte-site delta is `BuildContext.pruneKeyCaches`, not either compiler gap. A census-window-only native debugger
+   breakpoint confirms `hl_freelist_resize`: old capacity 41, head 41, new capacity 62, payload 496 bytes.
+   Its backtrace is `hl_freelist_resize` → `hl_freelist_add_range` → `hl_hbremove` →
+   `BuildContext.pruneKeyCaches` (`idsByPath.remove` at the captured line 946). The debugger run reproduces the
+   same exact 5,467 objects / 278,736 bytes. HashLink map removal grows its fragmented-slot freelist; this is a
+   separate runtime allocation, not the interface-adapter or constructor-temporary limitation and not a correctness
+   exception. No HashLink edit was made. After the attribution report, the lead assigned this to UI cache
+   maintenance and requested the stable-capacity fix below. At that checkpoint, telemetry remained unpublished pending the lead decision. The later user approval
+   is recorded below; no exception was assumed during those measurements.
+   Evidence: DATA1 `evidence/instance-body-root-exact-22-comparison.json`,
+   `native-child-ownership-*-type-delta.json`, `instance-body-root-structural-byte-attribution.json`,
+   `cnc-progress-freelist-confirmed-gdb.log` and its calibrated census JSON.
+
+   **Lead-directed UI cache fix (implemented and remeasured).** The follow-up trace identifies
+   nineteen stale paths ending in `slot:N/row/item:line-N/text`: CNC auto-follow moves a fixed-size virtualized
+   window. The slot roots remain, but each recycled slot changes its keyed text child. Removing those old IDs
+   is correct; retaining dead IDs or dropping the item key would change identity semantics. Repeated removal and
+   insertion fragments the global string map's free-slot ranges and grows its freelist during a steady action.
+   Replace that map and its separate traversal list with `WidgetIdCache`: sorted parallel path/WidgetId arrays,
+   binary lookup, in-place pruning and retained high-water storage. It starts empty and grows only for actual
+   insertions; no capacity pre-sizing is used. The cache preserves WidgetId references, path hashing, collision
+   resolution, liveness checks and the existing 8,192-ID bound. Stale references are cleared without trimming the
+   backing arrays. The cache fix changes neither HashLink nor the compiler and adds no per-widget entry object.
+   On the freshly built `065e0de61` compiler base and pinned HashLink `7d33c19fb`, the minimal original-map path
+   fails after eight warm cycles with "Steady key-cache pruning allocated backing storage: 2736". The new
+   alternating-window regression passes on HashLink, Wasm32 and Wasm GC, with inlining off/on: 1,024 frames
+   allocate nothing, retain exactly the live IDs and keep stable backing storage. The fresh 22-action census on `7b97c092e` confirms `cnc-progress` at 5,465 objects / 277,912 bytes:
+   one object / 328 bytes below the correct control. Its pruning byte-buffer allocation falls to zero. Selection
+   additionally saves one object / 1,120 bytes versus the pre-fix candidate; no other action increases. Full
+   batch gates remain unfinished. Evidence is
+   DATA1 `evidence/cache-old-path-new-base.json` and `evidence/cache-new-base-three-target.log`. Telemetry
+   has the temporary user approval recorded below for its two compiler-gap items.
+
+   **Paired frame and GC diagnostics (renewed on `9707f25de`).** Seven alternating control/native pairs cover all 22 actions.
+   Frame p50 / p95 / p99 in milliseconds (control → native): selection
+   2.882 / 5.826 / 6.307 → 3.206 / 6.028 / 8.172 (21 samples per side); CNC progress
+   0.897 / 1.221 / 1.545 → 0.957 / 1.709 / 1.862 (672 samples); CNC resume
+   0.496 / 0.797 / 0.820 → 0.528 / 0.860 / 0.895 (21 samples); telemetry step
+   2.670 / 3.777 / 4.470 → 2.763 / 3.793 / 4.424 (63 samples). These are diagnostics,
+   not timing acceptance thresholds. Every action's frame GC-pause p50 / p95 / p99 is zero on both
+   sides: no collection occurred within those measured frame intervals. Frame GC scheduling was enabled;
+   it suppresses automatic collection during rendering and may collect at the end of a frame or during idle.
+   The counters include `endFrame`, so a forced boundary collection would be counted. Process-wide pilot
+   counters record 21 collections on each side across the seven pairs, outside the selected frames; the
+   maximum individual process pauses were 3.404 ms control and 3.551 ms native. These zero-inclusive per-frame percentiles do
+   not describe the distribution of individual GC pauses or establish a GC-free application. Complete raw
+   frame samples, all-action percentiles and process GC counters are in DATA1
+   `evidence/publish-9707-paired-frame-gc.json`; exact allocations are in
+   `evidence/publish-9707-full-census-report.json` (also available as a 22-row Markdown table). The original checkpoint rejected telemetry's +320 bytes; the temporary user approval follows.
+
+   **Temporary telemetry exception approved by the user.** For the Button batch, `telemetry-step`
+   changes from 14,983 objects / 624,712 bytes to 14,851 / 625,032: minus 132 objects and plus 320 bytes.
+   This steady-state byte residue is accepted temporarily, attributed to the two measured compiler gaps:
+   HashLink class-to-interface adapters (owner: dev-c5) and value-constructor temporaries (owner: a1).
+   Re-measure when those fixes land. The residue must disappear; if it does not, the remaining increase is
+   a regression to fix, not a continuing exception. This approval does not relax verify mode, budgets, or
+   any other action's allocation rule. Publication still requires the remaining full batch gates and rebase.
+
+   **Closed event phases (ported; final batch gates pending).** `UiEventPhase` closes the public event
+   phase to `Capture`, `Target` and `Bubble`; registration takes the same enum, with `Bubble` as the default.
+   The existing target-only bubble subscription is an internal listener-selection policy, represented by a
+   separate private enum in the existing handler field. It adds no per-listener record or field and never
+   appears as an event phase. Outside-pointer notifications remain separate direct subscriptions and report
+   `Target`, with the original pointer target and subscribed node as `currentTarget`; there is no fourth routed
+   phase. Producers, readers, UI/example callers and outer callers are ported together, without string overloads.
+   The routing regression covers listener ordering, target-only selection and outside delivery; negative fixtures
+   reject string assignment and registration. All eighteen runtime target/inlining cases and twelve string-rejection cases pass;
+   dispatch allocation remains zero on all targets. Standalone HashLink pairs with inlining off/on
+   also preserve event-construction bytes (163,680 for the warmed 1,024-event counter window) and listener
+   registration bytes (106,576 for 1,024 listeners). The subsequent same-compiler 22-action comparison
+   is exactly unchanged, as recorded below. Final batch gates and rebase still precede publication.
+
+   **Renewed publication evidence on `9707f25de`.** The fresh published-head control, Button-before-enum
+   control and Button-plus-enum modules use the same compiler and runtime. All 22 action counts in the table
+   above are unchanged from the parked checkpoint. The enum-only comparison is exactly equal in objects and
+   bytes for every action. Pilot fresh-mount verification passes on all three modules. The portable component
+   suite passes 162 target/inlining configurations plus twelve string-rejection cases; UI value snapshots pass
+   sixty positive and 702 negative configurations. The full compiler gate passes all eighty integration stages,
+   both 897-test driver runs, Wasm backend/parity, compiler embedding and external-tool checks. The explicit
+   fixed-point check also passes, with identical stage-1/stage-2 hashes. No full-gate baseline skips were needed.
+
+   Outer gates use `e9173b977`, with `MATERIA_ROOT` set to the shared supplier-data checkout and all outputs,
+   caches and temporaries on DATA1. App tests and headless performance pass. Retention passes eight scenarios;
+   `panel-flows` stops with "Inspection camera ignored its view label", reproduced on the fresh control with
+   verification enabled. The budget runner repeats that same known retention failure; its three performance
+   scenario results contain no budget failures. This is a documented outer baseline skip, not a weakened
+   verifier or raised ceiling. All ten native UI scripts pass, including the full framework/dock/input and
+   1,101-node layout transaction gates. The seven final frame/GC pairs are complete and reported above.
+   Fresh reports are DATA1 `evidence/publish-9707-exact-22-comparison.json`,
+   `publish-9707-enum-comparison.json`, `publish-9707-full-gate-summary.json` and
+   `publish-9707-outer-gate-classification.json` and `publish-9707-ten-ui-summary.json`. Publication still
+   requires the final publication checks below.
+
+   The publication branch is rebased onto `bac1af1c8`. Its rebuilt compiler passes Tier 1 with
+   898 tests and zero failures, including 554 live, plain and plain-without-early-pruning cases.
+   Self-hosting reaches a byte-identical stage-1/stage-2 fixed point. All 162 component runtime
+   configurations and twelve string-phase rejection cases also pass after the rebase. UI and native
+   runtime sources and pins are unchanged from the renewed census above. Fresh editor control and
+   candidate builds pass, with equal source hashes and non-output arguments, but their raw modules
+   differ from the earlier compiler's modules. The previous runtime measurements were therefore
+   not accepted as proof for this compiler: all 22 actions were captured again.
+
+   **First post-rebase capture: publication stopped.** Twenty-one actions kept their earlier candidate
+   counts, including the exact approved telemetry exception. CNC resume instead measures
+   1,462 objects / 76,384 B on the control and 1,547 / 80,464 B on the candidate: **+85 objects /
+   +4,080 B**, failing the structural object rule. Compared with the previous candidate, the
+   extra 92 objects / 3,496 B comprise snapshot encoding, JSON serialization and file-persistence
+   allocation sites, including `FileDockWorkspacePersistence.save`. Both sides use identical
+   `WorkspaceSaveWorker` source; its background thread encodes and writes a pending snapshot after
+   a 150 ms quiet period. This is evidence of possible setup-save activity entering the process-wide
+   census window, not permission to subtract it or accept a passing retry. A deterministic scheduling
+   reproduction and a correction at the measurement cause were required, as resolved below. No UI increase was
+   been excused. Fresh module-bound evidence is DATA1 `evidence/publication-rebase-exact-22-comparison.json`
+   and `publication-rebase-cnc-resume-persistence-stop.json`. The earlier frame/GC pairs above belong
+   to the earlier modules; the current-module diagnostics are recorded below.
+
+   **Workspace-save census barrier; corrected baseline on `bac1af1c8`.** The controlled reproduction
+   queues a setup snapshot under the worker's enqueue lock, opens the census, then releases the lock and
+   lets the normal quiet timer expire. The old path fails with one save marker in the window; its stack
+   enters through `WorkspaceSaveWorker.run`. Waiting on `awaitIdle()` before opening the window removes
+   that marker. A save scheduled by the action itself is included: the harness waits for its encode/write
+   and asserts idle before stopping the census. The end-barrier reproduction counts exactly one such save.
+   Neither barrier enqueues a save or bypasses the quiet period. Errors remain available through `takeError()`.
+
+   The harness registers every editor it creates, including the additional CNC editor, and drains them
+   after setup and at both capture boundaries. The worker and harness changes are identical in the
+   published-head control, pre-enum control and candidate. The idle barrier allocates zero on HashLink,
+   Wasm32 and Wasm GC with inlining off/on; the worker tests cover quiet completion, no extra writes,
+   action saves, coalescing and error reporting. All 22 actions were captured again after the source
+   correction, without subtracting any work from the earlier failing capture. The corrected census passes
+   the refined acceptance rule. CNC resume is back to -7 objects / +584 B; telemetry remains the exact
+   approved -132 objects / +320 B temporary exception. Tab switches now include their own workspace saves
+   on both sides, so their absolute counts rise equally and their deltas remain unchanged.
+
+   | Action | Control objects / B | Candidate objects / B | Delta objects / B |
+   | --- | ---: | ---: | ---: |
+   | hierarchy->sensors | 2,092 / 137,168 | 2,080 / 135,648 | -12 / -1,520 |
+   | sensors->hierarchy | 1,565 / 96,384 | 1,562 / 96,144 | -3 / -240 |
+   | console->telemetry | 1,594 / 94,776 | 1,582 / 93,760 | -12 / -1,016 |
+   | telemetry->console | 2,128 / 109,136 | 2,120 / 108,512 | -8 / -624 |
+   | scroll-inspector | 227 / 25,784 | 226 / 25,592 | -1 / -192 |
+   | hover-enter | 32 / 1,032 | 32 / 1,032 | +0 / +0 |
+   | hover-inside | 32 / 1,032 | 32 / 1,032 | +0 / +0 |
+   | idle | 17 / 584 | 17 / 584 | +0 / +0 |
+   | idle-focused | 17 / 584 | 17 / 584 | +0 / +0 |
+   | hover-other | 187 / 9,760 | 182 / 9,520 | -5 / -240 |
+   | hover-field | 323 / 17,432 | 313 / 16,472 | -10 / -960 |
+   | hover-away | 257 / 12,576 | 249 / 12,104 | -8 / -472 |
+   | type-char | 417 / 16,456 | 417 / 16,456 | +0 / +0 |
+   | type-backspace | 432 / 17,088 | 432 / 17,088 | +0 / +0 |
+   | selection | 8,649 / 585,416 | 8,563 / 589,792 | -86 / +4,376 |
+   | cnc-unchanged | 19 / 640 | 19 / 640 | +0 / +0 |
+   | cnc-select | 2,193 / 123,272 | 2,193 / 123,272 | +0 / +0 |
+   | cnc-source | 4,615 / 268,336 | 4,595 / 267,448 | -20 / -888 |
+   | cnc-progress | 5,466 / 278,240 | 5,465 / 277,912 | -1 / -328 |
+   | cnc-hold | 1,011 / 46,736 | 1,001 / 45,648 | -10 / -1,088 |
+   | cnc-resume | 1,462 / 76,384 | 1,455 / 76,968 | -7 / +584 |
+   | telemetry-step | 14,983 / 624,712 | 14,851 / 625,032 | -132 / +320 |
+
+   Evidence: DATA1 `evidence/workspace-census-unsafe-summary.json`, `workspace-census-barrier-summary.json`,
+   `workspace-idle-parity-summary.json`, `workspace-barrier-identical-inputs.json` and
+   `workspace-barrier-exact-22-comparison.json`. The fresh enum-only comparison is exactly unchanged on all
+   22 actions. Outer app tests and three 500-cycle headless performance runs pass. Retention passes eight
+   scenarios; its only failure, "Inspection camera ignored its view label", reproduces on the fresh barrier
+   control with verification enabled. The budget runner fails only that same nested retention check;
+   its three performance scenarios have no budget failures. No verifier or ceiling changed. The local outer
+   commit is `d2ca0968d`, based on `e9173b977`; it is never pushed from this worktree.
+
+   Seven alternating frame/GC pairs use the same fresh modules as the corrected census. Frame time is
+   ordinary UI submission time; the allocation-only workspace barriers are inactive in these timing runs.
+   Selected p50 / p95 / p99 frame times in milliseconds are:
+
+   | Action | Control | Candidate |
+   | --- | ---: | ---: |
+   | selection | 2.978 / 5.554 / 5.644 | 2.911 / 5.899 / 5.939 |
+   | CNC progress | 0.885 / 1.098 / 1.578 | 0.934 / 1.306 / 1.776 |
+   | CNC resume | 0.491 / 0.569 / 0.737 | 0.523 / 0.751 / 0.813 |
+   | telemetry step | 2.601 / 4.477 / 5.410 | 2.754 / 3.483 / 3.711 |
+
+   All 22 actions have zero in-frame GC-pause p50/p95/p99 and zero collections in their captured frames.
+   The component-panel processes have 21 collections per side outside those frames, with maximum pauses
+   of 3.232 ms control and 3.410 ms candidate. These are per-frame pause sums and process maxima, not a
+   per-collection percentile distribution or a claim of a GC-free application. All 22 allocation rows and
+   diagnostic percentiles are in DATA1 `evidence/workspace-barrier-full-census-report.json` and `.md`;
+   outer classification is `workspace-barrier-outer-gate-classification.json`. The final source fetch and
+   publication check still precede the push.
+
+   **Independent review corrections (local, before renewed gates).** The body-root batch `0892af06d` had four
+   reproduced correctness defects. `ScopeRootStateMain` overflowed recursive `StateStore.retain` for a Checkbox
+   with `onChange`; the actual TextField fixture with loaded fonts threw "Native scope resource has a different
+   owner type". Native owners now use negative scalar resource IDs, disjoint from positive widget-state IDs, with
+   no extra identity allocation. Injected installation failure also reproduced a subscribed owner left in the
+   pending list; installation is now inside mount rollback. `SelectionFocusMain` failed with "Selection requested
+   focus on a non-focusable label or icon"; Select, ComboBox and SelectionPopup now request the Button root ID.
+   `ScopeVariantRootMain` failed with "Returning to A returned B"; variant caches record their nested root owner
+   and exclude the enclosing scope currently building the alternative. `ScopeNodeFieldsMain` failed with "Caller
+   node fields lost on body replacement"; cursor, tab index, command scope, window-decoration region/cursor,
+   hit-test policy, focus trap and self hit testing now have authored baselines and persistent caller override bits.
+   Forwarding rebases those baselines. The new node-field baseline increases owner/boundary size and must be
+   remeasured; the earlier twenty-mount counts describe the unreviewed snapshot only.
+
+   All four regressions pass focused HashLink checks after correction, including repeated stateful mounts,
+   installation cleanup, A/B/A leaves and nested scopes, focus return/navigation, and repeated field transfer with
+   a coinciding authored default. The Menu measurement concern did not reproduce: the old default Button style
+   contributes row gap/direction/alignment, while width calculation consumes padding and typography only.
+   `MenuMeasurementMain` confirms equal horizontal padding, font size and letter spacing on the default theme;
+   the measurement code retains its null inline style with this dependency documented. These fixtures join the
+   three-target suite. The real TextField fixture additionally requires native fonts. All interrupted gate outputs
+   are rejected; full gates and the exact 22-action census restart after these fixes.
+
+   **Native instance lifetimes (gate correction).** The full dock gate and an isolated reproduction found that
+   a component's widget identity cannot also identify its lifetime: mounting cached pane B disposed A's Button
+   owners even though the pane cache retained A. Native owners now receive distinct scalar instance IDs; stable
+   widget identity still addresses focus, capture, layout and key paths. The same native record holds both scalar
+   identities, without an allocated identity holder. A flat set retains the widget paths of live instances. Retained
+   caches resolve their own completed root scope rather than a forwarding ancestor displaying another alternative.
+   A detached child stays subscribed when its parent's existing ownership table still retains it; actual removals
+   still unsubscribe. Disposal unregisters the native record immediately, including patch-only frames, and compacts
+   reusable managed-ID storage before tombstones cause unnecessary growth. No retained-update path, ownership
+   counter, compiler change, budget change or verify exception is introduced.
+
+   The new failures were reproduced before correction: "Cached pane native owner disposed by another variant",
+   "A cached native component's lifetime was overwritten by another instance", "Inactive cached nested component
+   was disposed", and "Native patch updates retained obsolete component owners". Focused HashLink checks now pass,
+   including original dock A/B/A reuse, moved panels and model callback replacement. The reviewed twenty-mount
+   Button result remains 2,612 objects / 201,968 bytes against control 2,672 / 198,296. The two compiler-gap items
+   account for 40 objects / 3,040 bytes; subtracting them is attribution only and leaves 632 bytes above control.
+   The caller-property baseline adds 32 bytes per owner and 40 per boundary temporary relative to the earlier
+   compact-owner result. Actual action counts, rather than this mount probe, decide publication.
+
+   Full restyle tests also required two assertion ports: selector classes live on the Button body root, and caller
+   decorations follow its native current root under the same widget ID. Listener, style, overlay and fresh-build
+   comparisons remain required. Outer gates use `60d9d4c36`; the existing OCCT prefix is an explicit read-only input
+   (the source difference is Vcpkg configuration unused by Linux Ninja), and the fresh worktree needs its standard
+   root `build/` output directory. The app control reproduces the missing-directory failure and passes after that
+   setup correction. The initial failed setup results are rejected. Full gates and all 22 action windows must run
+   again on the corrected native ownership implementation.
+
    Foundation evidence is retained under `/media/joao/DATA1/haxeon-stage5-gates/evidence/`:
    `native-foundation-pilot-comparison.log`, `worker-binding-trace-comparison.json`, the paired
    `current-*-all-census.json` and `current-*-pilot-census.json`, and the six-configuration

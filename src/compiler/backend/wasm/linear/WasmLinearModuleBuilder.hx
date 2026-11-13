@@ -10,6 +10,7 @@ import compiler.backend.wasm.WasmFunctionLower;
 import compiler.backend.wasm.WasmEncoder;
 import compiler.backend.wasm.gc.WasmGcRoots;
 import compiler.backend.wasm.WasmLayout;
+import compiler.backend.wasm.EnumStringDescriptors;
 import compiler.backend.wasm.WasmModule.WasmFunction;
 import compiler.backend.wasm.WasmModule.WasmModule;
 import compiler.backend.wasm.WasmPatch;
@@ -28,6 +29,7 @@ import compiler.backend.wasm.linear.WasmLinearContext.WasmLinearContextState;
 import compiler.backend.wasm.linear.WasmLinearGc;
 import compiler.backend.wasm.linear.WasmLinearRuntime;
 import compiler.ir.Ir.IrProgram;
+import compiler.ir.Ir.IrEnum;
 import compiler.ir.IrVerifier;
 import compiler.backend.wasm.WasmFlattenValueFields;
 import compiler.backend.wasm.WasmValueLayout;
@@ -36,6 +38,7 @@ import compiler.backend.wasm.WasmValueLayout;
 class WasmLinearModuleBuilder {
 	final program:IrProgram;
 	final logicalProgram:IrProgram;
+	final enumDeclarations:Array<IrEnum>;
 	final options:BackendOptions;
 	final patchChanged:Null<Array<String>>;
 	final target:WasmTargetConfig;
@@ -48,6 +51,7 @@ class WasmLinearModuleBuilder {
 	var boundaryExportAdapters:Map<String, String>;
 	var preferredEntry:String;
 	var reachable:Map<String, Bool>;
+	var stringifiableEnums:Map<String, Bool>;
 	var usedCNatives:Map<String, Bool>;
 	var usedNatives:Map<String, Bool>;
 	var layout:WasmLayout;
@@ -85,9 +89,11 @@ class WasmLinearModuleBuilder {
 	var scalarAbi:compiler.backend.wasm.WasmScalarAbi;
 	var fieldLowering:compiler.backend.wasm.WasmFlattenValueFields;
 
-	public function new(program:IrProgram, logicalProgram:IrProgram, options:BackendOptions, patchChanged:Null<Array<String>>, target:WasmTargetConfig) {
+	public function new(program:IrProgram, logicalProgram:IrProgram, enumDeclarations:Array<IrEnum>, options:BackendOptions, patchChanged:Null<Array<String>>,
+			target:WasmTargetConfig) {
 		this.program = program;
 		this.logicalProgram = logicalProgram;
+		this.enumDeclarations = enumDeclarations;
 		this.options = options;
 		this.patchChanged = patchChanged;
 		this.target = target;
@@ -95,30 +101,46 @@ class WasmLinearModuleBuilder {
 		module.runtimeTypeIds = compiler.backend.wasm.WasmTypeIdPlan.forProgram(program);
 	}
 
-	public static function compile(program:IrProgram, options:BackendOptions, patchChanged:Null<Array<String>>, target:WasmTargetConfig):compiler.backend.wasm.WasmCompilation {
+	public static function compile(program:IrProgram, options:BackendOptions, patchChanged:Null<Array<String>>,
+			target:WasmTargetConfig):compiler.backend.wasm.WasmCompilation {
 		var logical = new IrProgram(program.entryPoint);
-		logical.functions = program.functions.copy(); logical.objects = program.objects.copy(); logical.natives = program.natives.copy();
-		logical.cNatives = program.cNatives; logical.interfaces = program.interfaces; logical.enums = program.enums; logical.staticFields = program.staticFields;
-		logical.positionalFingerprints = program.positionalFingerprints; logical.parameterDefaults = program.parameterDefaults;
-		logical.positionalPlaces = program.positionalPlaces; logical.positionalSources = program.positionalSources;
+		logical.functions = program.functions.copy();
+		logical.objects = program.objects.copy();
+		logical.natives = program.natives.copy();
+		logical.cNatives = program.cNatives;
+		logical.interfaces = program.interfaces;
+		logical.enums = program.enums;
+		logical.staticFields = program.staticFields;
+		logical.positionalFingerprints = program.positionalFingerprints;
+		logical.parameterDefaults = program.parameterDefaults;
+		logical.positionalPlaces = program.positionalPlaces;
+		logical.positionalSources = program.positionalSources;
 		var boundaryExports = WasmModuleSupport.exportedFunctions(logical, options.exports == null ? [] : options.exports),
-			boundaryPlan = new compiler.backend.wasm.WasmScalarAbi(logical, boundaryExports, true), exportAdapters:Map<String, String> = [];
+			boundaryPlan = new compiler.backend.wasm.WasmScalarAbi(logical, boundaryExports, true),
+			exportAdapters:Map<String, String> = [];
 		logical = compiler.backend.wasm.WasmScalarClosureEscapes.rewrite(logical, boundaryPlan.scalarClosures, boundaryExports, exportAdapters);
 		// Keep the inline-value Dynamic-boundary invariant while verifying the
 		// explicit closure adapters generated for this target.
 		IrVerifier.verify(logical);
-		var roots = [for (name in boundaryExports) exportAdapters.exists(name) ? exportAdapters.get(name) : name];
-		if (WasmModuleSupport.hasFunction(logical, "__init")) roots.push("__init");
-		var entry = WasmModuleSupport.hasFunction(logical, "main") ? "main" :
-			WasmModuleSupport.hasFunction(logical, "Main.main") ? "Main.main" : logical.entryPoint;
-		var originalCount = logical.functions.length, adapters = WasmLinearClosureAdapters.generate(logical, boundaryPlan.scalarClosures, entry, roots),
-			existing = logical.functions.slice(0, originalCount), generated = logical.functions.slice(originalCount);
+		var roots = [
+			for (name in boundaryExports)
+				exportAdapters.exists(name) ? exportAdapters.get(name) : name
+		];
+		if (WasmModuleSupport.hasFunction(logical, "__init"))
+			roots.push("__init");
+		var entry = WasmModuleSupport.hasFunction(logical,
+			"main") ? "main" : WasmModuleSupport.hasFunction(logical, "Main.main") ? "Main.main" : logical.entryPoint;
+		var originalCount = logical.functions.length,
+			adapters = WasmLinearClosureAdapters.generate(logical, boundaryPlan.scalarClosures, entry, roots),
+			existing = logical.functions.slice(0, originalCount),
+			generated = logical.functions.slice(originalCount);
 		generated = compiler.ir.IrValueInterfaceBoxes.rewrite(generated, logical.objects, logical.interfaces, existing);
 		generated = compiler.ir.IrCheckedDynamicCasts.rewrite(generated, logical.objects, true, existing);
 		logical.functions = existing.concat(generated);
 		while (true) {
 			var missing = WasmDynamicCalls.missingVarargsAdapters(logical.functions, logical.enums);
-			if (missing.length == 0) break;
+			if (missing.length == 0)
+				break;
 			logical.functions = logical.functions.concat(missing);
 		}
 		// Interface/cast adapters may have been generated after the initial
@@ -126,35 +148,64 @@ class WasmLinearModuleBuilder {
 		adapters.rewriteSignatureChecks();
 		compiler.ir.IrEnumTagLowering.escapes(logical);
 		if (!Lambda.exists(logical.natives, n -> n.name == "__std_is_of_type") && generated.length > 0)
-			logical.natives.push({name: "__std_is_of_type", library: "haxeon_runtime", symbol: "__std_is_of_type", arguments: [Dyn, TypeRef], result: Bool});
+			logical.natives.push({
+				name: "__std_is_of_type",
+				library: "haxeon_runtime",
+				symbol: "__std_is_of_type",
+				arguments: [Dyn, TypeRef],
+				result: Bool
+			});
 		IrVerifier.verify(logical);
-		var values = new WasmValueLayout(logical), verified = new WasmFlattenValueFields(logical).rewrite();
-		verified.objects = [for (object in logical.objects) {
-			name: object.name, isValue: object.isValue, nativeLayout: object.nativeLayout, base: object.base, interfaces: object.interfaces,
-			fields: values.fields(object.fields), methods: object.methods
-		}];
+		var values = new WasmValueLayout(logical),
+			verified = new WasmFlattenValueFields(logical).rewrite();
+		verified.objects = [
+			for (object in logical.objects)
+				{
+					name: object.name,
+					isValue: object.isValue,
+					nativeLayout: object.nativeLayout,
+					base: object.base,
+					interfaces: object.interfaces,
+					fields: values.fields(object.fields),
+					methods: object.methods
+				}
+		];
 		IrVerifier.verify(verified);
-		var exports = [for (name in boundaryExports) exportAdapters.exists(name) ? exportAdapters.get(name) : name],
-			abi = new compiler.backend.wasm.WasmScalarAbi(logical, exports, false, true),
-			scalar = abi.rewrite(), fields = new WasmFlattenValueFields(scalar, name -> {
+		var exports = [
+			for (name in boundaryExports)
+				exportAdapters.exists(name) ? exportAdapters.get(name) : name
+		], abi = new compiler.backend.wasm.WasmScalarAbi(logical, exports, false,
+			true), scalar = abi.rewrite(), fields = new WasmFlattenValueFields(scalar, name -> {
 				var signature = abi.signatures.get(name);
 				return signature != null && signature.throwsReceiver;
 			}), flattened = fields.rewrite();
-		flattened.objects = [for (object in logical.objects) {
-			name: object.name, isValue: object.isValue, nativeLayout: object.nativeLayout, base: object.base, interfaces: object.interfaces,
-			fields: values.fields(object.fields), methods: object.methods
-		}];
+		flattened.objects = [
+			for (object in logical.objects)
+				{
+					name: object.name,
+					isValue: object.isValue,
+					nativeLayout: object.nativeLayout,
+					base: object.base,
+					interfaces: object.interfaces,
+					fields: values.fields(object.fields),
+					methods: object.methods
+				}
+		];
 		var physicalObjects = compiler.ir.IrObjectTable.of([for (object in flattened.objects) object.name => object]);
-		flattened.functions = [for (fn in flattened.functions) {
-			var signature = abi.signatures.get(fn.name);
-			signature != null && signature.throwsReceiver ? fn : compiler.ir.IrScalarReplacement.rewrite(fn, physicalObjects, true);
-		}];
+		flattened.functions = [
+			for (fn in flattened.functions) {
+				var signature = abi.signatures.get(fn.name);
+				signature != null
+			&& signature.throwsReceiver ? fn : compiler.ir.IrScalarReplacement.rewrite(fn, physicalObjects, true);
+			}
+		];
 		abi.validate(flattened);
+		var enumDeclarations = logical.enums;
 		if (options.developmentMetadata == false) {
 			flattened = compiler.ir.IrEnumRuntimeTypes.physical(flattened);
 			logical = compiler.ir.IrEnumRuntimeTypes.physical(logical);
 		}
-		var builder = new WasmLinearModuleBuilder(flattened, logical, options, patchChanged, target);
+		var builder = new WasmLinearModuleBuilder(flattened, logical, enumDeclarations, options, patchChanged, target);
 		builder.boundaryExportNames = boundaryExports;
 		builder.boundaryExportAdapters = exportAdapters;
 		builder.closureAdapters = adapters;
@@ -199,33 +250,52 @@ class WasmLinearModuleBuilder {
 		}
 		preferredEntry = WasmModuleSupport.hasFunction(program,
 			"main") ? "main" : WasmModuleSupport.hasFunction(program, "Main.main") ? "Main.main" : program.entryPoint;
-		var roots = [for (name in exportedFunctions) boundaryExportAdapters.exists(name) ? boundaryExportAdapters.get(name) : name];
+		var roots = [
+			for (name in exportedFunctions)
+				boundaryExportAdapters.exists(name) ? boundaryExportAdapters.get(name) : name
+		];
 		if (WasmModuleSupport.hasFunction(program, "__init"))
 			roots.push("__init");
 		reachable = IrReachability.withGeneratedRuntimeRoots(program, preferredEntry, roots);
-		var plannedFunctions:Map<String, Bool> = [], rootSet:Map<String, Bool> = [];
-		for (fn in program.functions) plannedFunctions.set(fn.name, true);
+		var plannedFunctions:Map<String, Bool> = [],
+			rootSet:Map<String, Bool> = [];
+		for (fn in program.functions)
+			plannedFunctions.set(fn.name, true);
 		var changed = true;
 		while (changed) {
 			changed = scalarAbi.retainOriginals(reachable, roots);
-			if (fieldLowering.retainOriginals(reachable, roots)) changed = true;
-			if (scalarAbi.retainVirtualTargets(program, reachable, roots)) changed = true;
-			for (root in roots) rootSet.set(root, true);
-			for (fn in program.functions) if (reachable.exists(fn.name))
-				for (block in fn.blocks) for (located in block.instructions) switch located.value {
-					case SafeCast(output, _): switch output.type {
-						case Function(_, _):
-							var name = closureAdapters.castName(output.type);
-							if (plannedFunctions.exists(name) && !rootSet.exists(name)) { roots.push(name); rootSet.set(name, true); changed = true; }
-						default:
-					}
-					default:
-				}
-			if (changed) reachable = IrReachability.withGeneratedRuntimeRoots(program, preferredEntry, roots);
+			if (fieldLowering.retainOriginals(reachable, roots))
+				changed = true;
+			if (scalarAbi.retainVirtualTargets(program, reachable, roots))
+				changed = true;
+			for (root in roots)
+				rootSet.set(root, true);
+			for (fn in program.functions)
+				if (reachable.exists(fn.name))
+					for (block in fn.blocks)
+						for (located in block.instructions)
+							switch located.value {
+								case SafeCast(output, _):
+									switch output.type {
+										case Function(_, _):
+											var name = closureAdapters.castName(output.type);
+											if (plannedFunctions.exists(name) && !rootSet.exists(name)) {
+												roots.push(name);
+												rootSet.set(name, true);
+												changed = true;
+											}
+										default:
+									}
+								default:
+							}
+			if (changed)
+				reachable = IrReachability.withGeneratedRuntimeRoots(program, preferredEntry, roots);
 		}
 		usedCNatives = WasmModuleSupport.reachableCNatives(program, reachable);
 		usedNatives = IrReachability.natives(program, reachable);
 		compiler.backend.wasm.WasmValueLaneRuntime.attach(program, reachable, usedNatives);
+		stringifiableEnums = usedNatives.exists("__std_string") ? WasmModuleSupport.stringifiableEnums(program, reachable) : [];
+		var enumStringDescriptors = new EnumStringDescriptors(program, stringifiableEnums, enumDeclarations);
 		layout = new WasmLayout(program, logicalProgram, module.runtimeTypeIds);
 		strings = [];
 		var nextData = memoryBase + WasmLayout.STRING_DATA_OFFSET;
@@ -243,7 +313,7 @@ class WasmLinearModuleBuilder {
 							}
 						default:
 					}
-		for (value in ["null", "true", "false", "Object"].concat(WasmLinearRuntime.dynamicStringConstants(program))
+		for (value in ["null", "true", "false", "Object"].concat(WasmLinearRuntime.dynamicStringConstants(program, enumStringDescriptors))
 			.concat(WasmLinearDynamicArrays.runtimeStrings(program)))
 			if (!strings.exists(value)) {
 				var bytes = WasmModuleSupport.stringBytes(value, module.runtimeTypeIds),
@@ -252,25 +322,31 @@ class WasmLinearModuleBuilder {
 				strings.set(value, offset);
 				nextData = WasmModuleSupport.align(offset + bytes.length, 8);
 			}
+		var enumStrings = WasmLinearEnumStringTable.place(module, enumStringDescriptors, layout, strings, nextData);
+		nextData = enumStrings.end;
 		var staticData = WasmModuleSupport.placeStaticData(program, module, nextData, reachable);
 		nextData = staticData.end;
 		staticDataAddresses = staticData.addresses;
 		staticClosureDescriptors = [];
 		staticClosureRecords = [];
-		for (fn in program.functions) if (reachable.exists(fn.name)) for (block in fn.blocks) for (located in block.instructions)
-			switch located.value {
-				case StaticClosure(output, name):
-					var key = WasmLinearClosureAdapters.staticDescriptorKey(name, output.type);
-					if (!staticClosureDescriptors.exists(key)) {
-						var offset = WasmModuleSupport.align(nextData, 8), bytes = haxe.io.Bytes.alloc(WasmLayout.STATIC_CLOSURE_SIZE);
-						bytes.setInt32(WasmLayout.STATIC_CLOSURE_SIGNATURE_OFFSET, closureAdapters.signatureId(output.type));
-						module.data.push({offset: offset, bytes: bytes, censusCategory: "closure descriptors"});
-						staticClosureDescriptors.set(key, offset);
-						staticClosureRecords.set(key, {name: name, bytes: bytes});
-						nextData = offset + WasmLayout.STATIC_CLOSURE_SIZE;
-					}
-				default:
-			}
+		for (fn in program.functions)
+			if (reachable.exists(fn.name))
+				for (block in fn.blocks)
+					for (located in block.instructions)
+						switch located.value {
+							case StaticClosure(output, name):
+								var key = WasmLinearClosureAdapters.staticDescriptorKey(name, output.type);
+								if (!staticClosureDescriptors.exists(key)) {
+									var offset = WasmModuleSupport.align(nextData, 8),
+										bytes = haxe.io.Bytes.alloc(WasmLayout.STATIC_CLOSURE_SIZE);
+									bytes.setInt32(WasmLayout.STATIC_CLOSURE_SIGNATURE_OFFSET, closureAdapters.signatureId(output.type));
+									module.data.push({offset: offset, bytes: bytes, censusCategory: "closure descriptors"});
+									staticClosureDescriptors.set(key, offset);
+									staticClosureRecords.set(key, {name: name, bytes: bytes});
+									nextData = offset + WasmLayout.STATIC_CLOSURE_SIZE;
+								}
+							default:
+						}
 		reflectionBytes = null;
 		reflectionTable = 0;
 		reflectionCount = 0;
@@ -345,6 +421,9 @@ class WasmLinearModuleBuilder {
 			reflectionBytes: reflectionBytes
 		};
 		linear = new WasmLinearContext(module, program, layout, options, linearState);
+		linear.enumStringDescriptors = enumStringDescriptors;
+		linear.enumStringTable = enumStrings.address;
+		linear.enumStringRows = enumStrings.count;
 		linear.pendingExceptionFlag = pendingExceptionFlag;
 		linear.pendingExceptionValue = pendingExceptionValue;
 	}
@@ -363,7 +442,9 @@ class WasmLinearModuleBuilder {
 		allocator = WasmLinearAllocator.build(linear);
 		functions.set("__haxeon_alloc", allocator);
 		WasmLinearRuntime.register(linear);
-		compiler.backend.wasm.WasmValueLaneRuntime.declare(module, functions, program, fn -> { return {parameters: [for (a in fn.arguments) WasmModuleSupport.requireValueType(a.type)], results: WasmModuleSupport.resultTypes(fn.result)}; });
+		compiler.backend.wasm.WasmValueLaneRuntime.declare(module, functions, program, fn -> {
+			return {parameters: [for (a in fn.arguments) WasmModuleSupport.requireValueType(a.type)], results: WasmModuleSupport.resultTypes(fn.result)};
+		});
 		WasmLinearValueArrays.register(linear, usedNatives);
 		functions.set("__haxeon_cstring_copy", WasmLinearRuntime.addCStringCopy(module, allocator));
 		WasmLinearArrays.registerNativeAllocators(linear);
@@ -426,7 +507,8 @@ class WasmLinearModuleBuilder {
 			for (method in object.methods)
 				methods.set(object.name + "." + method.name, method.functionName);
 		for (fn in program.functions) {
-			if (StringTools.startsWith(fn.name, compiler.ir.IrValueLaneRuntime.PREFIX) && functions.exists(fn.name)) continue;
+			if (StringTools.startsWith(fn.name, compiler.ir.IrValueLaneRuntime.PREFIX) && functions.exists(fn.name))
+				continue;
 			if (!reachable.exists(fn.name))
 				continue;
 			if (fn.name == "__entry" && preferredEntry != "__entry")
@@ -437,10 +519,13 @@ class WasmLinearModuleBuilder {
 					parameters.push(WasmModuleSupport.requireValueType(argument.type))
 				catch (error:Dynamic)
 					throw 'Wasm function ${fn.name} has an unsupported parameter type: $error';
-			var results:Array<WasmValueType> = [], signature = scalarAbi.signatures.get(fn.name);
+			var results:Array<WasmValueType> = [],
+				signature = scalarAbi.signatures.get(fn.name);
 			try
-				results = signature == null ? WasmModuleSupport.resultTypes(fn.result) :
-					[for (result in scalarAbi.resultTypes(signature)) WasmModuleSupport.requireValueType(result)]
+				results = signature == null ? WasmModuleSupport.resultTypes(fn.result) : [
+					for (result in scalarAbi.resultTypes(signature))
+						WasmModuleSupport.requireValueType(result)
+				]
 			catch (error:Dynamic)
 				throw 'Wasm function ${fn.name} has an unsupported result type: $error';
 			var type:WasmFunctionType = {parameters: parameters, results: results};
@@ -453,17 +538,18 @@ class WasmLinearModuleBuilder {
 		var cstringCopy = functions.get("__haxeon_cstring_copy");
 		if (cstringCopy == null)
 			throw "Linear Wasm C string copy helper is missing";
-		var linearRepresentation = new WasmLinearRepresentation(layout, allocator, bytesDataPointer, cstringCopy, scalarAbi, functions, null, null, staticClosureDescriptors, closureAdapters);
-		representation = new WasmRepresentationSet(linearRepresentation, linearRepresentation, null, linearRepresentation,
-			context -> {
-				var perFunction = new WasmLinearRepresentation(layout, allocator, bytesDataPointer, cstringCopy, scalarAbi, functions,
-					context.irFunction, context.allocateLocal, staticClosureDescriptors, closureAdapters);
-				return new WasmRepresentationSet(perFunction, perFunction, null, perFunction, null);
-			});
+		var linearRepresentation = new WasmLinearRepresentation(layout, allocator, bytesDataPointer, cstringCopy, scalarAbi, functions, null, null,
+			staticClosureDescriptors, closureAdapters);
+		representation = new WasmRepresentationSet(linearRepresentation, linearRepresentation, null, linearRepresentation, context -> {
+			var perFunction = new WasmLinearRepresentation(layout, allocator, bytesDataPointer, cstringCopy, scalarAbi, functions, context.irFunction,
+				context.allocateLocal, staticClosureDescriptors, closureAdapters);
+			return new WasmRepresentationSet(perFunction, perFunction, null, perFunction, null);
+		});
 		tableSlots = WasmModuleSupport.buildTableSlots(module, functions);
 		for (record in staticClosureRecords) {
 			var slot = tableSlots.get(record.name);
-			if (slot == null) throw 'Static closure target ${record.name} has no table slot';
+			if (slot == null)
+				throw 'Static closure target ${record.name} has no table slot';
 			record.bytes.setInt32(WasmLayout.STATIC_CLOSURE_FUNCTION_OFFSET, slot);
 		}
 		closureAdapters.defineSignatureQuery(module, functions);

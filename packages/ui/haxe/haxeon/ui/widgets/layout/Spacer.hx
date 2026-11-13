@@ -10,18 +10,18 @@ import haxeon.ui.core.View;
 
 /** Empty layout node that can consume available space on either axis. */
 class Spacer implements View {
-	final key:Key;
-	public final style:LayoutStyle;
+  final key:Key;
+  public final style:LayoutStyle;
 
-	public function new(key:String, ?width:LayoutAxis, ?height:LayoutAxis) {
-		this.key = new Key(key);
-		style = new LayoutStyle();
-		style.width = width == null ? LayoutAxis.grow() : width;
-		style.height = height == null ? LayoutAxis.grow() : height;
-	}
+  public function new(key:String, ?width:LayoutAxis, ?height:LayoutAxis) {
+    this.key = new Key(key);
+    style = new LayoutStyle();
+    style.width = width == null ? LayoutAxis.grow() : width;
+    style.height = height == null ? LayoutAxis.grow() : height;
+  }
 
-	public function build(context:BuildContext):RenderNode
-		return context.withScope(key, function() {
-			return new RenderNode(context.id("spacer"), LayoutVisualKind.Box, style);
-		});
+  public function build(context:BuildContext):RenderNode return context.withScope(key, function() {
+    return context.createNode(context.rootId("spacer"), LayoutVisualKind.Box, style);
+  }
+  );
 }

@@ -2,6 +2,7 @@ package compiler.backend.wasm.linear;
 
 import compiler.backend.Backend.BackendOptions;
 import compiler.backend.wasm.WasmLayout;
+import compiler.backend.wasm.EnumStringDescriptors;
 import compiler.backend.wasm.WasmModule.WasmModule;
 import compiler.ir.Ir.IrProgram;
 
@@ -52,6 +53,9 @@ class WasmLinearContext {
 	public final reflectionCount:Int;
 	public final reflectionBytes:Null<haxe.io.Bytes>;
 
+	public var enumStringDescriptors:Null<EnumStringDescriptors>;
+	public var enumStringTable:Int = 0;
+	public var enumStringRows:Int = 0;
 	public var markFunction:Int = -1;
 	public var traceFunction:Int = -1;
 	public var collectorFunction:Int = -1;

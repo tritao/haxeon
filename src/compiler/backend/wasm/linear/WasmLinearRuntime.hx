@@ -13,6 +13,7 @@ import compiler.backend.wasm.WasmModule.WasmModule;
 import compiler.backend.wasm.WasmFunctionBuilder.WasmFunctionBuilder;
 import compiler.backend.wasm.WasmFunctionBuilder.WasmLocalRef;
 import compiler.backend.wasm.WasmModuleSupport;
+import compiler.backend.wasm.EnumStringDescriptors;
 
 class WasmLinearRuntime {
 	/** Whether runtime errors throw a catchable Haxe exception; set per module by `register`. */
@@ -140,7 +141,8 @@ class WasmLinearRuntime {
 						case "__string_char_code_at":
 							functions.set(native.name, addStringCharCodeAt(module, native.name));
 						case "__string_concat":
-							functions.set(native.name, addStringConcat(module, native.name, allocator, requiredStringOffset(strings, "null")));
+							if (!functions.exists(native.name))
+								functions.set(native.name, addStringConcat(module, native.name, allocator, requiredStringOffset(strings, "null")));
 						case "__string_to_lower_case":
 							functions.set(native.name, addStringCase(module, native.name, allocator, true));
 						case "__string_to_upper_case":
@@ -176,6 +178,9 @@ class WasmLinearRuntime {
 						case "__reflect_is_object":
 							functions.set(native.name, addDynamicIsObject(module, native.name, program));
 						case "__std_string":
+							if ((context.enumStringDescriptors != null && context.enumStringDescriptors.hasPayload)
+								&& !functions.exists("__string_concat"))
+								functions.set("__string_concat", addStringConcat(module, "__string_concat", allocator, requiredStringOffset(strings, "null")));
 							var integerString = addIntToString(module, "__haxeon_i32_to_string", allocator),
 								int64String = addInt64ToString(module, "__haxeon_i64_to_string", allocator);
 							functions.set("__haxeon_i32_to_string", integerString);
@@ -184,13 +189,35 @@ class WasmLinearRuntime {
 						case "__dynamic_equal":
 							// Emitted after the native scan so the string helper has an index.
 						case "__dynamic_object_type_id":
-							var body:Array<WasmInstruction> = [LocalGet(0), I32Eqz, If(null), I32Const(0), Return, End,
-								LocalGet(0), I32Const(1), I32And, If(null), I32Const(0), Return, End];
+							var body:Array<WasmInstruction> = [
+								LocalGet(0),
+								I32Eqz,
+								If(null),
+								I32Const(0),
+								Return,
+								End,
+								LocalGet(0),
+								I32Const(1),
+								I32And,
+								If(null),
+								I32Const(0),
+								Return,
+								End
+							];
 							for (pair in module.runtimeTypeIds.remapped())
-								body = body.concat([LocalGet(0), I32Load(0), I32Const(pair.id), I32Eq, If(null), I32Const(pair.hash), Return, End]);
+								body = body.concat([
+									LocalGet(0),
+									I32Load(0),
+									I32Const(pair.id),
+									I32Eq,
+									If(null),
+									I32Const(pair.hash),
+									Return,
+									End
+								]);
 							body = body.concat([LocalGet(0), I32Load(0), Return]);
-							functions.set(native.name, module.addFunction(WasmFunctionBuilder.fromRaw(native.name,
-								{parameters: [I32], results: [I32]}, [], body)));
+							functions.set(native.name,
+								module.addFunction(WasmFunctionBuilder.fromRaw(native.name, {parameters: [I32], results: [I32]}, [], body)));
 						case "__std_is_of_type", "__std_is_exact_type", "__exception_matches":
 							functions.set(native.name, addTypeTest(module, native.name, program));
 						case "__array_copy_i32", "__array_copy_bool", "__array_copy_ref", "__array_copy_bytes":
@@ -308,15 +335,37 @@ class WasmLinearRuntime {
 			I32Const(0),
 			Return,
 			End,
-			LocalGet(0), I32Const(1), I32And,
-			LocalGet(1), I32Const(1), I32And, I32Or,
+			LocalGet(0),
+			I32Const(1),
+			I32And,
+			LocalGet(1),
+			I32Const(1),
+			I32And,
+			I32Or,
 			If(null),
-			LocalGet(0), I32Const(1), I32And,
-			LocalGet(1), I32Const(1), I32And, I32And, I32Eqz,
-			If(null), I32Const(0), Return, End,
-			LocalGet(0), I32Const(-2), I32And, I32Load(WasmLayout.STATIC_CLOSURE_FUNCTION_OFFSET),
-			LocalGet(1), I32Const(-2), I32And, I32Load(WasmLayout.STATIC_CLOSURE_FUNCTION_OFFSET),
-			I32Eq, Return, End,
+			LocalGet(0),
+			I32Const(1),
+			I32And,
+			LocalGet(1),
+			I32Const(1),
+			I32And,
+			I32And,
+			I32Eqz,
+			If(null),
+			I32Const(0),
+			Return,
+			End,
+			LocalGet(0),
+			I32Const(-2),
+			I32And,
+			I32Load(WasmLayout.STATIC_CLOSURE_FUNCTION_OFFSET),
+			LocalGet(1),
+			I32Const(-2),
+			I32And,
+			I32Load(WasmLayout.STATIC_CLOSURE_FUNCTION_OFFSET),
+			I32Eq,
+			Return,
+			End,
 			LocalGet(0),
 			I32Load(0),
 			I32Const(WasmLayout.CLOSURE_TYPE_ID),
@@ -351,10 +400,15 @@ class WasmLinearRuntime {
 		if (first == last) {
 			body.push(I32Const(0));
 		} else if (last - first == 1) {
-			body.push(LocalGet(1)); body.push(I32Const(ids[first])); body.push(I32Eq);
+			body.push(LocalGet(1));
+			body.push(I32Const(ids[first]));
+			body.push(I32Eq);
 		} else {
 			var middle = first + ((last - first) >> 1);
-			body.push(LocalGet(1)); body.push(I32Const(ids[middle])); body.push(I32LtS); body.push(If(I32));
+			body.push(LocalGet(1));
+			body.push(I32Const(ids[middle]));
+			body.push(I32LtS);
+			body.push(If(I32));
 			appendEnumKindCheck(body, ids, first, middle);
 			body.push(Else);
 			appendEnumKindCheck(body, ids, middle, last);
@@ -363,22 +417,34 @@ class WasmLinearRuntime {
 	}
 
 	/** Lower the stable haxeon_runtime symbol names used by generated HXI and stdlib code. */
-	static function addRuntimeNativeFunction(module:WasmModule, native:compiler.ir.Ir.IrNative, allocator:Int, bytesDataPointer:Int,
-			outputReserve:Int, program:IrProgram):Null<Int> {
+	static function addRuntimeNativeFunction(module:WasmModule, native:compiler.ir.Ir.IrNative, allocator:Int, bytesDataPointer:Int, outputReserve:Int,
+			program:IrProgram):Null<Int> {
 		return switch native.symbol {
 			case "__reflect_is_enum":
-				if (native.arguments.length != 1 || !compiler.ir.IrVerifier.sameType(native.arguments[0], Dyn) || !compiler.ir.IrVerifier.sameType(native.result, Bool))
+				if (native.arguments.length != 1
+					|| !compiler.ir.IrVerifier.sameType(native.arguments[0], Dyn)
+					|| !compiler.ir.IrVerifier.sameType(native.result, Bool))
 					throw "Invalid Wasm32 enum kind query signature";
 				var ids = [for (declaration in program.enums) module.runtimeTypeId(Enum(declaration.name))];
 				ids.sort((left, right) -> left < right ? -1 : left > right ? 1 : 0);
 				var body:Array<WasmInstruction> = ids.length == 0 ? [] : [
-					LocalGet(0), I32Eqz, LocalGet(0), I32Const(1), I32And, I32Or,
-					If(null), I32Const(0), Return, End,
-					LocalGet(0), I32Load(0), LocalSet(1)
+					LocalGet(0),
+					I32Eqz,
+					LocalGet(0),
+					I32Const(1),
+					I32And,
+					I32Or,
+					If(null),
+					I32Const(0),
+					Return,
+					End,
+					LocalGet(0),
+					I32Load(0),
+					LocalSet(1)
 				];
 				appendEnumKindCheck(body, ids, 0, ids.length);
 				body.push(Return);
-				module.addFunction(WasmFunctionBuilder.fromRaw(native.name, {parameters: [I32], results: [I32]}, ids.length == 0 ? [] : [{type:I32}], body));
+				module.addFunction(WasmFunctionBuilder.fromRaw(native.name, {parameters: [I32], results: [I32]}, ids.length == 0 ? [] : [{type: I32}], body));
 			case "__reflect_is_function": module.addFunction(WasmFunctionBuilder.fromRaw(native.name, {parameters: [I32], results: [I32]}, [], [
 					LocalGet(0),
 					I32Eqz,
@@ -412,13 +478,43 @@ class WasmLinearRuntime {
 					Return
 				]));
 			case "__closure_receiver_if_match": module.addFunction(WasmFunctionBuilder.fromRaw(native.name, {parameters: [I32, I32], results: [I32]}, [], [
-					LocalGet(0), I32Eqz, If(null), I32Const(0), Return, End,
-					LocalGet(0), I32Const(1), I32And, If(null), I32Const(0), Return, End,
-					LocalGet(0), I32Load(0), I32Const(WasmLayout.CLOSURE_TYPE_ID), I32Eq, I32Eqz, If(null), I32Const(0), Return, End,
-					LocalGet(0), I32Load(WasmLayout.CLOSURE_FUNCTION_OFFSET), LocalGet(1), I32Const(-2), I32And,
-					I32Load(WasmLayout.STATIC_CLOSURE_FUNCTION_OFFSET), I32Eq, I32Eqz,
-					If(null), I32Const(0), Return, End,
-					LocalGet(0), I32Load(WasmLayout.CLOSURE_RECEIVER_OFFSET), Return
+					LocalGet(0),
+					I32Eqz,
+					If(null),
+					I32Const(0),
+					Return,
+					End,
+					LocalGet(0),
+					I32Const(1),
+					I32And,
+					If(null),
+					I32Const(0),
+					Return,
+					End,
+					LocalGet(0),
+					I32Load(0),
+					I32Const(WasmLayout.CLOSURE_TYPE_ID),
+					I32Eq,
+					I32Eqz,
+					If(null),
+					I32Const(0),
+					Return,
+					End,
+					LocalGet(0),
+					I32Load(WasmLayout.CLOSURE_FUNCTION_OFFSET),
+					LocalGet(1),
+					I32Const(-2),
+					I32And,
+					I32Load(WasmLayout.STATIC_CLOSURE_FUNCTION_OFFSET),
+					I32Eq,
+					I32Eqz,
+					If(null),
+					I32Const(0),
+					Return,
+					End,
+					LocalGet(0),
+					I32Load(WasmLayout.CLOSURE_RECEIVER_OFFSET),
+					Return
 				]));
 			case "fun_compare": addCompareMethods(module, native.name);
 			case "__math_is_finite", "__math_pow", "__math_cos", "__math_sin", "__math_tan", "__math_atan2", "__math_round", "__math_exp", "__math_log",
@@ -873,7 +969,6 @@ class WasmLinearRuntime {
 		builder.ifElse(function(builder) {
 			emitCombineI32(builder, byteLocals, [24, 16, 8, 0]);
 			builder.localSet(result);
-
 		}, function(builder) {
 			emitCombineI32(builder, byteLocals, [0, 8, 16, 24]);
 			builder.localSet(result);
@@ -2065,10 +2160,22 @@ class WasmLinearRuntime {
 			"_bytes")) Bytes; else if (StringTools.endsWith(mapName, "_ref")) Dyn; else throw 'Unknown Wasm map value ABI "$mapName"';
 
 	public static function mapEntrySize(valueType:IrType):Int
-		return (switch (valueType) { case F64: true; default: false; }) || (switch (valueType) { case I64: true; default: false; }) ? 16 : 8;
+		return (switch (valueType) {
+			case F64: true;
+			default: false;
+		}) || (switch (valueType) {
+			case I64: true;
+			default: false;
+		}) ? 16 : 8;
 
 	public static function mapValueOffset(valueType:IrType):Int
-		return (switch (valueType) { case F64: true; default: false; }) || (switch (valueType) { case I64: true; default: false; }) ? 8 : 4;
+		return (switch (valueType) {
+			case F64: true;
+			default: false;
+		}) || (switch (valueType) {
+			case I64: true;
+			default: false;
+		}) ? 8 : 4;
 
 	static function ensureStringEqual(module:WasmModule, functions:Map<String, Int>):Int {
 		var result = functions.get("__string_equal");
@@ -2090,11 +2197,21 @@ class WasmLinearRuntime {
 	}
 
 	static function ensureMapArrayAllocator(module:WasmModule, functions:Map<String, Int>, allocator:Int, valueType:IrType):Int {
-		var suffix = (switch (valueType) { case F64: true; default: false; }) ? "f64" : (switch (valueType) { case I64: true; default: false; }) ? "i64" : "i32",
-			name = "__array_alloc_" + suffix,
-			result = functions.get(name);
+		var suffix = (switch (valueType) {
+			case F64: true;
+			default: false;
+		}) ? "f64" : (switch (valueType) {
+			case I64: true;
+			default: false;
+		}) ? "i64" : "i32", name = "__array_alloc_" + suffix, result = functions.get(name);
 		if (result == null) {
-			result = WasmLinearArrays.addArrayAllocator(module, name, (switch (valueType) { case F64: true; default: false; }) || (switch (valueType) { case I64: true; default: false; }) ? 8 : 4, allocator);
+			result = WasmLinearArrays.addArrayAllocator(module, name, (switch (valueType) {
+				case F64: true;
+				default: false;
+			}) || (switch (valueType) {
+				case I64: true;
+				default: false;
+			}) ? 8 : 4, allocator);
 			functions.set(name, result);
 		}
 		return result;
@@ -2103,7 +2220,10 @@ class WasmLinearRuntime {
 	static function addMapRuntimeFunction(module:WasmModule, functions:Map<String, Int>, name:String, mapName:String, operation:String, allocator:Int):Int {
 		var keyType = mapKeyType(mapName),
 			valueType = mapValueType(mapName),
-			stringEqual = (switch (keyType) { case Bytes: true; default: false; }) ? ensureStringEqual(module, functions) : 0;
+			stringEqual = (switch (keyType) {
+				case Bytes: true;
+				default: false;
+			}) ? ensureStringEqual(module, functions) : 0;
 		var entrySize = mapEntrySize(valueType),
 			valueOffset = mapValueOffset(valueType);
 		return switch operation {
@@ -2170,13 +2290,28 @@ class WasmLinearRuntime {
 			body.push(instruction);
 
 	static function mapKeyCompare(keyType:IrType, stringEqual:Int):Array<WasmInstruction>
-		return (switch (keyType) { case Bytes: true; default: false; }) ? [LocalGet(1), Call(stringEqual),] : [LocalGet(1), I32Eq];
+		return (switch (keyType) {
+			case Bytes: true;
+			default: false;
+		}) ? [LocalGet(1), Call(stringEqual),] : [LocalGet(1), I32Eq];
 
 	static function loadMapValue(type:IrType, offset:Int):WasmInstruction
-		return (switch (type) { case F64: true; default: false; }) ? F64Load(offset) : (switch (type) { case I64: true; default: false; }) ? I64Load(offset) : I32Load(offset);
+		return (switch (type) {
+			case F64: true;
+			default: false;
+		}) ? F64Load(offset) : (switch (type) {
+			case I64: true;
+			default: false;
+		}) ? I64Load(offset) : I32Load(offset);
 
 	static function storeMapValue(type:IrType, offset:Int):WasmInstruction
-		return (switch (type) { case F64: true; default: false; }) ? F64Store(offset) : (switch (type) { case I64: true; default: false; }) ? I64Store(offset) : I32Store(offset);
+		return (switch (type) {
+			case F64: true;
+			default: false;
+		}) ? F64Store(offset) : (switch (type) {
+			case I64: true;
+			default: false;
+		}) ? I64Store(offset) : I32Store(offset);
 
 	static function addMapFind(module:WasmModule, name:String, keyType:IrType, valueType:IrType, stringEqual:Int):Int {
 		var entrySize = mapEntrySize(valueType),
@@ -2204,7 +2339,10 @@ class WasmLinearRuntime {
 					builder.i32Add();
 					builder.emit(I32Load(0));
 					builder.localGet(key);
-					if ((switch (keyType) { case Bytes: true; default: false; }))
+					if ((switch (keyType) {
+						case Bytes: true;
+						default: false;
+					}))
 						builder.call(builder.functionRef(stringEqual));
 					else
 						builder.emit(I32Eq);
@@ -2264,7 +2402,10 @@ class WasmLinearRuntime {
 					builder.i32Add();
 					builder.emit(I32Load(0));
 					builder.localGet(key);
-					if ((switch (keyType) { case Bytes: true; default: false; }))
+					if ((switch (keyType) {
+						case Bytes: true;
+						default: false;
+					}))
 						builder.call(builder.functionRef(stringEqual));
 					else
 						builder.emit(I32Eq);
@@ -2385,7 +2526,13 @@ class WasmLinearRuntime {
 			builder.localGet(map);
 			builder.emit(I32Load(WasmLayout.MAP_ENTRIES_OFFSET));
 			builder.localSet(entries);
-			if ((switch (valueType) { case I32: true; default: false; }) || (switch (valueType) { case Bool: true; default: false; })) {
+			if ((switch (valueType) {
+				case I32: true;
+				default: false;
+			}) || (switch (valueType) {
+				case Bool: true;
+				default: false;
+			})) {
 				builder.i32Const(WasmLayout.DYN_I32_SIZE);
 				builder.call(builder.functionRef(allocator));
 				builder.localSet(result);
@@ -2400,7 +2547,10 @@ class WasmLinearRuntime {
 				builder.i32Add();
 				builder.emit(I32Load(valueOffset));
 				builder.emit(I32Store(WasmLayout.DYN_PAYLOAD_OFFSET));
-			} else if ((switch (valueType) { case F64: true; default: false; })) {
+			} else if ((switch (valueType) {
+				case F64: true;
+				default: false;
+			})) {
 				builder.i32Const(WasmLayout.DYN_F64_SIZE);
 				builder.call(builder.functionRef(allocator));
 				builder.localSet(result);
@@ -2415,7 +2565,10 @@ class WasmLinearRuntime {
 				builder.i32Add();
 				builder.emit(F64Load(valueOffset));
 				builder.emit(F64Store(WasmLayout.DYN_PAYLOAD_OFFSET));
-			} else if ((switch (valueType) { case I64: true; default: false; })) {
+			} else if ((switch (valueType) {
+				case I64: true;
+				default: false;
+			})) {
 				builder.i32Const(WasmLayout.DYN_I64_SIZE);
 				builder.call(builder.functionRef(allocator));
 				builder.localSet(result);
@@ -2732,29 +2885,46 @@ class WasmLinearRuntime {
 			builder.localSet(result);
 		}, function(builder) {
 			// Static closures are tagged table slots, not heap headers.
-			builder.localGet(value); builder.i32Const(1); builder.emit(I32And);
-			builder.if_(function(builder) { builder.i32Const(0); builder.return_(); });
+			builder.localGet(value);
+			builder.i32Const(1);
+			builder.emit(I32And);
+			builder.if_(function(builder) {
+				builder.i32Const(0);
+				builder.return_();
+			});
 			builder.localGet(value);
 			builder.emit(I32Load(0));
 			builder.localGet(typeId);
 			builder.emit(I32Eq);
 			builder.localSet(result);
 			var iteratorTypes:Map<String, Bool> = [];
-			for (fn in program.functions) for (block in fn.blocks) for (located in block.instructions) switch located.value {
-				case TypeValue(_, type): switch type {
-					case Iterator(_) if (!iteratorTypes.exists(Std.string(type))):
-						iteratorTypes.set(Std.string(type), true);
-						builder.localGet(typeId); builder.i32Const(module.runtimeTypeId(type)); builder.emit(I32Eq);
-						builder.if_(function(builder) {
-							builder.localGet(value); builder.emit(I32Load(0)); builder.i32Const(module.runtimeTypeId(Abstract("realtime_iterator")));
-							builder.emit(I32Eq);
-							builder.localGet(value); builder.emit(I32Load(WasmLayout.ITERATOR_TYPE_OFFSET)); builder.localGet(typeId);
-							builder.emit(I32Eq); builder.emit(I32And); builder.localSet(result);
-						});
-					default:
-				}
-				default:
-			}
+			for (fn in program.functions)
+				for (block in fn.blocks)
+					for (located in block.instructions)
+						switch located.value {
+							case TypeValue(_, type):
+								switch type {
+									case Iterator(_) if (!iteratorTypes.exists(Std.string(type))):
+										iteratorTypes.set(Std.string(type), true);
+										builder.localGet(typeId);
+										builder.i32Const(module.runtimeTypeId(type));
+										builder.emit(I32Eq);
+										builder.if_(function(builder) {
+											builder.localGet(value);
+											builder.emit(I32Load(0));
+											builder.i32Const(module.runtimeTypeId(Abstract("realtime_iterator")));
+											builder.emit(I32Eq);
+											builder.localGet(value);
+											builder.emit(I32Load(WasmLayout.ITERATOR_TYPE_OFFSET));
+											builder.localGet(typeId);
+											builder.emit(I32Eq);
+											builder.emit(I32And);
+											builder.localSet(result);
+										});
+									default:
+								}
+							default:
+						}
 			if (name != "__std_is_exact_type")
 				for (object in program.objects) {
 					var accepted = [module.runtimeTypeId(Obj(object.name))];
@@ -3904,7 +4074,7 @@ class WasmLinearRuntime {
 	}
 
 	static function dynamicString(module:WasmModule, name:String, strings:Map<String, Int>, program:IrProgram, integerString:Int, int64String:Int,
-			?floatString:Int, ?functions:Map<String, Int>):WasmFunction {
+			?floatString:Int, ?functions:Map<String, Int>, ?enumTable:Int = 0, ?enumRows:Int = 0, ?enumPayloads:Bool = false):WasmFunction {
 		var nullString = requiredStringOffset(strings, "null"),
 			objectString = requiredStringOffset(strings, "Object"),
 			trueString = requiredStringOffset(strings, "true"),
@@ -3944,6 +4114,19 @@ class WasmLinearRuntime {
 				builder.return_();
 			});
 		}
+		// Enum payload recursion must retain Std.string's array behavior too.
+		var arrayString = functions == null ? null : functions.get("Std.arrayString");
+		if (arrayString != null) {
+			builder.localGet(value);
+			builder.emit(I32Load(0));
+			builder.i32Const(module.runtimeTypeId(Array(Dyn)));
+			builder.emit(I32Eq);
+			builder.if_(function(builder) {
+				builder.localGet(value);
+				builder.call(builder.functionRef(arrayString));
+				builder.return_();
+			});
+		}
 		// Objects print through their class's toString, or their class name without one, as on HL.
 		// Method indices exist only after user functions are declared (finalizeDynamicString).
 		for (object in program.objects) {
@@ -3976,26 +4159,8 @@ class WasmLinearRuntime {
 			}, I32);
 			builder.return_();
 		});
-		// Parameterless enum constructors print their name, as on HL and Wasm GC.
-		for (enumDecl in program.enums) {
-			builder.localGet(value);
-			builder.emit(I32Load(0));
-			builder.i32Const(module.runtimeTypeId(Enum(enumDecl.name)));
-			builder.emit(I32Eq);
-			builder.if_(function(builder) {
-				for (index in 0...enumDecl.cases.length)
-					if (enumDecl.cases[index].params.length == 0) {
-						builder.localGet(value);
-						builder.emit(I32Load(WasmLayout.HEADER_SIZE));
-						builder.i32Const(index);
-						builder.emit(I32Eq);
-						builder.if_(function(builder) {
-							builder.i32Const(requiredStringOffset(strings, enumDecl.cases[index].name));
-							builder.return_();
-						});
-					}
-			});
-		}
+		if (enumRows > 0 && functions != null)
+			emitEnumString(builder, value, enumTable, enumRows, strings, integerString, int64String, floatString, functions, enumPayloads);
 		// Keep dynamic object stringification total. Some objects can arrive
 		// through generated/native boundaries without appearing in the program's
 		// concrete object table; they still follow the standard "Object" fallback.
@@ -4008,14 +4173,218 @@ class WasmLinearRuntime {
 	 * Complete dynamic stringification after user functions have been assigned
 	 * Wasm indices, allowing the runtime helper to call the shared Ryu formatter.
 	 */
-	/** Static strings dynamic stringification returns: class names and parameterless enum constructor names. */
-	public static function dynamicStringConstants(program:IrProgram):Array<String> {
+	/** Scan static constructor and field descriptors using one formatter for every enum. */
+	static function emitEnumString(builder:WasmFunctionBuilder, value:WasmLocalRef, table:Int, rows:Int, strings:Map<String, Int>, integerString:Int,
+			int64String:Int, floatString:Null<Int>, functions:Map<String, Int>, hasPayloads:Bool):Void {
+		var concat = functions.get("__string_concat"),
+			recursive = functions.get("__std_string");
+		var row = builder.local("enumRow", I32),
+			cursor = builder.local("enumCursor", I32),
+			field = builder.local("enumField", I32),
+			count = builder.local("enumCount", I32),
+			kind = builder.local("enumKind", I32),
+			address = builder.local("enumAddress", I32),
+			result = builder.local("enumResult", I32),
+			part = builder.local("enumPart", I32),
+			tag = builder.local("enumTag", I32);
+		builder.i32Const(table);
+		builder.localSet(row);
+		builder.i32Const(rows);
+		builder.localSet(count);
+		builder.block(b -> b.loop(b -> {
+			b.localGet(count);
+			b.i32Eqz();
+			b.emit(BrIf(1));
+			b.localGet(row);
+			b.emit(I32Load(0));
+			b.localGet(value);
+			b.emit(I32Load(0));
+			b.emit(I32Eq);
+			b.localGet(value);
+			b.emit(I32Load(WasmLayout.HEADER_SIZE));
+			b.localSet(tag);
+			b.localGet(tag);
+			b.i32Const(0);
+			b.emit(I32LtS);
+			b.i32Eqz();
+			b.emit(I32And);
+			b.localGet(tag);
+			b.localGet(row);
+			b.emit(I32Load(4));
+			b.emit(I32LtS);
+			b.emit(I32And);
+			b.if_(b -> {
+				b.localGet(row);
+				b.emit(I32Load(8));
+				b.localGet(tag);
+				b.i32Const(8);
+				b.emit(I32Mul);
+				b.i32Add();
+				b.localSet(cursor);
+				b.localGet(cursor);
+				b.emit(I32Load(0));
+				b.localSet(result);
+				b.localGet(cursor);
+				b.emit(I32Load(4));
+				b.localSet(cursor);
+				b.localGet(cursor);
+				b.i32Eqz();
+				b.if_(b -> {
+					b.localGet(result);
+					b.return_();
+				});
+				if (!hasPayloads || concat == null || recursive == null) {
+					b.emit(Unreachable);
+					return;
+				}
+				b.localGet(cursor);
+				b.emit(I32Load(0));
+				b.localSet(count);
+				b.localGet(cursor);
+				b.i32Const(4);
+				b.i32Add();
+				b.localSet(cursor);
+				b.i32Const(0);
+				b.localSet(field);
+				b.block(b -> b.loop(b -> {
+					b.localGet(field);
+					b.localGet(count);
+					b.emit(I32LtS);
+					b.i32Eqz();
+					b.emit(BrIf(1));
+					b.localGet(field);
+					b.if_(b -> {
+						b.localGet(result);
+						b.i32Const(requiredStringOffset(strings, ","));
+						b.call(b.functionRef(concat));
+						b.localSet(result);
+					});
+					b.localGet(cursor);
+					b.emit(I32Load(0));
+					b.localGet(value);
+					b.i32Add();
+					b.localSet(address);
+					b.localGet(cursor);
+					b.emit(I32Load(4));
+					b.localSet(kind);
+					b.localGet(kind);
+					b.i32Const(EnumStringDescriptors.REFERENCE);
+					b.emit(I32Eq);
+					b.if_(b -> {
+						b.localGet(address);
+						b.emit(I32Load(0));
+						b.call(b.functionRef(recursive));
+						b.localSet(part);
+					});
+					b.localGet(kind);
+					b.i32Const(EnumStringDescriptors.INTEGER);
+					b.emit(I32Eq);
+					b.if_(b -> {
+						b.localGet(address);
+						b.emit(I32Load(0));
+						b.call(b.functionRef(integerString));
+						b.localSet(part);
+					});
+					b.localGet(kind);
+					b.i32Const(EnumStringDescriptors.BOOLEAN);
+					b.emit(I32Eq);
+					b.if_(b -> {
+						b.localGet(address);
+						b.emit(I32Load(0));
+						b.ifElse(b -> b.i32Const(requiredStringOffset(strings, "true")), b -> b.i32Const(requiredStringOffset(strings, "false")), I32);
+						b.localSet(part);
+					});
+					b.localGet(kind);
+					b.i32Const(EnumStringDescriptors.INTEGER64);
+					b.emit(I32Eq);
+					b.if_(b -> {
+						b.localGet(address);
+						b.emit(I64Load(0));
+						b.call(b.functionRef(int64String));
+						b.localSet(part);
+					});
+					b.localGet(kind);
+					b.i32Const(EnumStringDescriptors.FLOAT);
+					b.emit(I32Eq);
+					b.if_(b -> {
+						if (floatString == null)
+							b.emit(Unreachable);
+						else {
+							b.localGet(address);
+							b.emit(F64Load(0));
+							b.call(b.functionRef(floatString));
+							b.localSet(part);
+						}
+					});
+					b.localGet(kind);
+					b.i32Const(EnumStringDescriptors.TAG);
+					b.emit(I32Eq);
+					b.if_(b -> {
+						b.i32Const(requiredStringOffset(strings, "null"));
+						b.localSet(part);
+						b.localGet(address);
+						b.emit(I32Load(0));
+						b.localSet(tag);
+						b.localGet(tag);
+						b.i32Const(1);
+						b.emit(I32LtS);
+						b.i32Eqz();
+						b.localGet(tag);
+						b.localGet(cursor);
+						b.emit(I32Load(8));
+						b.emit(I32Load(0));
+						b.emit(I32LeS);
+						b.emit(I32And);
+						b.if_(b -> {
+							b.localGet(cursor);
+							b.emit(I32Load(8));
+							b.localGet(tag);
+							b.i32Const(4);
+							b.emit(I32Mul);
+							b.i32Add();
+							b.emit(I32Load(0));
+							b.localSet(part);
+						});
+					});
+					b.localGet(result);
+					b.localGet(part);
+					b.call(b.functionRef(concat));
+					b.localSet(result);
+					b.localGet(cursor);
+					b.i32Const(12);
+					b.i32Add();
+					b.localSet(cursor);
+					b.localGet(field);
+					b.i32Const(1);
+					b.i32Add();
+					b.localSet(field);
+					b.emit(Br(0));
+				}));
+				b.localGet(result);
+				b.i32Const(requiredStringOffset(strings, ")"));
+				b.call(b.functionRef(concat));
+				b.return_();
+			});
+			b.localGet(row);
+			b.i32Const(12);
+			b.i32Add();
+			b.localSet(row);
+			b.localGet(count);
+			b.i32Const(1);
+			b.i32Sub();
+			b.localSet(count);
+			b.emit(Br(0));
+		}));
+	}
+
+	/** Static strings used by object and enum dynamic stringification. */
+	public static function dynamicStringConstants(program:IrProgram, descriptors:EnumStringDescriptors):Array<String> {
 		var result:Array<String> = [for (object in program.objects) object.name];
-		for (enumDecl in program.enums)
-			for (constructor in enumDecl.cases)
-				if (constructor.params.length == 0)
-					result.push(constructor.name);
-		return result;
+		if (descriptors.hasPayload) {
+			result.push(",");
+			result.push(")");
+		}
+		return result.concat(descriptors.names());
 	}
 
 	public static function finalizeDynamicString(context:WasmLinearContext):Void {
@@ -4027,8 +4396,10 @@ class WasmLinearRuntime {
 			int64String = context.functions.get("__haxeon_i64_to_string");
 		if (integerString == null || int64String == null)
 			throw "Dynamic string numeric formatters were not registered";
-		context.module.setFunction(dynamicString, WasmLinearRuntime.dynamicString(context.module, "__std_string", context.strings, context.program,
-			integerString, int64String, floatString, context.functions));
+		context.module.setFunction(dynamicString,
+			WasmLinearRuntime.dynamicString(context.module, "__std_string", context.strings, context.program, integerString, int64String, floatString,
+				context.functions, context.enumStringTable, context.enumStringRows,
+				(context.enumStringDescriptors != null && context.enumStringDescriptors.hasPayload)));
 	}
 
 	public static function addStringEqual(module:WasmModule, name:String):Int {
@@ -4223,15 +4594,36 @@ class WasmLinearRuntime {
 			leftType = builder.local("leftType", I32),
 			rightType = builder.local("rightType", I32);
 		// Static closures are tagged addresses of immutable descriptors, not heap objects.
-		builder.localGet(left); builder.i32Const(1); builder.emit(I32And);
-		builder.localGet(right); builder.i32Const(1); builder.emit(I32And); builder.emit(I32Or);
+		builder.localGet(left);
+		builder.i32Const(1);
+		builder.emit(I32And);
+		builder.localGet(right);
+		builder.i32Const(1);
+		builder.emit(I32And);
+		builder.emit(I32Or);
 		builder.if_(function(builder) {
-			builder.localGet(left); builder.i32Const(1); builder.emit(I32And);
-			builder.localGet(right); builder.i32Const(1); builder.emit(I32And); builder.emit(I32And);
-			builder.i32Eqz(); builder.if_(function(builder) { builder.i32Const(0); builder.return_(); });
-			builder.localGet(left); builder.i32Const(-2); builder.emit(I32And); builder.emit(I32Load(WasmLayout.STATIC_CLOSURE_FUNCTION_OFFSET));
-			builder.localGet(right); builder.i32Const(-2); builder.emit(I32And); builder.emit(I32Load(WasmLayout.STATIC_CLOSURE_FUNCTION_OFFSET));
-			builder.emit(I32Eq); builder.return_();
+			builder.localGet(left);
+			builder.i32Const(1);
+			builder.emit(I32And);
+			builder.localGet(right);
+			builder.i32Const(1);
+			builder.emit(I32And);
+			builder.emit(I32And);
+			builder.i32Eqz();
+			builder.if_(function(builder) {
+				builder.i32Const(0);
+				builder.return_();
+			});
+			builder.localGet(left);
+			builder.i32Const(-2);
+			builder.emit(I32And);
+			builder.emit(I32Load(WasmLayout.STATIC_CLOSURE_FUNCTION_OFFSET));
+			builder.localGet(right);
+			builder.i32Const(-2);
+			builder.emit(I32And);
+			builder.emit(I32Load(WasmLayout.STATIC_CLOSURE_FUNCTION_OFFSET));
+			builder.emit(I32Eq);
+			builder.return_();
 		});
 		builder.i32Const(0);
 		builder.localSet(result);
@@ -4362,8 +4754,8 @@ class WasmLinearRuntime {
 	}
 
 	/** Two values of the same enum are equal when they are the same constructor and it takes no arguments. */
-	static function appendNullaryEnumEqual(module:WasmModule, builder:WasmFunctionBuilder, program:IrProgram, left:WasmLocalRef, right:WasmLocalRef, leftType:WasmLocalRef,
-			result:WasmLocalRef):Void {
+	static function appendNullaryEnumEqual(module:WasmModule, builder:WasmFunctionBuilder, program:IrProgram, left:WasmLocalRef, right:WasmLocalRef,
+			leftType:WasmLocalRef, result:WasmLocalRef):Void {
 		for (enumDecl in program.enums) {
 			var nullary = [
 				for (index in 0...enumDecl.cases.length)
@@ -4395,8 +4787,8 @@ class WasmLinearRuntime {
 		}
 	}
 
-	static function appendMixedNumberEqual(module:WasmModule, builder:WasmFunctionBuilder, left:WasmLocalRef, right:WasmLocalRef, leftType:WasmLocalRef, rightType:WasmLocalRef,
-			result:WasmLocalRef):Void {
+	static function appendMixedNumberEqual(module:WasmModule, builder:WasmFunctionBuilder, left:WasmLocalRef, right:WasmLocalRef, leftType:WasmLocalRef,
+			rightType:WasmLocalRef, result:WasmLocalRef):Void {
 		for (intOnLeft in [true, false]) {
 			builder.localGet(leftType);
 			builder.i32Const(module.runtimeTypeId(intOnLeft ? I32 : F64));
@@ -4433,5 +4825,8 @@ class WasmLinearRuntime {
 	}
 
 	static function resultTypes(type:IrType):Array<WasmValueType>
-		return (switch (type) { case Void: true; default: false; }) ? [] : [WasmModuleSupport.requireValueType(type)];
+		return (switch (type) {
+			case Void: true;
+			default: false;
+		}) ? [] : [WasmModuleSupport.requireValueType(type)];
 }

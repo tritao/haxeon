@@ -32,6 +32,7 @@ class CompilationContext {
 
 	public final graph:ModuleGraph;
 	public final objectCache:Map<String, IrObject>;
+	public final canonicalObjectCache:Map<String, IrObject>;
 	public final moduleId:Bytes;
 	public final genericSpecializations:GenericSpecializationRegistry;
 
@@ -65,6 +66,7 @@ class CompilationContext {
 		modules = owner.modules;
 		graph = owner.graph;
 		objectCache = owner.objectCache;
+		canonicalObjectCache = owner.canonicalObjectCache;
 		moduleId = owner.moduleId;
 		genericSpecializations = owner.genericSpecializations;
 		rootModules = owner.rootModules;

@@ -138,6 +138,30 @@ class ConditionalCompilation {
 		return {text: output.toString(), defines: names};
 	}
 
+	/** Byte extent of one directive, including an inline condition but excluding following Haxe code. */
+	public static function directiveEnd(file:SourceFile, offset:Int):Int {
+		var source = file.bytes;
+		if (offset >= source.length || source.get(offset) != "#".code)
+			return offset;
+		var nameEnd = offset + 1;
+		while (nameEnd < source.length && isDirectiveLetter(source.get(nameEnd)))
+			nameEnd++;
+		var name = file.slice(offset + 1, nameEnd);
+		if (name == "else" || name == "end")
+			return nameEnd;
+		if (name == "error")
+			return findLineEnd(source, nameEnd);
+		if (name != "if" && name != "elseif")
+			return offset;
+		var expression = file.slice(nameEnd, findLineEnd(source, nameEnd)),
+			parser = new DefineExpression(expression, [], [], file, nameEnd);
+		parser.parsePrefix();
+		var end = nameEnd + haxe.io.Bytes.ofString(expression.substring(0, parser.consumed())).length;
+		while (end > nameEnd && (source.get(end - 1) == " ".code || source.get(end - 1) == "\t".code || source.get(end - 1) == "\r".code))
+			end--;
+		return end;
+	}
+
 	static function isDirectiveLetter(code:Int):Bool
 		return code >= "a".code && code <= "z".code || code >= "A".code && code <= "Z".code;
 

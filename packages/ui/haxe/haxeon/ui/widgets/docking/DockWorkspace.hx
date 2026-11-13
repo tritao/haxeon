@@ -43,784 +43,1021 @@ import haxeon.ui.theme.TextRole;
 
 /** Renders a DockWorkspaceModel using split panes, tab groups, and lazy panels. */
 class DockWorkspace implements View {
-	public static inline final DividerExtent = 8.0;
-	public static inline final MinimumHorizontalExtent = 190.0;
-	public final key:String;
-	public final model:DockWorkspaceModel;
-	public var interaction(default, null):DockWorkspaceInteraction;
-	public final style:LayoutStyle;
-	/** Available content height when the workspace sits below application chrome. */
-	public var availableHeight:Null<Float> = null;
-	/** Available content width when the workspace sits beside application chrome. */
-	public var availableWidth:Null<Float> = null;
-	/** Optional fixed actions for a dock tab group, including single dock headers. */
-	public var headerActions:Null<Array<String>->String->Null<View>> = null;
-	/** Application-owned action state included in retained pane keys. */
-	public var headerActionsRevision:String = "";
-	/** Expand a matching group vertically without changing the persisted dock tree. */
-	public var expandedGroup:Null<Array<String>> = null;
-	/** Presentation-only suppression; preserves the model, split paths and saved layout. */
-	public var hiddenPanels:Array<String> = [];
-	final suppliedInteraction:Bool;
-	final panelContents:Map<String, DockPanelContent>;
-	/** Scratch for `fillPaneCacheKey`; read straight after it fills, before any other pane's key is built. */
-	final paneKeyHash:KeyHash = new KeyHash();
-	/** Where panel content is keyed while building: under the workspace, by panel ID (see DockPanelView). */
-	var panelScope:Null<KeyScope> = null;
+  public static inline final DividerExtent = 8.0;
+  public static inline final MinimumHorizontalExtent = 190.0;
+  public final key:String;
+  public final model:DockWorkspaceModel;
+  public var interaction(default, null):DockWorkspaceInteraction;
+  public final style:LayoutStyle;
+  /** Available content height when the workspace sits below application chrome. */
+  public var availableHeight:Null<Float> = null;
+  /** Available content width when the workspace sits beside application chrome. */
+  public var availableWidth:Null<Float> = null;
+  /** Optional fixed actions for a dock tab group, including single dock headers. */
+  public var headerActions:Null<Array<String> -> String -> Null<View>> = null;
+  /** Application-owned action state included in retained pane keys. */
+  public var headerActionsRevision:String = "";
+  /** Expand a matching group vertically without changing the persisted dock tree. */
+  public var expandedGroup:Null<Array<String>> = null;
+  /** Presentation-only suppression; preserves the model, split paths and saved layout. */
+  public var hiddenPanels:Array<String> = [];
+  final suppliedInteraction:Bool;
+  final panelContents:Map<String, DockPanelContent>;
+  /** Scratch for `fillPaneCacheKey`; read straight after it fills, before any other pane's key is built. */
+  final paneKeyHash:KeyHash = new KeyHash();
+  /** Where panel content is keyed while building: under the workspace, by panel ID (see DockPanelView). */
+  var panelScope:Null<KeyScope> = null;
 
-	public function new(key:String, model:DockWorkspaceModel,
-			?panelContents:Array<DockPanelContent>, ?style:LayoutStyle,
-			?interaction:DockWorkspaceInteraction) {
-		if (key == null || key.length == 0 || model == null)
-			throw "Dock workspaces require a stable key and model";
-		this.key = key;
-		this.model = model;
-		suppliedInteraction = interaction != null;
-		this.interaction = interaction == null ? new DockWorkspaceInteraction(model) : interaction;
-		this.style = style == null ? defaultStyle() : style.copy();
-		this.panelContents = new Map();
-		if (panelContents != null)
-			for (content in panelContents) {
-				if (content == null || this.panelContents.exists(content.panelId))
-					throw "Dock workspace panel content IDs must be unique";
-				this.panelContents.set(content.panelId, content);
-			}
-	}
+  public function new(
+    key:String,
+    model:DockWorkspaceModel,
+    ?panelContents:Array<DockPanelContent>,
+    ?style:LayoutStyle,
+    ?interaction:DockWorkspaceInteraction
+  ) {
+    if (key == null || key.length == 0 || model == null) throw "Dock workspaces require a stable key and model";
+    this.key = key;
+    this.model = model;
+    suppliedInteraction = interaction != null;
+    this.interaction = interaction == null ? new DockWorkspaceInteraction(model) : interaction;
+    this.style = style == null ? defaultStyle() : style.copy();
+    this.panelContents = new Map();
+    if (panelContents != null) for (content in panelContents) {
+      if (content == null
+        || this.panelContents.exists(content.panelId)) throw "Dock workspace panel content IDs must be unique";
+      this.panelContents.set(content.panelId, content);
+    }
+  }
 
-	public function build(context:BuildContext):RenderNode {
-		var observed = context.buildProbe != null;
-		var started = observed ? Sys.time() : 0.0;
-		var mounted:State<DockWorkspaceMount> = context.resourceState(context.id("workspace-mount:" + key),
-			function() { return new DockWorkspaceMount(model, interaction); },
-			function(value) { value.dispose(); });
-		var mount = mounted.value;
-		mount.bind(model, suppliedInteraction ? interaction : null);
-		interaction = mount.interaction;
-		interaction.beginFrame();
-		var labelWidths:DockTextWidthCache = context.lazyState(
-			context.id("tab-label-width-cache"), function() return new DockTextWidthCache()).value;
-		var panelCache:DockPanelCache = context.resourceState(
-			context.id("panel-tree-cache:" + key), function() return new DockPanelCache(),
-			function(cache) cache.dispose()).value;
-		panelCache.bind(model, interaction);
-		panelCache.retain(context);
-		var paneCache:DockPanelCache = context.resourceState(
-			context.id("pane-tree-cache:" + key), function() return new DockPanelCache(16, true),
-			function(cache) cache.dispose()).value;
-		paneCache.bind(model, interaction);
-		paneCache.retain(context);
-		panelScope = context.currentScope().child(new Key("dock-panels:" + key));
-		var content = buildNode(model.root, context, [], "layout",
-			availableWidth == null ? context.viewportWidth : availableWidth, availableHeight == null ? context.viewportHeight : availableHeight,
-			labelWidths, panelCache, paneCache);
-		var layout = new SizedBox("layout", content, LayoutAxis.grow(), LayoutAxis.grow());
-		var root = new Column(key, [new KeyedView("content", layout)], style).build(context);
-		// Includes the panels built inside it; subtract their own probes to get the chrome.
-		if (observed)
-			context.reportBuild("dock-workspace", 0.0, Sys.time() - started, root);
-		return root;
-	}
+  public function build(context:BuildContext):RenderNode {
+    var observed = context.buildProbe != null;
+    var started = observed ? Sys.time() : 0.0;
+    var mounted:State<DockWorkspaceMount> = context.resourceState(context.id("workspace-mount:" + key), function() {
+      return new DockWorkspaceMount(model, interaction);
+    }, function(value) {
+      value.dispose();
+    }
+    );
+    var mount = mounted.value;
+    mount.bind(model, suppliedInteraction ? interaction : null);
+    interaction = mount.interaction;
+    interaction.beginFrame();
+    var labelWidths:DockTextWidthCache = context.lazyState(
+      context.id("tab-label-width-cache"),
+      function() return new DockTextWidthCache()
+    ).value;
+    var panelCache:DockPanelCache = context.resourceState(
+      context.id("panel-tree-cache:" + key),
+      function() return new DockPanelCache(),
+      function(cache) cache.dispose()
+    ).value;
+    panelCache.bind(model, interaction);
+    panelCache.retain(context);
+    var paneCache:DockPanelCache = context.resourceState(
+      context.id("pane-tree-cache:" + key),
+      function() return new DockPanelCache(16, true),
+      function(cache) cache.dispose()
+    ).value;
+    paneCache.bind(model, interaction);
+    paneCache.retain(context);
+    panelScope = context.currentScope().child(new Key("dock-panels:" + key));
+    var content = buildNode(
+      model.root,
+      context,
+      [],
+      "layout",
+      availableWidth == null ? context.viewportWidth : availableWidth,
+      availableHeight == null ? context.viewportHeight : availableHeight,
+      labelWidths,
+      panelCache,
+      paneCache
+    );
+    var layout = new SizedBox("layout", content, LayoutAxis.grow(), LayoutAxis.grow());
+    var root = new Column(key, [new KeyedView("content", layout)], style).build(context);
+    // Includes the panels built inside it; subtract their own probes to get the chrome.
+    if (observed) context.reportBuild("dock-workspace", 0.0, Sys.time() - started, root);
+    return root;
+  }
 
-	function buildNode(node:DockNode, context:BuildContext, path:Array<Int>, nodeKey:String,
-		availableWidth:Float, availableHeight:Float, labelWidths:DockTextWidthCache,
-		panelCache:DockPanelCache, paneCache:DockPanelCache):View {
-		if (node == null)
-			return new Text("No dock layout");
-		switch (node) {
-			case DockNode.Empty: return new Text("No panels");
-			case DockNode.Panel(panelId):
-				if (hiddenPanels.indexOf(panelId) >= 0) return new haxeon.ui.widgets.layout.Spacer(nodeKey, LayoutAxis.fixed(0), LayoutAxis.fixed(0));
-				return paneView([panelId], panelId, context, nodeKey, availableWidth, paneCache, function() {
-					return targetView(panelId, buildTabs([panelId], panelId, context, nodeKey,
-						availableWidth, labelWidths, panelCache));
-				});
-			case DockNode.Tabs(panelIds, activePanelId):
-				if (hiddenPanels.length > 0) {
-					panelIds = panelIds == null ? [] : [for (id in panelIds) if (hiddenPanels.indexOf(id) < 0) id];
-					if (panelIds.length == 0) return new haxeon.ui.widgets.layout.Spacer(nodeKey, LayoutAxis.fixed(0), LayoutAxis.fixed(0));
-					if (panelIds.indexOf(activePanelId) < 0) activePanelId = panelIds[0];
-				}
-				var targetPanelId = activePanelId == null && panelIds != null && panelIds.length > 0
-					? panelIds[0] : activePanelId;
-				return paneView(panelIds, activePanelId, context, nodeKey, availableWidth, paneCache, function() {
-					return targetPanelId == null ? buildTabs(panelIds, activePanelId, context, nodeKey,
-						availableWidth, labelWidths, panelCache) : targetView(targetPanelId,
-						buildTabs(panelIds, activePanelId, context, nodeKey, availableWidth, labelWidths,
-							panelCache));
-				});
-			case DockNode.Split(axis, ratio, first, second):
-				return buildSplit(axis, ratio, first, second, context, path, nodeKey,
-					availableWidth, availableHeight, labelWidths, panelCache, paneCache);
-		}
-	}
+  function buildNode(
+    node:DockNode,
+    context:BuildContext,
+    path:Array<Int>,
+    nodeKey:String,
+    availableWidth:Float,
+    availableHeight:Float,
+    labelWidths:DockTextWidthCache,
+    panelCache:DockPanelCache,
+    paneCache:DockPanelCache
+  ):View {
+    if (node == null) return new Text("No dock layout");
+    switch (node) {
+      case DockNode.Empty:
+        return new Text("No panels");
+      case DockNode.Panel(panelId):
+        if (hiddenPanels.indexOf(panelId) >= 0) return new haxeon.ui.widgets.layout.Spacer(
+          nodeKey,
+          LayoutAxis.fixed(0),
+          LayoutAxis.fixed(0)
+        );
+        return paneView([panelId], panelId, context, nodeKey, availableWidth, paneCache, function() {
+          return targetView(
+            panelId,
+            buildTabs([panelId], panelId, context, nodeKey, availableWidth, labelWidths, panelCache)
+          );
+        }
+        );
+      case DockNode.Tabs(panelIds, activePanelId):
+        if (hiddenPanels.length > 0) {
+          panelIds = panelIds == null ? [] : [for (id in panelIds) if (hiddenPanels.indexOf(id) < 0) id];
+          if (panelIds.length == 0) return new haxeon.ui.widgets.layout.Spacer(
+            nodeKey,
+            LayoutAxis.fixed(0),
+            LayoutAxis.fixed(0)
+          );
+          if (panelIds.indexOf(activePanelId) < 0) activePanelId = panelIds[0];
+        }
+        var targetPanelId = activePanelId == null
+          && panelIds != null && panelIds.length > 0 ? panelIds[0] : activePanelId;
+        return paneView(panelIds, activePanelId, context, nodeKey, availableWidth, paneCache, function() {
+          return targetPanelId == null ? buildTabs(
+            panelIds,
+            activePanelId,
+            context,
+            nodeKey,
+            availableWidth,
+            labelWidths,
+            panelCache
+          ) : targetView(
+            targetPanelId,
+            buildTabs(panelIds, activePanelId, context, nodeKey, availableWidth, labelWidths, panelCache)
+          );
+        }
+        );
+      case DockNode.Split(axis, ratio, first, second):
+        return buildSplit(
+          axis,
+          ratio,
+          first,
+          second,
+          context,
+          path,
+          nodeKey,
+          availableWidth,
+          availableHeight,
+          labelWidths,
+          panelCache,
+          paneCache
+        );
+    }
+  }
 
-	function buildTabs(panelIds:Array<String>, activePanelId:String,
-		context:BuildContext, nodeKey:String, availableWidth:Float,
-		labelWidths:DockTextWidthCache, panelCache:DockPanelCache):View {
-		var items:Array<TabItem> = [];
-		var visiblePanels:Array<DockPanelDescriptor> = [];
-		if (panelIds != null)
-			for (panelId in panelIds) {
-				var descriptor = model.get(panelId);
-				if (descriptor != null)
-					visiblePanels.push(descriptor);
-			}
-		var selectedId = activePanelId == null && visiblePanels.length > 0 ? visiblePanels[0].id : activePanelId;
-		if (visiblePanels.length == 1 &&
-			visiblePanels[0].headerMode == haxeon.ui.docking.DockPanelHeaderMode.Content)
-			return panelView(visiblePanels[0].id, availableWidth, panelCache);
-		var allWidth = Math.max(0, visiblePanels.length - 1) * 4.0;
-		var selectedWidth = allWidth;
-		for (descriptor in visiblePanels) {
-			var iconWidth = 20.0 + (descriptor.icon == null ? 0.0 : 14.0);
-			var labelWidth = tabLabelWidth(descriptor.title, context, labelWidths);
-			var badgeWidth = descriptor.badgeCount > 0 ? 28.0 + Std.string(descriptor.badgeCount).length * 6 : 0.0;
-			var labelledWidth = badgeWidth + iconWidth + (descriptor.icon == null ? 0.0 : 8.0) + labelWidth;
-			allWidth += labelledWidth;
-			selectedWidth += descriptor.id == selectedId || descriptor.icon == null
-				? labelledWidth : iconWidth + badgeWidth;
-		}
-		var showAllLabels = visiblePanels.length <= 1 || allWidth <= availableWidth;
-		var showSelectedLabel = showAllLabels || selectedWidth <= availableWidth;
-		for (descriptor in visiblePanels) {
-			var item = new TabItem(descriptor.id, descriptor.title,
-				panelView(descriptor.id, availableWidth, panelCache),
-				descriptor.enabled, descriptor.icon,
-				!showAllLabels && descriptor.icon != null &&
-					(descriptor.id != selectedId || !showSelectedLabel) ? "" : null);
-			item.badgeCount = descriptor.badgeCount;
-			items.push(item);
-		}
-		var options = new TabsOptions();
-		if (headerActions != null) options.headerTrailing = headerActions([for (panel in visiblePanels) panel.id], selectedId);
-		options.selectionMode = TabsSelectionMode.Controlled;
-		options.onTabDragStart = function(panelId, event)
-			interaction.beginTabDrag(panelId, event.pointerId, event.x, event.y);
-		options.onTabDragMove = function(panelId, event)
-			interaction.moveTabDrag(panelId, event.pointerId, event.x, event.y);
-		options.onTabDragEnd = function(panelId, event)
-			interaction.endTabDrag(panelId, event.pointerId, event.x, event.y);
-		options.onTabDragCancel = function(panelId, event)
-			interaction.cancelTabDrag(panelId, event.pointerId);
-		options.onTabHeaderBuilt = function(panelId, node) {
-			interaction.registerTabTarget(new DockTabDropTarget(panelId, node));
-			// Preview changes invalidate the pane through the tracked interaction fields. A node that has nothing to paint
-			// until then does not need its own layout, style and paint callback in every idle tab header.
-			var tabPreview = interaction.preview;
-			if (tabPreview == null || tabPreview.targetPanelId != panelId ||
-				(tabPreview.zone != DockDropZone.TabBefore && tabPreview.zone != DockDropZone.TabAfter))
-				return;
-			var indicatorStyle = new LayoutStyle();
-			indicatorStyle.width = LayoutAxis.grow();
-			indicatorStyle.height = LayoutAxis.grow();
-			indicatorStyle.positioning = LayoutPositioning.Absolute;
-			indicatorStyle.zIndex = 2;
-			var indicator = new RenderNode(context.id("tab-drop-indicator:" + panelId),
-				LayoutVisualKind.Custom, indicatorStyle);
-			indicator.hitTestSelf = false;
-			var tabPreviewKey = tabPreview.sourcePanelId + ":" + tabPreview.targetPanelId + ":" +
-				Std.string(tabPreview.zone);
-			indicator.onPaint(function(canvas, geometry) {
-				var preview = interaction.preview;
-				if (preview == null || preview.targetPanelId != panelId ||
-					(preview.zone != DockDropZone.TabBefore && preview.zone != DockDropZone.TabAfter))
-					return;
-				var indicatorWidth = Math.max(2.0, Math.min(4.0, geometry.width * 0.08));
-				var x = preview.zone == DockDropZone.TabBefore ? 0.0 :
-					Math.max(0.0, geometry.width - indicatorWidth);
-				canvas.fillRectIfPositive(new Rect(x, 0.0, indicatorWidth, geometry.height),
-					Color.rgba(0.18, 0.52, 0.95, 0.9));
-			}, "tab-drop-indicator:" + panelId + ":" + tabPreviewKey);
-			node.add(indicator);
-		};
-		var tabs = haxeon.ui.widgets.controls.Tabs.withOptions(nodeKey, items, activePanelId, function(next) {
-			model.activate(next);
-		}, options);
-		// The panel follows its split pane even when the active content has a larger intrinsic width.
-		tabs.style.width = LayoutAxis.stretch();
-		tabs.style.height = LayoutAxis.grow();
-		return tabs;
-	}
+  function buildTabs(
+    panelIds:Array<String>,
+    activePanelId:String,
+    context:BuildContext,
+    nodeKey:String,
+    availableWidth:Float,
+    labelWidths:DockTextWidthCache,
+    panelCache:DockPanelCache
+  ):View {
+    var items:Array<TabItem> = [];
+    var visiblePanels:Array<DockPanelDescriptor> = [];
+    if (panelIds != null) for (panelId in panelIds) {
+      var descriptor = model.get(panelId);
+      if (descriptor != null) visiblePanels.push(descriptor);
+    }
+    var selectedId = activePanelId == null && visiblePanels.length > 0 ? visiblePanels[0].id : activePanelId;
+    if (visiblePanels.length == 1
+      && visiblePanels[0].headerMode == haxeon.ui.docking.DockPanelHeaderMode.Content) return panelView(
+        visiblePanels[0].id,
+        availableWidth,
+        panelCache
+      );
+    var allWidth = Math.max(0, visiblePanels.length - 1) * 4.0;
+    var selectedWidth = allWidth;
+    for (descriptor in visiblePanels) {
+      var iconWidth = 20.0 + (descriptor.icon == null ? 0.0 : 14.0);
+      var labelWidth = tabLabelWidth(descriptor.title, context, labelWidths);
+      var badgeWidth = descriptor.badgeCount > 0 ? 28.0 + Std.string(descriptor.badgeCount).length * 6 : 0.0;
+      var labelledWidth = badgeWidth + iconWidth + (descriptor.icon == null ? 0.0 : 8.0) + labelWidth;
+      allWidth += labelledWidth;
+      selectedWidth += descriptor.id == selectedId || descriptor.icon == null ? labelledWidth : iconWidth + badgeWidth;
+    }
+    var showAllLabels = visiblePanels.length <= 1 || allWidth <= availableWidth;
+    var showSelectedLabel = showAllLabels || selectedWidth <= availableWidth;
+    for (descriptor in visiblePanels) {
+      var item = new TabItem(
+        descriptor.id,
+        descriptor.title,
+        panelView(descriptor.id, availableWidth, panelCache),
+        descriptor.enabled,
+        descriptor.icon,
+        !showAllLabels && descriptor.icon != null && (descriptor.id != selectedId || !showSelectedLabel) ? "" : null
+      );
+      item.badgeCount = descriptor.badgeCount;
+      items.push(item);
+    }
+    var options = new TabsOptions();
+    if (headerActions != null) options.headerTrailing = headerActions(
+      [for (panel in visiblePanels) panel.id],
+      selectedId
+    );
+    options.selectionMode = TabsSelectionMode.Controlled;
+    options.onTabDragStart = function(panelId, event) interaction.beginTabDrag(
+      panelId,
+      event.pointerId,
+      event.x,
+      event.y
+    );
+    options.onTabDragMove = function(panelId,
+      event) interaction.moveTabDrag(panelId, event.pointerId, event.x, event.y);
+    options.onTabDragEnd = function(panelId, event) interaction.endTabDrag(panelId, event.pointerId, event.x, event.y);
+    options.onTabDragCancel = function(panelId, event) interaction.cancelTabDrag(panelId, event.pointerId);
+    options.onTabHeaderBuilt = function(panelId, node) {
+      interaction.registerTabTarget(new DockTabDropTarget(panelId, node));
+      // Preview changes invalidate the pane through the tracked interaction fields. A node that has nothing to paint
+      // until then does not need its own layout, style and paint callback in every idle tab header.
+      var tabPreview = interaction.preview;
+      if (tabPreview == null || tabPreview.targetPanelId != panelId
+        || (tabPreview.zone != DockDropZone.TabBefore && tabPreview.zone != DockDropZone.TabAfter)) return;
+      var indicatorStyle = new LayoutStyle();
+      indicatorStyle.width = LayoutAxis.grow();
+      indicatorStyle.height = LayoutAxis.grow();
+      indicatorStyle.positioning = LayoutPositioning.Absolute;
+      indicatorStyle.zIndex = 2;
+      var indicator = context.createNode(
+        context.rootId("tab-drop-indicator:" + panelId),
+        LayoutVisualKind.Custom,
+        indicatorStyle
+      );
+      indicator.hitTestSelf = false;
+      var tabPreviewKey = tabPreview.sourcePanelId + ":" + tabPreview.targetPanelId + ":" + Std.string(tabPreview.zone);
+      indicator.onPaint(function(canvas, geometry) {
+        var preview = interaction.preview;
+        if (preview == null || preview.targetPanelId != panelId
+          || (preview.zone != DockDropZone.TabBefore && preview.zone != DockDropZone.TabAfter)) return;
+        var indicatorWidth = Math.max(2.0, Math.min(4.0, geometry.width * 0.08));
+        var x = preview.zone == DockDropZone.TabBefore ? 0.0 : Math.max(0.0, geometry.width - indicatorWidth);
+        canvas.fillRectIfPositive(new Rect(x, 0.0, indicatorWidth, geometry.height), Color.rgba(0.18, 0.52, 0.95, 0.9));
+      }, "tab-drop-indicator:" + panelId + ":" + tabPreviewKey);
+      node.add(indicator);
+    };
+    var tabs = haxeon.ui.widgets.controls.Tabs.withOptions(nodeKey, items, activePanelId, function(next) {
+      model.activate(next);
+    }, options);
+    // The panel follows its split pane even when the active content has a larger intrinsic width.
+    tabs.style.width = LayoutAxis.stretch();
+    tabs.style.height = LayoutAxis.grow();
+    return tabs;
+  }
 
-	function matchesExpandedGroup(node:DockNode):Bool {
-		var ids = haxeon.ui.docking.DockNodeTools.panelIds(node);
-		if (ids.length == 0 || expandedGroup == null) return false;
-		for (id in ids) if (expandedGroup.indexOf(id) < 0) return false;
-		return true;
-	}
+  function matchesExpandedGroup(node:DockNode):Bool {
+    var ids = haxeon.ui.docking.DockNodeTools.panelIds(node);
+    if (ids.length == 0 || expandedGroup == null) return false;
+    for (id in ids) if (expandedGroup.indexOf(id) < 0) return false;
+    return true;
+  }
 
-	function tabLabelWidth(label:String, context:BuildContext,
-		labelWidths:DockTextWidthCache):Float {
-		if (context.fonts == null) return label.length * 8.0;
-		var style = context.resolveTextRole(TextRole.Button,
-			new TextStyleOverride(null, context.theme.tokens.tabHeaderFontSize, null, TextWrap.None));
-		return labelWidths.measure(context.fonts, label, style.textStyle, style.paragraphStyle);
-	}
+  function tabLabelWidth(label:String, context:BuildContext, labelWidths:DockTextWidthCache):Float {
+    if (context.fonts == null) return label.length * 8.0;
+    var style = context.resolveTextRole(
+      TextRole.Button,
+      new TextStyleOverride(null, context.theme.tokens.tabHeaderFontSize, null, TextWrap.None)
+    );
+    return labelWidths.measure(context.fonts, label, style.textStyle, style.paragraphStyle);
+  }
 
-	function hasPresentedPanel(node:DockNode):Bool {
-		for (id in haxeon.ui.docking.DockNodeTools.panelIds(node))
-			if (hiddenPanels.indexOf(id) < 0) return true;
-		return false;
-	}
+  function hasPresentedPanel(node:DockNode):Bool {
+    for (id in haxeon.ui.docking.DockNodeTools.panelIds(node)) if (hiddenPanels.indexOf(id) < 0) return true;
+    return false;
+  }
 
-	function buildSplit(axis:DockSplitAxis, ratio:Float, first:DockNode, second:DockNode,
-		context:BuildContext, path:Array<Int>, nodeKey:String,
-		availableWidth:Float, availableHeight:Float, labelWidths:DockTextWidthCache,
-		panelCache:DockPanelCache, paneCache:DockPanelCache):View {
-		var firstPath = path.copy();
-		firstPath.push(0);
-		var secondPath = path.copy();
-		secondPath.push(1);
-		if (hiddenPanels.length > 0) {
-			if (!hasPresentedPanel(first)) return buildNode(second, context, secondPath, nodeKey + ":second",
-				availableWidth, availableHeight, labelWidths, panelCache, paneCache);
-			if (!hasPresentedPanel(second)) return buildNode(first, context, firstPath, nodeKey + ":first",
-				availableWidth, availableHeight, labelWidths, panelCache, paneCache);
-		}
-		if (axis == DockSplitAxis.Vertical && expandedGroup != null) {
-			if (matchesExpandedGroup(second) && !matchesExpandedGroup(first)) return buildNode(second, context, secondPath, nodeKey + ":second",
-				availableWidth, availableHeight, labelWidths, panelCache, paneCache);
-			if (matchesExpandedGroup(first) && !matchesExpandedGroup(second)) return buildNode(first, context, firstPath, nodeKey + ":first",
-				availableWidth, availableHeight, labelWidths, panelCache, paneCache);
-		}
-		var horizontal = axis == DockSplitAxis.Horizontal;
-		var available = horizontal ? availableWidth : availableHeight;
-		if (available <= 0.0)
-			available = 1000.0;
-		var minimum = horizontal ? MinimumHorizontalExtent : 120.0;
-		var divider = DividerExtent;
-		var maximum = available - minimum;
-		if (maximum < minimum)
-			maximum = minimum;
-		var options = new SplitViewOptions();
-		options.orientation = horizontal ? SplitOrientation.Horizontal : SplitOrientation.Vertical;
-		options.resizableSide = SplitSide.Leading;
-		options.extent = clamp(ratio * available, minimum, maximum);
-		options.minimumExtent = minimum;
-		options.maximumExtent = maximum;
-		options.dividerExtent = divider;
-		options.dividerHairline = true;
-		options.onResize = function(next) {
-			model.setSplitRatio(path, next / available);
-		};
-		var remaining = Math.max(0.0, available - options.extent);
-		var firstWidth = horizontal ? options.extent : availableWidth;
-		var firstHeight = horizontal ? availableHeight : options.extent;
-		var secondWidth = horizontal ? remaining : availableWidth;
-		var secondHeight = horizontal ? availableHeight : remaining;
-		return new SplitView(nodeKey,
-			buildNode(first, context, firstPath, nodeKey + ":first", firstWidth, firstHeight,
-				labelWidths, panelCache, paneCache),
-			buildNode(second, context, secondPath, nodeKey + ":second", secondWidth, secondHeight,
-				labelWidths, panelCache, paneCache),
-			options);
-	}
+  function buildSplit(
+    axis:DockSplitAxis,
+    ratio:Float,
+    first:DockNode,
+    second:DockNode,
+    context:BuildContext,
+    path:Array<Int>,
+    nodeKey:String,
+    availableWidth:Float,
+    availableHeight:Float,
+    labelWidths:DockTextWidthCache,
+    panelCache:DockPanelCache,
+    paneCache:DockPanelCache
+  ):View {
+    var firstPath = path.copy();
+    firstPath.push(0);
+    var secondPath = path.copy();
+    secondPath.push(1);
+    if (hiddenPanels.length > 0) {
+      if (!hasPresentedPanel(first)) return buildNode(
+        second,
+        context,
+        secondPath,
+        nodeKey + ":second",
+        availableWidth,
+        availableHeight,
+        labelWidths,
+        panelCache,
+        paneCache
+      );
+      if (!hasPresentedPanel(second)) return buildNode(
+        first,
+        context,
+        firstPath,
+        nodeKey + ":first",
+        availableWidth,
+        availableHeight,
+        labelWidths,
+        panelCache,
+        paneCache
+      );
+    }
+    if (axis == DockSplitAxis.Vertical && expandedGroup != null) {
+      if (matchesExpandedGroup(second) && !matchesExpandedGroup(first)) return buildNode(
+        second,
+        context,
+        secondPath,
+        nodeKey + ":second",
+        availableWidth,
+        availableHeight,
+        labelWidths,
+        panelCache,
+        paneCache
+      );
+      if (matchesExpandedGroup(first) && !matchesExpandedGroup(second)) return buildNode(
+        first,
+        context,
+        firstPath,
+        nodeKey + ":first",
+        availableWidth,
+        availableHeight,
+        labelWidths,
+        panelCache,
+        paneCache
+      );
+    }
+    var horizontal = axis == DockSplitAxis.Horizontal;
+    var available = horizontal ? availableWidth : availableHeight;
+    if (available <= 0.0) available = 1000.0;
+    var minimum = horizontal ? MinimumHorizontalExtent : 120.0;
+    var divider = DividerExtent;
+    var maximum = available - minimum;
+    if (maximum < minimum) maximum = minimum;
+    var options = new SplitViewOptions();
+    options.orientation = horizontal ? SplitOrientation.Horizontal : SplitOrientation.Vertical;
+    options.resizableSide = SplitSide.Leading;
+    options.extent = clamp(ratio * available, minimum, maximum);
+    options.minimumExtent = minimum;
+    options.maximumExtent = maximum;
+    options.dividerExtent = divider;
+    options.dividerHairline = true;
+    options.onResize = function(next) {
+      model.setSplitRatio(path, next / available);
+    };
+    var remaining = Math.max(0.0, available - options.extent);
+    var firstWidth = horizontal ? options.extent : availableWidth;
+    var firstHeight = horizontal ? availableHeight : options.extent;
+    var secondWidth = horizontal ? remaining : availableWidth;
+    var secondHeight = horizontal ? availableHeight : remaining;
+    return new SplitView(
+      nodeKey,
+      buildNode(
+        first,
+        context,
+        firstPath,
+        nodeKey + ":first",
+        firstWidth,
+        firstHeight,
+        labelWidths,
+        panelCache,
+        paneCache
+      ),
+      buildNode(
+        second,
+        context,
+        secondPath,
+        nodeKey + ":second",
+        secondWidth,
+        secondHeight,
+        labelWidths,
+        panelCache,
+        paneCache
+      ),
+      options
+    );
+  }
 
-	/**
+  /**
 	 * One pane (its tab strip and active panel) as a retained subtree: rebuilt only when what it shows, or a hover,
 	 * focus or state inside it, changed. The view is created lazily so a hit skips measuring labels and building tab items.
 	 */
-	function paneView(panelIds:Array<String>, activePanelId:Null<String>, context:BuildContext, nodeKey:String,
-			availableWidth:Float, paneCache:DockPanelCache, create:Void->View):View {
-		var retainable = fillPaneCacheKey(panelIds, activePanelId, context, nodeKey, availableWidth);
-		var selected = activePanelId == null && panelIds != null && panelIds.length > 0 ? panelIds[0] : activePanelId;
-		// Length prefixes keep arbitrary panel IDs distinct from split-path components.
-		var cacheKey = nodeKey.length + ":" + nodeKey + ":" +
-			(selected == null ? "-1:" : selected.length + ":" + selected);
-		return new DockPaneView(cacheKey, retainable, paneKeyHash.a, paneKeyHash.b, create, paneCache, interaction);
-	}
+  function paneView(
+    panelIds:Array<String>,
+    activePanelId:Null<String>,
+    context:BuildContext,
+    nodeKey:String,
+    availableWidth:Float,
+    paneCache:DockPanelCache,
+    create:Void -> View
+  ):View {
+    var retainable = fillPaneCacheKey(panelIds, activePanelId, context, nodeKey, availableWidth);
+    var selected = activePanelId == null && panelIds != null && panelIds.length > 0 ? panelIds[0] : activePanelId;
+    // Length prefixes keep arbitrary panel IDs distinct from split-path components.
+    var cacheKey = nodeKey.length + ":" + nodeKey + ":" + (selected == null ? "-1:" : selected.length + ":" + selected);
+    return new DockPaneView(cacheKey, retainable, paneKeyHash.a, paneKeyHash.b, create, paneCache, interaction);
+  }
 
-	/**
+  /**
 	 * Fills `paneKeyHash` with the pane structure. False when the active panel has not declared tracked retention.
 	 */
-	function fillPaneCacheKey(panelIds:Array<String>, activePanelId:Null<String>, context:BuildContext, nodeKey:String,
-			availableWidth:Float):Bool {
-		if (panelIds == null || panelIds.length == 0)
-			return false;
-		var selected = activePanelId == null ? panelIds[0] : activePanelId;
-		var content = panelContents.get(selected);
-		if (content == null || !content.observed)
-			return false;
-		var hash = paneKeyHash.reset();
-			hash.addString(nodeKey).addString(headerActionsRevision).addFloat(availableWidth).addInt(context.styleRevision)
-			.addFloat(context.viewportWidth).addFloat(context.viewportHeight).addString(selected);
-		for (panelId in panelIds) {
-			var descriptor = model.get(panelId);
-			if (descriptor != null)
-				hash.addString(panelId).addString(descriptor.title).addInt(descriptor.badgeCount)
-					.addInt(descriptor.icon == null ? -1 : Type.enumIndex(descriptor.icon)).addBool(descriptor.enabled)
-					.addInt(Type.enumIndex(descriptor.headerMode));
-		}
-		return true;
-	}
+  function fillPaneCacheKey(
+    panelIds:Array<String>,
+    activePanelId:Null<String>,
+    context:BuildContext,
+    nodeKey:String,
+    availableWidth:Float
+  ):Bool {
+    if (panelIds == null || panelIds.length == 0) return false;
+    var selected = activePanelId == null ? panelIds[0] : activePanelId;
+    var content = panelContents.get(selected);
+    if (content == null || !content.observed) return false;
+    var hash = paneKeyHash.reset();
+    hash.addString(nodeKey).addString(headerActionsRevision).addFloat(availableWidth).addInt(context
+      .styleRevision).addFloat(context.viewportWidth).addFloat(context.viewportHeight).addString(selected);
+    for (panelId in panelIds) {
+      var descriptor = model.get(panelId);
+      if (descriptor != null) hash.addString(panelId)
+        .addString(descriptor.title).addInt(descriptor.badgeCount).addInt(descriptor.icon == null ? -1
+        : Type.enumIndex(descriptor.icon)).addBool(descriptor.enabled).addInt(Type.enumIndex(descriptor.headerMode));
+    }
+    return true;
+  }
 
-	function panelView(panelId:String, availableWidth:Float, panelCache:DockPanelCache):View {
-		var descriptor = model.get(panelId);
-		var content = panelContents.get(panelId);
-		return descriptor == null ? new Text("Missing panel: " + panelId) : content == null ?
-			new Text("Missing panel content: " + panelId) :
-			new DockPanelView(descriptor, content, availableWidth, panelCache, panelScope);
-	}
+  function panelView(panelId:String, availableWidth:Float, panelCache:DockPanelCache):View {
+    var descriptor = model.get(panelId);
+    var content = panelContents.get(panelId);
+    return descriptor == null ? new Text("Missing panel: " + panelId)
+      : content == null ? new Text("Missing panel content: " + panelId) : new DockPanelView(
+        descriptor,
+        content,
+        availableWidth,
+        panelCache,
+        panelScope
+      );
+  }
 
-	function targetView(targetPanelId:String, child:View):View
-		return new DockDropTargetView(child, interaction, targetPanelId);
+  function targetView(targetPanelId:String, child:View):View return new DockDropTargetView(
+    child,
+    interaction,
+    targetPanelId
+  );
 
-	static function defaultStyle():LayoutStyle {
-		var result = new LayoutStyle();
-		result.width = LayoutAxis.grow();
-		result.height = LayoutAxis.grow();
-		return result;
-	}
+  static function defaultStyle():LayoutStyle {
+    var result = new LayoutStyle();
+    result.width = LayoutAxis.grow();
+    result.height = LayoutAxis.grow();
+    return result;
+  }
 
-	static inline function clamp(value:Float, minimum:Float, maximum:Float):Float
-		return value < minimum ? minimum : value > maximum ? maximum : value;
+  static inline function clamp(value:Float,
+    minimum:Float, maximum:Float):Float return value < minimum ? minimum : value > maximum ? maximum : value;
 }
 
 /** One subscription pair per mounted workspace, independent of rebuilt View instances. */
 private class DockWorkspaceMount {
-	public var model(default, null):DockWorkspaceModel;
-	public var interaction(default, null):DockWorkspaceInteraction;
+  public var model(default, null):DockWorkspaceModel;
+  public var interaction(default, null):DockWorkspaceInteraction;
 
-	public function new(model:DockWorkspaceModel, interaction:DockWorkspaceInteraction) {
-		this.model = model;
-		this.interaction = interaction;
-	}
+  public function new(model:DockWorkspaceModel, interaction:DockWorkspaceInteraction) {
+    this.model = model;
+    this.interaction = interaction;
+  }
 
-	public function bind(nextModel:DockWorkspaceModel,
-			requestedInteraction:Null<DockWorkspaceInteraction>):Void {
-		if (model == nextModel &&
-			(requestedInteraction == null || interaction == requestedInteraction))
-			return;
-		model = nextModel;
-		interaction = requestedInteraction == null ? new DockWorkspaceInteraction(nextModel) : requestedInteraction;
-	}
+  public function bind(nextModel:DockWorkspaceModel, requestedInteraction:Null<DockWorkspaceInteraction>):Void {
+    if (model == nextModel && (requestedInteraction == null || interaction == requestedInteraction)) return;
+    model = nextModel;
+    interaction = requestedInteraction == null ? new DockWorkspaceInteraction(nextModel) : requestedInteraction;
+  }
 
-	public function dispose():Void {}
+  public function dispose():Void {
+  }
 }
 
 private class DockPanelView implements View {
-	/** Single-threaded scratch: filled and read within one `build` before any child builds. */
-	static final scratchKey:KeyHash = new KeyHash();
-	final descriptor:DockPanelDescriptor;
-	final content:DockPanelContent;
-	final availableWidth:Float;
-	final panelCache:DockPanelCache;
-	final scope:KeyScope;
+  /** Single-threaded scratch: filled and read within one `build` before any child builds. */
+  static final scratchKey:KeyHash = new KeyHash();
+  final descriptor:DockPanelDescriptor;
+  final content:DockPanelContent;
+  final availableWidth:Float;
+  final panelCache:DockPanelCache;
+  final scope:KeyScope;
 
-	public function new(descriptor:DockPanelDescriptor, content:DockPanelContent,
-			availableWidth:Float, panelCache:DockPanelCache, scope:KeyScope) {
-		this.descriptor = descriptor;
-		this.content = content;
-		this.availableWidth = availableWidth;
-		this.panelCache = panelCache;
-		this.scope = scope;
-	}
+  public function new(
+    descriptor:DockPanelDescriptor,
+    content:DockPanelContent,
+    availableWidth:Float,
+    panelCache:DockPanelCache,
+    scope:KeyScope
+  ) {
+    this.descriptor = descriptor;
+    this.content = content;
+    this.availableWidth = availableWidth;
+    this.panelCache = panelCache;
+    this.scope = scope;
+  }
 
-	public function build(context:BuildContext):RenderNode {
-		var keyed = false;
-		var keyA = 0, keyB = 0;
-		if (content.observed) {
-			keyed = true;
-			var hash = scratchKey.reset();
-			hash.addInt(context.styleRevision).addFloat(context.viewportWidth).addFloat(context.viewportHeight)
-				.addFloat(availableWidth);
-			keyA = hash.a;
-			keyB = hash.b;
-		}
-		var cached = keyed ? panelCache.entry(descriptor.id) : null;
-		var hitStarted = context.buildProbe != null ? Sys.time() : 0.0;
-		if (cached != null && !context.bypassRetention && cached.matches(keyA, keyB) && cached.topologyMatches()
-			&& cached.statesMatch(context)) {
-			context.retainStateIds(cached.stateIds);
-			var retained = context.currentRoot(cached.root);
-			context.retainDependencies(cached.observed);
-			cached.replaceRoot(retained);
-			context.claimRetainedTree(retained);
-			retained.detach();
-			if (context.buildProbe != null)
-				context.reportBuild("panel-hit:" + descriptor.id, 0.0, Sys.time() - hitStarted, retained);
-			return retained;
-		}
-		if (cached != null)
-			cached.root.detach();
-		var observed = context.buildProbe != null;
-		var preparationStarted = observed ? Sys.time() : 0.0;
-		var stateMarker = context.stateUsageMarker();
-		var dependencyMark = context.dependencyMarker();
-		var buildStarted = 0.0;
-		// Keyed under the workspace, not the split path to the pane, so a panel keeps its state when the layout around it
-		// changes: a neighbour closing, or the panel moving to another split.
-		var root = context.withScopeUnder(scope, new Key("panel:" + descriptor.id), function() {
-			var widthBuilder = content.buildWithWidth, builder = content.build;
-			var view = widthBuilder != null ? widthBuilder(context, availableWidth) : builder != null ? builder(context) : null;
-			if (view == null)
-				view = new Text("Panel returned no content: " + descriptor.id);
-			buildStarted = observed ? Sys.time() : 0.0;
-			return view.build(context);
-		});
-		if (observed)
-			context.reportBuild("panel:" + descriptor.id, buildStarted - preparationStarted,
-				Sys.time() - buildStarted, root);
-		if (keyed) {
-			var usedStates = context.stateIdsUsedSince(stateMarker);
-			var dependencies = context.dependenciesSince(dependencyMark,
-				cached == null ? null : cached.observed);
-			var interactions = new InteractionStateSnapshot(context.currentRoot(root), context);
-			panelCache.put(descriptor.id, keyA, keyB, root, usedStates,
-				interactions, dependencies);
-		}
-		return root;
-	}
+  public function build(context:BuildContext):RenderNode {
+    var keyed = false;
+    var keyA = 0, keyB = 0;
+    if (content.observed) {
+      keyed = true;
+      var hash = scratchKey.reset();
+      hash.addInt(context
+        .styleRevision).addFloat(context.viewportWidth).addFloat(context.viewportHeight).addFloat(availableWidth);
+      keyA = hash.a;
+      keyB = hash.b;
+    }
+    var cached = keyed ? panelCache.entry(descriptor.id) : null;
+    var hitStarted = context.buildProbe != null ? Sys.time() : 0.0;
+    if (cached != null && !context.bypassRetention && cached.matches(keyA,
+      keyB) && cached.topologyMatches() && cached.statesMatch(context)) {
+      context.retainStateIds(cached.stateIds);
+      var retained = context.currentRoot(cached.root);
+      context.retainDependencies(cached.observed);
+      cached.replaceRoot(retained);
+      context.claimRetainedTree(retained);
+      retained.detach();
+      if (context.buildProbe != null) context.reportBuild(
+        "panel-hit:" + descriptor.id,
+        0.0,
+        Sys.time() - hitStarted,
+        retained
+      );
+      return retained;
+    }
+    if (cached != null) cached.root.detach();
+    var observed = context.buildProbe != null;
+    var preparationStarted = observed ? Sys.time() : 0.0;
+    var stateMarker = context.stateUsageMarker();
+    var dependencyMark = context.dependencyMarker();
+    var buildStarted = 0.0;
+    // Keyed under the workspace, not the split path to the pane, so a panel keeps its state when the layout around it
+    // changes: a neighbour closing, or the panel moving to another split.
+    var root = context.withScopeUnder(scope, new Key("panel:" + descriptor.id), function() {
+      var widthBuilder = content.buildWithWidth, builder = content.build;
+      var view = widthBuilder != null ? widthBuilder(context,
+        availableWidth) : builder != null ? builder(context) : null;
+      if (view == null) view = new Text("Panel returned no content: " + descriptor.id);
+      buildStarted = observed ? Sys.time() : 0.0;
+      return view.build(context);
+    }
+    );
+    if (observed) context.reportBuild(
+      "panel:" + descriptor.id,
+      buildStarted - preparationStarted,
+      Sys.time() - buildStarted,
+      root
+    );
+    if (keyed) {
+      var usedStates = context.stateIdsUsedSince(stateMarker);
+      var dependencies = context.dependenciesSince(dependencyMark, cached == null ? null : cached.observed);
+      var interactions = new InteractionStateSnapshot(context.currentRoot(root), context);
+      panelCache.put(descriptor.id, keyA, keyB, root, usedStates, interactions, dependencies);
+    }
+    return root;
+  }
 }
 
 /** A retained pane: reuses the built tab strip and panel while its key and the interaction state inside it are unchanged. */
 private class DockPaneView implements View {
-	final key:String;
-	final retainable:Bool;
-	final keyA:Int;
-	final keyB:Int;
-	final create:Void->View;
-	final cache:DockPanelCache;
-	final interaction:DockWorkspaceInteraction;
+  final key:String;
+  final retainable:Bool;
+  final keyA:Int;
+  final keyB:Int;
+  final create:Void -> View;
+  final cache:DockPanelCache;
+  final interaction:DockWorkspaceInteraction;
 
-	public function new(key:String, retainable:Bool, keyA:Int, keyB:Int, create:Void->View, cache:DockPanelCache,
-			interaction:DockWorkspaceInteraction) {
-		this.key = key;
-		this.retainable = retainable;
-		this.keyA = keyA;
-		this.keyB = keyB;
-		this.create = create;
-		this.cache = cache;
-		this.interaction = interaction;
-	}
+  public function new(
+    key:String,
+    retainable:Bool,
+    keyA:Int,
+    keyB:Int,
+    create:Void -> View,
+    cache:DockPanelCache,
+    interaction:DockWorkspaceInteraction
+  ) {
+    this.key = key;
+    this.retainable = retainable;
+    this.keyA = keyA;
+    this.keyB = keyB;
+    this.create = create;
+    this.cache = cache;
+    this.interaction = interaction;
+  }
 
-	public function build(context:BuildContext):RenderNode {
-		var cached = retainable ? cache.entry(key) : null;
-		if (cached != null && !context.bypassRetention && cached.matches(keyA, keyB) && cached.topologyMatches()
-			&& cached.statesMatch(context)) {
-			context.retainStateIds(cached.stateIds);
-			var retained = context.currentRoot(cached.root);
-			context.retainDependencies(cached.observed);
-			cached.replaceRoot(retained);
-			context.claimRetainedTree(retained);
-			retained.detach();
-			interaction.replay(cached.targets, cached.tabTargets);
-			return retained;
-		}
-		if (cached != null)
-			cached.root.detach();
-		var stateMarker = context.stateUsageMarker();
-		var dependencyMark = context.dependencyMarker();
-		var targetMark = interaction.targetCount(), tabMark = interaction.tabTargetCount();
-		var root = create().build(context);
-		if (retainable) {
-			var usedStates = context.stateIdsUsedSince(stateMarker);
-			var dependencies = context.dependenciesSince(dependencyMark,
-				cached == null ? null : cached.observed);
-			var interactions = new InteractionStateSnapshot(context.currentRoot(root), context);
-			cache.put(key, keyA, keyB, root, usedStates,
-				interactions, dependencies,
-				interaction.targetsSince(targetMark),
-				interaction.tabTargetsSince(tabMark), context);
-		}
-		return root;
-	}
+  public function build(context:BuildContext):RenderNode {
+    var cached = retainable ? cache.entry(key) : null;
+    if (cached != null && !context.bypassRetention && cached.matches(keyA,
+      keyB) && cached.topologyMatches() && cached.statesMatch(context)) {
+      context.retainStateIds(cached.stateIds);
+      var retained = context.currentRoot(cached.root);
+      context.retainDependencies(cached.observed);
+      cached.replaceRoot(retained);
+      context.claimRetainedTree(retained);
+      retained.detach();
+      interaction.replay(cached.targets, cached.tabTargets);
+      return retained;
+    }
+    if (cached != null) cached.root.detach();
+    var stateMarker = context.stateUsageMarker();
+    var dependencyMark = context.dependencyMarker();
+    var targetMark = interaction.targetCount(), tabMark = interaction.tabTargetCount();
+    var root = create().build(context);
+    if (retainable) {
+      var usedStates = context.stateIdsUsedSince(stateMarker);
+      var dependencies = context.dependenciesSince(dependencyMark, cached == null ? null : cached.observed);
+      var interactions = new InteractionStateSnapshot(context.currentRoot(root), context);
+      cache.put(
+        key,
+        keyA,
+        keyB,
+        root,
+        usedStates,
+        interactions,
+        dependencies,
+        interaction.targetsSince(targetMark),
+        interaction.tabTargetsSince(tabMark),
+        context
+      );
+    }
+    return root;
+  }
 }
 
 private class DockPanelCache {
-	final entries:Map<String, DockPanelCacheEntry>;
-	final maxEntries:Int;
-	final checkTopology:Bool;
-	/** Bounded caches keep the most recently used keys last. */
-	final recent:Array<String>;
-	var model:Null<DockWorkspaceModel> = null;
-	var interaction:Null<DockWorkspaceInteraction> = null;
+  final entries:Map<String, DockPanelCacheEntry>;
+  final maxEntries:Int;
+  final checkTopology:Bool;
+  /** Bounded caches keep the most recently used keys last. */
+  final recent:Array<String>;
+  var model:Null<DockWorkspaceModel> = null;
+  var interaction:Null<DockWorkspaceInteraction> = null;
 
-	public function new(maxEntries:Int = 0, checkTopology:Bool = false) {
-		entries = new Map();
-		this.maxEntries = maxEntries;
-		this.checkTopology = checkTopology;
-		recent = [];
-	}
+  public function new(maxEntries:Int = 0, checkTopology:Bool = false) {
+    entries = new Map();
+    this.maxEntries = maxEntries;
+    this.checkTopology = checkTopology;
+    recent = [];
+  }
 
-	/** Cached callbacks and drop targets belong to this model and interaction, even if another has the same revision. */
-	public function bind(nextModel:DockWorkspaceModel, nextInteraction:DockWorkspaceInteraction):Void {
-		if (model == nextModel && interaction == nextInteraction) return;
-		for (entry in entries) { entry.observed.dispose(); entry.interactions.dispose(); }
-		entries.clear();
-		recent.resize(0);
-		model = nextModel;
-		interaction = nextInteraction;
-	}
+  /** Cached callbacks and drop targets belong to this model and interaction, even if another has the same revision. */
+  public function bind(nextModel:DockWorkspaceModel, nextInteraction:DockWorkspaceInteraction):Void {
+    if (model == nextModel && interaction == nextInteraction) return;
+    for (entry in entries) {
+      entry.observed.dispose();
+      entry.interactions.dispose();
+    }
+    entries.clear();
+    recent.resize(0);
+    model = nextModel;
+    interaction = nextInteraction;
+  }
 
-	public function entry(panelId:String):Null<DockPanelCacheEntry> {
-		var found = entries.get(panelId);
-		if (found != null && maxEntries > 0) {
-			recent.remove(panelId);
-			recent.push(panelId);
-		}
-		return found;
-	}
+  public function entry(panelId:String):Null<DockPanelCacheEntry> {
+    var found = entries.get(panelId);
+    if (found != null && maxEntries > 0) {
+      recent.remove(panelId);
+      recent.push(panelId);
+    }
+    return found;
+  }
 
-	public function put(panelId:String, keyA:Int, keyB:Int, root:RenderNode, stateIds:Array<Int>,
-			interactions:InteractionStateSnapshot, observed:haxeon.ui.core.Dependencies,
-			?targets:Array<DockDropTarget>, ?tabTargets:Array<DockTabDropTarget>, ?context:BuildContext):Void {
-		var previous = entries.get(panelId);
-		if (previous != null) {
-			if (previous.root != root) previous.root.detach();
-			if (previous.observed != observed) previous.observed.dispose();
-			previous.interactions.dispose();
-		}
-		if (maxEntries > 0) {
-			recent.remove(panelId);
-			recent.push(panelId);
-			if (recent.length > maxEntries) {
-				// The current render tree may still own this root; release only the cache's reference.
-				var evicted = recent.shift();
-				if (evicted != null) {
-					var old = entries.get(evicted);
-					entries.remove(evicted);
-					if (old != null) { old.observed.dispose(); old.interactions.dispose(); }
-				}
-			}
-		}
-		entries.set(panelId, new DockPanelCacheEntry(keyA, keyB, root, stateIds,
-			interactions, observed, targets, tabTargets, checkTopology, context));
-	}
+  public function put(
+    panelId:String,
+    keyA:Int,
+    keyB:Int,
+    root:RenderNode,
+    stateIds:Array<Int>,
+    interactions:InteractionStateSnapshot,
+    observed:haxeon.ui.core.Dependencies,
+    ?targets:Array<DockDropTarget>,
+    ?tabTargets:Array<DockTabDropTarget>,
+    ?context:BuildContext
+  ):Void {
+    var previous = entries.get(panelId);
+    if (previous != null) {
+      if (previous.root != root) previous.root.detach();
+      if (previous.observed != observed) previous.observed.dispose();
+      previous.interactions.dispose();
+    }
+    if (maxEntries > 0) {
+      recent.remove(panelId);
+      recent.push(panelId);
+      if (recent.length > maxEntries) {
+        // The current render tree may still own this root; release only the cache's reference.
+        var evicted = recent.shift();
+        if (evicted != null) {
+          var old = entries.get(evicted);
+          entries.remove(evicted);
+          if (old != null) {
+            old.observed.dispose();
+            old.interactions.dispose();
+          }
+        }
+      }
+    }
+    entries.set(
+      panelId,
+      new DockPanelCacheEntry(
+        keyA,
+        keyB,
+        root,
+        stateIds,
+        interactions,
+        observed,
+        targets,
+        tabTargets,
+        checkTopology,
+        context
+      )
+    );
+  }
 
-	public function retain(context:BuildContext):Void {
-		for (entry in entries) {
-			context.retainStateIds(entry.stateIds, true);
-			entry.interactions.retainState(context);
-		}
-	}
+  public function retain(context:BuildContext):Void {
+    for (entry in entries) {
+      context.retainStateIds(entry.stateIds, true);
+      entry.interactions.retainState(context);
+    }
+  }
 
-	public function dispose():Void {
-		for (entry in entries) entry.dispose();
-		entries.clear();
-		recent.resize(0);
-		model = null;
-		interaction = null;
-	}
+  public function dispose():Void {
+    for (entry in entries) entry.dispose();
+    entries.clear();
+    recent.resize(0);
+    model = null;
+    interaction = null;
+  }
 }
 
 private class DockPanelCacheEntry {
-	final keyA:Int;
-	final keyB:Int;
-	public var root(default, null):RenderNode;
-	public final stateIds:Array<Int>;
-	/** Drop targets the build registered; a hit replays them because the interaction forgets them every frame. */
-	public final targets:Array<DockDropTarget>;
-	public final tabTargets:Array<DockTabDropTarget>;
-	public final interactions:InteractionStateSnapshot;
-	/** Observable fields and signals the subtree's build read outside widget state. */
-	public final observed:haxeon.ui.core.Dependencies;
-	/** A hidden pane cannot be reused after one of its retained children moved to another tree. */
-	final topologyNodes:Null<Array<RenderNode>>;
-	final topologyParents:Null<Array<Null<RenderNode>>>;
-	final topologyPositions:Null<Array<Int>>;
-	final topologyChildCounts:Null<Array<Int>>;
+  final keyA:Int;
+  final keyB:Int;
+  public var root(default, null):RenderNode;
+  public final stateIds:Array<Int>;
+  /** Drop targets the build registered; a hit replays them because the interaction forgets them every frame. */
+  public final targets:Array<DockDropTarget>;
+  public final tabTargets:Array<DockTabDropTarget>;
+  public final interactions:InteractionStateSnapshot;
+  /** Observable fields and signals the subtree's build read outside widget state. */
+  public final observed:haxeon.ui.core.Dependencies;
+  /** A hidden pane cannot be reused after one of its retained children moved to another tree. */
+  final topologyNodes:Null<Array<RenderNode>>;
+  final topologyParents:Null<Array<Null<RenderNode>>>;
+  final topologyPositions:Null<Array<Int>>;
+  final topologyChildCounts:Null<Array<Int>>;
 
-	public function new(keyA:Int, keyB:Int, root:RenderNode, stateIds:Array<Int>,
-			interactions:InteractionStateSnapshot, observed:haxeon.ui.core.Dependencies, ?targets:Array<DockDropTarget>,
-			?tabTargets:Array<DockTabDropTarget>, checkTopology:Bool = false, ?context:BuildContext) {
-		this.keyA = keyA;
-		this.keyB = keyB;
-		this.root = root;
-		this.stateIds = stateIds == null ? [] : stateIds.copy();
-		this.interactions = interactions;
-		this.observed = observed;
-		this.targets = targets == null ? [] : targets;
-		this.tabTargets = tabTargets == null ? [] : tabTargets;
-		if (checkTopology) {
-			if (context == null) throw "Pane topology snapshots require a build context";
-			var topologyContext:BuildContext = context;
-			var nodes:Array<RenderNode> = [], parents:Array<Null<RenderNode>> = [], positions:Array<Int> = [],
-				childCounts:Array<Int> = [];
-			function capture(node:RenderNode, variableParent:Bool):Void {
-				var parent = node == root ? null : node.parent;
-				nodes.push(node);
-				parents.push(parent);
-				positions.push(parent == null ? -1 : variableParent ? -2 : parent.children.indexOf(node));
-				// A nested self-updating widget owns its children and may reconcile them while this pane is live.
-				// Its interaction snapshot tracks that build; retain only the children its caller added afterward.
-				var owner = node == root ? null : topologyContext.updatingBuild(node);
-				childCounts.push(owner == null ? node.children.length : -1);
-				for (child in node.children) {
-					var owned = false;
-					if (owner != null && owner.built != null)
-						for (made in owner.built.children) if (made.id.value == child.id.value) { owned = true; break; }
-					if (!owned) capture(child, owner != null);
-				}
-			}
-			capture(root, false);
-			topologyNodes = nodes;
-			topologyParents = parents;
-			topologyPositions = positions;
-			topologyChildCounts = childCounts;
-		} else {
-			topologyNodes = null;
-			topologyParents = null;
-			topologyPositions = null;
-			topologyChildCounts = null;
-		}
-	}
+  public function new(
+    keyA:Int,
+    keyB:Int,
+    root:RenderNode,
+    stateIds:Array<Int>,
+    interactions:InteractionStateSnapshot,
+    observed:haxeon.ui.core.Dependencies,
+    ?targets:Array<DockDropTarget>,
+    ?tabTargets:Array<DockTabDropTarget>,
+    checkTopology:Bool = false,
+    ?context:BuildContext
+  ) {
+    this.keyA = keyA;
+    this.keyB = keyB;
+    this.root = root;
+    this.stateIds = stateIds == null ? [] : stateIds.copy();
+    this.interactions = interactions;
+    this.observed = observed;
+    this.targets = targets == null ? [] : targets;
+    this.tabTargets = tabTargets == null ? [] : tabTargets;
+    if (checkTopology) {
+      if (context == null) throw "Pane topology snapshots require a build context";
+      var topologyContext:BuildContext = context;
+      var nodes:Array<RenderNode> = [],
+        parents:Array<Null<RenderNode>> = [], positions:Array<Int> = [], childCounts:Array<Int> = [];
+      function capture(node:RenderNode, variableParent:Bool):Void {
+        var parent = node == root ? null : node.parent;
+        nodes.push(node);
+        parents.push(parent);
+        positions.push(parent == null ? -1 : variableParent ? -2 : parent.children.indexOf(node));
+        // A nested self-updating widget owns its children and may reconcile them while this pane is live.
+        // Its interaction snapshot tracks that build; retain only the children its caller added afterward.
+        var owner = node == root ? null : topologyContext.updatingBuild(node);
+        var native = topologyContext.renderScopeAt(node);
+        childCounts.push(owner == null && native == null ? node.children.length : -1);
+        for (child in node.children) {
+          var owned = native != null && native.owns(child);
+          if (owner != null
+            && owner.built != null) for (made in owner.built.children) if (made.id.value == child.id.value) {
+            owned = true;
+            break;
+          }
+          if (!owned) capture(child, owner != null || native != null);
+        }
+      }
+      capture(root, false);
+      topologyNodes = nodes;
+      topologyParents = parents;
+      topologyPositions = positions;
+      topologyChildCounts = childCounts;
+    } else {
+      topologyNodes = null;
+      topologyParents = null;
+      topologyPositions = null;
+      topologyChildCounts = null;
+    }
+  }
 
-	public function topologyMatches():Bool {
-		var nodes = topologyNodes, parents = topologyParents, positions = topologyPositions, counts = topologyChildCounts;
-		if (nodes == null) return true;
-		if (parents == null || positions == null || counts == null) throw "Incomplete pane topology snapshot";
-		if (RenderNode.latest(root) != root) return false;
-		for (index in 0...nodes.length) {
-			var node = nodes[index], parent = parents[index];
-			if (counts[index] >= 0 && node.children.length != counts[index]) return false;
-			if (node != root && positions[index] == -2 && (node.parent != parent || parent == null ||
-				parent.children.indexOf(node) < 0)) return false;
-			if (node != root && positions[index] != -2 && (node.parent != parent || parent == null ||
-				positions[index] < 0 || positions[index] >= parent.children.length ||
-				parent.children[positions[index]] != node)) return false;
-		}
-		return true;
-	}
+  public function topologyMatches():Bool {
+    var nodes = topologyNodes, parents = topologyParents, positions = topologyPositions, counts = topologyChildCounts;
+    if (nodes == null) return true;
+    if (parents == null || positions == null || counts == null) throw "Incomplete pane topology snapshot";
+    if (RenderNode.latest(root) != root) return false;
+    var rootOwner = root.scopeOwner();
+    if (rootOwner != null) {
+      var current = rootOwner.currentRoot(root);
+      if (!current.id.equals(root.id)) return false;
+      root = current;
+    }
+    for (index in 0...nodes.length) {
+      var oldNode = nodes[index], native = oldNode.scopeOwner();
+      if (native != null) {
+        var current = native.currentRoot(oldNode);
+        if (!current.id.equals(oldNode.id)) return false;
+        nodes[index] = current;
+      }
+      var oldParent = parents[index];
+      if (oldParent != null) {
+        var nativeParent = oldParent.scopeOwner();
+        if (nativeParent != null) {
+          var current = nativeParent.currentRoot(oldParent);
+          if (!current.id.equals(oldParent.id)) return false;
+          parents[index] = current;
+        }
+      }
 
-	public function matches(otherA:Int, otherB:Int):Bool
-		return keyA == otherA && keyB == otherB;
+      var node = nodes[index], parent = parents[index];
+      if (counts[index] >= 0 && node.children.length != counts[index]) return false;
+      if (node != root && positions[index] == -2
+        && (node.parent != parent || parent == null || parent.children.indexOf(node) < 0)) return false;
+      if (node != root && positions[index] != -2 && (node.parent != parent || parent == null || positions[index] < 0
+        || positions[index] >= parent.children.length || parent.children[positions[index]] != node)) return false;
+    }
+    return true;
+  }
 
-	/** A self-updating widget at the root of the subtree was rebuilt in place; keep the replacement. */
-	public function replaceRoot(next:RenderNode):Void
-		root = next;
+  public function matches(otherA:Int, otherB:Int):Bool return keyA == otherA && keyB == otherB;
 
-	public function statesMatch(context:BuildContext):Bool {
-		return observed.current() && interactions.matches(context);
-	}
+  /** A self-updating widget at the root of the subtree was rebuilt in place; keep the replacement. */
+  public function replaceRoot(next:RenderNode):Void root = next;
 
-	public function dispose():Void {
-		root.detach();
-		interactions.dispose();
-		observed.dispose();
-	}
+  public function statesMatch(context:BuildContext):Bool {
+    return observed.current() && interactions.matches(context);
+  }
+
+  public function dispose():Void {
+    root.detach();
+    interactions.dispose();
+    observed.dispose();
+  }
 }
 
 private class DockDropTargetView implements View {
-	final child:View;
-	final interaction:DockWorkspaceInteraction;
-	final targetPanelId:String;
+  final child:View;
+  final interaction:DockWorkspaceInteraction;
+  final targetPanelId:String;
 
-	public function new(child:View, interaction:DockWorkspaceInteraction,
-			targetPanelId:String) {
-		if (child == null || interaction == null || targetPanelId == null)
-			throw "Dock drop target views require a child, interaction, and target";
-		this.child = child;
-		this.interaction = interaction;
-		this.targetPanelId = targetPanelId;
-	}
+  public function new(child:View, interaction:DockWorkspaceInteraction, targetPanelId:String) {
+    if (child == null || interaction == null
+      || targetPanelId == null) throw "Dock drop target views require a child, interaction, and target";
+    this.child = child;
+    this.interaction = interaction;
+    this.targetPanelId = targetPanelId;
+  }
 
-	public function build(context:BuildContext):RenderNode {
-		var node = child.build(context);
-		interaction.registerTarget(new DockDropTarget(targetPanelId, node));
-		var activePreview = interaction.preview;
-		if (activePreview != null && activePreview.targetPanelId == targetPanelId) {
-			var previewStyle = new LayoutStyle();
-			previewStyle.width = LayoutAxis.grow();
-			previewStyle.height = LayoutAxis.grow();
-			previewStyle.positioning = LayoutPositioning.Absolute;
-			previewStyle.zIndex = 2;
-			var previewNode = new RenderNode(context.id("drop-preview:" + targetPanelId),
-				LayoutVisualKind.Custom, previewStyle);
-			previewNode.setStyleIdentity("dock-drop-preview", targetPanelId);
-			previewNode.hitTestSelf = false;
-			var previewKey = activePreview.sourcePanelId + ":" + activePreview.targetPanelId + ":" +
-				Std.string(activePreview.zone);
-			previewNode.onPaint(function(canvas, geometry) {
-				var preview = interaction.preview;
-				if (preview == null || preview.targetPanelId != targetPanelId)
-					return;
-				canvas.fillRectIfPositive(previewRect(preview.zone, geometry.width, geometry.height),
-					Color.rgba(0.18, 0.52, 0.95, 0.22));
-			}, "dock-drop-preview:" + previewKey);
-			node.add(previewNode);
-		}
-		return node;
-	}
+  public function build(context:BuildContext):RenderNode {
+    var node = child.build(context);
+    interaction.registerTarget(new DockDropTarget(targetPanelId, node));
+    var activePreview = interaction.preview;
+    if (activePreview != null && activePreview.targetPanelId == targetPanelId) {
+      var previewStyle = new LayoutStyle();
+      previewStyle.width = LayoutAxis.grow();
+      previewStyle.height = LayoutAxis.grow();
+      previewStyle.positioning = LayoutPositioning.Absolute;
+      previewStyle.zIndex = 2;
+      var previewNode = context.createNode(
+        context.rootId("drop-preview:" + targetPanelId),
+        LayoutVisualKind.Custom,
+        previewStyle
+      );
+      previewNode.setStyleIdentity("dock-drop-preview", targetPanelId);
+      previewNode.hitTestSelf = false;
+      var previewKey = activePreview.sourcePanelId
+        + ":" + activePreview.targetPanelId + ":" + Std.string(activePreview.zone);
+      previewNode.onPaint(function(canvas, geometry) {
+        var preview = interaction.preview;
+        if (preview == null || preview.targetPanelId != targetPanelId) return;
+        canvas.fillRectIfPositive(
+          previewRect(preview.zone, geometry.width, geometry.height),
+          Color.rgba(0.18, 0.52, 0.95, 0.22)
+        );
+      }, "dock-drop-preview:" + previewKey);
+      node.add(previewNode);
+    }
+    return node;
+  }
 
-	static function previewRect(zone:DockDropZone, width:Float, height:Float):Rect {
-		return switch (zone) {
-			case DockDropZone.Center: new Rect(width * 0.2, height * 0.2, width * 0.6, height * 0.6);
-			case DockDropZone.TabBefore: new Rect(0.0, 0.0, Math.max(3.0, width * 0.08), height);
-			case DockDropZone.TabAfter: new Rect(Math.max(0.0, width * 0.92), 0.0,
-				Math.max(3.0, width * 0.08), height);
-			case DockDropZone.Left: new Rect(0.0, 0.0, width * 0.25, height);
-			case DockDropZone.Right: new Rect(width * 0.75, 0.0, width * 0.25, height);
-			case DockDropZone.Top: new Rect(0.0, 0.0, width, height * 0.25);
-			case DockDropZone.Bottom: new Rect(0.0, height * 0.75, width, height * 0.25);
-		};
-	}
+  static function previewRect(zone:DockDropZone, width:Float, height:Float):Rect {
+    return switch (zone) {
+      case DockDropZone.Center:
+        new Rect(width * 0.2, height * 0.2, width * 0.6, height * 0.6);
+      case DockDropZone.TabBefore:
+        new Rect(0.0, 0.0, Math.max(3.0, width * 0.08), height);
+      case DockDropZone.TabAfter:
+        new Rect(Math.max(0.0, width * 0.92), 0.0, Math.max(3.0, width * 0.08), height);
+      case DockDropZone.Left:
+        new Rect(0.0, 0.0, width * 0.25, height);
+      case DockDropZone.Right:
+        new Rect(width * 0.75, 0.0, width * 0.25, height);
+      case DockDropZone.Top:
+        new Rect(0.0, 0.0, width, height * 0.25);
+      case DockDropZone.Bottom:
+        new Rect(0.0, height * 0.75, width, height * 0.25);
+    };
+  }
 }
 
 /** Bounded measured-width cache for tab labels during repeated workspace builds. */
 /** What a tab label's measured width depends on; hashed and compared by field, so a new style field joins the key. */
 private struct DockTextWidthKey implements Hashable {
-	public final label:String;
-	public final textStyle:TextStyle;
-	public final paragraphStyle:ParagraphStyle;
+  public final label:String;
+  public final textStyle:TextStyle;
+  public final paragraphStyle:ParagraphStyle;
 
-	public function new(label:String, textStyle:TextStyle, paragraphStyle:ParagraphStyle) {
-		this.label = label;
-		this.textStyle = textStyle;
-		this.paragraphStyle = paragraphStyle;
-	}
+  public function new(label:String, textStyle:TextStyle, paragraphStyle:ParagraphStyle) {
+    this.label = label;
+    this.textStyle = textStyle;
+    this.paragraphStyle = paragraphStyle;
+  }
 }
 
 private class DockTextWidthEntry {
-	public final key:DockTextWidthKey;
-	public final width:Float;
+  public final key:DockTextWidthKey;
+  public final width:Float;
 
-	public function new(key:DockTextWidthKey, width:Float) {
-		this.key = key;
-		this.width = width;
-	}
+  public function new(key:DockTextWidthKey, width:Float) {
+    this.key = key;
+    this.width = width;
+  }
 }
 
 private class DockTextWidthCache {
-	static inline var MAX_ENTRIES:Int = 128;
-	var fonts:Null<FontCollection>;
-	final buckets:Map<Int, Array<DockTextWidthEntry>>;
-	var entryCount:Int;
+  static inline var MAX_ENTRIES:Int = 128;
+  var fonts:Null<FontCollection>;
+  final buckets:Map<Int, Array<DockTextWidthEntry>>;
+  var entryCount:Int;
 
-	public function new() {
-		fonts = null;
-		buckets = new Map();
-		entryCount = 0;
-	}
+  public function new() {
+    fonts = null;
+    buckets = new Map();
+    entryCount = 0;
+  }
 
-	public function measure(fonts:FontCollection, label:String, textStyle:TextStyle,
-		paragraphStyle:ParagraphStyle):Float {
-		if (this.fonts != fonts) {
-			this.fonts = fonts;
-			buckets.clear();
-			entryCount = 0;
-		}
-		var key = new DockTextWidthKey(label, textStyle, paragraphStyle);
-		var hash = haxeon.Hashing.hash(key);
-		var bucket = buckets.get(hash);
-		if (bucket != null)
-			for (index in 0...bucket.length)
-				if (bucket[index].key == key)
-					return bucket[index].width;
-		var layout = TextLayout.createStyled(fonts, label, 100000.0, textStyle, paragraphStyle);
-		var width = layout.measure().width;
-		layout.dispose();
-		if (entryCount >= MAX_ENTRIES) {
-			buckets.clear();
-			entryCount = 0;
-			bucket = null;
-		}
-		if (bucket == null) {
-			bucket = [];
-			buckets.set(hash, bucket);
-		}
-		bucket.push(new DockTextWidthEntry(key, width));
-		entryCount++;
-		return width;
-	}
+  public function measure(fonts:FontCollection,
+    label:String, textStyle:TextStyle, paragraphStyle:ParagraphStyle):Float {
+    if (this.fonts != fonts) {
+      this.fonts = fonts;
+      buckets.clear();
+      entryCount = 0;
+    }
+    var key = new DockTextWidthKey(label, textStyle, paragraphStyle);
+    var hash = haxeon.Hashing.hash(key);
+    var bucket = buckets.get(hash);
+    if (bucket != null) for (index in 0...bucket.length) if (bucket[index].key == key) return bucket[index].width;
+    var layout = TextLayout.createStyled(fonts, label, 100000.0, textStyle, paragraphStyle);
+    var width = layout.measure().width;
+    layout.dispose();
+    if (entryCount >= MAX_ENTRIES) {
+      buckets.clear();
+      entryCount = 0;
+      bucket = null;
+    }
+    if (bucket == null) {
+      bucket = [];
+      buckets.set(hash, bucket);
+    }
+    bucket.push(new DockTextWidthEntry(key, width));
+    entryCount++;
+    return width;
+  }
 }

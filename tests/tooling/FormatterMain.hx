@@ -197,6 +197,29 @@ class FormatterMain {
 		if (conditional != expectedConditional)
 			throw "conditional branches disturbed formatter indentation";
 
+		for (inlineConditionalSource in [
+			"function main():Int { var value = #if feature 41 #else 42 #end; return value; }\n",
+			"function main():Int { var value = #if (feature || other)\n41;\n#else\n42;\n#end\nreturn value; }\n",
+			"function main():Int return identity(#if feature 40 #elseif other 41 #else 42 #end);\n"
+		]) {
+			var inlineConditional = SourceFormatter.format(inlineConditionalSource, 2, true);
+			if (inlineConditional == null || SourceFormatter.format(inlineConditional, 2, true) != inlineConditional)
+				throw "inline conditional formatting did not preserve valid, stable source";
+			for (defines in [new Map<String, String>(), ["feature" => "1"], ["other" => "1"]]) {
+				var beforeFile = new SourceFile("inline-before.hx", inlineConditionalSource),
+					afterFile = new SourceFile("inline-after.hx", inlineConditional),
+					beforeActive = compiler.syntax.ConditionalCompilation.process(beforeFile, defines),
+					afterActive = compiler.syntax.ConditionalCompilation.process(afterFile, defines),
+					beforeTokens = new Lexer(beforeFile, beforeActive.text).tokenize(),
+					afterTokens = new Lexer(afterFile, afterActive.text).tokenize();
+				if (beforeTokens.length != afterTokens.length)
+					throw "inline conditional formatting changed active token count";
+				for (index in 0...beforeTokens.length)
+					if (beforeTokens[index].kind != afterTokens[index].kind || beforeTokens[index].text != afterTokens[index].text)
+						throw "inline conditional formatting changed an active branch";
+			}
+		}
+
 		var disabledSource = "function main():Int { // @formatter:off\n   var   untouched=foo( 1,2 );\n // @formatter:on\nreturn 0; }\n",
 			disabled = SourceFormatter.format(disabledSource, 2, true),
 			expectedDisabled = "function main():Int { // @formatter:off\n   var   untouched=foo( 1,2 );\n // @formatter:on\n  return 0;\n}\n";

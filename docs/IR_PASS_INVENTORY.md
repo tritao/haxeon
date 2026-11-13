@@ -74,6 +74,8 @@ committed; status is `done`, `active` or `queued`. The declaration model it rest
 | Value-array names and the runtime-array native registry | a1 | `a1-internals` | queued |
 | Enum-pass consolidation: a phase-order document first (reviewed by dev-71 before code), adapter escapes expressed as typed operations | a1 | `a1-internals` | active: phase-order proposal for dev-71 review |
 | Typed dynamic sites: producer and backend boundary proposal | a1 | `a1-internals` | active (claimed 2026-11-12) |
+| Wasm GC closure adapters as IR | a1 | `a1-enum-producer` | active (claimed 2026-11-12) |
+| Value-constructor destination through the scalar ABI: design note for dev-71 review | a1 | `a1-value-constructor-design` | active (claimed 2026-11-13) |
 | Documentation cleanup into `docs/history/` | a1 | `a1-internals` | done (2026-11-12) |
 | §13 reachability walk over declared providers, pruning before the passes, one frontend pass | dev-c5 | `warm-rebuild-reuse` | queued; waits on the §13 design decisions |
 | Warm-rebuild correctness: the edit sweep, the shared-helper origin (`docs/HELPER_OWNERSHIP.md`) | dev-c5 | `warm-rebuild-reuse` | active |
@@ -97,6 +99,15 @@ bounds and panel-flows inspection-camera label. The rebased editor and Web compa
 functions; the exact allocation windows matched. One-shot typing and memory measurements were noisy under concurrent
 builds. The complete control, per-run measurements, module hashes and accepted baseline messages are preserved in the
 [November 2026 gate history](history/ir-pass-inventory-2026-11.md).
+
+On outer `8ced7e09a`, the app suite also stopped at `Worker document tests failed: schema v17 is unsupported;
+expected v18`. The same message occurs with the unchanged `124b72aa0` control compiler in the same outer worktree;
+the candidate and control logs are `q3-outer-logs/app-tests.log` and `q3-outer-logs/control-app-tests.log` under
+`/media/joao/DATA1/haxeon-a1-gates/`. The remaining outer gates were run separately: retention and budgets encountered
+the previously recorded `Inspection camera ignored its view label` baseline, and the headless-only check passed.
+On the updated outer base `60d9d4c36`, the app suite passes, including with its test temporary directory under
+`TMPDIR`; retention and budgets still report the inspection-camera baseline, and headless-only passes. The logs are
+under `/media/joao/DATA1/haxeon-a1-gates/q3-outer-60d-logs/`.
 
 ## Measurement
 
@@ -124,6 +135,9 @@ most of those 17M before any pass is ported.
   contributions and the object/interface/enum tables. Generators of helper functions belong here: the helper set is a function of
   the summary.
 - **(c) global**: the rewrite needs other functions' bodies, or the summary is a fixpoint over a call-dependency graph.
+
+`IrInlineEnumRequests` is transitional: delete it together with the whole-program enum rescans when enum operations are
+resolved at the reviewed backend boundaries in [the phase-order plan](ENUM_PASS_PHASE_ORDER.md).
 
 ## Per pass
 

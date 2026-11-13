@@ -16,7 +16,7 @@ JSON
 export LD_LIBRARY_PATH="$root/out:$("$root/scripts/hashlink-path.sh")${LD_LIBRARY_PATH:+:$LD_LIBRARY_PATH}"
 fixtures=("$@")
 if [[ ${#fixtures[@]} == 0 ]]; then
-  fixtures=(RenderScopeMain TrackedScopeMain EqualChildMain BoundTextMain BoundTextFailureMain BindingLifetimeMain TextIconMain IconButtonMain)
+  fixtures=(UiEventPhaseMain WidgetIdCacheMain ScopeFullFrameOwnershipMain ScopeLegacyCacheLifetimeMain ScopeLegacyReplacementMain ScopeInstanceLifetimeMain ScopeCachedNestedLifetimeMain ScopeRootStateMain ScopeVariantRootMain ScopeNodeFieldsMain SelectionFocusMain MenuMeasurementMain IdSetMain StateStoreFlatMain ScopeRootBoundaryMain RenderScopeMain TrackedScopeMain EqualChildMain BoundTextMain BoundTextFailureMain BindingLifetimeMain TextIconMain IconButtonMain ButtonMain ScopeInputsMain FocusCaptureMain FocusDispatchAllocations)
 fi
 for fixture in "${fixtures[@]}"; do
   for inline in 0 1; do
@@ -30,6 +30,16 @@ for fixture in "${fixtures[@]}"; do
             platform_hxi="$root/packages/platform/bindings/nativekit-wasm.hxi"
             net_hxi="$root/packages/platform/bindings/nativekit-net-wasm.hxi"
             ui_hxi="$ui/bindings/nativekit-ui-wasm.hxi"
+        fi
+        census_class=""
+        case "$fixture" in
+            FocusDispatchAllocations) census_class=FocusDispatchCensus ;;
+            WidgetIdCacheMain) census_class=WidgetIdCacheCensus ;;
+        esac
+        if [[ -n $census_class && $target != hl ]]; then
+            options+=("--export=$census_class.prepare" "--export=$census_class.perform")
+            if [[ $target == wasm32 ]]; then options+=(--wasm-memory-stats);
+            else options+=(--wasm-gc-allocation-count); fi
         fi
         artifact="$tmp/$inline-$target"
         if ! HAXEON_INLINE="$inline" "$hl" "$compiler" "${options[@]}" --output="$artifact" \
@@ -49,10 +59,10 @@ for fixture in "${fixtures[@]}"; do
             set -e
             if [[ $status != 42 ]]; then echo "FAIL: $target inline=$inline returned $status" >&2; exit 1; fi
         else
-            node - "$artifact" "$target" "$inline" <<'JS'
+            node - "$artifact" "$target" "$inline" "$fixture" <<'JS'
 const fs = require("fs");
 (async () => {
-  const [file, target, inline] = process.argv.slice(2);
+  const [file, target, inline, fixture] = process.argv.slice(2);
   const module = new WebAssembly.Module(fs.readFileSync(file));
   const imports = {env: {memory: new WebAssembly.Memory({initial: 4096, maximum: 4096})}};
   class ExitSignal { constructor(code) { this.code = code; } }
@@ -76,8 +86,48 @@ const fs = require("fs");
   try { result = instance.exports.main(); }
   catch (error) { if (error instanceof ExitSignal) result = error.code; else throw error; }
   if (result !== 42) throw new Error(`${target} inline=${inline} returned ${result}`);
+  if (fixture === "FocusDispatchAllocations" || fixture === "WidgetIdCacheMain") {
+    const exports = instance.exports;
+    const census = fixture === "FocusDispatchAllocations" ? "FocusDispatchCensus" : "WidgetIdCacheCensus";
+    const perIteration = fixture === "FocusDispatchAllocations" ? 6 : 1;
+    exports[`${census}.prepare`]();
+    exports[`${census}.perform`](8);
+    const count = target === "wasm32" ? exports["haxeon.memory.allocation_count"] : exports.__allocation_count;
+    for (const n of [8, 1024]) {
+      const before = count();
+      const delivered = exports[`${census}.perform`](n);
+      const allocations = count() - before;
+      if (delivered !== n * perIteration || allocations !== 0)
+        throw new Error(`${fixture} ${target} inline=${inline}: delivered=${delivered}, allocations=${allocations}`);
+      console.log(`PASS: ${fixture} on ${target}, inline=${inline}, n=${n}, allocations=0`);
+    }
+  }
 })().catch(error => { console.error(error); process.exit(1); });
 JS
+        fi
+        if [[ $fixture == UiEventPhaseMain ]]; then
+            for invalid in UiEventPhaseAssignment UiEventPhaseRegistration; do
+                if HAXEON_INLINE="$inline" "$hl" "$compiler" "${options[@]}" --output="$tmp/invalid-$target" \
+                    --entry="$invalid" --root="$ui/tests/haxeon/negative" --root="$ui/haxe" \
+                    --root="$ui/bindings/haxe" --root="$root/packages/editor/src" --root="$root/packages/platform/src" \
+                    --ffi-interface="$platform_hxi" --ffi-projection="$root/packages/platform/bindings/nativekit.hxmap" \
+                    --ffi-interface="$net_hxi" --ffi-projection="$root/packages/platform/bindings/nativekit-net.hxmap" \
+                    --ffi-interface="$ui_hxi" --ffi-projection="$ui/bindings/nativekit-ui.hxmap" \
+                    "$ui/tests/haxeon/negative/$invalid.hx" > "$tmp/invalid.log" 2>&1; then
+                    echo "FAIL: $invalid accepted a string phase on $target" >&2
+                    exit 1
+                fi
+                if [[ $invalid == UiEventPhaseAssignment ]]; then
+                    expected='E1002: Type mismatch for field "event.phase"'
+                else
+                    expected='E1009: Type mismatch for argument 3 to "haxeon.ui.core.RenderNode.on"'
+                fi
+                if ! rg -Fq "$expected" "$tmp/invalid.log"; then
+                    cat "$tmp/invalid.log" >&2
+                    exit 1
+                fi
+                echo "PASS: $invalid rejects string phase on $target, inline=$inline"
+            done
         fi
         echo "PASS: $fixture on $target, inline=$inline"
     done
