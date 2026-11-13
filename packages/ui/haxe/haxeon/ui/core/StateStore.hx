@@ -7,8 +7,7 @@ class StateStore {
   final scopes:Map<Int, RenderScope> = new Map();
   // A cached alternative owns its component instances even when their widget IDs match the visible alternative.
   var nextScopeId:Int = -1;
-  final scopeIdentities:IdSet = new IdSet(256);
-  var scopeIdentitiesDirty:Bool = true;
+  final retainedWidgetScratch:IdSet = new IdSet(256);
 
   /** Resource ownership follows the current body, rather than a cache's initial flattened ID list. */
   final ownedStates:Map<Int, Array<Int>> = new Map();
@@ -79,11 +78,12 @@ class StateStore {
 
   /** Keep diagnostic paths only for mounted nodes or retained application state. */
   public function prunePaths(mounted:Map<Int, RenderNode>):Void {
+    var retained = retainedWidgetIds(mounted);
     var read = 0, write = 0;
     while (read < pathIds.length) {
       var id = pathIds[read++];
       if (!paths.exists(id)) continue;
-      if (!mounted.exists(id) && !handles.exists(id) && !hasScopeIdentity(id)) paths.remove(id);
+      if (!mounted.exists(id) && !handles.exists(id) && !retained.has(id)) paths.remove(id);
       else pathIds[write++] = id;
     }
     pathIds.resize(write);
@@ -105,17 +105,22 @@ class StateStore {
     return id;
   }
 
-  /** Resource identity is per instance; this flat membership keeps its stable widget paths alive. */
-  public function hasScopeIdentity(id:Int):Bool {
-    if (scopeIdentitiesDirty) {
-      scopeIdentities.clear();
-      for (index in 0...managedCount) {
-        var owner = scopes.get(managedIds[index]);
-        if (owner != null && !owner.disposed) scopeIdentities.add(owner.identityId);
-      }
-      scopeIdentitiesDirty = false;
+  /** Borrowed membership for one key-cache prune, including hidden native bodies. */
+  @:allow(haxeon.ui.core.WidgetIdCache) function retainedWidgetIds(mounted:Map<Int, RenderNode>):IdSet {
+    retainedWidgetScratch.clear();
+    for (index in 0...managedCount) {
+      var owner = scopes.get(managedIds[index]);
+      if (owner == null || owner.disposed) continue;
+      retainedWidgetScratch.add(owner.identityId);
+      if (owner.root != null && mounted.get(owner.root.id.value) != owner.root) retainBodyWidgetIds(owner.root,
+        mounted);
     }
-    return scopeIdentities.has(id);
+    return retainedWidgetScratch;
+  }
+
+  function retainBodyWidgetIds(node:RenderNode, mounted:Map<Int, RenderNode>):Void {
+    if (!mounted.exists(node.id.value)) retainedWidgetScratch.add(node.id.value);
+    for (child in node.children) retainBodyWidgetIds(child, mounted);
   }
 
   public function scopeOwner(id:Int):Null<RenderScope> return scopes.get(id);
@@ -127,7 +132,6 @@ class StateStore {
     var previous = scopes.get(id);
     if (previous != null && previous != owner) throw "Native scope resource already has an owner";
     scopes.set(id, owner);
-    scopeIdentitiesDirty = true;
     if (!managed.has(id)) {
       managed.add(id);
       appendManaged(id);
@@ -141,7 +145,6 @@ class StateStore {
     scopes.remove(id);
     ownedStates.remove(id);
     managed.remove(id);
-    scopeIdentitiesDirty = true;
     if (!sweeping && managedCount > 256 && managedCount > managed.count() * 2) compactManaged();
   }
 
@@ -254,7 +257,6 @@ class StateStore {
       managed.remove(id);
       handles.remove(id);
       scopes.remove(id);
-      scopeIdentitiesDirty = true;
       ownedStates.remove(id);
     }
     if (stale.length > 0) compactManaged();
@@ -329,7 +331,6 @@ class StateStore {
     frameActive = false;
     handles.clear();
     scopes.clear();
-    scopeIdentitiesDirty = true;
     ownedStates.clear();
     paths.clear();
     pathIds.resize(0);

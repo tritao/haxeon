@@ -1228,6 +1228,29 @@ retention scenarios, budgets that may only go down, memory runs, compiler suites
    `interaction-store-3d8a96e58-focused.log`, `interaction-store-3d8a96e58-remaining-wasm-summary.json`, and
    `ui-hl-reflect-copy-3d8a96e58-report.md` under the DATA1 evidence directory.
 
+   **Hidden native-body key lifetime (measured follow-up).** Pruning kept a native owner's identity path but
+   discarded stateless descendants of its retained, unmounted body. A minimal regression fails with
+   "Pruning dropped a child ID of a retained native body". Key and diagnostic-path pruning now share a
+   borrowed flat membership set containing live scope identities and hidden body descendants; disposed
+   bodies no longer retain those paths. The prototype passes all three targets with inlining off/on and
+   zero allocations over 1,024 prepared prune workloads. Undo, tab and pilot verification also pass.
+   On `3d8a96e58`, the paired 15 editor actions save 19 objects / 1,840 bytes on hierarchy→sensors,
+   19 / 1,864 on sensors→hierarchy, and 5 / 80 on selection relative to the interaction-store checkpoint;
+   the other twelve actions match. Against the published UI control, sensors→hierarchy and
+   telemetry→console still each add 42 objects / 3,712 bytes, including a Button body rebuilt to correct
+   stale hover. Those increases remain unaccepted. Evidence: `retained-widget-id-parity-summary.json`
+   and `retained-widget-id-editor-15-comparison.json` on DATA1. Production Tier 1 passes 904/904;
+   the regression and nested-cache lifetime fixtures pass all three targets with inlining off/on.
+   The additional WidgetIdCache and flat-state fixtures pass both Wasm targets; their HashLink checks
+   reproduce the same reflected-copy compiler failure on the published UI control. This is a local
+   checkpoint: the remaining batch gates and complete census are still required before publication.
+
+   The fresh control pilot census again stops on `cnc-progress` with the analyzer's stack/type byte
+   reconciliation assertion. This time the original raw window is preserved: type counts total 9,361
+   objects / 415,680 bytes; stack samples total 415,665 bytes including the expected extra calibration
+   byte. The `bytes` type alone is missing 16 sampled bytes. No subtraction or retry is accepted and
+   no complete 22-action comparison is claimed. See `undo-3d8a96e58-census-accounting-failure.json`.
+
    **Independent review corrections (local, before renewed gates).** The body-root batch `0892af06d` had four
    reproduced correctness defects. `ScopeRootStateMain` overflowed recursive `StateStore.retain` for a Checkbox
    with `onChange`; the actual TextField fixture with loaded fonts threw "Native scope resource has a different

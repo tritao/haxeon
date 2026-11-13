@@ -16,7 +16,7 @@ JSON
 export LD_LIBRARY_PATH="$root/out:$("$root/scripts/hashlink-path.sh")${LD_LIBRARY_PATH:+:$LD_LIBRARY_PATH}"
 fixtures=("$@")
 if [[ ${#fixtures[@]} == 0 ]]; then
-  fixtures=(UiEventPhaseMain WidgetIdCacheMain InteractionStateStoreMain ScopeFullFrameOwnershipMain ScopeLegacyCacheLifetimeMain ScopeLegacyReplacementMain ScopeInstanceLifetimeMain ScopeCachedNestedLifetimeMain ScopeRootStateMain ScopeVariantRootMain ScopeNodeFieldsMain ScopePatchOrderMain ScopeIncomingInteractionMain RoutingStateMain SelectionFocusMain MenuMeasurementMain IdSetMain StateStoreFlatMain ScopeRootBoundaryMain RenderScopeMain TrackedScopeMain EqualChildMain BoundTextMain BoundTextFailureMain BindingLifetimeMain TextIconMain IconButtonMain ButtonMain ScopeInputsMain FocusCaptureMain FocusDispatchAllocations)
+  fixtures=(UiEventPhaseMain WidgetIdCacheMain RetainedWidgetIdMain InteractionStateStoreMain ScopeFullFrameOwnershipMain ScopeLegacyCacheLifetimeMain ScopeLegacyReplacementMain ScopeInstanceLifetimeMain ScopeCachedNestedLifetimeMain ScopeRootStateMain ScopeVariantRootMain ScopeNodeFieldsMain ScopePatchOrderMain ScopeIncomingInteractionMain RoutingStateMain SelectionFocusMain MenuMeasurementMain IdSetMain StateStoreFlatMain ScopeRootBoundaryMain RenderScopeMain TrackedScopeMain EqualChildMain BoundTextMain BoundTextFailureMain BindingLifetimeMain TextIconMain IconButtonMain ButtonMain ScopeInputsMain FocusCaptureMain FocusDispatchAllocations)
 fi
 for fixture in "${fixtures[@]}"; do
   for inline in 0 1; do
@@ -36,6 +36,7 @@ for fixture in "${fixtures[@]}"; do
             FocusDispatchAllocations) census_class=FocusDispatchCensus ;;
             WidgetIdCacheMain) census_class=WidgetIdCacheCensus ;;
             InteractionStateStoreMain) census_class=InteractionStateStoreMain ;;
+            RetainedWidgetIdMain) census_class=RetainedWidgetIdMain ;;
         esac
         if [[ -n $census_class && $target != hl ]]; then
             options+=("--export=$census_class.prepare" "--export=$census_class.perform")
@@ -87,10 +88,10 @@ const fs = require("fs");
   try { result = instance.exports.main(); }
   catch (error) { if (error instanceof ExitSignal) result = error.code; else throw error; }
   if (result !== 42) throw new Error(`${target} inline=${inline} returned ${result}`);
-  if (fixture === "FocusDispatchAllocations" || fixture === "WidgetIdCacheMain" || fixture === "InteractionStateStoreMain") {
+  if (fixture === "FocusDispatchAllocations" || fixture === "WidgetIdCacheMain" || fixture === "InteractionStateStoreMain" || fixture === "RetainedWidgetIdMain") {
     const exports = instance.exports;
     const census = fixture === "FocusDispatchAllocations" ? "FocusDispatchCensus" :
-      fixture === "WidgetIdCacheMain" ? "WidgetIdCacheCensus" : "InteractionStateStoreMain";
+      fixture === "WidgetIdCacheMain" ? "WidgetIdCacheCensus" : fixture;
     const perIteration = fixture === "FocusDispatchAllocations" ? 6 : 1;
     exports[`${census}.prepare`]();
     exports[`${census}.perform`](8);

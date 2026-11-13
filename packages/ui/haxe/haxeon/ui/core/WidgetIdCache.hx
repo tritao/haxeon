@@ -52,10 +52,11 @@ class WidgetIdCache {
 
   /** Preserve sorted order and release stale references without resizing either backing array. */
   public function prune(mounted:Map<Int, RenderNode>, states:StateStore):Void {
+    var retained = states.retainedWidgetIds(mounted);
     var previous = count, write = 0;
     for (read in 0...previous) {
       var id = ids[read];
-      if (id != null && (mounted.exists(id.value) || states.contains(id) || states.hasScopeIdentity(id.value))) {
+      if (id != null && (mounted.exists(id.value) || states.contains(id) || retained.has(id.value))) {
         if (write != read) {
           paths[write] = paths[read];
           ids[write] = id;
