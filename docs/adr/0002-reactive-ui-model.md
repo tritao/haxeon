@@ -1259,6 +1259,16 @@ retention scenarios, budgets that may only go down, memory runs, compiler suites
    `c6da3300b-retired-baseline-focused-summary.json` and `compiler-baseline-exceptions-current.json`.
    The separate HashLink census accounting failure remains unresolved; this compiler fix does not waive it.
 
+   **Settings compiler baseline on `c6da3300b`.** The renewed settings project gate fails with
+   `HashLink lowering failed for $value-dynamic-equal: Object type "Obj(haxeon.ui.core.PointerLocation)"
+   must be registered before use`. A standalone project-source replay reproduces the same lowering
+   failure on both the typed-ID candidate and unmodified `c6da3300b` UI, using the same compiler and
+   FFI inputs. This is separate from the retired reflected-copy failure. Compiler sources are unchanged;
+   settings is recorded as baseline red, not retried to obtain a pass. Evidence:
+   `settings-c6da3300b-roots-corrected-lowering-control.json` and
+   `compiler-baseline-exceptions-current.json`. The first replay attempt supplied nonexistent source
+   roots and failed before lowering; its setup failure remains recorded separately.
+
    **Typed scope resources (implementation under validation).** Replace the negative-number namespace with
    `ScopeResourceId`, an erased integer abstract accepted by scope-owner APIs. Widget APIs continue to take
    `WidgetId`. Mixed ownership and liveness lists use the separate erased `ResourceId`: its low bit selects
@@ -1285,6 +1295,33 @@ retention scenarios, budgets that may only go down, memory runs, compiler suites
    `scope-id-c6da3300b-editor-verification.json` and `scope-id-c6da3300b-paired-build-audit.json`.
    DATA1 evidence: `scope-id-cold-c6da3300b-summary.json`,
    `typed-scope-id-c6da3300b-frozen-inputs.json`, and `typed-scope-id-c6da3300b-component-model-summary.json`.
+
+   **Rejected return-tab constructor optimization.** An isolated Button probe moves the callback wrapper
+   from description construction to body construction. It saves 40 objects per twenty descriptions on
+   all three targets (HL 960 bytes; Wasm32 640 bytes), with callback/disabled/precedence checks passing
+   inlining off/on. However, the current return-tab action traces allocate no Button descriptions:
+   their Button allocations are body-build label closures. Constructor savings cannot remove that
+   body cost. No production change is made and the queued optimization editor builds were canceled
+   before starting. See `button-activation-c6da3300b-probe-summary.json` and
+   `button-activation-return-tab-rejection.json`. The fresh matched `c6da3300b` control comparison
+   confirms +42 objects / +3,712 bytes for both sensors-to-hierarchy and telemetry-to-console; all
+   other thirteen editor actions are unchanged or lower. These increases remain unaccepted. See
+   `undo-order-c6da3300b-editor-15-comparison.json`; this is not a complete 22-action census.
+
+   **Retained-tree claim traversal (under validation).** The action trace attributes six capturing
+   visitors and six function objects to `BuildContext.claimRetainedTree` in a return-tab window.
+   Replace that visitor with direct recursive ID claiming, preserving traversal order and duplicate-ID
+   errors without introducing storage or an update path. `RetainedClaimMain` fails before the fix with
+   49,152 allocated bytes over 1,024 claims, then passes on HL, Wasm32 and Wasm GC with inlining off/on;
+   all measured claims allocate zero. Seventeen IDs are claimed and a duplicate root is rejected.
+   Tier 1 passes 907/0 and four affected component fixtures pass all 24 target/inline configurations.
+   The fresh editor capture saves 12 objects / 288 bytes on each tab switch and eight / 192 on
+   selection, with no other action changing. Return-tab actions remain +30 objects / +3,424 bytes
+   against the pushed UI control and remain unaccepted. The final fixture also fails against the
+   frozen pre-fix source with the same 49,152-byte error; its source-root override is explicit.
+   See `retained-claim-focused-summary.json`, `retained-claim-affected-components-summary.json`,
+   `retained-claim-c6da3300b-vs-pushed-editor-15.json` and
+   `retained-claim-old-final-fixture-explicit-root.log`.
 
    **Decorations as inputs — direction approved, implementation deferred until undo publication.** The reviewed inventory
    contains 69 site groups in 46 files: 40 production UI groups, 10 outer groups (including one test),

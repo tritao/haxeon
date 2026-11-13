@@ -1444,10 +1444,12 @@ class BuildContext {
     adoptRenderScopes(root, activeRenderScope);
     // Independent builds claim their completed tree when it returns to the enclosing build.
     if (patching || buildingRenderScope) return;
-    root.walk(function(node) {
-      if (!claimed.add(node.id.value)) throw 'Duplicate retained widget ID ${node.id.value}';
-    }
-    );
+    claimRetainedIds(root);
+  }
+
+  function claimRetainedIds(node:RenderNode):Void {
+    if (!claimed.add(node.id.value)) throw 'Duplicate retained widget ID ${node.id.value}';
+    for (child in node.children) claimRetainedIds(child);
   }
 
   /** Opens an already initialized value without supplying an unused placeholder. */
