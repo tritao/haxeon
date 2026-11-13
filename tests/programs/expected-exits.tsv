@@ -574,3 +574,4 @@ q3-nullary-enum-string	42
 q3-dynamic-array-boundaries	42
 q3-dynamic-equality-fallbacks	42
 inline-enum-canonical-flat	42
+equality-array-conformance	42

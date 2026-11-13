@@ -215,6 +215,10 @@ typedef TypedSwitchArrayPattern = {final elements:Array<TypedSwitchArrayElement>
 typedef TypedSwitchArrayElement = {
 	final type:CompilerType;
 	final value:Null<TypedExpression>;
+
+	/** Declared value equality for a value-pattern comparison, if one is required. */
+	final equalityFunction:Null<String>;
+
 	final subjectBinding:Null<String>;
 	final isCatchAll:Bool;
 	final constructorIndex:Int;

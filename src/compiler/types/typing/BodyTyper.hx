@@ -1156,6 +1156,7 @@ class BodyTyper {
 						subjectBinding = isCatchAll ? null : switchSubjectBinding(pattern, elementType, scope),
 						enumPattern = subjectBinding == null && !isCatchAll ? typeEnumPattern(pattern, elementType, scope) : null,
 						typedValue:Null<TypedExpression> = null,
+						equalityFunction:Null<String> = null,
 						constructorIndex = -1,
 						bindings:Array<TypedSwitchBinding> = [],
 						predicates:Array<TypedSwitchPredicate> = [];
@@ -1169,10 +1170,28 @@ class BodyTyper {
 						var literal = enumLiteral(typedValue);
 						if (literal != null)
 							constructorIndex = literal.index;
+						if (literal == null && !AstPredicates.isNullExpression(pattern)) {
+							var valueType = switch elementType {
+								case TNullable(inner): inner;
+								default: elementType;
+							};
+							var needsConformance = session.relations.isStruct(valueType) || (switch valueType {
+								case TArray(_): true;
+								default: false;
+							});
+							if (needsConformance && !DeclaredConformance.supportsEquality(session, elementType))
+								fail("E1025", 'Type "${compiler.semantic.SemanticSignature.display(elementType)}" does not conform to Equatable',
+									typedValue.span);
+							if (DeclaredConformance.usesEquality(session, elementType)) {
+								ValueEqualityGenerator.request(session, elementType, session.currentContext.name, typedValue.span);
+								equalityFunction = ValueEqualityGenerator.equalsName(elementType);
+							}
+						}
 					}
 					elements.push({
 						type: elementType,
 						value: typedValue,
+						equalityFunction: equalityFunction,
 						subjectBinding: subjectBinding,
 						isCatchAll: isCatchAll,
 						constructorIndex: constructorIndex,

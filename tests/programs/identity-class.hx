@@ -111,8 +111,8 @@ function main():Int {
   objects.set(a, 1);
   objects.set(b, 2);
   if (objects.get(a) != 1 || objects.get(b) != 2) return 10;
-  if (haxeon.Equality.equals(a, b) || !haxeon.Equality.equals(a, a)) return 11;
-  if (haxeon.Equality.equals(av, bv) || !haxeon.Equality.equals(av, alias)) return 12;
+  if (a == b || a != a) return 11;
+  if (av == bv || av != alias) return 12;
   IdentityClassCensus.prepare();
   #if !wasm
   var before = hl.Gc.totalAllocated();

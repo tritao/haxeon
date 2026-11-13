@@ -3400,7 +3400,9 @@ class IrGenerator {
 					var expected = lowerExpression(value, builder, localTypes),
 						matches = if (isNullExpression(value)) builder.equal(elementValue,
 							builder.constNull(elementType)); else if (isStringPatternType(value.type)) builder.call("__string_equal",
-							[elementValue, expected], Bool); else builder.equal(elementValue, expected);
+							[elementValue, expected],
+							Bool); else if (elementPattern.equalityFunction != null) builder.call(elementPattern.equalityFunction, [elementValue, expected],
+							Bool); else builder.equal(elementValue, expected);
 					builder.branch(matches, successBlock, nextBlock);
 				}
 			}

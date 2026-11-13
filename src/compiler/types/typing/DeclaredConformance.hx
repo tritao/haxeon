@@ -13,6 +13,7 @@ class DeclaredConformance {
 	public static function usesEquality(session:TypingSession, type:CompilerType):Bool
 		return switch type {
 			case TKeyPath(_, _, _): true;
+			case TArray(element): supportsEquality(session, element);
 			case TNullable(element): usesEquality(session, element);
 			case TInstance(NominalKind.Class, _, _): session.relations.isStruct(type) && has(session, type, "Equatable");
 			default: false;
@@ -24,6 +25,7 @@ class DeclaredConformance {
 			case TInt, TInt64, TFloat, TBool, TString, TNativeScalar(_), TKeyPath(_, _, _): true;
 			case TAbstract(name, _, representation) if (session.declarations.enumAbstracts.exists(name)): supportsEquality(session, representation);
 			case TNullable(element): supportsEquality(session, element);
+			case TArray(element): supportsEquality(session, element);
 			case TInstance(NominalKind.Class, _, _): session.relations.isStruct(type) && has(session, type, "Equatable");
 			case TInstance(NominalKind.Enum, _, _), TTypeParameter(_, _): has(session, type, "Equatable");
 			default: false;
@@ -54,11 +56,7 @@ class DeclaredConformance {
 				if (usesEquality(session, type))
 					ValueEqualityGenerator.request(session, type, session.currentContext.name, span);
 			} else
-				switch type {
-					case TInstance(NominalKind.Class, _, _):
-						BodyTyper.fail("E1025", 'Type "${compiler.semantic.SemanticSignature.display(type)}" does not conform to Hashable', span);
-					default:
-				}
+				BodyTyper.fail("E1025", 'Type "${compiler.semantic.SemanticSignature.display(type)}" does not conform to Hashable', span);
 		}
 	}
 }

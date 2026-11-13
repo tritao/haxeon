@@ -1,4 +1,3 @@
-import haxeon.Equality;
 import haxeon.Diff;
 
 class Point {
@@ -53,7 +52,7 @@ function main():Int {
   if (Diff.all(Style) != 63) return 8;
   var p = new Point(), q = new Point();
   q.y = 1.0;
-  if (Equality.equals(p, q)) return 9;
+  if (p == q) return 9;
   // Replacing a reference field changes identity even when its fields match.
   var c = Diff.copy(a);
   c.origin = new Point();

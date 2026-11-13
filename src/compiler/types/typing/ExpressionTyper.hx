@@ -1146,8 +1146,12 @@ class ExpressionTyper {
 
 	public function typeArrayLiteral(values:Array<AstExpression>, span:SourceSpan, scope:Scope, expectedType:Null<CompilerType>):TypedExpression {
 		var expectedMap = mapExpectation(expectedType);
-		if (values.length == 0 && expectedMap != null)
+		if (values.length == 0 && expectedMap != null) {
+			DeclaredConformance.requestHashableMapKey(session, expectedMap.key, span);
+			if (session.mapName(expectedMap.key, expectedMap.value) == null)
+				fail("E1016", "This map key/value type has no compiler-owned runtime ABI", span);
 			return new TypedExpression(TMapLiteral([]), TMap(expectedMap.key, expectedMap.value), span);
+		}
 		// In a Dynamic context the elements still decide the type, as they would anywhere else ([new Child()] is an
 		// Array<Child>, which does not convert to Array<Base>); only elements with no common type, or none, make it Dynamic.
 		var dynamicContext = isDynamicExpectation(expectedType);
@@ -2206,6 +2210,12 @@ class ExpressionTyper {
 			default: false;
 		};
 
+	function usesOperatorEquality(type:CompilerType):Bool
+		return switch type {
+			case TArray(_): false;
+			default: DeclaredConformance.usesEquality(session, type);
+		};
+
 	function compareOperands(left:TypedExpression, right:TypedExpression, operation:Int, span:SourceSpan, reversed:Bool):TypedExpression {
 		if (operation == 2 && !isNullOperand(left) && !isNullOperand(right))
 			for (operand in [left, right]) {
@@ -2258,7 +2268,7 @@ class ExpressionTyper {
 		// null test so flow narrowing can recognize it; nullable struct copies are made at actual bindings instead.
 		if (operation == 2 && isNullable(left.type) && TypeRelations.equals(left.type, right.type)) {
 			var declaredNullable = switch left.type {
-				case TNullable(element): session.relations.isStruct(element) || DeclaredConformance.usesEquality(session, element);
+				case TNullable(element): session.relations.isStruct(element) || usesOperatorEquality(element);
 				default: false;
 			};
 			if ((session.relations.isNullableValueClass(left.type) || declaredNullable) && !isNullOperand(left) && !isNullOperand(right)) {
@@ -2270,7 +2280,7 @@ class ExpressionTyper {
 		if (operation == 2) {
 			var nullableElement:Null<CompilerType> = switch left.type {
 				case TNullable(element)
-					if ((session.relations.isStruct(element) || DeclaredConformance.usesEquality(session, element))
+					if ((session.relations.isStruct(element) || usesOperatorEquality(element))
 						&& TypeRelations.equals(element, right.type)): element;
 				default: null;
 			};
@@ -2280,9 +2290,8 @@ class ExpressionTyper {
 				return new TypedExpression(TCall(ValueEqualityGenerator.equalsName(left.type), [left, right]), TBool, span);
 			}
 			nullableElement = switch right.type {
-				case TNullable(element)
-					if ((session.relations.isStruct(element) || DeclaredConformance.usesEquality(session, element))
-						&& TypeRelations.equals(element, left.type)): element;
+				case TNullable(element) if ((session.relations.isStruct(element) || usesOperatorEquality(element))
+					&& TypeRelations.equals(element, left.type)): element;
 				default: null;
 			};
 			if (nullableElement != null) {
@@ -2305,7 +2314,7 @@ class ExpressionTyper {
 						span);
 				default:
 			}
-		if (operation == 2 && TypeRelations.equals(left.type, right.type) && DeclaredConformance.usesEquality(session, left.type)) {
+		if (operation == 2 && TypeRelations.equals(left.type, right.type) && usesOperatorEquality(left.type)) {
 			ValueEqualityGenerator.request(session, left.type, session.currentContext.name, span);
 			return new TypedExpression(TCall(ValueEqualityGenerator.equalsName(left.type), [left, right]), TBool, span);
 		}

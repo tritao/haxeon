@@ -254,6 +254,7 @@ class TestCatalog {
 		"NativeAnnotationsMain",
 		"StructSyntaxMain",
 		"EnumConformanceMain",
+		"EqualityConformanceMain",
 		"EnumEqualityIncrementalMain",
 		"StructPropertiesMain",
 		"NativeMemoryMain",

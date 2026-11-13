@@ -839,8 +839,13 @@ struct Record implements Hashable { /* fields */ }
 `Equatable` supplies `==`; `Hashable` implies `Equatable`, so a type that is also a key ordinarily declares only
 `Hashable`. The compiler synthesizes equality and hashing when every field supports the required conformance, and names
 an offending field otherwise. Hand-written `equals` and `hash` implementations satisfy the same interfaces rather than
-forming a separate declaration mechanism. A type has one equality used by `==`, maps, `haxeon.Equality.equals`,
-`haxeon.Hashing.hash` and containing types.
+forming a separate declaration mechanism. A value type has one equality used by `==`, maps, `haxeon.Equality.equals`,
+`haxeon.Hashing.hash` and containing types. Arrays are reference types with the operator distinction described below.
+
+`Array<T>` conforms to `Equatable` when `T` does. Equality compares lengths and then elements in order; null arrays
+compare equal only to null. This applies through a generic `T:Equatable` bound as well. Array `==` remains a reference
+identity comparison, including for arrays whose elements conform. Arrays are mutable and do not
+implicitly conform to `Hashable`, so they cannot serve as map keys. `Null<T>` retains the conformance of `T`.
 
 A handwritten `equals(other:T):Bool` on a `Hashable` type requires a handwritten `hash():Int`. The compiler cannot
 infer which distinctions the custom equality ignores, so a hash synthesized from all fields could give unequal hashes
@@ -859,8 +864,8 @@ Generic `T:Equatable` and `T:Hashable` bounds admit value types only; classes an
 them. Primitives, integer enum abstracts and key paths retain their value semantics. Floats retain IEEE equality.
 Float hashing folds the IEEE bits after canonicalizing both zero signs and all NaNs, so equal values hash alike and
 infinities or large finite values do not require a numeric conversion. Value bounds on generic classes and functions, including `Map<K:Hashable, V>`,
-are checked at compile time and struct-bound calls dispatch without boxing. `haxeon.Equality.equals` follows the same
-static rules as `==`, including identity for class references.
+are checked at compile time and struct-bound calls dispatch without boxing. `haxeon.Equality.equals` requires
+`Equatable`; use `==` to compare class references by identity.
 Class instances used as keys in `haxe.ds.ObjectMap` use identity; declaring value conformance on a class is not a way
 to select map equality.
 

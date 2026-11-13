@@ -38,7 +38,7 @@ function main():Int {
   if (Equality.equals(absentLeft, absentRight)) return 6;
   var plainLeft = new Identity();
   var plainRight = new Identity();
-  if (Equality.equals(plainLeft, plainRight) || !Equality.equals(plainLeft, plainLeft)) return 7;
+  if (plainLeft == plainRight || plainLeft != plainLeft) return 7;
   var dynamicLeft:Dynamic = [1, 2];
   var dynamicRight:Dynamic = [1, 2];
   if (Equality.equals(dynamicLeft, dynamicRight)) return 8;

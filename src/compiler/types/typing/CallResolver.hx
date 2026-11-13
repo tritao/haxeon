@@ -1332,6 +1332,14 @@ class CallResolver {
 				default: false;
 			}))
 				return new TypedExpression(TCall("__dynamic_equal", [left, coerce(right, TDynamic, "dynamic equality operand", "E1002")]), TBool, span);
+			var explicitEquality = name == "Equality.equals" || name == "haxeon.Equality.equals";
+			if (explicitEquality && !DeclaredConformance.supportsEquality(session, left.type))
+				fail("E1025", 'Type "${compiler.semantic.SemanticSignature.display(left.type)}" does not conform to Equatable', span);
+			if (!explicitEquality && (switch left.type {
+				case TArray(_) | TNullable(TArray(_)): true;
+				default: false;
+			}))
+				return new TypedExpression(TEqual(left, right), TBool, span);
 			var structType = switch left.type {
 				case TNullable(element) if (session.relations.isStruct(element)): element;
 				default: left.type;
@@ -1470,11 +1478,14 @@ class CallResolver {
 					// Runtime type tests name a declaration, not an instantiation; generic arguments are erased here.
 					if (session.classDecls.exists(targetName)) TInstance(NominalKind.Class, targetName,
 						[
-							for (_ in requiredMapValue(session.classDecls, targetName).typeParameters) TDynamic
+							for (_ in requiredMapValue(session.classDecls, targetName).typeParameters)
+								TDynamic
 						]); else if (session.interfaceDecls.exists(targetName)) TInstance(NominalKind.Interface, targetName, [
-							for (_ in requiredMapValue(session.interfaceDecls, targetName).typeParameters) TDynamic
+							for (_ in requiredMapValue(session.interfaceDecls, targetName).typeParameters)
+								TDynamic
 					]); else TInstance(NominalKind.Enum, targetName, [
-							for (_ in requiredMapValue(session.enumDecls, targetName).typeParameters) TDynamic
+							for (_ in requiredMapValue(session.enumDecls, targetName).typeParameters)
+								TDynamic
 					]);
 			};
 			var value = coerce(typeExpressionValue(arguments[0], scope), TDynamic, "Std.isOfType value", "E1002"),

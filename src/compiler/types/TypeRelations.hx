@@ -271,6 +271,11 @@ class TypeRelations {
 					return satisfiesConstraint(representation, expected);
 				case TNullable(element):
 					return satisfiesConstraint(element, expected);
+				case TArray(element):
+					return (switch expected {
+						case TInstance(NominalKind.Interface, "Equatable", _): true;
+						default: false;
+					}) && satisfiesConstraint(element, expected);
 				case TInstance(NominalKind.Enum, name, _):
 					var declaration = declarations.enums.get(name);
 					if (declaration == null)

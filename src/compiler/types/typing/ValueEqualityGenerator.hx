@@ -12,7 +12,7 @@ import compiler.types.TypedAst.TypedStatement;
 import compiler.types.typing.TypingSession.EqualityRequest;
 import haxe.crypto.Sha256;
 
-/** Fieldwise language equality: each field uses its own `==`, including reference identity. */
+/** Fieldwise declared equality, including nested value helpers. */
 class ValueEqualityGenerator {
 	public static function equalsName(type:CompilerType):String
 		return "$value$equality:" + Sha256.encode(compiler.semantic.SemanticSignature.type(type)).substr(0, 32);
@@ -72,10 +72,16 @@ class ValueEqualityGenerator {
 			return;
 		seen.set(name, true);
 		switch type {
-			case TNullable(element) if (DeclaredConformance.has(session, element, "Equatable")):
+			case TNullable(element) if (DeclaredConformance.has(session, element, "Equatable")
+				|| DeclaredConformance.usesEquality(session, element)):
 				if (!requests.exists(name))
 					requests.set(name, {type: type, origin: root.origin, span: root.span});
 				collect(session, element, root, requests, seen);
+			case TArray(element) if (DeclaredConformance.supportsEquality(session, element)):
+				if (!requests.exists(name))
+					requests.set(name, {type: type, origin: root.origin, span: root.span});
+				if (needsHelper(session, element))
+					collect(session, element, root, requests, seen);
 			case TInstance(NominalKind.Class, className, arguments)
 				if (session.relations.isStruct(type) && DeclaredConformance.has(session, type, "Equatable")):
 				var declaration = session.classDecls.get(className);
@@ -97,10 +103,20 @@ class ValueEqualityGenerator {
 	static function needsHelper(session:TypingSession, type:CompilerType):Bool
 		return switch type {
 			case TKeyPath(_, _, _): true;
-			case TNullable(element): DeclaredConformance.has(session, element, "Equatable");
+			case TNullable(element): DeclaredConformance.has(session, element, "Equatable") || DeclaredConformance.usesEquality(session, element);
+			case TArray(element): DeclaredConformance.supportsEquality(session, element);
 			case TInstance(NominalKind.Class, _, _): session.relations.isStruct(type) && DeclaredConformance.has(session, type, "Equatable");
 			default: false;
 		};
+
+	static function compareValue(session:TypingSession, left:TypedExpression, right:TypedExpression, span:SourceSpan,
+			compare:(TypedExpression, TypedExpression, SourceSpan) -> TypedExpression):TypedExpression {
+		if (DeclaredConformance.usesEquality(session, left.type)) {
+			request(session, left.type, session.currentContext.name, span);
+			return new TypedExpression(TCall(equalsName(left.type), [left, right]), TBool, span);
+		}
+		return compare(left, right, span);
+	}
 
 	static function compareFunction(session:TypingSession, request:EqualityRequest,
 			compare:(TypedExpression, TypedExpression, SourceSpan) -> TypedExpression):TypedFunction {
@@ -114,7 +130,8 @@ class ValueEqualityGenerator {
 				new AnonymousTypeRegistry(session).register(type);
 				statements.push(TReturn(compare(new TypedExpression(TField(left, "$key"), TString, span),
 					new TypedExpression(TField(right, "$key"), TString, span), span), span));
-			case TNullable(element) if (DeclaredConformance.has(session, element, "Equatable")):
+			case TNullable(element) if (DeclaredConformance.has(session, element, "Equatable")
+				|| DeclaredConformance.usesEquality(session, element)):
 				var nil = new TypedExpression(TNullableWrap(new TypedExpression(TNullLiteral, TNull, span)), type, span),
 					leftAbsent = new TypedExpression(TEqual(left, nil), TBool, span),
 					rightAbsent = new TypedExpression(TEqual(right, nil), TBool, span),
@@ -122,7 +139,27 @@ class ValueEqualityGenerator {
 					rightValue = new TypedExpression(TCast(right), element, span);
 				statements.push(TIf(leftAbsent, [TReturn(rightAbsent, span)], [], span));
 				statements.push(TIf(rightAbsent, [TReturn(new TypedExpression(TBoolLiteral(false), TBool, span), span)], [], span));
-				statements.push(TReturn(compare(leftValue, rightValue, span), span));
+				statements.push(TReturn(compareValue(session, leftValue, rightValue, span, compare), span));
+			case TArray(element) if (DeclaredConformance.supportsEquality(session, element)):
+				var nil = new TypedExpression(TNullableWrap(new TypedExpression(TNullLiteral, TNull, span)), type, span),
+					leftAbsent = new TypedExpression(TEqual(left, nil), TBool, span),
+					rightAbsent = new TypedExpression(TEqual(right, nil), TBool, span),
+					leftLength = new TypedExpression(TArrayLength(left), TInt, span),
+					rightLength = new TypedExpression(TArrayLength(right), TInt, span),
+					index = new TypedExpression(TLocal("$array-equality-index"), TInt, span),
+					leftElement = new TypedExpression(TIndex(left, index), element, span),
+					rightElement = new TypedExpression(TIndex(right, index), element, span),
+					comparison = compareValue(session, leftElement, rightElement, span, compare);
+				statements.push(TIf(leftAbsent, [TReturn(rightAbsent, span)], [], span));
+				statements.push(TIf(rightAbsent, [TReturn(new TypedExpression(TBoolLiteral(false), TBool, span), span)], [], span));
+				statements.push(TIf(new TypedExpression(TNot(new TypedExpression(TEqual(leftLength, rightLength), TBool, span)), TBool, span),
+					[TReturn(new TypedExpression(TBoolLiteral(false), TBool, span), span)], [], span));
+				statements.push(TVar("$array-equality-index", new TypedExpression(TIntLiteral(0), TInt, span), span));
+				statements.push(TWhile(new TypedExpression(TLess(index, leftLength), TBool, span), [
+					TIf(new TypedExpression(TNot(comparison), TBool, span), [TReturn(new TypedExpression(TBoolLiteral(false), TBool, span), span)], [], span),
+					TAssign("$array-equality-index", new TypedExpression(TAdd(index, new TypedExpression(TIntLiteral(1), TInt, span)), TInt, span), span)
+				], span));
+				statements.push(TReturn(new TypedExpression(TBoolLiteral(true), TBool, span), span));
 			case TInstance(NominalKind.Class, name, arguments) if (session.relations.isStruct(type)
 				&& DeclaredConformance.has(session, type, "Equatable")):
 				var declaration = session.classDecls.get(name);
@@ -143,7 +180,7 @@ class ValueEqualityGenerator {
 							physical = session.representation.resolveField(type, field.name, field.span).physical,
 							leftField = session.representation.boundaryCast(new TypedExpression(TField(left, field.name), physical, span), fieldType),
 							rightField = session.representation.boundaryCast(new TypedExpression(TField(right, field.name), physical, span), fieldType),
-							comparison = compare(leftField, rightField, span);
+							comparison = compareValue(session, leftField, rightField, span, compare);
 						statements.push(TIf(new TypedExpression(TNot(comparison), TBool, span),
 							[TReturn(new TypedExpression(TBoolLiteral(false), TBool, span), span)], [], span));
 					}
