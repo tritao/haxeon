@@ -90,9 +90,9 @@ class BreakAnalyzer {
 					if (penalty == 0)
 						penalty = 10;
 				}
-			// The parser recognizes shifts and their assignments by source adjacency.
-			// Never put whitespace or a wrapping boundary inside these operators.
-			if (adjacentShiftParts(left, right)) {
+			// Preserve shifts and compound lexer tokens split only for type annotation.
+			// Neither spaces nor wrapping may change their original token boundaries.
+			if (adjacentOperatorParts(left, right)) {
 				spaces = 0;
 				canBreak = false;
 				mustBreak = false;
@@ -160,12 +160,13 @@ class BreakAnalyzer {
 	}
 
 	/** Adjacent token pieces that are one operator in source: `<<`, `>>=`, and the map arrow `=>`. */
-	static function adjacentShiftParts(left:FormatToken, right:FormatToken):Bool {
+	static function adjacentOperatorParts(left:FormatToken, right:FormatToken):Bool {
 		if (left.end != right.start)
 			return false;
 		var leftKind = FormatTokenTools.syntaxKind(left),
 			rightKind = FormatTokenTools.syntaxKind(right);
 		return (leftKind == TokenKind.Assign && rightKind == TokenKind.Greater)
+			|| (leftKind == TokenKind.Greater && rightKind == TokenKind.Assign)
 			|| (leftKind == TokenKind.Less && (rightKind == TokenKind.Less || rightKind == TokenKind.LessEqual))
 			|| (leftKind == TokenKind.Greater && (rightKind == TokenKind.Greater || rightKind == TokenKind.GreaterEqual));
 	}
@@ -175,7 +176,7 @@ class BreakAnalyzer {
 			|| tokens[index + 1].kind == FormatTokenKind.DocComment
 			|| tokens[index + 1].kind == FormatTokenKind.BlockComment)
 			return 1;
-		if (adjacentShiftParts(tokens[index], tokens[index + 1]))
+		if (adjacentOperatorParts(tokens[index], tokens[index + 1]))
 			return 0;
 		if (left == null || right == null)
 			return 0;

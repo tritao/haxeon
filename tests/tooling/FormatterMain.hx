@@ -56,7 +56,28 @@ class FormatterMain {
 		}
 	}
 
+	static function assertGenericAssignmentBoundaries():Void {
+		for (width in [120, 24, 8]) {
+			var config = FormatConfigTools.defaults(2, true);
+			config.lineWidth = width;
+			var source = "class Test { var a:Array<Int>=[]; var b:Map<String,Array<Int>>=new Map(); var c:Array<Int> = []; }\n";
+			var output = Formatter.format(source, config);
+			if (output == null)
+				throw "Generic assignment source was rejected";
+			var before = new Lexer(new SourceFile("before.hx", source)).tokenize();
+			var after = new Lexer(new SourceFile("after.hx", output)).tokenize();
+			if (before.length != after.length)
+				throw "Generic assignment formatting changed token count at width " + width;
+			for (index in 0...before.length)
+				if (before[index].kind != after[index].kind || before[index].text != after[index].text)
+					throw "Generic assignment formatting changed token " + index + " at width " + width;
+			if (Formatter.format(output, config) != output)
+				throw "Generic compound-token formatting was not stable";
+		}
+	}
+
 	static function main():Void {
+		assertGenericAssignmentBoundaries();
 		assertUpdateOperatorBoundaries();
 		assertScannerMatchesLexer("function main():Int { var a = b ?? c; a += 1; a -= 1; a *= 2; a /= 2; a %= 2; a &= 1; a |= 1; a ^= 1; a++; --a; "
 			+ "var t = a == b || a != b && a <= b || a >= b; var f = (x) -> x; var u = !a; var v = ~a; var w = [a ? b : c]; "

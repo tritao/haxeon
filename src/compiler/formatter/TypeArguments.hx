@@ -8,6 +8,7 @@ import compiler.formatter.FormatToken.FormatTokenTools;
 typedef TypeArgumentPairs = {
 	final opens:Map<Int, Int>;
 	final closes:Map<Int, Int>;
+
 	/** Indexes of `>=` tokens that really close a list and start an assignment: `Array<Int>= []`. */
 	final splits:Array<Int>;
 }
@@ -23,7 +24,10 @@ typedef TypeArgumentPairs = {
 **/
 class TypeArguments {
 	public static function find(tokens:Array<FormatToken>):TypeArgumentPairs {
-		var opens:Map<Int, Int> = [], closes:Map<Int, Int> = [], splits:Array<Int> = [], syntax:Array<Int> = [];
+		var opens:Map<Int, Int> = [],
+			closes:Map<Int, Int> = [],
+			splits:Array<Int> = [],
+			syntax:Array<Int> = [];
 		for (index in 0...tokens.length)
 			if (FormatTokenTools.isSyntax(tokens[index]))
 				syntax.push(index);
@@ -67,8 +71,8 @@ class TypeArguments {
 						}
 						return;
 					}
-				case TokenKind.Identifier, TokenKind.TypeInt, TokenKind.TypeBool, TokenKind.TypeFloat, TokenKind.TypeString, TokenKind.Void,
-					TokenKind.Comma, TokenKind.Dot:
+				case TokenKind.Identifier, TokenKind.TypeInt, TokenKind.TypeBool, TokenKind.TypeFloat, TokenKind.TypeString, TokenKind.Void, TokenKind.Comma,
+					TokenKind.Dot:
 					hasContent[hasContent.length - 1] = true;
 				case TokenKind.Question, TokenKind.Colon:
 					// Only inside a structure or function type: `{?a:Int}`, `(?Int) -> Void`.
@@ -99,15 +103,31 @@ class TypeArguments {
 			|| kind == TokenKind.TypeString || kind == TokenKind.Void;
 
 	static function mayFollowType(kind:Null<TokenKind>):Bool
-		return kind == null || kind == TokenKind.LeftParen || kind == TokenKind.LeftBracket || kind == TokenKind.LeftBrace || kind == TokenKind.Dot
-			|| kind == TokenKind.Comma || kind == TokenKind.RightParen || kind == TokenKind.RightBracket || kind == TokenKind.RightBrace
-			|| kind == TokenKind.Assign || kind == TokenKind.Colon || kind == TokenKind.Semicolon || kind == TokenKind.Arrow || kind == TokenKind.Return
-			|| kind == TokenKind.Extends || kind == TokenKind.Implements
-			// The body of `function f():Array<Int> throw ...` is an expression.
-			|| kind == TokenKind.Throw || kind == TokenKind.If || kind == TokenKind.Switch || kind == TokenKind.Try || kind == TokenKind.New
-			|| kind == TokenKind.This || kind == TokenKind.Function;
+		return kind == null
+			|| kind == TokenKind.LeftParen
+			|| kind == TokenKind.LeftBracket
+			|| kind == TokenKind.LeftBrace
+			|| kind == TokenKind.Dot
+			|| kind == TokenKind.Comma
+			|| kind == TokenKind.RightParen
+			|| kind == TokenKind.RightBracket
+			|| kind == TokenKind.RightBrace
+			|| kind == TokenKind.Assign
+			|| kind == TokenKind.Colon
+			|| kind == TokenKind.Semicolon
+			|| kind == TokenKind.Arrow
+			|| kind == TokenKind.Return
+			|| kind == TokenKind.Extends
+			|| kind == TokenKind.Implements // The body of `function f():Array<Int> throw ...` is an expression.
+			|| kind == TokenKind.Throw
+			|| kind == TokenKind.If
+			|| kind == TokenKind.Switch
+			|| kind == TokenKind.Try
+			|| kind == TokenKind.New
+			|| kind == TokenKind.This
+			|| kind == TokenKind.Function;
 
-	/** Splits each `>=` that closes a type argument list into `>` and `=`, so both are spaced as ordinary tokens. */
+	/** Split for syntax annotation; rendering must preserve each original compound token's adjacency. */
 	public static function splitAssignments(tokens:Array<FormatToken>):Array<FormatToken> {
 		var splits = find(tokens).splits;
 		if (splits.length == 0)
@@ -119,8 +139,18 @@ class TypeArguments {
 				result.push(token);
 				continue;
 			}
-			result.push({kind: FormatTokenKind.Syntax(TokenKind.Greater), text: ">", start: token.start, end: token.start + 1});
-			result.push({kind: FormatTokenKind.Syntax(TokenKind.Assign), text: "=", start: token.start + 1, end: token.end});
+			result.push({
+				kind: FormatTokenKind.Syntax(TokenKind.Greater),
+				text: ">",
+				start: token.start,
+				end: token.start + 1
+			});
+			result.push({
+				kind: FormatTokenKind.Syntax(TokenKind.Assign),
+				text: "=",
+				start: token.start + 1,
+				end: token.end
+			});
 		}
 		return result;
 	}
