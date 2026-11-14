@@ -1,5 +1,7 @@
 package pages;
 
+import components.ShowcaseKit;
+
 import haxeon.ui.widgets.controls.Button;
 
 
@@ -188,13 +190,9 @@ class ControlsPage {
     }, buttonStyle);
   }
 
-  static function labeledIconButton(explorer:UiExplorer):haxeon.ui.widgets.controls.Button {
-    var button = explorer.button("Search", "labeled-search-action", function() {
-    }
-    );
-    button.leadingIcon = IconName.Search;
-    return button;
-  }
+  static function labeledIconButton(explorer:UiExplorer):Button return ShowcaseKit.button(explorer,
+    "Search", "labeled-search-action", function() {
+  }, false, true, IconName.Search);
 
   static function spinnerSample(explorer:UiExplorer, key:String, label:String, kind:SpinnerKind):Column {
     var style = new LayoutStyle();

@@ -11,6 +11,7 @@ import haxeon.ui.theme.Theme;
 import haxeon.ui.theme.ThemeTokens;
 import haxeon.ui.theme.TextRole;
 import haxeon.ui.widgets.controls.Button;
+import haxeon.ui.icons.IconName;
 import haxeon.ui.widgets.layout.Column;
 import haxeon.ui.widgets.KeyedView;
 import haxeon.ui.widgets.layout.Padding;
@@ -58,21 +59,34 @@ import haxeon.ui.widgets.text.TextField;
     }, style);
   }
 
-  static function button(
+  public static function button(
     explorer:UiExplorer,
     label:String,
     key:String,
     action:Void -> Void,
     selected:Bool = false,
-    enabled:Bool = true
-  ):Button {
+    enabled:Bool = true,
+    ?leadingIcon:IconName,
+    ?style:LayoutStyle
+  ):Button return new Button(
+    label,
+    style == null ? buttonStyle() : style,
+    action,
+    key,
+    enabled,
+    null,
+    selected,
+    null,
+    leadingIcon
+  );
+
+  public static function buttonStyle():LayoutStyle {
     var style = new LayoutStyle();
     style.height = LayoutAxis.fixed(38.0);
     style.padding = new Insets(12.0, 9.0, 12.0, 9.0);
     style.radiusTopLeft = style.radiusTopRight = 5.0;
     style.radiusBottomLeft = style.radiusBottomRight = 5.0;
-    var result = new Button(label, style, action, key, enabled, null, selected);
-    return result;
+    return style;
   }
 
   static function disabledButton(explorer:UiExplorer, label:String):Button {

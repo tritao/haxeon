@@ -1,5 +1,7 @@
 package pages;
 
+import components.ShowcaseKit;
+
 import haxeon.ui.widgets.controls.Button;
 import haxeon.ui.widgets.text.Text;
 
@@ -34,12 +36,12 @@ class GesturesPage {
     var cardStyle = new LayoutStyle();
     cardStyle.width = LayoutAxis.grow();
     cardStyle.height = LayoutAxis.fixed(48.0);
-    var gestureCard = explorer.button("Touch, hold, or drag me", "gesture-card-button", function() {
+    var buttonStyle = ShowcaseKit.buttonStyle();
+    buttonStyle.width = LayoutAxis.grow();
+    buttonStyle.height = LayoutAxis.fixed(48.0);
+    var gestureCard = ShowcaseKit.button(explorer, "Touch, hold, or drag me", "gesture-card-button", function() {
       explorer.state.gestures.message = "Button activation routed through the child view.";
-    }
-    );
-    gestureCard.style.width = LayoutAxis.grow();
-    gestureCard.style.height = LayoutAxis.fixed(48.0);
+    }, false, true, null, buttonStyle);
     var detector = new GestureDetector("gesture-playground-detector", gestureCard, [new TapRecognizer(function(_) {
       explorer.state.gestures.tapCount++;
       explorer.state.gestures.message = "Tap recognized.";

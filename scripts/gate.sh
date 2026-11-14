@@ -3,7 +3,7 @@
 #
 #   scripts/gate.sh quick|wave|full [jobs]
 #
-#   quick  the NUL guard, the whole-tree type check and the driver in its default configuration (every program built live and plain, named cases, executables)
+#   quick  the NUL guard, whole-tree type check, default driver, and UI Showcase builds on HL/Wasm32/Wasm GC
 #   wave   quick, then the driver again with HAXEON_CHECK_REUSE=1 (adds the warm-edit rebuilds and the reuse comparisons), then the Wasm
 #          backend script (scripts/test-wasm-backend.sh; a broken Wasm fixture once reached main because no gate ran it) and the
 #          self-hosting compile (tests/integration/test-compiler-embedding.sh: Haxeon compiles the compiler's own sources, which stock
@@ -92,6 +92,8 @@ suite type-check-all "$root/.tools/haxe/haxe" --cwd "$root" common.hxml -cp test
 	--macro "include('compiler')" --macro "include('build')" \
 	-hl "$work/type-check-all.hl" --no-output -main Main
 suite driver-default env -u HAXEON_CHECK_REUSE "$root/scripts/test-driver.sh" "$jobs"
+# Example callers are outside the compiler and UI fixture roots; final-prop API ports must check the app too.
+suite ui-showcase env -u HAXEON_COMPILER_HL bash "$root/packages/ui/tools/test-showcase-builds.sh"
 if [ "$mode" != quick ]; then
 	suite driver-checked env HAXEON_CHECK_REUSE=1 "$root/scripts/test-driver.sh" "$jobs"
 	suite wasm-backend "$root/scripts/test-wasm-backend.sh"

@@ -1,5 +1,7 @@
 package shell;
 
+import components.ShowcaseKit;
+
 import nativekit.ffi.NativeKitTypes.WindowDecorationRegionKind;
 import haxeon.ui.LayoutAlignmentY;
 import haxeon.ui.LayoutAxis;
@@ -34,12 +36,10 @@ class TopBar {
       ],
       clusterStyle(12.0)
     );
-    var themeButton = explorer.button(explorer.state.lightTheme ? "Dark mode" : "Light mode",
-      "theme-toggle", function() {
+    var themeButton = ShowcaseKit.button(explorer,
+      explorer.state.lightTheme ? "Dark mode" : "Light mode", "theme-toggle", function() {
       explorer.toggleTheme();
-    }
-    );
-    themeButton.leadingIcon = explorer.state.lightTheme ? IconName.Moon : IconName.Sun;
+    }, false, true, explorer.state.lightTheme ? IconName.Moon : IconName.Sun);
     var actions:Array<KeyedView> = [explorer.keyed(
       "theme",
       new WindowChrome("theme-client", WindowDecorationRegionKind.Client, themeButton)
@@ -62,20 +62,16 @@ class TopBar {
     );
   }
 
-  static function inspectButton(explorer:UiExplorer):Button {
-    var button = explorer.button(explorer.state.inspector.picking ? "Cancel inspect" : "Inspect",
-      "inspector-toggle", function() {
-      if (explorer.state.inspector.picking) {
-        explorer.state.inspector.picking = false;
-        explorer.state.inspector.hoveredNodeId = 0;
-      } else {
-        explorer.state.inspector.open = true;
-        explorer.state.inspector.picking = true;
-      }
-    }, explorer.state.inspector.open || explorer.state.inspector.picking);
-    button.leadingIcon = IconName.Inspect;
-    return button;
-  }
+  static function inspectButton(explorer:UiExplorer):Button return ShowcaseKit.button(explorer,
+    explorer.state.inspector.picking ? "Cancel inspect" : "Inspect", "inspector-toggle", function() {
+    if (explorer.state.inspector.picking) {
+      explorer.state.inspector.picking = false;
+      explorer.state.inspector.hoveredNodeId = 0;
+    } else {
+      explorer.state.inspector.open = true;
+      explorer.state.inspector.picking = true;
+    }
+  }, explorer.state.inspector.open || explorer.state.inspector.picking, true, IconName.Inspect);
 
   static function clusterStyle(gap:Float):LayoutStyle {
     var style = new LayoutStyle();

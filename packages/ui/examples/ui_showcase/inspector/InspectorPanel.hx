@@ -1,5 +1,7 @@
 package inspector;
 
+import components.ShowcaseKit;
+
 import haxeon.ui.LayoutAxis;
 import haxeon.ui.LayoutStyle;
 import haxeon.ui.Insets;
@@ -89,13 +91,13 @@ class InspectorPanel {
   }
 
   static function tabButton(explorer:UiExplorer, label:String, tab:String):Button {
-    var item = explorer.button(label, "inspector-tab-" + tab, function() {
+    var style = ShowcaseKit.buttonStyle();
+    style.width = LayoutAxis.grow();
+    style.height = LayoutAxis.fixed(30.0);
+    style.padding = new Insets(7.0, 5.0, 7.0, 5.0);
+    return ShowcaseKit.button(explorer, label, "inspector-tab-" + tab, function() {
       explorer.state.inspector.tab = tab;
-    }, explorer.state.inspector.tab == tab);
-    item.style.width = LayoutAxis.grow();
-    item.style.height = LayoutAxis.fixed(30.0);
-    item.style.padding = new Insets(7.0, 5.0, 7.0, 5.0);
-    return item;
+    }, explorer.state.inspector.tab == tab, true, null, style);
   }
 
   static function buildContent(
