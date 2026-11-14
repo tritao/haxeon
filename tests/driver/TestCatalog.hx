@@ -81,6 +81,7 @@ class TestCatalog {
 		"WasmGcLocalCompactionMain",
 		"WasmGcDynamicNullMain",
 		"WasmGcSinglePhiMain",
+		"WasmGcConstantDiamondMain",
 		"WasmGcClosureWarmEditMain",
 		"ScalarAbiEligibilityMain",
 		"GenericStructFunctionMain",

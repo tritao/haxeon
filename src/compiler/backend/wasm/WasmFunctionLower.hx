@@ -106,6 +106,7 @@ class WasmFunctionLower {
   final context:WasmFunctionLowerContext;
   final nonNull:compiler.ir.IrNonNullFacts;
   final nullValues:Map<Int, Bool> = [];
+  var diamondGraph:Null<compiler.ir.IrGraph>;
 
   function new(context:WasmFunctionLowerContext) {
     this.context = context;
@@ -509,6 +510,71 @@ class WasmFunctionLower {
     }
   }
 
+  /** Reuse the condition for a pure two-arm constant join. */
+  function emitConstantDiamond(
+    body:Array<WasmInstruction>,
+    block:IrBlock,
+    values:Map<Int, Int>,
+    instruction:IrInstruction
+  ):Bool {
+    switch instruction {
+      case Phi(output, inputs) if (inputs.length == 2 && (switch output.type {
+        case I32:
+          true;
+        default:
+          false;
+      }
+      )):if (diamondGraph == null) diamondGraph = new compiler.ir.IrGraph(context.irFunction);
+      var graph = diamondGraph;
+      var joinPreds = graph.predecessors.get(block.id);
+      var first = graph.block(inputs[0].block), second = graph.block(inputs[1].block);
+      var pa = graph.predecessors.get(first.id), pb = graph.predecessors.get(second.id);
+      if (joinPreds == null || joinPreds.length != 2 || pa == null
+        || pb == null || pa.length != 1 || pb.length != 1 || pa[0] != pb[0] || first.instructions.length != 1
+        || second.instructions.length != 1 || first.terminator == null || second.terminator == null) return false;
+      var branch = graph.block(pa[0]);
+      if (branch.terminator == null) return false;
+      switch [
+        branch.terminator.value,
+        first.terminator.value,
+        second.terminator.value,
+        first.instructions[0].value,
+        second.instructions[0].value
+      ] {
+        case [Branch(condition, yes, no), Jump(a), Jump(b), ConstInt(v1,
+          n1), ConstInt(v2, n2)] if (yes != no && a == block.id && b == block.id && v1.id == inputs[0].value.id && v2.id
+          == inputs[1].value.id && ((yes == first.id && no == second.id) || (yes == second.id && no == first.id))):
+          // Blockful WasmValuePlacement does not coalesce, so the dominating
+          // condition keeps its value at the join, including across back edges.
+          var trueValue = yes == first.id ? n1 : n2, falseValue = yes == first.id ? n2 : n1;
+          if (trueValue == 1 && falseValue == 0) emit(
+            body,
+            [LocalGet(requiredLocal(values, condition.id)), I32Eqz, I32Eqz, LocalSet(requiredLocal(values, output.id))]
+          );
+          else if (trueValue == 0 && falseValue == 1) emit(
+            body,
+            [LocalGet(requiredLocal(values, condition.id)), I32Eqz, LocalSet(requiredLocal(values, output.id))]
+          );
+          else emit(
+            body,
+            [
+              LocalGet(requiredLocal(values, condition.id)),
+              If(I32),
+              I32Const(trueValue),
+              Else,
+              I32Const(falseValue),
+              End,
+              LocalSet(requiredLocal(values, output.id))
+            ]
+          );
+          return true;
+        default:
+      }
+      default:
+    }
+    return false;
+  }
+
   function emitPhiGroup(body:Array<WasmInstruction>, block:IrBlock, values:Map<Int, Int>, predecessor:Int):Void {
     var single:Null<IrInstruction> = null;
     var count = 0;
@@ -526,6 +592,12 @@ class WasmFunctionLower {
     // A single destination cannot overwrite another phi's input. Multiple
     // phis still require staging, independently of WasmValuePlacement's
     // current choice to leave blockful functions uncoalesced.
+    if (count == 1 && Std.isOfType(context.representation.values, WasmGcRepresentation) && emitConstantDiamond(
+      body,
+      block,
+      values,
+      single
+    )) return;
     if (count == 1 && Std.isOfType(context.representation.values, WasmGcRepresentation)) switch single {
       case Phi(output, inputs):
         WasmPhiLower.capture(body, inputs, values, predecessor, requiredLocal(values, output.id));
