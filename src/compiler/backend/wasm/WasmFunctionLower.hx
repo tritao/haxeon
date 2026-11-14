@@ -105,10 +105,16 @@ private class StructuredEmission {
 class WasmFunctionLower {
   final context:WasmFunctionLowerContext;
   final nonNull:compiler.ir.IrNonNullFacts;
+  final nullValues:Map<Int, Bool> = [];
 
   function new(context:WasmFunctionLowerContext) {
     this.context = context;
     this.nonNull = new compiler.ir.IrNonNullFacts(context.irFunction);
+    for (block in context.irFunction.blocks) for (instruction in block.instructions) switch instruction.value {
+      case ConstNull(output):
+        nullValues.set(output.id, true);
+      default:
+    }
   }
 
   static function requiredLocal(locals:Map<Int, Int>, valueId:Int):Int {
@@ -1954,7 +1960,24 @@ class WasmFunctionLower {
       case LessEqual(output, left, right):
         binary(body, output, left, right, values, comparisonInstruction(left.type, F64Le, I64LeS, I32LeS));
       case Equal(output, left, right):
-        emit(
+        if (Std.isOfType(context.representation.values, WasmGcRepresentation) && (switch left.type {
+          case Dyn:
+            true;
+          default:
+            false;
+        }
+        ) && (nullValues.exists(left.id) || nullValues.exists(right.id))) {
+          var other = nullValues.exists(left.id) ? right : left;
+          emit(
+            body,
+            [
+              LocalGet(requiredLocal(values, other.id)),
+              RefCast({nullable: true, heap: Eq}),
+              RefIsNull,
+              LocalSet(requiredLocal(values, output.id))
+            ]
+          );
+        } else emit(
           body,
           context.representation.values.equal(
             requiredLocal(values, output.id),
@@ -1974,6 +1997,16 @@ class WasmFunctionLower {
           context.representation.values,
           WasmGcRepresentation
         ) : null;
+        if (gcRepresentation != null && name == "__dynamic_equal"
+          && arguments.length == 2 && (nullValues.exists(arguments[0].id) || nullValues.exists(arguments[1].id))) {
+          var other = nullValues.exists(arguments[0].id) ? arguments[1] : arguments[0];
+          body.push(LocalGet(requiredLocal(values, other.id)));
+          // Dynamic equality requires eqref, including its trap for unsupported host values.
+          body.push(RefCast({nullable: true, heap: Eq}));
+          body.push(RefIsNull);
+          body.push(LocalSet(requiredLocal(values, output.id)));
+          return;
+        }
         if (name == compiler.ir.IrReferenceIdentity.NAME) {
           for (argument in arguments) {
             body.push(LocalGet(requiredLocal(values, argument.id)));

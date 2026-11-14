@@ -6,6 +6,9 @@ function main():Int {
   var sameNumber:Dynamic = 40.5;
   var otherNumber:Dynamic = 41.5;
   var nanValue:Dynamic = 0.0 / 0.0;
+  var absent:Dynamic = null;
+  if (first == null || null == first || absent != null || null != absent) return 2;
+  if (firstNumber == null || null == firstNumber) return 3;
   return first == same && first != different
     && firstNumber == sameNumber && firstNumber != otherNumber && !(nanValue == nanValue) ? 42 : 1;
 }

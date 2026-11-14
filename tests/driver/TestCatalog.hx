@@ -79,6 +79,7 @@ class TestCatalog {
 		"GenericScalarMapOwnerMain",
 		"WasmClosureVerificationOrderMain",
 		"WasmGcLocalCompactionMain",
+		"WasmGcDynamicNullMain",
 		"WasmGcClosureWarmEditMain",
 		"ScalarAbiEligibilityMain",
 		"GenericStructFunctionMain",
