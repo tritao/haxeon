@@ -25,8 +25,9 @@ private typedef Replacement = {
 
 /** Token/CST formatter facade. Parser validation remains the refusal boundary. */
 class Formatter {
-	public static function format(source:String, config:FormatConfig, ?rangeStart:Int, ?rangeEnd:Int):Null<String> {
-		var file = new SourceFile("<format>", source);
+	public static function format(source:String, config:FormatConfig, ?rangeStart:Int, ?rangeEnd:Int, ?path:String):Null<String> {
+		var file = new SourceFile(path == null ? "<format>" : path, source);
+		var result:String;
 		try {
 			var conditional = ConditionalCompilation.process(file, []);
 			new Parser(new Lexer(file, conditional.text).tokenize()).parseProgram();
@@ -36,16 +37,17 @@ class Formatter {
 				units = UnwrappedLineBuilder.build(tokens, syntax, comments),
 				rendered = [for (unit in units) renderUnit(unit, syntax, config)],
 				newline = source.indexOf("\r\n") >= 0 ? "\r\n" : "\n";
-			if (rangeStart == null || rangeEnd == null)
-				return joinRendered(rendered, newline, StringTools.endsWith(source, "\n"));
-			if (rangeStart <= 0 && rangeEnd >= source.length)
-				return joinRendered(rendered, newline, StringTools.endsWith(source, "\n"));
-			return formatRange(file, tokens, syntax, units, rendered, newline, rangeStart, rangeEnd);
+			if (rangeStart == null || rangeEnd == null || rangeStart <= 0 && rangeEnd >= source.length)
+				result = joinRendered(rendered, newline, StringTools.endsWith(source, "\n"));
+			else
+				result = formatRange(file, tokens, syntax, units, rendered, newline, rangeStart, rangeEnd);
 		} catch (_:CompileError) {
 			return null;
 		} catch (_:Dynamic) {
 			return null;
 		}
+		TokenPreservation.verify(file.path, source, result);
+		return result;
 	}
 
 	static function renderUnit(unit:UnwrappedLine, syntax:SyntaxInfo, config:FormatConfig):RenderedUnit {

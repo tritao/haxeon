@@ -8,6 +8,22 @@ import compiler.syntax.Lexer;
 import compiler.syntax.Token.TokenKind;
 
 class FormatterMain {
+	static function assertTokenPreservation():Void {
+		compiler.formatter.TokenPreservation.verify("comments.hx", "var x = 1; // before\n", "/* moved */\nvar x=1;\n");
+		for (output in ["var x = a +++ b;", "var x = a + ++c;", "var x = a + ++b; extra;"]) {
+			var refused = false;
+			try {
+				compiler.formatter.TokenPreservation.verify("known-bad.hx", "var x = a + ++b;", output);
+			} catch (error:compiler.formatter.TokenPreservation.TokenMismatch) {
+				refused = error.message.indexOf("known-bad.hx at token ") >= 0
+					&& error.message.indexOf("expected ") >= 0
+					&& error.message.indexOf("got ") >= 0;
+			}
+			if (!refused)
+				throw "Token guard accepted corrupt output or omitted its first-token diagnostic";
+		}
+	}
+
 	/** The scanner and the lexer must agree on every operator, or the formatter would split a token such as `??`. */
 	static function assertScannerMatchesLexer(text:String):Void {
 		var file = new SourceFile("operators.hx", text), tokens = new FormatScanner(file).scan(), lexical = new Lexer(file).tokenize(), index = 0;
@@ -77,6 +93,7 @@ class FormatterMain {
 	}
 
 	static function main():Void {
+		assertTokenPreservation();
 		assertGenericAssignmentBoundaries();
 		assertUpdateOperatorBoundaries();
 		assertScannerMatchesLexer("function main():Int { var a = b ?? c; a += 1; a -= 1; a *= 2; a /= 2; a %= 2; a &= 1; a |= 1; a ^= 1; a++; --a; "

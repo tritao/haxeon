@@ -6,6 +6,9 @@ cli="$repo_dir/scripts/haxeon"
 project_dir=$(mktemp -d "${TMPDIR:-/tmp}/haxeon-formatter.XXXXXX")
 trap 'rm -rf -- "$project_dir"' EXIT
 
+"$repo_dir/.tools/haxe/haxe" --cwd "$repo_dir" common.hxml -main tools.FormatterTokenGuard -js "$project_dir/token-guard.js"
+node "$repo_dir/tests/integration/test-formatter-token-guard.js" "$project_dir/token-guard.js" "$project_dir"
+
 node - "$repo_dir" <<'JS'
 const assert = require('assert');
 const fs = require('fs');

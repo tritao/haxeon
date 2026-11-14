@@ -2,7 +2,6 @@ package tools;
 
 import build.CompilerSources;
 import build.HashLinkPath;
-
 import tools.WatchRun.WatchChange;
 import tools.WatchRun.WatchProfiling;
 import haxe.Json;
@@ -57,8 +56,10 @@ private typedef BuildOptions = {
 	final compilerOnly:Bool;
 	final watch:Bool;
 	final live:Bool;
+
 	/** `--strict-live`: report an edit that cannot patch instead of reloading the module, so unexpected reloads show. */
 	final strictLive:Bool;
+
 	final jobs:Int;
 	final selfHosted:Bool;
 	final profile:Bool;
@@ -108,7 +109,8 @@ class HaxeonCli {
 
 	/** Environment for a launched program: where the user started it from, unless the caller already said. */
 	static function launchEnvironment():Map<String, String> {
-		var environment = new Map<String, String>(), existing = Sys.getEnv("HAXEON_INVOKED_FROM");
+		var environment = new Map<String, String>(),
+			existing = Sys.getEnv("HAXEON_INVOKED_FROM");
 		if (existing == null || existing == "")
 			environment.set("HAXEON_INVOKED_FROM", invokedFrom);
 		return environment;
@@ -153,6 +155,8 @@ class HaxeonCli {
 			Sys.exit(status);
 		} catch (error:Dynamic) {
 			Sys.stderr().writeString("haxeon: " + Std.string(error) + "\n");
+			if (Std.isOfType(error, compiler.formatter.TokenPreservation.TokenMismatch))
+				Sys.exit(2);
 			Sys.exit(1);
 		}
 	}
@@ -269,7 +273,7 @@ class HaxeonCli {
 		config.lineWidth = options.lineWidth;
 		if (options.stdin) {
 			var source = Sys.stdin().readAll().toString(),
-				formatted = Formatter.format(source, config);
+				formatted = Formatter.format(source, config, null, null, "<stdin>");
 			if (formatted == null)
 				throw "cannot format malformed source from stdin";
 			if (options.check)
@@ -280,15 +284,23 @@ class HaxeonCli {
 		var status = 0;
 		var files = SourceFiles.expand(options.paths);
 		for (path in files) {
-			var source = File.getContent(path),
-				formatted = Formatter.format(source, config);
+			var source = File.getContent(path);
+			var formatted:Null<String>;
+			try {
+				formatted = Formatter.format(source, config, null, null, path);
+			} catch (error:compiler.formatter.TokenPreservation.TokenMismatch) {
+				Sys.stderr().writeString(error.message + "\n");
+				status = 2;
+				continue;
+			}
 			if (formatted == null)
 				throw 'Cannot format malformed source: $path';
 			if (formatted == source)
 				continue;
 			if (options.check) {
 				Sys.println('Would reformat $path');
-				status = 1;
+				if (status == 0)
+					status = 1;
 			} else
 				File.saveContent(path, formatted);
 		}
@@ -676,8 +688,7 @@ class HaxeonCli {
 			// edit is already warm.
 			var session = options.watch ? new BuildSession() : null;
 			var buildStatus = HaxeonProjectBuild.build(project, home, output, options.defines, options.jobs, options.plan, options.explain, options.timings,
-				resolutionMs, options.selfHosted, options.compilerOnly, options.live, instrument, session,
-				options.buildMode == "development");
+				resolutionMs, options.selfHosted, options.compilerOnly, options.live, instrument, session, options.buildMode == "development");
 			if (buildStatus != 0 || !launch)
 				return buildStatus;
 			// Under the build's PATH, which chooses the worker the rebuilds will reach.
@@ -747,8 +758,7 @@ class HaxeonCli {
 							}
 							var candidate = cachedProject;
 							var status = HaxeonProjectBuild.build(candidate, home, output, options.defines, options.jobs, false, false, false, 0.0,
-								options.selfHosted, change.compilerOnly, options.live, instrument, session,
-								options.buildMode == "development");
+								options.selfHosted, change.compilerOnly, options.live, instrument, session, options.buildMode == "development");
 							if (windows)
 								Sys.putEnv("PATH", runPath);
 							return status == 0 ? candidate : null;
@@ -1057,11 +1067,11 @@ class HaxeonCli {
 	}
 
 	static function parseBuildOptions(arguments:Array<String>):BuildOptions {
-		var projectPath = CONFIG_FILE, target:Null<String> = null, buildMode = "development", buildModeExplicit = false, output:Null<String> = null, device:Null<String> = null, defines = [],
-			runtimeArguments = [], plan = false, explain = false, timings = false, compilerOnly = false, watch = false, live = false, strictLive = false, jobs = 4,
-			selfHosted = Sys.getEnv("HAXEON_SELF_HOSTED") == "1", profile = false, profileSources:Array<String> = null, profileOutput:Null<String> = null,
-			profileStart = "launch", profileDuration = 0, profileMaxSize = ProfileCapture.DEFAULT_MAX_SIZE_MIB, profileWindow:Null<String> = null,
-			profileMinCall:Null<Float> = null;
+		var projectPath = CONFIG_FILE, target:Null<String> = null, buildMode = "development", buildModeExplicit = false, output:Null<String> = null,
+			device:Null<String> = null, defines = [], runtimeArguments = [], plan = false, explain = false, timings = false, compilerOnly = false,
+			watch = false, live = false, strictLive = false, jobs = 4, selfHosted = Sys.getEnv("HAXEON_SELF_HOSTED") == "1", profile = false,
+			profileSources:Array<String> = null, profileOutput:Null<String> = null, profileStart = "launch", profileDuration = 0,
+			profileMaxSize = ProfileCapture.DEFAULT_MAX_SIZE_MIB, profileWindow:Null<String> = null, profileMinCall:Null<Float> = null;
 		var index = 0;
 		while (index < arguments.length) {
 			var argument = arguments[index++];
@@ -1095,8 +1105,8 @@ class HaxeonCli {
 					throw 'Option "--profile-output" requires a value';
 				profileOutput = arguments[index++];
 				profile = true;
-			} else if (argument == "--project" || argument == "--target" || argument == "--build-mode" || argument == "--output" || argument == "--define" || argument == "--device"
-				|| argument == "--jobs") {
+			} else if (argument == "--project" || argument == "--target" || argument == "--build-mode" || argument == "--output" || argument == "--define"
+				|| argument == "--device" || argument == "--jobs") {
 				if (index >= arguments.length)
 					throw 'Option "$argument" requires a value';
 				var value = arguments[index++];
@@ -1128,8 +1138,7 @@ class HaxeonCli {
 			else if (StringTools.startsWith(argument, "--build-mode=")) {
 				buildMode = argument.substr("--build-mode=".length);
 				buildModeExplicit = true;
-			}
-			else if (StringTools.startsWith(argument, "--output="))
+			} else if (StringTools.startsWith(argument, "--output="))
 				output = argument.substr("--output=".length);
 			else if (StringTools.startsWith(argument, "--device="))
 				device = argument.substr("--device=".length);
