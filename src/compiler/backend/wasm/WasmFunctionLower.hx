@@ -510,6 +510,28 @@ class WasmFunctionLower {
   }
 
   function emitPhiGroup(body:Array<WasmInstruction>, block:IrBlock, values:Map<Int, Int>, predecessor:Int):Void {
+    var single:Null<IrInstruction> = null;
+    var count = 0;
+    for (located in block.instructions) switch located.value {
+      case Phi(output, _) if ((switch output.type {
+        case Void:
+          false;
+        default:
+          true;
+      }
+      )):count++;
+      single = located.value;
+      default:
+    }
+    // A single destination cannot overwrite another phi's input. Multiple
+    // phis still require staging, independently of WasmValuePlacement's
+    // current choice to leave blockful functions uncoalesced.
+    if (count == 1 && Std.isOfType(context.representation.values, WasmGcRepresentation)) switch single {
+      case Phi(output, inputs):
+        WasmPhiLower.capture(body, inputs, values, predecessor, requiredLocal(values, output.id));
+        return;
+      default:
+    }
     var staged:Array<{target:Int, temporary:Int}> = [];
     for (located in block.instructions) switch located.value {
       // A Void join (branches whose results are discarded) carries no value; placement gives it no local.

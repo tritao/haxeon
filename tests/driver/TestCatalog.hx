@@ -80,6 +80,7 @@ class TestCatalog {
 		"WasmClosureVerificationOrderMain",
 		"WasmGcLocalCompactionMain",
 		"WasmGcDynamicNullMain",
+		"WasmGcSinglePhiMain",
 		"WasmGcClosureWarmEditMain",
 		"ScalarAbiEligibilityMain",
 		"GenericStructFunctionMain",
