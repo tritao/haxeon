@@ -23,7 +23,41 @@ class FormatterMain {
 			throw "scanner dropped tokens the lexer produced";
 	}
 
+	static function assertUpdateOperatorBoundaries():Void {
+		for (expression in [
+			"x + ++y",
+			"x - --y",
+			"x * ++y",
+			"x / --y",
+			"x - -y",
+			"- -x",
+			"++x + y",
+			"x++ + y",
+			"--x - y",
+			"x-- - y"
+		]) {
+			var source = "function f(x:Int, y:Int):Int return " + expression + ";\n";
+			for (width in [120, 24, 8]) {
+				var config = FormatConfigTools.defaults(2, true);
+				config.lineWidth = width;
+				var output = Formatter.format(source, config);
+				if (output == null)
+					throw "Update operator source was rejected: " + expression;
+				var before = new Lexer(new SourceFile("before.hx", source)).tokenize();
+				var after = new Lexer(new SourceFile("after.hx", output)).tokenize();
+				if (before.length != after.length)
+					throw "Formatting changed update operator token count: " + expression;
+				for (index in 0...before.length)
+					if (before[index].kind != after[index].kind || before[index].text != after[index].text)
+						throw "Formatting changed update operator tokens: " + expression;
+				if (Formatter.format(output, config) != output)
+					throw "Update operator formatting was not stable";
+			}
+		}
+	}
+
 	static function main():Void {
+		assertUpdateOperatorBoundaries();
 		assertScannerMatchesLexer("function main():Int { var a = b ?? c; a += 1; a -= 1; a *= 2; a /= 2; a %= 2; a &= 1; a |= 1; a ^= 1; a++; --a; "
 			+ "var t = a == b || a != b && a <= b || a >= b; var f = (x) -> x; var u = !a; var v = ~a; var w = [a ? b : c]; "
 			+ "var s = (a << 1) | (a >> 1) & (a >>> 1); var q:Map<String, Array<Int>> = []; @:meta var m = a.b; $a; return a < b ? 1 : a > b ? 2 : 3; }");
@@ -100,8 +134,10 @@ class FormatterMain {
 			var syntaxTokens = [
 				for (token in scanned)
 					if (switch token.kind {
-							case Syntax(_): true;
-							default: false;
+							case Syntax(_):
+								true;
+							default:
+								false;
 						}) token
 			];
 			if (syntaxTokens.length != original.length - 1)

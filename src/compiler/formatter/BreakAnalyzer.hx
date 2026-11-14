@@ -18,12 +18,15 @@ private typedef DelimiterGroup = {
 /** Classifies token boundaries and turns overlong delimited groups into constraints. */
 class BreakAnalyzer {
 	public static function analyze(line:UnwrappedLine, syntax:SyntaxInfo, config:FormatConfig):Array<Boundary> {
-		var tokens = line.tokens, groups = findGroups(tokens, syntax), expanded:Array<DelimiterGroup> = [];
+		var tokens = line.tokens,
+			groups = findGroups(tokens, syntax),
+			expanded:Array<DelimiterGroup> = [];
 		// Outermost first: a group inside an expanded one starts its own line, so only the part of the line before it counts.
 		groups.sort((left, right) -> left.open - right.open);
 		for (group in groups)
 			if (group.commas.length > 0
-				&& groupPrefixWidth(tokens, group.open, expanded, line.indent, config, syntax) + rangeWidth(tokens, group.open, group.close, syntax) > config.lineWidth)
+				&& groupPrefixWidth(tokens, group.open, expanded, line.indent, config,
+					syntax) + rangeWidth(tokens, group.open, group.close, syntax) > config.lineWidth)
 				expanded.push(group);
 
 		var result:Array<Boundary> = [];
@@ -131,7 +134,11 @@ class BreakAnalyzer {
 					stack.push({open: index, closeKind: TokenKind.RightBrace, commas: []});
 				case TokenKind.Less:
 					if (opensTypeArguments(tokens, index, syntax))
-						stack.push({open: index, closeKind: TokenKind.Greater, commas: []});
+						stack.push({
+							open: index,
+							closeKind: TokenKind.Greater,
+							commas: []
+						});
 				case TokenKind.Comma:
 					if (stack.length > 0)
 						stack[stack.length - 1].commas.push(index);
@@ -207,7 +214,14 @@ class BreakAnalyzer {
 			return 0;
 		if (left == TokenKind.Question && !isTernaryQuestion(tokens, index))
 			return 0;
-		if (right == TokenKind.Increment || right == TokenKind.Decrement || left == TokenKind.Not || left == TokenKind.BitNot)
+		// Adjacent unary signs must not become an update token when the source is scanned again.
+		if ((left == TokenKind.Plus && right == TokenKind.Plus) || (left == TokenKind.Minus && right == TokenKind.Minus))
+			return 1;
+		if (right == TokenKind.Increment || right == TokenKind.Decrement)
+			return endsOperand(tokens, index, left, syntax) || left == TokenKind.Not || left == TokenKind.BitNot ? 0 : 1;
+		if (left == TokenKind.Increment || left == TokenKind.Decrement)
+			return index == 0 || !endsOperand(tokens, index - 1, FormatTokenTools.syntaxKind(tokens[index - 1]), syntax) ? 0 : 1;
+		if (left == TokenKind.Not || left == TokenKind.BitNot)
 			return 0;
 		if (isUnary(tokens, index, left))
 			return 0;
@@ -232,7 +246,8 @@ class BreakAnalyzer {
 				TokenKind.StringLiteral, TokenKind.RegexLiteral, TokenKind.BoolTrue, TokenKind.BoolFalse, TokenKind.This, TokenKind.Increment,
 				TokenKind.Decrement, TokenKind.TypeInt, TokenKind.TypeBool, TokenKind.TypeFloat, TokenKind.TypeString:
 				true;
-			default: false;
+			default:
+				false;
 		};
 	}
 
@@ -245,18 +260,20 @@ class BreakAnalyzer {
 	/** Can this token end an operand, so that a following `(` or `[` is a call or an index rather than a new expression? */
 	static function endsOperand(tokens:Array<FormatToken>, index:Int, kind:Null<TokenKind>, syntax:SyntaxInfo):Bool
 		return switch kind {
-			case TokenKind.Identifier, TokenKind.RightParen, TokenKind.RightBracket, TokenKind.RightBrace, TokenKind.This, TokenKind.New,
-				TokenKind.Function, TokenKind.StringLiteral, TokenKind.Integer, TokenKind.Float, TokenKind.BoolTrue, TokenKind.BoolFalse,
-				TokenKind.TypeInt, TokenKind.TypeBool, TokenKind.TypeFloat, TokenKind.TypeString, TokenKind.Dollar:
+			case TokenKind.Identifier, TokenKind.RightParen, TokenKind.RightBracket, TokenKind.RightBrace, TokenKind.This, TokenKind.New, TokenKind.Function,
+				TokenKind.StringLiteral, TokenKind.Integer, TokenKind.Float, TokenKind.BoolTrue, TokenKind.BoolFalse, TokenKind.TypeInt, TokenKind.TypeBool,
+				TokenKind.TypeFloat, TokenKind.TypeString, TokenKind.Dollar:
 				true;
-			case TokenKind.Greater: closesTypeArguments(tokens, index, syntax);
-			default: false;
+			case TokenKind.Greater:
+				closesTypeArguments(tokens, index, syntax);
+			default:
+				false;
 		};
 
 	/** A prefix operator binds to what follows it without a space: `!(a)`, `-(a)`, `@:meta`. */
 	static function isPrefixOperator(tokens:Array<FormatToken>, index:Int, kind:Null<TokenKind>):Bool
-		return kind == TokenKind.Not || kind == TokenKind.BitNot || kind == TokenKind.Increment || kind == TokenKind.Decrement || kind == TokenKind.At || kind == TokenKind.Backslash
-			|| isUnary(tokens, index, kind);
+		return kind == TokenKind.Not || kind == TokenKind.BitNot || kind == TokenKind.Increment || kind == TokenKind.Decrement || kind == TokenKind.At
+			|| kind == TokenKind.Backslash || isUnary(tokens, index, kind);
 
 	static function colonNeedsSpace(tokens:Array<FormatToken>, index:Int, syntax:SyntaxInfo):Bool {
 		// A structure type inside type arguments, `Array<{a:Int}>`, is annotated like any other type.
@@ -300,8 +317,8 @@ class BreakAnalyzer {
 			|| previous == TokenKind.Colon || previous == TokenKind.Question || previous == TokenKind.Return || previous == TokenKind.Throw
 			|| previous == TokenKind.Case || previous == TokenKind.In || previous == TokenKind.Arrow || previous == TokenKind.Else
 			|| previous == TokenKind.Do || previous == TokenKind.PlusAssign || previous == TokenKind.MinusAssign || previous == TokenKind.StarAssign
-			|| previous == TokenKind.SlashAssign || previous == TokenKind.PercentAssign || previous == TokenKind.AndAssign
-			|| previous == TokenKind.OrAssign || previous == TokenKind.XorAssign || isBinaryOperator(previous);
+			|| previous == TokenKind.SlashAssign || previous == TokenKind.PercentAssign || previous == TokenKind.AndAssign || previous == TokenKind.OrAssign
+			|| previous == TokenKind.XorAssign || isBinaryOperator(previous);
 	}
 
 	static function isBinaryOperator(kind:Null<TokenKind>):Bool
@@ -340,7 +357,10 @@ class BreakAnalyzer {
 	}
 
 	/** The first token of the line holding `open` and that line's indent: the element of the innermost expanded group around it. */
-	static function lineStart(open:Int, expanded:Array<DelimiterGroup>, indent:Int, config:FormatConfig):{token:Int, indent:Int} {
+	static function lineStart(open:Int, expanded:Array<DelimiterGroup>, indent:Int, config:FormatConfig):{
+		token:Int,
+		indent:Int
+	} {
 		var parent:Null<DelimiterGroup> = null;
 		for (group in expanded)
 			if (group.open < open && open < group.close && (parent == null || group.open > parent.open))
@@ -351,7 +371,10 @@ class BreakAnalyzer {
 		for (comma in parent.commas)
 			if (comma < open)
 				token = comma + 1;
-		return {token: token, indent: lineStart(parent.open, expanded, indent, config).indent + FormatConfigTools.continuationLevels(config)};
+		return {
+			token: token,
+			indent: lineStart(parent.open, expanded, indent, config).indent + FormatConfigTools.continuationLevels(config)
+		};
 	}
 
 	static function rangeWidth(tokens:Array<FormatToken>, start:Int, end:Int, syntax:SyntaxInfo):Int {
