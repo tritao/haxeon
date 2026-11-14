@@ -246,6 +246,11 @@ class WasmFunctionLower {
 				body = wrapped;
 		}
 		body = WasmOptimizer.optimize(body);
+		if (Std.isOfType(context.representation.values, WasmGcRepresentation)) {
+			var compacted = compiler.backend.wasm.gc.WasmGcLocalCompaction.run(body, locals, type.parameters.length);
+			body = compacted.body;
+			locals = compacted.locals;
+		}
 		return new WasmFunction(fn.name, type, locals, body);
 	}
 
