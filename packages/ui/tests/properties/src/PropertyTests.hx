@@ -34,7 +34,10 @@ class PropertyTests {
 			commands.onPropertyEdit = event -> events.push(event.result);
 			var binding = new PropertyBinding(descriptor, commands);
 			check(rejected(binding.apply(PropertyValue.Int(11))) && submissions == 0, "Validation precedes submission");
-			check(binding.apply(PropertyValue.Int(1)) == Unchanged && submissions == 0, "Equality precedes submission");
+			check((switch binding.apply(PropertyValue.Int(1)) {
+				case Unchanged: true;
+				default: false;
+			}) && submissions == 0, "Equality precedes submission");
 			events.resize(0);
 			var result = binding.apply(PropertyValue.Int(2));
 			check(switch result {
@@ -78,7 +81,7 @@ class PropertyTests {
 						default:
 					}
 				});
-			check(new PropertyBinding(sync, commands).apply(PropertyValue.Int(7)) == Applied,
+			check(PropertyEditResultTools.isApplied(new PropertyBinding(sync, commands).apply(PropertyValue.Int(7))),
 				"Synchronous editing still applies");
 			check(document.history.undoCount == 1 && document.undo() && value == 4 && document.redo() && value == 7,
 				"Synchronous undo and redo remain intact");

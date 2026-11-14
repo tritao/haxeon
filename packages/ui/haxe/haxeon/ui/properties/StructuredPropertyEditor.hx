@@ -117,7 +117,7 @@ class StructuredPropertyEditor implements PropertyEditorExtension {
 				local.dirty = true;
 			}
 			draftState.update(local);
-			draftRevision.update(value -> value + 1);
+			draftRevision.update(draftRevision.value + 1);
 			if (onDraftChanged != null) onDraftChanged();
 		}
 		function commit():Void {
@@ -133,7 +133,7 @@ class StructuredPropertyEditor implements PropertyEditorExtension {
 				}) {
 					local.dirty = false;
 					if (retainDrafts) retainedDrafts.remove(descriptor.id);
-					draftRevision.update(value -> value + 1);
+					draftRevision.update(draftRevision.value + 1);
 				}
 				if (onDraftChanged != null) onDraftChanged();
 			} catch (_:Dynamic) {
@@ -392,7 +392,7 @@ class StructuredPropertyEditor implements PropertyEditorExtension {
 				local = new StructuredPropertyDrafts(base);
 				if (retainDrafts) retainedDrafts.set(descriptor.id, local);
 				draftState.update(local);
-				draftRevision.update(value -> value + 1);
+				draftRevision.update(draftRevision.value + 1);
 				if (onDraftChanged != null) onDraftChanged();
 			}, "revert", enabled && local.dirty, null,
 				null, null, null, null, null, null, null, null, null,
