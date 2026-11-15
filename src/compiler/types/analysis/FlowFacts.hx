@@ -7,13 +7,25 @@ import compiler.types.TypeRelations;
 class FlowFacts {
 	final parent:Null<FlowFacts>;
 	var invalidationSink:Null<FlowFacts>;
-	final assignmentTypes:Map<String, Null<CompilerType>> = [];
-	final refinedTypes:Map<String, CompilerType> = [];
-	final stableRefinedTypes:Map<String, CompilerType> = [];
-	final invalidated:Map<String, Bool> = [];
-	final invalidatedPrefixes:Array<String> = [];
-	final invalidatedNamespaces:Array<String> = [];
-	final erasedNamespaces:Array<String> = [];
+
+	/*
+		Most branches record few facts, so every collection starts as one shared empty instance and a branch gets its own on its
+		first write. Reads use the fields; writes (`set`, `push`) go through `own...` only. Removing from the shared empty
+		collections is harmless: they have nothing to remove.
+	 */
+	static final noAssignments:Map<String, Null<CompilerType>> = [];
+
+	static final noTypes:Map<String, CompilerType> = [];
+	static final noFlags:Map<String, Bool> = [];
+	static final noStrings:Array<String> = [];
+
+	var assignmentTypes:Map<String, Null<CompilerType>> = noAssignments;
+	var refinedTypes:Map<String, CompilerType> = noTypes;
+	var stableRefinedTypes:Map<String, CompilerType> = noTypes;
+	var invalidated:Map<String, Bool> = noFlags;
+	var invalidatedPrefixes:Array<String> = noStrings;
+	var invalidatedNamespaces:Array<String> = noStrings;
+	var erasedNamespaces:Array<String> = noStrings;
 
 	/** The namespace of facts about expression paths. */
 	static inline final EXPRESSION_PREFIX = "$expression:";
@@ -25,8 +37,35 @@ class FlowFacts {
 				&& bindingId.charCodeAt(prefix.length) == 46
 				&& StringTools.startsWith(bindingId, prefix));
 
-	final erasedMentions:Array<String> = [];
-	final invalidatedFields:Array<String> = [];
+	var erasedMentions:Array<String> = noStrings;
+	var invalidatedFields:Array<String> = noStrings;
+
+	function ownAssignments():Map<String, Null<CompilerType>> {
+		if (assignmentTypes == noAssignments)
+			assignmentTypes = [];
+		return assignmentTypes;
+	}
+
+	function ownRefined():Map<String, CompilerType> {
+		if (refinedTypes == noTypes)
+			refinedTypes = [];
+		return refinedTypes;
+	}
+
+	function ownStableRefined():Map<String, CompilerType> {
+		if (stableRefinedTypes == noTypes)
+			stableRefinedTypes = [];
+		return stableRefinedTypes;
+	}
+
+	function ownInvalidated():Map<String, Bool> {
+		if (invalidated == noFlags)
+			invalidated = [];
+		return invalidated;
+	}
+
+	static function owned(list:Array<String>):Array<String>
+		return list == noStrings ? [] : list;
 
 	public function new(?parent:FlowFacts) {
 		this.parent = parent;
@@ -43,13 +82,13 @@ class FlowFacts {
 
 	/** Retain the type guaranteed by every assignment; null denotes an unknown write. */
 	function captureWrite(bindingId:String, type:Null<CompilerType>):Void {
-		invalidated.set(bindingId, true);
+		ownInvalidated().set(bindingId, true);
 		if (!assignmentTypes.exists(bindingId))
-			assignmentTypes.set(bindingId, type);
+			ownAssignments().set(bindingId, type);
 		else {
 			var previous = assignmentTypes.get(bindingId);
 			if (previous == null || type == null || !TypeRelations.equals(previous, type))
-				assignmentTypes.set(bindingId, null);
+				ownAssignments().set(bindingId, null);
 		}
 		if (invalidationSink != null)
 			invalidationSink.captureWrite(bindingId, type);
@@ -96,10 +135,10 @@ class FlowFacts {
 		invalidated.remove(bindingId);
 		if (stable) {
 			refinedTypes.remove(bindingId);
-			stableRefinedTypes.set(bindingId, type);
+			ownStableRefined().set(bindingId, type);
 		} else {
 			stableRefinedTypes.remove(bindingId);
-			refinedTypes.set(bindingId, type);
+			ownRefined().set(bindingId, type);
 		}
 	}
 
@@ -108,7 +147,7 @@ class FlowFacts {
 			invalidationSink.captureWrite(bindingId, null);
 		refinedTypes.remove(bindingId);
 		stableRefinedTypes.remove(bindingId);
-		invalidated.set(bindingId, true);
+		ownInvalidated().set(bindingId, true);
 	}
 
 	public function resolve(bindingId:String):Null<CompilerType> {
@@ -201,6 +240,7 @@ class FlowFacts {
 		for (bindingId in stableRefinedTypes.keys())
 			if (isUnder(bindingId, prefix))
 				stableRefinedTypes.remove(bindingId);
+		invalidatedPrefixes = owned(invalidatedPrefixes);
 		invalidatedPrefixes.push(prefix);
 	}
 
@@ -210,6 +250,7 @@ class FlowFacts {
 		for (bindingId in refinedTypes.keys())
 			if (StringTools.startsWith(bindingId, prefix))
 				refinedTypes.remove(bindingId);
+		invalidatedNamespaces = owned(invalidatedNamespaces);
 		invalidatedNamespaces.push(prefix);
 	}
 
@@ -223,6 +264,7 @@ class FlowFacts {
 		for (bindingId in stableRefinedTypes.keys())
 			if (StringTools.startsWith(bindingId, prefix))
 				stableRefinedTypes.remove(bindingId);
+		erasedNamespaces = owned(erasedNamespaces);
 		erasedNamespaces.push(prefix);
 	}
 
@@ -237,6 +279,7 @@ class FlowFacts {
 		for (bindingId in stableRefinedTypes.keys())
 			if (StringTools.startsWith(bindingId, expressionPrefix) && bindingId.indexOf(fragment) >= 0)
 				stableRefinedTypes.remove(bindingId);
+		erasedMentions = owned(erasedMentions);
 		erasedMentions.push(fragment);
 	}
 
@@ -263,6 +306,7 @@ class FlowFacts {
 		for (bindingId in refinedTypes.keys())
 			if (mentionsField(bindingId, field))
 				refinedTypes.remove(bindingId);
+		invalidatedFields = owned(invalidatedFields);
 		invalidatedFields.push(field);
 	}
 

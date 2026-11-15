@@ -44,21 +44,40 @@ class Scope {
 	final parent:Null<Scope>;
 	final facts:FlowFacts;
 	var nextLocalId:Int = 0;
-	final values:Map<String, ScopeValue> = [];
+	/*
+		Most scopes define nothing and capture nothing, so every collection starts as one shared empty instance and a scope gets
+		its own on its first write. Reads use the fields; writes (`set`, `push`) go through `own...` only. Removing from the shared
+		empty collections is harmless: they have nothing to remove.
+	*/
+	static final noValues:Map<String, ScopeValue> = [];
+
+	static final noValueList:Array<ScopeValue> = [];
+	static final noFlags:Map<String, Bool> = [];
+	static final noTypes:Map<String, CompilerType> = [];
+	static final noNames:Map<String, String> = [];
+	static final noSources:Map<String, TypedExpression> = [];
+
+	var values:Map<String, ScopeValue> = noValues;
 
 	/**
 	 * The same values in definition order, and by identity. Walking a map goes through an iterator object whose every call is dynamic, and
 	 * looking a value up by id by walking the map compared every id of the scope; the visible set is asked for at every branch of every function.
 	 */
-	final valueList:Array<ScopeValue> = [];
+	var valueList:Array<ScopeValue> = noValueList;
 
-	final valuesById:Map<String, ScopeValue> = [];
-	final assigned:Map<String, Bool> = [];
-	final captures:Map<String, Bool> = [];
-	final captureStorageTypes:Map<String, CompilerType> = [];
-	final cellCaptures:Map<String, Bool> = [];
-	final cellClasses:Map<String, String> = [];
-	final mapKeySources:Map<String, TypedExpression> = [];
+	var valuesById:Map<String, ScopeValue> = noValues;
+	var assigned:Map<String, Bool> = noFlags;
+	var captures:Map<String, Bool> = noFlags;
+	var captureStorageTypes:Map<String, CompilerType> = noTypes;
+	var cellCaptures:Map<String, Bool> = noFlags;
+	var cellClasses:Map<String, String> = noNames;
+	var mapKeySources:Map<String, TypedExpression> = noSources;
+
+	function ownAssigned():Map<String, Bool> {
+		if (assigned == noFlags)
+			assigned = [];
+		return assigned;
+	}
 
 	public function new(?parent:Scope) {
 		this.parent = parent;
@@ -79,11 +98,15 @@ class Scope {
 			scoped: false,
 			keyPathConstant: null
 		};
+		if (values == noValues) {
+			values = [];
+			valueList = [];
+		}
 		values.set(name, value);
 		valueList.push(value);
 		if (!valuesById.exists(value.id))
-			valuesById.set(value.id, value);
-		assigned.set(value.id, initialized);
+			(valuesById == noValues ? valuesById = [] : valuesById).set(value.id, value);
+		ownAssigned().set(value.id, initialized);
 	}
 
 	public function defineReceiver(type:CompilerType, span:SourceSpan):Void
@@ -108,13 +131,13 @@ class Scope {
 	public function markAssigned(name:String):Void {
 		var value = resolveLocal(name);
 		if (value != null)
-			assigned.set(value.id, true);
+			ownAssigned().set(value.id, true);
 	}
 
 	/** For speculative typing: every visible local counts as assigned in this scope, not in its parents. */
 	public function assumeAllAssigned():Void
 		for (value in visibleValues())
-			assigned.set(value.id, true);
+			ownAssigned().set(value.id, true);
 
 	public function setMapKeySource(name:String, source:Null<TypedExpression>):Void {
 		var value = resolveLocal(name);
@@ -123,7 +146,7 @@ class Scope {
 		if (source == null)
 			mapKeySources.remove(value.id);
 		else
-			mapKeySources.set(value.id, source);
+			(mapKeySources == noSources ? mapKeySources = [] : mapKeySources).set(value.id, source);
 	}
 
 	public function mapKeySource(name:String):Null<TypedExpression> {
@@ -150,7 +173,7 @@ class Scope {
 					break;
 				}
 			if (allAssigned)
-				assigned.set(value.id, true);
+				ownAssigned().set(value.id, true);
 		}
 	}
 
@@ -195,13 +218,13 @@ class Scope {
 			?storageType:CompilerType, ?localFunction:LocalFunction, ?declaration:String):Void {
 		// A capture is the same variable as the one it captures, so it keeps that declaration's identity.
 		define(name, type, span, true, bindingId, false, localFunction, declaration);
-		captures.set(name, true);
+		(captures == noFlags ? captures = [] : captures).set(name, true);
 		if (storageType != null)
-			captureStorageTypes.set(requireId(name), storageType);
+			(captureStorageTypes == noTypes ? captureStorageTypes = [] : captureStorageTypes).set(requireId(name), storageType);
 		if (cell) {
-			cellCaptures.set(name, true);
+			(cellCaptures == noFlags ? cellCaptures = [] : cellCaptures).set(name, true);
 			if (cellClass != null)
-				cellClasses.set(name, cellClass);
+				(cellClasses == noNames ? cellClasses = [] : cellClasses).set(name, cellClass);
 		}
 	}
 
