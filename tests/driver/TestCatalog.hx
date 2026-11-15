@@ -101,6 +101,7 @@ class TestCatalog {
 		"MemberModuleShadowMain",
 		"FinalFieldMain",
 		"ModuleVariablesMain",
+		"SignatureMetadataMain",
 		"FinalLocalMain",
 		"GenericStructuralMain",
 		"ValueEqualityIncrementalMain",
