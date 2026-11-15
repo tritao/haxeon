@@ -10,14 +10,6 @@ set(BUILD_SHARED_LIBS OFF CACHE BOOL "Build HashLink as a static library for the
 set(WITH_VM OFF CACHE BOOL "The Android host supplies the VM executable sources" FORCE)
 set(HL_BUILD_TESTS OFF CACHE BOOL "Do not build HashLink tests for Android" FORCE)
 set(BUILD_TESTING OFF CACHE BOOL "Do not build HashLink tests for Android" FORCE)
-set(HL_JIT_AARCH64_OLD_DEFAULT OFF)
-if(NOT EXISTS "${HAXEON_ROOT}/vendor/hashlink/src/jit_aarch64.c"
-    OR NOT EXISTS "${HAXEON_ROOT}/vendor/hashlink/src/jit_aarch64_emit.c")
-    set(HL_JIT_AARCH64_OLD_DEFAULT ON)
-endif()
-option(HL_JIT_AARCH64_OLD
-    "Use the legacy direct HL-bytecode AArch64 JIT instead of the HL2 IR backend"
-    ${HL_JIT_AARCH64_OLD_DEFAULT})
 
 # Android does not ship libffi headers or a runtime library in its NDK. Build
 # the pinned upstream submodule with the same NDK compiler and link it
@@ -129,23 +121,15 @@ set(HAXEON_VM_SOURCES
 )
 
 if(ANDROID_ABI STREQUAL "arm64-v8a")
-    if(HL_JIT_AARCH64_OLD)
-        set(HAXEON_JIT_SOURCES
-            "${HAXEON_ROOT}/vendor/hashlink/src/jit_arm64.c"
-            "${HAXEON_ROOT}/vendor/hashlink/src/jit_arm64_compat.c"
-            "${HAXEON_ROOT}/vendor/hashlink/src/jit_gdb.c"
-        )
-    else()
-        set(HAXEON_JIT_SOURCES
-            "${HAXEON_ROOT}/vendor/hashlink/src/jit.c"
-            "${HAXEON_ROOT}/vendor/hashlink/src/jit_emit.c"
-            "${HAXEON_ROOT}/vendor/hashlink/src/jit_regs.c"
-            "${HAXEON_ROOT}/vendor/hashlink/src/jit_aarch64.c"
-            "${HAXEON_ROOT}/vendor/hashlink/src/jit_aarch64_emit.c"
-            "${HAXEON_ROOT}/vendor/hashlink/src/jit_dump.c"
-            "${HAXEON_ROOT}/vendor/hashlink/src/jit_gdb.c"
-        )
-    endif()
+    set(HAXEON_JIT_SOURCES
+        "${HAXEON_ROOT}/vendor/hashlink/src/jit.c"
+        "${HAXEON_ROOT}/vendor/hashlink/src/jit_emit.c"
+        "${HAXEON_ROOT}/vendor/hashlink/src/jit_regs.c"
+        "${HAXEON_ROOT}/vendor/hashlink/src/jit_aarch64.c"
+        "${HAXEON_ROOT}/vendor/hashlink/src/jit_aarch64_emit.c"
+        "${HAXEON_ROOT}/vendor/hashlink/src/jit_dump.c"
+        "${HAXEON_ROOT}/vendor/hashlink/src/jit_gdb.c"
+    )
 else()
     set(HAXEON_JIT_SOURCES
         "${HAXEON_ROOT}/vendor/hashlink/src/jit.c"

@@ -19,7 +19,7 @@ jobs:
         run: ./scripts/bootstrap-tools.sh
       - name: Build experimental shared-JIT collector
         run: |
-          cmake --preset release -DHL_JIT_AARCH64_OLD=OFF -DHAXEON_GC_APPLE_SOFTWARE_TEST=ON
+          cmake --preset release -DHAXEON_GC_APPLE_SOFTWARE_TEST=ON
           cmake --build --preset release --target libhl hl haxeon_runtime
       - name: Validate software-only GC
         run: |

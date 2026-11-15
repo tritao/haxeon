@@ -226,7 +226,7 @@ The initial source audit identified these coverage groups:
 | Dynamic-field helpers | `std/obj.c`: `hl_dyn_setp`, `hl_obj_lookup_set`, `hl_obj_set_field`; `std/cast.c`: `hl_write_dyn` | Cover direct stores, conversion paths, backing-buffer replacement and virtual/dynamic-object structural changes. |
 | Arrays and bulk copies | `std/array.c`: `hl_array_reserve`, `hl_array_blit`, `hl_carray_blit`; `native/runtime/arrays.c` | Cover copied destination ranges and the old array header's reference to replacement storage. |
 | Maps and closures | `std/maps.h` template and `std/fun.c` | Cover reference keys/values, resized buffers, captured values and initialization across allocations. |
-| Legacy ARM JIT and generated C | `jit_arm64.c`, `hlc.h` | Audit separately; shared current JIT instrumentation does not cover these paths. |
+| Generated C | `hlc.h` | Audit separately; shared current JIT instrumentation does not cover this path. |
 | Unsafe/native interfaces | `OSetMem`, `ORefData`, raw pointer writes, FFI callbacks and external HDLLs | Define an explicit reference-store/bulk-write contract; compiler instrumentation alone cannot cover arbitrary native writes. |
 | Roots | Globals, registered roots, stack references | Current root rescanning handles these; distinguish root storage from heap storage when references can alias either. |
 
@@ -467,7 +467,7 @@ Normal Apple builds still report incremental GC unavailable. To build the experi
 on Apple Silicon, use:
 
 ```sh
-cmake --preset release -DHL_JIT_AARCH64_OLD=OFF -DHAXEON_GC_APPLE_SOFTWARE_TEST=ON
+cmake --preset release -DHAXEON_GC_APPLE_SOFTWARE_TEST=ON
 cmake --build --preset release --target libhl hl haxeon_runtime
 bash tests/integration/test-gc-apple-software.sh
 ```

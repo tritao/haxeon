@@ -12,7 +12,8 @@ jobs:
   platform:
     name: ${{ matrix.name }}
     strategy:
-      fail-fast: true
+      # Each platform reports its own result: one failing platform must not hide the others behind cancellations.
+      fail-fast: false
       matrix:
         include:
           - name: test

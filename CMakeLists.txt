@@ -40,26 +40,10 @@ set(WITH_UV OFF CACHE BOOL "Do not build optional HashLink libraries" FORCE)
 set(WITH_VIDEO OFF CACHE BOOL "Do not build optional HashLink libraries" FORCE)
 set(WITH_HEAPS OFF CACHE BOOL "Do not build optional HashLink libraries" FORCE)
 
-# The upstream HL2 AArch64 JIT is still being validated against Haxeon's
-# legacy backend. Keep the known-good backend as this project's ARM64 default;
-# pass -DHL_JIT_AARCH64_OLD=OFF to explicitly exercise the HL2 implementation.
-set(HAXEON_AARCH64_JIT_DEFAULT OFF)
-if(APPLE AND CMAKE_OSX_ARCHITECTURES)
-  if(CMAKE_OSX_ARCHITECTURES MATCHES "arm64" AND NOT CMAKE_OSX_ARCHITECTURES MATCHES "x86_64")
-    set(HAXEON_AARCH64_JIT_DEFAULT ON)
-  endif()
-elseif(CMAKE_SYSTEM_PROCESSOR MATCHES "aarch64|arm64")
-  set(HAXEON_AARCH64_JIT_DEFAULT ON)
-endif()
-option(HL_JIT_AARCH64_OLD "Use the legacy direct HL-bytecode AArch64 JIT" ${HAXEON_AARCH64_JIT_DEFAULT})
-
 option(HAXEON_GC_APPLE_SOFTWARE_TEST "Build unvalidated Apple AArch64 software GC test backend" OFF)
 if(HAXEON_GC_APPLE_SOFTWARE_TEST)
-  if(NOT APPLE OR NOT HAXEON_AARCH64_JIT_DEFAULT)
+  if(NOT APPLE OR NOT CMAKE_OSX_ARCHITECTURES MATCHES "arm64" OR CMAKE_OSX_ARCHITECTURES MATCHES "x86_64")
     message(FATAL_ERROR "Apple software GC tests require an Apple AArch64 target")
-  endif()
-  if(HL_JIT_AARCH64_OLD)
-    message(FATAL_ERROR "Apple software GC tests require -DHL_JIT_AARCH64_OLD=OFF (shared JIT barriers)")
   endif()
 endif()
 
