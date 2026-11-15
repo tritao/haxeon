@@ -98,21 +98,9 @@ interface NativeKitAudio @target("portable-abi64") @library("nativekit") @depend
 		 * Specialized physical, percussion, spectral, noise and granular generators.
 		 */
 		NK_AUDIO_DSP_CAPABILITY_SPECIALIZED_SOURCE = 512;
-		/**
-		 * Specialized physical, percussion, spectral, noise and granular generators.
-		 */
 		NK_AUDIO_DSP_CAPABILITY_STEREO_UNISON = 1024;
-		/**
-		 * Specialized physical, percussion, spectral, noise and granular generators.
-		 */
 		NK_AUDIO_DSP_CAPABILITY_FILTER_ENVELOPE = 2048;
-		/**
-		 * Specialized physical, percussion, spectral, noise and granular generators.
-		 */
 		NK_AUDIO_DSP_CAPABILITY_MULTI_LFO = 4096;
-		/**
-		 * Specialized physical, percussion, spectral, noise and granular generators.
-		 */
 		NK_AUDIO_DSP_CAPABILITY_PAN_MODULATION = 8192;
 	}
 	/**
@@ -121,11 +109,22 @@ interface NativeKitAudio @target("portable-abi64") @library("nativekit") @depend
 	enum nk_audio_dsp_event_kind : u32 {
 		NK_AUDIO_DSP_EVENT_NOTE_ON = 0;
 		NK_AUDIO_DSP_EVENT_NOTE_OFF = 1;
+		/**
+		 * Sets one instrument parameter.
+		 */
 		NK_AUDIO_DSP_EVENT_PARAMETER = 2;
 		/**
-		 * Linearly changes one parameter over duration_frames.
+		 * Linearly changes one instrument parameter over duration_frames.
 		 */
 		NK_AUDIO_DSP_EVENT_PARAMETER_RAMP = 3;
+		/**
+		 * Sets one parameter of the oscillator source at oscillator_index.
+		 */
+		NK_AUDIO_DSP_EVENT_OSCILLATOR_PARAMETER = 4;
+		/**
+		 * Linearly changes one oscillator source parameter over duration_frames.
+		 */
+		NK_AUDIO_DSP_EVENT_OSCILLATOR_PARAMETER_RAMP = 5;
 	}
 	/**
 	 * Filter components supported by the DSP patch model.
@@ -211,17 +210,32 @@ interface NativeKitAudio @target("portable-abi64") @library("nativekit") @depend
 		 * Independent filter ADSR, sharing the note gate with the amplitude ADSR.
 		 */
 		NK_AUDIO_DSP_MODULATION_SOURCE_FILTER_ENVELOPE = 3;
-		/**
-		 * Independent filter ADSR, sharing the note gate with the amplitude ADSR.
-		 */
 		NK_AUDIO_DSP_MODULATION_SOURCE_LFO2 = 4;
-		/**
-		 * Independent filter ADSR, sharing the note gate with the amplitude ADSR.
-		 */
 		NK_AUDIO_DSP_MODULATION_SOURCE_LFO3 = 5;
 	}
 	/**
-	 * Instrument parameter identifiers; oscillator-specific values require a source index.
+	 * Parameters of one oscillator source; every use names the source by its zero-based index.
+	 */
+	enum nk_audio_dsp_oscillator_parameter : u32 {
+		/**
+		 * Source waveform, one of nk_audio_dsp_waveform.
+		 */
+		NK_AUDIO_DSP_OSCILLATOR_PARAMETER_WAVEFORM = 0;
+		/**
+		 * Source linear level in the inclusive range [0, 1].
+		 */
+		NK_AUDIO_DSP_OSCILLATOR_PARAMETER_LEVEL = 1;
+		/**
+		 * Source tuning offset in cents.
+		 */
+		NK_AUDIO_DSP_OSCILLATOR_PARAMETER_DETUNE_CENTS = 2;
+		/**
+		 * Source normalized phase offset in the inclusive range [0, 1].
+		 */
+		NK_AUDIO_DSP_OSCILLATOR_PARAMETER_PHASE = 3;
+	}
+	/**
+	 * Instrument-wide parameter identifiers; see nk_audio_dsp_oscillator_parameter for per-source ones.
 	 */
 	enum nk_audio_dsp_parameter : u32 {
 		NK_AUDIO_DSP_PARAMETER_WAVEFORM = 0;
@@ -242,22 +256,6 @@ interface NativeKitAudio @target("portable-abi64") @library("nativekit") @depend
 		 * State-variable low-pass resonance in the inclusive range [0, 1].
 		 */
 		NK_AUDIO_DSP_PARAMETER_FILTER_RESONANCE = 8;
-		/**
-		 * Per-source waveform; the event oscillator index selects the source.
-		 */
-		NK_AUDIO_DSP_PARAMETER_OSCILLATOR_WAVEFORM = 9;
-		/**
-		 * Per-source linear level in the inclusive range [0, 1].
-		 */
-		NK_AUDIO_DSP_PARAMETER_OSCILLATOR_LEVEL = 10;
-		/**
-		 * Per-source tuning offset in cents.
-		 */
-		NK_AUDIO_DSP_PARAMETER_OSCILLATOR_DETUNE_CENTS = 11;
-		/**
-		 * Per-source normalized phase offset in the inclusive range [0, 1].
-		 */
-		NK_AUDIO_DSP_PARAMETER_OSCILLATOR_PHASE = 12;
 	}
 	/**
 	 * Specialized DaisySP generator. Existing patches keep the oscillator graph.
@@ -338,7 +336,8 @@ interface NativeKitAudio @target("portable-abi64") @library("nativekit") @depend
 		NK_AUDIO_DSP_WAVEFORM_SQUARE = 3;
 	}
 	/**
-	 * Parameters for reverb, dynamics, and stereo delay processors; unsupported combinations are rejected.
+	 * Parameters for reverb, dynamics, and stereo delay processors; unsupported combinations are
+	 * rejected.
 	 */
 	enum nk_audio_effect_parameter : u32 {
 		NK_AUDIO_EFFECT_PARAMETER_WET = 0;
@@ -351,21 +350,12 @@ interface NativeKitAudio @target("portable-abi64") @library("nativekit") @depend
 		 * Reverb decay to -60 dB in seconds, [0.03, 90].
 		 */
 		NK_AUDIO_EFFECT_PARAMETER_DECAY_SECONDS = 3;
-		/**
-		 * Reverb decay to -60 dB in seconds, [0.03, 90].
-		 */
 		NK_AUDIO_EFFECT_PARAMETER_LOW_CUT_HZ = 4;
-		/**
-		 * Reverb decay to -60 dB in seconds, [0.03, 90].
-		 */
 		NK_AUDIO_EFFECT_PARAMETER_HIGH_CUT_HZ = 5;
 		/**
 		 * Reverb damping multipliers, [1, 10].
 		 */
 		NK_AUDIO_EFFECT_PARAMETER_LOW_DAMPING = 6;
-		/**
-		 * Reverb damping multipliers, [1, 10].
-		 */
 		NK_AUDIO_EFFECT_PARAMETER_HIGH_DAMPING = 7;
 		/**
 		 * Reverb early-reflection gain, [0, 2.5].
@@ -379,29 +369,11 @@ interface NativeKitAudio @target("portable-abi64") @library("nativekit") @depend
 		 * Compressor ratio, [1, 100].
 		 */
 		NK_AUDIO_EFFECT_PARAMETER_RATIO = 10;
-		/**
-		 * Compressor ratio, [1, 100].
-		 */
 		NK_AUDIO_EFFECT_PARAMETER_ATTACK_MS = 11;
-		/**
-		 * Compressor ratio, [1, 100].
-		 */
 		NK_AUDIO_EFFECT_PARAMETER_RELEASE_MS = 12;
-		/**
-		 * Compressor ratio, [1, 100].
-		 */
 		NK_AUDIO_EFFECT_PARAMETER_MAKEUP_DB = 13;
-		/**
-		 * Compressor ratio, [1, 100].
-		 */
 		NK_AUDIO_EFFECT_PARAMETER_GATE_THRESHOLD_DB = 14;
-		/**
-		 * Compressor ratio, [1, 100].
-		 */
 		NK_AUDIO_EFFECT_PARAMETER_EXPANDER_THRESHOLD_DB = 15;
-		/**
-		 * Compressor ratio, [1, 100].
-		 */
 		NK_AUDIO_EFFECT_PARAMETER_EXPANDER_RATIO = 16;
 		/**
 		 * Dynamics wet/dry mix, [0, 1].
@@ -1076,7 +1048,7 @@ interface NativeKitAudio @target("portable-abi64") @library("nativekit") @depend
 	/**
 	 * Reads one oscillator-specific parameter.
 	 */
-	extern fn nk_audio_dsp_instrument_get_oscillator_parameter(instrument: nk_audio_dsp_instrument, oscillator_index: u32, parameter: nk_audio_dsp_parameter, out_value: ptr<f32> @out) -> nk_result;
+	extern fn nk_audio_dsp_instrument_get_oscillator_parameter(instrument: nk_audio_dsp_instrument, oscillator_index: u32, parameter: nk_audio_dsp_oscillator_parameter, out_value: ptr<f32> @out) -> nk_result;
 	/**
 	 * Reads one current instrument parameter.
 	 */
@@ -1088,7 +1060,7 @@ interface NativeKitAudio @target("portable-abi64") @library("nativekit") @depend
 	/**
 	 * Sets one oscillator-specific parameter between render calls.
 	 */
-	extern fn nk_audio_dsp_instrument_set_oscillator_parameter(instrument: nk_audio_dsp_instrument, oscillator_index: u32, parameter: nk_audio_dsp_parameter, value: f32) -> nk_result;
+	extern fn nk_audio_dsp_instrument_set_oscillator_parameter(instrument: nk_audio_dsp_instrument, oscillator_index: u32, parameter: nk_audio_dsp_oscillator_parameter, value: f32) -> nk_result;
 	extern fn nk_audio_dsp_instrument_set_parameter(instrument: nk_audio_dsp_instrument, parameter: nk_audio_dsp_parameter, value: f32) -> nk_result;
 	/**
 	 * Creates an immutable, renderer-independent patch definition.
@@ -1652,7 +1624,7 @@ interface NativeKitAudio @target("portable-abi64") @library("nativekit") @depend
 	/**
 	 * One sample-accurate event in a render block. Events must be frame sorted.
 	 */
-	struct nk_audio_dsp_event @layout(56, 8) {
+	struct nk_audio_dsp_event @layout(64, 8) {
 		/**
 		 * Set to sizeof(nk_audio_dsp_event) before passing the structure.
 		 */
@@ -1666,7 +1638,7 @@ interface NativeKitAudio @target("portable-abi64") @library("nativekit") @depend
 		 */
 		frame_offset: u32 @offset(8);
 		/**
-		 * Instrument for NOTE_ON, PARAMETER, and PARAMETER_RAMP; ignored for NOTE_OFF.
+		 * Instrument for NOTE_ON and the parameter events; ignored for NOTE_OFF.
 		 */
 		instrument: nk_audio_dsp_instrument @offset(12);
 		/**
@@ -1682,26 +1654,33 @@ interface NativeKitAudio @target("portable-abi64") @library("nativekit") @depend
 		 */
 		velocity: f32 @offset(24);
 		/**
-		 * Parameter ID and start value for PARAMETER and PARAMETER_RAMP.
+		 * Instrument parameter for PARAMETER and PARAMETER_RAMP; ignored for other event kinds.
 		 */
 		parameter: nk_audio_dsp_parameter @offset(28);
-		value: f32 @offset(32);
 		/**
-		 * Zero-based oscillator source for oscillator-specific parameters.
+		 * Source parameter for OSCILLATOR_PARAMETER and OSCILLATOR_PARAMETER_RAMP; ignored otherwise.
+		 */
+		oscillator_parameter: nk_audio_dsp_oscillator_parameter @offset(32);
+		/**
+		 * Zero-based oscillator source for the oscillator parameter events; zero for other event kinds.
 		 */
 		oscillator_index: u32 @offset(36);
 		/**
-		 * End value for PARAMETER_RAMP; ignored for other event kinds.
+		 * New value, or the start value of a ramp, for the parameter events.
 		 */
-		end_value: f32 @offset(40);
+		value: f32 @offset(40);
 		/**
-		 * Number of frames from value to end_value for PARAMETER_RAMP.
+		 * End value for the ramp events; ignored for other event kinds.
 		 */
-		duration_frames: u32 @offset(44);
+		end_value: f32 @offset(44);
+		/**
+		 * Number of frames from value to end_value for the ramp events.
+		 */
+		duration_frames: u32 @offset(48);
 		/**
 		 * Reserved for compatible extensions; set all elements to zero.
 		 */
-		reserved2: array<u64, 1> @offset(48);
+		reserved2: array<u64, 1> @offset(56);
 	}
 	/**
 	 * Filter component in a reusable patch.
@@ -2193,11 +2172,15 @@ interface NativeKitAudio @target("portable-abi64") @library("nativekit") @depend
 	/**
 	 * Payload of NK_EVENT_DIALOG_MESSAGE_COMPLETE.
 	 */
-	struct nk_dialog_message_result @layout(4, 4) {
+	struct nk_dialog_message_result @layout(8, 4) {
 		/**
 		 * Button selected by the user, or NK_MESSAGE_RESULT_NONE on cancellation.
 		 */
 		button: nk_message_result @offset(0);
+		/**
+		 * Nonzero when the optional verification checkbox was checked.
+		 */
+		checkbox_checked: u32 @offset(4);
 	}
 	/**
 	 * Options for URI-resource dialogs.
@@ -2239,7 +2222,7 @@ interface NativeKitAudio @target("portable-abi64") @library("nativekit") @depend
 	/**
 	 * Options for a native message dialog.
 	 */
-	struct nk_message_dialog_options @layout(32, 8) {
+	struct nk_message_dialog_options @layout(48, 8) {
 		/**
 		 * Set to sizeof(nk_message_dialog_options) before starting the dialog.
 		 */
@@ -2264,6 +2247,14 @@ interface NativeKitAudio @target("portable-abi64") @library("nativekit") @depend
 		 * Required UTF-8 message text.
 		 */
 		message: utf8 @offset(24);
+		/**
+		 * Optional label for the affirmative (YES) button.
+		 */
+		yes_label: nullable<utf8> @offset(32);
+		/**
+		 * Optional unchecked verification checkbox; null hides it.
+		 */
+		checkbox_label: nullable<utf8> @offset(40);
 	}
 	/**
 	 * Opaque handle for one audio mixer bus.

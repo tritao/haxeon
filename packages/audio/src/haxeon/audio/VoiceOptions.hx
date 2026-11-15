@@ -16,13 +16,13 @@ class VoiceOptions {
 	private function nativeValue():NativeVoiceOptions {
 		var result = new NativeVoiceOptions();
 		result.set_struct_size(NativeVoiceOptions.size());
-		var flags:VoiceLoadFlags = 0;
+		var flags = VoiceLoadFlags.empty();
 		if (looping)
-			flags |= VoiceLoadFlags.Looping;
+			flags = flags | VoiceLoadFlags.Looping;
 		if (streaming)
-			flags |= VoiceLoadFlags.Streaming;
+			flags = flags | VoiceLoadFlags.Streaming;
 		if (asynchronous)
-			flags |= VoiceLoadFlags.Asynchronous;
+			flags = flags | VoiceLoadFlags.Asynchronous;
 		result.set_flags(flags);
 		return result;
 	}

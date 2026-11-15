@@ -4,8 +4,8 @@ import nativekit.ffi.NativeKitGpu;
 
 /** Centralizes raw GPU-adapter result handling for the typed Haxe facade. */
 class GpuResult {
-	public static function check(status:Int, operation:String):Void {
-		if (status != 0)
-			throw new GpuError(status, operation, NativeKitGpu.nkgpu_last_error());
+	public static function check(status:GpuStatus, operation:String):Void {
+		if (status != GpuStatus.Ok)
+			throw new GpuError(status.rawValue(), operation, NativeKitGpu.nkgpu_last_error());
 	}
 }

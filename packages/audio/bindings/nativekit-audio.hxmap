@@ -18,14 +18,28 @@
     "nk_audio_dsp_modulation_polarity": "NativeDspModulationPolarity",
     "nk_audio_dsp_modulation_source": "NativeDspModulationSource",
     "nk_audio_dsp_parameter": "NativeDspParameter",
+    "nk_audio_dsp_oscillator_parameter": "NativeDspOscillatorParameter",
     "nk_audio_dsp_waveform": "NativeDspWaveform",
     "nk_audio_dsp_source_kind": "NativeDspSourceKind",
     "nk_audio_dsp_source_parameter": "NativeDspSourceParameter",
-    "nk_audio_resource_loading": "ResourceLoading"
+    "nk_audio_resource_loading": "NativeResourceLoading"
   },
   "enumValuePrefixes": [
     "NK_AUDIO_VOICE_"
   ],
+  "enumValueNames": {
+    "nk_audio_voice_flags": {
+      "NK_AUDIO_VOICE_LOOPING": "Looping",
+      "NK_AUDIO_VOICE_STREAM": "Streaming",
+      "NK_AUDIO_VOICE_ASYNC": "Asynchronous"
+    },
+    "nk_audio_voice_steal_policy": {
+      "NK_AUDIO_VOICE_STEAL_NONE": "None",
+      "NK_AUDIO_VOICE_STEAL_OLDEST": "Oldest",
+      "NK_AUDIO_VOICE_STEAL_QUIETEST": "Quietest",
+      "NK_AUDIO_VOICE_STEAL_LOWEST_PRIORITY": "LowestPriority"
+    }
+  },
   "typeNames": {
     "nk_resource": "NativeKitTypes.ResourceValue",
     "nk_resource_asset": "NativeKitTypes.ResourceAssetHandle",

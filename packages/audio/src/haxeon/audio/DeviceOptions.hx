@@ -7,10 +7,6 @@ import nativekit.ffi.NativeKitAudioTypes;
 class DeviceOptions {
 	/** Selects the backend default playback device. */
 	public static inline var DEFAULT_DEVICE:Int = -1;
-	/** Default file loading policy, with background miniaudio resource workers. */
-	public static inline var RESOURCE_LOADING_BACKGROUND:Int = 0;
-	/** Synchronous file loading, without resource workers; suitable for prepared browser sources. */
-	public static inline var RESOURCE_LOADING_SYNCHRONOUS:Int = 1;
 
 	/** Playback device index returned by Mixer.deviceCount/deviceName. */
 	public var playbackDeviceIndex:Int = DEFAULT_DEVICE;
@@ -27,7 +23,7 @@ class DeviceOptions {
 	/** Miniaudio file loading policy. Synchronous mode may block during file loading
 	 * and is unsuitable for background file decoding or streamed miniaudio voices.
 	 * NativeKit DSP, SF2 and stream-worker behavior is independent. */
-	public var resourceLoading:Int = RESOURCE_LOADING_BACKGROUND;
+	public var resourceLoading:ResourceLoading = ResourceLoading.Background;
 
 	public function new() {}
 

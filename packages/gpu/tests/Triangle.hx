@@ -47,7 +47,7 @@ class Triangle {
 
 	static function verifyStructuredErrors():Void {
 		var caught = false;
-		try haxeon.gpu.GpuResult.check(-3, "test.invalidHandle") catch (error:haxeon.platform.PlatformError) {
+		try haxeon.gpu.GpuResult.check(GpuStatus.ErrorInvalidHandle, "test.invalidHandle") catch (error:haxeon.platform.PlatformError) {
 			caught = error.domain == "nativekit-gpu" && error.code == -3 && error.operation == "test.invalidHandle";
 		}
 		if (!caught) throw "GPU errors must expose their domain, status, and operation";
@@ -405,7 +405,7 @@ class Triangle {
 
 			if (ready && running) {
 				renderer.beginFrame();
-				if (frames == 0 && NativeKitGpu.nkgpu_submit_commands(renderer.nativeHandle(), Bytes.alloc(4), 4) != -2)
+				if (frames == 0 && NativeKitGpu.nkgpu_submit_commands(renderer.nativeHandle(), Bytes.alloc(4), 4) != GpuStatus.ErrorInvalidArgument)
 					throw "truncated command stream was accepted";
 				var started = Date.now().getTime();
 				if (frames < 12) {
@@ -429,7 +429,7 @@ class Triangle {
 		sampler.dispose();
 		image.dispose();
 		pipeline.dispose();
-		if (NativeKitGpu.nkgpu_pipeline_destroy(renderer.nativeHandle(), stalePipeline) != -3)
+		if (NativeKitGpu.nkgpu_pipeline_destroy(renderer.nativeHandle(), stalePipeline) != GpuStatus.ErrorInvalidHandle)
 			throw "stale pipeline handle was accepted";
 		shader.dispose();
 		indexBuffer.dispose();

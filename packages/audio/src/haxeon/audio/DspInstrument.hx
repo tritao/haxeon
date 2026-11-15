@@ -39,7 +39,7 @@ class DspInstrument {
 	}
 
 	/** Sets one oscillator-specific parameter between render calls. */
-	public function setOscillatorParameter(oscillatorIndex:Int, parameter:DspParameter,
+	public function setOscillatorParameter(oscillatorIndex:Int, parameter:DspOscillatorParameter,
 		value:Float):Void {
 		ensureLive();
 		if (oscillatorIndex < 0)
@@ -57,7 +57,7 @@ class DspInstrument {
 	}
 
 	/** Reads one oscillator-specific parameter. */
-	public function oscillatorParameter(oscillatorIndex:Int, parameter:DspParameter):Float {
+	public function oscillatorParameter(oscillatorIndex:Int, parameter:DspOscillatorParameter):Float {
 		ensureLive();
 		if (oscillatorIndex < 0)
 			throw BindingError.invalidArgument("DspInstrument.oscillatorParameter", "DSP oscillator parameter index must not be negative");

@@ -16,6 +16,13 @@
 		"nkgpu_backend": "Backend",
 		"nkgpu_vertex_format": "NativeVertexFormat",
 		"nkgpu_buffer_usage": "NativeBufferUsage",
+		"nkgpu_image_usage": "NativeImageUsage",
+		"nkgpu_image_type": "NativeImageType",
+		"nkgpu_load_action": "NativeLoadAction",
+		"nkgpu_store_action": "NativeStoreAction",
+		"nkgpu_readback_state": "NativeReadbackState",
+		"nkgpu_timestamp_state": "NativeTimestampState",
+		"nkgpu_batch_pass_kind": "NativeBatchPassKind",
 		"nkgpu_index_type": "NativeIndexType",
 		"nkgpu_blend_factor": "BlendFactor",
 		"nkgpu_blend_op": "BlendOperation",
@@ -37,6 +44,9 @@
 		"nkgpu_index_type": {
 			"NKGPU_INDEXTYPE_UINT16": "UInt16",
 			"NKGPU_INDEXTYPE_UINT32": "UInt32"
+		},
+		"nkgpu_image_type": {
+			"NKGPU_IMAGETYPE_2D": "TwoD"
 		}
 	},
 	"typeNames": {

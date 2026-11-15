@@ -24,11 +24,13 @@ interface NativeKitFilesystem @target("portable-abi64") @library("nativekit_file
 	extern fn nk_filesystem_directory_open(root: nk_filesystem_handle, relative_path: utf8, out_cursor: ptr<nk_filesystem_handle> @out) -> nk_result;
 	extern fn nk_filesystem_file_close(file: nk_filesystem_handle) -> nk_result;
 	/**
-	 * Read the opened file's current identity and metadata. The handle pins its original file identity.
+	 * Read the opened file's current identity and metadata. The handle pins its original file
+	 * identity.
 	 */
 	extern fn nk_filesystem_file_info(file: nk_filesystem_handle, out_entry: ptr<nk_filesystem_entry> @out) -> nk_result;
 	/**
-	 * Open an in-root regular file for bounded positional reads. Final symlinks are followed only in-root.
+	 * Open an in-root regular file for bounded positional reads. Final symlinks are followed only
+	 * in-root.
 	 */
 	extern fn nk_filesystem_file_open(root: nk_filesystem_handle, relative_path: utf8, out_file: ptr<nk_filesystem_handle> @out) -> nk_result;
 	/**

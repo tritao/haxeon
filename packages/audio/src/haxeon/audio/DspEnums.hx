@@ -1,66 +1,25 @@
 package haxeon.audio;
 
 /** Built-in oscillator and LFO shapes. */
-enum abstract DspWaveform(Int) from Int to Int {
-	var Sine = 0;
-	var Triangle = 1;
-	var Saw = 2;
-	var Square = 3;
-}
+typedef DspWaveform = nativekit.ffi.NativeKitAudioTypes.NativeDspWaveform;
 
 /** Filter algorithms available to a DSP patch. */
-enum abstract DspFilterType(Int) from Int to Int {
-	var None = 0;
-	var SvfLowPass = 1;
-}
+typedef DspFilterType = nativekit.ffi.NativeKitAudioTypes.NativeDspFilterType;
 
 /** LFO phase behavior when a voice receives a note-on. */
-enum abstract DspLfoMode(Int) from Int to Int {
-	var Retrigger = 0;
-	var FreeRunning = 1;
-}
+typedef DspLfoMode = nativekit.ffi.NativeKitAudioTypes.NativeDspLfoMode;
 
 /** Sources available to a generic modulation route, including audio-rate operators. */
-enum abstract DspModulationSource(Int) from Int to Int {
-	var Lfo = 0;
-	var Envelope = 1;
-	var Oscillator = 2;
-	var FilterEnvelope = 3;
-	var Lfo2 = 4;
-	var Lfo3 = 5;
-}
+typedef DspModulationSource = nativekit.ffi.NativeKitAudioTypes.NativeDspModulationSource;
 
 /** Destinations available to a generic modulation route. */
-enum abstract DspModulationDestination(Int) from Int to Int {
-	var PitchSemitones = 0;
-	var FilterCutoffHz = 1;
-	var Amplitude = 2;
-	var OscillatorLevel = 3;
-	var OscillatorPhase = 4;
-	var OscillatorFrequencyHz = 5;
-	var Pan = 6;
-	var FilterCutoffSemitones = 7;
-}
+typedef DspModulationDestination = nativekit.ffi.NativeKitAudioTypes.NativeDspModulationDestination;
 
 /** Normalizes a modulation source before its route amount is applied. */
-enum abstract DspModulationPolarity(Int) from Int to Int {
-	var Bipolar = 0;
-	var Unipolar = 1;
-}
+typedef DspModulationPolarity = nativekit.ffi.NativeKitAudioTypes.NativeDspModulationPolarity;
 
 /** Instrument parameters accepted by the native DSP instrument. */
-enum abstract DspParameter(Int) from Int to Int {
-	var Waveform = 0;
-	var Gain = 1;
-	var AttackSeconds = 2;
-	var DecaySeconds = 3;
-	var SustainLevel = 4;
-	var ReleaseSeconds = 5;
-	var NoiseLevel = 6;
-	var FilterCutoffHz = 7;
-	var FilterResonance = 8;
-	var OscillatorWaveform = 9;
-	var OscillatorLevel = 10;
-	var OscillatorDetuneCents = 11;
-	var OscillatorPhase = 12;
-}
+typedef DspParameter = nativekit.ffi.NativeKitAudioTypes.NativeDspParameter;
+
+/** Parameters of one oscillator source, addressed with its zero-based index. */
+typedef DspOscillatorParameter = nativekit.ffi.NativeKitAudioTypes.NativeDspOscillatorParameter;

@@ -118,12 +118,12 @@ class Smoke {
 
 		}
 		var fileArrayResult = NativeKit.nk_clipboard_set_files(["/tmp/nativekit-a", "/tmp/nativekit-b"]);
-		if (fileArrayResult != 0 && fileArrayResult != Result.ErrorUnsupported)
+		if (fileArrayResult != Result.Ok && fileArrayResult != Result.ErrorUnsupported)
 			return 14;
 		var resourceArrayResult = NativeKit.nk_clipboard_set_resources([
 			resource("file:///tmp/nativekit-a", "text/plain", "nativekit-a")
 		]);
-		if (resourceArrayResult != 0 && resourceArrayResult != Result.ErrorUnsupported)
+		if (resourceArrayResult != Result.Ok && resourceArrayResult != Result.ErrorUnsupported)
 			return 15;
 
 		var windowOptions = new NativeWindowOptions();
@@ -246,13 +246,13 @@ class Smoke {
 			if (windowCreated) dialogCancellationOk = false;
 		}
 		var primary = NativeKit.nk_monitor_get_primary();
-		var monitorOk = primary.status == -4;
-		if (primary.status == 0) {
+		var monitorOk = primary.status == Result.ErrorUnsupported;
+		if (primary.status == Result.Ok) {
 			var name = NativeKit.nk_monitor_get_name(primary.out_monitor);
-			monitorOk = primary.out_monitor.isValid() && name.status == 0 && name.buffer != null;
+			monitorOk = primary.out_monitor.isValid() && name.status == Result.Ok && name.buffer != null;
 		}
 
-		var diagnosticOk = NativeKit.nk_window_destroy(WindowHandle.invalid()) == -3 && NativeKit.nk_last_error() != null;
+		var diagnosticOk = NativeKit.nk_window_destroy(WindowHandle.invalid()) == Result.ErrorInvalidHandle && NativeKit.nk_last_error() != null;
 		var httpEventOk = NativeKitHttpEventTests.run(events);
 		var fileWatchOk = NativeKitFileWatchTests.run(events);
 		var lifetimeOk = NativeKitLifetimeTests.run(events);
@@ -292,7 +292,7 @@ class Smoke {
 		value.set_uri(uri);
 		value.set_mime_type(mimeType);
 		value.set_display_name(displayName);
-		value.set_flags(0);
+		value.set_flags(ResourceFlags.empty());
 		return value;
 	}
 }

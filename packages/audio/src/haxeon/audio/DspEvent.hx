@@ -15,15 +15,15 @@ class DspEvent {
 	final note:Int;
 	final velocity:Float;
 	final parameterValue:Null<DspParameter>;
+	final oscillatorParameterValue:Null<DspOscillatorParameter>;
 	final oscillatorIndex:Int;
 	final value:Float;
 	final endValue:Float;
 	final durationFrames:Int;
 
-	private function new(kind:DspEventKind, frameOffset:Int,
-		instrument:Null<DspInstrument>, voiceId:Int, note:Int, velocity:Float,
-		?parameter:DspParameter, value:Float = 0.0, oscillatorIndex:Int = 0,
-		endValue:Float = 0.0, durationFrames:Int = 0) {
+	private function new(kind:DspEventKind, frameOffset:Int, instrument:Null<DspInstrument>, voiceId:Int, note:Int, velocity:Float,
+			?parameter:DspParameter, ?oscillatorParameter:DspOscillatorParameter, value:Float = 0.0, oscillatorIndex:Int = 0,
+			endValue:Float = 0.0, durationFrames:Int = 0) {
 		if (frameOffset < 0)
 			throw BindingError.invalidArgument("DspEvent.new", "DSP event frame offset must not be negative");
 		this.kind = kind;
@@ -33,6 +33,7 @@ class DspEvent {
 		this.note = note;
 		this.velocity = velocity;
 		this.parameterValue = parameter;
+		this.oscillatorParameterValue = oscillatorParameter;
 		this.oscillatorIndex = oscillatorIndex;
 		this.value = value;
 		this.endValue = endValue;
@@ -58,58 +59,46 @@ class DspEvent {
 			voiceId, 0, 0.0);
 
 	/** Changes an instrument parameter at an exact frame offset. */
-	public static function parameter(instrument:DspInstrument, parameter:DspParameter,
-		value:Float, frameOffset:Int = 0):DspEvent {
+	public static function parameter(instrument:DspInstrument, parameter:DspParameter, value:Float, frameOffset:Int = 0):DspEvent {
 		if (instrument == null)
 			throw BindingError.invalidArgument("DspEvent.parameter", "DSP parameter instrument must not be null");
-		if (parameter >= DspParameter.OscillatorWaveform)
-			throw BindingError.invalidArgument("DspEvent.parameter", "DSP oscillator parameters require oscillatorParameter()");
-		return new DspEvent(DspEventKind.Parameter, frameOffset, instrument,
-			0, 0, 0.0, parameter, value);
+		return new DspEvent(DspEventKind.Parameter, frameOffset, instrument, 0, 0, 0.0, parameter, null, value);
 	}
 
-	/** Changes one oscillator-specific parameter at an exact frame offset. */
-	public static function oscillatorParameter(instrument:DspInstrument, oscillatorIndex:Int,
-		parameter:DspParameter, value:Float, frameOffset:Int = 0):DspEvent {
+	/** Changes one parameter of an oscillator source at an exact frame offset. */
+	public static function oscillatorParameter(instrument:DspInstrument, oscillatorIndex:Int, parameter:DspOscillatorParameter, value:Float,
+			frameOffset:Int = 0):DspEvent {
 		if (instrument == null)
 			throw BindingError.invalidArgument("DspEvent.oscillatorParameter", "DSP oscillator parameter instrument must not be null");
 		if (oscillatorIndex < 0)
 			throw BindingError.invalidArgument("DspEvent.oscillatorParameter", "DSP oscillator parameter index must not be negative");
-		if (parameter < DspParameter.OscillatorWaveform || parameter > DspParameter.OscillatorPhase)
-			throw BindingError.invalidArgument("DspEvent.oscillatorParameter", "DSP oscillator parameter kind is invalid");
-		return new DspEvent(DspEventKind.Parameter, frameOffset, instrument,
-			0, 0, 0.0, parameter, value, oscillatorIndex);
+		return new DspEvent(DspEventKind.OscillatorParameter, frameOffset, instrument, 0, 0, 0.0, null, parameter, value, oscillatorIndex);
 	}
 
-	/** Linearly changes a global instrument parameter over exact audio frames. */
-	public static function parameterRamp(instrument:DspInstrument, parameter:DspParameter,
-		startValue:Float, endValue:Float, durationFrames:Int, frameOffset:Int = 0):DspEvent {
+	/** Linearly changes an instrument parameter over exact audio frames. */
+	public static function parameterRamp(instrument:DspInstrument, parameter:DspParameter, startValue:Float, endValue:Float, durationFrames:Int,
+			frameOffset:Int = 0):DspEvent {
 		if (instrument == null)
 			throw BindingError.invalidArgument("DspEvent.parameterRamp", "DSP parameter ramp instrument must not be null");
-		if (parameter >= DspParameter.OscillatorWaveform)
-			throw BindingError.invalidArgument("DspEvent.parameterRamp", "DSP oscillator parameters require oscillatorParameterRamp()");
 		validateRampDuration(durationFrames);
 		if (parameter == DspParameter.Waveform)
 			throw BindingError.invalidArgument("DspEvent.parameterRamp", "DSP parameter ramp cannot target a waveform");
-		return new DspEvent(DspEventKind.ParameterRamp, frameOffset, instrument,
-			0, 0, 0.0, parameter, startValue, 0, endValue, durationFrames);
+		return new DspEvent(DspEventKind.ParameterRamp, frameOffset, instrument, 0, 0, 0.0, parameter, null, startValue, 0, endValue,
+			durationFrames);
 	}
 
-	/** Linearly changes one oscillator-specific parameter over exact audio frames. */
-	public static function oscillatorParameterRamp(instrument:DspInstrument, oscillatorIndex:Int,
-		parameter:DspParameter, startValue:Float, endValue:Float, durationFrames:Int,
-		frameOffset:Int = 0):DspEvent {
+	/** Linearly changes one parameter of an oscillator source over exact audio frames. */
+	public static function oscillatorParameterRamp(instrument:DspInstrument, oscillatorIndex:Int, parameter:DspOscillatorParameter,
+			startValue:Float, endValue:Float, durationFrames:Int, frameOffset:Int = 0):DspEvent {
 		if (instrument == null)
 			throw BindingError.invalidArgument("DspEvent.oscillatorParameterRamp", "DSP oscillator parameter ramp instrument must not be null");
 		if (oscillatorIndex < 0)
 			throw BindingError.invalidArgument("DspEvent.oscillatorParameterRamp", "DSP oscillator parameter ramp index must not be negative");
-		if (parameter < DspParameter.OscillatorWaveform || parameter > DspParameter.OscillatorPhase)
-			throw BindingError.invalidArgument("DspEvent.oscillatorParameterRamp", "DSP oscillator parameter ramp kind is invalid");
-		if (parameter == DspParameter.OscillatorWaveform)
+		if (parameter == DspOscillatorParameter.Waveform)
 			throw BindingError.invalidArgument("DspEvent.oscillatorParameterRamp", "DSP parameter ramp cannot target a waveform");
 		validateRampDuration(durationFrames);
-		return new DspEvent(DspEventKind.ParameterRamp, frameOffset, instrument,
-			0, 0, 0.0, parameter, startValue, oscillatorIndex, endValue, durationFrames);
+		return new DspEvent(DspEventKind.OscillatorParameterRamp, frameOffset, instrument, 0, 0, 0.0, null, parameter, startValue,
+			oscillatorIndex, endValue, durationFrames);
 	}
 
 	static function validateRampDuration(durationFrames:Int):Void {
@@ -123,15 +112,17 @@ class DspEvent {
 		result.set_struct_size(NativeDspEvent.size());
 		result.set_kind(kind);
 		result.set_frame_offset(frameOffset);
-		result.set_instrument(instrument == null
-			? DspInstrumentHandle.invalid()
-			: instrument.nativeHandle());
+		result.set_instrument(instrument == null ? DspInstrumentHandle.invalid() : instrument.nativeHandle());
 		result.set_voice_id(voiceId);
 		result.set_note(note);
 		result.set_velocity(velocity);
-		result.set_parameter(parameterValue == null ? DspParameter.Gain : parameterValue);
-		result.set_value(value);
+		// Each kind reads only its own parameter field; the other stays zero.
+		if (parameterValue != null)
+			result.set_parameter(parameterValue);
+		if (oscillatorParameterValue != null)
+			result.set_oscillator_parameter(oscillatorParameterValue);
 		result.set_oscillator_index(oscillatorIndex);
+		result.set_value(value);
 		result.set_end_value(endValue);
 		result.set_duration_frames(durationFrames);
 		return result;

@@ -10,12 +10,12 @@ class DspSourceOptions {
   final options:NativeDspSourceOptions;
   public function new(kind:DspSourceKind) {
     this.kind = kind;
-    var made = NativeKitAudio.nk_audio_dsp_source_defaults(cast kind);
+    var made = NativeKitAudio.nk_audio_dsp_source_defaults(kind);
     AudioResult.check(made.status, "audio.dsp.source.defaults");
     options = made.out_options;
   }
   public function set(parameter:DspSourceParameter, value:Float):DspSourceOptions {
-    var domain = NativeKitAudio.nk_audio_dsp_source_parameter_info(cast kind, cast parameter);
+    var domain = NativeKitAudio.nk_audio_dsp_source_parameter_info(kind, parameter);
     AudioResult.check(domain.status, "audio.dsp.source.parameter");
     if (!Math.isFinite(value)
       || value < domain.out_minimum || value > domain.out_maximum) throw BindingError.invalidArgument("DspSourceOptions.set", "DSP source parameter is out of range");
@@ -25,13 +25,13 @@ class DspSourceOptions {
       && value != Math.floor(value)) throw BindingError.invalidArgument("DspSourceOptions.set", "DSP source parameter requires an integer");
     if (parameter == DspSourceParameter.Resolution
       && value % 4 != 0) throw BindingError.invalidArgument("DspSourceOptions.set", "Resonator resolution requires groups of four modes");
-    options.set_values((parameter:Int), value);
+    options.set_values(parameter.rawValue(), value);
     return this;
   }
   public function get(parameter:DspSourceParameter):Float {
-    var domain = NativeKitAudio.nk_audio_dsp_source_parameter_info(cast kind, cast parameter);
+    var domain = NativeKitAudio.nk_audio_dsp_source_parameter_info(kind, parameter);
     AudioResult.check(domain.status, "audio.dsp.source.parameter");
-    return options.get_values((parameter:Int));
+    return options.get_values(parameter.rawValue());
   }
   /** Bank: seven registrations; Harmonic: sixteen partials. Normalize nonnegative weights. */
   public function spectrum(weights:Array<Float>):DspSourceOptions {

@@ -247,9 +247,13 @@ interface NativeKitGpu @target("portable-abi64") @library("nativekit_gpu") @depe
 		NKGPU_IMAGEFORMAT_DEPTH32F = 13;
 	}
 	/**
-	 * Basic image shape used by nkgpu_image_desc. A zero descriptor value keeps the 2D default.
+	 * Image shape used by nkgpu_image_desc and sampled-image shader bindings.
 	 */
 	enum nkgpu_image_type : u32 {
+		/**
+		 * The default shape: 2D, or a 2D array when an image descriptor has several layers.
+		 */
+		NKGPU_IMAGETYPE_AUTO = 0;
 		NKGPU_IMAGETYPE_2D = 1;
 		NKGPU_IMAGETYPE_ARRAY = 2;
 		NKGPU_IMAGETYPE_CUBE = 3;
@@ -515,89 +519,26 @@ interface NativeKitGpu @target("portable-abi64") @library("nativekit_gpu") @depe
 		 * Four normalized unsigned-byte vertex components.
 		 */
 		NKGPU_VERTEXFORMAT_UBYTE4N = 5;
-		/**
-		 * Four normalized unsigned-byte vertex components.
-		 */
 		NKGPU_VERTEXFORMAT_INT = 6;
-		/**
-		 * Four normalized unsigned-byte vertex components.
-		 */
 		NKGPU_VERTEXFORMAT_INT2 = 7;
-		/**
-		 * Four normalized unsigned-byte vertex components.
-		 */
 		NKGPU_VERTEXFORMAT_INT3 = 8;
-		/**
-		 * Four normalized unsigned-byte vertex components.
-		 */
 		NKGPU_VERTEXFORMAT_INT4 = 9;
-		/**
-		 * Four normalized unsigned-byte vertex components.
-		 */
 		NKGPU_VERTEXFORMAT_UINT = 10;
-		/**
-		 * Four normalized unsigned-byte vertex components.
-		 */
 		NKGPU_VERTEXFORMAT_UINT2 = 11;
-		/**
-		 * Four normalized unsigned-byte vertex components.
-		 */
 		NKGPU_VERTEXFORMAT_UINT3 = 12;
-		/**
-		 * Four normalized unsigned-byte vertex components.
-		 */
 		NKGPU_VERTEXFORMAT_UINT4 = 13;
-		/**
-		 * Four normalized unsigned-byte vertex components.
-		 */
 		NKGPU_VERTEXFORMAT_BYTE4 = 14;
-		/**
-		 * Four normalized unsigned-byte vertex components.
-		 */
 		NKGPU_VERTEXFORMAT_BYTE4N = 15;
-		/**
-		 * Four normalized unsigned-byte vertex components.
-		 */
 		NKGPU_VERTEXFORMAT_UBYTE4 = 16;
-		/**
-		 * Four normalized unsigned-byte vertex components.
-		 */
 		NKGPU_VERTEXFORMAT_SHORT2 = 17;
-		/**
-		 * Four normalized unsigned-byte vertex components.
-		 */
 		NKGPU_VERTEXFORMAT_SHORT2N = 18;
-		/**
-		 * Four normalized unsigned-byte vertex components.
-		 */
 		NKGPU_VERTEXFORMAT_USHORT2 = 19;
-		/**
-		 * Four normalized unsigned-byte vertex components.
-		 */
 		NKGPU_VERTEXFORMAT_USHORT2N = 20;
-		/**
-		 * Four normalized unsigned-byte vertex components.
-		 */
 		NKGPU_VERTEXFORMAT_SHORT4 = 21;
-		/**
-		 * Four normalized unsigned-byte vertex components.
-		 */
 		NKGPU_VERTEXFORMAT_SHORT4N = 22;
-		/**
-		 * Four normalized unsigned-byte vertex components.
-		 */
 		NKGPU_VERTEXFORMAT_USHORT4 = 23;
-		/**
-		 * Four normalized unsigned-byte vertex components.
-		 */
 		NKGPU_VERTEXFORMAT_USHORT4N = 24;
-		/**
-		 * Four normalized unsigned-byte vertex components.
-		 */
 		NKGPU_VERTEXFORMAT_HALF2 = 25;
-		/**
-		 * Four normalized unsigned-byte vertex components.
-		 */
 		NKGPU_VERTEXFORMAT_HALF4 = 26;
 	}
 	/**
@@ -1521,7 +1462,7 @@ interface NativeKitGpu @target("portable-abi64") @library("nativekit_gpu") @depe
 		row_pitch: u32 @offset(44);
 		dynamic_update: u32 @offset(48);
 		/**
-		 * Zero selects the legacy 2D/array behavior.
+		 * NKGPU_IMAGETYPE_AUTO selects 2D, or a 2D array when layer_count is above one.
 		 */
 		type: nkgpu_image_type @offset(52);
 	}
@@ -1665,7 +1606,7 @@ interface NativeKitGpu @target("portable-abi64") @library("nativekit_gpu") @depe
 		 */
 		name: utf8 @offset(40);
 		/**
-		 * Image shape for NKGPU_SHADERBINDING_SAMPLED_IMAGE; zero means 2D.
+		 * Image shape for NKGPU_SHADERBINDING_SAMPLED_IMAGE; NKGPU_IMAGETYPE_AUTO means 2D.
 		 */
 		image_type: nkgpu_image_type @offset(48);
 	}

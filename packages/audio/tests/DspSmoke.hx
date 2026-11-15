@@ -7,6 +7,7 @@ import haxeon.audio.DspOscillatorOptions;
 import haxeon.audio.DspEnums.DspModulationDestination;
 import haxeon.audio.DspEnums.DspModulationPolarity;
 import haxeon.audio.DspEnums.DspModulationSource;
+import haxeon.audio.DspEnums.DspOscillatorParameter;
 import haxeon.audio.DspEnums.DspParameter;
 import haxeon.audio.DspEnums.DspWaveform;
 import haxeon.audio.DspInstrument;
@@ -51,8 +52,8 @@ class DspSmoke {
 			instrument = patch.createInstrument(engine);
 			wavetable.dispose();
 			wavetable = null;
-			instrument.setOscillatorParameter(1, DspParameter.OscillatorLevel, 0.2);
-			if (Math.abs(instrument.oscillatorParameter(1, DspParameter.OscillatorLevel) - 0.2) > 0.0001)
+			instrument.setOscillatorParameter(1, DspOscillatorParameter.Level, 0.2);
+			if (Math.abs(instrument.oscillatorParameter(1, DspOscillatorParameter.Level) - 0.2) > 0.0001)
 				throw "Haxe DSP oscillator parameter did not round-trip";
 			instrument.setParameter(DspParameter.Gain, 0.5);
 			if (instrument.parameter(DspParameter.Gain) != 0.5)
@@ -60,7 +61,7 @@ class DspSmoke {
 			var target = new DspRenderTarget(64, 1);
 			engine.render(target, [
 				DspEvent.noteOn(instrument, 7, 69),
-				DspEvent.oscillatorParameter(instrument, 1, DspParameter.OscillatorPhase, 0.25, 16),
+				DspEvent.oscillatorParameter(instrument, 1, DspOscillatorParameter.Phase, 0.25, 16),
 				DspEvent.parameter(instrument, DspParameter.Gain, 0.0, 32)
 			]);
 			var renderedSamples = target.samples;
@@ -77,9 +78,9 @@ class DspSmoke {
 				throw "Haxe DSP parameter ramp did not reach its end value";
 			engine.render(target, [DspEvent.noteOff(7)]);
 			var capabilities = engine.capabilities();
-			if ((capabilities & DspCapabilities.Wavetable) == 0
-				|| (capabilities & DspCapabilities.Lfo) == 0
-					|| (capabilities & DspCapabilities.Modulation) == 0)
+			if (!capabilities.contains(DspCapabilities.Wavetable)
+				|| !capabilities.contains(DspCapabilities.Lfo)
+					|| !capabilities.contains(DspCapabilities.Modulation))
 				throw "Haxe DSP capabilities omitted modulation support";
 		} catch (error:Dynamic) {
 			if (instrument != null)

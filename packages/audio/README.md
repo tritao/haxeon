@@ -264,7 +264,7 @@ remains the native normalized amount. Drive suppresses the measured peak; use
 `drive = 0` for a linear response and reserve output headroom separately.
 
 Device configuration also exposes `DeviceOptions.resourceLoading`. It defaults to
-`RESOURCE_LOADING_BACKGROUND`; use `RESOURCE_LOADING_SYNCHRONOUS` for apps with
+`ResourceLoading.Background`; use `ResourceLoading.Synchronous` for apps with
 prepared/decoded, SF2 and DSP sources that need teardown without miniaudio
 resource-worker joins. Configure it before the first audio use. Synchronous file
 loading runs on the caller and is unsuitable for background file decoding or

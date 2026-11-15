@@ -1998,17 +1998,8 @@ interface NativeKit @target("portable-abi64") @library("nativekit") {
 		 * The platform's primary shortcut modifier (Command on macOS, Control elsewhere).
 		 */
 		NK_MENU_MOD_PRIMARY = 1;
-		/**
-		 * The platform's primary shortcut modifier (Command on macOS, Control elsewhere).
-		 */
 		NK_MENU_MOD_SHIFT = 2;
-		/**
-		 * The platform's primary shortcut modifier (Command on macOS, Control elsewhere).
-		 */
 		NK_MENU_MOD_ALT = 4;
-		/**
-		 * The platform's primary shortcut modifier (Command on macOS, Control elsewhere).
-		 */
 		NK_MENU_MOD_CONTROL = 8;
 	}
 	/**

@@ -1,19 +1,16 @@
 package haxeon.audio;
 
-/** Flags used when creating an audio voice. */
-enum abstract VoiceLoadFlags(Int) from Int to Int {
-	var Looping = 1;
-	var Streaming = 2;
-	var Asynchronous = 4;
-}
+/** How a voice loads its sound, combined with `|`; the native NativeKit flags. */
+typedef VoiceLoadFlags = nativekit.ffi.NativeKitAudioTypes.NativeVoiceFlags;
+
+/**
+ * How miniaudio loads file resources: Background (the default) uses resource workers; Synchronous loads on the caller,
+ * without workers to join at teardown, and suits prepared, SF2 and DSP sources.
+ */
+typedef ResourceLoading = nativekit.ffi.NativeKitAudioTypes.NativeResourceLoading;
 
 /** Policy used when a bus must make room for a higher-priority voice. */
-enum abstract VoiceStealPolicy(Int) from Int to Int {
-	var None = 0;
-	var Oldest = 1;
-	var Quietest = 2;
-	var LowestPriority = 3;
-}
+typedef VoiceStealPolicy = nativekit.ffi.NativeKitAudioTypes.NativeVoiceStealPolicy;
 
 /** Chooses which clip variant an AudioCue starts for each playback. */
 enum abstract AudioCueSelection(Int) from Int to Int {
