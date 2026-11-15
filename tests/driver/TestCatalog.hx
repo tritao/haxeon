@@ -415,6 +415,8 @@ class TestCatalog {
 			hxmlCase("runtime", "static-field", "tests/hxml/static-field-test.hxml", "static-field-test.hl", 0, "static fields lower to persistent globals"),
 			hxmlCase("runtime", "jit-dynamic-unbox", "tests/hxml/jit-dynamic-unbox-test.hxml", "jit-dynamic-unbox-test.hl", 0,
 				"an unboxed dynamic value survives assignment in nested try blocks"),
+			hxmlCase("runtime", "jit-try-local-writes", "tests/hxml/jit-try-local-writes-test.hxml", "jit-try-local-writes-test.hl", 0,
+				"locals written in try reach catch on every path into the try"),
 			hxmlCase("runtime", "jit-address-taken", "tests/hxml/jit-address-taken-test.hxml", "jit-address-taken-test.hl", 0,
 				"the JIT keeps reading locals whose address is passed to a callee from memory"),
 			hxmlCase("runtime", "nominal-interface-patch", "tests/hxml/nominal-interface-patch-test.hxml", "nominal-interface-patch-test.hl", 0,
