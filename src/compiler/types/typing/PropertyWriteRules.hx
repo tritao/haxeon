@@ -22,8 +22,11 @@ class PropertyWriteRules {
 		check(session, owner, name, true, span);
 
 	static function check(session:TypingSession, owner:Null<String>, name:String, isStatic:Bool, span:SourceSpan):Void {
-		var remaining = 64;
-		while (owner != null && remaining-- > 0) {
+		var seen:Map<String, Bool> = [];
+		while (owner != null) {
+			if (seen.exists(owner))
+				throw 'Cyclic class hierarchy while resolving property "$owner.$name"';
+			seen.set(owner, true);
 			var declaration = session.classDecls.get(owner);
 			if (declaration == null)
 				return;
@@ -46,8 +49,11 @@ class PropertyWriteRules {
 			return true;
 		var owner = declaration.name;
 		var caller = session.currentContext.lexicalOwner;
-		var current = caller, remaining = 64;
-		while (current != null && remaining-- > 0) {
+		var current = caller, seen:Map<String, Bool> = [];
+		while (current != null) {
+			if (seen.exists(current))
+				throw 'Cyclic class hierarchy while checking access from "$caller"';
+			seen.set(current, true);
 			if (current == owner)
 				return true;
 			var declaration = session.classDecls.get(current);

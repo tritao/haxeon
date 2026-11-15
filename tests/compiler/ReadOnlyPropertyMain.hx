@@ -86,7 +86,20 @@ class ReadOnlyPropertyMain {
 				throw error;
 		}
 		qualifiedAccess();
+		deepHierarchy();
 		Sys.println('PASS: null setters reject outside writes');
+	}
+
+	static function deepHierarchy():Void {
+		var source = 'class Base { public var value(default,null):Int; public function new() value = 0; } ';
+		for (index in 0...70) {
+			var parent = index == 0 ? 'Base' : 'Level' + (index - 1);
+			source += 'class Level$index extends $parent { public function new() super(); } ';
+		}
+		source +=
+			'class Leaf extends Level69 { public function new() super(); public function update(other:Leaf) other.value = 1; } ';
+		Frontend.compile(source + 'function main():Void { var leaf = new Leaf(); leaf.update(leaf); }');
+		expectError(source + 'function main():Void { var leaf = new Leaf(); leaf.value = 1; }');
 	}
 
 	static function qualifiedAccess():Void {
