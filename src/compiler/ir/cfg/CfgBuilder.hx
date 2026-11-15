@@ -21,6 +21,20 @@ class CfgBuilder {
 
 	var current:CfgBlock;
 	var nextValue:Int = 0;
+
+	/** The locals that hold evaluated operands are named by number within a function; the names are shared by all functions. */
+	static final operandNames:Array<String> = [];
+
+	var nextOperand:Int = 0;
+
+	/** A local name no other operand of this function uses. */
+	public function operandName():String {
+		var index = nextOperand++;
+		while (operandNames.length <= index)
+			operandNames.push("$operand:" + operandNames.length);
+		return operandNames[index];
+	}
+
 	var activeTraps:Array<{id:Int, preserveExceptionStack:Bool}> = [];
 	var provenance:SourceProvenance = SourceProvenance.generated("cfg-builder");
 

@@ -1112,19 +1112,20 @@ class IrGenerator {
 		return statements.length == 0 ? fallback : typedStatementSpan(statements[statements.length - 1]).end;
 
 	function lowerOperands(expressions:Array<TypedExpression>, builder:CfgBuilder, localTypes:Map<String, IrType>, firstOwner:Bool = false):Array<CfgValue> {
-		var temporaries:Array<{name:String, type:IrType}> = [];
+		var names:Array<String> = [], types:Array<IrType> = [];
 		for (index in 0...expressions.length) {
 			var expression = expressions[index],
 				value = firstOwner
-					&& index == 0 ? lowerOwnerReceiver(expression, builder, localTypes) : lowerExpression(expression, builder, localTypes),
-				name = '$' + 'operand:${expression.span.start}:${value.id}';
+					&& index == 0 ? lowerOwnerReceiver(expression, builder, localTypes) : lowerExpression(expression, builder, localTypes);
 			if (builder.isTerminated())
 				return [];
+			var name = builder.operandName();
 			localTypes.set(name, value.type);
 			builder.store(name, value);
-			temporaries.push({name: name, type: value.type});
+			names.push(name);
+			types.push(value.type);
 		}
-		return [for (temporary in temporaries) builder.load(temporary.name, temporary.type)];
+		return [for (index in 0...names.length) builder.load(names[index], types[index])];
 	}
 
 	function lowerMapGet(builder:CfgBuilder, localTypes:Map<String, IrType>, map:CfgValue, key:CfgValue, keyType:CompilerType, valueType:CompilerType,
