@@ -71,6 +71,7 @@ wasm-gc-wasmtime                 ci          lane=wasm requires=wasmtime -- bash
 driver-default                   quick,ci    -- env -u HAXEON_CHECK_REUSE scripts/test-driver.sh {jobs}
 # Example callers are outside the compiler and UI fixture roots; final-prop API ports must check the app too.
 ui-showcase                      quick       -- env -u HAXEON_COMPILER_HL bash packages/ui/tools/test-showcase-builds.sh
+example-builds                   quick       -- python3 tests/integration/check-example-builds.py
 # Adds the warm-edit rebuilds and the reuse comparisons.
 driver-checked                   wave        -- env HAXEON_CHECK_REUSE=1 scripts/test-driver.sh {jobs}
 
