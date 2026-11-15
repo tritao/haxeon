@@ -422,6 +422,8 @@ class TestCatalog {
 				"locals written in try reach catch on every path into the try"),
 			hxmlCase("runtime", "jit-narrow-integers", "tests/hxml/jit-narrow-integers-test.hxml", "jit-narrow-integers-test.hl", 0,
 				"narrow unsigned compares and 64-bit integer conversions"),
+			hxmlCase("runtime", "gc-thread-handoff", "tests/hxml/gc-thread-handoff-test.hxml", "gc-thread-handoff-test.hl", 0,
+				"GC threads start and hand values over through deques while collections run"),
 			hxmlCase("runtime", "jit-address-taken", "tests/hxml/jit-address-taken-test.hxml", "jit-address-taken-test.hl", 0,
 				"the JIT keeps reading locals whose address is passed to a callee from memory"),
 			hxmlCase("runtime", "nominal-interface-patch", "tests/hxml/nominal-interface-patch-test.hxml", "nominal-interface-patch-test.hl", 0,

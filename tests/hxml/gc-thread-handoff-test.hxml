@@ -1,0 +1,4 @@
+common.hxml
+-cp tests
+-cp tests/runtime
+-main GcThreadHandoffMain
