@@ -33,13 +33,14 @@ class Host {
 		#end
 	}
 
-	/** The host for an address a socket reports, named by the address. */
+	/** The host for an address a socket reports, named by the address: resolving a dotted address only parses it. */
 	@:allow(sys.net.Socket)
 	static function ofIp(ip:Int):Host {
-		var result = new Host("127.0.0.1");
-		result.ip = ip;
-		result.host = result.toString();
-		return result;
+		#if wasm
+		throw "Hosts are not available on Wasm";
+		#else
+		return new Host(hostToString(ip));
+		#end
 	}
 
 	/** The address in dotted form. */

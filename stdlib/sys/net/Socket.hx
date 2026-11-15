@@ -135,7 +135,10 @@ class Socket {
 	/** Free for the program's own use. */
 	public var custom:Dynamic;
 
-	/** A new TCP socket. `accepted` is for `accept`: the connection it takes, instead of a new socket. */
+	/**
+	 * A new TCP socket, as Haxe's `new Socket()`. `accepted` is internal to this module, for `accept` to wrap the connection it
+	 * takes: its type is private, so other code can only leave it out.
+	 */
 	public function new(#if !wasm ?accepted:SocketHandle #end) {
 		#if wasm
 		throw "Sockets are not available on Wasm";
