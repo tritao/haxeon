@@ -3,29 +3,28 @@ package compiler.types.analysis;
 import compiler.types.Type.CompilerType;
 import compiler.types.TypeRelations;
 
+/** The facts one branch records. */
+private class FactTables {
+	public final assignmentTypes:Map<String, Null<CompilerType>> = [];
+	public final refinedTypes:Map<String, CompilerType> = [];
+	public final stableRefinedTypes:Map<String, CompilerType> = [];
+	public final invalidated:Map<String, Bool> = [];
+	public final invalidatedPrefixes:Array<String> = [];
+	public final invalidatedNamespaces:Array<String> = [];
+	public final erasedNamespaces:Array<String> = [];
+	public final erasedMentions:Array<String> = [];
+	public final invalidatedFields:Array<String> = [];
+
+	public function new() {}
+}
+
 /** Branch-local facts keyed by resolved binding identity. */
 class FlowFacts {
 	final parent:Null<FlowFacts>;
 	var invalidationSink:Null<FlowFacts>;
 
-	/*
-		Most branches record few facts, so every collection starts as one shared empty instance and a branch gets its own on its
-		first write. Reads use the fields; writes (`set`, `push`) go through `own...` only. Removing from the shared empty
-		collections is harmless: they have nothing to remove.
-	 */
-	static final noAssignments:Map<String, Null<CompilerType>> = [];
-
-	static final noTypes:Map<String, CompilerType> = [];
-	static final noFlags:Map<String, Bool> = [];
-	static final noStrings:Array<String> = [];
-
-	var assignmentTypes:Map<String, Null<CompilerType>> = noAssignments;
-	var refinedTypes:Map<String, CompilerType> = noTypes;
-	var stableRefinedTypes:Map<String, CompilerType> = noTypes;
-	var invalidated:Map<String, Bool> = noFlags;
-	var invalidatedPrefixes:Array<String> = noStrings;
-	var invalidatedNamespaces:Array<String> = noStrings;
-	var erasedNamespaces:Array<String> = noStrings;
+	/** Most branches record no fact, so a branch's tables are made with its first one (`own`); until then it has none. */
+	var tables:Null<FactTables> = null;
 
 	/** The namespace of facts about expression paths. */
 	static inline final EXPRESSION_PREFIX = "$expression:";
@@ -37,39 +36,19 @@ class FlowFacts {
 				&& bindingId.charCodeAt(prefix.length) == 46
 				&& StringTools.startsWith(bindingId, prefix));
 
-	var erasedMentions:Array<String> = noStrings;
-	var invalidatedFields:Array<String> = noStrings;
-
-	function ownAssignments():Map<String, Null<CompilerType>> {
-		if (assignmentTypes == noAssignments)
-			assignmentTypes = [];
-		return assignmentTypes;
-	}
-
-	function ownRefined():Map<String, CompilerType> {
-		if (refinedTypes == noTypes)
-			refinedTypes = [];
-		return refinedTypes;
-	}
-
-	function ownStableRefined():Map<String, CompilerType> {
-		if (stableRefinedTypes == noTypes)
-			stableRefinedTypes = [];
-		return stableRefinedTypes;
-	}
-
-	function ownInvalidated():Map<String, Bool> {
-		if (invalidated == noFlags)
-			invalidated = [];
-		return invalidated;
-	}
-
-	static function owned(list:Array<String>):Array<String>
-		return list == noStrings ? [] : list;
-
 	public function new(?parent:FlowFacts) {
 		this.parent = parent;
 		invalidationSink = parent == null ? null : parent.invalidationSink;
+	}
+
+	/** This branch's tables, made on the first fact it records. */
+	function own():FactTables {
+		var current = tables;
+		if (current == null) {
+			current = new FactTables();
+			tables = current;
+		}
+		return current;
 	}
 
 	/** Keep all invalidations, including those later hidden by a new refinement, for exceptional exits. */
@@ -82,13 +61,14 @@ class FlowFacts {
 
 	/** Retain the type guaranteed by every assignment; null denotes an unknown write. */
 	function captureWrite(bindingId:String, type:Null<CompilerType>):Void {
-		ownInvalidated().set(bindingId, true);
-		if (!assignmentTypes.exists(bindingId))
-			ownAssignments().set(bindingId, type);
+		var facts = own();
+		facts.invalidated.set(bindingId, true);
+		if (!facts.assignmentTypes.exists(bindingId))
+			facts.assignmentTypes.set(bindingId, type);
 		else {
-			var previous = assignmentTypes.get(bindingId);
+			var previous = facts.assignmentTypes.get(bindingId);
 			if (previous == null || type == null || !TypeRelations.equals(previous, type))
-				ownAssignments().set(bindingId, null);
+				facts.assignmentTypes.set(bindingId, null);
 		}
 		if (invalidationSink != null)
 			invalidationSink.captureWrite(bindingId, type);
@@ -100,9 +80,12 @@ class FlowFacts {
 	}
 
 	public function applyInvalidations(summary:FlowFacts):Void {
+		var recorded = summary.tables;
+		if (recorded == null)
+			return;
 		var preserved:Map<String, CompilerType> = [];
-		for (key in summary.assignmentTypes.keys()) {
-			var assigned = summary.assignmentTypes.get(key),
+		for (key in recorded.assignmentTypes.keys()) {
+			var assigned = recorded.assignmentTypes.get(key),
 				entry = resolve(key);
 			// Replacing a non-null local with another non-null value keeps its type, but not its field facts.
 			if (!StringTools.startsWith(key, "$expression:")
@@ -114,17 +97,17 @@ class FlowFacts {
 		// These effects were already recorded in enclosing tries; replaying them is not a new unknown write.
 		var outerSink = invalidationSink;
 		invalidationSink = null;
-		for (key in summary.invalidated.keys())
+		for (key in recorded.invalidated.keys())
 			invalidate(key);
-		for (prefix in summary.invalidatedPrefixes)
+		for (prefix in recorded.invalidatedPrefixes)
 			invalidatePrefix(prefix);
-		for (prefix in summary.invalidatedNamespaces)
+		for (prefix in recorded.invalidatedNamespaces)
 			invalidateNamespace(prefix);
-		for (prefix in summary.erasedNamespaces)
+		for (prefix in recorded.erasedNamespaces)
 			invalidateNamespaceCompletely(prefix);
-		for (fragment in summary.erasedMentions)
+		for (fragment in recorded.erasedMentions)
 			invalidateMentioning(fragment);
-		for (field in summary.invalidatedFields)
+		for (field in recorded.invalidatedFields)
 			invalidateField(field);
 		for (key => type in preserved)
 			refine(key, type);
@@ -132,44 +115,49 @@ class FlowFacts {
 	}
 
 	public function refine(bindingId:String, type:CompilerType, stable:Bool = false):Void {
-		invalidated.remove(bindingId);
+		var facts = own();
+		facts.invalidated.remove(bindingId);
 		if (stable) {
-			refinedTypes.remove(bindingId);
-			ownStableRefined().set(bindingId, type);
+			facts.refinedTypes.remove(bindingId);
+			facts.stableRefinedTypes.set(bindingId, type);
 		} else {
-			stableRefinedTypes.remove(bindingId);
-			ownRefined().set(bindingId, type);
+			facts.stableRefinedTypes.remove(bindingId);
+			facts.refinedTypes.set(bindingId, type);
 		}
 	}
 
 	public function invalidate(bindingId:String):Void {
 		if (invalidationSink != null)
 			invalidationSink.captureWrite(bindingId, null);
-		refinedTypes.remove(bindingId);
-		stableRefinedTypes.remove(bindingId);
-		ownInvalidated().set(bindingId, true);
+		var facts = own();
+		facts.refinedTypes.remove(bindingId);
+		facts.stableRefinedTypes.remove(bindingId);
+		facts.invalidated.set(bindingId, true);
 	}
 
 	public function resolve(bindingId:String):Null<CompilerType> {
-		if (refinedTypes.exists(bindingId))
-			return refinedTypes.get(bindingId);
-		if (stableRefinedTypes.exists(bindingId))
-			return stableRefinedTypes.get(bindingId);
-		for (prefix in invalidatedPrefixes)
-			if (isUnder(bindingId, prefix))
+		var facts = tables;
+		if (facts != null) {
+			if (facts.refinedTypes.exists(bindingId))
+				return facts.refinedTypes.get(bindingId);
+			if (facts.stableRefinedTypes.exists(bindingId))
+				return facts.stableRefinedTypes.get(bindingId);
+			for (prefix in facts.invalidatedPrefixes)
+				if (isUnder(bindingId, prefix))
+					return null;
+			if (facts.invalidated.exists(bindingId))
 				return null;
-		if (invalidated.exists(bindingId))
-			return null;
-		for (prefix in erasedNamespaces)
-			if (StringTools.startsWith(bindingId, prefix))
+			for (prefix in facts.erasedNamespaces)
+				if (StringTools.startsWith(bindingId, prefix))
+					return null;
+			if (mentionsErased(facts, bindingId))
 				return null;
-		if (mentionsErased(bindingId))
-			return null;
-		for (prefix in invalidatedNamespaces)
-			if (StringTools.startsWith(bindingId, prefix))
+			for (prefix in facts.invalidatedNamespaces)
+				if (StringTools.startsWith(bindingId, prefix))
+					return parent == null ? null : parent.resolveStable(bindingId);
+			if (mentionsInvalidatedField(facts, bindingId))
 				return parent == null ? null : parent.resolveStable(bindingId);
-		if (mentionsInvalidatedField(bindingId))
-			return parent == null ? null : parent.resolveStable(bindingId);
+		}
 		var outer = parent;
 		return outer == null ? null : outer.resolve(bindingId);
 	}
@@ -184,17 +172,20 @@ class FlowFacts {
 	function collectKeys(result:Array<String>, seen:Map<String, Bool>):Void {
 		if (parent != null)
 			parent.collectKeys(result, seen);
-		for (key in refinedTypes.keys())
+		var facts = tables;
+		if (facts == null)
+			return;
+		for (key in facts.refinedTypes.keys())
 			if (!seen.exists(key)) {
 				seen.set(key, true);
 				result.push(key);
 			}
-		for (key in stableRefinedTypes.keys())
+		for (key in facts.stableRefinedTypes.keys())
 			if (!seen.exists(key)) {
 				seen.set(key, true);
 				result.push(key);
 			}
-		for (key in invalidated.keys())
+		for (key in facts.invalidated.keys())
 			if (!seen.exists(key)) {
 				seen.set(key, true);
 				result.push(key);
@@ -202,91 +193,98 @@ class FlowFacts {
 	}
 
 	function resolveStable(bindingId:String):Null<CompilerType> {
-		for (prefix in invalidatedPrefixes)
-			if (isUnder(bindingId, prefix))
+		var facts = tables;
+		if (facts != null) {
+			for (prefix in facts.invalidatedPrefixes)
+				if (isUnder(bindingId, prefix))
+					return null;
+			if (facts.invalidated.exists(bindingId))
 				return null;
-		if (invalidated.exists(bindingId))
-			return null;
-		for (prefix in erasedNamespaces)
-			if (StringTools.startsWith(bindingId, prefix))
+			for (prefix in facts.erasedNamespaces)
+				if (StringTools.startsWith(bindingId, prefix))
+					return null;
+			if (mentionsErased(facts, bindingId))
 				return null;
-		if (mentionsErased(bindingId))
-			return null;
-		if (stableRefinedTypes.exists(bindingId))
-			return stableRefinedTypes.get(bindingId);
+			if (facts.stableRefinedTypes.exists(bindingId))
+				return facts.stableRefinedTypes.get(bindingId);
+		}
 		return parent == null ? null : parent.resolveStable(bindingId);
 	}
 
 	/** Whether the visible fact survives calls, including facts inherited through a branch. */
 	public function isStable(bindingId:String):Bool {
-		if (resolve(bindingId) == null || refinedTypes.exists(bindingId))
+		if (resolve(bindingId) == null)
 			return false;
-		if (stableRefinedTypes.exists(bindingId))
-			return true;
-		for (prefix in invalidatedNamespaces)
-			if (StringTools.startsWith(bindingId, prefix))
+		var facts = tables;
+		if (facts != null) {
+			if (facts.refinedTypes.exists(bindingId))
+				return false;
+			if (facts.stableRefinedTypes.exists(bindingId))
+				return true;
+			for (prefix in facts.invalidatedNamespaces)
+				if (StringTools.startsWith(bindingId, prefix))
+					return parent != null && parent.resolveStable(bindingId) != null;
+			if (mentionsInvalidatedField(facts, bindingId))
 				return parent != null && parent.resolveStable(bindingId) != null;
-		if (mentionsInvalidatedField(bindingId))
-			return parent != null && parent.resolveStable(bindingId) != null;
+		}
 		return parent != null && parent.isStable(bindingId);
 	}
 
 	public function invalidatePrefix(prefix:String):Void {
 		if (invalidationSink != null)
 			invalidationSink.invalidatePrefix(prefix);
-		for (bindingId in refinedTypes.keys())
+		var facts = own();
+		for (bindingId in facts.refinedTypes.keys())
 			if (isUnder(bindingId, prefix))
-				refinedTypes.remove(bindingId);
-		for (bindingId in stableRefinedTypes.keys())
+				facts.refinedTypes.remove(bindingId);
+		for (bindingId in facts.stableRefinedTypes.keys())
 			if (isUnder(bindingId, prefix))
-				stableRefinedTypes.remove(bindingId);
-		invalidatedPrefixes = owned(invalidatedPrefixes);
-		invalidatedPrefixes.push(prefix);
+				facts.stableRefinedTypes.remove(bindingId);
+		facts.invalidatedPrefixes.push(prefix);
 	}
 
 	public function invalidateNamespace(prefix:String):Void {
 		if (invalidationSink != null)
 			invalidationSink.invalidateNamespace(prefix);
-		for (bindingId in refinedTypes.keys())
+		var facts = own();
+		for (bindingId in facts.refinedTypes.keys())
 			if (StringTools.startsWith(bindingId, prefix))
-				refinedTypes.remove(bindingId);
-		invalidatedNamespaces = owned(invalidatedNamespaces);
-		invalidatedNamespaces.push(prefix);
+				facts.refinedTypes.remove(bindingId);
+		facts.invalidatedNamespaces.push(prefix);
 	}
 
 	/** Forgets every fact under `prefix`, including stable ones, in this branch and the branches it extends. */
 	public function invalidateNamespaceCompletely(prefix:String):Void {
 		if (invalidationSink != null)
 			invalidationSink.invalidateNamespaceCompletely(prefix);
-		for (bindingId in refinedTypes.keys())
+		var facts = own();
+		for (bindingId in facts.refinedTypes.keys())
 			if (StringTools.startsWith(bindingId, prefix))
-				refinedTypes.remove(bindingId);
-		for (bindingId in stableRefinedTypes.keys())
+				facts.refinedTypes.remove(bindingId);
+		for (bindingId in facts.stableRefinedTypes.keys())
 			if (StringTools.startsWith(bindingId, prefix))
-				stableRefinedTypes.remove(bindingId);
-		erasedNamespaces = owned(erasedNamespaces);
-		erasedNamespaces.push(prefix);
+				facts.stableRefinedTypes.remove(bindingId);
+		facts.erasedNamespaces.push(prefix);
 	}
 
 	/** Forgets every expression fact whose path mentions `fragment`, such as a map entry keyed by a reassigned local. */
 	public function invalidateMentioning(fragment:String):Void {
 		if (invalidationSink != null)
 			invalidationSink.invalidateMentioning(fragment);
-		var expressionPrefix = EXPRESSION_PREFIX;
-		for (bindingId in refinedTypes.keys())
+		var facts = own(), expressionPrefix = EXPRESSION_PREFIX;
+		for (bindingId in facts.refinedTypes.keys())
 			if (StringTools.startsWith(bindingId, expressionPrefix) && bindingId.indexOf(fragment) >= 0)
-				refinedTypes.remove(bindingId);
-		for (bindingId in stableRefinedTypes.keys())
+				facts.refinedTypes.remove(bindingId);
+		for (bindingId in facts.stableRefinedTypes.keys())
 			if (StringTools.startsWith(bindingId, expressionPrefix) && bindingId.indexOf(fragment) >= 0)
-				stableRefinedTypes.remove(bindingId);
-		erasedMentions = owned(erasedMentions);
-		erasedMentions.push(fragment);
+				facts.stableRefinedTypes.remove(bindingId);
+		facts.erasedMentions.push(fragment);
 	}
 
-	function mentionsErased(bindingId:String):Bool {
-		if (erasedMentions.length == 0 || !StringTools.startsWith(bindingId, EXPRESSION_PREFIX))
+	static function mentionsErased(facts:FactTables, bindingId:String):Bool {
+		if (facts.erasedMentions.length == 0 || !StringTools.startsWith(bindingId, EXPRESSION_PREFIX))
 			return false;
-		for (fragment in erasedMentions)
+		for (fragment in facts.erasedMentions)
 			if (bindingId.indexOf(fragment) >= 0)
 				return true;
 		return false;
@@ -303,11 +301,11 @@ class FlowFacts {
 	public function invalidateField(field:String):Void {
 		if (invalidationSink != null)
 			invalidationSink.invalidateField(field);
-		for (bindingId in refinedTypes.keys())
+		var facts = own();
+		for (bindingId in facts.refinedTypes.keys())
 			if (mentionsField(bindingId, field))
-				refinedTypes.remove(bindingId);
-		invalidatedFields = owned(invalidatedFields);
-		invalidatedFields.push(field);
+				facts.refinedTypes.remove(bindingId);
+		facts.invalidatedFields.push(field);
 	}
 
 	/** Whether an expression fact's path has a `.field` segment, ending the path or followed by `.` or a map-entry `:`. */
@@ -332,8 +330,8 @@ class FlowFacts {
 		}
 	}
 
-	function mentionsInvalidatedField(bindingId:String):Bool {
-		for (field in invalidatedFields)
+	static function mentionsInvalidatedField(facts:FactTables, bindingId:String):Bool {
+		for (field in facts.invalidatedFields)
 			if (mentionsField(bindingId, field))
 				return true;
 		return false;

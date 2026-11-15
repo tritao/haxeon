@@ -36,6 +36,31 @@ private typedef ScopeValue = {
 	var keyPathConstant:Null<String>;
 }
 
+/** The locals a scope defines: by name, in definition order, and by binding id. */
+private class ScopeDefinitions {
+	public final values:Map<String, ScopeValue> = [];
+
+	/**
+	 * The same values in definition order, and by identity. Walking a map goes through an iterator object whose every call is dynamic, and
+	 * looking a value up by id by walking the map compared every id of the scope; the visible set is asked for at every branch of every function.
+	 */
+	public final valueList:Array<ScopeValue> = [];
+
+	public final valuesById:Map<String, ScopeValue> = [];
+
+	public function new() {}
+}
+
+/** The locals a scope (a lambda's) captures, and how they are stored. */
+private class ScopeCaptures {
+	public final captures:Map<String, Bool> = [];
+	public final storageTypes:Map<String, CompilerType> = [];
+	public final cellCaptures:Map<String, Bool> = [];
+	public final cellClasses:Map<String, String> = [];
+
+	public function new() {}
+}
+
 /**
  * Lexical bindings, definite assignment, flow facts, and capture decisions.
  * Child scopes preserve stable binding IDs while maintaining branch-local facts.
@@ -45,38 +70,42 @@ class Scope {
 	final facts:FlowFacts;
 	var nextLocalId:Int = 0;
 	/*
-		Most scopes define nothing and capture nothing, so every collection starts as one shared empty instance and a scope gets
-		its own on its first write. Reads use the fields; writes (`set`, `push`) go through `own...` only. Removing from the shared
-		empty collections is harmless: they have nothing to remove.
+		Most scopes define, assign, capture and track nothing, so each kind of record is made with its first entry (`own...`);
+		until then the field is null.
 	*/
-	static final noValues:Map<String, ScopeValue> = [];
+	var definitions:Null<ScopeDefinitions> = null;
 
-	static final noValueList:Array<ScopeValue> = [];
-	static final noFlags:Map<String, Bool> = [];
-	static final noTypes:Map<String, CompilerType> = [];
-	static final noNames:Map<String, String> = [];
-	static final noSources:Map<String, TypedExpression> = [];
+	/** Locals assigned in this scope, by binding id: its own and its parents'. */
+	var assigned:Null<Map<String, Bool>> = null;
 
-	var values:Map<String, ScopeValue> = noValues;
+	var captured:Null<ScopeCaptures> = null;
+	var mapKeySources:Null<Map<String, TypedExpression>> = null;
 
-	/**
-	 * The same values in definition order, and by identity. Walking a map goes through an iterator object whose every call is dynamic, and
-	 * looking a value up by id by walking the map compared every id of the scope; the visible set is asked for at every branch of every function.
-	 */
-	var valueList:Array<ScopeValue> = noValueList;
-
-	var valuesById:Map<String, ScopeValue> = noValues;
-	var assigned:Map<String, Bool> = noFlags;
-	var captures:Map<String, Bool> = noFlags;
-	var captureStorageTypes:Map<String, CompilerType> = noTypes;
-	var cellCaptures:Map<String, Bool> = noFlags;
-	var cellClasses:Map<String, String> = noNames;
-	var mapKeySources:Map<String, TypedExpression> = noSources;
+	function ownDefinitions():ScopeDefinitions {
+		var current = definitions;
+		if (current == null) {
+			current = new ScopeDefinitions();
+			definitions = current;
+		}
+		return current;
+	}
 
 	function ownAssigned():Map<String, Bool> {
-		if (assigned == noFlags)
-			assigned = [];
-		return assigned;
+		var current = assigned;
+		if (current == null) {
+			current = [];
+			assigned = current;
+		}
+		return current;
+	}
+
+	function ownCaptured():ScopeCaptures {
+		var current = captured;
+		if (current == null) {
+			current = new ScopeCaptures();
+			captured = current;
+		}
+		return current;
 	}
 
 	public function new(?parent:Scope) {
@@ -86,7 +115,7 @@ class Scope {
 
 	public function define(name:String, type:CompilerType, span:SourceSpan, initialized:Bool = true, ?bindingId:String, receiver:Bool = false,
 			?localFunction:LocalFunction, ?declaration:String):Void {
-		if (values.exists(name))
+		if (definitions != null && definitions.values.exists(name))
 			throw new CompileError(new Diagnostic("E1001", 'Duplicate local "$name"', span));
 		var value:ScopeValue = {
 			source: name,
@@ -98,14 +127,11 @@ class Scope {
 			scoped: false,
 			keyPathConstant: null
 		};
-		if (values == noValues) {
-			values = [];
-			valueList = [];
-		}
-		values.set(name, value);
-		valueList.push(value);
-		if (!valuesById.exists(value.id))
-			(valuesById == noValues ? valuesById = [] : valuesById).set(value.id, value);
+		var own = ownDefinitions();
+		own.values.set(name, value);
+		own.valueList.push(value);
+		if (!own.valuesById.exists(value.id))
+			own.valuesById.set(value.id, value);
 		ownAssigned().set(value.id, initialized);
 	}
 
@@ -143,18 +169,21 @@ class Scope {
 		var value = resolveLocal(name);
 		if (value == null)
 			return;
-		if (source == null)
-			mapKeySources.remove(value.id);
-		else
-			(mapKeySources == noSources ? mapKeySources = [] : mapKeySources).set(value.id, source);
+		if (source == null) {
+			var sources = mapKeySources;
+			if (sources != null)
+				sources.remove(value.id);
+		} else
+			(mapKeySources == null ? mapKeySources = [] : mapKeySources).set(value.id, source);
 	}
 
 	public function mapKeySource(name:String):Null<TypedExpression> {
 		var value = resolveLocal(name);
 		if (value == null)
 			return null;
-		if (mapKeySources.exists(value.id))
-			return mapKeySources.get(value.id);
+		var sources = mapKeySources;
+		if (sources != null && sources.exists(value.id))
+			return sources.get(value.id);
 		var outer = parent;
 		return outer == null ? null : outer.mapKeySource(name);
 	}
@@ -218,13 +247,14 @@ class Scope {
 			?storageType:CompilerType, ?localFunction:LocalFunction, ?declaration:String):Void {
 		// A capture is the same variable as the one it captures, so it keeps that declaration's identity.
 		define(name, type, span, true, bindingId, false, localFunction, declaration);
-		(captures == noFlags ? captures = [] : captures).set(name, true);
+		var own = ownCaptured();
+		own.captures.set(name, true);
 		if (storageType != null)
-			(captureStorageTypes == noTypes ? captureStorageTypes = [] : captureStorageTypes).set(requireId(name), storageType);
+			own.storageTypes.set(requireId(name), storageType);
 		if (cell) {
-			(cellCaptures == noFlags ? cellCaptures = [] : cellCaptures).set(name, true);
+			own.cellCaptures.set(name, true);
 			if (cellClass != null)
-				(cellClasses == noNames ? cellClasses = [] : cellClasses).set(name, cellClass);
+				own.cellClasses.set(name, cellClass);
 		}
 	}
 
@@ -332,14 +362,20 @@ class Scope {
 		}
 	}
 
-	public function isCapture(name:String):Bool
-		return captures.exists(name) || (parent != null && parent.isCapture(name));
+	public function isCapture(name:String):Bool {
+		var own = captured;
+		return own != null && own.captures.exists(name) || (parent != null && parent.isCapture(name));
+	}
 
-	public function isCellCapture(name:String):Bool
-		return cellCaptures.exists(name) || (parent != null && parent.isCellCapture(name));
+	public function isCellCapture(name:String):Bool {
+		var own = captured;
+		return own != null && own.cellCaptures.exists(name) || (parent != null && parent.isCellCapture(name));
+	}
 
-	public function cellClass(name:String):Null<String>
-		return cellClasses.exists(name) ? cellClasses.get(name) : (parent == null ? null : parent.cellClass(name));
+	public function cellClass(name:String):Null<String> {
+		var own = captured;
+		return own != null && own.cellClasses.exists(name) ? own.cellClasses.get(name) : (parent == null ? null : parent.cellClass(name));
+	}
 
 	public function requireCellClass(name:String):String {
 		var resolved = cellClass(name);
@@ -360,13 +396,16 @@ class Scope {
 		var value = resolveLocal(name);
 		if (value == null)
 			return null;
-		if (captureStorageTypes.exists(value.id))
-			return captureStorageTypes.get(value.id);
+		var own = captured;
+		if (own != null && own.storageTypes.exists(value.id))
+			return own.storageTypes.get(value.id);
 		return parent == null ? value.declared : parent.resolveDeclaredById(value.id, value.declared);
 	}
 
-	function resolveDeclaredById(id:String, fallback:CompilerType):CompilerType
-		return captureStorageTypes.exists(id) ? captureStorageTypes.get(id) : (parent == null ? fallback : parent.resolveDeclaredById(id, fallback));
+	function resolveDeclaredById(id:String, fallback:CompilerType):CompilerType {
+		var own = captured;
+		return own != null && own.storageTypes.exists(id) ? own.storageTypes.get(id) : (parent == null ? fallback : parent.resolveDeclaredById(id, fallback));
+	}
 
 	public function resolveId(name:String):Null<String> {
 		var value = resolveLocal(name);
@@ -409,14 +448,15 @@ class Scope {
 	}
 
 	function resolveLocal(name:String):Null<ScopeValue> {
-		if (values.exists(name))
-			return values.get(name);
+		var own = definitions;
+		if (own != null && own.values.exists(name))
+			return own.values.get(name);
 		var outer = parent;
 		return outer == null ? null : outer.resolveLocal(name);
 	}
 
 	function resolveById(id:String):Null<ScopeValue> {
-		var found = valuesById.get(id);
+		var own = definitions, found = own == null ? null : own.valuesById.get(id);
 		if (found != null)
 			return found;
 		var outer = parent;
@@ -424,8 +464,9 @@ class Scope {
 	}
 
 	function isAssignedId(id:String):Bool {
-		if (assigned.exists(id))
-			return assigned.get(id);
+		var own = assigned;
+		if (own != null && own.exists(id))
+			return own.get(id);
 		var outer = parent;
 		return outer != null && outer.isAssignedId(id);
 	}
@@ -482,7 +523,9 @@ class Scope {
 	public function visibleValues():Array<ScopeValue> {
 		var count = 0, scope:Null<Scope> = this;
 		while (scope != null) {
-			count += scope.valueList.length;
+			var own = scope.definitions;
+			if (own != null)
+				count += own.valueList.length;
 			scope = scope.parent;
 		}
 		var result:Array<ScopeValue> = [];
@@ -490,10 +533,13 @@ class Scope {
 		var end = count;
 		scope = this;
 		while (scope != null) {
-			var list = scope.valueList;
-			end -= list.length;
-			for (index in 0...list.length)
-				result[end + index] = list[index];
+			var own = scope.definitions;
+			if (own != null) {
+				var list = own.valueList;
+				end -= list.length;
+				for (index in 0...list.length)
+					result[end + index] = list[index];
+			}
 			scope = scope.parent;
 		}
 		return result;
