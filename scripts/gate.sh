@@ -47,10 +47,11 @@ overall=0
 } >"$summary"
 
 echo "gate: building the compiler entry point and the build tool"
-export HAXEON_MAIN_HL=$work/haxeon-main.hl HAXEON_BUILD_HL=$work/haxeon-build.hl
+# From the content-hashed tool cache (`haxeon dev tool-path`), pinned for every suite of this gate.
+export HAXEON_MAIN_HL HAXEON_BUILD_HL
 if ! { "$root/scripts/build-native.sh" >"$out/build-native.log" 2>&1 &&
-	"$root/.tools/haxe/haxe" --cwd "$root" common.hxml -hl "$HAXEON_MAIN_HL" -main Main >"$out/build-main.log" 2>&1 &&
-	"$root/.tools/haxe/haxe" --cwd "$root" common.hxml -hl "$HAXEON_BUILD_HL" -main build.HaxeonBuild >"$out/build-tool.log" 2>&1; }; then
+	HAXEON_MAIN_HL=$("$root/scripts/haxeon" dev tool-path Main 2>"$out/build-main.log") &&
+	HAXEON_BUILD_HL=$("$root/scripts/haxeon" dev tool-path build.HaxeonBuild 2>"$out/build-tool.log"); }; then
 	echo "build: FAILED (see $out/build-*.log)" >>"$summary"
 	echo "exit: 1" >>"$summary"
 	cat "$summary"

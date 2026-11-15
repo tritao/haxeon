@@ -29,13 +29,13 @@ fi
 "$root_dir/scripts/build-native.sh" >/dev/null
 mkdir -p "$out_dir"
 
-# Compile with haxeon: the HashLink build scripts/test.sh provides, else `haxe --run Main`.
+# Compile with haxeon: the HashLink build of the compiler entry point the caller pinned (HAXEON_MAIN_HL), else the cached build of this
+# tree's sources.
+if [[ -z ${HAXEON_MAIN_HL:-} || ! -f $HAXEON_MAIN_HL ]]; then
+	HAXEON_MAIN_HL=$("$root_dir/scripts/haxeon" dev tool-path Main)
+fi
 realtime_compile() {
-	if [[ -n ${HAXEON_MAIN_HL:-} && -f $HAXEON_MAIN_HL ]]; then
-		(cd "$root_dir" && run_hl "$root_dir/out:$hashlink_dir" "$HAXEON_MAIN_HL" "$1" "$2")
-	else
-		"$haxe" --cwd "$root_dir" common.hxml --run Main "$1" "$2"
-	fi
+	(cd "$root_dir" && run_hl "$root_dir/out:$hashlink_dir" "$HAXEON_MAIN_HL" "$1" "$2")
 }
 
 run_case() {

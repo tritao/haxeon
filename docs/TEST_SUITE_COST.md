@@ -9,6 +9,8 @@ Measured on the branch at the sources of commit 5f2bd5aa, 20 cores, 31 GB (22 GB
 ## 0. Done
 
 - `scripts/test-driver.sh` builds Main to HashLink by default (e5 below); `HAXEON_TEST_INTERPRETED=1` keeps the interpreter path.
+  Since 2026-11-15 the build comes from the content-hashed tool cache (`haxeon dev tool-path`, docs/DEVELOPMENT.md), so a rerun on an
+  unchanged tree skips it.
 - Two program cases wrote one fixed directory from both builds at once and failed 2 in 60 concurrent runs; fixed (e11e60b9).
 
 ## 1. Program-case runner

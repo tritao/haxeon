@@ -110,28 +110,29 @@ run_timed external-tool-build bash "$root_dir/tests/integration/test-external-to
 run_timed no-nul-literals bash "$root_dir/tests/integration/test-no-nul-literals.sh"
 mkdir -p "$root_dir/out"
 
-# Build the compiler entry points and the build tool to HashLink bytecode once. The test driver,
-# the differential tests and the Wasm scripts reuse the compilers instead of re-interpreting the
-# whole compiler with `haxe --run` for every case (~2 s each, of which compiling takes ~0.2 s),
-# and the build tool hashes native inputs under the JIT instead of the interpreter.
-mkdir -p "$root_dir/out/test-tools"
-prebuilt_compilers=$(mktemp -d "$root_dir/out/test-tools/compilers.XXXXXX")
-trap 'rm -rf -- "$prebuilt_compilers"' EXIT
-export HAXEON_MAIN_HL="$prebuilt_compilers/haxeon-main.hl"
-export HAXEON_COMPILER_HL="$prebuilt_compilers/haxeon-compiler.hl"
-prebuilt_build_tool="$prebuilt_compilers/haxeon-build.hl"
-build_prebuilt_compilers() {
-	local status=0
-	"$haxe" --cwd "$root_dir" common.hxml -hl "$HAXEON_MAIN_HL" -main Main &
-	local main_build=$!
-	"$haxe" --cwd "$root_dir" common.hxml -hl "$prebuilt_build_tool" -main build.HaxeonBuild &
-	local build_tool_build=$!
-	"$haxe" --cwd "$root_dir" common.hxml -hl "$HAXEON_COMPILER_HL" -main compiler.tools.HaxeonCompiler || status=1
-	wait "$main_build" || status=1
-	wait "$build_tool_build" || status=1
+# The compiler entry points, the build tool and the CLI as HashLink bytecode, from the content-hashed tool cache (`haxeon dev tool-path`,
+# out/tools): built once per content of their sources, so an unchanged tree reuses the last run's builds. The test driver, the
+# differential tests and the Wasm scripts use them instead of re-interpreting the whole compiler with `haxe --run` for every case (~2 s
+# each, of which compiling takes ~0.2 s), and the build tool hashes native inputs under the JIT instead of the interpreter. The paths are
+# resolved here once and exported, so every stage of this run uses the same builds even if the sources change while it runs.
+prebuilt_paths=$(mktemp -d "${TMPDIR:-/tmp}/haxeon-test-tools.XXXXXX")
+trap 'rm -rf -- "$prebuilt_paths"' EXIT
+resolve_prebuilt_tools() {
+	local status=0 main
+	local -a pids=()
+	"$root_dir/scripts/haxeon" dev help >/dev/null # Brings the CLI up to date once, before the parallel requests use it.
+	for main in Main compiler.tools.HaxeonCompiler build.HaxeonBuild tools.HaxeonCli; do
+		"$root_dir/scripts/haxeon" dev tool-path "$main" >"$prebuilt_paths/$main" &
+		pids+=($!)
+	done
+	for main in "${pids[@]}"; do wait "$main" || status=1; done
 	return "$status"
 }
-run_timed prebuilt-compilers build_prebuilt_compilers
+run_timed prebuilt-compilers resolve_prebuilt_tools
+export HAXEON_MAIN_HL HAXEON_COMPILER_HL
+HAXEON_MAIN_HL=$(<"$prebuilt_paths/Main")
+HAXEON_COMPILER_HL=$(<"$prebuilt_paths/compiler.tools.HaxeonCompiler")
+prebuilt_build_tool=$(<"$prebuilt_paths/build.HaxeonBuild")
 run_timed runtime-build-isolation bash "$root_dir/tests/integration/test-driver-runtime-isolation.sh"
 run_timed hxi-value-records bash "$root_dir/scripts/test-hxi-value-records.sh"
 run_timed messagepack-interop bash "$root_dir/scripts/test-messagepack-interop.sh"
@@ -160,7 +161,7 @@ run_wasm_stages() {
 		echo "Skipping Wasm GC wasmtime checks: Wasmtime 47.0.0 is not installed (set WASMTIME to its executable)"
 	fi
 }
-wasm_log="$prebuilt_compilers/wasm-stages.log"
+wasm_log="$prebuilt_paths/wasm-stages.log"
 run_wasm_stages >"$wasm_log" 2>&1 &
 wasm_stages=$!
 run_timed formatter-integration "$root_dir/tests/integration/test-haxeon-formatter.sh"
@@ -176,9 +177,7 @@ run_timed world-native-nested-int16-store-integration "$root_dir/tests/integrati
 # separate source caches, so they can share runner slots without racing on the
 # repository's `out/` tree.
 if [[ -z ${HAXEON_HAXE:-} ]]; then
-	test_cli_hl="$root_dir/out/test-tools/haxeon-cli.hl"
-	mkdir -p "$(dirname "$test_cli_hl")"
-	run_timed test-cli-build "$haxe" --cwd "$root_dir" common.hxml -hl "$test_cli_hl" -main tools.HaxeonCli
+	test_cli_hl=$(<"$prebuilt_paths/tools.HaxeonCli")
 fi
 run_isolated_integration_group \
 	tests/integration/test-cmake-native-package.sh \

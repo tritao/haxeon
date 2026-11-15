@@ -14,8 +14,8 @@ mkdir -p "$work/out" "$work/loaded" "$work/bin"
 cp "$root_dir/out/haxeon_runtime.hdll" "$work/out/haxeon_runtime.hdll"
 cp "$root_dir/out/haxeon_runtime.hdll" "$work/loaded/haxeon_runtime.hdll"
 printf 'int rebuilt_runtime(void) { return 42; }\n' > "$work/runtime.c"
-"$root_dir/.tools/haxe/haxe" --cwd "$root_dir" common.hxml -cp tests/runtime -hl "$work/probe.hl" -main RuntimeBuildSafetyProbe
-"$root_dir/.tools/haxe/haxe" --cwd "$root_dir" common.hxml -hl "$work/driver.hl" -main build.HaxeonBuild
+probe_hl=$("$root_dir/scripts/haxeon" dev tool-path --cp tests/runtime RuntimeBuildSafetyProbe)
+driver_hl=$("$root_dir/scripts/haxeon" dev tool-path build.HaxeonBuild)
 
 # An accidental failure to detect the mapping must never launch a real native build.
 cat > "$work/bin/cmake" <<'CMOCK'
@@ -26,7 +26,7 @@ CMOCK
 chmod +x "$work/bin/cmake"
 set +e
 (cd "$root_dir" && PATH="$work/bin:$PATH" LD_LIBRARY_PATH="$root_dir/out:$hashlink_dir" \
-  "$hashlink_dir/hl" "$work/driver.hl" test 1) > "$work/refusal.log" 2>&1
+  "$hashlink_dir/hl" "$driver_hl" test 1) > "$work/refusal.log" 2>&1
 status=$?
 set -e
 if [[ $status != 1 ]] || ! grep -Fq "Cannot build native libraries in $root_dir/out:" "$work/refusal.log" \
@@ -40,7 +40,7 @@ fi
 # from the other directory that the release native build writes to.
 set +e
 (cd "$root_dir" && PATH="$work/bin:$PATH" LD_LIBRARY_PATH="$work/loaded:$root_dir/out/cmake/release/hashlink-runtime" \
-  "$root_dir/out/cmake/release/hashlink-runtime/hl" "$work/driver.hl" test 1) > "$work/toolchain-refusal.log" 2>&1
+  "$root_dir/out/cmake/release/hashlink-runtime/hl" "$driver_hl" test 1) > "$work/toolchain-refusal.log" 2>&1
 status=$?
 set -e
 if [[ $status != 1 ]] || ! grep -Fq "Cannot build native libraries in $root_dir/out/cmake/release/hashlink-runtime:" "$work/toolchain-refusal.log" \
@@ -55,7 +55,7 @@ cp "$hashlink_dir/hl" "$work/loaded/hl"
 cp -L "$hashlink_dir/libhl.so.1" "$work/loaded/libhl.so.1"
 set +e
 (cd "$root_dir" && PATH="$work/bin:$PATH" LD_LIBRARY_PATH="$work/loaded" \
-  "$work/loaded/hl" "$work/driver.hl" test 1) > "$work/allowed.log" 2>&1
+  "$work/loaded/hl" "$driver_hl" test 1) > "$work/allowed.log" 2>&1
 status=$?
 set -e
 if [[ $status != 97 ]] || ! grep -Fq 'native build marker' "$work/allowed.log"; then
@@ -63,12 +63,12 @@ if [[ $status != 97 ]] || ! grep -Fq 'native build marker' "$work/allowed.log"; 
   echo "FAIL: isolated driver did not reach the native build (exit $status)" >&2
   exit 1
 fi
-LD_LIBRARY_PATH="$work/out:$hashlink_dir" "$hashlink_dir/hl" "$work/probe.hl" "$work/out" conflict "$work/runtime.c"
+LD_LIBRARY_PATH="$work/out:$hashlink_dir" "$hashlink_dir/hl" "$probe_hl" "$work/out" conflict "$work/runtime.c"
 ln -s "$work/out" "$work/output-link"
-LD_LIBRARY_PATH="$work/out:$hashlink_dir" "$hashlink_dir/hl" "$work/probe.hl" "$work/output-link" conflict "$work/runtime.c"
+LD_LIBRARY_PATH="$work/out:$hashlink_dir" "$hashlink_dir/hl" "$probe_hl" "$work/output-link" conflict "$work/runtime.c"
 mkdir -p "$work/hard link"
 ln "$work/out/haxeon_runtime.hdll" "$work/hard link/haxeon_runtime.hdll"
-LD_LIBRARY_PATH="$work/hard link:$hashlink_dir" "$hashlink_dir/hl" "$work/probe.hl" "$work/out" conflict "$work/runtime.c"
+LD_LIBRARY_PATH="$work/hard link:$hashlink_dir" "$hashlink_dir/hl" "$probe_hl" "$work/out" conflict "$work/runtime.c"
 df -h /
-LD_LIBRARY_PATH="$work/loaded:$hashlink_dir" "$hashlink_dir/hl" "$work/probe.hl" "$work/out" safe "$work/runtime.c"
+LD_LIBRARY_PATH="$work/loaded:$hashlink_dir" "$hashlink_dir/hl" "$probe_hl" "$work/out" safe "$work/runtime.c"
 echo 'PASS: driver rejects a mapped build output and permits a separate native rebuild'

@@ -5,7 +5,7 @@ root_dir=$(cd "$(dirname "$0")/.." && pwd)
 haxe=${HAXEON_REAL_HAXE:-"$root_dir/.tools/haxe/haxe"}
 hashlink_dir=$("$root_dir/scripts/hashlink-path.sh")
 hl="$hashlink_dir/hl"
-cli=${HAXEON_TEST_CLI_HL:-"$root_dir/out/test-tools/haxeon-cli.hl"}
+cli=${HAXEON_TEST_CLI_HL:-}
 original=("$@")
 
 # Integration scripts use the standard Haxe --run form. Dispatch that CLI
@@ -13,6 +13,7 @@ original=("$@")
 if [[ $# -ge 6 && $1 == --cwd && $3 == -cp && $5 == --run && $6 == tools.HaxeonCli ]]; then
 	cwd=$2
 	shift 6
+	[[ -n $cli ]] || cli=$("$root_dir/scripts/haxeon" dev tool-path tools.HaxeonCli)
 	cd "$cwd"
 	case $(uname -s) in
 		Darwin)

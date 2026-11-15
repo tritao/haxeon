@@ -17,7 +17,7 @@ for(const [module,memory] of [[shared,new WebAssembly.Memory({initial:1,maximum:
 }
 console.log('PASS: shared/unshared imports and bounded memory link validation');
 JS
-"$root_dir/.tools/haxe/haxe" --cwd "$root_dir" common.hxml -main compiler.tools.HaxeonCompiler -hl "$build_dir/compiler.hl"
+compiler=${HAXEON_COMPILER_HL:-$("$root_dir/scripts/haxeon" dev tool-path compiler.tools.HaxeonCompiler)}
 cat > "$build_dir/contract.json" <<'JSON'
 {"name":"nativekit-haxeon-linear-memory","version":1,"address_model":"wasm32","page_size":65536,"host_base":0,"host_limit":1048576,"guest_base":1048576,"guest_limit":4194304,"memory_size":4194304}
 JSON
@@ -31,7 +31,7 @@ for target in wasm32 wasm-gc; do
       [[ $fixture == wasm-utf8-field ]] && source_dir=tests/ffi
       exports=("--export=$fixture.callback")
       [[ $fixture == wasm-utf8-field ]] && exports=("--export=$fixture.copy" "--export=$fixture.verify")
-      "$hashlink_dir/hl" "$build_dir/compiler.hl" \
+      "$hashlink_dir/hl" "$compiler" \
         --target="$target" --entry="$fixture" --output="$build_dir/$fixture-$target.wasm" \
         --wasm-import-memory --wasm-shared-memory --wasm-memory-contract="$build_dir/contract.json" \
         --root="$source_dir" "${exports[@]}" "$source_dir/$fixture.hx"

@@ -61,9 +61,9 @@ echo "PASS: the compiler builds itself to a fixed point"
 
 # Run the same equality semantics through a stock-Haxe-built compiler and the self-hosted compiler.
 echo "equality guard: building the compiler with stock Haxe"
-"$haxe" --cwd "$root_dir" common.hxml -hl "$work/haxe-built-compiler.hl" -main compiler.tools.HaxeonCompiler
+haxe_built_compiler=$("$root_dir/scripts/haxeon" dev tool-path compiler.tools.HaxeonCompiler)
 fixture="$root_dir/tests/programs/equality-self-hosting-guard.hx"
-for compiler in "$work/haxe-built-compiler.hl" "$work/stage-1.hl"; do
+for compiler in "$haxe_built_compiler" "$work/stage-1.hl"; do
  for inline in 0 1; do
   for target in hl wasm32 wasm-gc; do
    output="$work/equality-$(basename "$compiler")-$target-$inline.bin"

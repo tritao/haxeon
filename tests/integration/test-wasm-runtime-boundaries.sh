@@ -5,7 +5,7 @@ cd "$repo_dir"
 temporary_dir=$(mktemp -d "${TMPDIR:-/tmp}/haxeon-wasm-boundaries.XXXXXX")
 trap 'rm -rf -- "${temporary_dir:?}"' EXIT
 export LD_LIBRARY_PATH="$repo_dir/out:$("$repo_dir/scripts/hashlink-path.sh")${LD_LIBRARY_PATH:+:$LD_LIBRARY_PATH}"
-.tools/haxe/haxe common.hxml -main compiler.tools.HaxeonCompiler -hl "$temporary_dir/compiler.hl"
+compiler=${HAXEON_COMPILER_HL:-$("$repo_dir/scripts/haxeon" dev tool-path compiler.tools.HaxeonCompiler)}
 cat > "$temporary_dir/BoundaryBuffers.hxi" <<'HXI'
 interface BoundaryBuffers @target("portable-abi32") @library("boundary_buffers") {
   struct boundary_record @layout(4, 4) { value: i32 @offset(0); }
@@ -28,7 +28,7 @@ for program in wasm-gc-closures wasm-arena native-memory-flat-struct out-buffer;
   for target in wasm32 wasm-gc; do
     source="tests/programs/$program.hx"
     [[ "$program" != out-buffer ]] || source="$temporary_dir/out-buffer.hx"
-    "$("$repo_dir/scripts/hashlink-path.sh")/hl" "$temporary_dir/compiler.hl" --ffi-interface="$temporary_dir/BoundaryBuffers.hxi" --root="$temporary_dir" --target="$target" --output="$temporary_dir/$program.$target" --entry="$program" --root=tests/programs "$source" > "$temporary_dir/build.log" 2>&1 || { cat "$temporary_dir/build.log"; exit 1; }
+    "$("$repo_dir/scripts/hashlink-path.sh")/hl" "$compiler" --ffi-interface="$temporary_dir/BoundaryBuffers.hxi" --root="$temporary_dir" --target="$target" --output="$temporary_dir/$program.$target" --entry="$program" --root=tests/programs "$source" > "$temporary_dir/build.log" 2>&1 || { cat "$temporary_dir/build.log"; exit 1; }
   done
 done
 node - "$temporary_dir" <<'JS'

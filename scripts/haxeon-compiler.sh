@@ -1,9 +1,9 @@
 # Sourced by the Wasm test scripts; expects `root_dir` and `haxe_bin`.
 #
 # `haxe --run compiler.tools.HaxeonCompiler` re-interprets the whole compiler for every
-# fixture (about 2.5 s each). The compiler is built to HashLink bytecode once instead and
-# each fixture compiles in a fraction of a second. Nested scripts inherit the build through
-# HAXEON_COMPILER_HL; concurrent runs build into their own temporary directory.
+# fixture (about 2.5 s each). The compiler is built to HashLink bytecode instead, once per
+# content of its sources (`haxeon dev tool-path`), and each fixture compiles in a fraction of
+# a second. HAXEON_COMPILER_HL, when set, pins a specific compiler build instead.
 
 hashlink_dir=$("$root_dir/scripts/hashlink-path.sh")
 haxeon_hl="$hashlink_dir/hl"
@@ -16,11 +16,8 @@ haxeon_failed=0
 haxeon_max_jobs=${TEST_JOBS:-$(nproc 2>/dev/null || echo 4)}
 
 if [[ -z ${HAXEON_COMPILER_HL:-} || ! -f $HAXEON_COMPILER_HL ]]; then
-	mkdir -p "$root_dir/out/test-tools"
-	haxeon_compiler_dir=$(mktemp -d "$root_dir/out/test-tools/haxeon-compiler.XXXXXX")
-	trap 'rm -rf -- "$haxeon_compiler_dir"' EXIT
-	export HAXEON_COMPILER_HL="$haxeon_compiler_dir/haxeon-compiler.hl"
-	"$haxe_bin" --cwd "$root_dir" common.hxml -hl "$HAXEON_COMPILER_HL" -main compiler.tools.HaxeonCompiler
+	export HAXEON_COMPILER_HL
+	HAXEON_COMPILER_HL=$("$root_dir/scripts/haxeon" dev tool-path compiler.tools.HaxeonCompiler) || return 1
 fi
 
 # Compile with the prebuilt compiler; paths are relative to the repository root.

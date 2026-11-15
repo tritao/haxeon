@@ -39,11 +39,13 @@ if [[ ! -f "$cli" || ! -f "$stamp" || "$(cat "$stamp")" != "$fingerprint" ]]; th
 	temporary="$cli.tmp.$$"
 	trap 'rm -f "$temporary" "$temporary.inputs"' EXIT
 	# The class paths of the compiler come from common.hxml, the one list every stock-Haxe build of these sources uses.
-	"$haxe" --cwd "$root_dir" common.hxml -main tools.HaxeonCli -hl "$temporary"
+	# Diagnostics go to stderr: callers capture stdout (`$(scripts/haxeon dev tool-path ...)`).
+	"$haxe" --cwd "$root_dir" common.hxml -main tools.HaxeonCli -hl "$temporary" >&2
 	printf '%s\n' "$fingerprint" > "$temporary.inputs"
 	mv "$temporary" "$cli"
 	mv "$temporary.inputs" "$stamp"
 	trap - EXIT
 fi
 export LD_LIBRARY_PATH="$hashlink_dir:$root_dir/out${LD_LIBRARY_PATH:+:$LD_LIBRARY_PATH}"
+export DYLD_LIBRARY_PATH="$hashlink_dir:$root_dir/out${DYLD_LIBRARY_PATH:+:$DYLD_LIBRARY_PATH}"
 exec "$hashlink" "$cli" "$@"

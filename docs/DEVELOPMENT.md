@@ -49,6 +49,27 @@ every external tool, and a hand-written list is exactly what missed `lib/haxeon-
 build by hashing sources must hash the directories `common.hxml` names, not a fixed pair. `tests/integration/test-external-tool-build.sh`
 builds and runs a small external tool this way and is part of the wave gate.
 
+### Prebuilt tools: `haxeon dev tool-path`
+
+Scripts in this tree do not build their own copy of the compiler or another entry point. They ask for it by main class and get a cached
+HashLink build:
+
+```sh
+compiler=$(scripts/haxeon dev tool-path compiler.tools.HaxeonCompiler)   # the compiler CLI
+main=$(scripts/haxeon dev tool-path Main)                                # the compiler entry the driver uses
+probe=$(scripts/haxeon dev tool-path --cp tests/runtime RuntimeBuildSafetyProbe)
+```
+
+Builds live in `out/tools/<main>-<key>.hl`. The key hashes `common.hxml`, every file under its class paths and any `--cp` directories,
+the pinned Haxe binary and its standard library, and the `--define` values, so an unchanged tree reuses the last build and any edit
+gets a new one. stdout is only the path; build diagnostics go to stderr. The newest three builds of each main are kept, and older ones
+are removed once they are an hour old. A build in `out/tools` does not sit next to `haxeon_runtime.hdll`, so run it with
+`out` and the HashLink directory on the library path, as every launcher here does.
+
+`HAXEON_MAIN_HL`, `HAXEON_COMPILER_HL` and `HAXEON_BUILD_HL` remain as pins: when set, a script uses that exact build instead
+(a frozen control compiler, for example). `scripts/test.sh` and `scripts/gate.sh` resolve the tools once and export them, so every
+stage of one run uses the same builds even if the sources change while it runs.
+
 `bootstrap/compiler.hl` is checked in. For ordinary compiler development,
 `bootstrap-compiler.sh --self` rebuilds it with the checked-in compiler and
 pinned HashLink without invoking the reference Haxe compiler.

@@ -147,6 +147,7 @@ class HaxeonCli {
 				case "run": build(arguments, true);
 				case "workspace": workspaceCommand(arguments);
 				case "heap": HeapInspector.run(arguments);
+				case "dev": tools.dev.DevCommand.run(arguments, haxeonHome());
 				case "help", "--help", "-h": usage();
 				case _:
 					Sys.stderr().writeString('Unknown command: $command\n');
@@ -1578,6 +1579,7 @@ class HaxeonCli {
 		Sys.println("                                    build or test run it with shared native builds");
 		Sys.println("  heap inspect BYTECODE DUMP      Inspect a HashLink heap snapshot with matching bytecode");
 		Sys.println("       [--capture DIR] [--report PATH]  Read a capture manifest or choose a report path");
+		Sys.println("  dev tool-path MAIN             (checkout) Print a cached HashLink build of a Haxe entry point; see `dev help`");
 		Sys.println("  --device SERIAL                Select Android device for run");
 		Sys.println("  --project PATH                 Select a haxeon.json file");
 		Sys.println("  --output PATH                  Override the build output path");
