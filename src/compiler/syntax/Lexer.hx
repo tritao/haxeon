@@ -242,7 +242,7 @@ class Lexer {
 					} else TokenKind.Percent;
 				default: throw new CompileError(new Diagnostic("E0001", 'Unexpected character "${String.fromCharCode(code)}"', file.span(start, position)));
 			}
-			tokens.push(new Token(kind, text(start, position), file.span(start, position)));
+			tokens.push(new Token(kind, operatorText(start, position), file.span(start, position)));
 		}
 		tokens.push(new Token(TokenKind.Eof, "", file.span(position, position)));
 		return tokens;
@@ -310,6 +310,24 @@ class Lexer {
 
 	inline function text(start:Int, end:Int):String
 		return source.getString(start, end - start);
+
+	/** Operator and punctuation texts, by their bytes packed into an Int: they are few and repeat in every file. */
+	static final operators:Map<Int, String> = [];
+
+	/** The text of an operator token, shared by every token with the same bytes; longer texts are read as usual. */
+	function operatorText(start:Int, end:Int):String {
+		if (end - start > 3)
+			return text(start, end);
+		var key = end - start;
+		for (index in start...end)
+			key = (key << 8) | source.get(index);
+		var known = operators.get(key);
+		if (known != null)
+			return known;
+		var value = text(start, end);
+		operators.set(key, value);
+		return value;
+	}
 
 	static inline function utf8Width(code:Int):Int
 		return code < 0xE0 ? 2 : code < 0xF0 ? 3 : 4;
