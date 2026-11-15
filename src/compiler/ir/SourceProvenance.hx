@@ -28,10 +28,11 @@ class SourceLocation {
 	}
 
 	public static function fromSpan(span:SourceSpan):SourceLocation {
-		var start = span.file.lineColumnAt(span.start),
-			end = span.file.lineColumnAt(span.end);
-		return new SourceLocation(span.file.path, span.start, span.end, start.line, start.column, end.line, end.column,
-			span.generatedReason == null ? span.file.contentHash() : 0);
+		var file = span.file,
+			startLine = file.lineAt(span.start),
+			endLine = file.lineAt(span.end);
+		return new SourceLocation(file.path, span.start, span.end, startLine, file.columnOnLine(span.start, startLine), endLine,
+			file.columnOnLine(span.end, endLine), span.generatedReason == null ? file.contentHash() : 0);
 	}
 }
 

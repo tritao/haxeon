@@ -89,6 +89,10 @@ class SourceFile {
 		return offset - lineStarts[line - 1] + 1;
 	}
 
+	/** One-based column of an offset on a line already found with `lineAt`. */
+	public inline function columnOnLine(offset:Int, line:Int):Int
+		return offset - lineStarts[line - 1] + 1;
+
 	/** One-based line and column containing an offset, using a single line lookup. */
 	public function lineColumnAt(offset:Int):{line:Int, column:Int} {
 		var line = lineAt(offset);
