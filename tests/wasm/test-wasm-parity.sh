@@ -6,11 +6,10 @@ haxe_bin="$root_dir/.tools/haxe/haxe"
 parity_output_dir=${HAXEON_WASM_PARITY_OUTPUT_DIR:-"$root_dir/out"}
 mkdir -p "$parity_output_dir"
 
-if [[ ! -x "$haxe_bin" ]]; then
-	echo "missing pinned Haxe; run ./scripts/bootstrap-tools.sh first" >&2
-	exit 1
-fi
+source "$root_dir/scripts/lib/env.sh"
+haxeon_require_haxe
 source "$root_dir/scripts/haxeon-compiler.sh"
+haxeon_export_library_path
 
 # The broader GC Bytes fixture includes GC-specific bounds behavior. The shared
 # bytes-view fixture checks portable aliasing and copy semantics on both targets.
@@ -378,7 +377,6 @@ for inline in 0 1; do
 	HAXEON_INLINE="$inline" haxeon_compile --target=hl \
 		--output="$parity_output_dir/key-path-semantics-inline-$inline.hl" --entry=key-path-semantics --root=tests/programs tests/programs/key-path-semantics.hx
 	status=0
-	LD_LIBRARY_PATH="$root_dir/out:$hashlink_dir${LD_LIBRARY_PATH:+:$LD_LIBRARY_PATH}" \
 		"$haxeon_hl" "$parity_output_dir/key-path-semantics-inline-$inline.hl" || status=$?
 	if [[ $status -ne 42 ]]; then
 		echo "Key path HashLink semantics (inline=$inline) expected exit 42, got $status" >&2
@@ -387,7 +385,6 @@ for inline in 0 1; do
 	HAXEON_INLINE="$inline" haxeon_compile --target=hl \
 		--output="$parity_output_dir/key-paths-inline-$inline.hl" --entry=key-paths --root=tests/programs tests/programs/key-paths.hx
 	status=0
-	LD_LIBRARY_PATH="$root_dir/out:$hashlink_dir${LD_LIBRARY_PATH:+:$LD_LIBRARY_PATH}" \
 		"$haxeon_hl" "$parity_output_dir/key-paths-inline-$inline.hl" || status=$?
 	if [[ $status -ne 42 ]]; then
 		echo "Key path HashLink census (inline=$inline) expected exit 42, got $status" >&2
@@ -397,7 +394,6 @@ for inline in 0 1; do
 		--output="$parity_output_dir/defer-allocation-hl-inline-$inline.hl" \
 		--entry=defer-allocation-hl --root=tests/fixtures/scoped-cleanup tests/fixtures/scoped-cleanup/defer-allocation-hl.hx
 	status=0
-	LD_LIBRARY_PATH="$root_dir/out:$hashlink_dir${LD_LIBRARY_PATH:+:$LD_LIBRARY_PATH}" \
 		"$haxeon_hl" "$parity_output_dir/defer-allocation-hl-inline-$inline.hl" || status=$?
 	if [[ $status -ne 42 ]]; then
 		echo "defer HashLink allocation census (inline=$inline) expected exit 42, got $status" >&2
@@ -408,7 +404,6 @@ for inline in 0 1; do
 			--target=hl --output="$parity_output_dir/$value_case-inline-$inline.hl" \
 			--entry="$value_case" --root=tests/programs "tests/programs/$value_case.hx"
 		status=0
-		LD_LIBRARY_PATH="$root_dir/out:$hashlink_dir${LD_LIBRARY_PATH:+:$LD_LIBRARY_PATH}" \
 			"$haxeon_hl" "$parity_output_dir/$value_case-inline-$inline.hl" || status=$?
 		if [[ $status -ne 42 ]]; then
 			echo "$value_case (inline=$inline) expected exit 42, got $status" >&2
@@ -421,7 +416,6 @@ for inline in 0 1; do
 			--output="$parity_output_dir/$value_case-abi32-inline-$inline.hl" \
 			--entry="$value_case" --root=tests/programs "tests/programs/$value_case.hx"
 		status=0
-		LD_LIBRARY_PATH="$root_dir/out:$hashlink_dir${LD_LIBRARY_PATH:+:$LD_LIBRARY_PATH}" \
 			"$haxeon_hl" "$parity_output_dir/$value_case-abi32-inline-$inline.hl" || status=$?
 		if [[ $status -ne 42 ]]; then
 			echo "$value_case (32-bit ABI, inline=$inline) expected exit 42, got $status" >&2
@@ -441,7 +435,6 @@ for inline in 0 1; do
 		--entry=wasm-generic-struct-reflected-closure --root=stdlib --root=tests/programs \
 		tests/programs/wasm-generic-struct-reflected-closure.hx
 	status=0
-	LD_LIBRARY_PATH="$root_dir/out:$hashlink_dir${LD_LIBRARY_PATH:+:$LD_LIBRARY_PATH}" \
 		"$haxeon_hl" "$parity_output_dir/generic-struct-reflected-closure-inline-$inline.hl" || status=$?
 	if [[ $status -ne 42 ]]; then
 		echo "Reflected struct closure fixture (inline=$inline) expected exit 42, got $status" >&2
@@ -452,7 +445,6 @@ for inline in 0 1; do
 		--entry=wasm-value-interface-reflection --root=stdlib --root=tests/programs \
 		tests/programs/wasm-value-interface-reflection.hx
 	status=0
-	LD_LIBRARY_PATH="$root_dir/out:$hashlink_dir${LD_LIBRARY_PATH:+:$LD_LIBRARY_PATH}" \
 		"$haxeon_hl" "$parity_output_dir/value-interface-reflection-inline-$inline.hl" || status=$?
 	if [[ $status -ne 42 ]]; then
 		echo "Reflected value interface fixture (inline=$inline) expected exit 42, got $status" >&2
@@ -462,21 +454,18 @@ for inline in 0 1; do
 		--target=hl --output="$parity_output_dir/flat-object-layout-inline-$inline.hl" \
 		--entry=wasm-flat-object-layout --root=tests/programs tests/programs/wasm-flat-object-layout.hx
 	status=0
-	LD_LIBRARY_PATH="$root_dir/out:$hashlink_dir${LD_LIBRARY_PATH:+:$LD_LIBRARY_PATH}" \
 		"$haxeon_hl" "$parity_output_dir/flat-object-layout-inline-$inline.hl" || status=$?
 	if [[ $status -ne 42 ]]; then
 		echo "Flat object layout fixture (inline=$inline) expected exit 42, got $status" >&2
 		exit 1
 	fi
 	status=0
-	LD_LIBRARY_PATH="$root_dir/out:$hashlink_dir${LD_LIBRARY_PATH:+:$LD_LIBRARY_PATH}" \
 		"$haxeon_hl" "$parity_output_dir/observable-generic-runtime-inline-$inline.hl" || status=$?
 	if [[ $status -ne 42 ]]; then
 		echo "Observable generic runtime fixture (inline=$inline) expected exit 42, got $status" >&2
 		exit 1
 	fi
 	status=0
-	LD_LIBRARY_PATH="$root_dir/out:$hashlink_dir${LD_LIBRARY_PATH:+:$LD_LIBRARY_PATH}" \
 		"$haxeon_hl" "$parity_output_dir/observable-tracking-inline-$inline.hl" || status=$?
 	if [[ $status -ne 42 ]]; then
 		echo "Observable HashLink fixture (inline=$inline) expected exit 42, got $status" >&2

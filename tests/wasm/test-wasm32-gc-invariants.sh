@@ -7,10 +7,8 @@ artifact="$root_dir/out/wasm-gc-invariants.wasm"
 normal_artifact="$root_dir/out/wasm-gc-budget.wasm"
 map_artifact="$root_dir/out/wasm-gc-map-object.wasm"
 
-if [[ ! -x "$haxe_bin" ]]; then
-	echo "missing pinned Haxe; run ./scripts/bootstrap-tools.sh first" >&2
-	exit 1
-fi
+source "$root_dir/scripts/lib/env.sh"
+haxeon_require_haxe
 source "$root_dir/scripts/haxeon-compiler.sh"
 
 mkdir -p "$root_dir/out"

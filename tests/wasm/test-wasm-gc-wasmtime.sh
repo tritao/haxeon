@@ -6,10 +6,8 @@ haxe_bin="$root_dir/.tools/haxe/haxe"
 bundled_wasmtime="$root_dir/.tools/wasmtime-47.0.0/wasmtime"
 wasmtime_bin=${WASMTIME:-$([[ -x $bundled_wasmtime ]] && echo "$bundled_wasmtime" || echo wasmtime)}
 
-if [[ ! -x "$haxe_bin" ]]; then
-	echo "missing pinned Haxe; run ./scripts/bootstrap-tools.sh first" >&2
-	exit 1
-fi
+source "$root_dir/scripts/lib/env.sh"
+haxeon_require_haxe
 source "$root_dir/scripts/haxeon-compiler.sh"
 if ! command -v "$wasmtime_bin" >/dev/null 2>&1; then
 	echo "missing Wasmtime 47.0.0; install it or set WASMTIME to its executable" >&2

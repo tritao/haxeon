@@ -12,9 +12,7 @@ fi
 if [[ ${1:-} == "--self" ]]; then
 	command=bootstrap-self
 fi
-if [[ ! -x "$haxe" ]]; then
-	echo "missing pinned Haxe; run ./scripts/bootstrap-tools.sh first" >&2
-	exit 1
-fi
+source "$root_dir/scripts/lib/env.sh"
+haxeon_require_haxe
 
 "$haxe" --cwd "$root_dir" common.hxml --run build.HaxeonBuild "$command"

@@ -4,10 +4,8 @@ set -euo pipefail
 root_dir=$(cd "$(dirname "$0")/../.." && pwd)
 haxe_bin="$root_dir/.tools/haxe/haxe"
 mkdir -p "$root_dir/out"
-if [[ ! -x "$haxe_bin" ]]; then
-	echo "missing pinned Haxe; run ./scripts/bootstrap-tools.sh first" >&2
-	exit 1
-fi
+source "$root_dir/scripts/lib/env.sh"
+haxeon_require_haxe
 source "$root_dir/scripts/haxeon-compiler.sh"
 
 # The committed C runtime every wasm32 module links must match native/wasm (docs/WASM_LINEAR_RUNTIME.md).

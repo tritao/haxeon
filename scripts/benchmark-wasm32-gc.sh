@@ -7,10 +7,8 @@ stress_artifact="$root_dir/out/wasm-gc-benchmark-stress.wasm"
 budget_artifact="$root_dir/out/wasm-gc-benchmark-budget.wasm"
 sample_count=${1:-5}
 
-if [[ ! -x "$haxe_bin" ]]; then
-	echo "missing pinned Haxe; run ./scripts/bootstrap-tools.sh first" >&2
-	exit 1
-fi
+source "$root_dir/scripts/lib/env.sh"
+haxeon_require_haxe
 
 # The prebuilt compiler (scripts/haxeon-compiler.sh), not `haxe --run`, which interprets the whole compiler for each build.
 source "$root_dir/scripts/haxeon-compiler.sh"

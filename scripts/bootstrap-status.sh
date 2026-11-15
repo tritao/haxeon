@@ -4,9 +4,7 @@ set -euo pipefail
 root_dir=$(cd "$(dirname "$0")/.." && pwd)
 haxe="$root_dir/.tools/haxe/haxe"
 
-if [[ ! -x "$haxe" ]]; then
-	echo "missing local Haxe toolchain; run ./scripts/bootstrap-tools.sh first" >&2
-	exit 1
-fi
+source "$root_dir/scripts/lib/env.sh"
+haxeon_require_haxe
 
 "$haxe" --cwd "$root_dir" common.hxml --run compiler.tools.BootstrapStatus "$@"

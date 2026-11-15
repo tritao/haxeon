@@ -5,10 +5,8 @@ root_dir=$(cd "$(dirname "$0")/../.." && pwd)
 haxe_bin="$root_dir/.tools/haxe/haxe"
 artifact="$root_dir/out/wasm-gc-reuse-zero-init.wasm"
 
-if [[ ! -x "$haxe_bin" ]]; then
-	echo "missing pinned Haxe; run ./scripts/bootstrap-tools.sh first" >&2
-	exit 1
-fi
+source "$root_dir/scripts/lib/env.sh"
+haxeon_require_haxe
 source "$root_dir/scripts/haxeon-compiler.sh"
 
 mkdir -p "$root_dir/out"

@@ -2,6 +2,7 @@
 set -euo pipefail
 root_dir="$(cd "$(dirname "${BASH_SOURCE[0]}")/../.." && pwd)"
 hashlink_dir=$("$root_dir/scripts/hashlink-path.sh")
+source "$root_dir/scripts/lib/env.sh"
 build_dir=$(mktemp -d)
 trap 'rm -rf -- "$build_dir"' EXIT
 "$root_dir/.tools/haxe/haxe" --cwd "$root_dir" common.hxml -cp tests/compiler --run WasmSharedMemoryMain "$build_dir/shared.wasm" "$build_dir/unshared.wasm"
@@ -24,7 +25,7 @@ JSON
 for target in wasm32 wasm-gc; do
   (
     cd "$root_dir"
-    export LD_LIBRARY_PATH="$root_dir/out:$hashlink_dir${LD_LIBRARY_PATH:+:$LD_LIBRARY_PATH}"
+    haxeon_export_library_path
     export HAXEON_WASM_LEGACY_EXCEPTIONS=1
     for fixture in wasm-host-shared-memory wasm-utf8-field; do
       source_dir=tests/programs

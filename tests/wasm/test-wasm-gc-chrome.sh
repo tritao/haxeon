@@ -8,10 +8,8 @@ wasm_path="$root_dir/out/wasm-gc-chrome-smoke.wasm"
 page_path="$root_dir/out/wasm-gc-chrome-smoke.html"
 dom_path="$root_dir/out/wasm-gc-chrome-smoke.dom"
 
-if [[ ! -x "$haxe_bin" ]]; then
-	echo "missing pinned Haxe; run ./scripts/bootstrap-tools.sh first" >&2
-	exit 1
-fi
+source "$root_dir/scripts/lib/env.sh"
+haxeon_require_haxe
 source "$root_dir/scripts/haxeon-compiler.sh"
 if ! command -v "$chrome_bin" >/dev/null 2>&1; then
 	echo "missing Chrome; set CHROME_BIN or install Google Chrome" >&2
