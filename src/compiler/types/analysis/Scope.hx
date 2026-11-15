@@ -478,11 +478,24 @@ class Scope {
 		return result;
 	}
 
+	/** Every visible value, outermost scope first, in an array allocated at its final size. */
 	public function visibleValues():Array<ScopeValue> {
-		var outer = parent,
-			result:Array<ScopeValue> = outer == null ? [] : outer.visibleValues();
-		for (value in valueList)
-			result.push(value);
+		var count = 0, scope:Null<Scope> = this;
+		while (scope != null) {
+			count += scope.valueList.length;
+			scope = scope.parent;
+		}
+		var result:Array<ScopeValue> = [];
+		result.resize(count);
+		var end = count;
+		scope = this;
+		while (scope != null) {
+			var list = scope.valueList;
+			end -= list.length;
+			for (index in 0...list.length)
+				result[end + index] = list[index];
+			scope = scope.parent;
+		}
 		return result;
 	}
 
