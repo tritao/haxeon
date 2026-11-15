@@ -115,7 +115,7 @@ class DocumentStore {
 	public function new() {}
 
 	public function open(uri:String, version:Int, source:String):LspDocument {
-		var path = uriPath(uri), previous = byUri.get(uri);
+		var path = FileUri.toPath(uri), previous = byUri.get(uri);
 		if (previous != null)
 			uriByPath.remove(previous.path);
 		var document = new LspDocument(uri, path, version, source);
@@ -159,25 +159,6 @@ class DocumentStore {
 
 	public function uri(path:String):String {
 		var known = uriByPath.get(path);
-		return known == null ? pathUri(path) : known;
-	}
-
-	static function uriPath(uri:String):String {
-		if (!StringTools.startsWith(uri, "file://"))
-			return uri;
-		var path = uri.substr(7);
-		if (StringTools.startsWith(path, "localhost/"))
-			path = "/" + path.substr(10);
-		path = StringTools.urlDecode(path);
-		// file:///C:/x carries a slash before the Windows drive letter.
-		return windows && ~/^\/[A-Za-z]:/.match(path) ? path.substr(1) : path;
-	}
-
-	static final windows:Bool = Sys.systemName() == "Windows";
-
-	static function pathUri(path:String):String {
-		if (StringTools.startsWith(path, "file://"))
-			return path;
-		return windows && ~/^[A-Za-z]:/.match(path) ? "file:///" + path : "file://" + path;
+		return known == null ? FileUri.fromPath(path) : known;
 	}
 }

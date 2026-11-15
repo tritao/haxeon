@@ -2,6 +2,7 @@ import editor.lsp.LspDispatcher;
 import editor.lsp.LspProtocol;
 import editor.lsp.DocumentStore;
 import editor.lsp.DocumentStore.LspDocument;
+import editor.lsp.FileUri;
 import haxe.Json;
 import haxe.io.Path;
 import compiler.service.CancellationToken;
@@ -70,6 +71,7 @@ class CountingDiagnosticLanguageService extends LanguageService {
 
 class LspProtocolMain {
 	static function main():Void {
+		fileUris();
 		haxeonManifestWorkspace();
 		linkedManifestWorkspace();
 		recoveredDefinitionNavigation();
@@ -1738,6 +1740,24 @@ class LspProtocolMain {
 		Sys.println("PASS: current recovered this.member definitions, shadowing and edits with broken dependencies; rename remains protected");
 	}
 
+	/** `file:` URIs are percent-encoded, never form-encoded: a `+` in a path is a plus. */
+	static function fileUris():Void {
+		if (Sys.systemName() == "Windows")
+			return;
+		for (check in [
+			{uri: "file:///work/c++/Main.hx", path: "/work/c++/Main.hx"},
+			{uri: "file:///work/c%2B%2B/My%20Main.hx", path: "/work/c++/My Main.hx"},
+			{uri: "file://localhost/work/Main.hx", path: "/work/Main.hx"},
+			{uri: "file:///work/caf%C3%A9/100%.hx", path: "/work/caf\u00e9/100%.hx"}
+		])
+			if (FileUri.toPath(check.uri) != check.path)
+				throw 'file URI ${check.uri} read as ${FileUri.toPath(check.uri)}';
+		var path = "/work/c++/My Main#1?.hx";
+		if (FileUri.fromPath(path) != "file:///work/c%2B%2B/My%20Main%231%3F.hx" || FileUri.toPath(FileUri.fromPath(path)) != path)
+			throw 'path $path written as ${FileUri.fromPath(path)}';
+		Sys.println("PASS: file URIs decode percent escapes only and round-trip paths");
+	}
+
 	/** Package discovery resolves symbolic links; a workspace opened through a link must still own its manifest sources. */
 	static function linkedManifestWorkspace():Void {
 		if (Sys.systemName() == "Windows")
@@ -1780,7 +1800,12 @@ class LspProtocolMain {
 	}
 
 	static function haxeonManifestWorkspace():Void {
-		var base = sys.FileSystem.fullPath("out") + "/lsp-haxeon-workspace-" + Date.now().getTime() + "-" + Std.random(0x7fffffff);
+		// The `+` checks that workspace URIs are percent-decoded, not form-decoded (which reads it as a space).
+		var base = sys.FileSystem.fullPath("out")
+			+ "/lsp-haxeon-workspace+"
+			+ Std.int(Date.now().getTime() / 1000)
+			+ "-"
+			+ Std.random(0x7fffffff);
 		try {
 			haxeonManifestWorkspaceAt(base);
 		} catch (failure:Dynamic) {
@@ -1848,7 +1873,7 @@ class LspProtocolMain {
 		for (raw in messages) {
 			var message:Dynamic = Json.parse(raw);
 			if (message.method == "textDocument/publishDiagnostics") {
-				if (!StringTools.startsWith(message.params.uri, "file://" + base + "/"))
+				if (!StringTools.startsWith(FileUri.toPath(message.params.uri), base + "/"))
 					throw "LSP published diagnostics for a file outside the workspace";
 				if (message.params.uri == uri && message.params.diagnostics.length > 0)
 					foundDiagnostic = true;
@@ -2046,7 +2071,7 @@ class LspProtocolMain {
 				position: {line: 0, character: ffiSource.indexOf(".VALUE") + 2}
 			}
 		}));
-		if (ffiDefinition.result == null || ffiDefinition.result.uri != "file://" + base + "/app/fixture.hxi")
+		if (ffiDefinition.result == null || FileUri.toPath(ffiDefinition.result.uri) != base + "/app/fixture.hxi")
 			throw "projected FFI constant definition did not reach its ABI declaration: " + Json.stringify(ffiDefinition);
 		var oldConfiguration = ffiProtocol.project.configurations[0].id;
 		sys.io.File.saveContent(base + "/app/fixture.hxi",
@@ -2083,7 +2108,7 @@ class LspProtocolMain {
 			}
 		}));
 		if (reloadedDefinition.result == null
-			|| reloadedDefinition.result.uri != "file://" + base + "/app/fixture.hxi"
+			|| FileUri.toPath(reloadedDefinition.result.uri) != base + "/app/fixture.hxi"
 			|| reloadedDefinition.result.range.start.line != 1)
 			throw "FFI reload reused stale declaration provenance: " + Json.stringify(reloadedDefinition);
 
