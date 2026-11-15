@@ -10,7 +10,7 @@ class Renderer {
 		var result:Array<String> = [];
 		for (physical in layout.lines) {
 			var output = new StringBuf();
-			var verbatim = line.tokens.length == 1 && line.tokens[0].kind == FormatTokenKind.FormatterOff;
+			var verbatim = line.tokens.length == 1 && line.tokens[0].kind.match(FormatTokenKind.FormatterOff);
 			if (!verbatim)
 				output.add(FormatConfigTools.indentation(physical.indent, config));
 			for (index in physical.start...physical.end + 1) {

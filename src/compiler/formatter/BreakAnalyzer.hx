@@ -35,9 +35,9 @@ class BreakAnalyzer {
 			var left = tokens[index], right = tokens[index + 1], leftKind = FormatTokenTools.syntaxKind(left), rightKind = FormatTokenTools.syntaxKind(right),
 				spaces = spacing(tokens, index, leftKind, rightKind, syntax), canBreak = false, mustBreak = false, penalty = 0,
 				continuation = line.indent + FormatConfigTools.continuationLevels(config);
-			if (left.kind == FormatTokenKind.LineComment || left.kind == FormatTokenKind.DocComment)
+			if (left.kind.match(FormatTokenKind.LineComment) || left.kind.match(FormatTokenKind.DocComment))
 				mustBreak = true;
-			else if (left.kind == FormatTokenKind.BlockComment && left.text.indexOf("\n") >= 0)
+			else if (left.kind.match(FormatTokenKind.BlockComment) && left.text.indexOf("\n") >= 0)
 				mustBreak = true;
 			else if (leftKind == TokenKind.Comma) {
 				canBreak = true;
@@ -172,9 +172,9 @@ class BreakAnalyzer {
 	}
 
 	static function spacing(tokens:Array<FormatToken>, index:Int, left:Null<TokenKind>, right:Null<TokenKind>, syntax:SyntaxInfo):Int {
-		if (tokens[index + 1].kind == FormatTokenKind.LineComment
-			|| tokens[index + 1].kind == FormatTokenKind.DocComment
-			|| tokens[index + 1].kind == FormatTokenKind.BlockComment)
+		if (tokens[index + 1].kind.match(FormatTokenKind.LineComment)
+			|| tokens[index + 1].kind.match(FormatTokenKind.DocComment)
+			|| tokens[index + 1].kind.match(FormatTokenKind.BlockComment))
 			return 1;
 		if (adjacentOperatorParts(tokens[index], tokens[index + 1]))
 			return 0;

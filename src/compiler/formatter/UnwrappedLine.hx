@@ -85,7 +85,7 @@ class UnwrappedLineBuilder {
 						&& endsDeclaration(current[current.length - 1], syntax))
 						flush();
 					begin(token);
-					if (token.kind == FormatTokenKind.LineComment || current.length == 1)
+					if (token.kind.match(FormatTokenKind.LineComment) || current.length == 1)
 						flush();
 				case FormatTokenKind.Syntax(kind):
 					var isBlock = kind == TokenKind.LeftBrace

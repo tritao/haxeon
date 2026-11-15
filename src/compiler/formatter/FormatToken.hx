@@ -36,5 +36,5 @@ class FormatTokenTools {
 		};
 
 	public static function hasNewline(token:FormatToken):Bool
-		return token.kind == Newline || token.text.indexOf("\n") >= 0 || token.text.indexOf("\r") >= 0;
+		return token.kind.match(Newline) || token.text.indexOf("\n") >= 0 || token.text.indexOf("\r") >= 0;
 }

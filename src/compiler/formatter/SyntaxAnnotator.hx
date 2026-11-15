@@ -206,7 +206,7 @@ class SyntaxAnnotator {
 						return true;
 				default:
 					// A comment between the fields of a typedef body can only be kept by laying the fields out one per line.
-					if (inTypedef && depth == 1 && (token.kind == FormatTokenKind.DocComment || token.kind == FormatTokenKind.LineComment))
+					if (inTypedef && depth == 1 && (token.kind.match(FormatTokenKind.DocComment) || token.kind.match(FormatTokenKind.LineComment)))
 						return true;
 			}
 		}

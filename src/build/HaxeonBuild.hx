@@ -50,14 +50,14 @@ class HaxeonBuild {
 		if (nativeStatus != 0)
 			return nativeStatus;
 		configureRuntimeLibraryPath();
-		var outputDirectory = path("out", "bootstrap");
+		var outputDirectory = path(["out", "bootstrap"]);
 		if (!FileSystem.exists(outputDirectory))
 			FileSystem.createDirectory(outputDirectory);
 		var sources = sourceManifest();
-		var sourcesFile = path("out", "bootstrap", "compiler-sources.txt");
+		var sourcesFile = path(["out", "bootstrap", "compiler-sources.txt"]);
 		File.saveContent(sourcesFile, sources.join("\n") + "\n");
-		var checked = path("bootstrap", "compiler.hl");
-		var self = path("out", "bootstrap", "compiler-self.hl");
+		var checked = path(["bootstrap", "compiler.hl"]);
+		var self = path(["out", "bootstrap", "compiler-self.hl"]);
 		if (selfOnly) {
 			var status = compileWith(checked, self, sourcesFile);
 			if (status != 0)
@@ -70,13 +70,13 @@ class HaxeonBuild {
 			return 0;
 		}
 
-		var seed = path("out", "bootstrap", "compiler-seed.hl");
+		var seed = path(["out", "bootstrap", "compiler-seed.hl"]);
 		var status = run(haxe(), ["--cwd", root(), "common.hxml", "--run", "compiler.tools.HaxeonCompiler"].concat(compilerArguments(seed, sourcesFile)));
 		if (status != 0)
 			return status;
 		var compiler = seed;
 		for (stage in 1...9) {
-			var output = path("out", "bootstrap", 'compiler-stage-$stage.hl');
+			var output = path(["out", "bootstrap", 'compiler-stage-$stage.hl']);
 			status = compileWith(compiler, output, sourcesFile);
 			if (status != 0)
 				return status;
@@ -94,7 +94,7 @@ class HaxeonBuild {
 
 	static function test(arguments:Array<String>):Int {
 		#if hl
-		for (outputDirectory in [path("out"), HashLinkPath.directory(root())]) {
+		for (outputDirectory in [path(["out"]), HashLinkPath.directory(root())]) {
 			var loaded:Null<String>;
 			try
 				loaded = RuntimeBuildSafety.conflictingLibrary(outputDirectory)
@@ -157,7 +157,7 @@ class HaxeonBuild {
 	static function sourceManifest():Array<String> {
 		var result = [];
 		for (directory in ["src", "lib", "stdlib"])
-			collectSources(path(directory), result);
+			collectSources(path([directory]), result);
 		result.sort(Reflect.compare);
 		return result;
 	}
@@ -178,7 +178,7 @@ class HaxeonBuild {
 		return FileSystem.exists(left) && FileSystem.exists(right) && File.getBytes(left).compare(File.getBytes(right)) == 0;
 
 	static function configureRuntimeLibraryPath():Void {
-		var directories = [path("out"), HashLinkPath.directory(root())];
+		var directories = [path(["out"]), HashLinkPath.directory(root())];
 		Sys.putEnv("HAXEON_HASHLINK_DIR", HashLinkPath.directory(root()));
 		var variable = Sys.systemName() == "Windows" ? "PATH" : (Sys.systemName() == "Mac" ? "DYLD_LIBRARY_PATH" : "LD_LIBRARY_PATH");
 		var existing = Sys.getEnv(variable);
@@ -188,7 +188,7 @@ class HaxeonBuild {
 	}
 
 	static function haxe():String
-		return path(".tools", "haxe", "haxe" + executableSuffix());
+		return path([".tools", "haxe", "haxe" + executableSuffix()]);
 
 	static function hashlink():String
 		return HashLinkPath.executable(root());
@@ -196,7 +196,8 @@ class HaxeonBuild {
 	static function executableSuffix():String
 		return Sys.systemName() == "Windows" ? ".exe" : "";
 
-	static function path(...parts:String):String
+	/** `parts` joined below the repository root. */
+	static function path(parts:Array<String>):String
 		return Path.join([root()].concat(parts));
 
 	static function run(command:String, arguments:Array<String>, inherit:Bool = true):Int {

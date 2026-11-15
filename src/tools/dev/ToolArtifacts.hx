@@ -171,8 +171,11 @@ class ToolArtifacts {
 	function prune(main:String, keep:String):Void {
 		var now = Sys.time(), builds:Array<{path:String, time:Float}> = [];
 		for (entry in FileSystem.readDirectory(directory)) {
-			var path = Path.join([directory, entry]),
-				time = try FileSystem.stat(path).mtime.getTime() / 1000.0 catch (_:Dynamic) continue;
+			var path = Path.join([directory, entry]), time:Float;
+			try
+				time = FileSystem.stat(path).mtime.getTime() / 1000.0
+			catch (_:Dynamic)
+				continue;
 			if (StringTools.startsWith(entry, ".")) {
 				if (now - time > PRUNE_AGE_SECONDS)
 					removeQuietly(path);

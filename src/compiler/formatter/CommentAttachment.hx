@@ -34,11 +34,11 @@ class CommentAttachmentTools {
 						nextToken = nextSyntax[index],
 						lineBreakBefore = hasNewline(tokens, previous, index),
 						lineBreakAfter = hasNewline(tokens, index, nextToken);
-					if (token.kind == FormatTokenKind.DocComment && nextToken != null)
+					if (token.kind.match(FormatTokenKind.DocComment) && nextToken != null)
 						result.set(index, CommentAttachmentKind.Leading(nextToken));
 					else if (previous != null && !lineBreakBefore)
 						result.set(index, CommentAttachmentKind.Trailing(previous));
-					else if (nextToken != null && (lineBreakAfter || token.kind == FormatTokenKind.BlockComment))
+					else if (nextToken != null && (lineBreakAfter || token.kind.match(FormatTokenKind.BlockComment)))
 						result.set(index, CommentAttachmentKind.Leading(nextToken));
 					else
 						result.set(index, CommentAttachmentKind.Standalone);
