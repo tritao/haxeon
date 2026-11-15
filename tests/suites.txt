@@ -120,6 +120,7 @@ debug-line-encoding              ci          -- python3 tests/integration/test-d
 build-mode-metadata              ci          -- python3 tests/integration/test-build-mode-metadata.py
 binary-size-report               ci          -- python3 tests/integration/test-binary-size-report.py
 fatal-stack-integration          ci          -- python3 tests/integration/test-fatal-stack.py
+jit-stack-probe                  ci          -- python3 tests/integration/test-jit-stack-probe.py
 stdout-buffering-integration     ci          -- python3 tests/integration/test-stdout-buffering.py
 process-output-capture-integration ci        -- bash tests/integration/test-process-output-capture.sh
 
