@@ -186,19 +186,36 @@ class InputFiles {
 			return;
 		var full = absolute(path);
 		acquire();
-		var skip = ignoredExact != null && ignoredExact.exists(full);
-		if (!skip)
-			for (prefix in ignored)
-				if (StringTools.startsWith(full, prefix)) {
-					skip = true;
-					break;
-				}
+		var skip = ignoredAbsolute(full);
 		var key = kind + "\n" + full;
 		if (!skip && !noted.exists(key)) {
 			noted.set(key, true);
 			entries.push([full, kind, answer]);
 		}
 		release();
+	}
+
+	/** Whether recording leaves `path` out (the kernel's cache, `/proc`, `/sys`, `/dev`, or a file ignored on purpose). */
+	public static function ignores(path:String):Bool {
+		if (!isRecording() || ignored == null)
+			return true;
+		var full = absolute(path);
+		acquire();
+		var skip = ignoredAbsolute(full);
+		release();
+		return skip;
+	}
+
+	/** `ignores` for an absolute path, with the lock held. */
+	static function ignoredAbsolute(full:String):Bool {
+		if (ignoredExact != null && ignoredExact.exists(full))
+			return true;
+		var prefixes = ignored;
+		if (prefixes != null)
+			for (prefix in prefixes)
+				if (StringTools.startsWith(full, prefix))
+					return true;
+		return false;
 	}
 
 	static function acquire():Void {

@@ -39,6 +39,12 @@ extern function fileAppendContent(path:String, content:String):Void;
 
 @:hlNative("haxeon_runtime", "__file_save_bytes")
 extern function fileSaveBytes(path:String, bytes:Bytes):Void;
+
+@:hlNative("haxeon_runtime", "__file_input_open")
+extern function fileInputOpen(path:String, binary:Bool):hl.Abstract<"realtime_file_input">;
+
+@:hlNative("haxeon_runtime", "__file_output_open")
+extern function fileOutputOpen(path:String, append:Bool, binary:Bool):hl.Abstract<"realtime_file_output">;
 #else
 // Wasm keeps files in the session's in-memory filesystem (runtime.MemoryFileSystem).
 function fileGetContent(path:String):String
@@ -102,4 +108,45 @@ class File {
 		haxeon.build.InputFiles.wrote(path);
 		fileSaveBytes(path, bytes);
 	}
+
+	/**
+	 * Opens `path` to read it as a stream; throws when it cannot be opened. While recording, what the file holds when it is
+	 * opened is the input noted, as for `getBytes`. `binary` matters only on Windows, where text mode converts line ends.
+	 */
+	public static function read(path:String, binary:Bool = true):FileInput {
+		if (haxeon.build.InputFiles.isRecording() && !haxeon.build.InputFiles.ignores(path))
+			getBytes(path);
+		#if wasm
+		return new FileInput(fileGetBytes(path));
+		#else
+		return new FileInput(fileInputOpen(path, binary));
+		#end
+	}
+
+	/** Creates or truncates `path` and opens it to write. */
+	public static function write(path:String, binary:Bool = true):FileOutput {
+		haxeon.build.InputFiles.wrote(path);
+		#if wasm
+		fileSaveBytes(path, Bytes.alloc(0));
+		return new FileOutput(false, path);
+		#else
+		return new FileOutput(fileOutputOpen(path, false, binary));
+		#end
+	}
+
+	/** Opens `path` to write at its end, creating it when missing. */
+	public static function append(path:String, binary:Bool = true):FileOutput {
+		haxeon.build.InputFiles.wrote(path);
+		#if wasm
+		if (!runtime.MemoryFileSystem.exists(path))
+			fileSaveBytes(path, Bytes.alloc(0));
+		return new FileOutput(false, path);
+		#else
+		return new FileOutput(fileOutputOpen(path, true, binary));
+		#end
+	}
+
+	/** Copies the file at `srcPath` to `dstPath`, as Haxe's `File.copy`. */
+	public static function copy(srcPath:String, dstPath:String):Void
+		saveBytes(dstPath, getBytes(srcPath));
 }

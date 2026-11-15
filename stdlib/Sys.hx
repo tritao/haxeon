@@ -173,10 +173,16 @@ function sysStderr():sys.io.FileOutput
 	return new sys.io.FileOutput(true);
 #else
 @:hlNative("haxeon_runtime", "__sys_stdout")
-extern function sysStdout():sys.io.FileOutput;
+extern function sysStdoutHandle():hl.Abstract<"realtime_file_output">;
 
 @:hlNative("haxeon_runtime", "__sys_stderr")
-extern function sysStderr():sys.io.FileOutput;
+extern function sysStderrHandle():hl.Abstract<"realtime_file_output">;
+
+function sysStdout():sys.io.FileOutput
+	return new sys.io.FileOutput(sysStdoutHandle());
+
+function sysStderr():sys.io.FileOutput
+	return new sys.io.FileOutput(sysStderrHandle());
 
 @:hlNative("haxeon_runtime", "__sys_stdin")
 extern function sysStdinHandle():hl.Abstract<"realtime_file_input">;

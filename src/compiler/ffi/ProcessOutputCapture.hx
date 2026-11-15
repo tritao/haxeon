@@ -1,22 +1,16 @@
 package compiler.ffi;
 
-import sys.thread.Thread;
-#if haxeon
-import sys.thread.Mutex;
-#else
 import haxe.Timer;
 import haxe.io.Bytes;
 import haxe.io.BytesBuffer;
 import sys.io.Process;
 import sys.thread.Lock;
-#end
+import sys.thread.Thread;
 
-#if !haxeon
 private typedef CapturedBytes = {
 	final bytes:Bytes;
 	final truncated:Bool;
 }
-#end
 
 typedef ProcessCaptureResult = {
 	final stdout:String;
@@ -34,9 +28,7 @@ class ProcessOutputCapture {
 			throw "Process stderr limit cannot be negative";
 		if (timeoutSeconds != null && timeoutSeconds <= 0)
 			throw "Process timeout must be positive";
-		#if haxeon
-		return captureHaxeon(command, arguments, stderrLimit, timeoutSeconds);
-		#elseif eval
+		#if eval
 		// Haxe eval can stall when both blocking Process pipes are read from separate threads.
 		if (timeoutSeconds != null)
 			throw "Haxe eval process capture does not support timeouts";
@@ -110,87 +102,6 @@ class ProcessOutputCapture {
 		#end
 	}
 
-	#if haxeon
-	static function captureHaxeon(command:String, arguments:Array<String>, stderrLimit:Null<Int>, timeoutSeconds:Null<Float>):ProcessCaptureResult {
-		var process = sys.io.Process.run(command, arguments);
-		defer process.close();
-		var mutex = new Mutex(), stdout = "", stderr = "", stdoutDone = false, stderrDone = false,
-			failure:Dynamic = null;
-		Thread.create(function() {
-			runtime.ThreadName.setCurrent("haxeon.capture.stdout");
-			var error:Dynamic = null;
-			try
-				stdout = process.readStdout()
-			catch (caught:Dynamic)
-				error = caught;
-			mutex.acquire();
-			defer mutex.release();
-			if (error != null)
-				failure = error;
-			stdoutDone = true;
-		});
-		Thread.create(function() {
-			runtime.ThreadName.setCurrent("haxeon.capture.stderr");
-			var error:Dynamic = null;
-			try
-				stderr = process.readStderr()
-			catch (caught:Dynamic)
-				error = caught;
-			mutex.acquire();
-			defer mutex.release();
-			if (error != null && failure == null)
-				failure = error;
-			stderrDone = true;
-		});
-		var deadline = timeoutSeconds == null ? 0.0 : Sys.time() + timeoutSeconds;
-		var timedOut = false;
-		while (true) {
-			var done:Bool;
-			{
-				mutex.acquire();
-				defer mutex.release();
-				done = stdoutDone && stderrDone;
-			}
-			if (done)
-				break;
-			if (timeoutSeconds != null && Sys.time() >= deadline) {
-				process.kill();
-				timedOut = true;
-				break;
-			}
-			Sys.sleep(0.001);
-		}
-		if (timedOut)
-			while (true) {
-				var drained:Bool;
-				{
-					mutex.acquire();
-					defer mutex.release();
-					drained = stdoutDone && stderrDone;
-				}
-				if (drained)
-					break;
-				Sys.sleep(0.001);
-			}
-		var exitCode = process.exitCode();
-		if (timedOut)
-			throw 'Process "$command" timed out after $timeoutSeconds seconds';
-		if (failure != null)
-			throw 'Could not capture output from "$command": $failure';
-		var truncated = false;
-		if (stderrLimit != null && stderr.length > stderrLimit) {
-			stderr = stderr.substr(0, stderrLimit);
-			truncated = true;
-		}
-		return {
-			stdout: stdout,
-			stderr: stderr,
-			stderrTruncated: truncated,
-			exitCode: exitCode
-		};
-	}
-	#end
-
 	#if eval
 	static function captureSequential(command:String, arguments:Array<String>, stderrLimit:Null<Int>):ProcessCaptureResult {
 		var process = new Process(command, arguments),
@@ -218,7 +129,6 @@ class ProcessOutputCapture {
 	}
 	#end
 
-	#if !haxeon
 	static function read(input:haxe.io.Input, limit:Null<Int>):CapturedBytes {
 		var chunk = Bytes.alloc(16 * 1024),
 			captured = new BytesBuffer(),
@@ -261,5 +171,4 @@ class ProcessOutputCapture {
 			process.kill()
 		catch (_:Dynamic) {}
 	}
-	#end
 }
