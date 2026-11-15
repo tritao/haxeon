@@ -59,6 +59,13 @@ typedef FrontendResult = {
 	final frontendPassFunctions:Array<Int>;
 	final frontendPassReports:Array<String>;
 	final frontendDoneAt:Float;
+
+	/** Semantic analysis of the final frontend pass, which `typingLoweringDoneAt - frontendDoneAt` includes. */
+	final analysisMs:Float;
+
+	/** Typed AST to IR generation of the final frontend pass, which `typingLoweringDoneAt - frontendDoneAt` includes. */
+	final irGenerationMs:Float;
+
 	final typingLoweringDoneAt:Float;
 	final irAssemblyDoneAt:Float;
 	final allocationPhases:Array<PhaseAllocation>;
@@ -573,6 +580,7 @@ class FrontendCompilation {
 				}
 			}
 		regenerated = uniqueSorted(regenerated);
+		var irGenerationDoneAt = Sys.time() * 1000.0;
 		context.frontendPassReports.push(passReport(context.frontendPassReports.length
 			+ 1, [
 				stage("graph", frontendGraphDoneAt - passStartedAt, AllocationMeter.delta("graph", allocationAtStart, allocationAfterGraph)),
@@ -581,7 +589,7 @@ class FrontendCompilation {
 				stage("signature-inference", analysisDoneAt - frontendDoneAt,
 					AllocationMeter.delta("analysis", allocationAfterSemantic, allocationAfterAnalysis)),
 				stage("typing", typingDoneAt - analysisDoneAt, AllocationMeter.delta("typing", allocationAfterAnalysis, allocationAfterProgramTyping)),
-				stage("ir-generation", Sys.time() * 1000.0 - typingDoneAt,
+				stage("ir-generation", irGenerationDoneAt - typingDoneAt,
 					AllocationMeter.delta("ir-generation", allocationAfterProgramTyping, AllocationMeter.sample()))
 			], context.parseMs
 			- parseMsAtStart,
@@ -639,6 +647,8 @@ class FrontendCompilation {
 				frontendPassFunctions: context.frontendPassFunctions,
 				frontendPassReports: context.frontendPassReports,
 				frontendDoneAt: frontendDoneAt,
+				analysisMs: analysisDoneAt - frontendDoneAt,
+				irGenerationMs: irGenerationDoneAt - typingDoneAt,
 				typingLoweringDoneAt: typingLoweringDoneAt,
 				irAssemblyDoneAt: typingLoweringDoneAt,
 				allocationPhases: allocationPhases,
@@ -889,6 +899,8 @@ class FrontendCompilation {
 			frontendPassFunctions: context.frontendPassFunctions,
 			frontendPassReports: context.frontendPassReports,
 			frontendDoneAt: frontendDoneAt,
+			analysisMs: analysisDoneAt - frontendDoneAt,
+			irGenerationMs: irGenerationDoneAt - typingDoneAt,
 			typingLoweringDoneAt: typingLoweringDoneAt,
 			irAssemblyDoneAt: irAssemblyDoneAt,
 			allocationPhases: allocationPhases,

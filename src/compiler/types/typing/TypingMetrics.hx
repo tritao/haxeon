@@ -10,8 +10,19 @@ typedef TyperPhaseMetrics = {
 	final signatureTypingMs:Float;
 	final setupMs:Float;
 	final noReturnMs:Float;
+
+	/** Enum, interface and class declarations (fields, signatures, native layouts); no bodies. */
 	final metadataMs:Float;
-	final bodiesMs:Float;
+
+	/** Source class method and initializer bodies. */
+	final classBodiesMs:Float;
+
+	/** Source top-level functions and static abstract methods. */
+	final functionBodiesMs:Float;
+
+	/** Generic owner specializations and generated helpers (equality, flags, codecs, adapters), drained to a fixed point. */
+	final generatedMs:Float;
+
 	final bodyTransitionMs:Float;
 	final assemblyMs:Float;
 	final finalizationMs:Float;

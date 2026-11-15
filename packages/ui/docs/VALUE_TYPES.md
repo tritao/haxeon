@@ -966,9 +966,10 @@ bootstrapped by the pinned Haxe and running on the same checkout-built VM. Each 
 archived `36bc1497` compiler and stdlib: 640 source files, a fresh process per run, affinity `0,2,4,6`.
 The restored enum-metadata edits are outside this frozen workload and are not part of either measured compiler.
 
-The driver's `bodies=` metric is `ProgramTyper.metrics.bodiesMs`, ending immediately before
-`advanceAll(BodyTyped)` and including the helper completion loop. Ordinary class bodies are typed earlier
-in `metadata=`, which is shown too; `bodies=` alone is not total source-body typing time.
+At the time of this measurement the driver's `bodies=` metric ended immediately before
+`advanceAll(BodyTyped)` and included the helper completion loop, while ordinary class bodies were typed
+earlier inside `metadata=`; the table keeps those labels. The driver now reports them separately as
+`metadata=` (declarations only), `class-bodies=`, `function-bodies=` and `generated=` (owners and helpers).
 
 | Pair | Bodies control → candidate ms | Metadata control → candidate ms | Typing/lowering control → candidate ms |
 | --- | ---: | ---: | ---: |

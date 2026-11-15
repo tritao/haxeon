@@ -160,16 +160,20 @@ typedef CompileMetrics = {
 	final semanticInvalidationMs:Float;
 	final semanticAllocatedBytes:Float;
 	final typingLoweringMs:Float;
+	final analysisMs:Float;
 	final declarationMs:Float;
 	final shapeConnectionMs:Float;
 	final signatureTypingMs:Float;
 	final typerSetupMs:Float;
 	final typerNoReturnMs:Float;
 	final typerMetadataMs:Float;
-	final typerBodiesMs:Float;
+	final typerClassBodiesMs:Float;
+	final typerFunctionBodiesMs:Float;
+	final typerGeneratedMs:Float;
 	final bodyTransitionMs:Float;
 	final typerAssemblyMs:Float;
 	final finalizationTransitionMs:Float;
+	final irGenerationMs:Float;
 	final irAssemblyMs:Float;
 	final abiPlanningMs:Float;
 	final backendAssemblyMs:Float;
@@ -859,16 +863,20 @@ class Compiler {
 					semanticInvalidationMs: 0.0,
 					semanticAllocatedBytes: 0.0,
 					typingLoweringMs: 0.0,
+					analysisMs: 0.0,
 					declarationMs: 0.0,
 					shapeConnectionMs: 0.0,
 					signatureTypingMs: 0.0,
 					typerSetupMs: 0.0,
 					typerNoReturnMs: 0.0,
 					typerMetadataMs: 0.0,
-					typerBodiesMs: 0.0,
+					typerClassBodiesMs: 0.0,
+					typerFunctionBodiesMs: 0.0,
+					typerGeneratedMs: 0.0,
 					bodyTransitionMs: 0.0,
 					typerAssemblyMs: 0.0,
 					finalizationTransitionMs: 0.0,
+					irGenerationMs: 0.0,
 					irAssemblyMs: 0.0,
 					abiPlanningMs: 0.0,
 					backendAssemblyMs: 0.0,

@@ -235,14 +235,16 @@ class ProgramTyper {
 						BodyTyper.fail("E1022", 'Native layout types cannot be returned by value in an interface yet', parsedMethod.span);
 				}
 			}
-		if (cachedMetadata == null) {
+		if (cachedMetadata == null)
 			typedClasses = layoutNativeClasses(typedClasses);
-			typedClasses = typeClassBodies(program.classes, typedClasses, selected);
-		} else {
+		else
 			bindCachedNativeLayouts(typedClasses);
-		}
 		var metadataDoneAt = Sys.time() * 1000.0;
 		var allocationAfterMetadata = AllocationMeter.sample();
+		if (cachedMetadata == null)
+			typedClasses = typeClassBodies(program.classes, typedClasses, selected);
+		var classBodiesDoneAt = Sys.time() * 1000.0;
+		var allocationAfterClassBodies = AllocationMeter.sample();
 		for (fn in program.functions)
 			if (fn.isExtern != true && !BodyTyper.isGeneric(fn) && (selected == null || selected.exists(fn.name)))
 				typedFunctions.push(bodyTyper.typeFunction(fn));
@@ -259,6 +261,8 @@ class ProgramTyper {
 					&& (selected == null || selected.exists(name)))
 					typedFunctions.push(bodyTyper.typeFunction(BodyTyper.requiredMapValue(session.signatures, name), abstractDecl.name, true));
 			}
+		var functionBodiesDoneAt = Sys.time() * 1000.0;
+		var allocationAfterFunctionBodies = AllocationMeter.sample();
 		// Field and signature types can request owners without a construction expression. A
 		// generated owner's fields and methods can request further owners, so drain to a fixed point.
 		assembler.registerProgramTypes(typedFunctions, typedClasses, typedInterfaces, typedEnums, typedNatives);
@@ -412,8 +416,8 @@ class ProgramTyper {
 		keepAnonymousUnits(cachedMetadata != null ? cachedMetadata : retained != null ? retained.program : null, program.classes);
 		assembler.registerProgramTypes(typedFunctions, typedClasses, typedInterfaces, typedEnums, typedNatives);
 		var nativeTypeDescriptors = bodyTyper.expressionTyper.nativeTypeDescriptors();
-		var bodiesDoneAt = Sys.time() * 1000.0;
-		var allocationAfterBodies = AllocationMeter.sample();
+		var generatedDoneAt = Sys.time() * 1000.0;
+		var allocationAfterGenerated = AllocationMeter.sample();
 		semantic.lifecycle.advanceAll(BodyTyped);
 		var bodyTransitionDoneAt = Sys.time() * 1000.0;
 		var result:TypedProgram = assembler.assemble(typedEnums, typedInterfaces, typedClasses, typedFunctions, typedNatives, nativeTypeDescriptors);
@@ -436,8 +440,10 @@ class ProgramTyper {
 					AllocationMeter.delta("typer-setup", allocationAtStart, allocationAfterSetup),
 					AllocationMeter.delta("typer-no-return", allocationAfterSetup, allocationAfterNoReturn),
 					AllocationMeter.delta("typer-metadata", allocationAfterNoReturn, allocationAfterMetadata),
-					AllocationMeter.delta("typer-bodies", allocationAfterMetadata, allocationAfterBodies),
-					AllocationMeter.delta("typer-assembly", allocationAfterBodies, allocationAfterAssembly),
+					AllocationMeter.delta("typer-class-bodies", allocationAfterMetadata, allocationAfterClassBodies),
+					AllocationMeter.delta("typer-function-bodies", allocationAfterClassBodies, allocationAfterFunctionBodies),
+					AllocationMeter.delta("typer-generated", allocationAfterFunctionBodies, allocationAfterGenerated),
+					AllocationMeter.delta("typer-assembly", allocationAfterGenerated, allocationAfterAssembly),
 					AllocationMeter.delta("typer-finalize", allocationAfterAssembly, allocationAfterFinalize)
 				],
 				declarationMs: semantic.lifecycleMetrics.declarationMs,
@@ -446,8 +452,10 @@ class ProgramTyper {
 				setupMs: setupDoneAt - startedAt,
 				noReturnMs: noReturnDoneAt - setupDoneAt,
 				metadataMs: metadataDoneAt - noReturnDoneAt,
-				bodiesMs: bodiesDoneAt - metadataDoneAt,
-				bodyTransitionMs: bodyTransitionDoneAt - bodiesDoneAt,
+				classBodiesMs: classBodiesDoneAt - metadataDoneAt,
+				functionBodiesMs: functionBodiesDoneAt - classBodiesDoneAt,
+				generatedMs: generatedDoneAt - functionBodiesDoneAt,
+				bodyTransitionMs: bodyTransitionDoneAt - generatedDoneAt,
 				assemblyMs: assemblyDoneAt - bodyTransitionDoneAt,
 				finalizationMs: finalizationDoneAt - assemblyDoneAt
 			}
