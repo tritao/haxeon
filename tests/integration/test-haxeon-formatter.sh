@@ -12,8 +12,9 @@ cd "$project_dir"
 
 source='function main():Int { var value=compute(firstArgument,secondArgument,thirdArgument); return value; }'
 formatted=$(printf '%s\n' "$source" | "$cli" fmt --stdin)
-[[ "$formatted" == *$'compute(\n'* ]]
-[[ "$formatted" == *$'    firstArgument,'* ]]
+# An over-long argument list is filled: wrapped as late as it fits, one continuation level in.
+[[ "$formatted" == *$'compute(firstArgument,\n'* ]]
+[[ "$formatted" == *$'    secondArgument, thirdArgument);'* ]]
 
 printf '%s\n' "$formatted" | "$cli" fmt --stdin --check
 

@@ -1,8 +1,10 @@
 package compiler.formatter;
 
+import compiler.formatter.Boundary.BreakLayout;
 import compiler.formatter.FormatConfig.FormatConfigTools;
 import compiler.formatter.FormatDoc.FormatDocTools;
 import compiler.formatter.FormatToken.FormatTokenTools;
+import compiler.formatter.UnwrappedLine.UnwrappedLineTools;
 import compiler.syntax.Token.TokenKind;
 
 typedef LayoutLine = {
@@ -43,7 +45,7 @@ class LayoutSolver {
 			var width = 0;
 			for (index in start...end + 1) {
 				var token = line.tokens[index];
-				if (line.trailingComments != null && line.trailingComments.exists(token.start))
+				if (UnwrappedLineTools.isTrailingComment(line, token))
 					continue;
 				if (index > start)
 					width += boundaries[index - 1].spaces;
@@ -52,8 +54,9 @@ class LayoutSolver {
 			return width;
 		}
 
-		function solveFrom(start:Int, indent:Int):LayoutPath {
-			var key = start + ":" + indent;
+		// `indent` is the current physical line's, `base` the indent of the element it belongs to (see BreakLayout).
+		function solveFrom(start:Int, indent:Int, base:Int):LayoutPath {
+			var key = start + ":" + indent + ":" + base;
 			if (memo.exists(key))
 				return memo.get(key);
 			var best:Null<LayoutPath> = null;
@@ -69,7 +72,8 @@ class LayoutSolver {
 				}
 				var boundary = boundaries[end];
 				if (boundary.mustBreak || boundary.canBreak) {
-					var next = solveFrom(end + 1, continuationIndent(line, end, indent, boundary, config)),
+					var placed = place(boundary.layout, indent, base, line, config),
+						next = solveFrom(end + 1, placed.indent, placed.base),
 						combined:Array<LayoutLine> = [{start: start, end: end, indent: indent}];
 					combined = combined.concat(next.lines);
 					var candidate:LayoutPath = {
@@ -87,27 +91,28 @@ class LayoutSolver {
 			return best;
 		}
 
-		var result = solveFrom(0, line.indent);
+		var result = solveFrom(0, line.indent, line.indent);
 		return {lines: result.lines, cost: result.cost};
 	}
 
+	/** The cheaper layout; on a tie the one found later, which breaks later, so a wrapped list fills its first line. */
 	static function choose(current:Null<LayoutPath>, candidate:LayoutPath):LayoutPath {
-		if (current == null || candidate.cost < current.cost)
+		if (current == null || candidate.cost <= current.cost)
 			return candidate;
 		return current;
 	}
 
-	static function continuationIndent(line:UnwrappedLine, boundaryIndex:Int, currentIndent:Int, boundary:Boundary, config:FormatConfig):Int {
-		var nextKind = FormatTokenTools.syntaxKind(line.tokens[boundaryIndex + 1]),
-			leftKind = FormatTokenTools.syntaxKind(line.tokens[boundaryIndex]);
-		if (nextKind == TokenKind.RightParen || nextKind == TokenKind.RightBracket || nextKind == TokenKind.RightBrace)
-			return currentIndent > line.indent ? currentIndent - 1 : boundary.continuationIndent;
-		if (boundary.mustBreak
-			&& (leftKind == TokenKind.LeftParen || leftKind == TokenKind.LeftBracket || leftKind == TokenKind.LeftBrace || leftKind == TokenKind.Less)
-			&& currentIndent > line.indent)
-			return currentIndent + FormatConfigTools.continuationLevels(config);
-		if (boundary.mustBreak && leftKind == TokenKind.Comma && currentIndent > line.indent)
-			return currentIndent;
-		return boundary.continuationIndent;
+	/** The indent of the line after a break, and of the element it starts. */
+	static function place(layout:BreakLayout, indent:Int, base:Int, line:UnwrappedLine, config:FormatConfig):{indent:Int, base:Int} {
+		var levels = FormatConfigTools.continuationLevels(config);
+		return switch layout {
+			case Wrap(count): {indent: base + count * levels, base: base};
+			case Open: {indent: indent + levels, base: indent + levels};
+			case Separator: {indent: base, base: base};
+			case Close:
+				var closing = Std.int(Math.max(line.indent, base - levels));
+				{indent: closing, base: closing};
+			case At(fixed): {indent: fixed, base: fixed};
+		};
 	}
 }

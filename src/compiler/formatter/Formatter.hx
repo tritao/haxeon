@@ -41,7 +41,7 @@ class Formatter {
 				comments = CommentAttachmentTools.attach(tokens),
 				syntax = SyntaxAnnotator.annotate(tokens),
 				units = UnwrappedLineBuilder.build(tokens, syntax, comments),
-				rendered = [for (unit in units) renderUnit(unit, syntax, config)],
+				rendered = renderUnits(units, tokens, syntax, config),
 				newline = source.indexOf("\r\n") >= 0 ? "\r\n" : "\n";
 			if (rangeStart == null || rangeEnd == null || rangeStart <= 0 && rangeEnd >= source.length)
 				result = joinRendered(rendered, newline, StringTools.endsWith(source, "\n"));
@@ -77,15 +77,94 @@ class Formatter {
 			throw "unbalanced brackets";
 	}
 
-	static function renderUnit(unit:UnwrappedLine, syntax:SyntaxInfo, config:FormatConfig):RenderedUnit {
-		var boundaries = BreakAnalyzer.analyze(unit, syntax, config),
-			layout = LayoutSolver.solve(unit, boundaries, config);
-		return {
-			sourceStart: unit.sourceStart,
-			sourceEnd: unit.sourceEnd,
-			blankBefore: unit.blankBefore,
-			lines: Renderer.render(unit, layout, boundaries, config)
-		};
+	/**
+	 * Lays out every logical line in order. A block that opens at the end of a wrapped line (`value = if (c) {` on a continuation
+	 * line, a callback passed as a later argument) indents its body from that physical line, not from its statement: the logical lines
+	 * of the block inherit how far past its statement the opening line went, and its `}` lines up with that line. The line builder
+	 * cannot know this; only the layout of the opening line does.
+	 */
+	static function renderUnits(units:Array<UnwrappedLine>, tokens:Array<FormatToken>, syntax:SyntaxInfo, config:FormatConfig):Array<RenderedUnit> {
+		var indexAt = new Map<Int, Int>();
+		for (index in 0...tokens.length)
+			indexAt.set(tokens[index].start, index);
+		// Open blocks whose opening line went past its statement: the start offset of each one's `}` and the extra levels inside it.
+		var blocks:Array<{close:Int, extra:Int}> = [], rendered:Array<RenderedUnit> = [];
+		for (unit in units) {
+			var extra = blocks.length == 0 ? 0 : blocks[blocks.length - 1].extra,
+				line:UnwrappedLine = extra == 0 ? unit : {
+					tokens: unit.tokens,
+					indent: unit.indent + extra,
+					blankBefore: unit.blankBefore,
+					sourceStart: unit.sourceStart,
+					sourceEnd: unit.sourceEnd,
+					trailingComments: unit.trailingComments,
+					newlineBefore: unit.newlineBefore
+				},
+				boundaries = BreakAnalyzer.analyze(line, syntax, config),
+				layout = LayoutSolver.solve(line, boundaries, config);
+			rendered.push({
+				sourceStart: unit.sourceStart,
+				sourceEnd: unit.sourceEnd,
+				blankBefore: unit.blankBefore,
+				lines: Renderer.render(line, layout, boundaries, config)
+			});
+			// A `}` that begins this line closes its block; the line itself still lined up with the block's opener.
+			var first = firstSyntax(unit);
+			if (first != null && blocks.length > 0 && first.start == blocks[blocks.length - 1].close)
+				blocks.pop();
+			// A block left open at the end of this line indents its body from the line's last physical line.
+			var last = lastSyntax(unit);
+			if (last != null && FormatTokenTools.syntaxKind(last) == TokenKind.LeftBrace
+				&& syntax.blockOpens.exists(last.start) && syntax.blockOpens.get(last.start) && layout.lines.length > 0) {
+				// A statement's own block (a function or control body) stays one level past the statement however its header wraps; a
+				// block inside an expression lives where the expression's line is.
+				if (!insideExpression(unit))
+					continue;
+				var open = indexAt.get(last.start), close = open == null ? null : syntax.matching.get(open),
+					beyond = layout.lines[layout.lines.length - 1].indent - unit.indent;
+				if (close != null && beyond > 0)
+					blocks.push({close: tokens[close].start, extra: beyond});
+				else if (close != null && extra > 0)
+					// The block still sits inside an indented one: its lines keep that block's extra levels until it closes.
+					blocks.push({close: tokens[close].start, extra: extra});
+			}
+		}
+		return rendered;
+	}
+
+	/**
+	 * Whether the `{` ending `unit` opens a block inside an expression: inside an unclosed bracket (a callback argument), or after
+	 * `=`, `return`, `throw` or `->` at the line's top level (`value = if (c) {`, `x -> {`). Otherwise it is its statement's own.
+	 */
+	static function insideExpression(unit:UnwrappedLine):Bool {
+		var depth = 0, expression = false, last = unit.tokens.length - 1;
+		while (last >= 0 && !FormatTokenTools.isSyntax(unit.tokens[last]))
+			last--;
+		for (index in 0...last)
+			switch FormatTokenTools.syntaxKind(unit.tokens[index]) {
+				case TokenKind.LeftParen, TokenKind.LeftBracket, TokenKind.LeftBrace:
+					depth++;
+				case TokenKind.RightParen, TokenKind.RightBracket, TokenKind.RightBrace:
+					depth--;
+				case TokenKind.Assign, TokenKind.Return, TokenKind.Throw, TokenKind.Arrow if (depth == 0):
+					expression = true;
+				default:
+			}
+		return depth > 0 || expression;
+	}
+
+	static function firstSyntax(unit:UnwrappedLine):Null<FormatToken> {
+		for (token in unit.tokens)
+			if (FormatTokenTools.isSyntax(token))
+				return token;
+		return null;
+	}
+
+	static function lastSyntax(unit:UnwrappedLine):Null<FormatToken> {
+		var index = unit.tokens.length - 1;
+		while (index >= 0 && !FormatTokenTools.isSyntax(unit.tokens[index]))
+			index--;
+		return index >= 0 ? unit.tokens[index] : null;
 	}
 
 	static function joinRendered(units:Array<RenderedUnit>, newline:String, trailingNewline:Bool):String {

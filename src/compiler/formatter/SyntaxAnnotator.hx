@@ -220,6 +220,11 @@ class SyntaxAnnotator {
 		if (previous == null || previous == TokenKind.RightParen || previous == TokenKind.Else || previous == TokenKind.Try || previous == TokenKind.Catch
 			|| previous == TokenKind.Final)
 			return true;
+		// `case A: {` opens the arm's block and `x -> {` a lambda's body, unless the brace starts an object literal (`case A: {x: 1}`,
+		// `x -> {y: x}`), as Haxe decides it.
+		if ((previous == TokenKind.Colon && endsCaseHeader(tokens, syntaxIndexes, position - 1) || previous == TokenKind.Arrow)
+			&& !startsObjectLiteral(tokens, syntaxIndexes, position))
+			return true;
 		return switch previous {
 			case TokenKind.Assign, TokenKind.Colon, TokenKind.Comma, TokenKind.LeftParen, TokenKind.LeftBracket, TokenKind.Arrow, TokenKind.Return,
 				TokenKind.Less: false;
@@ -244,6 +249,40 @@ class SyntaxAnnotator {
 			|| previous == TokenKind.Dot)
 			return FormatNodeKind.ArgumentList;
 		return FormatNodeKind.Parenthesized;
+	}
+
+	/** Whether the `:` at syntax position `colon` ends a `case ...:` or `default:` header. */
+	static function endsCaseHeader(tokens:Array<FormatToken>, syntaxIndexes:Array<Int>, colon:Int):Bool {
+		var depth = 0, position = colon - 1;
+		while (position >= 0) {
+			switch FormatTokenTools.syntaxKind(tokens[syntaxIndexes[position]]) {
+				case TokenKind.RightParen | TokenKind.RightBracket | TokenKind.RightBrace:
+					depth++;
+				case TokenKind.LeftParen | TokenKind.LeftBracket | TokenKind.LeftBrace:
+					if (depth == 0)
+						return false;
+					depth--;
+				case TokenKind.Case | TokenKind.Default if (depth == 0):
+					return true;
+				case TokenKind.Semicolon | TokenKind.Colon if (depth == 0):
+					return false;
+				default:
+			}
+			position--;
+		}
+		return false;
+	}
+
+	/** Whether the `{` at syntax position `open` starts an object literal: `{}`, `{name:` or `{"name":`. */
+	static function startsObjectLiteral(tokens:Array<FormatToken>, syntaxIndexes:Array<Int>, open:Int):Bool {
+		if (open + 1 >= syntaxIndexes.length)
+			return false;
+		var first = FormatTokenTools.syntaxKind(tokens[syntaxIndexes[open + 1]]);
+		if (first == TokenKind.RightBrace)
+			return false;
+		return (first == TokenKind.Identifier || first == TokenKind.StringLiteral)
+			&& open + 2 < syntaxIndexes.length
+			&& FormatTokenTools.syntaxKind(tokens[syntaxIndexes[open + 2]]) == TokenKind.Colon;
 	}
 
 	static function previousKind(tokens:Array<FormatToken>, syntaxIndexes:Array<Int>, position:Int):Null<TokenKind> {

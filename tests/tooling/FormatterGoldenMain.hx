@@ -1,5 +1,6 @@
 import compiler.formatter.FormatConfig.FormatConfigTools;
 import compiler.formatter.Formatter;
+import compiler.formatter.ProjectFormat;
 import haxe.io.Path;
 import sys.FileSystem;
 import sys.io.File;
@@ -13,6 +14,15 @@ class FormatterGoldenMain {
 				continue;
 			var inputPath = Path.join([directoryPath, "input.txt"]),
 				expectedPath = Path.join([directoryPath, "expected.txt"]);
+			// A `stable.hx` case is already formatted in the default style (tabs, 120 columns): formatting it must change nothing.
+			var stablePath = Path.join([directoryPath, "stable.hx"]);
+			if (FileSystem.exists(stablePath)) {
+				var source = File.getContent(stablePath), formatted = Formatter.format(source, ProjectFormat.standard());
+				if (formatted != source)
+					throw 'Stable formatter case "$directory" changed:\n$formatted';
+				count++;
+				continue;
+			}
 			if (!FileSystem.exists(inputPath) || !FileSystem.exists(expectedPath))
 				throw 'Golden formatter case "$directory" needs input.txt and expected.txt';
 			var config = FormatConfigTools.make(2, true);

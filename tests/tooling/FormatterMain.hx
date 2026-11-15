@@ -105,7 +105,8 @@ class FormatterMain {
 	static function assertTrailingComments():Void {
 		var cases = [
 			"class A {\n\tfunction f() {\n\t\tvar first = 1, // a comment long enough to push this line well beyond the column limit of the formatter, surely\n\t\t\tsecond = 2;\n\t}\n}\n",
-			"class A {\n\tfunction f() {\n\t\tfoo(a, // x\n\t\t\tb);\n\t}\n}\n",
+			// A comment inside an argument list puts each argument on its own line, rather than leaving the list half-flat.
+			"class A {\n\tfunction f() {\n\t\tfoo(\n\t\t\ta, // x\n\t\t\tb\n\t\t);\n\t}\n}\n",
 			"class A {\n\tfunction f() {\n\t\tvar x = 1; // after a statement\n\t\ty();\n\t}\n}\n"
 		];
 		for (source in cases) {
@@ -130,8 +131,26 @@ class FormatterMain {
 			throw "An open @formatter:off range did not keep the rest of the file";
 	}
 
+	/**
+	 * Layout rules that match how this code is written: bodies on their own line, `{}` kept, types read whole, filled argument lists,
+	 * and the author's one-per-line literals and declarations kept. Each case is already formatted, so formatting changes nothing.
+	 */
+	static function assertHouseLayout():Void {
+		var config = FormatConfigTools.make(4, false);
+		for (source in [
+			"class A {\n\tfunction f() {\n\t\tif (a)\n\t\t\tx();\n\t\telse if (b)\n\t\t\ty();\n\t\telse\n\t\t\tz();\n\t\tfor (i in 0...3)\n\t\t\tfor (j in 0...3) {\n\t\t\t\tk(i, j);\n\t\t\t}\n\t\tvar v = if (a) 1 else 2;\n\t\tdo {\n\t\t\tx();\n\t\t} while (c);\n\t}\n}\n",
+			"class A {\n\tpublic function new() {}\n\n\tfunction f() {\n\t\tif (a) {}\n\t\tswitch x {}\n\t\ttry {} catch (e:Dynamic) {}\n\t}\n}\n",
+			"class A {\n\tfunction f() {\n\t\tvar a = 1, b = 2;\n\t\tvar objects:Map<String, Int> = [],\n\t\t\tsubclasses:Map<String, Array<String>> = [];\n\t\tvar values = [\n\t\t\tfirst,\n\t\t\tsecond\n\t\t];\n\t\tvar flat = {x: 1, y: 2};\n\t\tvar order = [for (_ in 0...count) -1];\n\t\tvar t = a ? b : c, typed:Array<Int> = [];\n\t}\n}\n"
+		]) {
+			var formatted = Formatter.format(source, config);
+			if (formatted != source)
+				throw 'Formatting changed already formatted code:\n$source\nbecame\n$formatted';
+		}
+	}
+
 	static function main():Void {
 		assertTokenPreservation();
+		assertHouseLayout();
 		assertOpenFormatterOff();
 		assertTrailingComments();
 		assertBeyondParser();
@@ -242,9 +261,10 @@ class FormatterMain {
 		config.lineWidth = 60;
 		var wrappedSource = "function build(name:String,arguments:Array<String>,configuration:Configuration):BuildResult { return computeSomething(firstValue,transform(secondValue),thirdValue); }\n",
 			wrapped = Formatter.format(wrappedSource, config),
-			expectedWrapped = "function build(\n  name:String,\n  arguments:Array<String>,\n  configuration:Configuration\n):BuildResult {\n  return computeSomething(\n    firstValue,\n    transform(secondValue),\n    thirdValue\n  );\n}\n";
+			// An over-long list is filled, wrapping as late as it fits: calls continue one level deeper, parameters two.
+			expectedWrapped = "function build(name:String, arguments:Array<String>,\n    configuration:Configuration):BuildResult {\n  return computeSomething(firstValue,\n    transform(secondValue), thirdValue);\n}\n";
 		if (wrapped != expectedWrapped || Formatter.format(wrapped, config) != expectedWrapped)
-			throw "width-aware formatter did not choose a stable expanded layout";
+			throw "width-aware formatter did not choose a stable filled layout";
 		for (line in wrapped.split("\n"))
 			if (line.length > config.lineWidth)
 				throw "breakable formatted output exceeded the configured line width";
@@ -252,9 +272,7 @@ class FormatterMain {
 		wideContinuation.lineWidth = 40;
 		wideContinuation.continuationIndentWidth = 4;
 		var wideContinuationOutput = Formatter.format("function main():Int { return compute(firstValue,secondValue,thirdValue); }\n", wideContinuation);
-		if (wideContinuationOutput == null
-			|| wideContinuationOutput.indexOf("\n      firstValue,") < 0
-			|| wideContinuationOutput.indexOf("\n    );") < 0)
+		if (wideContinuationOutput != "function main():Int {\n  return compute(firstValue,\n      secondValue, thirdValue);\n}\n")
 			throw "continuation indentation width was not applied independently";
 		var tabbed = Formatter.format("function main():Int { return 0; }\n", FormatConfigTools.make(2, false));
 		if (tabbed == null || tabbed.indexOf("\n\treturn 0;") < 0)
@@ -262,23 +280,25 @@ class FormatterMain {
 		var genericConfig = FormatConfigTools.make(2, true);
 		genericConfig.lineWidth = 40;
 		var generic = Formatter.format("function main():Int { var value:Map<FirstArgument,SecondArgument> = []; return 0; }\n", genericConfig),
-			expectedGeneric = "function main():Int {\n  var value:Map<\n    FirstArgument,\n    SecondArgument\n  > = [];\n  return 0;\n}\n";
+			// A type is read whole: the line breaks outside `Map<...>`, even when the type alone is wider than the line.
+			expectedGeneric = "function main():Int {\n  var value:Map<FirstArgument, SecondArgument>\n    = [];\n  return 0;\n}\n";
 		if (generic != expectedGeneric)
-			throw "generic argument list did not use a break opportunity";
+			throw "a type argument list was broken";
 
 		var switchSource = "function main():Int { switch value { case First: return firstValue; case Second: return secondValue; default: return 0; } return 0; }\n",
 			switchFormatted = Formatter.format(switchSource, config),
-			expectedSwitch = "function main():Int {\n  switch value {\n    case First:\n      return firstValue;\n    case Second:\n      return secondValue;\n    default:\n      return 0;\n  }\n  return 0;\n}\n";
+			// Arms written on their case's line stay there.
+			expectedSwitch = "function main():Int {\n  switch value {\n    case First: return firstValue;\n    case Second: return secondValue;\n    default: return 0;\n  }\n  return 0;\n}\n";
 		if (switchFormatted != expectedSwitch || Formatter.format(switchFormatted, config) != expectedSwitch)
 			throw "switch cases did not receive stable structural indentation";
 		var emptySwitch = Formatter.format("function main():Int { switch value {} return 0; }\n", config),
-			expectedEmptySwitch = "function main():Int {\n  switch value {\n  }\n  return 0;\n}\n";
+			expectedEmptySwitch = "function main():Int {\n  switch value {}\n  return 0;\n}\n";
 		if (emptySwitch != expectedEmptySwitch)
-			throw "empty switch blocks did not close at the switch indentation";
+			throw "an empty switch block did not stay {}";
 
 		var expressionSource = "function main():Int { var result=firstCondition?firstValue:secondValue; return firstObject.secondObject.thirdObject.compute(firstArgument,secondArgument); }\n",
 			expressionConfig = FormatConfigTools.make(2, true),
-			expectedExpression = "function main():Int {\n  var result = firstCondition\n    ? firstValue : secondValue;\n  return firstObject\n    .secondObject.thirdObject.compute(\n      firstArgument,\n      secondArgument\n    );\n}\n";
+			expectedExpression = "function main():Int {\n  var result = firstCondition\n    ? firstValue : secondValue;\n  return firstObject.secondObject.thirdObject\n    .compute(firstArgument, secondArgument);\n}\n";
 		expressionConfig.lineWidth = 50;
 		var expressionFormatted = Formatter.format(expressionSource, expressionConfig);
 		if (expressionFormatted != expectedExpression || Formatter.format(expressionFormatted, expressionConfig) != expectedExpression)
@@ -302,7 +322,7 @@ class FormatterMain {
 			callRangeStart = callRangeSource.indexOf("secondArgument"),
 			callRangeEnd = callRangeStart + "secondArgument".length,
 			callRangeFormatted = Formatter.format(callRangeSource, rangeConfig, callRangeStart, callRangeEnd),
-			expectedCallRange = "function main():Int {\n  var result = compute(\n    firstArgument,\n    secondArgument,\n    thirdArgument\n  );\nreturn result;\n}\n";
+			expectedCallRange = "function main():Int {\n  var result = compute(firstArgument,\n    secondArgument, thirdArgument);\nreturn result;\n}\n";
 		if (callRangeFormatted != expectedCallRange)
 			throw "range formatting did not expand a partial call to its safe logical unit";
 
