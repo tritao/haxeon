@@ -161,6 +161,8 @@ class BindingWalker implements AstChildVisitor {
 
 	function statement(value:AstStatement):Void {
 		switch value {
+			case PrivateAccessStatement(inner, _):
+				statement(inner);
 			case VarDeclaration(name, type, initializer, span):
 				switch initializer {
 					case Lambda(_, _, _, _):

@@ -103,6 +103,7 @@ class TestCatalog {
 		"FinalFieldMain",
 		"ModuleVariablesMain",
 		"SignatureMetadataMain",
+		"ReadOnlyPropertyMain",
 		"FinalLocalMain",
 		"GenericStructuralMain",
 		"ValueEqualityIncrementalMain",

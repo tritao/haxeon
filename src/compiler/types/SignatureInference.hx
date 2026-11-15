@@ -200,7 +200,7 @@ class SignatureInference {
 			methods:Map<String, AstFunction>,
 			constraints:Map<String, Map<String, AstType>>):Void
 		for (statement in statements)
-			switch statement {
+			switch compiler.syntax.AstPredicates.unannotatedStatement(statement) {
 				case VarDeclaration(name, type, initializer, _):
 					var valueType = type == null ? inferSimpleExpression(initializer, environment) : type;
 					if (valueType != null)
@@ -235,7 +235,7 @@ class SignatureInference {
 	function collectExpressionCallConstraint(expression:AstExpression, environment:InferenceEnvironment,
 			methods:Map<String, AstFunction>,
 			constraints:Map<String, Map<String, AstType>>):Void
-		switch expression {
+		switch compiler.syntax.AstPredicates.unannotatedExpression(expression) {
 			case Call(name, arguments, _), MethodCall(_, name, arguments, _):
 				var methodName = localMethodName(name);
 				if (methods.exists(methodName)) {
@@ -267,7 +267,7 @@ class SignatureInference {
 		}
 
 	function inferSimpleExpression(expression:AstExpression, environment:InferenceEnvironment):Null<AstType>
-		return switch expression {
+		return switch compiler.syntax.AstPredicates.unannotatedExpression(expression) {
 			case Variable(name, _): environment.get(name);
 			case IntegerLiteral(_, _): IntType;
 			case FloatLiteral(_, _): FloatType;
@@ -288,9 +288,9 @@ class SignatureInference {
 			classes:Map<String, AstClass>):AstFunction {
 		var inferred:Map<String, AstType> = [];
 		for (statement in fn.statements)
-			switch statement {
+			switch compiler.syntax.AstPredicates.unannotatedStatement(statement) {
 				case Assignment(path, value, _):
-					switch value {
+					switch compiler.syntax.AstPredicates.unannotatedExpression(value) {
 						case Variable(argumentName, _): inferAssignmentBoundArgument(path, argumentName, owner, classes,
 							inferred);
 						default:
@@ -318,7 +318,7 @@ class SignatureInference {
 
 	function inferExpressionBoundArguments(expression:AstExpression, owner:AstClass, methods:Map<String, AstFunction>,
 			constructors:Map<String, AstFunction>, classes:Map<String, AstClass>, inferred:Map<String, AstType>):Void
-		switch expression {
+		switch compiler.syntax.AstPredicates.unannotatedExpression(expression) {
 			case Call(name, arguments, _):
 				inferArgumentsFromCallable(methods, localMethodName(name), arguments, inferred);
 				if (StringTools.endsWith(name, ".push") && arguments.length == 1) {
@@ -422,7 +422,7 @@ class SignatureInference {
 			methods:Null<Map<String, AstFunction>>, output:Array<AstType>):Bool {
 		var found = false;
 		for (statement in statements)
-			switch statement {
+			switch compiler.syntax.AstPredicates.unannotatedStatement(statement) {
 				case Return(expression, _):
 					found = true;
 					var candidate = inferExpression(expression, environment, enums, methods);
@@ -448,7 +448,7 @@ class SignatureInference {
 
 	function inferExpression(expression:AstExpression, environment:InferenceEnvironment, enums:Map<String, AstEnum>,
 			?methods:Map<String, AstFunction>):Null<AstType>
-		return switch expression {
+		return switch compiler.syntax.AstPredicates.unannotatedExpression(expression) {
 			case IntegerLiteral(_, _): IntType;
 			case FloatLiteral(_, _): FloatType;
 			case StringLiteral(_, _): StringType;
@@ -645,7 +645,7 @@ class SignatureInference {
 		fn = inferDefaultBoundArguments(fn);
 		var inferred:Map<String, AstType> = [];
 		for (statement in fn.statements)
-			switch statement {
+			switch compiler.syntax.AstPredicates.unannotatedStatement(statement) {
 				case FieldAssignment(object, fieldName, value, _):
 					switch object {
 						case Variable(objectName, _) if (objectName == "this"):
@@ -662,7 +662,7 @@ class SignatureInference {
 
 	function constrainExpressionFromField(inferred:Map<String, AstType>, expression:AstExpression, fieldName:String,
 			classDecl:AstClass):Void
-		switch expression {
+		switch compiler.syntax.AstPredicates.unannotatedExpression(expression) {
 			case Variable(argumentName, _):
 				constrainFromField(inferred, argumentName, fieldName, classDecl);
 			case Conditional(_, whenTrue, whenFalse, _):

@@ -539,9 +539,13 @@ class TypingSession {
 
 	public function enterBody(name:String, ?typeSubstitutions:Map<String, CompilerType>, ?ownerOverride:String,
 			?sourceFunctionName:String):TypingContext {
-		var owner = ownerOverride != null ? ownerOverride : compiler.semantic.LambdaName.is(name)
-			? currentContext.lexicalOwner : parentPath(name),
-			body = new TypingContext(name, typeSubstitutions, owner, sourceFunctionName);
+		var isLambda = compiler.semantic.LambdaName.is(name),
+			owner = ownerOverride != null ? ownerOverride : isLambda ? currentContext.lexicalOwner : parentPath(name),
+			source = sourceFunctionName != null ? sourceFunctionName : isLambda
+				? currentContext.sourceFunctionName : null,
+			body = new TypingContext(name, typeSubstitutions, owner, source);
+		if (isLambda)
+			body.privateAccessDepth = currentContext.privateAccessDepth;
 		if (bodyContexts.length == 1)
 			typedUnits.set(name, true);
 		bodyContexts.push(body);

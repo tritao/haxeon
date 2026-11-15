@@ -17,6 +17,7 @@ class AstScan {
 			if (expressionMatches(expression, test))
 				return true;
 		return switch statement {
+			case PrivateAccessStatement(inner, _): statementMatches(inner, test);
 			case If(_, yes, no, _): anyExpression(yes, test) || anyExpression(no, test);
 			case While(_, body, _), DoWhile(body, _, _), ForIn(_, _, _, body, _): anyExpression(body, test);
 			case Defer(body, _): anyExpression(body, test);
@@ -118,6 +119,9 @@ class AstScan {
 			if (isJump(statement))
 				return true;
 			switch statement {
+				case PrivateAccessStatement(inner, _):
+					if (jumpsOut([inner], isJump))
+						return true;
 				case If(_, yes, no, _):
 					if (jumpsOut(yes, isJump) || jumpsOut(no, isJump))
 						return true;

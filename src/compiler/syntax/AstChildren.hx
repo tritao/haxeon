@@ -12,6 +12,8 @@ class AstChildren {
 	/** Hands each of `expressions(expression)` to `visitor`, in the same order, without building the array. */
 	public static function visit(expression:AstExpression, visitor:AstChildVisitor):Void
 		switch expression {
+			case PrivateAccessExpression(inner, _):
+				visitor.visitChild(inner);
 			case IntegerLiteral(_, _), FloatLiteral(_, _), StringLiteral(_, _), BoolLiteral(_, _), NullLiteral(_),
 				Unreachable(_), EmptyExpression(_),
 				ErrorExpression(_), Variable(_, _), NativeLayoutQuery(_, _, _, _), KeyPathLiteral(_, _, _),
@@ -73,6 +75,8 @@ class AstChildren {
 	/** Hands each of `statementExpressions(statement)` to `visitor`, in the same order, without building the array. */
 	public static function visitStatement(statement:AstStatement, visitor:AstChildVisitor):Void
 		switch statement {
+			case PrivateAccessStatement(inner, _):
+				visitStatement(inner, visitor);
 			case VarDeclaration(_, _, value, _), ScopedDeclaration(_, _, value, _), Assignment(_, value, _),
 				Return(value, _), Throw(value, _), Expression(value, _), If(value, _, _, _),
 				While(value, _, _), DoWhile(_, value, _), ForIn(_, _, value, _, _):
@@ -97,6 +101,7 @@ class AstChildren {
 
 	public static function expressions(expression:AstExpression):Array<AstExpression>
 		return switch expression {
+			case PrivateAccessExpression(inner, _): [inner];
 			case IntegerLiteral(_, _), FloatLiteral(_, _), StringLiteral(_, _), BoolLiteral(_, _), NullLiteral(_),
 				Unreachable(_), EmptyExpression(_),
 				ErrorExpression(_), Variable(_, _), NativeLayoutQuery(_, _, _, _), KeyPathLiteral(_, _, _),
@@ -141,6 +146,7 @@ class AstChildren {
 
 	public static function statementExpressions(statement:AstStatement):Array<AstExpression>
 		return switch statement {
+			case PrivateAccessStatement(inner, _): statementExpressions(inner);
 			case VarDeclaration(_, _, value, _), ScopedDeclaration(_, _, value, _), Assignment(_, value, _),
 				Return(value, _), Throw(value, _), Expression(value, _), If(value, _, _, _),
 				While(value, _, _), DoWhile(_, value, _), ForIn(_, _, value, _, _): [value];

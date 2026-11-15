@@ -28,6 +28,7 @@ class AbstractConstructorNormalizer {
 
 	static function rewriteStatement(statement:AstStatement, resultName:String):AstStatement
 		return switch statement {
+			case PrivateAccessStatement(inner, span): PrivateAccessStatement(rewriteStatement(inner, resultName), span);
 			case Assignment("this", expression, span): Assignment(resultName, expression, span);
 			case Return(_, span): throw new CompileError(new Diagnostic("E1003",
 				"Abstract constructors cannot return a value", span));
@@ -82,6 +83,8 @@ class AbstractConstructorNormalizer {
 	static function collectDeclarations(statements:Array<AstStatement>, used:Map<String, Bool>):Void
 		for (statement in statements)
 			switch statement {
+				case PrivateAccessStatement(inner, _):
+					collectDeclarations([inner], used);
 				case UninitializedDeclaration(name, _, _), VarDeclaration(name, _, _, _):
 					used.set(name, true);
 				case If(_, yes, no, _):
@@ -109,6 +112,7 @@ class AbstractConstructorNormalizer {
 
 	static function statementAlwaysExits(statement:AstStatement):Bool
 		return switch statement {
+			case PrivateAccessStatement(inner, _): statementAlwaysExits(inner);
 			case Return(_, _), ReturnVoid(_), Throw(_, _): true;
 			case If(_, yes, no, _): no.length > 0 && alwaysExits(yes) && alwaysExits(no);
 			case Try(body, catches, _):

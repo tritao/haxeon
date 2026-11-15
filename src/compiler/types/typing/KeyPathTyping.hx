@@ -96,14 +96,14 @@ class KeyPathTyping {
 			}
 			var entry = resolveField(session, value, name, span);
 			if (entry.field.isStatic) fail('Cannot form a key path to static field "$name"', span);
-			if (!accessible(session, entry.declaration.name) && entry.field.isPublic != true)
+			if (!PropertyWriteRules.canAccess(session, entry.declaration, entry.field) && entry.field.isPublic != true)
 				fail('Cannot access private field "${entry.declaration.name}.$name" in a key path', span);
 			if ((entry.field.readAccess == GetAccess || entry.field.writeAccess == SetAccess
 				|| entry.field.readAccess == DynamicAccess || entry.field.writeAccess == DynamicAccess)
 				&& !(allowStoredProperty && DiffIntrinsics.hasStoredField(entry.field)))
 				fail('Cannot form a key path to computed property "$name"', span);
 			if (entry.field.readAccess == NeverAccess || entry.field.readAccess == NullAccess
-				&& !accessible(session, entry.declaration.name))
+				&& !PropertyWriteRules.canAccess(session, entry.declaration, entry.field))
 				fail('Cannot read field "$name" through a key path', span);
 			fields.push(entry);
 			value = entry.type;
@@ -118,8 +118,7 @@ class KeyPathTyping {
 		while (index > 0) {
 			var entry = fields[--index];
 			if (!DiffIntrinsics.isWritable(entry.field)
-				|| checkWriteAccess && entry.field.writeAccess == NullAccess
-				&& !accessible(session, entry.declaration.name)) {
+				|| checkWriteAccess && !PropertyWriteRules.canWrite(session, entry.declaration, entry.field)) {
 				writable = false;
 				writeError = 'Cannot write through key path: field "${entry.field.name}" is not writable';
 			}
@@ -223,21 +222,6 @@ class KeyPathTyping {
 		};
 	}
 
-	static function accessible(session:TypingSession, owner:String):Bool {
-		var current = session.currentContext.owner;
-		while (current != null) {
-			if (current == owner) return true;
-			var declaration = session.classDecls.get(current);
-			if (declaration == null || declaration.base == null) return false;
-			current = switch declaration.base {
-				case NamedType(name), AppliedType(name, _): name;
-				default: null;
-			};
-		}
-		return false;
-	}
-
-	@:noReturn
 	static function fail(message:String, span:SourceSpan):Void
 		throw new CompileError(new Diagnostic("E1009", message, span));
 }

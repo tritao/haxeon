@@ -1121,6 +1121,13 @@ class Parser {
 	}
 
 	function parseStatement():AstStatement {
+		if (check(TokenKind.At)) {
+			var metadata = parseMetadata(), statement = parseStatement();
+			for (entry in metadata)
+				if (entry.name == "privateAccess")
+					return PrivateAccessStatement(statement, entry.span.merge(statementSpan(statement)));
+			return statement;
+		}
 		if (check(TokenKind.Identifier) && current().text == "scoped" && peekKind(1) == TokenKind.Var) {
 			var start = advance().span;
 			consume(TokenKind.Var);
@@ -1473,6 +1480,10 @@ class Parser {
 			return;
 		var index = statements.length - 1;
 		switch statements[index] {
+			case PrivateAccessStatement(inner, span):
+				var wrapped = [inner];
+				returnArrowValue(wrapped);
+				statements[index] = PrivateAccessStatement(wrapped[0], span);
 			case Expression(expression, span): statements[index] = Return(expression, span);
 			case Try(body, catches, _):
 				returnArrowValue(body);
@@ -1483,10 +1494,15 @@ class Parser {
 	}
 
 	function parseStatements():Array<AstStatement> {
-		// Metadata on a statement (`@:privateAccess { ... }`) changes nothing it compiles to, as on an expression; taken
-		// here, the statement after it parses as it would without it, so a block stays a block statement.
-		if (check(TokenKind.At))
-			parseMetadata();
+		// Parse metadata before deciding whether this is a declaration or block, while retaining private access for typing.
+		if (check(TokenKind.At)) {
+			var metadata = parseMetadata(), statements = parseStatements();
+			for (entry in metadata)
+				if (entry.name == "privateAccess")
+					statements = [for (statement in statements)
+						PrivateAccessStatement(statement, entry.span.merge(statementSpan(statement)))];
+			return statements;
+		}
 		if (!check(TokenKind.Var) && !check(TokenKind.Final))
 			return [parseStatement()];
 		var immutable = check(TokenKind.Final);
@@ -1769,8 +1785,11 @@ class Parser {
 			return ErrorExpression(span);
 		}
 		if (check(TokenKind.At)) {
-			parseMetadata();
-			return parsePrimary();
+			var metadata = parseMetadata(), expression = parsePrimary();
+			for (entry in metadata)
+				if (entry.name == "privateAccess")
+					return PrivateAccessExpression(expression, entry.span.merge(expressionSpan(expression)));
+			return expression;
 		}
 		if (match(TokenKind.Switch))
 			return parseSwitchExpression(previous().span);
@@ -3034,6 +3053,7 @@ class Parser {
 
 	static function expressionSpan(expression:AstExpression):SourceSpan
 		return switch expression {
+			case PrivateAccessExpression(_, span): span;
 			case IntegerLiteral(_, span), FloatLiteral(_, span), StringLiteral(_, span), BoolLiteral(_, span),
 				NullLiteral(span), Unreachable(span),
 				EmptyExpression(span), ErrorExpression(span), Variable(_, span), Member(_, _, span), Add(_, _, span),
@@ -3292,7 +3312,7 @@ class Parser {
 
 	static function statementSpan(statement:AstStatement):SourceSpan
 		return switch statement {
-			case ErrorStatement(span): span;
+			case ErrorStatement(span), PrivateAccessStatement(_, span): span;
 			case UninitializedDeclaration(_, _, span), VarDeclaration(_, _, _, span), ScopedDeclaration(_, _, _, span),
 				Assignment(_, _, span), IndexAssignment(_, _, _, span),
 				FieldAssignment(_, _, _, span), Return(_, span), ReturnVoid(span), Throw(_, span), Defer(_, span),

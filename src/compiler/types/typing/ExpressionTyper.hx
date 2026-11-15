@@ -107,6 +107,17 @@ class ExpressionTyper {
 		if (expectedType != null && session.monomorphs.active())
 			expectedType = compiler.types.Monomorphs.expectation(expectedType);
 		var result = switch expression {
+			case PrivateAccessExpression(inner, _):
+				session.currentContext.privateAccessDepth++;
+				var value:TypedExpression;
+				try
+					value = typeExpressionCallback(inner, scope, expectedType, inferDynamicLambdaResult)
+				catch (error:Dynamic) {
+					session.currentContext.privateAccessDepth--;
+					throw error;
+				}
+				session.currentContext.privateAccessDepth--;
+				value;
 			case IntegerLiteral(_, _), FloatLiteral(_, _), StringLiteral(_, _), BoolLiteral(_, _), NullLiteral(_),
 				Unreachable(_), EmptyExpression(_),
 				ErrorExpression(_):
@@ -2014,9 +2025,11 @@ class ExpressionTyper {
 			case TCellLocal(name, cellClass): TPostfixCellLocal(name, cellClass, delta);
 			case TCellCaptured(name, cellClass): TPostfixCellCaptured(name, cellClass, delta);
 			case TStaticField(owner, name):
+				PropertyWriteRules.rejectStaticMutation(session, owner, name, span);
 				FinalFieldRules.rejectStaticMutation(session, owner, name, span);
 				TPostfixStaticField(owner, name, delta);
 			case TField(object, name):
+				PropertyWriteRules.rejectInstanceMutation(session, object.type, name, span);
 				switch object.type {
 					case TAnonymous(_, fields):
 						for (field in fields)

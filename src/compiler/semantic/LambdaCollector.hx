@@ -9,6 +9,8 @@ class LambdaCollector {
 			generatedByModule:Map<String, Map<String, Bool>>):Void {
 		for (statement in statements)
 			switch statement {
+				case PrivateAccessStatement(inner, _):
+					collect([inner], functionName, module, generatedByModule);
 				case ErrorStatement(_):
 				case UninitializedDeclaration(_, _, _):
 				case VarDeclaration(_, _, expression, _), ScopedDeclaration(_, _, expression, _),
@@ -60,6 +62,8 @@ class LambdaCollector {
 	public static function collectExpression(expression:AstExpression, functionName:String, module:String,
 			generatedByModule:Map<String, Map<String, Bool>>):Void
 		switch expression {
+			case PrivateAccessExpression(inner, _):
+				collectExpression(inner, functionName, module, generatedByModule);
 			case Lambda(_, body, identity, _):
 				var lambdaName = LambdaName.of(functionName, identity);
 				var names:Map<String, Bool>;

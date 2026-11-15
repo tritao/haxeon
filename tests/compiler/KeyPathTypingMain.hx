@@ -54,6 +54,12 @@ class KeyPathTypingMain {
 			+ 'function main():Int return Root.run();');
 		if (new compiler.ir.IrInterpreter(granted).run('main') != 42)
 			throw 'Composition lost the granted setter capability';
+		var friend = compiler.Frontend.compile('@:allow(Friend) class Item { public var value(default,null):Int=0; } '
+			+ 'class Friend { public static function run():Int { var item=new Item(); (\\Item.value).set(item,42); return item.value; } } '
+			+ 'function main():Int return Friend.run();');
+		if (new compiler.ir.IrInterpreter(friend).run('main') != 42)
+			throw 'Friend lost the key-path setter capability';
+		expectType('class Item { public var value(default,null):Int=0; } ', '\\Item.value', 'KeyPath<Item,Int>');
 		expectError(node, '(\\Node.height).set(new Node(),3)', 'not writable');
 		expectError('struct Point { public var x:Int=0; } ', '(\\Point.x).set(new Point(),3)',
 			'Cannot mutate temporary struct');

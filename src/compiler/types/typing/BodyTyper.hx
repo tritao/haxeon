@@ -490,6 +490,8 @@ class BodyTyper {
 			for (expression in AstChildren.statementExpressions(statement))
 				validateDeferredExpression(expression, loopDepth);
 			switch statement {
+				case PrivateAccessStatement(inner, _):
+					validateDeferredControl([inner], loopDepth);
 				case Return(_, span), ReturnVoid(span):
 					fail("E1019", "Cannot return from a deferred statement", span);
 				case Break(span), Continue(span) if (loopDepth == 0):
@@ -547,6 +549,16 @@ class BodyTyper {
 				continue;
 			}
 			switch statement {
+				case PrivateAccessStatement(inner, _):
+					session.currentContext.privateAccessDepth++;
+					try {
+						for (typed in typeStatements([inner], scope, result))
+							output.push(typed);
+					} catch (error:Dynamic) {
+						session.currentContext.privateAccessDepth--;
+						throw error;
+					}
+					session.currentContext.privateAccessDepth--;
 				case ErrorStatement(_):
 					throw "Simple statement was not dispatched";
 				case UninitializedDeclaration(_, _, _):
@@ -651,7 +663,7 @@ class BodyTyper {
 
 	/** Whether typing `initializer` with nothing expected makes a type variable for its type (`Monomorphs`). */
 	static function makesTypeVariable(initializer:AstExpression):Bool
-		return switch initializer {
+		return switch compiler.syntax.AstPredicates.unannotatedExpression(initializer) {
 			case NullLiteral(_): true;
 			case ArrayLiteral(values, _): values.length == 0;
 			case MapLiteral(entries, _): entries.length == 0;
@@ -675,7 +687,7 @@ class BodyTyper {
 	}
 
 	function knownExpressionType(expression:AstExpression, ?bindings:Map<String, CompilerType>):Null<CompilerType>
-		return switch expression {
+		return switch compiler.syntax.AstPredicates.unannotatedExpression(expression) {
 			case Variable(name, _) if (bindings != null): bindings.get(name);
 			case Call(name, _, _): knownCallType(name);
 			case StringLiteral(_, _): TString;
@@ -702,7 +714,7 @@ class BodyTyper {
 		var known = knownExpressionType(expression);
 		if (known != null)
 			return known;
-		return switch expression {
+		return switch compiler.syntax.AstPredicates.unannotatedExpression(expression) {
 			case Variable(name, _): name.indexOf(".") >= 0 ? typeExpression(expression,
 				scope).type : scope.resolve(name);
 			case Member(_, _, _): typeExpression(expression, scope).type;
@@ -738,7 +750,7 @@ class BodyTyper {
 	}
 
 	static function usesLocalExpectedType(initializer:AstExpression):Bool
-		return switch initializer {
+		return switch compiler.syntax.AstPredicates.unannotatedExpression(initializer) {
 			case NullLiteral(_): true;
 			case ArrayLiteral(values, _): values.length == 0 || valuesAreNull(values);
 			case ArrayComprehension(_, _, _, _, value, _, _): usesLocalExpectedType(value);
@@ -780,7 +792,7 @@ class BodyTyper {
 	function inferBodyStatementConstraints(statements:Array<AstStatement>, result:CompilerType):Bool {
 		var changed = false;
 		for (statement in statements)
-			switch statement {
+			switch compiler.syntax.AstPredicates.unannotatedStatement(statement) {
 				case VarDeclaration(name, declared, initializer, declarationSpan):
 					if (declared != null)
 						changed = constrainLocal(name, lowerType(declared, declarationSpan)) || changed;
@@ -814,7 +826,7 @@ class BodyTyper {
 	}
 
 	function constrainPushedExpression(expression:AstExpression):Bool
-		return switch expression {
+		return switch compiler.syntax.AstPredicates.unannotatedExpression(expression) {
 			case MethodCall(receiverExpression, methodName, arguments,
 				_) if (methodName == "push" && arguments.length == 1):
 				switch receiverExpression {
@@ -833,7 +845,7 @@ class BodyTyper {
 		};
 
 	function constrainLocalExpression(expression:AstExpression, expected:CompilerType):Bool
-		return switch expression {
+		return switch compiler.syntax.AstPredicates.unannotatedExpression(expression) {
 			case Variable(name, _): constrainLocal(name, expected);
 			case Call(name, arguments, span):
 				var enumName:Null<String> = switch expected {
@@ -2775,7 +2787,7 @@ class BodyTyper {
 
 	static function statementSpan(statement:AstStatement):SourceSpan
 		return switch statement {
-			case ErrorStatement(span): span;
+			case ErrorStatement(span), PrivateAccessStatement(_, span): span;
 			case UninitializedDeclaration(_, _, span), VarDeclaration(_, _, _, span), ScopedDeclaration(_, _, _, span),
 				Assignment(_, _, span),
 				IndexAssignment(_, _, _, span), FieldAssignment(_, _, _, span), Return(_, span), ReturnVoid(span),

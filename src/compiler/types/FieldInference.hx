@@ -17,7 +17,7 @@ class FieldInference {
 		if (initializer == null)
 			throw new CompileError(new Diagnostic("E1002",
 				'Cannot infer type of field "${field.name}" without an initializer', field.span));
-		return switch initializer {
+		return switch compiler.syntax.AstPredicates.unannotatedExpression(initializer) {
 			case IntegerLiteral(_, _): IntType;
 			case FloatLiteral(_, _): FloatType;
 			case Negate(value, _): isLiteralOperand(value) ? negatedType(field, value) : InferredType;
@@ -62,7 +62,7 @@ class FieldInference {
 	}
 
 	static function literalElementType(value:AstExpression):Null<AstType>
-		return switch value {
+		return switch compiler.syntax.AstPredicates.unannotatedExpression(value) {
 			case IntegerLiteral(_, _): IntType;
 			case FloatLiteral(_, _): FloatType;
 			case StringLiteral(_, _): StringType;
@@ -71,7 +71,7 @@ class FieldInference {
 		};
 
 	static function constantNumericType(field:AstField, expression:AstExpression):AstType {
-		var inferred:Null<AstType> = switch expression {
+		var inferred:Null<AstType> = switch compiler.syntax.AstPredicates.unannotatedExpression(expression) {
 			case IntegerLiteral(_, _): IntType;
 			case FloatLiteral(_, _): FloatType;
 			case Negate(value, _): nullableNumericType(value);
@@ -98,7 +98,7 @@ class FieldInference {
 
 	/** True when a numeric expression refers to a bare name, such as a sibling static constant, that only the class context can type. */
 	static function mentionsBareVariable(expression:AstExpression):Bool
-		return switch expression {
+		return switch compiler.syntax.AstPredicates.unannotatedExpression(expression) {
 			case Variable(name, _): name.indexOf(".") < 0;
 			case Negate(value, _): mentionsBareVariable(value);
 			case Add(left, right, _), Sub(left, right, _), Mul(left, right, _), Div(left, right, _),
@@ -120,7 +120,7 @@ class FieldInference {
 			resolving:Map<String, Bool>):Null<AstType> {
 		inline function operand(value:AstExpression)
 			return siblingNumericType(value, owner, classes, aliases, enums, enumAbstracts, resolving);
-		return switch expression {
+		return switch compiler.syntax.AstPredicates.unannotatedExpression(expression) {
 			case IntegerLiteral(_, _): IntType;
 			case FloatLiteral(_, _): FloatType;
 			case Variable("Math.PI" | "Math.NaN" | "Math.POSITIVE_INFINITY" | "Math.NEGATIVE_INFINITY", _): FloatType;
@@ -165,7 +165,7 @@ class FieldInference {
 	}
 
 	static function nullableNumericType(expression:AstExpression):Null<AstType>
-		return switch expression {
+		return switch compiler.syntax.AstPredicates.unannotatedExpression(expression) {
 			case IntegerLiteral(_, _): IntType;
 			case FloatLiteral(_, _): FloatType;
 			case Variable("Math.PI" | "Math.NaN" | "Math.POSITIVE_INFINITY" | "Math.NEGATIVE_INFINITY", _): FloatType;
@@ -234,7 +234,7 @@ class FieldInference {
 			default: true;
 		}))
 			return inferred;
-		switch expression {
+		switch compiler.syntax.AstPredicates.unannotatedExpression(expression) {
 			case ArrayLiteral(values, _):
 				var element = resolveValue(field, values[0], owner, classes, aliases, enums, enumAbstracts, resolving);
 				for (index in 1...values.length) {
@@ -299,7 +299,7 @@ class FieldInference {
 			enums:Map<String, compiler.syntax.Ast.AstEnum>,
 			enumAbstracts:Map<String, compiler.syntax.Ast.AstEnumAbstract>, file:String):Null<AstType> {
 		var path:Null<String> = null, hasArguments = false;
-		switch expression {
+		switch compiler.syntax.AstPredicates.unannotatedExpression(expression) {
 			case Member(Variable(owner, _), name, _):
 				path = owner + "." + name;
 			case Variable(value, _):
@@ -387,7 +387,7 @@ class FieldInference {
 	}
 
 	static function isOperator(expression:AstExpression):Bool
-		return switch expression {
+		return switch compiler.syntax.AstPredicates.unannotatedExpression(expression) {
 			case Negate(_, _), Add(_, _, _), Sub(_, _, _), Mul(_, _, _), Div(_, _, _), Mod(_, _, _), BitAnd(_, _, _),
 				BitXor(_, _, _), BitOr(_, _, _),
 				ShiftLeft(_, _, _), ShiftRight(_, _, _), UnsignedShiftRight(_, _, _): true;
@@ -395,14 +395,14 @@ class FieldInference {
 		};
 
 	static function isLiteralOperand(expression:AstExpression):Bool
-		return switch expression {
+		return switch compiler.syntax.AstPredicates.unannotatedExpression(expression) {
 			case IntegerLiteral(_, _), FloatLiteral(_, _), StringLiteral(_, _): true;
 			default: false;
 		};
 
 	/** Whether every leaf of an operator expression is a literal, so it types without declarations. */
 	static function hasOnlyLiteralOperands(expression:AstExpression):Bool
-		return switch expression {
+		return switch compiler.syntax.AstPredicates.unannotatedExpression(expression) {
 			case Negate(value, _): hasOnlyLiteralOperands(value);
 			case Add(left, right, _), Sub(left, right, _), Mul(left, right, _), Div(left, right, _),
 				Mod(left, right, _), BitAnd(left, right, _),
@@ -443,7 +443,7 @@ class FieldInference {
 				default: false;
 			}) ? FloatType : IntType;
 		}
-		return switch expression {
+		return switch compiler.syntax.AstPredicates.unannotatedExpression(expression) {
 			case IntegerLiteral(_, _): IntType;
 			case FloatLiteral(_, _): FloatType;
 			case StringLiteral(_, _): StringType;
@@ -491,7 +491,7 @@ class FieldInference {
 			resolving:Map<String, Bool>):Null<AstType> {
 		var reference = staticFieldReference(expression);
 		if (reference == null)
-			reference = switch expression {
+			reference = switch compiler.syntax.AstPredicates.unannotatedExpression(expression) {
 				case Variable(name, _) if (name.indexOf(".") < 0): {owner: owner, name: name};
 				default: null;
 			};
@@ -510,7 +510,7 @@ class FieldInference {
 	static function staticCallResult(expression:AstExpression, currentOwner:String,
 			classes:Map<String, compiler.syntax.Ast.AstClass>,
 			aliases:AliasTable):Null<AstType> {
-		var call = switch expression {
+		var call = switch compiler.syntax.AstPredicates.unannotatedExpression(expression) {
 			case Call(name, _, _): name;
 			default: null;
 		};
@@ -561,7 +561,7 @@ class FieldInference {
 	}
 
 	static function staticFieldReference(expression:AstExpression):Null<{owner:String, name:String}> {
-		return switch expression {
+		return switch compiler.syntax.AstPredicates.unannotatedExpression(expression) {
 			case Member(object, name, _):
 				var owner = switch object {
 					case Variable(value, _): value;
@@ -596,14 +596,14 @@ class FieldInference {
 	}
 
 	static function isConstantString(expression:AstExpression):Bool
-		return switch expression {
+		return switch compiler.syntax.AstPredicates.unannotatedExpression(expression) {
 			case StringLiteral(_, _): true;
 			case Add(left, right, _): isConstantString(left) && isConstantString(right);
 			default: false;
 		};
 
 	static function negatedType(field:AstField, value:AstExpression):AstType
-		return switch value {
+		return switch compiler.syntax.AstPredicates.unannotatedExpression(value) {
 			case IntegerLiteral(_, _): IntType;
 			case FloatLiteral(_, _): FloatType;
 			default:

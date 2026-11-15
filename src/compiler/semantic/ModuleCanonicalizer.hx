@@ -208,10 +208,11 @@ class ModuleCanonicalizer {
 		return [for (annotation in metadata)
 			{
 				name:resolveTypeName(annotation.name, aliases),
-					arguments:[
-						for (argument in annotation.arguments)
-							canonicalExpression(argument, module, entry, locals, aliases)
-					],
+				// Access grants name a source path, not an imported expression alias.
+				arguments:annotation.name == "access" || annotation.name == "allow" ? annotation.arguments : [
+					for (argument in annotation.arguments)
+						canonicalExpression(argument, module, entry, locals, aliases)
+				],
 					span:annotation.span
 			}];
 
@@ -374,6 +375,8 @@ class ModuleCanonicalizer {
 	public static function canonicalStatement(s:AstStatement, module:String, entry:String, locals:LocalScope,
 			?aliases:AliasTable):AstStatement
 		return switch s {
+			case PrivateAccessStatement(inner,
+				span): PrivateAccessStatement(canonicalStatement(inner, module, entry, locals, aliases), span);
 			case ErrorStatement(_): s;
 			case UninitializedDeclaration(n, t, span): UninitializedDeclaration(n, canonicalType(t, aliases), span);
 			case VarDeclaration(n, t, e,
@@ -439,6 +442,8 @@ class ModuleCanonicalizer {
 	public static function canonicalExpression(e:AstExpression, module:String, entry:String, locals:LocalScope,
 			?aliases:AliasTable):AstExpression
 		return switch e {
+			case PrivateAccessExpression(inner,
+				span): PrivateAccessExpression(canonicalExpression(inner, module, entry, locals, aliases), span);
 			case IntegerLiteral(_, _), FloatLiteral(_, _), StringLiteral(_, _), BoolLiteral(_, _), NullLiteral(_),
 				Unreachable(_), EmptyExpression(_),
 				ErrorExpression(_): e;

@@ -545,6 +545,7 @@ private class PurityWalker {
 
 	function statement(value:AstStatement):Bool {
 		return switch value {
+			case PrivateAccessStatement(inner, _): statement(inner);
 			case ErrorStatement(_): false;
 			case ScopedDeclaration(_, _, _, _): false;
 			case UninitializedDeclaration(name, type, _):
@@ -633,6 +634,7 @@ private class PurityWalker {
 
 	function expression(value:AstExpression):Bool {
 		return switch value {
+			case PrivateAccessExpression(inner, _): expression(inner);
 			case IntegerLiteral(_, _), FloatLiteral(_, _), StringLiteral(_, _), BoolLiteral(_, _), NullLiteral(_),
 				Unreachable(_), EmptyExpression(_),
 				NativeLayoutQuery(_, _, _, _), KeyPathLiteral(_, _, _), NewMap(_, _, _):

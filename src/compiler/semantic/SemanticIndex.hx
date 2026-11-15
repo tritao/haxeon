@@ -324,6 +324,8 @@ class SemanticIndex {
 			depth:Int):Void {
 		for (statement in statements)
 			switch statement {
+				case PrivateAccessStatement(inner, _):
+					indexRecoveredStatements(functionKey, [inner], scope, depth);
 				case UninitializedDeclaration(name, type, span):
 					addRecoveredLocal(functionKey, name, recoveredType(type), span, scope, depth);
 				case VarDeclaration(name, type, initializer, span), ScopedDeclaration(name, type, initializer, span):
@@ -373,6 +375,8 @@ class SemanticIndex {
 	function indexRecoveredStatementUses(statements:Array<AstStatement>):Void {
 		for (statement in statements)
 			switch statement {
+				case PrivateAccessStatement(inner, _):
+					indexRecoveredStatementUses([inner]);
 				case VarDeclaration(_, _, value, _), ScopedDeclaration(_, _, value, _), Return(value, _),
 					Throw(value, _), Expression(value, _):
 					indexRecoveredExpression(value);
@@ -423,6 +427,8 @@ class SemanticIndex {
 
 	function indexRecoveredExpression(expression:AstExpression):Void {
 		switch expression {
+			case PrivateAccessExpression(inner, _):
+				indexRecoveredExpression(inner);
 			case ErrorExpression(_):
 			case Variable(name, span):
 				var separator = name.indexOf(".");

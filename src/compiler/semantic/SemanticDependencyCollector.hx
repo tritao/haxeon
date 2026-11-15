@@ -115,6 +115,7 @@ class SemanticDependencyCollector {
 			entry:String):Void
 		for (statement in statements)
 			switch statement {
+				case PrivateAccessStatement(inner, _): addBodyDependencies(result, owner, [inner], module, entry);
 				case ErrorStatement(_):
 				case UninitializedDeclaration(_, type, _):
 					addTypeDependency(result, owner, SemanticDependencyKind.Body, type, new AliasTable());
@@ -172,6 +173,7 @@ class SemanticDependencyCollector {
 			aliases:AliasTable):Void
 		for (statement in statements)
 			switch statement {
+				case PrivateAccessStatement(inner, _): scanNativeLayoutQueryStatements(result, owner, [inner], aliases);
 				case VarDeclaration(_, _, expression, _), ScopedDeclaration(_, _, expression, _),
 					Assignment(_, expression, _), Return(expression, _), Throw(expression, _),
 					Expression(expression, _):
@@ -218,6 +220,7 @@ class SemanticDependencyCollector {
 			expression:AstExpression,
 			aliases:AliasTable):Void {
 		switch expression {
+			case PrivateAccessExpression(inner, _): scanNativeLayoutQueryExpression(result, owner, inner, aliases);
 			case NativeLayoutQuery(_, type, _, _):
 				addTypeDependency(result, owner, SemanticDependencyKind.Layout, type, aliases);
 			case KeyPathLiteral(type, _, _):
@@ -333,6 +336,7 @@ class SemanticDependencyCollector {
 
 	public static function scanCalls(statement:AstStatement, calls:Map<String, Bool>, aliases:Map<String, String>):Void
 		switch statement {
+			case PrivateAccessStatement(inner, _): scanCalls(inner, calls, aliases);
 			case ErrorStatement(_):
 			case UninitializedDeclaration(name, _, _):
 				aliases.remove(name);
@@ -402,6 +406,7 @@ class SemanticDependencyCollector {
 	public static function scanCallExpression(e:AstExpression, calls:Map<String, Bool>,
 			aliases:Map<String, String>):Void
 		switch e {
+			case PrivateAccessExpression(inner, _): scanCallExpression(inner, calls, aliases);
 			case Call(name, args, _):
 				var target = aliases.exists(name) ? aliases.get(name) : name;
 				calls.set(target, true);

@@ -187,6 +187,9 @@ typedef AstCatch = {
 
 /** Parsed expression tree; each constructor retains its complete source span. */
 enum AstExpression {
+	/** An expression evaluated with explicit private access. */
+	PrivateAccessExpression(expression:AstExpression, span:SourceSpan);
+
 	IntegerLiteral(value:Int, span:SourceSpan);
 	FloatLiteral(value:Float, span:SourceSpan);
 	StringLiteral(value:String, span:SourceSpan);
@@ -290,6 +293,9 @@ typedef AstSwitchExpressionCase = {
 
 /** Parsed statement tree before binding resolution and type checking. */
 enum AstStatement {
+	/** A statement evaluated with explicit private access. */
+	PrivateAccessStatement(statement:AstStatement, span:SourceSpan);
+
 	/** Recovery-only placeholder retaining the malformed statement location. */
 	ErrorStatement(span:SourceSpan);
 

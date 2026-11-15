@@ -396,6 +396,7 @@ class StatementTyper {
 				if (instanceField != null) {
 					if (thisType == null)
 						throw 'Missing "this" type for field "$name"';
+					PropertyWriteRules.rejectInstanceMutation(session, thisType, name, span);
 					var assignedValue = typeExpression(expression, scope, instanceField, false),
 						value = coerce(assignedValue, instanceField, 'field "$name"', "E1002");
 					var receiver = typeExpression(Variable("this", span), scope, null, false),
@@ -422,6 +423,7 @@ class StatementTyper {
 					staticField = assignmentRules.findStaticField(owner, name);
 				if (staticField == null)
 					fail("E1005", 'Unknown variable "$name"', span);
+				PropertyWriteRules.rejectStaticMutation(session, staticField.owner, name, span);
 				assignmentRules.rejectInlineFieldMutation(staticField.owner, name, span);
 				var assignedValue = typeExpression(expression, scope, staticField.type, false),
 					value = coerce(assignedValue, staticField.type, 'field "$name"', "E1002");
@@ -454,12 +456,14 @@ class StatementTyper {
 			object = unwrapNullable(typeExpression(Variable(objectName, span), scope, null, false));
 		if (sameType(object.type, TDynamic))
 			return dynamicFieldAssignment(object, fieldName, expression, span, scope);
+		PropertyWriteRules.rejectInstanceMutation(session, object.type, fieldName, span);
 		rejectFinalAnonymousFieldMutation(object.type, fieldName, span);
 		FinalFieldRules.rejectInstanceMutation(session, object, fieldName, span);
 		ValuePlaceRules.requireWritable(session, object, span);
 		return switch object.expression {
 			case TClassRef(className):
 				var staticField = assignmentRules.requireStaticField(className, fieldName, span);
+				PropertyWriteRules.rejectStaticMutation(session, staticField.owner, fieldName, span);
 				assignmentRules.rejectInlineFieldMutation(staticField.owner, fieldName, span);
 				FinalFieldRules.rejectStaticMutation(session, staticField.owner, fieldName, span);
 				var assignedValue = typeExpression(expression, scope, staticField.type, false),
@@ -557,12 +561,14 @@ class StatementTyper {
 		var object = unwrapNullable(typeExpression(receiverExpression, scope, null, false));
 		if (sameType(object.type, TDynamic))
 			return dynamicFieldAssignment(object, fieldName, expression, span, scope);
+		PropertyWriteRules.rejectInstanceMutation(session, object.type, fieldName, span);
 		rejectFinalAnonymousFieldMutation(object.type, fieldName, span);
 		FinalFieldRules.rejectInstanceMutation(session, object, fieldName, span);
 		ValuePlaceRules.requireWritable(session, object, span);
 		return switch object.expression {
 			case TClassRef(className):
 				var staticField = assignmentRules.requireStaticField(className, fieldName, span);
+				PropertyWriteRules.rejectStaticMutation(session, staticField.owner, fieldName, span);
 				assignmentRules.rejectInlineFieldMutation(staticField.owner, fieldName, span);
 				FinalFieldRules.rejectStaticMutation(session, staticField.owner, fieldName, span);
 				var assignedValue = typeExpression(expression, scope, staticField.type, false),

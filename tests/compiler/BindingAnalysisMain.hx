@@ -1,7 +1,10 @@
 import compiler.core.Source.SourceFile;
 import compiler.core.Source.SourceSpan;
 import compiler.syntax.Ast.AstFunction;
+import compiler.syntax.Ast.AstExpression;
 import compiler.syntax.Ast.AstStatement;
+import compiler.syntax.AstChildren;
+import compiler.syntax.AstChildren.AstChildVisitor;
 import compiler.syntax.Lexer;
 import compiler.syntax.Parser;
 import compiler.types.analysis.AssignedDeclarations;
@@ -15,6 +18,25 @@ import compiler.types.analysis.MapEscapeAnalysis;
  */
 class BindingAnalysisMain {
 	static function main():Void {
+		var span = new SourceFile("PrivateAccess.hx", "binding").span(0, 7);
+		var inner:AstExpression = Variable("binding", span);
+		var wrapped:AstExpression = PrivateAccessExpression(inner, span);
+		var statement:AstStatement = PrivateAccessStatement(Expression(inner, span), span);
+		var collector = new ChildCollector();
+		AstChildren.visit(wrapped, collector);
+		expect(collector.children.length == 1
+			&& Std.string(collector.children[0]) == Std.string(AstChildren.expressions(wrapped)[0]),
+			"private-access expression visitor must match expressions");
+		collector.children.resize(0);
+		AstChildren.visitStatement(statement, collector);
+		expect(collector.children.length == 1
+			&& Std.string(collector.children[0]) == Std.string(AstChildren.statementExpressions(statement)[0]),
+			"private-access statement visitor must match statementExpressions");
+		var privateCapture =
+			parse('function main():Void { var captured = 0; var f = function():Int return @:privateAccess captured; captured = 1; }');
+		var privateStorage = LexicalStorageAnalysis.analyze(privateCapture.statements, privateCapture.arguments);
+		expect(privateStorage.mutableCaptures.exists(declaration(privateCapture, "captured", 0)),
+			"binding walker must see a captured binding inside private access");
 		// Cells: a local needs one when a lambda captures it and it is written.
 		var fn =
 			parse("function main():Void {
@@ -159,4 +181,10 @@ class BindingAnalysisMain {
 		if (!condition)
 			throw message;
 	}
+}
+
+private class ChildCollector implements AstChildVisitor {
+	public final children:Array<AstExpression> = [];
+	public function new() {}
+	public function visitChild(child:AstExpression):Void children.push(child);
 }

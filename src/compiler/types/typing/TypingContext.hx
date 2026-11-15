@@ -50,6 +50,10 @@ class TypingContext {
 	public var diffTemporary:Int = 0;
 
 	public var loopDepth:Int = 0;
+
+	/** Nesting depth of an explicit `@:privateAccess` expression or statement. */
+	public var privateAccessDepth:Int = 0;
+
 	public var expectedReturnType:CompilerType = TVoid;
 	public var inferredResult:Null<CompilerType>;
 	public var contextualVoidLambda:Bool = false;

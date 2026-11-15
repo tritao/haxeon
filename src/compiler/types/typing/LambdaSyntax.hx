@@ -7,8 +7,9 @@ import compiler.syntax.Ast.AstType;
 /** Looks through the parser's result-annotated lambda binding. */
 class LambdaSyntax {
 	public static function literal(expression:AstExpression):AstExpression {
-		var result = annotated(expression);
-		return result == null ? expression : result;
+		var syntax = compiler.syntax.AstPredicates.unannotatedExpression(expression),
+			result = annotated(syntax);
+		return result == null ? syntax : result;
 	}
 
 	/** Return the wrapped lambda only when the parser made an annotated binding. */
