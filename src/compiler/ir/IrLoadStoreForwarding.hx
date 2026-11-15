@@ -5,8 +5,9 @@ import compiler.ir.IrFunction;
 import compiler.ir.SourceProvenance.Located;
 
 private typedef KnownField = {final object:Int; final field:String; final value:IrValue;}
-private typedef AvailableField = {final object:Int; final field:String; final value:Null<IrValue>;}
-private typedef KnownElement = {final array:IrValue; final index:String; final value:IrValue;}
+
+/** An array element whose value is known: `index` is a constant when `constant`, else the id of the index value. */
+private typedef KnownElement = {final array:IrValue; final constant:Bool; final index:Int; final value:IrValue;}
 
 /** Cross-block field and block-local array reload elimination. Stores and the input function are never changed.
  * Runtime array-cast checks enforce concrete storage types; differently typed arrays cannot alias
@@ -34,26 +35,28 @@ class IrLoadStoreForwarding {
 		var incoming = incomingFields(fn, objects),
 			dropped:Null<haxe.ds.ObjectMap<Dynamic, Bool>> = null,
 			substituted = 0;
+		// Each block's incoming fields are its own to change; the element facts reuse one list.
+		var elements:Array<KnownElement> = [];
 		for (block in fn.blocks) {
-			var fields:Array<KnownField> = incoming.exists(block.id) ? incoming.get(block.id).copy() : [],
-				elements:Array<KnownElement> = [];
+			var fields:Array<KnownField> = incoming.exists(block.id) ? incoming.get(block.id) : [];
+			elements.resize(0);
 			for (located in block.instructions) {
 				var instruction = substituted == 0 ? located.value : IrInliner.remap(located.value, use, function(id:Int):Int return id), drop = false;
 				switch instruction {
 					case FieldSet(object, field, value):
 						if (excludedField(value.type, objects) || !plainObject(object.type)) {
 							// An inline struct store can overwrite fields reached through earlier interior pointers.
-							fields = [];
-							elements = [];
+							fields.resize(0);
+							elements.resize(0);
 						} else {
-							fields = [for (entry in fields) if (entry.field != field) entry];
+							dropFieldName(fields, field);
 							if (!storeNeedsNormalization(object.type, field, objects))
 								fields.push({object: object.id, field: field, value: value});
 						}
 					case FieldGet(out, object, field):
 						if (!plainObject(object.type)) {
-							fields = [];
-							elements = [];
+							fields.resize(0);
+							elements.resize(0);
 						} else if (!excludedField(out.type, objects)) {
 							var known:Null<IrValue> = null;
 							for (entry in fields)
@@ -64,51 +67,56 @@ class IrLoadStoreForwarding {
 								substituted++;
 								drop = true;
 							} else {
-								fields = [
-									for (entry in fields)
-										if (entry.object != object.id || entry.field != field) entry
-								];
+								dropField(fields, object.id, field);
 								fields.push({object: object.id, field: field, value: out});
 							}
 						}
 					case ArraySet(array, index, value):
 						if (!plainArray(array.type) || excludedField(value.type, objects)) {
-							fields = [];
-							elements = [];
+							fields.resize(0);
+							elements.resize(0);
 						} else {
-							var key = indexKey(index, constants);
-							elements = [
-								for (entry in elements)
-									if (entry.array.id == array.id ? distinctConstants(entry.index, key) : !sameType(entry.array.type, array.type)) entry
-							];
-							elements.push({array: array, index: key, value: value});
+							var literal = constants.get(index.id),
+								constant = literal != null,
+								key = literal == null ? index.id : literal;
+							dropAliasedElements(elements, array, constant, key);
+							elements.push({
+								array: array,
+								constant: constant,
+								index: key,
+								value: value
+							});
 						}
 					case ArrayGet(out, array, index):
 						if (!plainArray(array.type)) {
-							fields = [];
-							elements = [];
+							fields.resize(0);
+							elements.resize(0);
 						} else if (!excludedField(out.type, objects)) {
-							var key = indexKey(index, constants),
+							var literal = constants.get(index.id),
+								constant = literal != null,
+								key = literal == null ? index.id : literal,
 								known:Null<IrValue> = null;
 							for (entry in elements)
-								if (entry.array.id == array.id && entry.index == key)
+								if (entry.array.id == array.id && entry.constant == constant && entry.index == key)
 									known = entry.value;
 							if (known != null && sameType(out.type, known.type)) {
 								substitutions.set(out.id, known);
 								substituted++;
 								drop = true;
 							} else {
-								elements = [
-									for (entry in elements)
-										if (entry.array.id != array.id || entry.index != key) entry
-								];
-								elements.push({array: array, index: key, value: out});
+								dropElement(elements, array.id, constant, key);
+								elements.push({
+									array: array,
+									constant: constant,
+									index: key,
+									value: out
+								});
 							}
 						}
 					default:
 						if (mayWriteMemory(instruction)) {
-							fields = [];
-							elements = [];
+							fields.resize(0);
+							elements.resize(0);
 						}
 				}
 				if (drop) {
@@ -160,11 +168,13 @@ class IrLoadStoreForwarding {
 		return fn.withBlocks(blocks, bindings);
 	}
 
-	/** Fields available on every normal path into each block. A null value is the analysis top. */
+	/** Fields available on every normal path into each block. */
 	static function incomingFields(fn:IrFunction, objects:Null<IrObjectTable>):Map<Int, Array<KnownField>> {
 		var result:Map<Int, Array<KnownField>> = [],
-			keys:Array<AvailableField> = [],
-			seen:Map<String, Bool> = [],
+			keyObjects:Array<Int> = [],
+			keyFields:Array<String> = [],
+			byObject:Map<Int, Map<String, Int>> = [],
+			byField:Map<String, Array<Int>> = [],
 			repeated = false;
 		for (block in fn.blocks)
 			for (located in block.instructions)
@@ -172,114 +182,113 @@ class IrLoadStoreForwarding {
 					case BeginTry(_, _, _), EndTry(_, _), Catch(_):
 						return result;
 					case FieldGet(_, object, field), FieldSet(object, field, _) if (plainObject(object.type)):
-						var key = object.id + ":" + field;
-						if (seen.exists(key))
+						var fields = byObject.get(object.id);
+						if (fields == null) {
+							fields = [];
+							byObject.set(object.id, fields);
+						}
+						if (fields.exists(field))
 							repeated = true;
 						else {
-							seen.set(key, true);
-							keys.push({object: object.id, field: field, value: null});
+							fields.set(field, keyObjects.length);
+							var sameName = byField.get(field);
+							if (sameName == null) {
+								sameName = [];
+								byField.set(field, sameName);
+							}
+							sameName.push(keyObjects.length);
+							keyObjects.push(object.id);
+							keyFields.push(field);
 						}
 					default:
 				}
 		if (!repeated || fn.blocks.length < 2)
 			return result;
-		var graph = new IrGraph(fn),
-			outgoing:Map<Int, Array<AvailableField>> = [];
+		// A key's state is absent (not available), present with a null value (the analysis top), or present with its value.
+		var count = keyObjects.length,
+			graph = new IrGraph(fn),
+			outgoing:Map<Int, BlockFields> = [],
+			top = BlockFields.top();
 		for (id in graph.order)
-			outgoing.set(id, keys.copy());
+			outgoing.set(id, top);
+		var before = new FieldStates(count),
+			after = new FieldStates(count),
+			entry = fn.blocks[0].id;
+		function meet(id:Int, into:FieldStates):Void {
+			var predecessors = graph.predecessors.get(id);
+			if (id == entry || predecessors == null || predecessors.length == 0) {
+				into.clear();
+				return;
+			}
+			into.load(outgoing.get(predecessors[0]));
+			for (i in 1...predecessors.length)
+				into.intersect(outgoing.get(predecessors[i]));
+		}
 		var changed = true;
 		while (changed) {
 			changed = false;
 			for (id in graph.order) {
-				var before:Array<AvailableField> = [],
-					predecessors = graph.predecessors.get(id);
-				if (id != fn.blocks[0].id && predecessors != null && predecessors.length > 0) {
-					before = outgoing.get(predecessors[0]).copy();
-					for (i in 1...predecessors.length)
-						before = intersectFields(before, outgoing.get(predecessors[i]));
-				}
-				result.set(id, [
-					for (entry in before)
-						if (entry.value != null) {object: entry.object, field: entry.field, value: entry.value}
-				]);
-				var after = before.copy();
+				meet(id, before);
+				after.copyFrom(before);
 				for (located in graph.block(id).instructions)
 					switch located.value {
 						case FieldSet(object, field, value):
 							if (excludedField(value.type, objects) || !plainObject(object.type))
-								after = [];
-							else
-								after = [for (entry in after) if (entry.field != field) entry];
+								after.clear();
+							else {
+								var sameName = byField.get(field);
+								if (sameName != null)
+									for (key in sameName)
+										after.present[key] = false;
+							}
 						case FieldGet(out, object, field):
 							if (!plainObject(object.type))
-								after = [];
-							else if (!excludedField(out.type, objects) && findField(after, object.id, field) == null)
-								after.push({object: object.id, field: field, value: out});
+								after.clear();
+							else if (!excludedField(out.type, objects)) {
+								// Every field access of a plain object was given a key above.
+								var fields = byObject.get(object.id),
+									found = fields == null ? null : fields.get(field),
+									key = found == null ?throw 'No field key for $field':found;
+								if (!after.present[key]) {
+									after.present[key] = true;
+									after.values[key] = out;
+								}
+							}
 						case ArraySet(array, _, value):
 							if (!plainArray(array.type) || excludedField(value.type, objects))
-								after = [];
+								after.clear();
 						case ArrayGet(_, array, _):
 							if (!plainArray(array.type))
-								after = [];
+								after.clear();
 						// Across blocks, even a non-writing call is an explicit barrier.
 						case Call(_, _, _):
-							after = [];
+							after.clear();
 						default:
 							if (mayWriteMemory(located.value))
-								after = [];
+								after.clear();
 					}
-				if (!sameFields(outgoing.get(id), after)) {
-					outgoing.set(id, after);
+				if (!after.matches(outgoing.get(id))) {
+					outgoing.set(id, after.compact());
 					changed = true;
 				}
 			}
 		}
+		// With the outgoing states fixed, each block's incoming state is the meet of its predecessors' once more.
+		for (id in graph.order) {
+			meet(id, before);
+			var fields:Array<KnownField> = [];
+			for (key in 0...count) {
+				var value = before.values[key];
+				if (before.present[key] && value != null)
+					fields.push({object: keyObjects[key], field: keyFields[key], value: value});
+			}
+			result.set(id, fields);
+		}
 		return result;
 	}
 
-	static function findField(fields:Array<AvailableField>, object:Int, name:String):Null<AvailableField> {
-		for (entry in fields)
-			if (entry.object == object && entry.field == name)
-				return entry;
-		return null;
-	}
-
-	static function intersectFields(left:Array<AvailableField>, right:Array<AvailableField>):Array<AvailableField> {
-		var common:Array<AvailableField> = [];
-		for (a in left) {
-			var b = findField(right, a.object, a.field);
-			if (b == null)
-				continue;
-			var leftValue = a.value, rightValue = b.value;
-			if (leftValue == null)
-				common.push(b);
-			else if (rightValue == null || leftValue.id == rightValue.id && sameType(leftValue.type, rightValue.type))
-				common.push(a);
-		}
-		return common;
-	}
-
-	static function sameFields(left:Array<AvailableField>, right:Array<AvailableField>):Bool {
-		if (left.length != right.length)
-			return false;
-		for (a in left) {
-			var b = findField(right, a.object, a.field);
-			if (b == null)
-				return false;
-			var leftValue = a.value, rightValue = b.value;
-			if (leftValue == null) {
-				if (rightValue != null)
-					return false;
-			} else {
-				if (rightValue == null || leftValue.id != rightValue.id || !sameType(leftValue.type, rightValue.type))
-					return false;
-			}
-		}
-		return true;
-	}
-
-	static function sameType(a:IrType, b:IrType):Bool
-		return Std.string(a) == Std.string(b);
+	static inline function sameType(a:IrType, b:IrType):Bool
+		return IrTypeIdentity.same(a, b);
 
 	/** A native-width store may change its input before a later load observes it. */
 	static function storeNeedsNormalization(type:IrType, field:String, objects:Null<IrObjectTable>):Bool {
@@ -330,13 +339,40 @@ class IrLoadStoreForwarding {
 			default: false;
 		};
 
-	static function indexKey(value:IrValue, constants:Map<Int, Int>):String {
-		var literal = constants.get(value.id);
-		return literal == null ? "v" + value.id : "c" + literal;
+	// The fact lists are filtered in place, keeping their order.
+
+	static function dropFieldName(fields:Array<KnownField>, field:String):Void {
+		var kept = 0;
+		for (entry in fields)
+			if (entry.field != field)
+				fields[kept++] = entry;
+		fields.resize(kept);
 	}
 
-	static function distinctConstants(a:String, b:String):Bool
-		return a != b && StringTools.startsWith(a, "c") && StringTools.startsWith(b, "c");
+	static function dropField(fields:Array<KnownField>, object:Int, field:String):Void {
+		var kept = 0;
+		for (entry in fields)
+			if (entry.object != object || entry.field != field)
+				fields[kept++] = entry;
+		fields.resize(kept);
+	}
+
+	/** After a store to `array[key]`: keeps the same array's elements at other constant indices and arrays of other types. */
+	static function dropAliasedElements(elements:Array<KnownElement>, array:IrValue, constant:Bool, key:Int):Void {
+		var kept = 0;
+		for (entry in elements)
+			if (entry.array.id == array.id ? constant && entry.constant && entry.index != key : !sameType(entry.array.type, array.type))
+				elements[kept++] = entry;
+		elements.resize(kept);
+	}
+
+	static function dropElement(elements:Array<KnownElement>, array:Int, constant:Bool, key:Int):Void {
+		var kept = 0;
+		for (entry in elements)
+			if (entry.array.id != array || entry.constant != constant || entry.index != key)
+				elements[kept++] = entry;
+		elements.resize(kept);
+	}
 
 	/** Unknown operations kill all facts. Dynamic arithmetic/comparisons can dispatch user code. */
 	public static function mayWriteMemory(instruction:IrInstruction):Bool
@@ -355,4 +391,138 @@ class IrLoadStoreForwarding {
 			case I32, I64, F32, F64, Bool: true;
 			default: false;
 		};
+}
+
+/** A block's outgoing available fields, stored compactly: the present keys and their values (null for the analysis top). */
+private class BlockFields {
+	/** Every key present with the top value: the state every block starts from. */
+	public final everything:Bool;
+
+	public final keys:Array<Int>;
+	public final values:Array<Null<IrValue>>;
+
+	public function new(everything:Bool, keys:Array<Int>, values:Array<Null<IrValue>>) {
+		this.everything = everything;
+		this.keys = keys;
+		this.values = values;
+	}
+
+	public static function top():BlockFields
+		return new BlockFields(true, [], []);
+}
+
+/**
+ * The available-field state being computed at one program point, one slot per field key of the function: a key is absent,
+ * present with a null value (the analysis top), or present with its value. A function keeps only a few of these.
+ */
+private class FieldStates {
+	public final present:Array<Bool>;
+	public final values:Array<Null<IrValue>>;
+
+	// The keys of the state being intersected in, marked with the current generation.
+	final marks:Array<Int>;
+	final marked:Array<Null<IrValue>>;
+	var generation = 0;
+
+	public function new(count:Int) {
+		present = [];
+		values = [];
+		marks = [];
+		marked = [];
+		for (_ in 0...count) {
+			present.push(false);
+			values.push(null);
+			marks.push(0);
+			marked.push(null);
+		}
+	}
+
+	public function clear():Void
+		for (key in 0...present.length)
+			present[key] = false;
+
+	public function load(fields:Null<BlockFields>):Void {
+		if (fields != null && fields.everything) {
+			for (key in 0...present.length) {
+				present[key] = true;
+				values[key] = null;
+			}
+			return;
+		}
+		clear();
+		if (fields != null)
+			for (index in 0...fields.keys.length) {
+				var key = fields.keys[index];
+				present[key] = true;
+				values[key] = fields.values[index];
+			}
+	}
+
+	/** Keeps the keys present in both; a top takes the other side's value, and differing values make the key absent. */
+	public function intersect(fields:Null<BlockFields>):Void {
+		if (fields != null && fields.everything)
+			return;
+		generation++;
+		if (fields != null)
+			for (index in 0...fields.keys.length) {
+				var key = fields.keys[index];
+				marks[key] = generation;
+				marked[key] = fields.values[index];
+			}
+		for (key in 0...present.length) {
+			if (!present[key])
+				continue;
+			if (marks[key] != generation) {
+				present[key] = false;
+				continue;
+			}
+			var mine = values[key], theirs = marked[key];
+			if (mine == null)
+				values[key] = theirs;
+			else if (theirs != null && !sameValue(mine, theirs))
+				present[key] = false;
+		}
+	}
+
+	public function copyFrom(other:FieldStates):Void
+		for (key in 0...present.length) {
+			present[key] = other.present[key];
+			values[key] = other.values[key];
+		}
+
+	public function matches(fields:BlockFields):Bool {
+		if (fields.everything) {
+			for (key in 0...present.length)
+				if (!present[key] || values[key] != null)
+					return false;
+			return true;
+		}
+		var count = 0;
+		for (key in 0...present.length)
+			if (present[key])
+				count++;
+		if (count != fields.keys.length)
+			return false;
+		for (index in 0...fields.keys.length) {
+			var key = fields.keys[index],
+				mine = values[key],
+				theirs = fields.values[index];
+			if (!present[key] || (mine == null ? theirs != null : theirs == null || !sameValue(mine, theirs)))
+				return false;
+		}
+		return true;
+	}
+
+	public function compact():BlockFields {
+		var keys:Array<Int> = [], kept:Array<Null<IrValue>> = [];
+		for (key in 0...present.length)
+			if (present[key]) {
+				keys.push(key);
+				kept.push(values[key]);
+			}
+		return new BlockFields(false, keys, kept);
+	}
+
+	static inline function sameValue(a:IrValue, b:IrValue):Bool
+		return a.id == b.id && IrTypeIdentity.same(a.type, b.type);
 }

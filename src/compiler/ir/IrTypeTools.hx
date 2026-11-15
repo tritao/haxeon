@@ -33,7 +33,7 @@ class IrTypeTools {
 			case Function(arguments, result):
 				var erasedArguments = [for (argument in arguments) erase(argument)],
 					erasedResult = erase(result);
-				var same = IrTypeIdentity.text(erasedResult) == IrTypeIdentity.text(result);
+				var same = IrTypeIdentity.same(erasedResult, result);
 				for (index in 0...arguments.length)
 					if (Std.string(erasedArguments[index]) != Std.string(arguments[index]))
 						same = false;
@@ -61,8 +61,8 @@ class IrTypeTools {
 	 * another kind, so that a value typed as `Null<Int>` really is an Int box (or null).
 	 */
 	public static function compatible(expected:IrType, actual:IrType):Bool
-		return Std.string(expected) == Std.string(actual) || ((switch (expected) { case Dyn: true; default: false; }) && nullableElement(actual) != null);
+		return IrTypeIdentity.same(expected, actual) || ((switch (expected) { case Dyn: true; default: false; }) && nullableElement(actual) != null);
 
 	static function changed(original:IrType, replacement:IrType, element:IrType):IrType
-		return IrTypeIdentity.text(erase(element)) == IrTypeIdentity.text(element) ? original : replacement;
+		return IrTypeIdentity.same(erase(element), element) ? original : replacement;
 }

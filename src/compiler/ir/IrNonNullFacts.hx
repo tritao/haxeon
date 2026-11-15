@@ -33,9 +33,36 @@ private class NonNullFactSet {
 	public function remove(value:Int):Void
 		set(value, false);
 
-	public function intersect(other:NonNullFactSet):Void
+	public function copyFrom(other:NonNullFactSet):Void
 		for (index in 0...words.length)
-			words[index] &= other.words[index];
+			words[index] = other.words[index];
+
+	public function clear():Void
+		for (index in 0...words.length)
+			words[index] = 0;
+
+	/** Becomes the facts along an edge: the predecessor's outgoing facts (none when it has none) plus `fact` (-1 for none). */
+	public function loadEdge(outgoing:Null<NonNullFactSet>, fact:Int):Void {
+		if (outgoing == null)
+			clear();
+		else
+			copyFrom(outgoing);
+		if (fact >= 0)
+			set(fact, true);
+	}
+
+	/** Intersects with the facts along another edge into the same block, as `loadEdge` describes them. */
+	public function intersectEdge(outgoing:Null<NonNullFactSet>, fact:Int):Void {
+		var factIndex = fact >= 0 ? positions.get(fact) : null,
+			factWord = factIndex == null ? -1 : factIndex >>> 5,
+			factBit = factIndex == null ? 0 : 1 << (factIndex & 31);
+		for (index in 0...words.length) {
+			var along = outgoing == null ? 0 : outgoing.words[index];
+			if (index == factWord)
+				along |= factBit;
+			words[index] &= along;
+		}
+	}
 
 	public function same(other:NonNullFactSet):Bool {
 		for (index in 0...words.length)
@@ -47,7 +74,8 @@ private class NonNullFactSet {
 
 /** Must facts at instruction entry; SSA values are never invalidated by a call or a store. */
 class IrNonNullFacts {
-	final proven:Map<Int, Map<Int, Bool>> = [];
+	/** Per block, a bit per instruction index whose receiver is proven non-null; blocks with none are absent. */
+	final proven:Map<Int, Array<Int>> = [];
 
 	/** Whether any instruction of `fn` has a receiver whose non-nullness could be proven: without one there is nothing to analyze. */
 	static function hasReceiver(fn:IrFunction):Bool {
@@ -115,37 +143,44 @@ class IrNonNullFacts {
 		if ((count & 31) != 0)
 			topWords[wordCount - 1] = -1 >>> (32 - (count & 31));
 		var top = new NonNullFactSet(positions, topWords);
+		// Each block's sets are allocated once; the iteration works in two scratch sets and copies into them.
+		var before = empty.copy(), after = empty.copy();
 		if (!hasTry) {
-			for (id in graph.order)
+			for (id in graph.order) {
 				outgoing.set(id, top.copy());
-			var changed = true;
+				incoming.set(id, empty.copy());
+			}
+			var entry = fn.blocks[0].id, changed = true;
 			while (changed) {
 				changed = false;
 				for (id in graph.order) {
-					var before = empty.copy(),
-						preds = graph.predecessors.get(id);
-					if (id != fn.blocks[0].id && preds != null && preds.length > 0) {
-						before = edge(graph, preds[0], id, outgoing, tests, empty);
-						for (i in 1...preds.length) {
-							var other = edge(graph, preds[i], id, outgoing, tests, empty);
-							before.intersect(other);
-						}
-					}
-					incoming.set(id, before);
-					var after = before.copy();
+					var preds = graph.predecessors.get(id);
+					if (id != entry && preds != null && preds.length > 0) {
+						before.loadEdge(outgoing.get(preds[0]), edgeFact(graph, preds[0], id, tests));
+						for (i in 1...preds.length)
+							before.intersectEdge(outgoing.get(preds[i]), edgeFact(graph, preds[i], id, tests));
+					} else
+						before.clear();
+					incoming.get(id).copyFrom(before);
+					after.copyFrom(before);
 					for (located in graph.block(id).instructions)
 						transfer(located.value, after, graph, id, outgoing, tests, true, checkedDereferences);
-					if (!equal(outgoing.get(id), after)) {
-						outgoing.set(id, after);
+					var known = outgoing.get(id);
+					if (!known.same(after)) {
+						known.copyFrom(after);
 						changed = true;
 					}
 				}
 			}
 		}
+		var facts = before;
 		for (block in fn.blocks) {
 			var incomingFacts = incoming.get(block.id),
-				facts = incomingFacts == null ? empty.copy() : incomingFacts.copy(),
-				at:Map<Int, Bool> = [];
+				at:Null<Array<Int>> = null;
+			if (incomingFacts == null)
+				facts.clear();
+			else
+				facts.copyFrom(incomingFacts);
 			// Fresh SSA definitions stay non-null even when exception edges prevent propagating check facts.
 			if (hasTry)
 				for (value in fresh.keys())
@@ -153,17 +188,23 @@ class IrNonNullFacts {
 			for (index in 0...block.instructions.length) {
 				var located = block.instructions[index],
 					receiver = checked(located.value);
-				if (receiver != null && facts.exists(receiver.id))
-					at.set(index, true);
+				if (receiver != null && facts.exists(receiver.id)) {
+					if (at == null)
+						at = [];
+					while (at.length <= index >>> 5)
+						at.push(0);
+					at[index >>> 5] |= 1 << (index & 31);
+				}
 				transfer(located.value, facts, graph, block.id, outgoing, tests, !hasTry, checkedDereferences);
 			}
-			proven.set(block.id, at);
+			if (at != null)
+				proven.set(block.id, at);
 		}
 	}
 
 	public function has(block:Int, index:Int):Bool {
-		var at = proven.get(block);
-		return at != null && at.exists(index);
+		var at = proven.get(block), word = index >>> 5;
+		return at != null && word < at.length && (at[word] & (1 << (index & 31))) != 0;
 	}
 
 	static function checked(instruction:IrInstruction):Null<IrValue>
@@ -208,19 +249,18 @@ class IrNonNullFacts {
 		}
 	}
 
-	static function edge(graph:IrGraph, from:Int, to:Int, outgoing:Map<Int, NonNullFactSet>, tests:Map<Int, Int>, empty:NonNullFactSet):NonNullFactSet {
-		var known = outgoing.get(from),
-			result = known == null ? empty.copy() : known.copy();
+	/** The value an edge proves non-null (its null test failed on the way), or -1. */
+	static function edgeFact(graph:IrGraph, from:Int, to:Int, tests:Map<Int, Int>):Int {
 		if (!graph.blocks.exists(from))
-			return result;
+			return -1;
 		var term = graph.block(from).terminator;
 		if (term != null)
 			switch term.value {
 				case Branch(condition, yes, no) if (yes != no && no == to && tests.exists(condition.id)):
-					result.set(tests.get(condition.id), true);
+					return tests.get(condition.id);
 				default:
 			}
-		return result;
+		return -1;
 	}
 
 	static function edgeHas(graph:IrGraph, from:Int, to:Int, outgoing:Map<Int, NonNullFactSet>, tests:Map<Int, Int>, value:Int):Bool {
@@ -235,7 +275,4 @@ class IrNonNullFacts {
 			default: false;
 		});
 	}
-
-	static function equal(a:Null<NonNullFactSet>, b:NonNullFactSet):Bool
-		return a != null && a.same(b);
 }

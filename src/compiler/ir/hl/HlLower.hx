@@ -690,7 +690,7 @@ class HlLower {
 		for (native in natives)
 			if (native.name == name) {
 				if (native.arguments.length != arguments.length
-					|| IrTypeIdentity.text(native.result) != IrTypeIdentity.text(result)
+					|| !IrTypeIdentity.same(native.result, result)
 					|| native.library != nativeLibrary
 					|| native.symbol != nativeSymbol)
 					throw 'Conflicting HashLink runtime native signature for "$name": ${native.arguments} -> ${native.result}, expected $arguments -> $result';
