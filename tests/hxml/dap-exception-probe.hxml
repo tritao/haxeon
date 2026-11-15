@@ -2,4 +2,3 @@
 -cp tests/dap
 -main DapExceptionProbe
 -debug
--hl out/dap-exception-probe.hl

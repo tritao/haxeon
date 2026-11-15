@@ -2,4 +2,3 @@ common.hxml
 -cp tests
 -cp tests/runtime
 -main InstanceInitializerMain
--hl out/instance-initializer-test.hl

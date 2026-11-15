@@ -6,7 +6,7 @@ mkdir -p "$repo_dir/out"
 
 "$repo_dir/scripts/build-native.sh"
 
-"$repo_dir/.tools/haxe/haxe" "$repo_dir/tests/hxml/hot-reload-test.hxml"
+"$repo_dir/.tools/haxe/haxe" "$repo_dir/tests/hxml/hot-reload-test.hxml" -hl "$repo_dir/out/hot-reload-test.hl"
 cmake --build --preset "${HAXEON_CMAKE_PRESET:-release}" --target haxeon-jit-support-lifetime
 (
   cd "$repo_dir/out"

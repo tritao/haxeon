@@ -20,7 +20,7 @@ cleanup() {
 trap cleanup EXIT
 
 export LD_LIBRARY_PATH="$root/out:$("$root/scripts/hashlink-path.sh")${LD_LIBRARY_PATH:+:$LD_LIBRARY_PATH}"
-"$root/.tools/haxe/haxe" "$root/tests/hxml/profiler-wait-target.hxml"
+"$root/.tools/haxe/haxe" "$root/tests/hxml/profiler-wait-target.hxml" -hl "$root/out/profiler-wait-target.hl"
 
 "$runtime" --diagnostics "$port" --diagnostics-wait "$target" >"$log" 2>&1 &
 pid=$!

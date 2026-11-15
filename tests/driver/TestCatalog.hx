@@ -16,6 +16,8 @@ typedef ProgramCase = {
 
 enum CompileStep {
 	HaxeMain(main:String, arguments:Array<String>);
+
+	/** A tests/hxml file, which names the program only; the runner compiles it to the case's `output` under out/. */
 	Hxml(path:String);
 }
 

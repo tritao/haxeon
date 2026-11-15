@@ -2,4 +2,3 @@ common.hxml
 -cp tests
 -cp tests/profiler
 -main HldiAuthMain
--hl out/hldi-auth-test.hl

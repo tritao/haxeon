@@ -2,4 +2,3 @@ common.hxml
 -cp tests
 -cp tests/runtime
 -main AddedFunctionPatchMain
--hl out/added-function-patch-test.hl

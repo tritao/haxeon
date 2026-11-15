@@ -2,4 +2,3 @@ common.hxml
 -cp tests
 -cp tests/runtime
 -main NullableEnumPatternMain
--hl out/nullable-enum-pattern-test.hl

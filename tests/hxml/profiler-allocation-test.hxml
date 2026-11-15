@@ -2,4 +2,3 @@ common.hxml
 -cp tests
 -cp tests/profiler
 -main ProfilerAllocationMain
--hl out/profiler-allocation-test.hl

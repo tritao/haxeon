@@ -2,4 +2,3 @@ common.hxml
 -cp tests
 -cp tests/profiler
 -main HldiClientMain
--hl out/hldi-client-test.hl

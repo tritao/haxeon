@@ -2,4 +2,3 @@ common.hxml
 -cp tests
 -cp tests/profiler
 -main ProfilerCalibrationMain
--hl out/profiler-calibration-test.hl

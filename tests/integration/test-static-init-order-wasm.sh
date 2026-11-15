@@ -5,7 +5,7 @@ export HAXEON_HASHLINK_DIR=${HAXEON_HASHLINK_DIR:-$("$root_dir/scripts/hashlink-
 cd "$root_dir"
 wasmtime=${WASMTIME:-$root_dir/.tools/wasmtime-47.0.0/wasmtime}
 export LD_LIBRARY_PATH="$root_dir/out:$("$root_dir/scripts/hashlink-path.sh")${LD_LIBRARY_PATH:+:$LD_LIBRARY_PATH}"
-"$root_dir/.tools/haxe/haxe" tests/hxml/static-init-order-test.hxml
+"$root_dir/.tools/haxe/haxe" tests/hxml/static-init-order-test.hxml -hl out/static-init-order-test.hl
 "$("$root_dir/scripts/hashlink-path.sh")/hl" out/static-init-order-test.hl
 node <<'JS'
 const fs = require("fs");

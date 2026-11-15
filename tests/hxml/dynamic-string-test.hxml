@@ -2,4 +2,3 @@ common.hxml
 -cp tests
 -cp tests/runtime
 -main DynamicStringMain
--hl out/dynamic-string-test.hl

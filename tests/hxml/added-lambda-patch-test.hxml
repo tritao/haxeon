@@ -2,4 +2,3 @@ common.hxml
 -cp tests
 -cp tests/runtime
 -main AddedLambdaPatchMain
--hl out/added-lambda-patch-test.hl

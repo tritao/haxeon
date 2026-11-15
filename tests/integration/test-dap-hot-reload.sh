@@ -38,7 +38,7 @@ if [[ ! -d "$adapter_dir/node_modules" ]]; then npm --prefix "$adapter_dir" ci -
   NEKOPATH="$tools_dir/neko-runtime/root/usr/lib/x86_64-linux-gnu/neko" haxe build.hxml
 )
 if [[ "${SKIP_DAP_BUILD:-0}" != 1 ]]; then
-  "$tools_dir/haxe/haxe" "$repo_dir/tests/hxml/dap-hot-reload-probe.hxml"
+  "$tools_dir/haxe/haxe" "$repo_dir/tests/hxml/dap-hot-reload-probe.hxml" -hl "$repo_dir/out/dap-hot-reload-probe.hl"
 fi
 
 python3 - "$dap_home/config/adapters.json" "$adapter_dir" <<'PY'

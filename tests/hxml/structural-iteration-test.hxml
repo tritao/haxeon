@@ -2,4 +2,3 @@ common.hxml
 -cp tests
 -cp tests/runtime
 -main StructuralIterationMain
--hl out/structural-iteration-test.hl

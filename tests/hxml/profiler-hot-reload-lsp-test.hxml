@@ -2,4 +2,3 @@ common.hxml
 -cp tests
 -cp tests/profiler
 -main ProfilerHotReloadLspMain
--hl out/profiler-hot-reload-lsp-test.hl

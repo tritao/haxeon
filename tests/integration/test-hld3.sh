@@ -13,7 +13,7 @@ cc -shared -fPIC -DHL_NAME\(n\)=realtime_\#\#n \
   -Wl,-rpath,"$repo_dir/vendor/hashlink" \
   -o "$repo_dir/out/haxeon_runtime.hdll"
 
-"$repo_dir/.tools/haxe/haxe" "$repo_dir/tests/hxml/dap-hot-reload-probe.hxml"
+"$repo_dir/.tools/haxe/haxe" "$repo_dir/tests/hxml/dap-hot-reload-probe.hxml" -hl "$repo_dir/out/dap-hot-reload-probe.hl"
 
 (
   cd "$repo_dir/out"

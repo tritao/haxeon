@@ -2,4 +2,3 @@ common.hxml
 -cp tests
 -cp tests/profiler
 -main ProfilerBackpressureMain
--hl out/profiler-backpressure-test.hl

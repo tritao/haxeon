@@ -54,7 +54,7 @@ cleanup() {
 }
 trap cleanup EXIT
 
-"$tools_dir/haxe/haxe" "$repo_dir/tests/hxml/dap-cli-probe.hxml"
+"$tools_dir/haxe/haxe" "$repo_dir/tests/hxml/dap-cli-probe.hxml" -hl "$repo_dir/out/dap-cli-probe.hl"
 "${dap[@]}" start >/dev/null
 
 launch_json=$(python3 - "$repo_dir" <<'PY'

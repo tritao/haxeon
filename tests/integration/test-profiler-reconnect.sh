@@ -10,8 +10,8 @@ target="$root/out/profiler-restart-target.hl"
 client="$root/out/profiler-reconnect-test.hl"
 export LD_LIBRARY_PATH="$root/out:$root/vendor/hashlink:$("$root/scripts/hashlink-path.sh")"
 
-"$root/.tools/haxe/haxe" "$root/tests/hxml/profiler-restart-target.hxml"
-"$root/.tools/haxe/haxe" "$root/tests/hxml/profiler-reconnect-test.hxml"
+"$root/.tools/haxe/haxe" "$root/tests/hxml/profiler-restart-target.hxml" -hl "$root/out/profiler-restart-target.hl"
+"$root/.tools/haxe/haxe" "$root/tests/hxml/profiler-reconnect-test.hxml" -hl "$root/out/profiler-reconnect-test.hl"
 HL_DIAGNOSTICS_TOKEN=$token "$runtime" --diagnostics "$port" "$target" &
 first=$!
 second=

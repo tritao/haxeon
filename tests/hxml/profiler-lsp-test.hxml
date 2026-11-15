@@ -2,4 +2,3 @@ common.hxml
 -cp tests
 -cp tests/profiler
 -main ProfilerLspMain
--hl out/profiler-lsp-test.hl

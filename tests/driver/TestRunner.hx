@@ -257,7 +257,7 @@ class TestRunner {
 					];
 				case Hxml(path):
 					[
-						{start: () -> new Process(haxe, ["--cwd", root, Path.join([root, path])]), failure: setupFailure}
+						{start: () -> new Process(haxe, ["--cwd", root, Path.join([root, path]), "-hl", output]), failure: setupFailure}
 					];
 			},
 			expected = test.expectedExit,

@@ -13,14 +13,14 @@ rm -f "$core_file"
 trap 'rm -f "$gdb_commands" "$gdb_output" "$symbol_commands" "$symbol_output" "$core_file" "$core_output"' EXIT
 
 "$repo_dir/tests/integration/test-hot-reload.sh" >/dev/null
-"$repo_dir/.tools/haxe/haxe" "$repo_dir/tests/hxml/static-field-test.hxml"
+"$repo_dir/.tools/haxe/haxe" "$repo_dir/tests/hxml/static-field-test.hxml" -hl "$repo_dir/out/static-field-test.hl"
 cc -shared -fPIC \
   -I "$repo_dir/vendor/hashlink/src" \
   "$repo_dir/tests/native/patch_core.c" \
   -L "$hashlink_dir" -lhl \
   -Wl,-rpath,"$hashlink_dir" \
   -o "$repo_dir/out/patch_core.hdll"
-"$repo_dir/.tools/haxe/haxe" "$repo_dir/tests/hxml/gdb-patch-core-test.hxml"
+"$repo_dir/.tools/haxe/haxe" "$repo_dir/tests/hxml/gdb-patch-core-test.hxml" -hl "$repo_dir/out/gdb-patch-core-test.hl"
 
 cat > "$gdb_commands" <<'GDB'
 set pagination off

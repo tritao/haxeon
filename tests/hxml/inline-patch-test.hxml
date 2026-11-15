@@ -2,4 +2,3 @@ common.hxml
 -cp tests
 -cp tests/runtime
 -main InlinePatchMain
--hl out/inline-patch-test.hl

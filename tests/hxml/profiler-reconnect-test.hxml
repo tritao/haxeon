@@ -2,4 +2,3 @@ common.hxml
 -cp tests
 -cp tests/profiler
 -main ProfilerReconnectMain
--hl out/profiler-reconnect-test.hl

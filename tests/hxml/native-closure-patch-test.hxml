@@ -2,4 +2,3 @@ common.hxml
 -cp tests
 -cp tests/runtime
 -main NativeClosurePatchMain
--hl out/native-closure-patch-test.hl

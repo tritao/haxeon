@@ -2,4 +2,3 @@ common.hxml
 -cp tests
 -cp tests/runtime
 -main WasmDynamicStringMain
--hl out/wasm-dynamic-string-test.hl

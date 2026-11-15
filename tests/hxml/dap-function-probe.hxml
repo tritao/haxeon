@@ -2,4 +2,3 @@
 -cp tests/dap
 -main DapFunctionProbe
 -debug
--hl out/dap-function-probe.hl

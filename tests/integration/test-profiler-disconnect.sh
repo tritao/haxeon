@@ -33,7 +33,7 @@ if [[ "$(uname -s)" == "Darwin" ]]; then
 else
 	export LD_LIBRARY_PATH="$root/out:$("$root/scripts/hashlink-path.sh")${LD_LIBRARY_PATH:+:$LD_LIBRARY_PATH}"
 fi
-"$root/.tools/haxe/haxe" "$root/tests/hxml/profiler-disconnect-target.hxml"
+"$root/.tools/haxe/haxe" "$root/tests/hxml/profiler-disconnect-target.hxml" -hl "$root/out/profiler-disconnect-target.hl"
 
 "$client" --connect-timeout 5 --rate 100 --interval 10000 --output "$temp_dir/capture.hlpc" "$port" \
 	>"$temp_dir/client.log" 2>&1 &

@@ -18,7 +18,7 @@ if [[ ! -d "$adapter_dir/node_modules" ]]; then npm --prefix "$adapter_dir" ci -
 		LD_LIBRARY_PATH="$tools_dir/neko-runtime/root/usr/lib/x86_64-linux-gnu" \
 		NEKOPATH="$tools_dir/neko-runtime/root/usr/lib/x86_64-linux-gnu/neko" haxe build.hxml
 )
-"$tools_dir/haxe/haxe" "$repo_dir/tests/hxml/dap-function-probe.hxml"
+"$tools_dir/haxe/haxe" "$repo_dir/tests/hxml/dap-function-probe.hxml" -hl "$repo_dir/out/dap-function-probe.hl"
 
 python3 - "$dap_home/config/adapters.json" "$adapter_dir" <<'PY'
 import json, sys

@@ -2,4 +2,3 @@ common.hxml
 -cp tests
 -cp tests/runtime
 -main LiveSignaturePatchMain
--hl out/live-signature-patch-test.hl

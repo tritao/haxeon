@@ -1,3 +1,2 @@
 -cp tests/profiler
 -main ProfilerDisconnectTarget
--hl out/profiler-disconnect-target.hl

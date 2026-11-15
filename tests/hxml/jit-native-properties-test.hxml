@@ -2,4 +2,3 @@ common.hxml
 -cp tests
 -cp tests/runtime
 -main JitNativePropertiesMain
--hl out/jit-native-properties-test.hl

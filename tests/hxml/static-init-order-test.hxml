@@ -2,4 +2,3 @@ common.hxml
 -cp tests
 -cp tests/runtime
 -main StaticInitOrderMain
--hl out/static-init-order-test.hl

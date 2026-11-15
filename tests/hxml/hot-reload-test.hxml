@@ -2,4 +2,3 @@ common.hxml
 -cp tests
 -cp tests/tooling
 -main HotReloadMain
--hl out/hot-reload-test.hl

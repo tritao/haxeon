@@ -2,4 +2,3 @@ common.hxml
 -cp tests
 -cp tests/runtime
 -main LiveOptionalScalarMain
--hl out/live-optional-scalar-test.hl
