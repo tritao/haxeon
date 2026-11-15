@@ -93,13 +93,13 @@ class HlValidator {
 
 		var functionIndices = new Map<Int, Bool>();
 		for (native in code.natives) {
-			requireType(code, native.type, 'native ${native.functionIndex}');
+			requireType(code, native.type, 'native', native.functionIndex);
 			requireString(code, native.library, 'native library');
 			requireString(code, native.name, 'native name');
 			addFunctionIndex(functionIndices, native.functionIndex);
 		}
 		for (fn in code.functions) {
-			requireType(code, fn.type, 'function ${fn.functionIndex}');
+			requireType(code, fn.type, 'function', fn.functionIndex);
 			addFunctionIndex(functionIndices, fn.functionIndex);
 		}
 		for (fn in code.functions) {
@@ -111,7 +111,7 @@ class HlValidator {
 				if (location.path == null || location.line < 1)
 					throw 'Invalid debug location in function ${fn.functionIndex}';
 			for (registerType in fn.registers)
-				requireType(code, registerType, 'register in function ${fn.functionIndex}');
+				requireType(code, registerType, 'register in function', fn.functionIndex);
 			validateInstructions(code, fn, functionIndices);
 			if (cache != null)
 				cache.markValidated(fn);
@@ -188,14 +188,14 @@ class HlValidator {
 						throw 'Invalid float constant $constant in function ${fn.functionIndex}';
 				case LoadString(destination, constant):
 					requireRegister(fn, destination);
-					requireString(code, constant, 'function ${fn.functionIndex}');
+					requireString(code, constant, 'function', fn.functionIndex);
 				case LoadBool(destination, _):
 					requireRegister(fn, destination);
 				case LoadNull(destination):
 					requireRegister(fn, destination);
 				case LoadType(destination, type):
 					requireRegister(fn, destination);
-					requireType(code, type, 'type literal in function ${fn.functionIndex}');
+					requireType(code, type, 'type literal in function', fn.functionIndex);
 				case ToDyn(destination, source):
 					requireRegister(fn, destination);
 					requireRegister(fn, source);
@@ -221,9 +221,9 @@ class HlValidator {
 					requireRegister(fn, destination);
 				case GlobalGet(destination, global):
 					requireRegister(fn, destination);
-					requireGlobal(code, global, 'function ${fn.functionIndex}');
+					requireGlobal(code, global, 'function', fn.functionIndex);
 				case GlobalSet(global, source):
-					requireGlobal(code, global, 'function ${fn.functionIndex}');
+					requireGlobal(code, global, 'function', fn.functionIndex);
 					requireRegister(fn, source);
 				case Add(destination, left, right):
 					requireRegister(fn, destination);
@@ -282,7 +282,7 @@ class HlValidator {
 						requireRegister(fn, argument);
 				case New(destination, type, _):
 					requireRegister(fn, destination);
-					requireType(code, type, 'object allocation in function ${fn.functionIndex}');
+					requireType(code, type, 'object allocation in function', fn.functionIndex);
 				case FieldGet(destination, object, field):
 					requireRegister(fn, destination);
 					requireRegister(fn, object);
@@ -388,18 +388,21 @@ class HlValidator {
 			throw 'Invalid register $register in function ${fn.functionIndex}';
 	}
 
-	static function requireType(code:HlCode, type:Int, context:String):Void {
+	/** `index`, when not -1, completes `context` ("register in function" and 12); the text is made only to report a failure. */
+	static function requireType(code:HlCode, type:Int, context:String, index:Int = -1):Void {
 		if (type < 0 || type >= code.types.length)
-			throw 'Invalid type $type for $context';
+			throw 'Invalid type $type for ${index == -1 ? context : context + " " + index}';
 	}
 
-	static function requireString(code:HlCode, string:Int, context:String):Void {
+	/** `index`, when not -1, completes `context` ("register in function" and 12); the text is made only to report a failure. */
+	static function requireString(code:HlCode, string:Int, context:String, index:Int = -1):Void {
 		if (string < 0 || string >= code.strings.length)
-			throw 'Invalid string $string for $context';
+			throw 'Invalid string $string for ${index == -1 ? context : context + " " + index}';
 	}
 
-	static function requireGlobal(code:HlCode, global:Int, context:String):Void {
+	/** `index`, when not -1, completes `context` ("register in function" and 12); the text is made only to report a failure. */
+	static function requireGlobal(code:HlCode, global:Int, context:String, index:Int = -1):Void {
 		if (global < 0 || global >= code.globals.length)
-			throw 'Invalid global $global for $context';
+			throw 'Invalid global $global for ${index == -1 ? context : context + " " + index}';
 	}
 }
