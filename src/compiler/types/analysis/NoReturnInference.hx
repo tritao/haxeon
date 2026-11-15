@@ -10,34 +10,33 @@ import compiler.syntax.Ast;
  */
 class NoReturnInference {
 	/**
-	 * `classes` supplies the class-hierarchy override families: a call through `Base.m` never
-	 * returns only once `Base.m` and every concrete override in its subclasses are each,
-	 * independently, also inferred never-returning - since a virtual call might reach any of
-	 * them. That requirement is wired in as an ordinary reverse dependency below, so an override
-	 * proven never-returning on a later round correctly reawakens the base method (and vice
-	 * versa), through the same worklist used for an actual forwarding call.
+	 * Only a call that cannot reach code outside the analysis qualifies: a function, a static method, or a struct's or an
+	 * inline method. An instance method of a class is an extension point, so it is never inferred never-returning, even when
+	 * every override in this program throws: whether library code such as `haxe.io.Input.readInt8` (which uses the
+	 * `readByte` result) type-checks must not depend on which subclasses a program happens to contain.
 	 */
-	public static function infer(signatures:Map<String, AstFunction>, classes:Map<String, AstClass>, overridden:Map<String, Bool>):Map<String, Bool> {
-		var overrideFamilies = OverrideAnalysis.overrideFamilies(classes, overridden);
+	public static function infer(signatures:Map<String, AstFunction>, classes:Map<String, AstClass>):Map<String, Bool> {
+		var overridable:Map<String, Bool> = [];
+		for (className => classDecl in classes)
+			if (classDecl.isStruct != true)
+				for (method in classDecl.methods)
+					if (!method.isStatic && method.isInline != true && method.name != "new")
+						overridable.set(className + "." + method.name, true);
 		var result:Map<String, Bool> = [];
 		var reverse:Map<String, Array<String>> = [], queue:Array<String> = [], queued:Map<String, Bool> = [], cursor = 0;
-		function link(dependency:String, dependent:String):Void {
-			var users = reverse.get(dependency);
-			if (users == null) {
-				users = [];
-				reverse.set(dependency, users);
-			}
-			users.push(dependent);
-		}
 		for (name => fn in signatures) {
+			if (overridable.exists(name))
+				continue;
 			var dependencies:Map<String, Bool> = [];
 			collectDependencies(fn.statements, name, dependencies);
-			for (dependency in dependencies.keys())
-				link(dependency, name);
-			var family = overrideFamilies.get(name);
-			if (family != null)
-				for (overrideKey in family)
-					link(overrideKey, name);
+			for (dependency in dependencies.keys()) {
+				var users = reverse.get(dependency);
+				if (users == null) {
+					users = [];
+					reverse.set(dependency, users);
+				}
+				users.push(name);
+			}
 			queue.push(name);
 			queued.set(name, true);
 		}
@@ -46,16 +45,6 @@ class NoReturnInference {
 			queued.remove(name);
 			var fn = signatures.get(name);
 			if (fn == null || result.exists(name) || !astStatementsDoNotReturn(fn.statements, name, result))
-				continue;
-			var family = overridden.exists(name) ? overrideFamilies.get(name) : null;
-			var blockedByFamily = false;
-			if (family != null)
-				for (overrideKey in family)
-					if (!result.exists(overrideKey)) {
-						blockedByFamily = true;
-						break;
-					}
-			if (blockedByFamily)
 				continue;
 			result.set(name, true);
 			var users = reverse.get(name);

@@ -51,13 +51,13 @@ class JsonParser {
 	function parseDocument():Dynamic {
 		var result = parseValue();
 		skipWhitespace();
-		if (position != inputLength) invalid("trailing data");
+		if (position != inputLength) throw invalid("trailing data");
 		return result;
 	}
 
 	function parseValue():Dynamic {
 		skipWhitespace();
-		if (position >= inputLength) invalid("unexpected end of input");
+		if (position >= inputLength) throw invalid("unexpected end of input");
 		var code = codeAt(position);
 		if (code == 34) return parseString();
 		if (code == 123) return parseObject();
@@ -66,7 +66,7 @@ class JsonParser {
 		if (code == 102) return literal("false", false);
 		if (code == 110) return literal("null", null);
 		if (code == 45 || code >= 48 && code <= 57) return parseNumber();
-		invalid("unexpected character");
+		throw invalid("unexpected character");
 	}
 
 	function parseObject():Dynamic {
@@ -76,14 +76,14 @@ class JsonParser {
 		if (take(125)) return result;
 		while (true) {
 			skipWhitespace();
-			if (position >= inputLength || codeAt(position) != 34) invalid("expected object field");
+			if (position >= inputLength || codeAt(position) != 34) throw invalid("expected object field");
 			var name:String = parseString();
 			skipWhitespace();
-			if (!take(58)) invalid("expected colon");
+			if (!take(58)) throw invalid("expected colon");
 			Reflect.setField(result, name, parseValue());
 			skipWhitespace();
 			if (take(125)) return result;
-			if (!take(44)) invalid("expected comma");
+			if (!take(44)) throw invalid("expected comma");
 		}
 	}
 
@@ -96,7 +96,7 @@ class JsonParser {
 			result.push(parseValue());
 			skipWhitespace();
 			if (take(93)) return result;
-			if (!take(44)) invalid("expected comma");
+			if (!take(44)) throw invalid("expected comma");
 		}
 	}
 
@@ -109,10 +109,10 @@ class JsonParser {
 				output.add(slice(start, position - start - 1));
 				return output.toString();
 			}
-			if (code < 32) invalid("control character in string");
+			if (code < 32) throw invalid("control character in string");
 			if (code != 92) continue;
 			output.add(slice(start, position - start - 1));
-			if (position >= inputLength) invalid("unfinished escape");
+			if (position >= inputLength) throw invalid("unfinished escape");
 			var escaped = codeAt(position++);
 			switch escaped {
 				case 34, 47, 92: output.addChar(escaped);
@@ -125,18 +125,18 @@ class JsonParser {
 					var high = hex4();
 					if (high >= 0xd800 && high <= 0xdbff) {
 						if (position + 2 > inputLength || codeAt(position) != 92 || codeAt(position + 1) != 117)
-							invalid("unpaired high surrogate");
+							throw invalid("unpaired high surrogate");
 						position += 2;
 						var low = hex4();
-						if (low < 0xdc00 || low > 0xdfff) invalid("invalid low surrogate");
+						if (low < 0xdc00 || low > 0xdfff) throw invalid("invalid low surrogate");
 						addUnicode(output, 0x10000 + ((high - 0xd800) << 10) + low - 0xdc00);
-					} else if (high >= 0xdc00 && high <= 0xdfff) invalid("unpaired low surrogate");
+					} else if (high >= 0xdc00 && high <= 0xdfff) throw invalid("unpaired low surrogate");
 					else addUnicode(output, high);
-				default: invalid("invalid escape");
+				default: throw invalid("invalid escape");
 			}
 			start = position;
 		}
-		invalid("unclosed string");
+		throw invalid("unclosed string");
 	}
 
 	static function addUnicode(output:StringBuf, code:Int):Void {
@@ -161,24 +161,24 @@ class JsonParser {
 
 	function parseNumber():Dynamic {
 		var start = position;
-		if (take(45) && position >= inputLength) invalid("unfinished number");
+		if (take(45) && position >= inputLength) throw invalid("unfinished number");
 		if (take(48)) {
-			if (position < inputLength && digit(codeAt(position))) invalid("leading zero");
+			if (position < inputLength && digit(codeAt(position))) throw invalid("leading zero");
 		} else {
-			if (position >= inputLength || !digit(codeAt(position))) invalid("expected digit");
+			if (position >= inputLength || !digit(codeAt(position))) throw invalid("expected digit");
 			while (position < inputLength && digit(codeAt(position))) position++;
 		}
 		var floating = false;
 		if (take(46)) {
 			floating = true;
-			if (position >= inputLength || !digit(codeAt(position))) invalid("expected fraction digit");
+			if (position >= inputLength || !digit(codeAt(position))) throw invalid("expected fraction digit");
 			while (position < inputLength && digit(codeAt(position))) position++;
 		}
 		if (position < inputLength && (codeAt(position) == 101 || codeAt(position) == 69)) {
 			floating = true;
 			position++;
 			if (position < inputLength && (codeAt(position) == 43 || codeAt(position) == 45)) position++;
-			if (position >= inputLength || !digit(codeAt(position))) invalid("expected exponent digit");
+			if (position >= inputLength || !digit(codeAt(position))) throw invalid("expected exponent digit");
 			while (position < inputLength && digit(codeAt(position))) position++;
 		}
 		var token = slice(start, position - start);
@@ -186,18 +186,18 @@ class JsonParser {
 	}
 
 	function literal(name:String, value:Dynamic):Dynamic {
-		if (slice(position, name.length) != name) invalid("invalid literal");
+		if (slice(position, name.length) != name) throw invalid("invalid literal");
 		position += name.length;
 		return value;
 	}
 
 	function hex4():Int {
-		if (position + 4 > inputLength) invalid("unfinished Unicode escape");
+		if (position + 4 > inputLength) throw invalid("unfinished Unicode escape");
 		var value = 0;
 		for (_ in 0...4) {
 			var code = codeAt(position++), digit = code >= 48 && code <= 57 ? code - 48
 				: code >= 65 && code <= 70 ? code - 55 : code >= 97 && code <= 102 ? code - 87 : -1;
-			if (digit < 0) invalid("invalid Unicode escape");
+			if (digit < 0) throw invalid("invalid Unicode escape");
 			value = value * 16 + digit;
 		}
 		return value;
@@ -212,8 +212,9 @@ class JsonParser {
 		return true;
 	}
 
-	function invalid(message:String):Void
-		throw '$message at position $position';
+	/** The error for `message` at the current position, for the caller to throw. */
+	function invalid(message:String):String
+		return '$message at position $position';
 
 	static function digit(code:Int):Bool return code >= 48 && code <= 57;
 	static function whitespace(code:Int):Bool return code == 32 || code == 9 || code == 10 || code == 13;

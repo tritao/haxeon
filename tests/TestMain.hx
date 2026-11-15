@@ -1093,16 +1093,23 @@ class TestMain {
 		}, "numeric operands",
 			"a subclass overriding a previously-pure base method with an impure one");
 		expectDependentAnswerInvalidated([
+			{path: "Guard.hx", source: "class Guard { public static function fail():Void throw \"no\"; }"},
 			{
-				path: "Base.hx",
-				source: "class Base { public function new() {} public function fail():Void throw \"no\"; public function get(v:Null<Float>):Float { if (v == null) this.fail(); return v + 1; } }"
-			},
-			{path: "Sub.hx", source: "class Sub extends Base {}"},
-			{path: "Main.hx", source: "import Sub; function main():Int return Std.int(new Sub().get(41.0));"}
+				path: "Main.hx",
+				source: "import Guard; function get(v:Null<Float>):Float { if (v == null) Guard.fail(); return v + 1; } function main():Int return Std.int(get(41.0));"
+			}
 		],
-			{path: "Sub.hx", source: "class Sub extends Base { override public function fail():Void {} }"}, "numeric operands",
-			"a subclass overriding a previously-never-returning base method");
+			{path: "Guard.hx", source: "class Guard { public static function fail():Void {} }"}, "numeric operands",
+			"a static helper that stopped never returning");
 		Sys.println("PASS: incremental recompiles retype callers whose purity or no-return dependency changed");
+		// An instance method can be overridden, so its call is typed by its declaration even when every body in the program
+		// throws: whether a library method type-checks must not depend on which subclasses a program contains.
+		for (subclass in [
+			"",
+			"class Sub extends Base { override public function fail():Void throw \"sub\"; }"
+		])
+			expectCompileError('class Base { public function new() {} public function fail():Void throw "no"; public function get(v:Null<Float>):Float { if (v == null) this.fail(); return v + 1; } } $subclass function main():Int return Std.int(new Base().get(41.0));',
+				"Arithmetic requires matching numeric operands");
 		// A base method is pure only once every concrete override is also pure - never merely
 		// because none happens to exist yet. A single impure override is enough to reject it, in
 		// one fresh compile, with no incremental edit involved.
@@ -1647,9 +1654,9 @@ class TestMain {
 		Sys.println("PASS: branching super-constructor arguments lower without cross-block receiver values");
 		var overriddenNoReturnCompiler = new Compiler();
 		overriddenNoReturnCompiler.update("Main.hx",
-			'class Part { public function new() {} public function size():Int return 42; } class Base { public function new() {} public function make():Part throw "abstract"; function fail():Int throw "failed"; public function guarded(flag:Bool):Int { if (flag) return 1; fail(); } } class Child extends Base { public function new() super(); override public function make():Part return new Part(); } function main():Int { var base:Base = new Child(); var part = base.make(); return part.size() + base.guarded(true) - 1; }');
+			'class Part { public function new() {} public function size():Int return 42; } class Base { public function new() {} public function make():Part throw "abstract"; function fail():Int throw "failed"; public function guarded(flag:Bool):Int { if (flag) return 1; return fail(); } } class Child extends Base { public function new() super(); override public function make():Part return new Part(); } function main():Int { var base:Base = new Child(); var part = base.make(); return part.size() + base.guarded(true) - 1; }');
 		overriddenNoReturnCompiler.compile("Main");
-		Sys.println("PASS: overridden throwing methods return values while other throwing methods stay no-return");
+		Sys.println("PASS: overridden throwing methods return values");
 		var assignmentConversionCompiler = new Compiler();
 		assignmentConversionCompiler.update("Main.hx",
 			'enum Resize { Changed(width:Int, height:Int); } class View { public function new() {} public function setViewport(width:Float, height:Float):Void {} } function main():Int { var view = new View(); var width = 900.0; var height = 650.0; switch Resize.Changed(1200, 800) { case Resize.Changed(nextWidth, nextHeight): width = nextWidth; height = nextHeight; } view.setViewport(width, height); return 42; }');
