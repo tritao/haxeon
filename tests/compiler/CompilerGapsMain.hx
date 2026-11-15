@@ -59,8 +59,8 @@ class CompilerGapsMain {
 						if (GeneratedProgramRunner.exitCode(result) != 42)
 							throw 'Compiler gap case $index failed';
 					} else if (c == warm)
-						File.saveBytes('out/compiler-gaps-$target-$index.wasm', new WasmBackend().compile(result.ir, {target: target, debugNames: true})
-							.bytes);
+						File.saveBytes(SuiteOutput.path('compiler-gaps-$target-$index.wasm'),
+							new WasmBackend().compile(result.ir, {target: target, debugNames: true}).bytes);
 				}
 		}
 
@@ -87,7 +87,7 @@ class CompilerGapsMain {
 					throw "An unsafe or unsupported conversion was accepted";
 				}
 		}
-		File.saveContent("out/compiler-gaps-count.txt", Std.string(programs.length));
+		File.saveContent(SuiteOutput.path("compiler-gaps-count.txt"), Std.string(programs.length));
 		Sys.println("PASS: checked Dynamic records, reflection, chained calls and Array.exists, cold and incremental, all targets");
 	}
 }

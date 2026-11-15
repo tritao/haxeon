@@ -2,11 +2,12 @@
 set -euo pipefail
 
 root_dir=$(cd "$(dirname "$0")/../.." && pwd)
+source "$root_dir/scripts/lib/env.sh"
+out_dir=$haxeon_suite_out # this suite's own directory: every file it writes and reads back goes there
 haxe_bin="$root_dir/.tools/haxe/haxe"
 bundled_wasmtime="$root_dir/.tools/wasmtime-47.0.0/wasmtime"
 wasmtime_bin=${WASMTIME:-$([[ -x $bundled_wasmtime ]] && echo "$bundled_wasmtime" || echo wasmtime)}
 
-source "$root_dir/scripts/lib/env.sh"
 haxeon_require_haxe
 source "$root_dir/scripts/haxeon-compiler.sh"
 if ! command -v "$wasmtime_bin" >/dev/null 2>&1; then
@@ -20,20 +21,20 @@ if [[ "$wasmtime_version" != *"47.0.0"* ]]; then
 	exit 1
 fi
 
-mkdir -p "$root_dir/out"
-"$haxe_bin" --cwd "$root_dir" common.hxml -cp tests/compiler --run WasmBackendMain
+mkdir -p "$out_dir"
+"$haxe_bin" --cwd "$root_dir" common.hxml -cp tests -cp tests/compiler --run WasmBackendMain
 haxeon_compile_async \
-	--target=wasm-gc --output=out/wasm-gc-wasmtime-bytes.wasm --entry=wasm-gc-bytes \
+	--target=wasm-gc --output="$out_dir/wasm-gc-wasmtime-bytes.wasm" --entry=wasm-gc-bytes \
 	--root=tests/programs tests/programs/wasm-gc-bytes.hx
 
 for case_name in add expression-lambda switch-expression-block member-range trailing-object-comma block-comprehension transparent-abstract computed-field-assignment assignment-expression literal-postfix bitwise bitwise-comparison-precedence type-annotation local-function switch-guard callback-method bound-method name-collision bool-if fib while-arithmetic branch-assignment static-class static-field static-field-init instance-class instance-field-init instance-field-init-constructor default-constructor-class enum-basic enum-payload enum-payload-pattern generic-enum-field nullable-guard-return nullable-array-guard native-abstract-null nullable-enum-switch array-mutation wasm-gc-invariants increment logical-comparisons negation switch-subject-binding enum-exhaustive try-return try-branch try-loop-control try-outer-local try-branch-local try-call-local local-shadowing captured-shadowing dynamic-argument switch-expression string-switch-statement switch-inline-final throw-expression array-literal empty-array-flow-inference do-while postfix-increment optional-enum-parameter call-many function-call function-value lambda single-argument-lambda contextual-callbacks enum-array-pattern anonymous-function enum-abstract computed-property mutable-capture nested-mutable-capture captured-lambda captured-this nullable-basic nullable-compound object-array for-in loop-control modulo switch-enum multiple-implements captured-method anonymous-record array-comprehension filtered-array-comprehension range-iteration cast-expression optional-argument-forwarding default-parameter-inference generic-functions generic-abstract bounded-generic generic-class array-iterator-wasm array-slice-index array-growth-wasm array-alias-growth array-index-growth array-resize array-expression-mutation array-field-mutation array-copy-concat array-unshift array-insert array-splice array-remove array-object-mutation array-reverse wasm-gc-dynamic-equality numeric-promotion function-wrapper inheritance-class override-method virtual-dispatch wasm-gc-reuse wasm-gc-std-is-of-type map-basic map-int map-primitive-types map-literal map-object map-anonymous-enum map-for-in map-key-value-for-in map-comprehension map-nullable-get nullable-map-get map-string-equality string-concat-mixed string-split string-split-edge wasm-gc-string-from-char-code bytes-codec bytes-stream-edge bytes-view reflect-compare-sort generic-interface generic-contextual-callback interface-dispatch interface-inheritance interface-upcast interface-field try-catch try-nested try-array-bounds concise-try try-typed-class try-typed-mismatch try-typed-int try-multiple-catches enum-argument-string string-interpolation wasm-gc-std-string-dynamic compiler-audit-regressions wasm-gc-string-operations; do
 	haxeon_compile_async \
-		--target=wasm-gc --output="out/wasm-gc-wasmtime-$case_name.wasm" --entry="$case_name" \
+		--target=wasm-gc --output="$out_dir/wasm-gc-wasmtime-$case_name.wasm" --entry="$case_name" \
 		--root=tests/programs "tests/programs/$case_name.hx"
 done
 
 haxeon_compile_async \
-	--target=wasm-gc --output=out/wasm-gc-wasmtime-bytes-compare.wasm --entry=wasm-bytes-compare \
+	--target=wasm-gc --output="$out_dir/wasm-gc-wasmtime-bytes-compare.wasm" --entry=wasm-bytes-compare \
 	--root=tests/programs tests/programs/wasm-bytes-compare.hx
 
 haxeon_compile_wait
@@ -209,9 +210,9 @@ for artifact in \
 	wasm-gc-wasmtime-compiler-audit-regressions \
 	wasm-gc-wasmtime-wasm-gc-string-operations \
 	wasm-gc-wasmtime-bytes-compare; do
-	wasm_file="$root_dir/out/$artifact.wasm"
-	result=$("$wasmtime_bin" run --invoke main "$wasm_file" 2>"$root_dir/out/wasmtime-stderr.txt") || {
-		cat "$root_dir/out/wasmtime-stderr.txt" >&2
+	wasm_file="$out_dir/$artifact.wasm"
+	result=$("$wasmtime_bin" run --invoke main "$wasm_file" 2>"$out_dir/wasmtime-stderr.txt") || {
+		cat "$out_dir/wasmtime-stderr.txt" >&2
 		echo "Wasmtime failed to run $artifact" >&2
 		exit 1
 	}
@@ -242,7 +243,7 @@ for artifact in \
 		expected=71
 	fi
 	if [[ "$result" != "$expected" ]]; then
-		cat "$root_dir/out/wasmtime-stderr.txt" >&2
+		cat "$out_dir/wasmtime-stderr.txt" >&2
 		echo "Wasmtime returned '$result' for $artifact, expected $expected" >&2
 		exit 1
 	fi

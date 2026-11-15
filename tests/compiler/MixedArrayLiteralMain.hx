@@ -53,10 +53,11 @@ class MixedArrayLiteralMain {
 					throw 'Mixed array case $index failed';
 				if (c == warm)
 					for (target in [Wasm32, WasmGc])
-						File.saveBytes('out/mixed-array-$target-$index.wasm', new WasmBackend().compile(result.ir, {target: target, debugNames: true}).bytes);
+						File.saveBytes(SuiteOutput.path('mixed-array-$target-$index.wasm'),
+							new WasmBackend().compile(result.ir, {target: target, debugNames: true}).bytes);
 			}
 		}
-		File.saveContent("out/mixed-array-count.txt", Std.string(cases.length));
+		File.saveContent(SuiteOutput.path("mixed-array-count.txt"), Std.string(cases.length));
 		for (index in 0...hostCases.length)
 			for (c in [warm, compiler()]) {
 				c.update("Main.hx", source(hostCases[index]));

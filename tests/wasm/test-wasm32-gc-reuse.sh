@@ -2,14 +2,15 @@
 set -euo pipefail
 
 root_dir=$(cd "$(dirname "$0")/../.." && pwd)
-haxe_bin="$root_dir/.tools/haxe/haxe"
-artifact="$root_dir/out/wasm-gc-reuse-zero-init.wasm"
-
 source "$root_dir/scripts/lib/env.sh"
+out_dir=$haxeon_suite_out # this suite's own directory: every file it writes and reads back goes there
+haxe_bin="$root_dir/.tools/haxe/haxe"
+artifact="$out_dir/wasm-gc-reuse-zero-init.wasm"
+
 haxeon_require_haxe
 source "$root_dir/scripts/haxeon-compiler.sh"
 
-mkdir -p "$root_dir/out"
+mkdir -p "$out_dir"
 haxeon_compile \
 	--target=wasm32 --output="$artifact" --entry=wasm-gc-reuse \
 	--wasm-gc-stress \

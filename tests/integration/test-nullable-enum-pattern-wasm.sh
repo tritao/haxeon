@@ -5,19 +5,23 @@ export HAXEON_HASHLINK_DIR=${HAXEON_HASHLINK_DIR:-$("$root_dir/scripts/hashlink-
 cd "$root_dir"
 wasmtime=${WASMTIME:-$root_dir/.tools/wasmtime-47.0.0/wasmtime}
 export LD_LIBRARY_PATH="$root_dir/out:$("$root_dir/scripts/hashlink-path.sh")${LD_LIBRARY_PATH:+:$LD_LIBRARY_PATH}"
-"$root_dir/.tools/haxe/haxe" tests/hxml/nullable-enum-pattern-test.hxml -hl out/nullable-enum-pattern-test.hl
-"$("$root_dir/scripts/hashlink-path.sh")/hl" out/nullable-enum-pattern-test.hl
+source "$root_dir/scripts/lib/env.sh"
+out_dir=$haxeon_suite_out # where the test main writes (tests/SuiteOutput.hx) and this script reads
+mkdir -p "$out_dir"
+export out_dir
+"$root_dir/.tools/haxe/haxe" tests/hxml/nullable-enum-pattern-test.hxml -hl "$out_dir/nullable-enum-pattern-test.hl"
+"$("$root_dir/scripts/hashlink-path.sh")/hl" "$out_dir/nullable-enum-pattern-test.hl"
 node <<'JS'
 const fs = require('fs');
 for (const build of ['clean', 'incremental']) {
-    const bytes = fs.readFileSync(`out/nullable-enum-pattern-Wasm32-${build}.wasm`);
+    const bytes = fs.readFileSync(`${process.env.out_dir}/nullable-enum-pattern-Wasm32-${build}.wasm`);
     const actual = new WebAssembly.Instance(new WebAssembly.Module(bytes), {}).exports.main();
     const expected = build === 'clean' ? 42 : 43;
     if (actual !== expected) throw new Error(`wasm32 ${build}: ${actual}, expected ${expected}`);
 }
 JS
 for build in clean incremental; do
-    actual=$("$wasmtime" run --invoke main "out/nullable-enum-pattern-WasmGc-$build.wasm")
+    actual=$("$wasmtime" run --invoke main "$out_dir/nullable-enum-pattern-WasmGc-$build.wasm")
     expected=42
     if [[ $build == incremental ]]; then expected=43; fi
     if [[ $actual != "$expected" ]]; then

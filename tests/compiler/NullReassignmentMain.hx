@@ -91,10 +91,10 @@ class NullReassignmentMain {
 					throw 'Valid null reassignment $index returned the wrong result';
 				if (c == warm)
 					for (target in [Wasm32, WasmGc])
-						File.saveBytes('out/null-reassignment-$target-$index.wasm',
+						File.saveBytes(SuiteOutput.path('null-reassignment-$target-$index.wasm'),
 							new WasmBackend().compile(result.ir, {target: target, debugNames: true}).bytes);
 			}
-		File.saveContent("out/null-reassignment-count.txt", Std.string(valid.length));
+		File.saveContent(SuiteOutput.path("null-reassignment-count.txt"), Std.string(valid.length));
 		for (index in 0...invalid.length)
 			for (c in [warm, compiler()]) {
 				c.update("Main.hx", source(invalid[index]));

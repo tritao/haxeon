@@ -12,7 +12,7 @@ class NullableEnumPatternMain {
 			compiler.update("Main.hx", incremental ? StringTools.replace(source, "return 42;", "return 43;") : source);
 			var result = compiler.compile("Main"),
 				build = incremental ? "incremental" : "clean";
-			var path = 'out/nullable-enum-pattern-$build.hl';
+			var path = SuiteOutput.path('nullable-enum-pattern-$build.hl');
 			File.saveBytes(path, HlWriter.encode(result.module).flatten());
 			var child = new sys.io.Process(Sys.getEnv("HAXEON_HASHLINK_DIR") + "/hl", [path]);
 			var output = child.stdout.readAll().toString() + child.stderr.readAll().toString(),
@@ -21,8 +21,8 @@ class NullableEnumPatternMain {
 			if (code != (incremental ? 43 : 42))
 				throw 'Nullable enum patterns ($build) returned $code: $output';
 			for (target in [Wasm32, WasmGc])
-				File.saveBytes('out/nullable-enum-pattern-$target-$build.wasm', new WasmBackend().compile(result.ir, {target: target, debugNames: true})
-					.bytes);
+				File.saveBytes(SuiteOutput.path('nullable-enum-pattern-$target-$build.wasm'),
+					new WasmBackend().compile(result.ir, {target: target, debugNames: true}).bytes);
 		}
 		Sys.println("PASS: nullable tuple and payload enum patterns, clean and incremental");
 	}

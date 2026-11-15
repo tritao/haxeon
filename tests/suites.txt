@@ -9,7 +9,7 @@
 #          `full` all three. A suite in several groups runs once.
 # command  a bash command run from the repository root, stdout and stderr together; {jobs} is the job count (--jobs). HAXEON_SUITE_OUT
 #          is an empty directory of the suite's own (in the run directory): a suite that may run beside another writes there, not to
-#          a fixed path under out/.
+#          a fixed path under out/ (scripts take it as haxeon_suite_out from scripts/lib/env.sh, test mains through tests/SuiteOutput.hx).
 #
 # options
 #   lane=NAME           suites of one lane run one after another, in the background, from where the first of them is listed; the rest
@@ -42,15 +42,10 @@ messagepack-interop              ci          -- bash tests/integration/test-mess
 run-output                       ci          -- bash tests/integration/test-run-output.sh
 wire-incremental-helpers         ci          -- bash tests/integration/test-wire-incremental-helpers.sh
 differential-tests               ci          -- tests/differential/run.sh
-driver-default                   quick,ci    -- env -u HAXEON_CHECK_REUSE scripts/test-driver.sh {jobs}
-# Example callers are outside the compiler and UI fixture roots; final-prop API ports must check the app too.
-ui-showcase                      quick       -- env -u HAXEON_COMPILER_HL bash packages/ui/tools/test-showcase-builds.sh
-# Adds the warm-edit rebuilds and the reuse comparisons.
-driver-checked                   wave        -- env HAXEON_CHECK_REUSE=1 scripts/test-driver.sh {jobs}
 
-# Both Wasm backends: backend-specific checks, then every manifest program against HL's exit codes. The suites listed after the lane
-# never touch Wasm artifacts. The driver's WasmBackendMain case writes to its own HAXEON_SUITE_OUT, not to the out/wasm-backend-* files
-# test-wasm-backend.sh reads, so the lane could start alongside the driver; it still starts after it until a run confirms that.
+# Both Wasm backends: backend-specific checks, then every manifest program against HL's exit codes. The lane starts before the driver
+# and runs beside it, although the driver runs several of the same test mains: every file a lane suite writes and reads back is in its
+# own HAXEON_SUITE_OUT (haxeon_suite_out in scripts/lib/env.sh, tests/SuiteOutput.hx in the mains), never at a fixed path under out/.
 wasm-backend                     wave,ci     lane=wasm -- bash tests/wasm/test-wasm-backend.sh
 wasm-parity                      ci          lane=wasm -- bash tests/wasm/test-wasm-parity.sh
 static-init-order-wasm           ci          lane=wasm requires=wasmtime -- bash tests/integration/test-static-init-order-wasm.sh
@@ -62,6 +57,12 @@ mixed-array-wasm                 ci          lane=wasm requires=wasmtime -- bash
 enum-typedef-wasm                ci          lane=wasm requires=wasmtime -- bash tests/integration/test-enum-typedef-wasm.sh
 nullable-enum-pattern-wasm       ci          lane=wasm requires=wasmtime -- bash tests/integration/test-nullable-enum-pattern-wasm.sh
 wasm-gc-wasmtime                 ci          lane=wasm requires=wasmtime -- bash tests/wasm/test-wasm-gc-wasmtime.sh
+
+driver-default                   quick,ci    -- env -u HAXEON_CHECK_REUSE scripts/test-driver.sh {jobs}
+# Example callers are outside the compiler and UI fixture roots; final-prop API ports must check the app too.
+ui-showcase                      quick       -- env -u HAXEON_COMPILER_HL bash packages/ui/tools/test-showcase-builds.sh
+# Adds the warm-edit rebuilds and the reuse comparisons.
+driver-checked                   wave        -- env HAXEON_CHECK_REUSE=1 scripts/test-driver.sh {jobs}
 
 formatter-integration            ci          -- tests/integration/test-haxeon-formatter.sh
 native-publish-integration       ci          -- bash tests/integration/test-native-publish.sh

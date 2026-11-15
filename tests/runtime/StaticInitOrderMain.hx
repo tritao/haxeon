@@ -82,7 +82,7 @@ class StaticInitOrderMain {
 		}
 		// The stateless frontend uses the same assembler without the incremental function cache.
 		var fullIr = Frontend.compile('class Seed { public static final value:Int = 0; } class Consumer { public static final values:Array<String> = ["All"].concat([for (value in Provider.values) value]); } class Provider { public static final values:Array<String> = ["Welding"]; } function main():Int return Consumer.values.length;');
-		var full = runBytecode("out/static-init-full.hl", HlWriter.encode(HlLower.lower(fullIr)).flatten());
+		var full = runBytecode(SuiteOutput.path("static-init-full.hl"), HlWriter.encode(HlLower.lower(fullIr)).flatten());
 		if (full.status != 2)
 			throw "Stateless frontend initialized a consumer before its provider: " + full.output;
 		// The first probe has no reads; later probes must not reuse its cached references.
@@ -118,7 +118,7 @@ class StaticInitOrderMain {
 			Runtime.dispose(live);
 			for (target in [Wasm32, WasmGc]) {
 				var bytes = new WasmBackend().compile(result.ir, {target: target, debugNames: true}).bytes;
-				File.saveBytes('out/static-init-$target-' + (incremental ? "incremental" : "clean") + ".wasm", bytes);
+				File.saveBytes(SuiteOutput.path('static-init-$target-' + (incremental ? "incremental" : "clean") + ".wasm"), bytes);
 			}
 		}
 		for (source in [
@@ -143,7 +143,7 @@ class StaticInitOrderMain {
 		compiler.update("Main.hx",
 			'class Missing { public static final values:Array<Int> = null; } class Consumer { public static final count:Int = Missing.values.length; } function main():Int return Consumer.count;');
 		var nullResult = compiler.compile("Main");
-		var failed = runBytecode("out/static-init-null.hl", HlWriter.encode(nullResult.module).flatten());
+		var failed = runBytecode(SuiteOutput.path("static-init-null.hl"), HlWriter.encode(nullResult.module).flatten());
 		if (failed.status == 0 || failed.output.indexOf('Cannot dereference null static "Missing.values"') < 0)
 			throw "Null static dereference at startup did not report an error: " + failed.output;
 		Sys.println("PASS: static initializers respect dependency order");

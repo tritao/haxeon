@@ -2,325 +2,325 @@
 set -euo pipefail
 
 root_dir=$(cd "$(dirname "$0")/../.." && pwd)
-haxe_bin="$root_dir/.tools/haxe/haxe"
-mkdir -p "$root_dir/out"
 source "$root_dir/scripts/lib/env.sh"
+out_dir=$haxeon_suite_out # this suite's own directory: every file it writes and reads back goes there
+haxe_bin="$root_dir/.tools/haxe/haxe"
+mkdir -p "$out_dir"
 haxeon_require_haxe
 source "$root_dir/scripts/haxeon-compiler.sh"
 
 # The committed C runtime every wasm32 module links must match native/wasm (docs/WASM_LINEAR_RUNTIME.md).
 bash "$root_dir/scripts/build-wasm-runtime.sh" --check
-# This script reads the modules WasmBackendMain writes from out/, so it runs it without the suite directory the test runner sets.
-env -u HAXEON_SUITE_OUT "$haxe_bin" --cwd "$root_dir" common.hxml -cp tests/compiler --run WasmBackendMain
+"$haxe_bin" --cwd "$root_dir" common.hxml -cp tests -cp tests/compiler --run WasmBackendMain
 bash "$root_dir/tests/wasm/test-wasm-shared-memory.sh"
 bash "$root_dir/tests/wasm/test-wasm32-gc-reuse.sh"
 bash "$root_dir/tests/wasm/test-wasm32-gc-invariants.sh"
 haxeon_compile_async \
-	--target=wasm32 --output=out/wasm-cli-backend.wasm --entry=add \
+	--target=wasm32 --output="$out_dir/wasm-cli-backend.wasm" --entry=add \
 	--root=tests/programs tests/programs/add.hx
 haxeon_compile_async \
-	--target=wasm32 --output=out/wasm-cli-source-root.wasm --entry=Main \
+	--target=wasm32 --output="$out_dir/wasm-cli-source-root.wasm" --entry=Main \
 	--root=tests/fixtures/source_root tests/fixtures/source_root/Main.hx
 haxeon_compile_async \
-	--target=wasm32 --output=out/wasm-cli-runtime-source.wasm --entry=wasm-runtime-source-link \
+	--target=wasm32 --output="$out_dir/wasm-cli-runtime-source.wasm" --entry=wasm-runtime-source-link \
 	--root=tests/programs tests/programs/wasm-runtime-source-link.hx
 haxeon_compile_async \
-	--target=wasm-gc --output=out/wasm-gc-cli-runtime-source.wasm --entry=wasm-runtime-source-link \
+	--target=wasm-gc --output="$out_dir/wasm-gc-cli-runtime-source.wasm" --entry=wasm-runtime-source-link \
 	--root=tests/programs tests/programs/wasm-runtime-source-link.hx
 haxeon_compile_async \
-	--target=wasm32 --output=out/wasm-cli-typed-std-dependency.wasm --entry=wasm-typed-std-dependency \
+	--target=wasm32 --output="$out_dir/wasm-cli-typed-std-dependency.wasm" --entry=wasm-typed-std-dependency \
 	--root=tests/programs tests/programs/wasm-typed-std-dependency.hx
 haxeon_compile_async \
-	--target=wasm32 --output=out/wasm-cli-int64-of-int.wasm --entry=wasm-int64-of-int \
+	--target=wasm32 --output="$out_dir/wasm-cli-int64-of-int.wasm" --entry=wasm-int64-of-int \
 	--root=tests/programs tests/programs/wasm-int64-of-int.hx
 haxeon_compile_async \
-	--target=wasm-gc --output=out/wasm-gc-cli-int64-of-int.wasm --entry=wasm-int64-of-int \
+	--target=wasm-gc --output="$out_dir/wasm-gc-cli-int64-of-int.wasm" --entry=wasm-int64-of-int \
 	--root=tests/programs tests/programs/wasm-int64-of-int.hx
 haxeon_compile_async \
-	--target=wasm32 --output=out/wasm-cli-ryu-source.wasm --entry=wasm-ryu-source \
+	--target=wasm32 --output="$out_dir/wasm-cli-ryu-source.wasm" --entry=wasm-ryu-source \
 	--export=wasm-ryu-source.stringifyFloat --root=tests/programs tests/programs/wasm-ryu-source.hx
 haxeon_compile_async \
-	--target=wasm-gc --output=out/wasm-gc-cli-ryu-source.wasm --entry=wasm-ryu-source \
+	--target=wasm-gc --output="$out_dir/wasm-gc-cli-ryu-source.wasm" --entry=wasm-ryu-source \
 	--root=tests/programs tests/programs/wasm-ryu-source.hx
 haxeon_compile_async \
-	--target=wasm32 --output=out/wasm-cli-std-string-fields.wasm --entry=wasm-std-string-fields \
+	--target=wasm32 --output="$out_dir/wasm-cli-std-string-fields.wasm" --entry=wasm-std-string-fields \
 	--root=tests/programs tests/programs/wasm-std-string-fields.hx
 haxeon_compile_async \
-	--target=wasm-gc --output=out/wasm-gc-cli-std-string-fields.wasm --entry=wasm-std-string-fields \
+	--target=wasm-gc --output="$out_dir/wasm-gc-cli-std-string-fields.wasm" --entry=wasm-std-string-fields \
 	--root=tests/programs tests/programs/wasm-std-string-fields.hx
 haxeon_compile_async \
-	--target=wasm32 --output=out/wasm-cli-memory-filesystem.wasm --entry=wasm-memory-filesystem \
+	--target=wasm32 --output="$out_dir/wasm-cli-memory-filesystem.wasm" --entry=wasm-memory-filesystem \
 	--root=tests/programs tests/programs/wasm-memory-filesystem.hx
 haxeon_compile_async \
-	--target=wasm-gc --output=out/wasm-gc-cli-memory-filesystem.wasm --entry=wasm-memory-filesystem \
+	--target=wasm-gc --output="$out_dir/wasm-gc-cli-memory-filesystem.wasm" --entry=wasm-memory-filesystem \
 	--root=tests/programs tests/programs/wasm-memory-filesystem.hx
 haxeon_compile_async \
-	--target=wasm32 --output=out/wasm-cli-ereg-engine.wasm --entry=wasm-ereg-engine \
+	--target=wasm32 --output="$out_dir/wasm-cli-ereg-engine.wasm" --entry=wasm-ereg-engine \
 	--root=tests/programs tests/programs/wasm-ereg-engine.hx
 haxeon_compile_async \
-	--target=wasm-gc --output=out/wasm-gc-cli-ereg-engine.wasm --entry=wasm-ereg-engine \
+	--target=wasm-gc --output="$out_dir/wasm-gc-cli-ereg-engine.wasm" --entry=wasm-ereg-engine \
 	--root=tests/programs tests/programs/wasm-ereg-engine.hx
 haxeon_compile_async \
-	--target=wasm32 --output=out/wasm-cli-dynamic.wasm --entry=dynamic-equality \
+	--target=wasm32 --output="$out_dir/wasm-cli-dynamic.wasm" --entry=dynamic-equality \
 	--root=tests/programs tests/programs/dynamic-equality.hx
 haxeon_compile_async \
-	--target=wasm32 --output=out/wasm-cli-function-wrapper.wasm --entry=function-wrapper \
+	--target=wasm32 --output="$out_dir/wasm-cli-function-wrapper.wasm" --entry=function-wrapper \
 	--root=tests/programs tests/programs/function-wrapper.hx
 haxeon_compile_async \
-	--target=wasm32 --output=out/wasm-cli-type-test.wasm --entry=std-is-of-type \
+	--target=wasm32 --output="$out_dir/wasm-cli-type-test.wasm" --entry=std-is-of-type \
 	--root=tests/programs tests/programs/std-is-of-type.hx
 haxeon_compile_async \
-	--target=wasm32 --output=out/wasm-cli-numeric-promotion.wasm --entry=numeric-promotion \
+	--target=wasm32 --output="$out_dir/wasm-cli-numeric-promotion.wasm" --entry=numeric-promotion \
 	--root=tests/programs tests/programs/numeric-promotion.hx
 haxeon_compile_async \
-	--target=wasm32 --output=out/wasm-cli-array-slice.wasm --entry=array-slice-index \
+	--target=wasm32 --output="$out_dir/wasm-cli-array-slice.wasm" --entry=array-slice-index \
 	--root=tests/programs tests/programs/array-slice-index.hx
 haxeon_compile_async \
-	--target=wasm32 --output=out/wasm-cli-array-mutation.wasm --entry=array-splice \
+	--target=wasm32 --output="$out_dir/wasm-cli-array-mutation.wasm" --entry=array-splice \
 	--root=tests/programs tests/programs/array-splice.hx
 haxeon_compile_async \
-	--target=wasm32 --output=out/wasm-cli-array-growth.wasm --entry=array-growth-wasm \
+	--target=wasm32 --output="$out_dir/wasm-cli-array-growth.wasm" --entry=array-growth-wasm \
 	--root=tests/programs tests/programs/array-growth-wasm.hx
 haxeon_compile_async \
-	--target=wasm32 --output=out/wasm-cli-array-iterator.wasm --entry=array-iterator-wasm \
+	--target=wasm32 --output="$out_dir/wasm-cli-array-iterator.wasm" --entry=array-iterator-wasm \
 	--root=tests/programs tests/programs/array-iterator-wasm.hx
 haxeon_compile_async \
-	--target=wasm32 --output=out/wasm-cli-map-basic.wasm --entry=map-basic \
+	--target=wasm32 --output="$out_dir/wasm-cli-map-basic.wasm" --entry=map-basic \
 	--root=tests/programs tests/programs/map-basic.hx
 haxeon_compile_async \
-	--target=wasm32 --output=out/wasm-cli-map-int.wasm --entry=map-int \
+	--target=wasm32 --output="$out_dir/wasm-cli-map-int.wasm" --entry=map-int \
 	--root=tests/programs tests/programs/map-int.hx
 haxeon_compile_async \
-	--target=wasm32 --output=out/wasm-cli-map-primitive-types.wasm --entry=map-primitive-types \
+	--target=wasm32 --output="$out_dir/wasm-cli-map-primitive-types.wasm" --entry=map-primitive-types \
 	--root=tests/programs tests/programs/map-primitive-types.hx
 haxeon_compile_async \
-	--target=wasm32 --output=out/wasm-cli-map-for-in.wasm --entry=map-for-in \
+	--target=wasm32 --output="$out_dir/wasm-cli-map-for-in.wasm" --entry=map-for-in \
 	--root=tests/programs tests/programs/map-for-in.hx
 haxeon_compile_async \
-	--target=wasm32 --output=out/wasm-cli-map-key-value-for-in.wasm --entry=map-key-value-for-in \
+	--target=wasm32 --output="$out_dir/wasm-cli-map-key-value-for-in.wasm" --entry=map-key-value-for-in \
 	--root=tests/programs tests/programs/map-key-value-for-in.hx
 haxeon_compile_async \
-	--target=wasm32 --output=out/wasm-cli-map-object.wasm --entry=map-object \
+	--target=wasm32 --output="$out_dir/wasm-cli-map-object.wasm" --entry=map-object \
 	--root=tests/programs tests/programs/map-object.hx
 haxeon_compile_async \
-	--target=wasm32 --output=out/wasm-cli-map-anonymous-enum.wasm --entry=map-anonymous-enum \
+	--target=wasm32 --output="$out_dir/wasm-cli-map-anonymous-enum.wasm" --entry=map-anonymous-enum \
 	--root=tests/programs tests/programs/map-anonymous-enum.hx
 haxeon_compile_async \
-	--target=wasm32 --output=out/wasm-cli-messagepack-enum-map.wasm --entry=wasm-messagepack-enum-map \
+	--target=wasm32 --output="$out_dir/wasm-cli-messagepack-enum-map.wasm" --entry=wasm-messagepack-enum-map \
 	--root=tests/programs tests/programs/wasm-messagepack-enum-map.hx
 haxeon_compile_async \
-	--target=wasm32 --output=out/wasm-cli-messagepack-wire.wasm --entry=wasm-messagepack-wire \
+	--target=wasm32 --output="$out_dir/wasm-cli-messagepack-wire.wasm" --entry=wasm-messagepack-wire \
 	--root=tests/programs tests/programs/wasm-messagepack-wire.hx
 haxeon_compile_async \
-	--target=wasm-gc --output=out/wasm-gc-cli-messagepack-wire.wasm --entry=wasm-messagepack-wire \
+	--target=wasm-gc --output="$out_dir/wasm-gc-cli-messagepack-wire.wasm" --entry=wasm-messagepack-wire \
 	--root=tests/programs tests/programs/wasm-messagepack-wire.hx
 haxeon_compile_async \
-	--target=wasm32 --output=out/wasm-cli-cnative-import.wasm --entry=wasm-cnative-import \
+	--target=wasm32 --output="$out_dir/wasm-cli-cnative-import.wasm" --entry=wasm-cnative-import \
 	--root=tests tests/wasm-cnative-import.hx
 haxeon_compile_async \
-	--target=wasm32 --output=out/wasm-cli-wasm32-bytes-view.wasm --entry=wasm32-bytes-view \
+	--target=wasm32 --output="$out_dir/wasm-cli-wasm32-bytes-view.wasm" --entry=wasm32-bytes-view \
 	--root=tests/ffi --ffi-interface=tests/ffi/wasm32_bytes_view.hxi tests/ffi/wasm32-bytes-view.hx
 haxeon_compile_async \
-	--target=wasm32 --output=out/wasm-cli-try-catch.wasm --entry=try-catch \
+	--target=wasm32 --output="$out_dir/wasm-cli-try-catch.wasm" --entry=try-catch \
 	--root=tests/programs tests/programs/try-catch.hx
 haxeon_compile_async \
-	--target=wasm32 --output=out/wasm-cli-try-nested.wasm --entry=try-nested \
+	--target=wasm32 --output="$out_dir/wasm-cli-try-nested.wasm" --entry=try-nested \
 	--root=tests/programs tests/programs/try-nested.hx
 haxeon_compile_async \
-	--target=wasm32 --output=out/wasm-cli-try-bounds.wasm --entry=try-array-bounds \
+	--target=wasm32 --output="$out_dir/wasm-cli-try-bounds.wasm" --entry=try-array-bounds \
 	--root=tests/programs tests/programs/try-array-bounds.hx
 haxeon_compile_async \
-	--target=wasm32 --output=out/wasm-cli-hxi-retained.wasm --entry=wasm-hxi-retained \
+	--target=wasm32 --output="$out_dir/wasm-cli-hxi-retained.wasm" --entry=wasm-hxi-retained \
 	--root=tests --ffi-interface=tests/ffi/retained_struct.hxi tests/wasm-hxi-retained.hx
 haxeon_compile_async \
-	--target=wasm32 --output=out/wasm-cli-hxi-retained-imported.wasm --entry=wasm-hxi-retained \
+	--target=wasm32 --output="$out_dir/wasm-cli-hxi-retained-imported.wasm" --entry=wasm-hxi-retained \
 	--wasm-import-memory --root=tests --ffi-interface=tests/ffi/retained_struct.hxi tests/wasm-hxi-retained.hx
 haxeon_compile_async \
-	--target=wasm32 --output=out/wasm-cli-hxi-value-records.wasm --entry=wasm32-value-records \
+	--target=wasm32 --output="$out_dir/wasm-cli-hxi-value-records.wasm" --entry=wasm32-value-records \
 	--root=tests/ffi --ffi-interface=tests/ffi/wasm32_value_records.hxi tests/ffi/wasm32-value-records.hx
 for target in wasm32 wasm-gc; do
 	haxeon_compile_async \
-		--target=$target --output=out/wasm-cli-host-services-$target.wasm --entry=wasm-host-services \
+		--target=$target --output="$out_dir/wasm-cli-host-services-$target.wasm" --entry=wasm-host-services \
 		--root=tests/programs tests/programs/wasm-host-services.hx
 	haxeon_compile_async \
-		--target=$target --output=out/wasm-cli-host-streams-$target.wasm --entry=wasm-host-services \
+		--target=$target --output="$out_dir/wasm-cli-host-streams-$target.wasm" --entry=wasm-host-services \
 		--wasm-import-memory --root=tests/programs tests/programs/wasm-host-services.hx
 	for inline in 0 1; do
 		HAXEON_INLINE="$inline" haxeon_compile_async \
-			--target=$target --output=out/wasm-cli-host-callbacks-inline-$inline-$target.wasm --entry=wasm-callbacks \
+			--target=$target --output="$out_dir/wasm-cli-host-callbacks-inline-$inline-$target.wasm" --entry=wasm-callbacks \
 			--root=tests/ffi --ffi-interface=tests/ffi/wasm_callbacks.hxi tests/ffi/wasm-callbacks.hx
 	done
 done
 haxeon_compile_async \
-	--target=wasm-gc --output=out/wasm-cli-gc-hxi-value-records.wasm --entry=wasm32-value-records \
+	--target=wasm-gc --output="$out_dir/wasm-cli-gc-hxi-value-records.wasm" --entry=wasm32-value-records \
 	--root=tests/ffi --ffi-interface=tests/ffi/wasm32_value_records.hxi tests/ffi/wasm32-value-records.hx
 haxeon_compile_async \
-	--target=wasm-gc --output=out/wasm-cli-gc-objects.wasm --entry=wasm-gc-objects \
+	--target=wasm-gc --output="$out_dir/wasm-cli-gc-objects.wasm" --entry=wasm-gc-objects \
 	--root=tests/programs tests/programs/wasm-gc-objects.hx
 haxeon_compile_async \
-	--target=wasm-gc --output=out/wasm-cli-gc-arrays.wasm --entry=wasm-gc-arrays \
+	--target=wasm-gc --output="$out_dir/wasm-cli-gc-arrays.wasm" --entry=wasm-gc-arrays \
 	--root=tests/programs tests/programs/wasm-gc-arrays.hx
 haxeon_compile_async \
-	--target=wasm-gc --output=out/wasm-cli-gc-enums.wasm --entry=wasm-gc-enums \
+	--target=wasm-gc --output="$out_dir/wasm-cli-gc-enums.wasm" --entry=wasm-gc-enums \
 	--root=tests/programs tests/programs/wasm-gc-enums.hx
 haxeon_compile_async \
-	--target=wasm-gc --output=out/wasm-cli-gc-closures.wasm --entry=wasm-gc-closures \
+	--target=wasm-gc --output="$out_dir/wasm-cli-gc-closures.wasm" --entry=wasm-gc-closures \
 	--root=tests/programs tests/programs/wasm-gc-closures.hx
 for target in wasm32 wasm-gc; do
 	haxeon_compile_async \
-		--target="$target" --output="out/wasm-cli-object-map-$target.wasm" --entry=wasm-object-map \
+		--target="$target" --output="$out_dir/wasm-cli-object-map-$target.wasm" --entry=wasm-object-map \
 		--root=tests/programs tests/programs/wasm-object-map.hx
 done
 haxeon_compile_async \
-	--target=wasm-gc --output=out/wasm-cli-gc-dynamic.wasm --entry=wasm-gc-dynamic \
+	--target=wasm-gc --output="$out_dir/wasm-cli-gc-dynamic.wasm" --entry=wasm-gc-dynamic \
 	--root=tests/programs tests/programs/wasm-gc-dynamic.hx
 haxeon_compile_async \
-	--target=wasm-gc --output=out/wasm-cli-gc-unconstructed-owned.wasm --entry=Main \
+	--target=wasm-gc --output="$out_dir/wasm-cli-gc-unconstructed-owned.wasm" --entry=Main \
 	--root=tests/fixtures/wasm-gc-unconstructed-owned \
 	--ffi-interface=tests/fixtures/wasm-gc-unconstructed-owned/unconstructed_owned.hxi \
 	tests/fixtures/wasm-gc-unconstructed-owned/Main.hx
 haxeon_compile_async \
-	--target=wasm-gc --output=out/wasm-cli-gc-exceptions.wasm --entry=wasm-gc-exceptions \
+	--target=wasm-gc --output="$out_dir/wasm-cli-gc-exceptions.wasm" --entry=wasm-gc-exceptions \
 	--root=tests/programs tests/programs/wasm-gc-exceptions.hx
 haxeon_compile_async \
-	--target=wasm-gc --output=out/wasm-cli-gc-strings.wasm --entry=wasm-gc-strings \
+	--target=wasm-gc --output="$out_dir/wasm-cli-gc-strings.wasm" --entry=wasm-gc-strings \
 	--root=tests/programs tests/programs/wasm-gc-strings.hx
 haxeon_compile_async \
-	--target=wasm32 --output=out/wasm-cli-string-split.wasm --entry=wasm-string-split \
+	--target=wasm32 --output="$out_dir/wasm-cli-string-split.wasm" --entry=wasm-string-split \
 	--root=tests/programs tests/programs/wasm-string-split.hx
 haxeon_compile_async \
-	--target=wasm-gc --output=out/wasm-cli-gc-bytes.wasm --entry=wasm-gc-bytes \
+	--target=wasm-gc --output="$out_dir/wasm-cli-gc-bytes.wasm" --entry=wasm-gc-bytes \
 	--root=tests/programs tests/programs/wasm-gc-bytes.hx
 haxeon_compile_async \
-	--target=wasm-gc --output=out/wasm-cli-gc-ffi-bytes.wasm --entry=wasm-gc-ffi-bytes \
+	--target=wasm-gc --output="$out_dir/wasm-cli-gc-ffi-bytes.wasm" --entry=wasm-gc-ffi-bytes \
 	--root=tests/ffi --ffi-interface=tests/ffi/gc_bytes.hxi tests/ffi/wasm-gc-ffi-bytes.hx
 haxeon_compile_async \
-	--target=wasm-gc --output=out/wasm-cli-gc-ffi-short-struct.wasm --entry=wasm-gc-ffi-short-struct \
+	--target=wasm-gc --output="$out_dir/wasm-cli-gc-ffi-short-struct.wasm" --entry=wasm-gc-ffi-short-struct \
 	--root=tests/ffi --ffi-interface=tests/ffi/gc_bytes.hxi tests/ffi/wasm-gc-ffi-short-struct.hx
 for target in wasm32 wasm-gc; do
-	haxeon_compile_async --target="$target" --output="out/wasm-utf8-result-$target.wasm" \
+	haxeon_compile_async --target="$target" --output="$out_dir/wasm-utf8-result-$target.wasm" \
 		--entry=wasm-utf8-result --root=tests/ffi --ffi-interface=tests/ffi/utf8_result.hxi tests/ffi/wasm-utf8-result.hx
 done
 haxeon_compile_async \
-	--target=wasm-gc --output=out/wasm-cli-gc-ffi-borrowed-array.wasm --entry=wasm-gc-ffi-borrowed-array \
+	--target=wasm-gc --output="$out_dir/wasm-cli-gc-ffi-borrowed-array.wasm" --entry=wasm-gc-ffi-borrowed-array \
 	--root=tests/ffi --ffi-interface=tests/ffi/gc_bytes.hxi tests/ffi/wasm-gc-ffi-borrowed-array.hx
 haxeon_compile_async \
-	--target=wasm-gc --output=out/wasm-cli-gc-ffi-nested-array.wasm --entry=wasm-gc-ffi-nested-array \
+	--target=wasm-gc --output="$out_dir/wasm-cli-gc-ffi-nested-array.wasm" --entry=wasm-gc-ffi-nested-array \
 	--root=tests/ffi --ffi-interface=tests/ffi/gc_nested.hxi tests/ffi/wasm-gc-ffi-nested-array.hx
 haxeon_compile_async \
-	--target=wasm-gc --wasm-import-memory --output=out/wasm-cli-arena.wasm --entry=wasm-arena \
+	--target=wasm-gc --wasm-import-memory --output="$out_dir/wasm-cli-arena.wasm" --entry=wasm-arena \
 	--root=tests/programs tests/programs/wasm-arena.hx
 haxeon_compile_wait
-(cd "$root_dir" && node tests/runtime/wasm-arena-host.js out/wasm-cli-arena.wasm)
+(cd "$root_dir" && node tests/runtime/wasm-arena-host.js "$out_dir/wasm-cli-arena.wasm")
 
-node - "$root_dir" <<'JS'
+node - "$root_dir" "$out_dir" <<'JS'
 const fs = require("fs");
-const root = process.argv[2];
+const root = process.argv[2], out = process.argv[3];
 const cases = [
-  ["out/wasm-utf8-result-wasm32.wasm", 42],
-  ["out/wasm-utf8-result-wasm-gc.wasm", 42],
-  ["out/wasm-backend-test.wasm", 42],
-  ["out/wasm-gc-raw-pointer.wasm", 42],
-  ["out/wasm-backend-branch.wasm", 42],
-  ["out/wasm-backend-loop.wasm", 6],
-  ["out/wasm-backend-object.wasm", 42],
-  ["out/wasm-backend-array.wasm", 42],
-  ["out/wasm-backend-float-array.wasm", 42],
-  ["out/wasm-backend-array-ops.wasm", 42],
-  ["out/wasm-backend-array-mutation.wasm", 42],
-  ["out/wasm-backend-string.wasm", 6],
-  ["out/wasm-backend-string-ops.wasm", 42],
-  ["out/wasm-backend-std-string.wasm", 42],
-  ["out/wasm-backend-std-string-i64.wasm", 42],
-	["out/wasm-cli-std-string-fields.wasm", 42],
-	["out/wasm-gc-cli-std-string-fields.wasm", 42],
-	["out/wasm-cli-memory-filesystem.wasm", 42],
-	["out/wasm-gc-cli-memory-filesystem.wasm", 42],
-	["out/wasm-cli-ereg-engine.wasm", 42],
-	["out/wasm-gc-cli-ereg-engine.wasm", 42],
-  ["out/wasm-backend-method.wasm", 42],
-  ["out/wasm-backend-global.wasm", 42],
-  ["out/wasm-backend-float-global.wasm", 42],
-  ["out/wasm-backend-enum.wasm", 42],
-  ["out/wasm-backend-float-enum.wasm", 42],
-  ["out/wasm-backend-inherited-field.wasm", 42],
-  ["out/wasm-backend-large-array.wasm", 20000],
-  ["out/wasm-cli-backend.wasm", 42],
-  ["out/wasm-cli-source-root.wasm", 42],
-  ["out/wasm-cli-runtime-source.wasm", 42],
-  ["out/wasm-gc-cli-runtime-source.wasm", 42],
-  ["out/wasm-cli-typed-std-dependency.wasm", 42],
-  ["out/wasm-cli-int64-of-int.wasm", 42],
-  ["out/wasm-gc-cli-int64-of-int.wasm", 42],
-  ["out/wasm-cli-ryu-source.wasm", 42],
-  ["out/wasm-gc-cli-ryu-source.wasm", 42],
-  ["out/wasm-cli-dynamic.wasm", 42],
-  ["out/wasm-cli-function-wrapper.wasm", 42],
-  ["out/wasm-cli-type-test.wasm", 42],
-  ["out/wasm-cli-numeric-promotion.wasm", 42],
-  ["out/wasm-cli-array-slice.wasm", 42],
-  ["out/wasm-cli-array-mutation.wasm", 42],
-  ["out/wasm-cli-array-growth.wasm", 42],
-  ["out/wasm-cli-array-iterator.wasm", 42],
-  ["out/wasm-cli-map-basic.wasm", 42],
-  ["out/wasm-cli-map-int.wasm", 42],
-  ["out/wasm-cli-map-primitive-types.wasm", 42],
-	["out/wasm-cli-map-for-in.wasm", 52],
-	["out/wasm-cli-map-key-value-for-in.wasm", 42],
-	["out/wasm-cli-map-object.wasm", 42],
-	["out/wasm-cli-map-anonymous-enum.wasm", 42],
-	["out/wasm-cli-messagepack-enum-map.wasm", 42],
-	["out/wasm-cli-messagepack-wire.wasm", 42],
-	["out/wasm-gc-cli-messagepack-wire.wasm", 42],
-	["out/wasm-cli-cnative-import.wasm", 42],
-	["out/wasm-cli-wasm32-bytes-view.wasm", 42],
-	["out/wasm-cli-hxi-retained.wasm", 42],
-	["out/wasm-cli-hxi-retained-imported.wasm", 42],
-	["out/wasm-cli-hxi-value-records.wasm", 42],
-	["out/wasm-cli-gc-hxi-value-records.wasm", 42],
-	["out/wasm-cli-host-services-wasm32.wasm", 42],
-	["out/wasm-cli-host-services-wasm-gc.wasm", 42],
-	["out/wasm-cli-host-callbacks-inline-0-wasm32.wasm", 42],
-	["out/wasm-cli-host-callbacks-inline-1-wasm32.wasm", 42],
-	["out/wasm-cli-host-callbacks-inline-0-wasm-gc.wasm", 42],
-	["out/wasm-cli-host-callbacks-inline-1-wasm-gc.wasm", 42],
-	["out/wasm-cli-try-catch.wasm", 42],
-	["out/wasm-cli-try-nested.wasm", 42],
-	["out/wasm-cli-try-bounds.wasm", 42],
-  ["out/wasm-backend-closure.wasm", 42],
-  ["out/wasm-backend-instance-closure.wasm", 42],
-  ["out/wasm-backend-virtual.wasm", 42],
-	["out/wasm-gc-model.wasm", 42],
-	["out/wasm-gc-type-plan.wasm", 42],
-	["out/wasm-gc-objects.wasm", 42],
-	["out/wasm-cli-gc-objects.wasm", 42],
-	["out/wasm-gc-arrays.wasm", 42],
-	["out/wasm-cli-gc-arrays.wasm", 42],
-	["out/wasm-gc-enums.wasm", 42],
-	["out/wasm-cli-gc-enums.wasm", 42],
-	["out/wasm-gc-closures.wasm", 42],
-	["out/wasm-cli-gc-closures.wasm", 42],
-	["out/wasm-cli-object-map-wasm32.wasm", 42],
-	["out/wasm-cli-object-map-wasm-gc.wasm", 42],
-	["out/wasm-gc-dynamic.wasm", 42],
-	["out/wasm-cli-gc-dynamic.wasm", 42],
-	["out/wasm-gc-native-pointer-reflect.wasm", 42],
+  ["wasm-utf8-result-wasm32.wasm", 42],
+  ["wasm-utf8-result-wasm-gc.wasm", 42],
+  ["wasm-backend-test.wasm", 42],
+  ["wasm-gc-raw-pointer.wasm", 42],
+  ["wasm-backend-branch.wasm", 42],
+  ["wasm-backend-loop.wasm", 6],
+  ["wasm-backend-object.wasm", 42],
+  ["wasm-backend-array.wasm", 42],
+  ["wasm-backend-float-array.wasm", 42],
+  ["wasm-backend-array-ops.wasm", 42],
+  ["wasm-backend-array-mutation.wasm", 42],
+  ["wasm-backend-string.wasm", 6],
+  ["wasm-backend-string-ops.wasm", 42],
+  ["wasm-backend-std-string.wasm", 42],
+  ["wasm-backend-std-string-i64.wasm", 42],
+	["wasm-cli-std-string-fields.wasm", 42],
+	["wasm-gc-cli-std-string-fields.wasm", 42],
+	["wasm-cli-memory-filesystem.wasm", 42],
+	["wasm-gc-cli-memory-filesystem.wasm", 42],
+	["wasm-cli-ereg-engine.wasm", 42],
+	["wasm-gc-cli-ereg-engine.wasm", 42],
+  ["wasm-backend-method.wasm", 42],
+  ["wasm-backend-global.wasm", 42],
+  ["wasm-backend-float-global.wasm", 42],
+  ["wasm-backend-enum.wasm", 42],
+  ["wasm-backend-float-enum.wasm", 42],
+  ["wasm-backend-inherited-field.wasm", 42],
+  ["wasm-backend-large-array.wasm", 20000],
+  ["wasm-cli-backend.wasm", 42],
+  ["wasm-cli-source-root.wasm", 42],
+  ["wasm-cli-runtime-source.wasm", 42],
+  ["wasm-gc-cli-runtime-source.wasm", 42],
+  ["wasm-cli-typed-std-dependency.wasm", 42],
+  ["wasm-cli-int64-of-int.wasm", 42],
+  ["wasm-gc-cli-int64-of-int.wasm", 42],
+  ["wasm-cli-ryu-source.wasm", 42],
+  ["wasm-gc-cli-ryu-source.wasm", 42],
+  ["wasm-cli-dynamic.wasm", 42],
+  ["wasm-cli-function-wrapper.wasm", 42],
+  ["wasm-cli-type-test.wasm", 42],
+  ["wasm-cli-numeric-promotion.wasm", 42],
+  ["wasm-cli-array-slice.wasm", 42],
+  ["wasm-cli-array-mutation.wasm", 42],
+  ["wasm-cli-array-growth.wasm", 42],
+  ["wasm-cli-array-iterator.wasm", 42],
+  ["wasm-cli-map-basic.wasm", 42],
+  ["wasm-cli-map-int.wasm", 42],
+  ["wasm-cli-map-primitive-types.wasm", 42],
+	["wasm-cli-map-for-in.wasm", 52],
+	["wasm-cli-map-key-value-for-in.wasm", 42],
+	["wasm-cli-map-object.wasm", 42],
+	["wasm-cli-map-anonymous-enum.wasm", 42],
+	["wasm-cli-messagepack-enum-map.wasm", 42],
+	["wasm-cli-messagepack-wire.wasm", 42],
+	["wasm-gc-cli-messagepack-wire.wasm", 42],
+	["wasm-cli-cnative-import.wasm", 42],
+	["wasm-cli-wasm32-bytes-view.wasm", 42],
+	["wasm-cli-hxi-retained.wasm", 42],
+	["wasm-cli-hxi-retained-imported.wasm", 42],
+	["wasm-cli-hxi-value-records.wasm", 42],
+	["wasm-cli-gc-hxi-value-records.wasm", 42],
+	["wasm-cli-host-services-wasm32.wasm", 42],
+	["wasm-cli-host-services-wasm-gc.wasm", 42],
+	["wasm-cli-host-callbacks-inline-0-wasm32.wasm", 42],
+	["wasm-cli-host-callbacks-inline-1-wasm32.wasm", 42],
+	["wasm-cli-host-callbacks-inline-0-wasm-gc.wasm", 42],
+	["wasm-cli-host-callbacks-inline-1-wasm-gc.wasm", 42],
+	["wasm-cli-try-catch.wasm", 42],
+	["wasm-cli-try-nested.wasm", 42],
+	["wasm-cli-try-bounds.wasm", 42],
+  ["wasm-backend-closure.wasm", 42],
+  ["wasm-backend-instance-closure.wasm", 42],
+  ["wasm-backend-virtual.wasm", 42],
+	["wasm-gc-model.wasm", 42],
+	["wasm-gc-type-plan.wasm", 42],
+	["wasm-gc-objects.wasm", 42],
+	["wasm-cli-gc-objects.wasm", 42],
+	["wasm-gc-arrays.wasm", 42],
+	["wasm-cli-gc-arrays.wasm", 42],
+	["wasm-gc-enums.wasm", 42],
+	["wasm-cli-gc-enums.wasm", 42],
+	["wasm-gc-closures.wasm", 42],
+	["wasm-cli-gc-closures.wasm", 42],
+	["wasm-cli-object-map-wasm32.wasm", 42],
+	["wasm-cli-object-map-wasm-gc.wasm", 42],
+	["wasm-gc-dynamic.wasm", 42],
+	["wasm-cli-gc-dynamic.wasm", 42],
+	["wasm-gc-native-pointer-reflect.wasm", 42],
 	// A dynamic call keeps only constructed classes' methods: the module must import no native destroy function (no imports at all).
-	["out/wasm-cli-gc-unconstructed-owned.wasm", 42],
-	["out/wasm-gc-exceptions.wasm", 42],
-	["out/wasm-cli-gc-exceptions.wasm", 42],
-	["out/wasm-gc-strings.wasm", 42],
-	["out/wasm-cli-gc-strings.wasm", 42],
-	["out/wasm-cli-string-split.wasm", 42],
-	["out/wasm-cli-gc-bytes.wasm", 42],
-	["out/wasm-cli-gc-ffi-bytes.wasm", 42],
-	["out/wasm-cli-gc-ffi-short-struct.wasm", 42],
-	["out/wasm-cli-gc-ffi-borrowed-array.wasm", 42],
-	["out/wasm-cli-gc-ffi-nested-array.wasm", 42]
+	["wasm-cli-gc-unconstructed-owned.wasm", 42],
+	["wasm-gc-exceptions.wasm", 42],
+	["wasm-cli-gc-exceptions.wasm", 42],
+	["wasm-gc-strings.wasm", 42],
+	["wasm-cli-gc-strings.wasm", 42],
+	["wasm-cli-string-split.wasm", 42],
+	["wasm-cli-gc-bytes.wasm", 42],
+	["wasm-cli-gc-ffi-bytes.wasm", 42],
+	["wasm-cli-gc-ffi-short-struct.wasm", 42],
+	["wasm-cli-gc-ffi-borrowed-array.wasm", 42],
+	["wasm-cli-gc-ffi-nested-array.wasm", 42]
 ];
 (async () => {
   for (const [relative, expected] of cases) {
-    const bytes = fs.readFileSync(`${root}/${relative}`);
+    const bytes = fs.readFileSync(`${out}/${relative}`);
     const importedMemory = relative.endsWith("hxi-retained-imported.wasm");
     const memory = importedMemory ? new WebAssembly.Memory({initial: 3}) : null;
     let moduleInstance = null;
@@ -778,7 +778,7 @@ const cases = [
       throw new Error("owned opaque pointer direct results and output slots were not released exactly once");
   }
   const int64Module = (await WebAssembly.instantiate(
-    fs.readFileSync(`${root}/out/wasm-backend-std-string-i64.wasm`))).instance;
+    fs.readFileSync(`${out}/wasm-backend-std-string-i64.wasm`))).instance;
   const int64Cases = [
     [0, 0, "0"],
     [0, 42, "42"],
@@ -796,7 +796,7 @@ const cases = [
       throw new Error(`Std.string(Int64(${high}, ${low})): expected ${expected}, got ${actual}`);
   }
   const floatModule = (await WebAssembly.instantiate(
-    fs.readFileSync(`${root}/out/wasm-cli-ryu-source.wasm`))).instance;
+    fs.readFileSync(`${out}/wasm-cli-ryu-source.wasm`))).instance;
   const floatCases = [
     [0, "0"], [40.5, "40.5"], [-42.25, "-42.25"], [0.1, "0.1"], [-0, "0"],
     [1e-6, "0.000001"], [1e-7, "1e-7"], [1e20, "100000000000000000000"], [1e21, "1e+21"],
@@ -838,7 +838,7 @@ const cases = [
   const context = vm.createContext({WebAssembly, TextDecoder, TextEncoder, Uint8Array, Date, performance, console});
   vm.runInContext(adapterSource + "\nglobalThis.adapter = HaxeonWasmHost;", context);
   for (const target of ["wasm32", "wasm-gc"]) {
-    const module = new WebAssembly.Module(fs.readFileSync(path.join(root, `out/wasm-cli-host-streams-${target}.wasm`)));
+    const module = new WebAssembly.Module(fs.readFileSync(path.join(out, `wasm-cli-host-streams-${target}.wasm`)));
     const memory = new WebAssembly.Memory({initial: 256, maximum: 4096});
     const output = [], errors = [];
     const guest = await context.adapter.instantiate(module, {memory, emscripten: {},
@@ -860,21 +860,21 @@ JS
 # fuel import. The Script-owned AOT consumer performs the production WAMR load/run gate separately.
 haxeon_compile \
 	--target=wasm32 --wasm-runtime-neutral --wasm-gc-stress \
-	--output=out/wasm-cli-runtime-neutral.wasm --entry=wasm-runtime-neutral \
+	--output="$out_dir/wasm-cli-runtime-neutral.wasm" --entry=wasm-runtime-neutral \
 	--export=RuntimeNeutralProbe.fuelLoop --export=RuntimeNeutralProbe.fuelTrapCatch \
 	--root=tests/programs tests/programs/wasm-runtime-neutral.hx
 haxeon_compile \
 	--target=wasm32 --wasm-gc-stress \
-	--output=out/wasm-cli-runtime-neutral-default.wasm --entry=wasm-runtime-neutral \
+	--output="$out_dir/wasm-cli-runtime-neutral-default.wasm" --entry=wasm-runtime-neutral \
 	--export=RuntimeNeutralProbe.fuelLoop --export=RuntimeNeutralProbe.fuelTrapCatch \
 	--root=tests/programs tests/programs/wasm-runtime-neutral.hx
 haxeon_compile \
 	--target=wasm32 --wasm-runtime-neutral \
-	--output=out/wasm-cli-runtime-neutral-sha256.wasm --entry=sha256 \
+	--output="$out_dir/wasm-cli-runtime-neutral-sha256.wasm" --entry=sha256 \
 	--root=tests/programs tests/programs/sha256.hx
-node - "$root_dir" <<'JS'
+node - "$root_dir" "$out_dir" <<'JS'
 const fs = require("fs"), path = require("path");
-const root = process.argv[2];
+const root = process.argv[2], out = process.argv[3];
 function readU32(bytes, cursor) {
   let value = 0, shift = 0, byte;
   do { byte = bytes[cursor.offset++]; value |= (byte & 0x7f) << shift; shift += 7; } while (byte & 0x80);
@@ -921,7 +921,7 @@ function parse(bytes) {
   return {sections, customs, imports};
 }
 function hasSection(module, id) { return module.sections.has(id); }
-const profileBytes = fs.readFileSync(path.join(root, "out/wasm-cli-runtime-neutral.wasm"));
+const profileBytes = fs.readFileSync(path.join(out, "wasm-cli-runtime-neutral.wasm"));
 const profile = parse(profileBytes), profileId = profile.customs.get("haxeon.runtime.profile");
 if (hasSection(profile, 13) || !profile.customs.has("haxeon.gc.roots") || !profileId)
   throw new Error("runtime-neutral module retained Wasm EH or omitted profile/precise-root metadata");
@@ -948,7 +948,7 @@ if (instance.exports.main() !== 42 || charges < 1000)
   throw new Error(`runtime-neutral main/fuel regression: charges=${charges}`);
 remaining = 20_000_000;
 let before = charges;
-const cryptoBytes = fs.readFileSync(path.join(root, "out/wasm-cli-runtime-neutral-sha256.wasm"));
+const cryptoBytes = fs.readFileSync(path.join(out, "wasm-cli-runtime-neutral-sha256.wasm"));
 const cryptoModule = new WebAssembly.Module(cryptoBytes), cryptoImports = WebAssembly.Module.imports(cryptoModule);
 if (cryptoImports.length !== 1 || cryptoImports[0].module !== "haxeon_host" || cryptoImports[0].name !== "fuel_charge")
   throw new Error(`runtime-neutral crypto exposed an unexpected import surface: ${JSON.stringify(cryptoImports)}`);
@@ -987,7 +987,7 @@ if (instance.exports["RuntimeNeutralProbe.fuelLoop"](0) !== 0)
 remaining = 0;
 expectTrap("initialization fuel exhaustion", () => new WebAssembly.Instance(module, imports));
 
-const defaultBytes = fs.readFileSync(path.join(root, "out/wasm-cli-runtime-neutral-default.wasm"));
+const defaultBytes = fs.readFileSync(path.join(out, "wasm-cli-runtime-neutral-default.wasm"));
 const defaultModule = parse(defaultBytes);
 if (!hasSection(defaultModule, 13) || defaultModule.customs.has("haxeon.runtime.profile")
     || defaultModule.imports.some(entry => entry.name === "fuel_charge"))
@@ -998,17 +998,17 @@ JS
 # haxeon-host.js throws haxeon.wasm.HostError into a guest that calls an import it cannot provide.
 for target in wasm32 wasm-gc; do
 	haxeon_compile_async \
-		--target="$target" --output="out/wasm-host-error-$target.wasm" --entry=wasm-host-error --wasm-import-memory \
+		--target="$target" --output="$out_dir/wasm-host-error-$target.wasm" --entry=wasm-host-error --wasm-import-memory \
 		--root=tests/ffi --ffi-interface=tests/ffi/host_error.hxi tests/ffi/wasm-host-error.hx
 done
 haxeon_compile_wait
-node - "$root_dir" <<'JS'
+node - "$root_dir" "$out_dir" <<'JS'
 const fs = require("fs"), path = require("path"), vm = require("vm");
-const root = process.argv[2];
+const root = process.argv[2], out = process.argv[3];
 vm.runInThisContext(fs.readFileSync(path.join(root, "stdlib/haxeon/wasm/haxeon-host.js"), "utf8"));
 (async () => {
   for (const target of ["wasm32", "wasm-gc"]) {
-    const module = new WebAssembly.Module(fs.readFileSync(path.join(root, `out/wasm-host-error-${target}.wasm`)));
+    const module = new WebAssembly.Module(fs.readFileSync(path.join(out, `wasm-host-error-${target}.wasm`)));
     const minimum = WebAssembly.Module.imports(module).some(entry => entry.kind === "memory") ? 64 : 0;
     const memory = new WebAssembly.Memory({initial: minimum});
     // Messages go to the top page, above anything the guest uses.

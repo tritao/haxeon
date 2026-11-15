@@ -37,8 +37,11 @@ class StructuralIterationMain {
 			if (checked < 2)
 				throw "Allocation regression checks did not inspect both concrete loops: " + [for (fn in result.ir.functions) fn.name].join(", ");
 			for (target in [Wasm32, WasmGc]) {
-				File.saveBytes('out/structural-iteration-$target-' + (incremental ? "incremental" : "clean") + ".wasm",
-					new WasmBackend().compile(result.ir, {target: target, debugNames: true}).bytes);
+				File.saveBytes(SuiteOutput.path('structural-iteration-$target-' + (incremental ? "incremental" : "clean") + ".wasm"),
+					new WasmBackend().compile(result.ir, {
+						target: target,
+						debugNames: true
+					}).bytes);
 			}
 			var live = Runtime.load(HlWriter.encode(result.module).flatten(), result.runtimeIdentity);
 			var value = Runtime.callInt(live, result.functionIds.get("main"));

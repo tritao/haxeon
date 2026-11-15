@@ -1,14 +1,17 @@
-# Shared setup for scripts that run this checkout's tools. Source it; it defines functions and two variables and runs nothing:
+# Shared setup for scripts that run this checkout's tools. Source it; it defines functions and three variables and runs nothing:
 #
 #   source "$root_dir/scripts/lib/env.sh"
 #   haxeon_require_haxe                 # exit 1, saying how to fix it, unless the pinned Haxe is installed
 #   haxeon_require_hashlink             # exit 1 unless the checkout-built HashLink is
 #   haxeon_export_library_path [DIR...] # put out/, the HashLink directory and DIRs on the library path
 #
-# haxeon_root is the repository root and haxeon_haxe the pinned Haxe, wherever the sourcing script lives.
+# haxeon_root is the repository root and haxeon_haxe the pinned Haxe, wherever the sourcing script lives. haxeon_suite_out is where a
+# test writes the files it reads back: HAXEON_SUITE_OUT, the directory of its own the suite runner gives each suite, else out/ (a run by
+# hand). Tests that may run beside another suite write there, never to fixed paths under out/; tests/SuiteOutput.hx is the Haxe side.
 
 haxeon_root=$(cd "$(dirname "${BASH_SOURCE[0]}")/../.." && pwd)
 haxeon_haxe="$haxeon_root/.tools/haxe/haxe"
+haxeon_suite_out=${HAXEON_SUITE_OUT:-$haxeon_root/out}
 
 haxeon_require_haxe() {
 	if [[ ! -x $haxeon_haxe ]]; then

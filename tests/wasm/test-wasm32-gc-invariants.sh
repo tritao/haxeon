@@ -2,16 +2,17 @@
 set -euo pipefail
 
 root_dir=$(cd "$(dirname "$0")/../.." && pwd)
-haxe_bin="$root_dir/.tools/haxe/haxe"
-artifact="$root_dir/out/wasm-gc-invariants.wasm"
-normal_artifact="$root_dir/out/wasm-gc-budget.wasm"
-map_artifact="$root_dir/out/wasm-gc-map-object.wasm"
-
 source "$root_dir/scripts/lib/env.sh"
+out_dir=$haxeon_suite_out # this suite's own directory: every file it writes and reads back goes there
+haxe_bin="$root_dir/.tools/haxe/haxe"
+artifact="$out_dir/wasm-gc-invariants.wasm"
+normal_artifact="$out_dir/wasm-gc-budget.wasm"
+map_artifact="$out_dir/wasm-gc-map-object.wasm"
+
 haxeon_require_haxe
 source "$root_dir/scripts/haxeon-compiler.sh"
 
-mkdir -p "$root_dir/out"
+mkdir -p "$out_dir"
 haxeon_compile \
 	--target=wasm32 --wasm-memory-stats --wasm-gc-stress --export=wasm-gc-invariants.exercise --export=wasm-gc-invariants.rootSnapshotExercise \
 	--export=wasm-gc-invariants.throwThroughRoots --export=wasm-gc-invariants.reallocateLargeArray --export=wasm-gc-invariants.allocationBurst \
