@@ -57,6 +57,16 @@ resolve, an alias of another type and an abstract with implicit conversions are
 never reported, since removing them could change what the file means. Enum imports
 are used through their constructors.
 
+It also reports runs of imports that are not in order, and `--fix` sorts them by path
+(ASCII, so `compiler.Diagnostic` sorts before `compiler.ffi.HxiAbi`). A run is
+consecutive import lines; a blank line, a comment, a `#if` line, a `using` or an
+import sharing its line with other code ends it, so groups stay where they are. A
+later import of a name wins, so a run where two imports make the same short name
+visible (module imports count every type the module declares), or with a package
+wildcard, keeps its order and is not reported. `--only unused-imports` or
+`--only import-order` checks one rule. `scripts/format.sh --changed` applies the
+order rule to every changed file; the rest of the tree is sorted in one pass later.
+
 On Windows, use `scripts/haxeon.cmd` or `scripts/haxeon.ps1`. `haxeon init`
 creates `src/Main.hx` and a project file like this:
 
