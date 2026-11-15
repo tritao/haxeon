@@ -150,63 +150,19 @@ class IrValueConstructors {
 	}
 
 	static function expandStraightLine(fn:IrFunction, constructors:Map<String, IrFunction>):IrFunction {
-		// Most functions call no value constructor: find that out before copying every block.
-		var calls = false;
-		for (block in fn.blocks) {
-			for (located in block.instructions)
-				switch located.value {
-					case Call(_, name, _) if (constructors.exists(name) && name != fn.name):
-						calls = true;
-						break;
-					default:
-				}
-			if (calls)
-				break;
-		}
-		if (!calls)
-			return fn;
-		var next = 0;
-		for (arg in fn.arguments)
-			if (arg.id >= next)
-				next = arg.id + 1;
-		for (block in fn.blocks)
-			for (located in block.instructions) {
-				var out = IrOperands.output(located.value);
-				if (out != null && out.id >= next)
-					next = out.id + 1;
-			}
-		var changed = false, blocks:Array<IrBlock> = [];
-		for (block in fn.blocks) {
-			var copy = new IrBlock(block.id);
-			for (located in block.instructions)
-				switch located.value {
-					case Call(out, name, args) if (constructors.exists(name) && name != fn.name):
-						var callee:IrFunction = cast constructors.get(name);
-						if (args.length != callee.arguments.length) {
-							copy.instructions.push(located);
-							continue;
-						}
-						var single:IrBlock = callee.blocks[0];
-						var terminator = single.terminator;
-						if (terminator == null) {
-							copy.instructions.push(located);
-							continue;
-						}
-						var returned:Null<IrValue> = switch terminator.value {
-							case Return(value): value;
-							default: null;
-						};
-						var defined = false;
-						for (instruction in single.instructions) {
-							var value = IrOperands.output(instruction.value);
-							if (value != null && returned != null && value.id == returned.id)
-								defined = true;
-						}
-						if (!defined || returned == null) {
-							copy.instructions.push(located);
-							continue;
-						}
-						var mapping:Map<Int, IrValue> = [];
+		// The first free value id is found only once a call is expanded; only the blocks with one are copied.
+		var next = -1;
+		return IrFunctionRewrite.instructions(fn, function(located) {
+			return switch located.value {
+				case Call(out, name, args) if (constructors.exists(name) && name != fn.name):
+					var callee:IrFunction = cast constructors.get(name),
+						single:IrBlock = callee.blocks[0],
+						returned = straightLineResult(callee, args.length);
+					if (returned == null) null; else {
+						if (next < 0)
+							next = firstFreeValue(fn);
+						var mapping:Map<Int, IrValue> = [],
+							expanded:Array<Located<IrInstruction>> = [];
 						for (i in 0...args.length)
 							mapping.set(callee.arguments[i].id, args[i]);
 						for (instruction in single.instructions) {
@@ -219,15 +175,48 @@ class IrValueConstructors {
 									throw 'Missing value constructor operand ${value.id}';
 								return found;
 							}, id -> id);
-							copy.instructions.push(new Located(mapped, instruction.provenance));
+							expanded.push(new Located(mapped, instruction.provenance));
 						}
-						changed = true;
-					default:
-						copy.instructions.push(located);
-				}
-			copy.terminator = block.terminator;
-			blocks.push(copy);
+						expanded;
+					}
+				default:
+					null;
+			};
+		});
+	}
+
+	/** The value a straight-line constructor called with `arguments` arguments returns, defined in its block; null when it cannot be expanded. */
+	static function straightLineResult(callee:IrFunction, arguments:Int):Null<IrValue> {
+		if (arguments != callee.arguments.length)
+			return null;
+		var single:IrBlock = callee.blocks[0], terminator = single.terminator;
+		if (terminator == null)
+			return null;
+		var returned:Null<IrValue> = switch terminator.value {
+			case Return(value): value;
+			default: null;
+		};
+		if (returned == null)
+			return null;
+		for (instruction in single.instructions) {
+			var value = IrOperands.output(instruction.value);
+			if (value != null && value.id == returned.id)
+				return returned;
 		}
-		return changed ? fn.withBlocks(blocks) : fn;
+		return null;
+	}
+
+	static function firstFreeValue(fn:IrFunction):Int {
+		var next = 0;
+		for (arg in fn.arguments)
+			if (arg.id >= next)
+				next = arg.id + 1;
+		for (block in fn.blocks)
+			for (located in block.instructions) {
+				var out = IrOperands.output(located.value);
+				if (out != null && out.id >= next)
+					next = out.id + 1;
+			}
+		return next;
 	}
 }

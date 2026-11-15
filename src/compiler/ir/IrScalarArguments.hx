@@ -598,7 +598,13 @@ class IrScalarArguments {
 	static function rewriteCalls(fn:IrFunction, byName:Map<String, IrFunction>, candidates:Map<String, IrFunction>, pinnedCandidates:Map<String, IrFunction>,
 			objects:Map<String, IrObject>, resolution:IrMethodResolution, methodNames:Map<String, Bool>, freshOnly:Map<String, Bool>,
 			terminalOnly:Map<String, Bool>, argumentsOnly:Bool):IrFunction {
-		var next = nextId(fn), changed = false, blocks:Array<IrBlock> = [];
+		// Value ids are numbered from the first free one, found when the first call is rewritten.
+		var next = -1;
+		function fresh():Int {
+			if (next < 0)
+				next = nextId(fn);
+			return next++;
+		}
 		var closures:Map<Int, {name:String, receiver:Null<IrValue>}> = [];
 		for (block in fn.blocks)
 			for (located in block.instructions)
@@ -609,152 +615,132 @@ class IrScalarArguments {
 						closures.set(out.id, {name: name, receiver: receiver});
 					default:
 				}
-		// Only these instructions can be rewritten; a function without any comes back as it is, with no block copied.
-		var rewritable = false;
-		for (block in fn.blocks) {
-			for (located in block.instructions)
-				switch located.value {
-					case CallClosure(_, closure, _) if (closures.exists(closure.id)):
-						rewritable = true;
-					case MethodCall(_, _, method, _, _) if (methodNames.exists(method)):
-						rewritable = true;
-					case Call(_, name, _) if (candidates.exists(name) || pinnedCandidates.exists(name)):
-						rewritable = true;
-					default:
-				}
-			if (rewritable)
-				break;
-		}
-		if (!rewritable)
-			return fn;
-		for (block in fn.blocks) {
-			var copy = new IrBlock(block.id);
-			for (located in block.instructions) {
-				var terminalFresh = false;
-				var instruction = switch located.value {
-					case CallClosure(out, closure, arguments) if (closures.exists(closure.id)):
-						var binding = closures.get(closure.id);
-						Call(out, binding.name, binding.receiver == null ? arguments : [binding.receiver].concat(arguments));
-					case MethodCall(out, receiver, method, arguments, terminalReceiver) if (methodNames.exists(method)):
-						var name = resolveMethod(receiver.type, method, objects, resolution);
-						if (name != null && terminalOnly.exists(name) && terminalReceiver == true)
-							terminalFresh = freshForTerminal(fn, receiver, objects, name, resolution);
-						var ordinaryFresh = name != null
-							&& !terminalOnly.exists(name)
-							&& freshForCandidate(fn, receiver, objects, candidates, name, resolution);
-						if (name == null
-							|| (!candidates.exists(name) && !pinnedCandidates.exists(name))
-							|| ((argumentsOnly || freshOnly.exists(name))
-								&& !pinnedCandidates.exists(name)
-								&& !terminalFresh
-								&& !ordinaryFresh
-								&& !(argumentsOnly
-									&& !terminalOnly.exists(name)
-									&& safeArrayEquality(located.provenance, fn, byName)))) located.value; else {
-							if (!argumentsOnly && !terminalFresh && !ordinaryFresh) {
-								var checked = new IrValue(next++, "$hl:receiver-check", Void);
-								copy.instructions.push(new Located(Call(checked, IrReceiverCheck.NAME, [receiver]), located.provenance));
-							}
-							Call(out, name, [receiver].concat(arguments));
-						}
-					default: located.value;
-				};
-				switch instruction {
-					case Call(out, name, arguments)
-						if ((candidates.exists(name) || pinnedCandidates.exists(name))
-							&& (pinnedCandidates.exists(name)
-								|| !freshOnly.exists(name)
-								|| terminalFresh
-								|| !terminalOnly.exists(name)
-								&& arguments.length > 0
-								&& freshForCandidate(fn, arguments[0], objects, candidates, name, resolution)
-								|| argumentsOnly
+		// Only the blocks with a call to rewrite are copied. A call's receiver check is emitted with the call that needs it, decided first.
+		return IrFunctionRewrite.instructions(fn, function(located) {
+			var terminalFresh = false,
+				check:Null<Located<IrInstruction>> = null;
+			var instruction = switch located.value {
+				case CallClosure(out, closure, arguments) if (closures.exists(closure.id)):
+					var binding = closures.get(closure.id);
+					Call(out, binding.name, binding.receiver == null ? arguments : [binding.receiver].concat(arguments));
+				case MethodCall(out, receiver, method, arguments, terminalReceiver) if (methodNames.exists(method)):
+					var name = resolveMethod(receiver.type, method, objects, resolution);
+					if (name != null && terminalOnly.exists(name) && terminalReceiver == true)
+						terminalFresh = freshForTerminal(fn, receiver, objects, name, resolution);
+					var ordinaryFresh = name != null
+						&& !terminalOnly.exists(name)
+						&& freshForCandidate(fn, receiver, objects, candidates, name, resolution);
+					if (name == null
+						|| (!candidates.exists(name) && !pinnedCandidates.exists(name))
+						|| ((argumentsOnly || freshOnly.exists(name))
+							&& !pinnedCandidates.exists(name)
+							&& !terminalFresh
+							&& !ordinaryFresh
+							&& !(argumentsOnly
 								&& !terminalOnly.exists(name)
-								&& safeArrayEquality(located.provenance, fn, byName))
-							&& (!argumentsOnly
-								|| terminalFresh
-								|| !terminalOnly.exists(name)
-								&& (safeArrayEquality(located.provenance, fn, byName) || freshValueArguments(fn, arguments, objects)))):
-						var pinned = pinnedCandidates.exists(name)
-							&& (!candidates.exists(name)
-								|| freshOnly.exists(name)
-								&& !terminalFresh
-								&& arguments.length > 0
-								&& (terminalOnly.exists(name)
-									|| !freshForCandidate(fn, arguments[0], objects, candidates, name, resolution)));
-						var target = pinned ? pinnedCandidates.get(name) : candidates.get(name),
-							expanded:Array<IrValue> = [];
-						if (target == null)
-							throw 'Missing scalar call target "$name"';
-						for (index in 0...arguments.length) {
-							var arg = arguments[index];
-							if (pinned && index == 0) {
-								expanded.push(arg);
-								continue;
-							}
-							if (!isValue(target.arguments[index].type, objects)) {
-								expanded.push(arg);
-								continue;
-							}
-							for (slot in slots(arg.type, objects)) {
-								var current = arg;
-								for (part in slot.path) {
-									var field = fieldOf(current.type, part, objects),
-										leaf = new IrValue(next++, arg.name + "." + part, field.type);
-									copy.instructions.push(new Located(FieldGet(leaf, current, part), located.provenance));
-									current = leaf;
-								}
-								expanded.push(current);
-							}
+								&& safeArrayEquality(located.provenance, fn, byName)))) located.value; else {
+						if (!argumentsOnly && !terminalFresh && !ordinaryFresh) {
+							var checked = new IrValue(fresh(), "$hl:receiver-check", Void);
+							check = new Located(Call(checked, IrReceiverCheck.NAME, [receiver]), located.provenance);
 						}
-						var returnSlots = isValue(target.result, objects) ? slots(target.result, objects) : [],
-							references:Array<IrValue> = [];
-						for (slot in returnSlots) {
-							var zero = new IrValue(next++, "$hl:result-zero", slot.type),
-								reference = new IrValue(next++, "$hl:result-ref", IrHlScalarRef.type(slot.type));
-							var init:IrInstruction = switch slot.type {
-								case I32, I64: ConstInt(zero, 0);
-								case F32, F64: ConstFloat(zero, 0.0);
-								case Bool: ConstBool(zero, false);
-								default: ConstNull(zero);
-							};
-							copy.instructions.push(new Located(init, located.provenance));
-							copy.instructions.push(new Located(Call(reference, IrHlScalarRef.ADDRESS, [zero]), located.provenance));
-							references.push(reference);
-							expanded.push(reference);
+						Call(out, name, [receiver].concat(arguments));
+					}
+				default: located.value;
+			};
+			return switch instruction {
+				case Call(out, name, arguments)
+					if ((candidates.exists(name) || pinnedCandidates.exists(name))
+						&& (pinnedCandidates.exists(name)
+							|| !freshOnly.exists(name)
+							|| terminalFresh
+							|| !terminalOnly.exists(name)
+							&& arguments.length > 0
+							&& freshForCandidate(fn, arguments[0], objects, candidates, name, resolution)
+							|| argumentsOnly
+							&& !terminalOnly.exists(name)
+							&& safeArrayEquality(located.provenance, fn, byName))
+						&& (!argumentsOnly
+							|| terminalFresh
+							|| !terminalOnly.exists(name)
+							&& (safeArrayEquality(located.provenance, fn, byName) || freshValueArguments(fn, arguments, objects)))):
+					var emitted:Array<Located<IrInstruction>> = [];
+					if (check != null)
+						emitted.push(check);
+					var pinned = pinnedCandidates.exists(name)
+						&& (!candidates.exists(name)
+							|| freshOnly.exists(name)
+							&& !terminalFresh
+							&& arguments.length > 0
+							&& (terminalOnly.exists(name) || !freshForCandidate(fn, arguments[0], objects, candidates, name, resolution)));
+					var target = pinned ? pinnedCandidates.get(name) : candidates.get(name),
+						expanded:Array<IrValue> = [];
+					if (target == null)
+						throw 'Missing scalar call target "$name"';
+					for (index in 0...arguments.length) {
+						var arg = arguments[index];
+						if (pinned && index == 0) {
+							expanded.push(arg);
+							continue;
 						}
-						var targetName = PREFIX + (pinned ? "$receiver:" : "") + name;
-						if (returnSlots.length == 0)
-							copy.instructions.push(new Located(Call(out, targetName, expanded), located.provenance));
-						else {
-							var ignored = new IrValue(next++, "$hl:result-call", Void);
-							copy.instructions.push(new Located(Call(ignored, targetName, expanded), located.provenance));
-							var typeName = switch out.type {
-								case Obj(value): value;
-								default: throw "Invalid scalar result";
-							};
-							copy.instructions.push(new Located(ValueInit(out), located.provenance));
-							for (index in 0...returnSlots.length) {
-								var slot = returnSlots[index], leaf = new IrValue(next++, "$hl:result-leaf", slot.type), current = out;
-								copy.instructions.push(new Located(Call(leaf, IrHlScalarRef.LOAD, [references[index]]), located.provenance));
-								for (pathIndex in 0...slot.path.length - 1) {
-									var field = fieldOf(current.type, slot.path[pathIndex], objects),
-										child = new IrValue(next++, field.name, field.type);
-									copy.instructions.push(new Located(FieldGet(child, current, field.name), located.provenance));
-									current = child;
-								}
-								copy.instructions.push(new Located(FieldSet(current, slot.path[slot.path.length - 1], leaf), located.provenance));
+						if (!isValue(target.arguments[index].type, objects)) {
+							expanded.push(arg);
+							continue;
+						}
+						for (slot in slots(arg.type, objects)) {
+							var current = arg;
+							for (part in slot.path) {
+								var field = fieldOf(current.type, part, objects),
+									leaf = new IrValue(fresh(), arg.name + "." + part, field.type);
+								emitted.push(new Located(FieldGet(leaf, current, part), located.provenance));
+								current = leaf;
 							}
+							expanded.push(current);
 						}
-						changed = true;
-					default:
-						copy.instructions.push(located);
-				}
-			}
-			copy.terminator = block.terminator;
-			blocks.push(copy);
-		}
-		return changed ? fn.withBlocks(blocks) : fn;
+					}
+					var returnSlots = isValue(target.result, objects) ? slots(target.result, objects) : [],
+						references:Array<IrValue> = [];
+					for (slot in returnSlots) {
+						var zero = new IrValue(fresh(), "$hl:result-zero", slot.type),
+							reference = new IrValue(fresh(), "$hl:result-ref", IrHlScalarRef.type(slot.type));
+						var init:IrInstruction = switch slot.type {
+							case I32, I64: ConstInt(zero, 0);
+							case F32, F64: ConstFloat(zero, 0.0);
+							case Bool: ConstBool(zero, false);
+							default: ConstNull(zero);
+						};
+						emitted.push(new Located(init, located.provenance));
+						emitted.push(new Located(Call(reference, IrHlScalarRef.ADDRESS, [zero]), located.provenance));
+						references.push(reference);
+						expanded.push(reference);
+					}
+					var targetName = PREFIX + (pinned ? "$receiver:" : "") + name;
+					if (returnSlots.length == 0)
+						emitted.push(new Located(Call(out, targetName, expanded), located.provenance));
+					else {
+						var ignored = new IrValue(fresh(), "$hl:result-call", Void);
+						emitted.push(new Located(Call(ignored, targetName, expanded), located.provenance));
+						var typeName = switch out.type {
+							case Obj(value): value;
+							default: throw "Invalid scalar result";
+						};
+						emitted.push(new Located(ValueInit(out), located.provenance));
+						for (index in 0...returnSlots.length) {
+							var slot = returnSlots[index], leaf = new IrValue(fresh(), "$hl:result-leaf", slot.type), current = out;
+							emitted.push(new Located(Call(leaf, IrHlScalarRef.LOAD, [references[index]]), located.provenance));
+							for (pathIndex in 0...slot.path.length - 1) {
+								var field = fieldOf(current.type, slot.path[pathIndex], objects),
+									child = new IrValue(fresh(), field.name, field.type);
+								emitted.push(new Located(FieldGet(child, current, field.name), located.provenance));
+								current = child;
+							}
+							emitted.push(new Located(FieldSet(current, slot.path[slot.path.length - 1], leaf), located.provenance));
+						}
+					}
+					emitted;
+				default:
+					null;
+			};
+		});
 	}
 
 	/** The Wasm scalar ABI reads fields at the call site. Only an unaliased value is stable there;
