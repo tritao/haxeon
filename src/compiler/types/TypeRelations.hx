@@ -546,9 +546,8 @@ class TypeRelations {
 			case TInstance(kind, name, arguments):
 				switch expected {
 					case TInstance(expectedKind, expectedName, expectedArguments):
-						if (Std.string(kind) != Std.string(expectedKind)
-							|| Std.string(name) != Std.string(expectedName)
-							|| arguments.length != expectedArguments.length)
+						if (kind != expectedKind
+							|| (name : String) != (expectedName : String) || arguments.length != expectedArguments.length)
 							return false;
 						var sawDynamic = false;
 						for (index in 0...arguments.length) {
@@ -579,11 +578,12 @@ class TypeRelations {
 		return switch left {
 			case TAbstract(name, arguments, _):
 				switch right {
-					case TAbstract(other, otherArguments, _): Std.string(name) == Std.string(other) && sameTypes(arguments, otherArguments, visiting);
+					case TAbstract(other, otherArguments, _): (name : String) == (other : String)
+							&& sameTypes(arguments, otherArguments, visiting);
 					default: false;
 				}
 			case TTypeParameter(owner, name): switch right {
-					case TTypeParameter(otherOwner, otherName): Std.string(owner) == Std.string(otherOwner) && name == otherName;
+					case TTypeParameter(otherOwner, otherName): (owner : String) == (otherOwner : String) && name == otherName;
 					default: false;
 				};
 			case TNativeScalar(name):
@@ -591,7 +591,7 @@ class TypeRelations {
 					case TNativeScalar(other): name == other;
 					default: false;
 				};
-			case TInstance(kind, name, arguments): sameNominal(right, kind, Std.string(name), arguments, visiting);
+			case TInstance(kind, name, arguments): sameNominal(right, kind, name, arguments, visiting);
 			case TNativeAbstract(name): sameNativeAbstract(right, name);
 			case TNullable(element): sameUnary(right, element, true, visiting);
 			case TArray(element): sameUnary(right, element, false, visiting);
@@ -621,8 +621,7 @@ class TypeRelations {
 	static function sameNominal(type:CompilerType, kind:compiler.types.Type.NominalKind, name:String, arguments:Array<CompilerType>,
 			visiting:Null<Array<FieldPair>>):Bool
 		return switch type {
-			case TInstance(otherKind, other, otherArguments): Std.string(kind) == Std.string(otherKind) && name == Std.string(other) && sameTypes(arguments,
-					otherArguments, visiting);
+			case TInstance(otherKind, other, otherArguments): kind == otherKind && name == (other : String) && sameTypes(arguments, otherArguments, visiting);
 			default: false;
 		};
 
