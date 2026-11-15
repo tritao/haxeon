@@ -11,6 +11,14 @@ enum docs_mode {
     DOCS_MODE_COMPACT = 1
 };
 
+/* Clang attaches a documented enumerator's comment to the undocumented ones after it too; only the first is documented. */
+enum docs_level {
+    /** The documented level. */
+    DOCS_LEVEL_LOW = 0,
+    DOCS_LEVEL_MEDIUM = 1,
+    DOCS_LEVEL_HIGH = 2
+};
+
 /** Options supplied when creating a documented resource. */
 typedef struct docs_options {
     /** Number of entries to reserve. */

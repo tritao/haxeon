@@ -208,6 +208,10 @@ class CHeaderImporterMain {
 		expect(documentation.get("docs_mode").raw.indexOf("Display mode accepted") >= 0, "generated HXI type documentation should be retained by the parser");
 		expect(documentation.get("docs_mode.DOCS_MODE_DEFAULT").raw.indexOf("platform default") >= 0,
 			"generated HXI enum-value documentation should be retained by the parser");
+		expect(documentation.get("docs_level.DOCS_LEVEL_LOW").raw.indexOf("The documented level") >= 0
+			&& !documentation.exists("docs_level.DOCS_LEVEL_MEDIUM")
+			&& !documentation.exists("docs_level.DOCS_LEVEL_HIGH"),
+			"an undocumented enumerator should not take the comment of a documented one before it");
 		expect(documentation.get("docs_options").raw.indexOf("Options supplied") >= 0,
 			"generated HXI structure documentation should be retained by the parser");
 		expect(documentation.get("docs_create").raw.indexOf("@param options") >= 0, "generated HXI documentation should be retained by the parser");

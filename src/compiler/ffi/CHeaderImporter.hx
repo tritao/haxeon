@@ -190,7 +190,8 @@ class CHeaderImporter {
 				var documentationNode:Dynamic = field(node, "_hxiDocumentationNode");
 				addDocumentation(documentation, enumName, documentationNode == null ? node : documentationNode);
 				var entries:Array<compiler.ffi.HxiModel.HxiEnumValue> = [],
-					nextValue = Int64.parseString("0");
+					nextValue = Int64.parseString("0"),
+					previousEnd:Null<Int> = null;
 				for (entry in values) {
 					var entryName:String = field(entry, "name"),
 						rawValue = constantValue(entry);
@@ -199,7 +200,8 @@ class CHeaderImporter {
 					var projectedValue = projectedIntegerValue(entry, rawValue, field(node, "_hxiFlags") == true);
 					if (field(entry, "_hxiFile") == null)
 						Reflect.setField(entry, "_hxiFile", field(node, "_hxiFile"));
-					addDocumentation(documentation, '$enumName.$entryName', entry);
+					addDocumentation(documentation, '$enumName.$entryName', entry, previousEnd);
+					previousEnd = endOffset(entry);
 					entries.push({name: entryName, value: parseProjectedInt64(projectedValue), span: sourceSpan(entry)});
 					nextValue = Int64.add(parseProjectedInt64(projectedValue), Int64.parseString("1"));
 				}
@@ -262,6 +264,7 @@ class CHeaderImporter {
 				var layout = layouts.get(name),
 					modelFields:Array<HxiField> = [];
 				addDocumentation(documentation, name, node);
+				var previousFieldEnd:Null<Int> = null;
 				for (entry in fields) {
 					var fieldName:String = field(entry, "name"),
 						fieldType:Dynamic = field(entry, "type"),
@@ -269,7 +272,8 @@ class CHeaderImporter {
 						offset = layout == null ? null : layout.offsets.get(fieldName);
 					if (StringTools.endsWith(qualifiedType, "[]"))
 						throw '${declarationLocation(entry)}: unsupported flexible array field "$fieldName"';
-					addDocumentation(documentation, '$name.$fieldName', entry);
+					addDocumentation(documentation, '$name.$fieldName', entry, previousFieldEnd);
+					previousFieldEnd = endOffset(entry);
 					var typeName = fieldTypeProjection(entry, qualifiedType),
 						borrowed = hasAnnotation(entry, "hxi:borrowed"),
 						lengthField = fieldLengthField(entry),
@@ -585,8 +589,8 @@ class CHeaderImporter {
 		};
 	}
 
-	static function addDocumentation(documentation:Map<String, HxiDocumentation>, name:String, node:Dynamic):Void {
-		var raw = documentationText(node);
+	static function addDocumentation(documentation:Map<String, HxiDocumentation>, name:String, node:Dynamic, ?notBefore:Int):Void {
+		var raw = documentationText(node, notBefore);
 		if (raw == null)
 			return;
 		var normalized = DocumentationTools.normalize(raw);
@@ -660,7 +664,7 @@ class CHeaderImporter {
 			throw 'Handle "$name" must contain one uint32_t field named id';
 	}
 
-	static function documentationText(node:Dynamic):Null<String> {
+	static function documentationText(node:Dynamic, ?notBefore:Int):Null<String> {
 		var comment:Dynamic = null;
 		for (child in children(node))
 			if (field(child, "kind") == "FullComment") {
@@ -684,7 +688,27 @@ class CHeaderImporter {
 		if (start < 0)
 			return null;
 		var close = byteIndexOf(source, "*/", start + 3);
-		return close < 0 ? null : byteSlice(source, start + 3, close);
+		if (close < 0)
+			return null;
+		// Clang hands a documented enumerator's comment to the undocumented enumerators after it too. A comment that
+		// starts before the previous sibling declaration ends belongs to that sibling, not to this one.
+		if (notBefore != null && start < notBefore)
+			return null;
+		return byteSlice(source, start + 3, close);
+	}
+
+	/** A range's last byte offset; a declaration that ends in a macro reports it as its expansion location. */
+	static function endOffset(node:Dynamic):Null<Int> {
+		var range:Dynamic = field(node, "range");
+		var end:Dynamic = range == null ? null : field(range, "end");
+		if (end == null)
+			return null;
+		var offset:Dynamic = field(end, "offset");
+		if (offset == null) {
+			var expansion:Dynamic = field(end, "expansionLoc");
+			offset = expansion == null ? null : field(expansion, "offset");
+		}
+		return offset == null ? null : Std.int(offset);
 	}
 
 	/** Clang reports byte offsets, so header text is sliced as bytes: multibyte characters must not shift them. */
