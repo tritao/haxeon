@@ -43,9 +43,20 @@ private class InferenceEnvironment {
 	}
 }
 
-/** Collects declaration-level constraints before body typing. */
+/** Collects declaration-level constraints before body typing. One inference is one instance, which holds what it caches. */
 class SignatureInference {
-	public static function inferProgram(program:AstProgram):AstProgram {
+	/** The last segment of each dotted name seen, so a name is cut once per inference rather than once per use. */
+	final lastSegments:Map<String, String> = [];
+
+	function new() {}
+
+	public static function inferProgram(program:AstProgram):AstProgram
+		return new SignatureInference().program(program);
+
+	public static function inferFieldBoundArguments(fn:AstFunction, classDecl:AstClass):AstFunction
+		return new SignatureInference().fieldBoundArguments(fn, classDecl);
+
+	function program(program:AstProgram):AstProgram {
 		var enums:Map<String, AstEnum> = [];
 		for (enumDecl in program.enums)
 			enums.set(enumDecl.name, enumDecl);
@@ -55,7 +66,7 @@ class SignatureInference {
 			classes.set(classDecl.name, classDecl);
 			for (method in classDecl.methods)
 				if (method.name == "new")
-					constructors.set(classDecl.name, inferFieldBoundArguments(method, classDecl));
+					constructors.set(classDecl.name, fieldBoundArguments(method, classDecl));
 		}
 		var inferredClasses:Array<AstClass> = [];
 		for (classDecl in program.classes) {
@@ -92,12 +103,12 @@ class SignatureInference {
 		};
 	}
 
-	static function inferClassMethods(classDecl:AstClass, enums:Map<String, AstEnum>, constructors:Map<String, AstFunction>,
+	function inferClassMethods(classDecl:AstClass, enums:Map<String, AstEnum>, constructors:Map<String, AstFunction>,
 			classes:Map<String, AstClass>):Array<AstFunction> {
 		var methods:Array<AstFunction> = [],
 			byName:Map<String, AstFunction> = [];
 		for (method in classDecl.methods) {
-			methods.push(inferFieldBoundArguments(accessorWithPropertyType(method, classDecl.fields), classDecl));
+			methods.push(fieldBoundArguments(accessorWithPropertyType(method, classDecl.fields), classDecl));
 		}
 		for (method in methods)
 			byName.set(method.name, method);
@@ -134,7 +145,7 @@ class SignatureInference {
 		Haxe types an unannotated `get_x`/`set_x` accessor from the declared type of property `x`: the getter's result, and the
 		setter's value argument and result.
 	**/
-	static function accessorWithPropertyType(method:AstFunction, fields:Array<compiler.syntax.Ast.AstField>):AstFunction {
+	function accessorWithPropertyType(method:AstFunction, fields:Array<compiler.syntax.Ast.AstField>):AstFunction {
 		var isGetter = StringTools.startsWith(method.name, "get_"),
 			isSetter = StringTools.startsWith(method.name, "set_");
 		if (!isGetter && !isSetter)
@@ -184,10 +195,10 @@ class SignatureInference {
 		};
 	}
 
-	static function constraintsFor(constraints:Map<String, Map<String, AstType>>, name:String):Map<String, AstType>
+	function constraintsFor(constraints:Map<String, Map<String, AstType>>, name:String):Map<String, AstType>
 		return constraints.exists(name) ? constraints.get(name) : [];
 
-	static function collectCallConstraints(statements:Array<AstStatement>, environment:InferenceEnvironment, methods:Map<String, AstFunction>,
+	function collectCallConstraints(statements:Array<AstStatement>, environment:InferenceEnvironment, methods:Map<String, AstFunction>,
 			constraints:Map<String, Map<String, AstType>>):Void
 		for (statement in statements)
 			switch statement {
@@ -222,7 +233,7 @@ class SignatureInference {
 				default:
 			}
 
-	static function collectExpressionCallConstraint(expression:AstExpression, environment:InferenceEnvironment, methods:Map<String, AstFunction>,
+	function collectExpressionCallConstraint(expression:AstExpression, environment:InferenceEnvironment, methods:Map<String, AstFunction>,
 			constraints:Map<String, Map<String, AstType>>):Void
 		switch expression {
 			case Call(name, arguments, _), MethodCall(_, name, arguments, _):
@@ -251,7 +262,7 @@ class SignatureInference {
 			default:
 		}
 
-	static function inferSimpleExpression(expression:AstExpression, environment:InferenceEnvironment):Null<AstType>
+	function inferSimpleExpression(expression:AstExpression, environment:InferenceEnvironment):Null<AstType>
 		return switch expression {
 			case Variable(name, _): environment.get(name);
 			case IntegerLiteral(_, _): IntType;
@@ -267,7 +278,7 @@ class SignatureInference {
 			default: null;
 		};
 
-	static function inferCallBoundArguments(fn:AstFunction, owner:AstClass, methods:Map<String, AstFunction>, constructors:Map<String, AstFunction>,
+	function inferCallBoundArguments(fn:AstFunction, owner:AstClass, methods:Map<String, AstFunction>, constructors:Map<String, AstFunction>,
 			classes:Map<String, AstClass>):AstFunction {
 		var inferred:Map<String, AstType> = [];
 		for (statement in fn.statements)
@@ -284,7 +295,7 @@ class SignatureInference {
 		return replaceArguments(fn, inferred);
 	}
 
-	static function inferAssignmentBoundArgument(path:String, argumentName:String, owner:AstClass, classes:Map<String, AstClass>,
+	function inferAssignmentBoundArgument(path:String, argumentName:String, owner:AstClass, classes:Map<String, AstClass>,
 			inferred:Map<String, AstType>):Void {
 		var fieldType = resolveMemberPath(path, owner, classes);
 		if (fieldType == null)
@@ -297,7 +308,7 @@ class SignatureInference {
 		}
 	}
 
-	static function inferExpressionBoundArguments(expression:AstExpression, owner:AstClass, methods:Map<String, AstFunction>,
+	function inferExpressionBoundArguments(expression:AstExpression, owner:AstClass, methods:Map<String, AstFunction>,
 			constructors:Map<String, AstFunction>, classes:Map<String, AstClass>, inferred:Map<String, AstType>):Void
 		switch expression {
 			case Call(name, arguments, _):
@@ -322,7 +333,7 @@ class SignatureInference {
 			default:
 		}
 
-	static function inferArgumentsFromCallable(callables:Map<String, AstFunction>, name:String, arguments:Array<AstExpression>,
+	function inferArgumentsFromCallable(callables:Map<String, AstFunction>, name:String, arguments:Array<AstExpression>,
 			inferred:Map<String, AstType>):Void {
 		if (!callables.exists(name))
 			return;
@@ -336,7 +347,7 @@ class SignatureInference {
 				}
 	}
 
-	static function resolveMemberPath(path:String, owner:AstClass, classes:Map<String, AstClass>):Null<AstType> {
+	function resolveMemberPath(path:String, owner:AstClass, classes:Map<String, AstClass>):Null<AstType> {
 		var parts = splitPath(path), current:Null<AstType> = null;
 		for (field in owner.fields)
 			if (field.name == parts[0])
@@ -361,11 +372,11 @@ class SignatureInference {
 		return current;
 	}
 
-	static function splitPath(path:String):Array<String> {
+	function splitPath(path:String):Array<String> {
 		return compiler.QualifiedName.split(path);
 	}
 
-	static function inferFunction(fn:AstFunction, enums:Map<String, AstEnum>, ?methods:Map<String, AstFunction>, ?owner:AstClass):AstFunction {
+	function inferFunction(fn:AstFunction, enums:Map<String, AstEnum>, ?methods:Map<String, AstFunction>, ?owner:AstClass):AstFunction {
 		if ((switch (fn.result) { case InferredType: false; default: true; }))
 			return fn;
 		var environment = new InferenceEnvironment();
@@ -388,7 +399,7 @@ class SignatureInference {
 		return withResult(fn, inferred);
 	}
 
-	static function withResult(fn:AstFunction, result:AstType):AstFunction
+	function withResult(fn:AstFunction, result:AstType):AstFunction
 		return {
 			name: fn.name,
 			isStatic: fn.isStatic,
@@ -402,7 +413,7 @@ class SignatureInference {
 			span: fn.span
 		};
 
-	static function collectReturnTypes(statements:Array<AstStatement>, environment:InferenceEnvironment, enums:Map<String, AstEnum>,
+	function collectReturnTypes(statements:Array<AstStatement>, environment:InferenceEnvironment, enums:Map<String, AstEnum>,
 			methods:Null<Map<String, AstFunction>>, output:Array<AstType>):Bool {
 		var found = false;
 		for (statement in statements)
@@ -430,7 +441,7 @@ class SignatureInference {
 		return found;
 	}
 
-	static function inferExpression(expression:AstExpression, environment:InferenceEnvironment, enums:Map<String, AstEnum>,
+	function inferExpression(expression:AstExpression, environment:InferenceEnvironment, enums:Map<String, AstEnum>,
 			?methods:Map<String, AstFunction>):Null<AstType>
 		return switch expression {
 			case IntegerLiteral(_, _): IntType;
@@ -471,14 +482,14 @@ class SignatureInference {
 			default: null;
 		};
 
-	static function inferQualifiedCollectionCall(name:String, environment:InferenceEnvironment):Null<AstType> {
+	function inferQualifiedCollectionCall(name:String, environment:InferenceEnvironment):Null<AstType> {
 		var parts = splitPath(name);
 		if (parts.length != 2 || !environment.exists(parts[0]))
 			return null;
 		return inferCollectionMethod(environment.get(parts[0]), parts[1]);
 	}
 
-	static function inferCollectionMethod(receiver:Null<AstType>, name:String):Null<AstType>
+	function inferCollectionMethod(receiver:Null<AstType>, name:String):Null<AstType>
 		return switch receiver {
 			case MapType(_, value) if (name == "get"): NullableType(value);
 			case MapType(key, _) if (name == "keys"): AppliedType("Iterator", [key]);
@@ -489,7 +500,7 @@ class SignatureInference {
 			default: null;
 		};
 
-	static function bindPattern(pattern:AstExpression, subjectType:Null<AstType>, environment:InferenceEnvironment, enums:Map<String, AstEnum>):Void {
+	function bindPattern(pattern:AstExpression, subjectType:Null<AstType>, environment:InferenceEnvironment, enums:Map<String, AstEnum>):Void {
 		if (subjectType == null)
 			return;
 		var enumName = switch subjectType {
@@ -514,11 +525,18 @@ class SignatureInference {
 		}
 	}
 
-	static function lastPathSegment(path:String):String {
-		return compiler.QualifiedName.last(path);
+	function lastPathSegment(path:String):String {
+		if (path.indexOf(".") < 0)
+			return path;
+		var known = lastSegments.get(path);
+		if (known != null)
+			return known;
+		var segment = compiler.QualifiedName.last(path);
+		lastSegments.set(path, segment);
+		return segment;
 	}
 
-	static function sameType(left:AstType, right:AstType):Bool
+	function sameType(left:AstType, right:AstType):Bool
 		return switch left {
 			case IntType: switch right {
 					case IntType: true;
@@ -582,7 +600,7 @@ class SignatureInference {
 				};
 		};
 
-	static function sameTypes(left:Array<AstType>, right:Array<AstType>):Bool {
+	function sameTypes(left:Array<AstType>, right:Array<AstType>):Bool {
 		if (left.length != right.length)
 			return false;
 		for (index in 0...left.length)
@@ -591,7 +609,7 @@ class SignatureInference {
 		return true;
 	}
 
-	static function sameFields(left:Array<compiler.syntax.Ast.AstAnonymousField>, right:Array<compiler.syntax.Ast.AstAnonymousField>):Bool {
+	function sameFields(left:Array<compiler.syntax.Ast.AstAnonymousField>, right:Array<compiler.syntax.Ast.AstAnonymousField>):Bool {
 		if (left.length != right.length)
 			return false;
 		for (index in 0...left.length) {
@@ -602,10 +620,10 @@ class SignatureInference {
 		return true;
 	}
 
-	static function localMethodName(name:String):String
+	function localMethodName(name:String):String
 		return lastPathSegment(name);
 
-	public static function inferFieldBoundArguments(fn:AstFunction, classDecl:AstClass):AstFunction {
+	function fieldBoundArguments(fn:AstFunction, classDecl:AstClass):AstFunction {
 		fn = inferDefaultBoundArguments(fn);
 		var inferred:Map<String, AstType> = [];
 		for (statement in fn.statements)
@@ -623,7 +641,7 @@ class SignatureInference {
 		return replaceArguments(fn, inferred);
 	}
 
-	static function constrainExpressionFromField(inferred:Map<String, AstType>, expression:AstExpression, fieldName:String, classDecl:AstClass):Void
+	function constrainExpressionFromField(inferred:Map<String, AstType>, expression:AstExpression, fieldName:String, classDecl:AstClass):Void
 		switch expression {
 			case Variable(argumentName, _):
 				constrainFromField(inferred, argumentName, fieldName, classDecl);
@@ -642,7 +660,7 @@ class SignatureInference {
 			default:
 		}
 
-	static function inferDefaultBoundArguments(fn:AstFunction):AstFunction {
+	function inferDefaultBoundArguments(fn:AstFunction):AstFunction {
 		var inferred:Map<String, AstType> = [];
 		for (argument in fn.arguments)
 			if ((switch (argument.type) { case InferredType: true; default: false; }) && argument.defaultValue != null) {
@@ -653,7 +671,7 @@ class SignatureInference {
 		return replaceArguments(fn, inferred);
 	}
 
-	static function replaceArguments(fn:AstFunction, inferred:Map<String, AstType>):AstFunction {
+	function replaceArguments(fn:AstFunction, inferred:Map<String, AstType>):AstFunction {
 		var changed = false;
 		for (argument in fn.arguments)
 			if ((switch (argument.type) { case InferredType: true; default: false; }) && inferred.get(argument.name) != null) {
@@ -688,7 +706,7 @@ class SignatureInference {
 		};
 	}
 
-	static function constrainFromField(inferred:Map<String, AstType>, argumentName:String, fieldName:String, classDecl:AstClass):Void
+	function constrainFromField(inferred:Map<String, AstType>, argumentName:String, fieldName:String, classDecl:AstClass):Void
 		for (field in classDecl.fields)
 			if (field.name == fieldName) {
 				var fieldType = field.type;
