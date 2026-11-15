@@ -94,8 +94,8 @@ cxx-project-ffi                  ci          pool=projects cli-launcher -- bash 
 git-package-lock                 ci          pool=projects cli-launcher -- bash tests/integration/test-git-package-lock.sh
 workspace                        ci          pool=projects cli-launcher -- bash tests/integration/test-workspace.sh
 workspace-shards                 ci          pool=projects cli-launcher -- bash tests/integration/test-workspace-shards.sh
-# Haxeon compiles the compiler's own sources, which stock Haxe does not check.
-compiler-embedding               wave,ci     pool=projects cli-launcher -- bash tests/integration/test-compiler-embedding.sh
+# Check the compiler fixed point and embedded incremental consumer together.
+self-hosting                     wave,ci     pool=projects cli-launcher -- bash scripts/check-self-hosting.sh
 loaded-source-invalidation       ci          pool=projects cli-launcher -- bash tests/integration/test-loaded-source-invalidation.sh
 
 # The C++ FFI fixtures write distinct out/ files; with the native runtime already built they share no build tree, so they share a pool.

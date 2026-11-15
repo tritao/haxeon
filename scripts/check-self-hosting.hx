@@ -110,6 +110,8 @@ function main() {
 					Script.fail('FAIL: equality guard $which');
 			}
 	Sys.println("PASS: Haxe-built and self-hosted compilers agree on equality across all targets");
+	if (Script.run("bash", [Path.join([root, "tests", "integration", "test-compiler-embedding.sh"])], {cwd: root}) != 0)
+		Script.fail("FAIL: the embedded compiler check failed");
 }
 
 /** Runs one build step with its output in `log`; on failure shows the log's end and stops with `failure`. */

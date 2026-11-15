@@ -5,8 +5,8 @@
 #
 #   quick  the NUL guard, whole-tree type check, default driver, and UI Showcase builds on HL/Wasm32/Wasm GC
 #   wave   quick, then the driver again with HAXEON_CHECK_REUSE=1 (adds the warm-edit rebuilds and the reuse comparisons), the Wasm
-#          backend script (a broken Wasm fixture once reached main because no gate ran it), the self-hosting compile
-#          (tests/integration/test-compiler-embedding.sh: Haxeon compiles the compiler's own sources, which stock Haxe does not check)
+#          backend script (a broken Wasm fixture once reached main because no gate ran it), the strict self-hosting
+#          fixed-point, equality and embedding checks
 #          and the external-tool build (a tool outside the tree links the compiler sources through common.hxml)
 #   full   wave and every suite scripts/test.sh runs, each once
 #
