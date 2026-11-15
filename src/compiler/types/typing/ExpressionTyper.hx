@@ -37,11 +37,9 @@ import compiler.types.TypedAst.TypedStatement;
 import compiler.types.TypedAst.TypedExpressionKind;
 import compiler.types.TypedAst.TypedMapEntry;
 import compiler.types.TypedAst.TypedObjectField;
-import compiler.types.TypedAst.TypedSwitchBinding;
 import compiler.types.TypedAst.TypedSwitchExpressionCase;
 import compiler.types.TypedAst.TypedSwitchPredicate;
 import compiler.types.TypedAst.TypedSwitchCoverageCase;
-import compiler.types.TypedAst.TypedSwitchArrayPattern;
 import compiler.types.Type.CompilerType;
 import compiler.types.TypeRelations;
 import compiler.types.IterationProtocol;
@@ -49,8 +47,6 @@ import compiler.types.StructProperties;
 
 typedef ExpressionTypeCallback = (AstExpression, Scope, Null<CompilerType>, Bool) -> TypedExpression;
 typedef ExpressionCoerceCallback = (TypedExpression, CompilerType, String, String) -> TypedExpression;
-typedef ExpressionSwitchArrayPatternCallback = (AstExpression, CompilerType, Scope) -> Null<TypedSwitchArrayPattern>;
-typedef ExpressionSwitchArrayPatternKeyCallback = TypedSwitchArrayPattern->Null<String>;
 typedef ExpressionArrayElementTypeCallback = (CompilerType, SourceSpan) -> CompilerType;
 typedef ContextualExpressionTypeCallback = (AstExpression, Scope) -> Null<CompilerType>;
 typedef LowerExpressionTypeCallback = (type:AstType, span:SourceSpan) -> CompilerType;
@@ -69,31 +65,6 @@ typedef ExpressionDispatchRules = {
 	contextualType:ContextualExpressionTypeCallback
 };
 
-typedef ExpressionSwitchPattern = {
-	value:TypedExpression,
-	enumName:String,
-	index:Int,
-	bindings:Array<TypedSwitchBinding>,
-	predicates:Array<TypedSwitchPredicate>
-};
-
-typedef ExpressionSwitchRules = {
-	subjectBinding:(AstExpression, CompilerType, Scope) -> Null<String>,
-	catchAll:AstExpression->Bool,
-	enumPattern:(AstExpression, CompilerType, Scope) -> Null<ExpressionSwitchPattern>,
-	arrayPattern:ExpressionSwitchArrayPatternCallback,
-	arrayPatternKey:ExpressionSwitchArrayPatternKeyCallback,
-	caseKey:(TypedExpression, Array<TypedSwitchPredicate>) -> Null<String>,
-	enumCaseCovered:(CompilerType, Int, Array<TypedSwitchCoverageCase>) -> Bool,
-	enumLiteral:TypedExpression->Null<{name:String, index:Int}>,
-	isEnum:CompilerType->Bool,
-	isNullableEnum:CompilerType->Bool,
-	enumName:CompilerType->Null<String>,
-
-	/** The values of a closed enum abstract keyed as switch cases are, or null when the subject is not one. */
-	closedEnumAbstractValues:CompilerType->Null<Array<{name:String, key:String}>>
-};
-
 /** Dispatches source expressions and owns their expression-specific typing rules. */
 class ExpressionTyper {
 	final session:TypingSession;
@@ -101,7 +72,7 @@ class ExpressionTyper {
 	final callResolver:CallResolver;
 	final typeExpressionCallback:ExpressionTypeCallback;
 	final coerce:ExpressionCoerceCallback;
-	final switchRules:ExpressionSwitchRules;
+	final switchRules:SwitchTypingRules;
 	final anonymousTypeRegistry:AnonymousTypeRegistry;
 	final arrayElementType:ExpressionArrayElementTypeCallback;
 	final lowerType:LowerExpressionTypeCallback;
@@ -109,7 +80,7 @@ class ExpressionTyper {
 	var typedAnnotationValues:Map<String, Array<NativeTypeAnnotationData>> = [];
 
 	public function new(session:TypingSession, conversionResolver:ConversionResolver, callResolver:CallResolver, typeExpression:ExpressionTypeCallback,
-			coerce:ExpressionCoerceCallback, switchRules:ExpressionSwitchRules, anonymousTypeRegistry:AnonymousTypeRegistry,
+			coerce:ExpressionCoerceCallback, switchRules:SwitchTypingRules, anonymousTypeRegistry:AnonymousTypeRegistry,
 			arrayElementType:ExpressionArrayElementTypeCallback, lowerType:LowerExpressionTypeCallback, dispatchRules:ExpressionDispatchRules) {
 		this.session = session;
 		this.conversionResolver = conversionResolver;

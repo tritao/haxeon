@@ -27,7 +27,6 @@ import compiler.types.TypedAst.TypedSwitchBinding;
 import compiler.types.TypedAst.TypedSwitchCase;
 import compiler.types.TypedAst.TypedSwitchPredicate;
 import compiler.types.TypedAst.TypedSwitchCoverageCase;
-import compiler.types.TypedAst.TypedSwitchArrayPattern;
 
 typedef StatementExpressionCallback = (AstExpression, Scope, Null<CompilerType>, Bool) -> TypedExpression;
 typedef StatementCoerceCallback = (TypedExpression, CompilerType, String, String) -> TypedExpression;
@@ -35,33 +34,9 @@ typedef ExpectedInitializerCallback = (String, AstExpression, Array<AstStatement
 typedef BindCellCallback = (String, SourceSpan, Scope, CompilerType) -> Void;
 typedef TypeStatementsCallback = (Array<AstStatement>, Scope, Null<CompilerType>) -> Array<TypedStatement>;
 typedef ExhaustiveEnumCallback = (CompilerType, Array<TypedSwitchCase>) -> Bool;
-typedef SwitchArrayPatternCallback = (AstExpression, CompilerType, Scope) -> Null<TypedSwitchArrayPattern>;
-typedef SwitchArrayPatternKeyCallback = TypedSwitchArrayPattern->Null<String>;
 typedef LowerTypeCallback = (type:AstType, span:SourceSpan) -> CompilerType;
 typedef NullableUnwrapper = TypedExpression->TypedExpression;
 typedef MapKeyIteratorSource = TypedExpression->Null<TypedExpression>;
-
-typedef SwitchPattern = {
-	value:TypedExpression,
-	enumName:String,
-	index:Int,
-	bindings:Array<TypedSwitchBinding>,
-	predicates:Array<TypedSwitchPredicate>
-};
-
-typedef SwitchTypingRules = {
-	subjectBinding:(AstExpression, CompilerType, Scope) -> Null<String>,
-	catchAll:AstExpression->Bool,
-	enumPattern:(AstExpression, CompilerType, Scope) -> Null<SwitchPattern>,
-	arrayPattern:SwitchArrayPatternCallback,
-	arrayPatternKey:SwitchArrayPatternKeyCallback,
-	caseKey:(TypedExpression, Array<TypedSwitchPredicate>) -> Null<String>,
-	enumCaseCovered:(CompilerType, Int, Array<TypedSwitchCoverageCase>) -> Bool,
-	enumLiteral:TypedExpression->Null<{name:String, index:Int}>,
-	isEnum:CompilerType->Bool,
-	isNullableEnum:CompilerType->Bool,
-	enumName:CompilerType->Null<String>
-};
 
 typedef StaticFieldInfo = {owner:String, type:CompilerType};
 

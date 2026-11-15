@@ -196,6 +196,21 @@ it:
 Default interface methods stay on demand; associated types and blanket implementations are not planned unless the
 iterator work requires them.
 
+### Width subtyping for anonymous structures (Haxe compatibility)
+
+Haxe lets a value of `{a, b, c}` be used where `{a, b}` is expected (only an object literal with extra fields is an
+error). Haxeon accepts only the same field set (`TypeRelations.anonymousReadOnlyWidening`), because each structure shape
+has a fixed layout. It is a common Haxe idiom (options records, passing a richer record to code that reads two fields),
+so ordinary Haxe code fails here, and code that must build with both compilers has to stay within the stricter rule:
+the compiler's own sources broke self-hosting this way when two copies of one rules type drifted (now one declaration,
+`SwitchTypingRules`).
+
+Supporting it needs a view of the wider object through the narrower type, not a copy: structures are reference types,
+so `==` and writes through the view must reach the original. HashLink has virtual objects (`ToVirtual` is already in
+the IR); Wasm32 and Wasm GC would need field-index tables like the typed interface tables. A value whose shape matches
+exactly keeps the fixed-layout path, so only the widening conversion pays. Needs a design document before it is
+implemented.
+
 ### Smaller conveniences
 
 Check each against what Haxeon already supports before designing it.

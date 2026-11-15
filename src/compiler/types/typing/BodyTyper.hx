@@ -91,7 +91,7 @@ class BodyTyper {
 			function(name, span, scope, type) this.bindCell(name, span, scope, type),
 			function(statements, scope, result) return this.typeStatements(statements, scope, result),
 			function(statements) return ControlFlow.returnsOnEveryPath(statements, function(type, cases) return this.exhaustiveEnum(type, cases)));
-		var switchRules = {
+		var switchRules:SwitchTypingRules = {
 			subjectBinding: function(value:AstExpression, expected:CompilerType, scope:Scope) return this.switchSubjectBinding(value, expected, scope),
 			catchAll: function(value:AstExpression) return isSwitchCatchAll(value),
 			enumPattern: function(value:AstExpression, expected:CompilerType, scope:Scope) return this.typeEnumPattern(value, expected, scope),
