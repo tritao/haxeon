@@ -1,5 +1,6 @@
 // `==` and `!=` against a constructor without arguments ask which constructor a value is, as in Haxe, even for an enum whose
-// other constructors have arguments and that does not conform to Equatable; a null value is none of them.
+// other constructors have arguments and that does not conform to Equatable; a null value is none of them. getIndex() gives
+// the constructor's position.
 enum Direction {
 	In;
 	Out;
@@ -39,5 +40,8 @@ function main():Int {
 	}
 	if (counted() == InOut || calls != 1)
 		return 6;
+	// EnumValue.getIndex() is the constructor's position in the declaration.
+	if (In.getIndex() != 0 || pick(1).getIndex() != 2 || array.getIndex() != 3)
+		return 7;
 	return 42;
 }

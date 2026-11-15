@@ -120,8 +120,12 @@ class ModuleAnalyzer {
 			for (field in classDecl.fields)
 				dependencies.remove(field.name);
 		}
-		for (enumDecl in ast.enums)
+		// A constructor of this module's enums is a value here too: `Red.getIndex()` names no module.
+		for (enumDecl in ast.enums) {
 			dependencies.remove(enumDecl.name);
+			for (constructor in enumDecl.cases)
+				dependencies.remove(constructor.name);
+		}
 		for (abstractDecl in ast.enumAbstracts)
 			dependencies.remove(abstractDecl.name);
 		for (abstractDecl in ast.abstracts)

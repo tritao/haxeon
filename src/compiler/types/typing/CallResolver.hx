@@ -238,6 +238,9 @@ class CallResolver {
 	public function typeMethodCall(receiver:TypedExpression, name:String, arguments:Array<AstExpression>, span:SourceSpan, scope:Scope,
 			expectedType:Null<CompilerType>, platformFirst:Bool = true, receiverName:Null<String> = null,
 			contextualGenericArguments:Bool = true):TypedExpression {
+		// Haxe's EnumValue.getIndex(): the constructor's position in the enum's declaration.
+		if (name == "getIndex" && arguments.length == 0 && receiver.type.match(TInstance(NominalKind.Enum, _, _)))
+			return new TypedExpression(TEnumIndex(receiver), TInt, span);
 		var pathCall = KeyPathOperations.call(session, receiver, name, arguments, span, scope, typeExpression, coerce, typeCallMemberWithFlow);
 		if (pathCall != null)
 			return pathCall;
@@ -1088,6 +1091,16 @@ class CallResolver {
 			if (isEnumMatch(receiver, methodName, arguments))
 				return typeEnumMatch(Variable(name.substring(0, name.lastIndexOf(".")), span), arguments[0], span, scope);
 			return typeMethodCall(receiver, methodName, arguments, span, scope, expectedType, false, receiverName, false);
+		}
+		// Nothing else names the receiver: a constructor without arguments can ("Color.Red.getIndex()", "Red.getIndex()").
+		if (methodName != null && !session.signatures.exists(name)) {
+			var prefix = name.substring(0, name.lastIndexOf(".")),
+				constructor = enumCaseInfo(prefix);
+			if (constructor == null && prefix.indexOf(".") < 0)
+				constructor = uniqueEnumCaseInfo(prefix, 0, span);
+			if (constructor != null && constructor.params.length == 0)
+				return typeMethodCall(typeEnumConstructor(prefix, [], null, constructor, span, scope), methodName, arguments, span, scope, expectedType,
+					false, prefix, false);
 		}
 		return resolveFunctionCall(name, arguments, span, scope);
 	}
