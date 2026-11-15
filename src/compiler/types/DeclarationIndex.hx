@@ -70,6 +70,65 @@ class DeclarationIndex {
 
 	final enumAbstractViews:Map<String, compiler.syntax.Ast.AstAbstract> = [];
 
+	// This index belongs to one semantic declaration snapshot; rebuilding the index drops the cache.
+	final abstractEqualityOperators:Map<String, Bool> = [];
+
+	/** Whether this abstract declares its own equality operator. */
+	public function declaresEqualityOperator(name:String):Bool {
+		if (abstractEqualityOperators.exists(name))
+			return abstractEqualityOperators.get(name);
+		var declaration = abstractDeclaration(name), found = false;
+		if (declaration != null)
+			for (method in declaration.methods)
+				if (methodDeclaresOperator(method, "==")) {
+					found = true;
+					break;
+				}
+		abstractEqualityOperators.set(name, found);
+		return found;
+	}
+
+	/** Match operator metadata identically for conformance and overload selection. */
+	public static function methodDeclaresOperator(method:AstFunction, symbol:String):Bool {
+		if (!method.isStatic || method.metadata == null)
+			return false;
+		for (metadata in method.metadata)
+			if (metadata.name == "op" && metadata.arguments.length == 1
+				&& operatorSymbol(metadata.arguments[0]) == symbol)
+				return true;
+		return false;
+	}
+
+	static function operatorSymbol(expression:AstExpression):Null<String>
+		return switch expression {
+			case Add(_, _, _):
+				"+";
+			case Sub(_, _, _):
+				"-";
+			case Mul(_, _, _):
+				"*";
+			case Div(_, _, _):
+				"/";
+			case Mod(_, _, _):
+				"%";
+			case Less(_, _, _):
+				"<";
+			case LessEqual(_, _, _):
+				"<=";
+			case Greater(_, _, _):
+				">";
+			case GreaterEqual(_, _, _):
+				">=";
+			case Equal(_, _, _):
+				"==";
+			case NotEqual(_, _, _):
+				"!=";
+			case Negate(_, _):
+				"u-";
+			default:
+				null;
+		};
+
 	/** Both abstract declaration forms share conversion and method lookup. */
 	public function abstractDeclaration(name:String):Null<compiler.syntax.Ast.AstAbstract> {
 		var ordinary = abstracts.get(name);

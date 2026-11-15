@@ -456,8 +456,12 @@ class TypeRelations {
 				return declarations.typeParameterSatisfies(actual, expected);
 			case _:
 		}
+		var valueCapability = switch expected {
+			case TInstance(NominalKind.Interface, name, _) if (name == "Equatable" || name == "Hashable"): true;
+			default: false;
+		};
 		switch actual {
-			case TAbstract(name, _, _) if (declarations.enumAbstracts.exists(name)):
+			case TAbstract(name, _, _) if (!valueCapability && declarations.enumAbstracts.exists(name)):
 				var declaration = declarations.enumAbstracts.get(name);
 				if (declaration.conformances != null)
 					for (conformance in declaration.conformances) {
@@ -469,10 +473,6 @@ class TypeRelations {
 		}
 		if (StructProperties.isConstraintType(expected))
 			return StructProperties.satisfies(declarations, actual, representationConstraintName(expected));
-		var valueCapability = switch expected {
-			case TInstance(NominalKind.Interface, name, _) if (name == "Equatable" || name == "Hashable"): true;
-			default: false;
-		};
 		if (valueCapability && (switch actual {
 			case TAnonymous(_, _): true;
 			case TInstance(NominalKind.Class, _, _) | TInstance(NominalKind.Enum, _, _): switch expected {
@@ -490,8 +490,9 @@ class TypeRelations {
 					return false;
 				case TInt, TInt64, TBool, TFloat, TString, TNativeScalar(_), TKeyPath(_, _, _):
 					return true;
-				case TAbstract(name, _, representation) if (declarations.enumAbstracts.exists(name)):
-					return satisfiesConstraint(representation, expected);
+				case TAbstract(name, _, representation):
+					return !declarations.declaresEqualityOperator(name)
+						&& satisfiesConstraint(representation, expected);
 				case TNullable(element):
 					return satisfiesConstraint(element, expected);
 				case TAnonymous(_, _):

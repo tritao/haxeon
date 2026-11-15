@@ -848,6 +848,7 @@ forming a separate declaration mechanism. A value type has one equality used by 
 compare equal only to null. This applies through a generic `T:Equatable` bound as well. Array `==` remains a reference
 identity comparison, including for arrays whose elements conform. Arrays are mutable and do not
 implicitly conform to `Hashable`, so they cannot serve as map keys. `Null<T>` retains the conformance of `T`.
+An abstract inherits `Equatable` and `Hashable` from its representation unless it defines its own `==` operator.
 
 Anonymous structures and their typedefs are reference types: `==` compares identity. They conform to `Equatable`
 or `Hashable` when every field has the respective conformance. `Equality.equals` and hashing compare or hash fields

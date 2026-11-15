@@ -74,6 +74,9 @@ class ValueEqualityGenerator {
 			return;
 		seen.set(name, true);
 		switch type {
+			case TAbstract(_, _, representation) if (DeclaredConformance.usesEquality(session, representation)):
+				if (!requests.exists(name)) requests.set(name, {type: type, origin: root.origin, span: root.span});
+				collect(session, representation, root, requests, seen);
 			case TNullable(element) if (DeclaredConformance.has(session, element, "Equatable")
 				|| DeclaredConformance.usesEquality(session, element)):
 				if (!requests.exists(name))
@@ -111,6 +114,7 @@ class ValueEqualityGenerator {
 	static function needsHelper(session:TypingSession, type:CompilerType):Bool
 		return switch type {
 			case TKeyPath(_, _, _): true;
+			case TAbstract(_, _, representation): DeclaredConformance.usesEquality(session, representation);
 			case TNullable(element): DeclaredConformance.has(session, element, "Equatable")
 				|| DeclaredConformance.usesEquality(session, element);
 			case TArray(element): DeclaredConformance.supportsEquality(session, element);
@@ -137,6 +141,10 @@ class ValueEqualityGenerator {
 			right = new TypedExpression(TLocal("right"), type, span),
 			statements:Array<TypedStatement> = [];
 		switch type {
+			case TAbstract(_, _, representation):
+				var leftValue = new TypedExpression(TCast(left), representation, span),
+					rightValue = new TypedExpression(TCast(right), representation, span);
+				statements.push(TReturn(compareValue(session, leftValue, rightValue, span, compare), span));
 			case TKeyPath(_, _, _):
 				new AnonymousTypeRegistry(session).register(type);
 				statements.push(TReturn(compare(new TypedExpression(TField(left, "$key"), TString, span),

@@ -93,6 +93,7 @@ class SemanticIndex {
 	var cancellation:Null<CancellationToken>;
 	var currentCaller:Null<SemanticSymbolId>;
 	var currentCallerName:Null<String>;
+	var currentAbstractDependencies:Map<String, Bool> = [];
 	var currentDependencyKind:SemanticDependencyKind = SemanticDependencyKind.Body;
 	var checkpointCount:Int = 0;
 
@@ -251,6 +252,7 @@ class SemanticIndex {
 		indexCompletionLocals(fn.statements, fn.span, 0);
 		currentCaller = functionId;
 		currentCallerName = fn.name;
+		currentAbstractDependencies = [];
 		indexStatements(fn, fn.statements, resolve, resolveEnumCase);
 		indexCallTokens(fn, functionId, resolve);
 		currentCaller = null;
@@ -650,6 +652,7 @@ class SemanticIndex {
 			resolveEnumCase:(String, Int) -> Null<SemanticSymbolId>):Void {
 		currentCaller = resolve(owner);
 		currentCallerName = owner;
+		currentAbstractDependencies = [];
 		currentDependencyKind = SemanticDependencyKind.Initializer;
 		var synthetic:TypedFunction = {
 			name: owner, role: UserFunction,
@@ -909,6 +912,7 @@ class SemanticIndex {
 		if (expression.semanticReference != null)
 			bindNamed(resolve, expression.semanticReference, expression.span);
 		completionTypes.push({span: expression.span, type: expression.type});
+		indexAbstractTypeDependencies(expression.type, resolve, null);
 		switch expression.expression {
 			case TLocal(identity), TCellLocal(identity, _), TCaptured(identity), TCellCaptured(identity, _):
 				var id = localId(fn, identity);
@@ -1157,6 +1161,37 @@ class SemanticIndex {
 			token = referenceToken(tokens, span, sourceLocalName(identity));
 		if (symbols.exists(id) && token != null)
 			bind(id, token.span);
+	}
+
+	function indexAbstractTypeDependencies(type:CompilerType, resolve:String->Null<SemanticSymbolId>,
+			explored:Null<Array<Array<compiler.types.Type.AnonymousField>>>):Void {
+		switch type {
+			case TAbstract(name, arguments, representation):
+				for (argument in arguments) indexAbstractTypeDependencies(argument, resolve, explored);
+				if (!currentAbstractDependencies.exists(name)) {
+					currentAbstractDependencies.set(name, true);
+					var id = resolve(name);
+					if (id != null) recordResolvedReference(name, id);
+					indexAbstractTypeDependencies(representation, resolve, explored);
+				}
+			case TNullable(element), TArray(element),
+				TIterator(element): indexAbstractTypeDependencies(element, resolve, explored);
+			case TMap(key, value), TKeyPath(key, value, _):
+				indexAbstractTypeDependencies(key, resolve, explored);
+				indexAbstractTypeDependencies(value, resolve, explored);
+			case TInstance(_, _, arguments): for (argument in arguments) indexAbstractTypeDependencies(argument,
+				resolve, explored);
+			case TFunction(arguments, result):
+				for (argument in arguments) indexAbstractTypeDependencies(argument, resolve, explored);
+				indexAbstractTypeDependencies(result, resolve, explored);
+			case TAnonymous(_, fields):
+				if (explored == null) explored = [];
+				if (explored.indexOf(fields) < 0) {
+					explored.push(fields);
+					for (field in fields) indexAbstractTypeDependencies(field.type, resolve, explored);
+				}
+			default:
+		}
 	}
 
 	function bindNamed(resolve:String->Null<SemanticSymbolId>, name:String, span:SourceSpan):Null<SemanticSymbolId> {

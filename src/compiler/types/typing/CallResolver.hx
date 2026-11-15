@@ -26,6 +26,7 @@ import compiler.types.analysis.AbstractConstructorNormalizer;
 import compiler.types.TypedAst.TypedExpression;
 import compiler.types.TypedAst.TypedExpressionKind;
 import compiler.types.TypeRelations;
+import compiler.types.DeclarationIndex;
 import compiler.semantic.SemanticSignature;
 
 typedef TypeExpressionCallback = (AstExpression, Scope, Null<CompilerType>, Bool) -> TypedExpression;
@@ -158,14 +159,8 @@ class CallResolver {
 			if (declaration == null)
 				throw 'Missing abstract declaration "$owner"';
 			for (method in declaration.methods) {
-				if (!method.isStatic || method.arguments.length != operands.length || method.metadata == null)
-					continue;
-				var matches = false;
-				for (metadata in method.metadata)
-					if (metadata.name == "op" && metadata.arguments.length == 1
-						&& operatorSymbol(metadata.arguments[0]) == symbol)
-						matches = true;
-				if (!matches)
+				if (method.arguments.length != operands.length
+					|| !DeclarationIndex.methodDeclaresOperator(method, symbol))
 					continue;
 				var expected = [for (argument in method.arguments) argumentType(argument, null)],
 					score = 0,
@@ -210,23 +205,6 @@ class CallResolver {
 		session.invalidateCallEffects(selected.key, scope);
 		return new TypedExpression(TCall(selected.key, arguments), resultType, span);
 	}
-
-	static function operatorSymbol(expression:AstExpression):Null<String>
-		return switch expression {
-			case Add(_, _, _): "+";
-			case Sub(_, _, _): "-";
-			case Mul(_, _, _): "*";
-			case Div(_, _, _): "/";
-			case Mod(_, _, _): "%";
-			case Less(_, _, _): "<";
-			case LessEqual(_, _, _): "<=";
-			case Greater(_, _, _): ">";
-			case GreaterEqual(_, _, _): ">=";
-			case Equal(_, _, _): "==";
-			case NotEqual(_, _, _): "!=";
-			case Negate(_, _): "u-";
-			default: null;
-		};
 
 	/** `value.match(pattern)` on an enum value. */
 	public function isEnumMatch(receiver:TypedExpression, name:String, arguments:Array<AstExpression>):Bool
@@ -1535,10 +1513,7 @@ class CallResolver {
 					right = rightValue;
 				}
 			}
-			if (!explicitEquality && !mapKeyEquality && (switch left.type {
-				case TArray(_) | TNullable(TArray(_)) | TAnonymous(_, _) | TNullable(TAnonymous(_, _)): true;
-				default: false;
-			}))
+			if (!explicitEquality && !mapKeyEquality && DeclaredConformance.usesIdentityEquality(left.type))
 				return new TypedExpression(TEqual(left, right), TBool, span);
 			var structType = switch left.type {
 				case TNullable(element) if (session.relations.isStruct(element)): element;

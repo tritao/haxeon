@@ -8,12 +8,36 @@ import compiler.types.TypedAst;
 
 /** Queries declared value capabilities using the same inheritance graph as interface bounds. */
 class DeclaredConformance {
+	static function customEqualityName(session:TypingSession, type:CompilerType):Null<String>
+		return switch type {
+			case TAbstract(name, _, representation):
+				session.declarations.declaresEqualityOperator(name) ? name : customEqualityName(session,
+					representation);
+			case TNullable(element) | TArray(element):
+				customEqualityName(session, element);
+			default:
+				null;
+		};
+
+	/** Arrays and anonymous structures, including abstract and nullable wrappers, use reference identity for == as in stock Haxe. */
+	public static function usesIdentityEquality(type:CompilerType):Bool
+		return switch type {
+			case TAbstract(_, _, representation) | TNullable(representation):
+				usesIdentityEquality(representation);
+			case TArray(_) | TAnonymous(_, _):
+				true;
+			default:
+				false;
+		};
+
 	public static function has(session:TypingSession, type:CompilerType, name:String):Bool
 		return session.relations.satisfiesConstraint(type, TInstance(NominalKind.Interface, name, []));
 
 	public static function usesEquality(session:TypingSession, type:CompilerType):Bool
 		return switch type {
 			case TKeyPath(_, _, _): true;
+			case TAbstract(name, _, representation): !session.declarations.declaresEqualityOperator(name)
+				&& usesEquality(session, representation);
 			case TArray(element): supportsEquality(session, element);
 			case TAnonymous(_, _): has(session, type, "Equatable");
 			case TNullable(element): usesEquality(session, element);
@@ -22,15 +46,12 @@ class DeclaredConformance {
 			default: false;
 		};
 
-	/**
-	 * A field can be synthesized only when its own equality is defined. An abstract's `==` compares its representation
-	 * (or calls an `@:op(==)` overload, which only Int and Float abstracts may declare), and generated helpers compare
-	 * elements through that same `==`, so every abstract has exactly its representation's equality.
-	 */
+	/** A field can be synthesized only when its own equality is defined. */
 	public static function supportsEquality(session:TypingSession, type:CompilerType):Bool
 		return switch type {
 			case TInt, TInt64, TFloat, TBool, TString, TNativeScalar(_), TKeyPath(_, _, _): true;
-			case TAbstract(_, _, representation): supportsEquality(session, representation);
+			case TAbstract(name, _, representation): !session.declarations.declaresEqualityOperator(name)
+				&& supportsEquality(session, representation);
 			case TNullable(element): supportsEquality(session, element);
 			case TArray(element): supportsEquality(session, element);
 			case TAnonymous(_, _): has(session, type, "Equatable");
@@ -68,8 +89,8 @@ class DeclaredConformance {
 	public static function supportsHash(session:TypingSession, type:CompilerType):Bool
 		return switch type {
 			case TInt, TInt64, TFloat, TBool, TString, TNativeScalar(_), TKeyPath(_, _, _): true;
-			case TAbstract(name, _, representation) if (session.declarations.enumAbstracts.exists(name))
-				: supportsHash(session, representation);
+			case TAbstract(name, _, representation): !session.declarations.declaresEqualityOperator(name)
+				&& supportsHash(session, representation);
 			case TNullable(element): supportsHash(session, element);
 			case TAnonymous(_, _): has(session, type, "Hashable");
 			case TInstance(NominalKind.Class, _, _): session.relations.isStruct(type) && has(session, type, "Hashable");
@@ -78,6 +99,9 @@ class DeclaredConformance {
 		};
 
 	public static function capabilityError(session:TypingSession, type:CompilerType, capability:String):String {
+		var custom = customEqualityName(session, type);
+		if (custom != null)
+			return 'Type "${compiler.semantic.SemanticSignature.display(type)}" does not conform to $capability (abstract "$custom" has a custom == operator)';
 		var field = session.relations.recursiveAnonymousField(type, [], null);
 		var message = 'Type "${compiler.semantic.SemanticSignature.display(type)}" does not conform to $capability';
 		return field == null
@@ -100,6 +124,11 @@ class DeclaredConformance {
 
 	/** Map operations need the same generated equality/hash helpers as ordinary value operations. */
 	public static function requestHashableMapKey(session:TypingSession, type:CompilerType, span:SourceSpan):Void {
+		switch type {
+			case TAbstract(_, _, _) if (!supportsHash(session, type)):
+				BodyTyper.fail("E1025", capabilityError(session, type, "Hashable"), span);
+			default:
+		}
 		if (session.isPayloadEnumKey(type)) {
 			if (!has(session, type, "Hashable"))
 				BodyTyper.fail("E1025", capabilityError(session, type, "Hashable"), span);

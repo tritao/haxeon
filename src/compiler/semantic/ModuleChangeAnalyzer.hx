@@ -107,7 +107,11 @@ class ModuleChangeAnalyzer {
 						for (type in abstractDecl.fromTypes)
 							SemanticSignature.parsed(type, ast.aliases)
 					].join(",") + " to "
-					+ [for (type in abstractDecl.toTypes) SemanticSignature.parsed(type, ast.aliases)].join(",");
+						+ [for (type in abstractDecl.toTypes) SemanticSignature.parsed(type, ast.aliases)].join(",");
+			// Operator and conversion metadata changes the abstract's typing behavior, even if method signatures do not change.
+			signature += ":method-metadata:"
+				+ [for (method in abstractDecl.methods) if (method.isStatic && method.metadata != null)
+				method.name + "=" + fieldMetadataFingerprint(state, method.metadata)].join(";");
 			abstracts.set(abstractName, signature);
 			if (state.abstractFingerprints.get(abstractName) != signature)
 				structuralChanged.set('abstract:$abstractName', true);

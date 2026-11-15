@@ -2,6 +2,10 @@ import haxeon.Equality;
 
 typedef GuardRecord = {x:Int, y:Int};
 
+abstract GuardId(Int) {
+	public inline function new(value:Int) this = value;
+}
+
 function main():Int {
 	var first:GuardRecord = {
 		x: 0,
@@ -34,5 +38,6 @@ function main():Int {
 		return 5;
 	if (Equality.equals(left, unequal))
 		return 6;
+	if (!Equality.equals(new GuardId(7), new GuardId(7)) || Equality.equals(new GuardId(7), new GuardId(8))) return 7;
 	return 42;
 }
