@@ -418,6 +418,8 @@ class TestCatalog {
 				"an unboxed dynamic value survives assignment in nested try blocks"),
 			hxmlCase("runtime", "jit-try-local-writes", "tests/hxml/jit-try-local-writes-test.hxml", "jit-try-local-writes-test.hl", 0,
 				"locals written in try reach catch on every path into the try"),
+			hxmlCase("runtime", "jit-narrow-integers", "tests/hxml/jit-narrow-integers-test.hxml", "jit-narrow-integers-test.hl", 0,
+				"narrow unsigned compares and 64-bit integer conversions"),
 			hxmlCase("runtime", "jit-address-taken", "tests/hxml/jit-address-taken-test.hxml", "jit-address-taken-test.hl", 0,
 				"the JIT keeps reading locals whose address is passed to a callee from memory"),
 			hxmlCase("runtime", "nominal-interface-patch", "tests/hxml/nominal-interface-patch-test.hxml", "nominal-interface-patch-test.hl", 0,

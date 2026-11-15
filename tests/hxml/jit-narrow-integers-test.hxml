@@ -1,0 +1,5 @@
+common.hxml
+-cp tests
+-cp tests/runtime
+-main JitNarrowIntegersMain
+-hl out/jit-narrow-integers-test.hl
