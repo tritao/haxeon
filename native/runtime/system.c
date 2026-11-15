@@ -100,6 +100,18 @@ HL_PRIM realtime_file_input *HL_NAME(__sys_stdin)( void ) {
 	return &realtime_stdin;
 }
 
+/* The next byte of `input`, or -1 at the end of the input. */
+HL_PRIM int HL_NAME(__file_input_read_byte)( realtime_file_input *input ) {
+	int code = fgetc(input->stream);
+	return code == EOF ? -1 : code;
+}
+
+/* Reads up to `len` bytes into `bytes` at `pos`; returns how many, 0 only at the end of the input. */
+HL_PRIM int HL_NAME(__file_input_read_bytes)( realtime_file_input *input, realtime_bytes *bytes, int pos, int len ) {
+	realtime_bytes_bounds(bytes, pos, len);
+	return len == 0 ? 0 : (int)fread(bytes->data + pos, 1, (size_t)len, input->stream);
+}
+
 /* The next line of `input` without its "\n" or "\r\n", or NULL at the end of the input. */
 HL_PRIM vstring *HL_NAME(__file_input_read_line)( realtime_file_input *input ) {
 	size_t capacity = 256, length = 0;

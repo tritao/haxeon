@@ -54,6 +54,7 @@ HL_PRIM int HL_NAME(__value_array_insert_empty)(varray *array, int position);
 #include "runtime/regex.c"
 #include "runtime/reflection.c"
 #include "runtime/files.c"
+#include "runtime/sockets.c"
 #include "runtime/int64.c"
 #include "runtime/atomic_files.c"
 #include "runtime/system.c"

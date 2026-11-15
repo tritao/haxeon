@@ -586,3 +586,4 @@ try-catch-local-writes	42
 generic-override-bridge	42
 haxe-syntax-forms	42
 stdlib-path-systools	42
+stdlib-io-sockets	42
