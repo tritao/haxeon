@@ -124,8 +124,8 @@ class AccessibilityBridge {
 		node.set_parent_id(item.parentId);
 		node.set_child_index(item.childIndex);
 		node.set_role(item.role);
-		node.set_states(AccessibilityStates.fromRaw(item.states.rawValue()));
-		node.set_actions(AccessibilityActions.fromRaw(item.actions.rawValue()));
+		node.set_states(item.states);
+		node.set_actions(item.actions);
 		node.set_reserved0(0);
 		node.set_x(item.bounds.x * coordinateScale);
 		node.set_y(item.bounds.y * coordinateScale);

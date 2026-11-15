@@ -304,16 +304,24 @@ interface NativeKitUI @target("portable-abi64") @library("nativekit_ui") @depend
 		NKUI_LAYER_HAS_BOUNDS = 2;
 	}
 	/**
-	 * Cross-axis child alignment values shared by the horizontal and vertical axes.
+	 * Horizontal child alignment; the low byte of a node's packed child alignment.
 	 */
-	enum nkui_layout_alignment : u32 {
-		NKUI_LAYOUT_ALIGNMENT_START = 0;
-		NKUI_LAYOUT_ALIGNMENT_END = 1;
-		NKUI_LAYOUT_ALIGNMENT_CENTER = 2;
+	enum nkui_layout_alignment_x : u32 {
+		NKUI_LAYOUT_ALIGNMENT_X_START = 0;
+		NKUI_LAYOUT_ALIGNMENT_X_END = 1;
+		NKUI_LAYOUT_ALIGNMENT_X_CENTER = 2;
+	}
+	/**
+	 * Vertical child alignment; the second byte of a node's packed child alignment.
+	 */
+	enum nkui_layout_alignment_y : u32 {
+		NKUI_LAYOUT_ALIGNMENT_Y_START = 0;
+		NKUI_LAYOUT_ALIGNMENT_Y_END = 1;
+		NKUI_LAYOUT_ALIGNMENT_Y_CENTER = 2;
 		/**
 		 * Aligns child baselines in horizontal rows; baseline-less children use their bottom edge.
 		 */
-		NKUI_LAYOUT_ALIGNMENT_BASELINE = 3;
+		NKUI_LAYOUT_ALIGNMENT_Y_BASELINE = 3;
 	}
 	/**
 	 * Persistent rendering policy for a retained custom-paint plane.

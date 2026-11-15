@@ -1146,8 +1146,8 @@ bool read_layout_transaction(const uint8_t *bytes, uint32_t byte_count,
             const bool overlay = (node_flags & NKUI_LAYOUT_NODE_OVERLAY) != 0;
             if (visual_kind < NKUI_LAYOUT_VISUAL_BOX || visual_kind > NKUI_LAYOUT_VISUAL_CUSTOM ||
                 (child_alignment & 0xffff0000u) != 0 ||
-                child_align_x > NKUI_LAYOUT_ALIGNMENT_CENTER ||
-                child_align_y > NKUI_LAYOUT_ALIGNMENT_BASELINE ||
+                child_align_x > NKUI_LAYOUT_ALIGNMENT_X_CENTER ||
+                child_align_y > NKUI_LAYOUT_ALIGNMENT_Y_BASELINE ||
                 child_distribution > NKUI_LAYOUT_DISTRIBUTION_SPACE_EVENLY ||
                 wrap_mode > NKUI_LAYOUT_WRAP_WRAP ||
                 align_self > NKUI_LAYOUT_SELF_ALIGNMENT_BASELINE ||

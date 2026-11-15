@@ -145,8 +145,8 @@ class LayoutTransaction {
 					+ ", height=" + axisDescription(style.height) + ", aspect=" + style.aspectRatio;
 			var determinant = style.transform.a * style.transform.d -
 				style.transform.b * style.transform.c;
-			var childAlignX = NativeEnums.alignmentXCode(style.childAlignX);
-			var childAlignY = NativeEnums.alignmentYCode(style.childAlignY);
+			var childAlignX = style.childAlignX;
+			var childAlignY = style.childAlignY;
 			var childDistribution = style.childDistribution;
 			var positioning = style.positioning;
 			var wrapMode = style.wrapMode;

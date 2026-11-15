@@ -88,14 +88,22 @@ enum NK_ENUM(nkui_layout_direction) {
     NKUI_LAYOUT_DIRECTION_TOP_TO_BOTTOM = 1
 };
 
-/** Cross-axis child alignment values shared by the horizontal and vertical axes. */
-typedef uint32_t nkui_layout_alignment;
-enum NK_ENUM(nkui_layout_alignment) {
-    NKUI_LAYOUT_ALIGNMENT_START = 0,
-    NKUI_LAYOUT_ALIGNMENT_END = 1,
-    NKUI_LAYOUT_ALIGNMENT_CENTER = 2,
+/** Horizontal child alignment; the low byte of a node's packed child alignment. */
+typedef uint32_t nkui_layout_alignment_x;
+enum NK_ENUM(nkui_layout_alignment_x) {
+    NKUI_LAYOUT_ALIGNMENT_X_START = 0,
+    NKUI_LAYOUT_ALIGNMENT_X_END = 1,
+    NKUI_LAYOUT_ALIGNMENT_X_CENTER = 2
+};
+
+/** Vertical child alignment; the second byte of a node's packed child alignment. */
+typedef uint32_t nkui_layout_alignment_y;
+enum NK_ENUM(nkui_layout_alignment_y) {
+    NKUI_LAYOUT_ALIGNMENT_Y_START = 0,
+    NKUI_LAYOUT_ALIGNMENT_Y_END = 1,
+    NKUI_LAYOUT_ALIGNMENT_Y_CENTER = 2,
     /** Aligns child baselines in horizontal rows; baseline-less children use their bottom edge. */
-    NKUI_LAYOUT_ALIGNMENT_BASELINE = 3
+    NKUI_LAYOUT_ALIGNMENT_Y_BASELINE = 3
 };
 
 /** Main-axis free-space distribution policies. */

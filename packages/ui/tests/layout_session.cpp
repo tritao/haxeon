@@ -537,7 +537,7 @@ int main() {
     const std::size_t panel_record =
         NKUI_LAYOUT_TRANSACTION_HEADER_BYTES + NKUI_LAYOUT_NODE_RECORD_BYTES;
     write_u32(centered, panel_record + NKUI_LAYOUT_NODE_CHILD_ALIGNMENT_OFFSET,
-              NKUI_LAYOUT_ALIGNMENT_CENTER | (NKUI_LAYOUT_ALIGNMENT_CENTER << 8));
+              NKUI_LAYOUT_ALIGNMENT_X_CENTER | (NKUI_LAYOUT_ALIGNMENT_Y_CENTER << 8));
     write_u32(centered, panel_record + NKUI_LAYOUT_NODE_CHILD_DISTRIBUTION_OFFSET,
               NKUI_LAYOUT_DISTRIBUTION_CENTER);
     if (nkui_layout_session_submit(session, centered.data(), centered.size(), &frame) != NKUI_OK ||
@@ -630,7 +630,7 @@ int main() {
     write_u32(baseline, panel_record + NKUI_LAYOUT_NODE_DIRECTION_OFFSET,
               NKUI_LAYOUT_DIRECTION_LEFT_TO_RIGHT);
     write_u32(baseline, panel_record + NKUI_LAYOUT_NODE_CHILD_ALIGNMENT_OFFSET,
-              NKUI_LAYOUT_ALIGNMENT_CENTER | (NKUI_LAYOUT_ALIGNMENT_BASELINE << 8));
+              NKUI_LAYOUT_ALIGNMENT_X_CENTER | (NKUI_LAYOUT_ALIGNMENT_Y_BASELINE << 8));
     if (nkui_layout_session_submit(session, baseline.data(), baseline.size(), &frame) != NKUI_OK)
         return 36;
 
@@ -664,13 +664,13 @@ int main() {
         return 8;
     invalid = bytes;
     write_u32(invalid, panel_record + NKUI_LAYOUT_NODE_CHILD_ALIGNMENT_OFFSET,
-              NKUI_LAYOUT_ALIGNMENT_BASELINE | (NKUI_LAYOUT_ALIGNMENT_CENTER << 8));
+              (NKUI_LAYOUT_ALIGNMENT_X_CENTER + 1u) | (NKUI_LAYOUT_ALIGNMENT_Y_CENTER << 8));
     if (nkui_layout_session_submit(session, invalid.data(), invalid.size(), &frame) !=
         NKUI_ERROR_INVALID_TRANSACTION)
         return 13;
     invalid = bytes;
     write_u32(invalid, panel_record + NKUI_LAYOUT_NODE_CHILD_ALIGNMENT_OFFSET,
-              NKUI_LAYOUT_ALIGNMENT_CENTER | ((NKUI_LAYOUT_ALIGNMENT_BASELINE + 1u) << 8));
+              NKUI_LAYOUT_ALIGNMENT_X_CENTER | ((NKUI_LAYOUT_ALIGNMENT_Y_BASELINE + 1u) << 8));
     if (nkui_layout_session_submit(session, invalid.data(), invalid.size(), &frame) !=
         NKUI_ERROR_INVALID_TRANSACTION)
         return 37;

@@ -382,7 +382,7 @@ private class StyleChildAlignXValue extends StyleValue {
 	public final value:LayoutAlignmentX;
 	public function new(property:StyleProperty<LayoutAlignmentX>, value:LayoutAlignmentX) { super(property); this.value = value; }
 	override public function inspect():Dynamic return value;
-	override public function key():String return Std.string(Type.enumIndex(value));
+	override public function key():String return Std.string(value.rawValue());
 	override public function sameAs(other:StyleValue):Bool
 		return other != null && property == other.property && Std.isOfType(other, StyleChildAlignXValue) &&
 			value == (cast other:StyleChildAlignXValue).value;
@@ -392,7 +392,7 @@ private class StyleChildAlignYValue extends StyleValue {
 	public final value:LayoutAlignmentY;
 	public function new(property:StyleProperty<LayoutAlignmentY>, value:LayoutAlignmentY) { super(property); this.value = value; }
 	override public function inspect():Dynamic return value;
-	override public function key():String return Std.string(Type.enumIndex(value));
+	override public function key():String return Std.string(value.rawValue());
 	override public function sameAs(other:StyleValue):Bool
 		return other != null && property == other.property && Std.isOfType(other, StyleChildAlignYValue) &&
 			value == (cast other:StyleChildAlignYValue).value;
