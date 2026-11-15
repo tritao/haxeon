@@ -34,9 +34,47 @@ private typedef LambdaNumbering = {
 
 /** Where to resume lambda numbering after a parse is thrown away. */
 private typedef LambdaMark = {
+	/** The stack of count maps, shallow: their contents come back by undoing the journal. */
 	final counts:Array<Map<String, Int>>;
+
+	final undo:Int;
 	final path:Array<String>;
 	final paths:Int;
+}
+
+/** Every lambda count `openLambda` changed, with the value it had (-1: none), so a rewind can undo back to a mark. */
+private class LambdaUndo {
+	final maps:Array<Map<String, Int>> = [];
+	final anchors:Array<String> = [];
+	final previous:Array<Int> = [];
+
+	public function new() {}
+
+	public var length(get, never):Int;
+
+	function get_length():Int
+		return maps.length;
+
+	public function record(map:Map<String, Int>, anchor:String, before:Int):Void {
+		maps.push(map);
+		anchors.push(anchor);
+		previous.push(before);
+	}
+
+	public function undoTo(length:Int):Void {
+		var index = maps.length;
+		while (index > length) {
+			index--;
+			var before = previous[index];
+			if (before < 0)
+				maps[index].remove(anchors[index]);
+			else
+				maps[index].set(anchors[index], before);
+		}
+		maps.resize(length);
+		anchors.resize(length);
+		previous.resize(length);
+	}
 }
 
 /** Recursive-descent parser for the supported Haxe-compatible source subset. */
@@ -63,6 +101,9 @@ class Parser {
 	 * each enclosing lambda.
 	 */
 	var lambdaCounts:Array<Map<String, Int>> = [[]];
+
+	/** Undoes lambda counts on a rewind; shared with the parsers of interpolated expressions, which share the counts. */
+	var lambdaUndo = new LambdaUndo();
 
 	/** Where the cursor is in the body it is in: the declarations, assignments and call arguments around it, outermost first. */
 	var lambdaPath:Array<String> = [];
@@ -513,8 +554,10 @@ class Parser {
 	function openLambda():String {
 		var counts = lambdaCounts[lambdaCounts.length - 1],
 			anchor = lambdaAnchor(),
-			ordinal = counts.exists(anchor) ? counts.get(anchor) : 0,
+			known = counts.get(anchor),
+			ordinal = known == null ? 0 : known,
 			identity = lambdaMember + "#" + (anchor == "" ? "" : anchor + "#") + ordinal;
+		lambdaUndo.record(counts, anchor, known == null ? -1 : ordinal);
 		counts.set(anchor, ordinal + 1);
 		lambdaCounts.push([]);
 		lambdaPaths.push(lambdaPath);
@@ -569,22 +612,18 @@ class Parser {
 	/** A rewind point: parsing that is thrown away must not consume lambda numbers. */
 	function lambdaMark():LambdaMark
 		return {
-			counts: [for (counts in lambdaCounts) copyCounts(counts)],
+			counts: lambdaCounts.copy(),
+			undo: lambdaUndo.length,
 			path: lambdaPath.copy(),
 			paths: lambdaPaths.length
 		};
 
+	/** Restores the numbering at `mark`; the same mark can be rewound to again after reparsing. */
 	function rewindLambdas(mark:LambdaMark):Void {
-		lambdaCounts = [for (counts in mark.counts) copyCounts(counts)];
+		lambdaUndo.undoTo(mark.undo);
+		lambdaCounts = mark.counts.copy();
 		lambdaPaths.splice(mark.paths, lambdaPaths.length - mark.paths);
 		lambdaPath = mark.path.copy();
-	}
-
-	static function copyCounts(counts:Map<String, Int>):Map<String, Int> {
-		var copy:Map<String, Int> = [];
-		for (anchor => count in counts)
-			copy.set(anchor, count);
-		return copy;
 	}
 
 	function parseFunction(allowMissingReturn:Bool, isExtern:Bool = false, ?metadata:Array<compiler.syntax.Ast.AstMetadata>,
@@ -3066,6 +3105,7 @@ class Parser {
 		var parser = new Parser(shifted);
 		parser.lambdaMember = lambdaMember;
 		parser.lambdaCounts = lambdaCounts;
+		parser.lambdaUndo = lambdaUndo;
 		parser.lambdaPath = lambdaPath.copy();
 		var expression = parser.parseExpression();
 		parser.consume(TokenKind.Eof);
