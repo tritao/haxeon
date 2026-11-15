@@ -331,6 +331,17 @@ class IrVerifier {
 				if (signature != null && receiverArguments.exists(name))
 					throw 'IR value constructor "$name" must not take a receiver';
 			}
+		// A method slot has one physical signature, its topmost declaration's. An override in it with another one is handed
+		// values it does not expect when called through the slot (IrOverrideBridges gives such overrides a bridge). Calls are
+		// checked against their receiver's own entry, so with every entry agreeing with its slot, calls agree with it too.
+		for (object in program.objects)
+			if (object.base != null)
+				for (method in object.methods) {
+					var own = signatures.get(method.functionName),
+						slot = slotSignature(objects, object.base, method.name, signatures);
+					if (own != null && slot != null && !sameSlotSignature(own, slot))
+						throw 'IR override "${method.functionName}" of slot "${method.name}" takes ${own.arguments.slice(1)} and returns ${own.result}, but the slot takes ${slot.arguments.slice(1)} and returns ${slot.result}';
+				}
 		// Private enum records and values containing opaque references need logical escape adapters.
 		for (object in program.objects)
 			if (object.isValue && StringTools.startsWith(object.name, IrInlineEnumLayout.VALUE_PREFIX))
@@ -1502,6 +1513,32 @@ class IrVerifier {
 				return findField(base, name, objects);
 		}
 		return null;
+	}
+
+	/** The signature of the topmost declaration of `name` at or above `objectName`: the physical signature of its slot. */
+	static function slotSignature(objects:Map<String, IrObject>, objectName:String, name:String,
+			signatures:Map<String,
+			{arguments:Array<IrType>, result:IrType, kind:IrFunctionKind}>):Null<{arguments:Array<IrType>, result:IrType, kind:IrFunctionKind}> {
+		var found:Null<{arguments:Array<IrType>, result:IrType, kind:IrFunctionKind}> = null,
+			current = objects.get(objectName);
+		while (current != null) {
+			for (method in current.methods)
+				if (method.name == name && signatures.exists(method.functionName))
+					found = signatures.get(method.functionName);
+			current = current.base == null ? null : objects.get(current.base);
+		}
+		return found;
+	}
+
+	/** Whether two methods of one slot agree on everything but their receivers, which are each declaration's own class. */
+	static function sameSlotSignature(a:{arguments:Array<IrType>, result:IrType, kind:IrFunctionKind},
+			b:{arguments:Array<IrType>, result:IrType, kind:IrFunctionKind}):Bool {
+		if (a.arguments.length != b.arguments.length || !sameType(a.result, b.result))
+			return false;
+		for (index in 1...a.arguments.length)
+			if (!sameType(a.arguments[index], b.arguments[index]))
+				return false;
+		return true;
 	}
 
 	static function findMethodFunction(object:IrObject, name:String, objects:IrVerifyTable<IrObject>):Null<String> {
