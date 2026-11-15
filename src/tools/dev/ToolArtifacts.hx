@@ -114,8 +114,10 @@ class ToolArtifacts {
 
 	function build(request:ToolRequest, output:String):Void {
 		ensureDirectory(directory);
-		var temporary = Path.join([directory, '.${Path.withoutDirectory(output)}.${Std.int(Sys.time() * 1000) % 100000000}-${Std.random(1000000)}.hl']),
-			arguments = ["--cwd", home, "common.hxml"];
+		var temporary = Path.join([
+			directory,
+			'.${Path.withoutDirectory(output)}.${Std.int(Sys.time() * 1000) % 100000000}-${Std.random(1000000)}.hl'
+		]), arguments = ["--cwd", home, "common.hxml"];
 		for (classPath in request.classPaths)
 			arguments = arguments.concat(["-cp", classPath]);
 		for (define in request.defines)
@@ -167,15 +169,17 @@ class ToolArtifacts {
 
 	/** Removes older builds of `main` beyond the newest few, and abandoned temporary files, once they are old enough. */
 	function prune(main:String, keep:String):Void {
-		var now = Sys.time(),
-			builds:Array<{path:String, time:Float}> = [];
+		var now = Sys.time(), builds:Array<{path:String, time:Float}> = [];
 		for (entry in FileSystem.readDirectory(directory)) {
 			var path = Path.join([directory, entry]),
 				time = try FileSystem.stat(path).mtime.getTime() / 1000.0 catch (_:Dynamic) continue;
 			if (StringTools.startsWith(entry, ".")) {
 				if (now - time > PRUNE_AGE_SECONDS)
 					removeQuietly(path);
-			} else if (StringTools.startsWith(entry, main + "-") && StringTools.endsWith(entry, ".hl") && entry.length == main.length + 20 && path != keep)
+			} else if (StringTools.startsWith(entry, main + "-")
+				&& StringTools.endsWith(entry, ".hl")
+				&& entry.length == main.length + 20
+				&& path != keep)
 				builds.push({path: path, time: time});
 		}
 		builds.sort((a, b) -> a.time > b.time ? -1 : a.time < b.time ? 1 : 0);
@@ -202,7 +206,8 @@ class ToolArtifacts {
 		try
 			FileSystem.createDirectory(path)
 		catch (_:Dynamic)
-			if (!FileSystem.exists(path)) throw 'Could not create $path';
+			if (!FileSystem.exists(path))
+				throw 'Could not create $path';
 	}
 
 	static function removeQuietly(path:String):Void {

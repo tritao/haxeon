@@ -20,10 +20,7 @@ class DevCommand {
 	}
 
 	static function toolPath(arguments:Array<String>, home:String):Int {
-		var main:Null<String> = null,
-			classPaths = [],
-			defines = [],
-			index = 0;
+		var main:Null<String> = null, classPaths = [], defines = [], index = 0;
 		while (index < arguments.length) {
 			var argument = arguments[index++];
 			switch argument {
