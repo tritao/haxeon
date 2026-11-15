@@ -13,7 +13,9 @@ import compiler.syntax.Ast.AstType;
 /** Lexically scoped types used while collecting lightweight signature constraints. */
 private class InferenceEnvironment {
 	final parent:Null<InferenceEnvironment>;
-	final values:Map<String, AstType> = [];
+
+	/** Made on the first declaration: most scopes declare nothing. */
+	var values:Null<Map<String, AstType>> = null;
 
 	public function new(?parent)
 		this.parent = parent;
@@ -21,14 +23,24 @@ private class InferenceEnvironment {
 	public function fork():InferenceEnvironment
 		return new InferenceEnvironment(this);
 
-	public function set(name:String, type:AstType):Void
-		values.set(name, type);
+	public function set(name:String, type:AstType):Void {
+		var own = values;
+		if (own == null) {
+			own = [];
+			values = own;
+		}
+		own.set(name, type);
+	}
 
-	public function get(name:String):Null<AstType>
-		return values.exists(name) ? values.get(name) : parent == null ? null : parent.get(name);
+	public function get(name:String):Null<AstType> {
+		var own = values;
+		return own != null && own.exists(name) ? own.get(name) : parent == null ? null : parent.get(name);
+	}
 
-	public function exists(name:String):Bool
-		return values.exists(name) || parent != null && parent.exists(name);
+	public function exists(name:String):Bool {
+		var own = values;
+		return own != null && own.exists(name) || parent != null && parent.exists(name);
+	}
 }
 
 /** Collects declaration-level constraints before body typing. */
@@ -642,10 +654,17 @@ class SignatureInference {
 	}
 
 	static function replaceArguments(fn:AstFunction, inferred:Map<String, AstType>):AstFunction {
-		var changed = false, arguments:Array<AstArgument> = [
+		var changed = false;
+		for (argument in fn.arguments)
+			if ((switch (argument.type) { case InferredType: true; default: false; }) && inferred.get(argument.name) != null) {
+				changed = true;
+				break;
+			}
+		if (!changed)
+			return fn;
+		var arguments:Array<AstArgument> = [
 			for (argument in fn.arguments) {
 				var inferredType = (switch (argument.type) { case InferredType: true; default: false; }) && inferred.exists(argument.name) ? inferred.get(argument.name) : null;
-				if (inferredType != null) changed = true;
 				{
 					name: argument.name,
 					type: inferredType == null ? argument.type : inferredType,
@@ -655,7 +674,7 @@ class SignatureInference {
 				};
 			}
 		];
-		return changed ? {
+		return {
 			name: fn.name,
 			isStatic: fn.isStatic,
 			isPublic: fn.isPublic,
@@ -666,7 +685,7 @@ class SignatureInference {
 			result: fn.result,
 			statements: fn.statements,
 			span: fn.span
-		} : fn;
+		};
 	}
 
 	static function constrainFromField(inferred:Map<String, AstType>, argumentName:String, fieldName:String, classDecl:AstClass):Void
