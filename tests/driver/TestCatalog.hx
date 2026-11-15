@@ -103,6 +103,7 @@ class TestCatalog {
 		"FinalFieldMain",
 		"ModuleVariablesMain",
 		"SignatureMetadataMain",
+		"LspFileUriMain",
 		"ReadOnlyPropertyMain",
 		"FinalLocalMain",
 		"GenericStructuralMain",
