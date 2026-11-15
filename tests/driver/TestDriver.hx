@@ -12,6 +12,7 @@ private typedef DriverOptions = {
 
 class TestDriver {
 	static function main():Void {
+		ensureTemporaryDirectory();
 		var options = parseOptions(Sys.args());
 		var runner = new TestRunner(options.root);
 		var failures = 0;
@@ -82,6 +83,17 @@ class TestDriver {
 		Sys.println('Test driver: ${selected - failures} passed, $failures failed, $selected total');
 		if (failures != 0)
 			Sys.exit(1);
+	}
+
+	/** Test mains write scratch files under TMPDIR, so every process the driver starts inherits one even when the shell sets none. */
+	static function ensureTemporaryDirectory():Void {
+		var current = Sys.getEnv("TMPDIR");
+		if (current != null && current != "")
+			return;
+		var fallback = Sys.systemName() == "Windows" ? Sys.getEnv("TEMP") : "/tmp";
+		if (fallback == null || fallback == "")
+			throw "TMPDIR is unset and no system temporary directory was found";
+		Sys.putEnv("TMPDIR", fallback);
 	}
 
 	static function printTiming(phase:String, started:Float):Void {
