@@ -177,11 +177,14 @@ enum IrTerminator {
 /** SSA basic block identified independently of its position in the block array. */
 class IrBlock {
 	public final id:Int;
-	public final instructions:Array<Located<IrInstruction>> = [];
+	public final instructions:Array<Located<IrInstruction>>;
 	public var terminator:Null<Located<IrTerminator>>;
 
-	public function new(id)
+	/** A block with no instructions yet, or one that takes `instructions` as its own (not copied). */
+	public function new(id, ?instructions:Array<Located<IrInstruction>>) {
 		this.id = id;
+		this.instructions = instructions == null ? [] : instructions;
+	}
 }
 
 /** Runtime-native function required by an IR program. */

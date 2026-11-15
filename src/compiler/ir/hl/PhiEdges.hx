@@ -17,6 +17,18 @@ class PhiEdges {
 					default:
 				}
 		}
+		// Only a branch into a block with phis gets an edge block: without one, nothing is copied.
+		var splits = false;
+		for (block in fn.blocks)
+			if (block.terminator != null)
+				switch block.terminator.value {
+					case Branch(_, yes, no) if (phiBlocks.exists(yes) || phiBlocks.exists(no)):
+						splits = true;
+						break;
+					default:
+				}
+		if (!splits)
+			return fn;
 		var edges:Map<String, Int> = [],
 			result:Array<IrBlock> = [],
 			added:Array<IrBlock> = [];
@@ -29,8 +41,8 @@ class PhiEdges {
 						var targets:Array<Int> = [yes, no],
 							redirected:Array<Int> = [];
 						for (target in targets) {
-							var key = block.id + ":" + target;
 							if (phiBlocks.exists(target)) {
+								var key = block.id + ":" + target;
 								if (!edges.exists(key)) {
 									var edge = new IrBlock(nextId++);
 									edge.terminator = new Located(Jump(target), terminator.provenance);

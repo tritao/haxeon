@@ -38,9 +38,36 @@ class IrFunctionRewrite {
 			}
 			if (blocks == null)
 				blocks = fn.blocks.slice(0, blockIndex);
-			var copy = new IrBlock(block.id);
-			for (instruction in rewritten)
-				copy.instructions.push(instruction);
+			var copy = new IrBlock(block.id, rewritten);
+			copy.terminator = block.terminator;
+			blocks.push(copy);
+		}
+		return blocks == null ? fn : fn.withBlocks(blocks);
+	}
+
+	/** The same rule for a pass that only removes instructions: `drop` is asked about each one with its block and index. */
+	public static function dropInstructions(fn:IrFunction, drop:(block:IrBlock, index:Int, located:Located<IrInstruction>) -> Bool):IrFunction {
+		var blocks:Null<Array<IrBlock>> = null;
+		for (blockIndex in 0...fn.blocks.length) {
+			var block = fn.blocks[blockIndex],
+				list = block.instructions,
+				kept:Null<Array<Located<IrInstruction>>> = null;
+			for (index in 0...list.length) {
+				var located = list[index];
+				if (drop(block, index, located)) {
+					if (kept == null)
+						kept = list.slice(0, index);
+				} else if (kept != null)
+					kept.push(located);
+			}
+			if (kept == null) {
+				if (blocks != null)
+					blocks.push(block);
+				continue;
+			}
+			if (blocks == null)
+				blocks = fn.blocks.slice(0, blockIndex);
+			var copy = new IrBlock(block.id, kept);
 			copy.terminator = block.terminator;
 			blocks.push(copy);
 		}

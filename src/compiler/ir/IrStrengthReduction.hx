@@ -26,27 +26,23 @@ class IrStrengthReduction {
 				}
 			}
 
-		var changed = false, blocks:Array<IrBlock> = [];
-		for (block in fn.blocks) {
-			var copy = new IrBlock(block.id);
-			for (located in block.instructions)
-				switch located.value {
-					case Div(out, left, right) if ((switch (out.type) { case F64: true; default: false; }) && (switch (right.type) { case F64: true; default: false; })):
-						var divisor = constants.get(right.id);
-						if (divisor != null && exactNormalReciprocal(divisor)) {
-							var reciprocal = new IrValue(nextValue++, "strength.reciprocal", F64);
-							copy.instructions.push(new Located(ConstFloat(reciprocal, 1.0 / divisor), located.provenance));
-							copy.instructions.push(new Located(Mul(out, left, reciprocal), located.provenance));
-							changed = true;
-						} else
-							copy.instructions.push(located);
-					default:
-						copy.instructions.push(located);
-				}
-			copy.terminator = block.terminator;
-			blocks.push(copy);
-		}
-		return changed ? fn.withBlocks(blocks) : fn;
+		// Only the blocks with a division to reduce are copied; a function without one comes back as it is.
+		return IrFunctionRewrite.instructions(fn, function(located) {
+			return switch located.value {
+				case Div(out, left, right) if ((switch (out.type) { case F64: true; default: false; }) && (switch (right.type) { case F64: true; default: false; })):
+					var divisor = constants.get(right.id);
+					if (divisor != null && exactNormalReciprocal(divisor)) {
+						var reciprocal = new IrValue(nextValue++, "strength.reciprocal", F64);
+						[
+							new Located(ConstFloat(reciprocal, 1.0 / divisor), located.provenance),
+							new Located(Mul(out, left, reciprocal), located.provenance)
+						];
+					} else
+						null;
+				default:
+					null;
+			};
+		});
 	}
 
 	/** A normal binary power of two whose reciprocal is also normal. */

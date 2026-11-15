@@ -609,6 +609,24 @@ class IrScalarArguments {
 						closures.set(out.id, {name: name, receiver: receiver});
 					default:
 				}
+		// Only these instructions can be rewritten; a function without any comes back as it is, with no block copied.
+		var rewritable = false;
+		for (block in fn.blocks) {
+			for (located in block.instructions)
+				switch located.value {
+					case CallClosure(_, closure, _) if (closures.exists(closure.id)):
+						rewritable = true;
+					case MethodCall(_, _, method, _, _) if (methodNames.exists(method)):
+						rewritable = true;
+					case Call(_, name, _) if (candidates.exists(name) || pinnedCandidates.exists(name)):
+						rewritable = true;
+					default:
+				}
+			if (rewritable)
+				break;
+		}
+		if (!rewritable)
+			return fn;
 		for (block in fn.blocks) {
 			var copy = new IrBlock(block.id);
 			for (located in block.instructions) {

@@ -150,6 +150,21 @@ class IrValueConstructors {
 	}
 
 	static function expandStraightLine(fn:IrFunction, constructors:Map<String, IrFunction>):IrFunction {
+		// Most functions call no value constructor: find that out before copying every block.
+		var calls = false;
+		for (block in fn.blocks) {
+			for (located in block.instructions)
+				switch located.value {
+					case Call(_, name, _) if (constructors.exists(name) && name != fn.name):
+						calls = true;
+						break;
+					default:
+				}
+			if (calls)
+				break;
+		}
+		if (!calls)
+			return fn;
 		var next = 0;
 		for (arg in fn.arguments)
 			if (arg.id >= next)

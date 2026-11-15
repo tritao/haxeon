@@ -33,21 +33,13 @@ class IrReceiverCheckElision {
 			}
 		}
 		for (binding in fn.debugBindings) uses.set(binding.value.id, true);
-		var facts = new IrNonNullFacts(fn), changed = false, blocks:Array<IrBlock> = [];
-		for (block in fn.blocks) {
-			var copy = new IrBlock(block.id);
-			for (index in 0...block.instructions.length) {
-				var located = block.instructions[index];
-				var drop = switch located.value {
-					case Call(output, name, arguments) if (name == IrReceiverCheck.NAME && arguments.length == 1):
-						!uses.exists(output.id) && facts.has(block.id, index);
-					default: false;
-				};
-				if (drop) changed = true; else copy.instructions.push(located);
-			}
-			copy.terminator = block.terminator;
-			blocks.push(copy);
-		}
-		return changed ? fn.withBlocks(blocks) : fn;
+		var facts = new IrNonNullFacts(fn);
+		return IrFunctionRewrite.dropInstructions(fn, function(block, index, located) {
+			return switch located.value {
+				case Call(output, name, arguments) if (name == IrReceiverCheck.NAME && arguments.length == 1):
+					!uses.exists(output.id) && facts.has(block.id, index);
+				default: false;
+			};
+		});
 	}
 }
