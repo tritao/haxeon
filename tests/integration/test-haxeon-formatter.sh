@@ -6,41 +6,19 @@ cli="$repo_dir/scripts/haxeon"
 project_dir=$(mktemp -d "${TMPDIR:-/tmp}/haxeon-formatter.XXXXXX")
 trap 'rm -rf -- "$project_dir"' EXIT
 
-"$repo_dir/.tools/haxe/haxe" --cwd "$repo_dir" common.hxml -main tools.FormatterTokenGuard -js "$project_dir/token-guard.js"
-node "$repo_dir/tests/integration/test-formatter-token-guard.js" "$project_dir/token-guard.js" "$project_dir"
-
-node - "$repo_dir" <<'JS'
-const assert = require('assert');
-const fs = require('fs');
-const {needsHaxeonFormatter} = require(process.argv[2] + '/scripts/format-source-profile.js');
-for (const source of [
-  'struct Vec2 { public var x:Int; }',
-  '@:value struct /* comment */ Vec2 { public var x:Int; }',
-  '/* struct Fake {} */ struct Real {}',
-  'function main():Int return Diff.bit(\\Style.width);'
-]) assert.strictEqual(needsHaxeonFormatter(source), true, source);
-for (const source of [
-  'class Main { var text = "\nstruct Fake {}"; }',
-  "class Main { var text = '\nstruct Fake {}'; }",
-  '// struct Fake {}\nclass Main {}',
-  '/* struct Fake {} */ class Main {}',
-  'class Main { var pattern = ~/struct Fake [/] {}/; }',
-  "class Main { var text = '${'struct Fake {}'}'; }",
-  'class Main { var text = "a\\\\b"; var other = \'c\\\\d\'; var pattern = ~/\\d+/; }'
-]) assert.strictEqual(needsHaxeonFormatter(source), false, source);
-assert.strictEqual(needsHaxeonFormatter(fs.readFileSync(process.argv[2] + '/tests/runtime/HxiNumericStorageMain.hx', 'utf8')), false);
-console.log('PASS: formatter profiles ignore embedded structs and backslashes in literals/comments/regex/interpolation, and route property paths');
-JS
+# The project's haxeon.json sets the style: two spaces and 40 columns here, so the wrapping below is visible.
+printf '{"version": 1, "format": {"indent": "spaces", "indentWidth": 2, "lineWidth": 40}}\n' > "$project_dir/haxeon.json"
+cd "$project_dir"
 
 source='function main():Int { var value=compute(firstArgument,secondArgument,thirdArgument); return value; }'
-formatted=$(printf '%s\n' "$source" | "$cli" fmt --stdin --line-width 40)
+formatted=$(printf '%s\n' "$source" | "$cli" fmt --stdin)
 [[ "$formatted" == *$'compute(\n'* ]]
 [[ "$formatted" == *$'    firstArgument,'* ]]
 
-printf '%s\n' "$formatted" | "$cli" fmt --stdin --line-width 40 --check
+printf '%s\n' "$formatted" | "$cli" fmt --stdin --check
 
 set +e
-printf '%s\n' "$source" | "$cli" fmt --stdin --line-width 40 --check >/dev/null
+printf '%s\n' "$source" | "$cli" fmt --stdin --check >/dev/null
 check_status=$?
 set -e
 if [[ $check_status -ne 1 ]]; then
@@ -58,8 +36,8 @@ if [[ $file_check_status -ne 1 ]]; then
 	echo "expected fmt --check to reject an unformatted file, got $file_check_status" >&2
 	exit 1
 fi
-"$cli" fmt --line-width 40 "$source_path"
-"$cli" fmt --line-width 40 --check "$source_path"
+"$cli" fmt "$source_path"
+"$cli" fmt --check "$source_path"
 
 struct_path="$project_dir/Struct.hx"
 printf 'struct Vec2 { public var x:Int; }\n' > "$struct_path"
@@ -85,8 +63,8 @@ if [[ $directory_check_status -ne 1 ]]; then
 	echo "expected fmt --check to reject an unformatted file under a directory, got $directory_check_status" >&2
 	exit 1
 fi
-"$cli" fmt --line-width 40 "$tree_dir"
-"$cli" fmt --line-width 40 --check "$tree_dir"
+"$cli" fmt "$tree_dir"
+"$cli" fmt --check "$tree_dir"
 "$cli" lint "$tree_dir" >/dev/null
 set +e
 "$cli" lint --manifest "$tree_dir" "$source_path" >/dev/null 2>&1
@@ -97,4 +75,29 @@ if [[ $manifest_status -ne 1 ]]; then
 	exit 1
 fi
 
-echo "PASS: built-in formatter CLI stdin, check, file, directory, and struct modes"
+# A nested haxeon.json without a "format" section (a package's tests) takes the enclosing project's setting.
+mkdir -p "$project_dir/tests"
+printf '{"version": 1}\n' > "$project_dir/tests/haxeon.json"
+printf '%s\n' "$source" > "$project_dir/tests/Nested.hx"
+"$cli" fmt "$project_dir/tests/Nested.hx"
+cmp -s "$project_dir/tests/Nested.hx" "$source_path"
+
+# With no setting above a file, the standard style applies: tabs and 120 columns.
+plain_dir=$(mktemp -d "${TMPDIR:-/tmp}/haxeon-formatter-plain.XXXXXX")
+trap 'rm -rf -- "$project_dir" "$plain_dir"' EXIT
+printf 'class Plain {\nfunction f():Int {\nreturn 1;\n}\n}\n' > "$plain_dir/Plain.hx"
+"$cli" fmt "$plain_dir/Plain.hx"
+grep -q $'^\t\treturn 1;$' "$plain_dir/Plain.hx"
+
+# A malformed setting is an error naming the manifest, never ignored, and the old flags are gone.
+printf '{"version": 1, "format": {"indent": "wide"}}\n' > "$plain_dir/haxeon.json"
+if "$cli" fmt --check "$plain_dir/Plain.hx" >/dev/null 2>"$plain_dir/error.txt" || ! grep -q 'format.indent' "$plain_dir/error.txt"; then
+	echo "expected a malformed format setting to fail with its key" >&2
+	exit 1
+fi
+if "$cli" fmt --line-width 40 "$source_path" >/dev/null 2>&1; then
+	echo "expected --line-width to be refused: the project setting decides" >&2
+	exit 1
+fi
+
+echo "PASS: built-in formatter CLI stdin, check, file, directory, struct and project-setting modes"

@@ -1,4 +1,4 @@
-function value():Int {
+function value():Int { // @formatter:off: the DAP tests address this file by line
 	var result = 43;
 	if (true) {
 		var scoped = result + 100;

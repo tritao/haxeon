@@ -1,4 +1,4 @@
-import compiler.Compiler;
+import compiler.Compiler; // @formatter:off: the DAP tests address this file by line
 import compiler.hl.HlWriter;
 import runtime.PatchSet;
 import runtime.Runtime;

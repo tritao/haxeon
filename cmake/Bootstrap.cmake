@@ -3,11 +3,8 @@ cmake_minimum_required(VERSION 3.24)
 get_filename_component(HAXEON_ROOT "${CMAKE_CURRENT_LIST_DIR}/.." ABSOLUTE)
 set(TOOLS_DIR "${HAXEON_ROOT}/.tools")
 set(HAXE_VERSION "4.3.7")
-set(FORMATTER_VERSION "1.18.0")
-set(FORMATTER_SHA256 "2d29c9b56e54b2643e07ee64003c3fc30a5bc133bdcb4cc15c48f09acda7a047")
 
 find_program(GIT_EXECUTABLE git REQUIRED)
-find_program(NODE_EXECUTABLE node REQUIRED)
 file(MAKE_DIRECTORY "${TOOLS_DIR}")
 
 function(run_checked description)
@@ -124,17 +121,6 @@ endif()
 download_checked("${haxe_url}" "${haxe_archive}" "${haxe_sha256}")
 extract_single_directory("${haxe_archive}" "${TOOLS_DIR}/haxe")
 
-set(formatter_archive "${TOOLS_DIR}/formatter-${FORMATTER_VERSION}.zip")
-download_checked(
-  "https://lib.haxe.org/p/formatter/${FORMATTER_VERSION}/download/"
-  "${formatter_archive}"
-  "${FORMATTER_SHA256}"
-)
-if(NOT EXISTS "${TOOLS_DIR}/formatter/run.js")
-  file(MAKE_DIRECTORY "${TOOLS_DIR}/formatter")
-  file(ARCHIVE_EXTRACT INPUT "${formatter_archive}" DESTINATION "${TOOLS_DIR}/formatter")
-endif()
-
 # Ninja 1.13 can join Haxeon's job server, so native builds share one job limit with Haxeon's own
 # actions; older system copies cannot. Windows uses the Ninja that ships with Visual Studio (see
 # src/build/native/MsvcEnvironment.hx).
@@ -238,6 +224,5 @@ run_checked("Native build"
   "${CMAKE_COMMAND}" --build --preset "${native_preset}")
 run_checked("Haxe version check" "${haxe_executable}" --version)
 run_checked("HashLink version check" "${hashlink_executable}" --version)
-run_checked("Formatter check" "${NODE_EXECUTABLE}" "${TOOLS_DIR}/formatter/run.js" --help)
 
 message(STATUS "Haxeon toolchain is ready")

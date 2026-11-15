@@ -1,4 +1,4 @@
-// trace, Sys.println and Date.now reach the host through the HaxeonHost interface on both Wasm backends;
+// trace, Sys.println and Date.now reach the host through the HaxeonHost interface on both Wasm backends; (@formatter:off: the expected trace names line 4)
 // the harness checks the text and timestamp the host saw.
 function main():Int {
 	trace("host trace");

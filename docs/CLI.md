@@ -40,15 +40,32 @@ Build the matching checkout's HashLink runtime before invoking the launcher.
 ./scripts/haxeon devices
 ./scripts/haxeon fmt src/Main.hx
 ./scripts/haxeon fmt --check src/Main.hx
-cat src/Main.hx | ./scripts/haxeon fmt --stdin --line-width 100
+cat src/Main.hx | ./scripts/haxeon fmt --stdin
 ./scripts/haxeon lint --manifest haxeon.json src/Main.hx
 ./scripts/haxeon lint --fix --manifest haxeon.json src/Main.hx
 ```
 
 `haxeon fmt` uses Haxeon's built-in lossless formatter. It rewrites files by
-default, while `--check` reports files that would change. Use `--stdin` for
-editor or pipeline integration, `--line-width` to set the column limit, and
-`--tab-size` with `--use-tabs` to control indentation.
+default, while `--check` reports files that would change; a directory stands for
+the `.hx` files under it. Use `--stdin` for editor or pipeline integration.
+
+The style comes from the project: the `format` section of the nearest
+`haxeon.json` above a file that has one, else tabs and 120 columns. `haxeon fmt`,
+`haxeon lint --fix` and the language server all read it (the language server
+ignores an editor's tab settings), so a file formats the same everywhere. A
+package's `tests/haxeon.json` without a `format` section takes the package's.
+
+```json
+"format": {"indent": "spaces", "indentWidth": 2, "lineWidth": 100}
+```
+
+`indent` is `tabs` or `spaces`, `indentWidth` the width of one level (the columns
+a tab counts for), `lineWidth` the column limit; every key is optional and an
+unknown key or bad value is an error. The formatter accepts any source that lexes
+and whose brackets balance, including Haxe that Haxeon's compiler does not support
+yet, and refuses output that changes a token or a comment's text. A file that must
+keep its layout says `@formatter:off` in a comment; without `@formatter:on` the
+rest of the file is kept as written.
 
 `haxeon lint` reports imports a file never uses and exits with 1 when it finds any;
 `--fix` removes them and reformats a file that was formatted before. Imports resolve
@@ -64,8 +81,8 @@ import sharing its line with other code ends it, so groups stay where they are. 
 later import of a name wins, so a run where two imports make the same short name
 visible (module imports count every type the module declares), or with a package
 wildcard, keeps its order and is not reported. `--only unused-imports` or
-`--only import-order` checks one rule. `scripts/format.sh --changed` applies the
-order rule to every changed file; the rest of the tree is sorted in one pass later.
+`--only import-order` checks one rule. `scripts/format.sh` sorts and formats the
+whole tree, and `scripts/format.sh --check` is the CI check.
 
 On Windows, use `scripts/haxeon.cmd` or `scripts/haxeon.ps1`. `haxeon init`
 creates `src/Main.hx` and a project file like this:

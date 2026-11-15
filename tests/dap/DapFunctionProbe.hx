@@ -1,4 +1,4 @@
-class DapFunctionProbe {
+class DapFunctionProbe { // @formatter:off: the DAP tests address this file by line
 	static function main() {
 		Sys.sleep(1.0);
 		var worker = new DapFunctionWorker();

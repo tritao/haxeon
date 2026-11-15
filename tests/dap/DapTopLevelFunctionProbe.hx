@@ -1,4 +1,4 @@
-function worker(value:Int):Int {
+function worker(value:Int):Int { // @formatter:off: the DAP tests address this file by line
 	return value + 1;
 }
 

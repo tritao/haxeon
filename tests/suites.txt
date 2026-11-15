@@ -25,7 +25,7 @@
 # Two suites must not share a lane or a pool when one writes files the other reads; say why next to a lane or pool that looks
 # combinable but is not.
 
-format-check                     ci          unless-env=SKIP_FORMAT_CHECK -- scripts/format.sh --check --changed
+format-check                     ci          unless-env=SKIP_FORMAT_CHECK -- scripts/format.sh --check
 # Every module of the compiler and the build tool type-checks, not only the ones the entry point reaches: a switch over an IR enum in a
 # module only tests compile (IrInterpreter) once broke the wave.
 type-check-all                   quick       -- .tools/haxe/haxe --cwd . common.hxml -cp tests/compiler --macro "include('compiler')" --macro "include('build')" -hl out/type-check-all.hl --no-output -main Main

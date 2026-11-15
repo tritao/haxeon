@@ -162,7 +162,9 @@ Pinned tool versions, archive checksums, extraction, and submodule setup are
 defined once in `cmake/Bootstrap.cmake`. The platform setup scripts are thin
 launchers for that shared bootstrap rather than separate installers.
 
-Haxe sources use the repository-pinned Haxe Formatter:
+Haxe sources are formatted by `haxeon fmt` (docs/CLI.md), with imports sorted by `haxeon lint`. This tree has no `format` setting,
+so it uses the standard style: tabs and 120 columns. `--check` covers every `.hx` file outside vendored code; a test file whose
+lines are part of the test carries `@formatter:off` at the end of its first line.
 
 ```sh
 ./scripts/format.sh

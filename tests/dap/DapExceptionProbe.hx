@@ -1,4 +1,4 @@
-function caughtThrow():Int {
+function caughtThrow():Int { // @formatter:off: the DAP tests address this file by line
 	try {
 		throw "caught-probe";
 	} catch (error:Int) {

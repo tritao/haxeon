@@ -1,4 +1,4 @@
-function main():Int {
+function main():Int { // @formatter:off: the DAP tests address this file by line
 	Sys.sleep(1.0);
 	var total = 0;
 	for (index in 0...5) {
