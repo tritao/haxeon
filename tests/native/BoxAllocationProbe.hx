@@ -10,15 +10,21 @@
 class BoxAllocationProbe {
 	static var keep:Array<Dynamic> = [];
 
+	/**
+	 * Boxed values start here, above the small Ints the runtime boxes once and shares (HL_STATIC_INT_MIN until
+	 * HL_STATIC_INT_COUNT later), so every box below is a new allocation: what this probe measures and dirties.
+	 */
+	static inline final BASE = 100000;
+
 	@:noInline static function boxed(value:Int):Dynamic {
 		return value;
 	}
 
 	static function allocate(n:Int):Bool {
 		for (i in 0...n) {
-			var v = boxed(i - 500);
+			var v = boxed(BASE + i);
 			var actual = BoxHooks.value(v);
-			if (actual != i - 500 || !BoxHooks.padding(v))
+			if (actual != BASE + i || !BoxHooks.padding(v))
 				return false;
 			keep[i & 127] = v;
 		}
@@ -53,7 +59,7 @@ class BoxAllocationProbe {
 		var live = boxed(42);
 		for (i in 0...100000) {
 			var sentinel = a + 0.25;
-			var v:Dynamic = i - 50000;
+			var v:Dynamic = BASE + i;
 			a = sentinel + 0.75;
 			b += 2;
 			c += 3;
@@ -61,7 +67,7 @@ class BoxAllocationProbe {
 			e += 5;
 			f += 6;
 			var actual = BoxHooks.value(v);
-			if (actual != i - 50000 || !BoxHooks.padding(v))
+			if (actual != BASE + i || !BoxHooks.padding(v))
 				fail(6);
 			keep[i & 127] = v;
 		}
