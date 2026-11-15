@@ -658,6 +658,13 @@ class IrProgramAssembler {
 					dispatchWalk == null ? null : dispatchWalk.createdClasses));
 		if (objects != null)
 			compiler.compilation.IrPassMeter.measureVoid("generic-owner-erasure", () -> GenericOwnerErasure.generate(generator.facts, allFunctions, objects));
+		// Every method slot keeps its topmost declaration's signature; overrides that lower to another get a bridge in the slot.
+		if (objects != null) {
+			var slotObjects:Array<IrObject> = objects;
+			var bridged = compiler.compilation.IrPassMeter.measure("override-bridges", () -> IrOverrideBridges.apply(allFunctions, slotObjects));
+			allFunctions = bridged.functions;
+			objects = bridged.objects;
+		}
 		// The prune point (docs/REACHABILITY_WALK.md): after the enum providers and generic owner erasure, which settle the class names and
 		// the helpers, and before every later pass. The entry function is created last, so the roots are what it calls: main, and the
 		// initializers `__init` runs.
