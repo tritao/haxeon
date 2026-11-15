@@ -46,6 +46,15 @@ import compiler.ir.SourceProvenance.Located;
 import sys.io.File;
 
 class WasmBackendMain {
+	/**
+	 * Where the modules this test writes go: HAXEON_SUITE_OUT when the test runner gives the suite its own directory (the driver),
+	 * else out/, where tests/wasm/test-wasm-backend.sh runs them. Two suites running this test never write the same files.
+	 */
+	static function output(name:String):String {
+		var directory = Sys.getEnv("HAXEON_SUITE_OUT");
+		return (directory == null || directory == "" ? "out" : directory) + "/" + name;
+	}
+
 	static function main():Void {
 		var deadClosure = Frontend.compile("function deadSource(value:String):String return value; "
 			+ "function dead():Int { var erased:Dynamic = deadSource; var casted:Bool->Bool = cast erased; return 0; } "
@@ -297,7 +306,7 @@ class WasmBackendMain {
 			argumentModes: [Value],
 			result: RawPtr
 		});
-		File.saveBytes("out/wasm-gc-raw-pointer.wasm", new WasmBackend().compile(rawPointerProgram, {target: WasmGc, debugNames: true}).bytes);
+		File.saveBytes(output("wasm-gc-raw-pointer.wasm"), new WasmBackend().compile(rawPointerProgram, {target: WasmGc, debugNames: true}).bytes);
 		var generatedNativeBuilder = new IrBuilder(),
 			generatedNativeArgument = generatedNativeBuilder.constInt(1);
 		generatedNativeBuilder.call("__std_string", [generatedNativeArgument], Bytes);
@@ -537,7 +546,7 @@ class WasmBackendMain {
 			|| !containsBytes(neutralProfile, "fuel_charge")
 			|| !containsBytes(neutralProfile, "haxeon.gc.roots"))
 			throw "Runtime-neutral Wasm omitted its profile identity, fuel ABI or precise-GC roots, or retained exception tags";
-		File.saveBytes("out/wasm-runtime-neutral-profile.wasm", neutralProfile);
+		File.saveBytes(output("wasm-runtime-neutral-profile.wasm"), neutralProfile);
 		var int64FlagsBuilder = new IrBuilder(),
 			highWord = int64FlagsBuilder.constInt(-2147483648),
 			zeroWord = int64FlagsBuilder.constInt(0),
@@ -658,40 +667,40 @@ class WasmBackendMain {
 		var closure = compile("function increment(value:Int):Int return value + 1; function main():Int { var fn = increment; return fn(41); }");
 		var instanceClosure = compile("class Adder { public function new() {} public function add(value:Int):Int return value + 1; } function main():Int { var adder = new Adder(); var fn = adder.add; return fn(41); }");
 		var virtualCall = compile("interface Adder { function add(value:Int):Int; } class Concrete implements Adder { public function new() {} public function add(value:Int):Int return value + 1; } function main():Int { var adder:Adder = new Concrete(); return adder.add(41); }");
-		File.saveBytes("out/wasm-backend-test.wasm", first);
-		File.saveBytes("out/wasm-backend-branch.wasm", branch);
-		File.saveBytes("out/wasm-backend-loop.wasm", loop);
-		File.saveBytes("out/wasm-backend-object.wasm", objectBytes);
-		File.saveBytes("out/wasm-backend-array.wasm", array);
-		File.saveBytes("out/wasm-backend-float-array.wasm", floatArray);
-		File.saveBytes("out/wasm-backend-array-ops.wasm", arrayOps);
-		File.saveBytes("out/wasm-backend-array-mutation.wasm", arrayMutation);
-		File.saveBytes("out/wasm-backend-string.wasm", string);
-		File.saveBytes("out/wasm-backend-string-ops.wasm", stringOps);
-		File.saveBytes("out/wasm-backend-std-string.wasm", stdString);
-		File.saveBytes("out/wasm-backend-std-string-i64.wasm", stdStringInt64);
-		File.saveBytes("out/wasm-backend-method.wasm", method);
-		File.saveBytes("out/wasm-backend-global.wasm", global);
-		File.saveBytes("out/wasm-backend-float-global.wasm", floatGlobal);
-		File.saveBytes("out/wasm-backend-enum.wasm", enumValue);
-		File.saveBytes("out/wasm-backend-float-enum.wasm", floatEnum);
-		File.saveBytes("out/wasm-backend-inherited-field.wasm", inheritedField);
-		File.saveBytes("out/wasm-backend-large-array.wasm", largeArray);
-		File.saveBytes("out/wasm-backend-closure.wasm", closure);
-		File.saveBytes("out/wasm-backend-instance-closure.wasm", instanceClosure);
-		File.saveBytes("out/wasm-backend-virtual.wasm", virtualCall);
+		File.saveBytes(output("wasm-backend-test.wasm"), first);
+		File.saveBytes(output("wasm-backend-branch.wasm"), branch);
+		File.saveBytes(output("wasm-backend-loop.wasm"), loop);
+		File.saveBytes(output("wasm-backend-object.wasm"), objectBytes);
+		File.saveBytes(output("wasm-backend-array.wasm"), array);
+		File.saveBytes(output("wasm-backend-float-array.wasm"), floatArray);
+		File.saveBytes(output("wasm-backend-array-ops.wasm"), arrayOps);
+		File.saveBytes(output("wasm-backend-array-mutation.wasm"), arrayMutation);
+		File.saveBytes(output("wasm-backend-string.wasm"), string);
+		File.saveBytes(output("wasm-backend-string-ops.wasm"), stringOps);
+		File.saveBytes(output("wasm-backend-std-string.wasm"), stdString);
+		File.saveBytes(output("wasm-backend-std-string-i64.wasm"), stdStringInt64);
+		File.saveBytes(output("wasm-backend-method.wasm"), method);
+		File.saveBytes(output("wasm-backend-global.wasm"), global);
+		File.saveBytes(output("wasm-backend-float-global.wasm"), floatGlobal);
+		File.saveBytes(output("wasm-backend-enum.wasm"), enumValue);
+		File.saveBytes(output("wasm-backend-float-enum.wasm"), floatEnum);
+		File.saveBytes(output("wasm-backend-inherited-field.wasm"), inheritedField);
+		File.saveBytes(output("wasm-backend-large-array.wasm"), largeArray);
+		File.saveBytes(output("wasm-backend-closure.wasm"), closure);
+		File.saveBytes(output("wasm-backend-instance-closure.wasm"), instanceClosure);
+		File.saveBytes(output("wasm-backend-virtual.wasm"), virtualCall);
 		validateGcModelRejectsInvalidModules();
-		File.saveBytes("out/wasm-gc-model.wasm", compileGcTypeModel());
-		File.saveBytes("out/wasm-eh-try-table.wasm", compileTryTableProgram());
-		File.saveBytes("out/wasm-gc-type-plan.wasm", compileGcTypePlan());
-		File.saveBytes("out/wasm-gc-objects.wasm", compileGcObjectProgram());
-		File.saveBytes("out/wasm-gc-arrays.wasm", compileGcArrayProgram());
-		File.saveBytes("out/wasm-gc-enums.wasm", compileGcEnumProgram());
-		File.saveBytes("out/wasm-gc-closures.wasm", compileGcClosureProgram());
-		File.saveBytes("out/wasm-gc-dynamic.wasm", compileGcDynamicProgram());
-		File.saveBytes("out/wasm-gc-native-pointer-reflect.wasm", compileGcNativePointerReflectProgram());
-		File.saveBytes("out/wasm-gc-exceptions.wasm", compileGcExceptionProgram());
-		File.saveBytes("out/wasm-gc-strings.wasm", compileGcStringProgram());
+		File.saveBytes(output("wasm-gc-model.wasm"), compileGcTypeModel());
+		File.saveBytes(output("wasm-eh-try-table.wasm"), compileTryTableProgram());
+		File.saveBytes(output("wasm-gc-type-plan.wasm"), compileGcTypePlan());
+		File.saveBytes(output("wasm-gc-objects.wasm"), compileGcObjectProgram());
+		File.saveBytes(output("wasm-gc-arrays.wasm"), compileGcArrayProgram());
+		File.saveBytes(output("wasm-gc-enums.wasm"), compileGcEnumProgram());
+		File.saveBytes(output("wasm-gc-closures.wasm"), compileGcClosureProgram());
+		File.saveBytes(output("wasm-gc-dynamic.wasm"), compileGcDynamicProgram());
+		File.saveBytes(output("wasm-gc-native-pointer-reflect.wasm"), compileGcNativePointerReflectProgram());
+		File.saveBytes(output("wasm-gc-exceptions.wasm"), compileGcExceptionProgram());
+		File.saveBytes(output("wasm-gc-strings.wasm"), compileGcStringProgram());
 		Sys.println("PASS: Wasm scalar backend");
 	}
 

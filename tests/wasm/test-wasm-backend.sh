@@ -10,7 +10,8 @@ source "$root_dir/scripts/haxeon-compiler.sh"
 
 # The committed C runtime every wasm32 module links must match native/wasm (docs/WASM_LINEAR_RUNTIME.md).
 bash "$root_dir/scripts/build-wasm-runtime.sh" --check
-"$haxe_bin" --cwd "$root_dir" common.hxml -cp tests/compiler --run WasmBackendMain
+# This script reads the modules WasmBackendMain writes from out/, so it runs it without the suite directory the test runner sets.
+env -u HAXEON_SUITE_OUT "$haxe_bin" --cwd "$root_dir" common.hxml -cp tests/compiler --run WasmBackendMain
 bash "$root_dir/tests/wasm/test-wasm-shared-memory.sh"
 bash "$root_dir/tests/wasm/test-wasm32-gc-reuse.sh"
 bash "$root_dir/tests/wasm/test-wasm32-gc-invariants.sh"

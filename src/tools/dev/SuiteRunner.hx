@@ -240,6 +240,7 @@ class SuiteRunner {
 		}
 		if (options.gate && suite.lane == null && suite.pool == null)
 			console('${prefix()}${suite.name}');
+		ensureDirectory(suiteOutput(suite));
 		var began = Sys.time(),
 			status = runScript(script(suite), log, stream),
 			seconds = Std.int(Sys.time() - began),
@@ -265,8 +266,15 @@ class SuiteRunner {
 		};
 	}
 
+	/** A directory of the suite's own, for files no other suite may write: HAXEON_SUITE_OUT. */
+	function suiteOutput(suite:Suite):String
+		return Path.join([directory, suite.name + ".out"]);
+
 	function script(suite:Suite):String {
-		var lines = ['cd ${quote(home)} || exit 2'];
+		var lines = [
+			'cd ${quote(home)} || exit 2',
+			'export HAXEON_SUITE_OUT=${quote(suiteOutput(suite))}'
+		];
 		if (suite.freshNative)
 			lines.push("unset HAXEON_NATIVE_READY");
 		if (suite.cliLauncher && launcherActive)

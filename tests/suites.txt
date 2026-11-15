@@ -7,7 +7,9 @@
 #
 # groups   a comma list of quick, wave, ci. `quick` selects quick suites, `wave` quick and wave, `ci` the ci suites (what CI runs) and
 #          `full` all three. A suite in several groups runs once.
-# command  a bash command run from the repository root, stdout and stderr together; {jobs} is the job count (--jobs).
+# command  a bash command run from the repository root, stdout and stderr together; {jobs} is the job count (--jobs). HAXEON_SUITE_OUT
+#          is an empty directory of the suite's own (in the run directory): a suite that may run beside another writes there, not to
+#          a fixed path under out/.
 #
 # options
 #   lane=NAME           suites of one lane run one after another, in the background, from where the first of them is listed; the rest
@@ -46,9 +48,9 @@ ui-showcase                      quick       -- env -u HAXEON_COMPILER_HL bash p
 # Adds the warm-edit rebuilds and the reuse comparisons.
 driver-checked                   wave        -- env HAXEON_CHECK_REUSE=1 scripts/test-driver.sh {jobs}
 
-# Both Wasm backends: backend-specific checks, then every manifest program against HL's exit codes. The lane starts after the driver
-# suites, never alongside them: the driver's WasmBackendMain case rewrites the out/wasm-backend-* files these read. The suites listed
-# after it never touch Wasm artifacts.
+# Both Wasm backends: backend-specific checks, then every manifest program against HL's exit codes. The suites listed after the lane
+# never touch Wasm artifacts. The driver's WasmBackendMain case writes to its own HAXEON_SUITE_OUT, not to the out/wasm-backend-* files
+# test-wasm-backend.sh reads, so the lane could start alongside the driver; it still starts after it until a run confirms that.
 wasm-backend                     wave,ci     lane=wasm -- bash tests/wasm/test-wasm-backend.sh
 wasm-parity                      ci          lane=wasm -- bash tests/wasm/test-wasm-parity.sh
 static-init-order-wasm           ci          lane=wasm requires=wasmtime -- bash tests/integration/test-static-init-order-wasm.sh
