@@ -996,10 +996,9 @@ class LspProtocol {
 
 	function formatting(request:Dynamic, token:CancellationToken, ranged:Bool):Array<Dynamic> {
 		token.check();
-		var document = document(request), params = required(request, "params"), options = required(params, "options"),
-			tabSize = requiredInt(options, "tabSize"), insertSpaces:Dynamic = required(options, "insertSpaces"), start = 0, end = document.source.length;
-		if (!Std.isOfType(insertSpaces, Bool) || tabSize <= 0)
-			throw new LspRequestError(-32602, "Formatting options require a positive tabSize and boolean insertSpaces");
+		// The editor's tabSize and insertSpaces are ignored: the project's haxeon.json decides (ProjectFormat), so a file formats the
+		// same from every editor and from `haxeon fmt`. Read fresh per request, so an edit to the setting takes effect at once.
+		var document = document(request), params = required(request, "params"), start = 0, end = document.source.length;
 		if (ranged) {
 			var range = required(params, "range"),
 				startPosition = required(range, "start"),
@@ -1007,7 +1006,8 @@ class LspProtocol {
 			start = document.offset(requiredInt(startPosition, "line"), requiredInt(startPosition, "character"));
 			end = document.offset(requiredInt(endPosition, "line"), requiredInt(endPosition, "character"));
 		}
-		var edits = service.format(compilerPath(document), start, end, tabSize, cast insertSpaces);
+		var path = compilerPath(document),
+			edits = service.format(path, start, end, new compiler.formatter.ProjectFormat().forFile(path));
 		return [
 			for (edit in edits)
 				{range: document.range(edit.span.start, edit.span.end), newText: edit.replacement}

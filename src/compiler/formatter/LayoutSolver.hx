@@ -37,12 +37,17 @@ class LayoutSolver {
 			return {lines: [{start: 0, end: line.tokens.length - 1, indent: line.indent}], cost: 0};
 		var memo:Map<String, LayoutPath> = [];
 
+		// A comment that trails code is not measured: it stays on its line whatever the width (BreakAnalyzer), so counting it would only
+		// make the solver break the code before it to make room it cannot get.
 		function renderWidth(start:Int, end:Int):Int {
 			var width = 0;
 			for (index in start...end + 1) {
+				var token = line.tokens[index];
+				if (line.trailingComments != null && line.trailingComments.exists(token.start))
+					continue;
 				if (index > start)
 					width += boundaries[index - 1].spaces;
-				width += line.tokens[index].text.length;
+				width += token.text.length;
 			}
 			return width;
 		}

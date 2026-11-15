@@ -13,13 +13,17 @@ typedef UnwrappedLine = {
 	final blankBefore:Int;
 	final sourceStart:Int;
 	final sourceEnd:Int;
+
+	/** Start offsets of the comments that trail code on their source line; layout keeps each on that line. */
+	final ?trailingComments:Map<Int, Bool>;
 }
 
 /** Builds logical lines from statement/block boundaries before line layout. */
 class UnwrappedLineBuilder {
 	public static function build(tokens:Array<FormatToken>, syntax:SyntaxInfo, ?comments:CommentAttachments):Array<UnwrappedLine> {
 		var result:Array<UnwrappedLine> = [], current:Array<FormatToken> = [], depth = 0, blankBefore = 0, pendingNewlines = 0,
-			conditionalBases:Array<Int> = [], switchBases:Array<Int> = [], opaqueBlockDepth = 0, lastClosedBlock = false;
+			conditionalBases:Array<Int> = [], switchBases:Array<Int> = [], opaqueBlockDepth = 0, lastClosedBlock = false,
+			trailingComments = new Map<Int, Bool>();
 
 		function begin(token:FormatToken):Void {
 			if (current.length == 0) {
@@ -40,7 +44,8 @@ class UnwrappedLineBuilder {
 				indent: depth,
 				blankBefore: blankBefore,
 				sourceStart: current[0].start,
-				sourceEnd: current[current.length - 1].end
+				sourceEnd: current[current.length - 1].end,
+				trailingComments: trailingComments
 			});
 			current = [];
 			blankBefore = 0;
@@ -84,8 +89,16 @@ class UnwrappedLineBuilder {
 						&& current.length > 0
 						&& endsDeclaration(current[current.length - 1], syntax))
 						flush();
+					var trailing = switch attachment {
+						case CommentAttachmentKind.Trailing(_): true;
+						default: false;
+					};
+					if (trailing)
+						trailingComments.set(token.start, true);
 					begin(token);
-					if (token.kind.match(FormatTokenKind.LineComment) || current.length == 1)
+					// A line comment ends the logical line, unless it trails a statement that goes on below it (`var a = 1, // why`
+					// then `b = 2;`, or an argument list): the rest keeps the statement's continuation indent.
+					if (current.length == 1 || token.kind.match(FormatTokenKind.LineComment) && !(trailing && statementContinues(current, syntax)))
 						flush();
 				case FormatTokenKind.Syntax(kind):
 					var isBlock = kind == TokenKind.LeftBrace
@@ -152,6 +165,20 @@ class UnwrappedLineBuilder {
 	}
 
 	/** A semicolon ends a statement, and a comma ends a field of a declaration list such as a typedef body. */
+	/** Whether the statement holding a trailing comment (the last token of `current`) is unfinished: its last code token ends nothing. */
+	static function statementContinues(current:Array<FormatToken>, syntax:SyntaxInfo):Bool {
+		var index = current.length - 2;
+		while (index >= 0 && !FormatTokenTools.isSyntax(current[index]))
+			index--;
+		if (index < 0)
+			return false;
+		return switch FormatTokenTools.syntaxKind(current[index]) {
+			case TokenKind.Semicolon, TokenKind.LeftBrace, TokenKind.RightBrace, TokenKind.Colon: false;
+			case TokenKind.Comma: !syntax.declarationCommas.exists(current[index].start);
+			default: true;
+		};
+	}
+
 	static function endsDeclaration(token:FormatToken, syntax:SyntaxInfo):Bool
 		return switch FormatTokenTools.syntaxKind(token) {
 			case TokenKind.Semicolon: true;

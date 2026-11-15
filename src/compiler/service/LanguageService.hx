@@ -1,5 +1,7 @@
 package compiler.service;
 
+import compiler.formatter.FormatConfig;
+import compiler.formatter.Formatter;
 import compiler.semantic.ModuleCanonicalizer;
 import compiler.syntax.Ast.AstType;
 import compiler.Diagnostic;
@@ -567,13 +569,14 @@ class LanguageService {
 		return state == null ? [] : indexedStructure(state).folds.copy();
 	}
 
-	public function format(path:String, start:Int, end:Int, tabSize:Int, insertSpaces:Bool):Array<TextEdit> {
+	/** Edits that format `path` between byte offsets `start` and `end`, with `config` (the file's project setting, ProjectFormat). */
+	public function format(path:String, start:Int, end:Int, config:FormatConfig):Array<TextEdit> {
 		var state = stateFor(path);
-		if (state == null || start < 0 || end < start || end > state.source.bytes.length || tabSize <= 0)
+		if (state == null || start < 0 || end < start || end > state.source.bytes.length)
 			return [];
 		var source = state.source.text,
-			formatted = SourceFormatter.format(source, tabSize, insertSpaces, state.source.stringOffsetForByteOffset(start),
-				state.source.stringOffsetForByteOffset(end));
+			formatted = Formatter.format(source, config, state.source.stringOffsetForByteOffset(start),
+				state.source.stringOffsetForByteOffset(end), path);
 		if (formatted == null || formatted == source)
 			return [];
 		var prefix = 0, limit = Std.int(Math.min(source.length, formatted.length));

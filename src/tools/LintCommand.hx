@@ -1,7 +1,7 @@
 package tools;
 
 import compiler.Source.SourceFile;
-import compiler.formatter.FormatConfig.FormatConfigTools;
+import compiler.formatter.ProjectFormat;
 import compiler.formatter.Formatter;
 import compiler.service.ImportOrder;
 import compiler.service.UnusedImports;
@@ -59,7 +59,7 @@ class LintCommand {
 		var command = new LintCommand();
 		for (manifest in manifests)
 			command.addManifest(manifest);
-		var config = FormatConfigTools.defaults(2, true), found = 0;
+		var projects = new ProjectFormat(), found = 0;
 		for (path in SourceFiles.expand(paths)) {
 			var source = File.getContent(path), file = new SourceFile(path, source);
 			// Unused imports read the raw tokens: with directives blanked out, an import used only in an inactive branch would look
@@ -82,7 +82,7 @@ class LintCommand {
 			for (block in unordered)
 				Sys.println('$path:${lineOf(source, block.start)}: imports not in order');
 			if (fix) {
-				var wasFormatted = Formatter.format(source, config) == source, edited = remove(source, unused);
+				var config = projects.forFile(path), wasFormatted = Formatter.format(source, config) == source, edited = remove(source, unused);
 				// Sorted after the removal, which can join two runs or empty one.
 				if (orderTokens != null)
 					edited = ImportOrder.sort(edited, ImportOrder.tokens(path, edited), command.resolve);

@@ -15,7 +15,7 @@ class FormatterGoldenMain {
 				expectedPath = Path.join([directoryPath, "expected.txt"]);
 			if (!FileSystem.exists(inputPath) || !FileSystem.exists(expectedPath))
 				throw 'Golden formatter case "$directory" needs input.txt and expected.txt';
-			var config = FormatConfigTools.defaults(2, true);
+			var config = FormatConfigTools.make(2, true);
 			config.lineWidth = switch directory {
 				case "arguments": 60;
 				case "binary": 40;

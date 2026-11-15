@@ -9,7 +9,8 @@ typedef FormatConfig = {
 }
 
 class FormatConfigTools {
-	public static function defaults(tabSize:Int, insertSpaces:Bool):FormatConfig
+	/** An explicit configuration, for the engine's own tests. Tools use ProjectFormat, which reads a project's setting. */
+	public static function make(tabSize:Int, insertSpaces:Bool):FormatConfig
 		return {
 			lineWidth: 120,
 			indentWidth: tabSize,

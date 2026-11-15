@@ -13,7 +13,7 @@ import build.execution.Executor;
 import build.execution.JobServer;
 import build.execution.ProcessRunner;
 import build.native.NativeCMakeProvider;
-import compiler.formatter.FormatConfig.FormatConfigTools;
+import compiler.formatter.ProjectFormat;
 import compiler.formatter.Formatter;
 import haxe.Json;
 import haxe.io.Path;
@@ -66,15 +66,6 @@ private typedef BuildOptions = {
 	final profileSources:Array<String>;
 	final profileOutput:Null<String>;
 	final profileControls:ProfileCapture.ProfileControls;
-}
-
-private typedef FormatOptions = {
-	final check:Bool;
-	final stdin:Bool;
-	final lineWidth:Int;
-	final indentWidth:Int;
-	final useTabs:Bool;
-	final paths:Array<String>;
 }
 
 private typedef PackageOptions = {
@@ -227,78 +218,55 @@ class HaxeonCli {
 		return 0;
 	}
 
+	/**
+	 * `haxeon fmt [--check] PATH... | --stdin`. Each file is formatted with its project's setting (ProjectFormat: the `format` section
+	 * of the nearest haxeon.json, else tabs and 120 columns); --stdin uses the current directory's.
+	 */
 	static function fmt(arguments:Array<String>):Int {
-		var check = false, stdin = false, lineWidth = 120, indentWidth = 2, useTabs = false, paths:Array<String> = [], index = 0;
-		while (index < arguments.length) {
-			var argument = arguments[index++];
+		var check = false, stdin = false, paths:Array<String> = [];
+		for (argument in arguments)
 			if (argument == "--check")
 				check = true;
 			else if (argument == "--stdin")
 				stdin = true;
-			else if (argument == "--use-tabs")
-				useTabs = true;
-			else if (argument == "--spaces" || argument == "--insert-spaces")
-				useTabs = false;
-			else if (argument == "--line-width" || argument == "--tab-size") {
-				if (index >= arguments.length)
-					throw 'Option "$argument" requires a positive integer';
-				var value = Std.parseInt(arguments[index++]);
-				if (value == null || value < 1)
-					throw 'Option "$argument" requires a positive integer';
-				if (argument == "--line-width")
-					lineWidth = value;
-				else
-					indentWidth = value;
-			} else if (StringTools.startsWith(argument, "--line-width=")) {
-				lineWidth = parsePositiveFormatOption(argument.substr("--line-width=".length), "--line-width");
-			} else if (StringTools.startsWith(argument, "--tab-size=")) {
-				indentWidth = parsePositiveFormatOption(argument.substr("--tab-size=".length), "--tab-size");
-			} else if (StringTools.startsWith(argument, "-"))
-				throw 'Unknown fmt option "$argument"';
+			else if (StringTools.startsWith(argument, "-"))
+				throw 'Unknown fmt option "$argument" (indentation and line width come from the "format" section of haxeon.json)';
 			else
 				paths.push(argument);
-		}
 		if (stdin && paths.length > 0)
 			throw 'haxeon fmt --stdin cannot be combined with file paths';
 		if (!stdin && paths.length == 0)
 			throw 'haxeon fmt requires a file path or --stdin';
-		var options:FormatOptions = {
-			check: check,
-			stdin: stdin,
-			lineWidth: lineWidth,
-			indentWidth: indentWidth,
-			useTabs: useTabs,
-			paths: paths
-		};
-		var config = FormatConfigTools.defaults(options.indentWidth, !options.useTabs);
-		config.lineWidth = options.lineWidth;
-		if (options.stdin) {
+		var projects = new ProjectFormat();
+		if (stdin) {
 			var source = Sys.stdin().readAll().toString(),
-				formatted = Formatter.format(source, config, null, null, "<stdin>");
+				formatted = Formatter.format(source, projects.forFile(Path.join([Sys.getCwd(), "<stdin>"])), null, null, "<stdin>");
 			if (formatted == null)
-				throw "cannot format malformed source from stdin";
-			if (options.check)
+				throw "cannot format source from stdin: it does not lex or its brackets do not balance";
+			if (check)
 				return formatted == source ? 0 : 1;
 			Sys.print(formatted);
 			return 0;
 		}
 		var status = 0;
-		var files = SourceFiles.expand(options.paths);
-		for (path in files) {
+		for (path in SourceFiles.expand(paths)) {
 			var source = File.getContent(path);
 			var formatted:Null<String>;
 			try {
-				formatted = Formatter.format(source, config, null, null, path);
+				formatted = Formatter.format(source, projects.forFile(path), null, null, path);
 			} catch (error:compiler.formatter.TokenPreservation.TokenMismatch) {
 				Sys.stderr().writeString(error.message + "\n");
 				status = 2;
 				continue;
 			}
-			if (formatted == null)
-				throw 'Cannot format malformed source: $path';
+			if (formatted == null) {
+				Sys.stderr().writeString('Cannot format $path: it does not lex or its brackets do not balance\n');
+				status = 2;
+				continue;
+			}
 			if (formatted == source)
 				continue;
-			if (options.check) {
+			if (check) {
 				Sys.println('Would reformat $path');
 				if (status == 0)
 					status = 1;
@@ -306,13 +274,6 @@ class HaxeonCli {
 				File.saveContent(path, formatted);
 		}
 		return status;
-	}
-
-	static function parsePositiveFormatOption(value:String, option:String):Int {
-		var parsed = Std.parseInt(value);
-		if (parsed == null || parsed < 1)
-			throw 'Option "$option" requires a positive integer';
-		return parsed;
 	}
 
 	static function add(arguments:Array<String>):Int {
@@ -1549,8 +1510,8 @@ class HaxeonCli {
 		Sys.println("  platforms                      Show targets exposed by this CLI");
 		Sys.println("  devices                        List connected Android devices");
 		Sys.println("  fmt [options] PATH...          Format Haxe source files");
-		Sys.println("       [--check] [--stdin]      Check files or format stdin");
-		Sys.println("       [--line-width N]         Set the formatter column limit (default 120)");
+		Sys.println("       [--check] [--stdin]      Check files or format stdin; indentation and line width come from");
+		Sys.println("                                    the \"format\" section of haxeon.json (default: tabs, 120 columns)");
 		Sys.println("  lint [--fix] [--only RULE] [--manifest FILE]... FILE...  Report (or fix) unused imports and imports out of order;");
 		Sys.println("                                    RULE is unused-imports or import-order");
 		Sys.println("  build [--target TARGET]        Build project in haxeon.json (host, wasm32, android)");

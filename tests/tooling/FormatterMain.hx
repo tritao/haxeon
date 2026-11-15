@@ -3,13 +3,22 @@ import compiler.formatter.FormatConfig.FormatConfigTools;
 import compiler.formatter.FormatScanner;
 import compiler.formatter.FormatToken.FormatTokenKind;
 import compiler.formatter.Formatter;
-import compiler.service.SourceFormatter;
 import compiler.syntax.Lexer;
 import compiler.syntax.Token.TokenKind;
 
 class FormatterMain {
 	static function assertTokenPreservation():Void {
-		compiler.formatter.TokenPreservation.verify("comments.hx", "var x = 1; // before\n", "/* moved */\nvar x=1;\n");
+		// A comment may move and its lines may be re-indented; its text may not change.
+		compiler.formatter.TokenPreservation.verify("comments.hx", "var x = 1; // before\n", "// before\nvar x=1;\n");
+		compiler.formatter.TokenPreservation.verify("comments.hx", "/**\n   * doc\n   */\nvar x = 1;\n", "/**\n * doc\n */\nvar x = 1;\n");
+		var commentRefused = false;
+		try {
+			compiler.formatter.TokenPreservation.verify("comments.hx", "var x = 1; // before\n", "/* moved */\nvar x=1;\n");
+		} catch (error:compiler.formatter.TokenPreservation.TokenMismatch) {
+			commentRefused = error.message.indexOf("changed comment 1") >= 0;
+		}
+		if (!commentRefused)
+			throw "Token guard accepted a changed comment";
 		for (output in ["var x = a +++ b;", "var x = a + ++c;", "var x = a + ++b; extra;"]) {
 			var refused = false;
 			try {
@@ -54,7 +63,7 @@ class FormatterMain {
 		]) {
 			var source = "function f(x:Int, y:Int):Int return " + expression + ";\n";
 			for (width in [120, 24, 8]) {
-				var config = FormatConfigTools.defaults(2, true);
+				var config = FormatConfigTools.make(2, true);
 				config.lineWidth = width;
 				var output = Formatter.format(source, config);
 				if (output == null)
@@ -74,7 +83,7 @@ class FormatterMain {
 
 	static function assertGenericAssignmentBoundaries():Void {
 		for (width in [120, 24, 8]) {
-			var config = FormatConfigTools.defaults(2, true);
+			var config = FormatConfigTools.make(2, true);
 			config.lineWidth = width;
 			var source = "class Test { var a:Array<Int>=[]; var b:Map<String,Array<Int>>=new Map(); var c:Array<Int> = []; }\n";
 			var output = Formatter.format(source, config);
@@ -92,8 +101,40 @@ class FormatterMain {
 		}
 	}
 
+	/** A comment that trails code stays on its line, the statement it trails keeps its continuation indent, and a second pass is a no-op. */
+	static function assertTrailingComments():Void {
+		var cases = [
+			"class A {\n\tfunction f() {\n\t\tvar first = 1, // a comment long enough to push this line well beyond the column limit of the formatter, surely\n\t\t\tsecond = 2;\n\t}\n}\n",
+			"class A {\n\tfunction f() {\n\t\tfoo(a, // x\n\t\t\tb);\n\t}\n}\n",
+			"class A {\n\tfunction f() {\n\t\tvar x = 1; // after a statement\n\t\ty();\n\t}\n}\n"
+		];
+		for (source in cases) {
+			var once = Formatter.format(source, FormatConfigTools.make(4, false));
+			if (once != source)
+				throw 'Trailing comment layout changed:\n$source\nbecame\n$once';
+		}
+	}
+
+	/** Valid Haxe that Haxeon's parser does not accept yet is formatted; unbalanced brackets are still refused. */
+	static function assertBeyondParser():Void {
+		for (source in ["using StringTools;\nclass A {}\n", "package;\nclass A {}\n", "class A {\n\tstatic function f(...parts:String) {}\n}\n",
+			"class A {\n\tfunction f() {\n\t\ttry {} catch (_) {}\n\t}\n}\n"])
+			if (Formatter.format(source, FormatConfigTools.make(4, false)) == null)
+				throw 'Formatter refused valid Haxe:\n$source';
+	}
+
+	/** `@formatter:off` with no `@formatter:on` keeps the rest of the file as written, without doubling its last newline. */
+	static function assertOpenFormatterOff():Void {
+		var source = "class Probe { // @formatter:off: a test addresses this file by line\nfunction   f() {return 1;}\n}\n";
+		if (Formatter.format(source, FormatConfigTools.make(4, false)) != source)
+			throw "An open @formatter:off range did not keep the rest of the file";
+	}
+
 	static function main():Void {
 		assertTokenPreservation();
+		assertOpenFormatterOff();
+		assertTrailingComments();
+		assertBeyondParser();
 		assertGenericAssignmentBoundaries();
 		assertUpdateOperatorBoundaries();
 		assertScannerMatchesLexer("function main():Int { var a = b ?? c; a += 1; a -= 1; a *= 2; a /= 2; a %= 2; a &= 1; a |= 1; a ^= 1; a++; --a; "
@@ -101,8 +142,8 @@ class FormatterMain {
 			+ "var s = (a << 1) | (a >> 1) & (a >>> 1); var q:Map<String, Array<Int>> = []; @:meta var m = a.b; $a; return a < b ? 1 : a > b ? 2 : 3; }");
 		var source = "function main():Int {\nvar text = \"{ literal }\"; // }\n/* keep { } */\nif (true) {\nreturn 42;   \n}\n}\n",
 			expected = "function main():Int {\n  var text = \"{ literal }\"; // }\n  /* keep { } */\n  if (true) {\n    return 42;\n  }\n}\n",
-			formatted = SourceFormatter.format(source, 2, true);
-		if (formatted != expected || SourceFormatter.format(formatted, 2, true) != expected)
+			formatted = Formatter.format(source, FormatConfigTools.make(2, true));
+		if (formatted != expected || Formatter.format(formatted, FormatConfigTools.make(2, true)) != expected)
 			throw "canonical formatter output was not stable";
 
 		var file = new SourceFile("round-trip.hx",
@@ -127,7 +168,7 @@ class FormatterMain {
 			}
 		if (syntaxCount == 0 || lexical[lexicalIndex].kind != TokenKind.Eof)
 			throw "lossless scanner changed syntax token sequence";
-		var formattedRoundTrip = SourceFormatter.format(file.text, 2, true),
+		var formattedRoundTrip = Formatter.format(file.text, FormatConfigTools.make(2, true)),
 			reformattedLexical = new Lexer(new SourceFile("formatted.hx", formattedRoundTrip)).tokenize(),
 			originalLexical = new Lexer(file).tokenize();
 		lexicalIndex = 0;
@@ -143,7 +184,7 @@ class FormatterMain {
 
 		var numericSource = "function main():Int { var values = [1e-12, 2E+10, 3e4, 1.25E-6, 1_000.5_0e-1_2, 0xCA_FE]; var nested:Array<Array<Int>> = []; var x = (64>>2) + (1<<2); x>>=1; x>>>=1; x<<=2; return x>>>1; }\n";
 		for (width in [100, 20, 8]) {
-			var numericConfig = FormatConfigTools.defaults(2, true);
+			var numericConfig = FormatConfigTools.make(2, true);
 			numericConfig.lineWidth = width;
 			var output = Formatter.format(numericSource, numericConfig);
 			for (literal in [
@@ -197,7 +238,7 @@ class FormatterMain {
 					throw "numeric formatting changed token spelling";
 		}
 
-		var config = FormatConfigTools.defaults(2, true);
+		var config = FormatConfigTools.make(2, true);
 		config.lineWidth = 60;
 		var wrappedSource = "function build(name:String,arguments:Array<String>,configuration:Configuration):BuildResult { return computeSomething(firstValue,transform(secondValue),thirdValue); }\n",
 			wrapped = Formatter.format(wrappedSource, config),
@@ -207,7 +248,7 @@ class FormatterMain {
 		for (line in wrapped.split("\n"))
 			if (line.length > config.lineWidth)
 				throw "breakable formatted output exceeded the configured line width";
-		var wideContinuation = FormatConfigTools.defaults(2, true);
+		var wideContinuation = FormatConfigTools.make(2, true);
 		wideContinuation.lineWidth = 40;
 		wideContinuation.continuationIndentWidth = 4;
 		var wideContinuationOutput = Formatter.format("function main():Int { return compute(firstValue,secondValue,thirdValue); }\n", wideContinuation);
@@ -215,10 +256,10 @@ class FormatterMain {
 			|| wideContinuationOutput.indexOf("\n      firstValue,") < 0
 			|| wideContinuationOutput.indexOf("\n    );") < 0)
 			throw "continuation indentation width was not applied independently";
-		var tabbed = SourceFormatter.format("function main():Int { return 0; }\n", 2, false);
+		var tabbed = Formatter.format("function main():Int { return 0; }\n", FormatConfigTools.make(2, false));
 		if (tabbed == null || tabbed.indexOf("\n\treturn 0;") < 0)
 			throw "tab indentation configuration was not honored";
-		var genericConfig = FormatConfigTools.defaults(2, true);
+		var genericConfig = FormatConfigTools.make(2, true);
 		genericConfig.lineWidth = 40;
 		var generic = Formatter.format("function main():Int { var value:Map<FirstArgument,SecondArgument> = []; return 0; }\n", genericConfig),
 			expectedGeneric = "function main():Int {\n  var value:Map<\n    FirstArgument,\n    SecondArgument\n  > = [];\n  return 0;\n}\n";
@@ -236,7 +277,7 @@ class FormatterMain {
 			throw "empty switch blocks did not close at the switch indentation";
 
 		var expressionSource = "function main():Int { var result=firstCondition?firstValue:secondValue; return firstObject.secondObject.thirdObject.compute(firstArgument,secondArgument); }\n",
-			expressionConfig = FormatConfigTools.defaults(2, true),
+			expressionConfig = FormatConfigTools.make(2, true),
 			expectedExpression = "function main():Int {\n  var result = firstCondition\n    ? firstValue : secondValue;\n  return firstObject\n    .secondObject.thirdObject.compute(\n      firstArgument,\n      secondArgument\n    );\n}\n";
 		expressionConfig.lineWidth = 50;
 		var expressionFormatted = Formatter.format(expressionSource, expressionConfig);
@@ -252,10 +293,10 @@ class FormatterMain {
 		var rangeSource = "function main():Int {\nvar first=1;\nvar second=2;\nreturn first+second;\n}\n",
 			rangeStart = rangeSource.indexOf("first"),
 			rangeEnd = rangeSource.indexOf("second") + "second=2;".length,
-			rangeFormatted = SourceFormatter.format(rangeSource, 2, true, rangeStart, rangeEnd);
+			rangeFormatted = Formatter.format(rangeSource, FormatConfigTools.make(2, true), rangeStart, rangeEnd);
 		if (rangeFormatted == null || rangeFormatted.indexOf("\n  var first = 1;\n  var second = 2;\nreturn first+second;") < 0)
 			throw "range formatting did not expand to complete logical lines";
-		var rangeConfig = FormatConfigTools.defaults(2, true);
+		var rangeConfig = FormatConfigTools.make(2, true);
 		rangeConfig.lineWidth = 40;
 		var callRangeSource = "function main():Int {\nvar result=compute(firstArgument,secondArgument,thirdArgument);\nreturn result;\n}\n",
 			callRangeStart = callRangeSource.indexOf("secondArgument"),
@@ -265,8 +306,7 @@ class FormatterMain {
 		if (callRangeFormatted != expectedCallRange)
 			throw "range formatting did not expand a partial call to its safe logical unit";
 
-		var conditional = SourceFormatter.format("#if missing\nfunction first():Int {\nreturn 1;\n}\n#else\nfunction second():Int {\nreturn 2;\n}\n#end\n", 2,
-			true),
+		var conditional = Formatter.format("#if missing\nfunction first():Int {\nreturn 1;\n}\n#else\nfunction second():Int {\nreturn 2;\n}\n#end\n", FormatConfigTools.make(2, true)),
 			expectedConditional = "#if missing\nfunction first():Int {\n  return 1;\n}\n#else\nfunction second():Int {\n  return 2;\n}\n#end\n";
 		if (conditional != expectedConditional)
 			throw "conditional branches disturbed formatter indentation";
@@ -276,8 +316,8 @@ class FormatterMain {
 			"function main():Int { var value = #if (feature || other)\n41;\n#else\n42;\n#end\nreturn value; }\n",
 			"function main():Int return identity(#if feature 40 #elseif other 41 #else 42 #end);\n"
 		]) {
-			var inlineConditional = SourceFormatter.format(inlineConditionalSource, 2, true);
-			if (inlineConditional == null || SourceFormatter.format(inlineConditional, 2, true) != inlineConditional)
+			var inlineConditional = Formatter.format(inlineConditionalSource, FormatConfigTools.make(2, true));
+			if (inlineConditional == null || Formatter.format(inlineConditional, FormatConfigTools.make(2, true)) != inlineConditional)
 				throw "inline conditional formatting did not preserve valid, stable source";
 			for (defines in [new Map<String, String>(), ["feature" => "1"], ["other" => "1"]]) {
 				var beforeFile = new SourceFile("inline-before.hx", inlineConditionalSource),
@@ -295,25 +335,25 @@ class FormatterMain {
 		}
 
 		var disabledSource = "function main():Int { // @formatter:off\n   var   untouched=foo( 1,2 );\n // @formatter:on\nreturn 0; }\n",
-			disabled = SourceFormatter.format(disabledSource, 2, true),
+			disabled = Formatter.format(disabledSource, FormatConfigTools.make(2, true)),
 			expectedDisabled = "function main():Int { // @formatter:off\n   var   untouched=foo( 1,2 );\n // @formatter:on\n  return 0;\n}\n";
 		if (disabled != expectedDisabled)
 			throw "formatter-off region was not preserved verbatim";
-		var markerInString = SourceFormatter.format("function main():String {\nvar text=\"@formatter:off\";\nreturn text;\n}\n", 2, true),
+		var markerInString = Formatter.format("function main():String {\nvar text=\"@formatter:off\";\nreturn text;\n}\n", FormatConfigTools.make(2, true)),
 			expectedMarkerInString = "function main():String {\n  var text = \"@formatter:off\";\n  return text;\n}\n";
 		if (markerInString != expectedMarkerInString)
 			throw "formatter markers inside strings changed formatting state";
 
-		var crlf = SourceFormatter.format(StringTools.replace(source, "\n", "\r\n"), 2, true);
+		var crlf = Formatter.format(StringTools.replace(source, "\n", "\r\n"), FormatConfigTools.make(2, true));
 		if (crlf == null || crlf.indexOf("\r\n") < 0 || crlf.indexOf("\n") != crlf.indexOf("\r\n") + 1)
 			throw "formatter did not preserve CRLF output";
-		if (SourceFormatter.format("function main(:Int {", 2, true) != null)
+		if (Formatter.format("function main(:Int {", FormatConfigTools.make(2, true)) != null)
 			throw "formatter accepted malformed source";
 		var structSource = "struct Vec2 {\npublic var x:Int;\n}\n",
-			structFormatted = SourceFormatter.format(structSource, 2, true);
+			structFormatted = Formatter.format(structSource, FormatConfigTools.make(2, true));
 		if (structFormatted == null
 			|| structFormatted.indexOf("struct Vec2") < 0
-			|| SourceFormatter.format(structFormatted, 2, true) != structFormatted)
+			|| Formatter.format(structFormatted, FormatConfigTools.make(2, true)) != structFormatted)
 			throw "formatter did not preserve struct declaration syntax";
 
 		Sys.println("PASS: lossless width-aware formatter");

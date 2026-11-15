@@ -8,7 +8,8 @@ import compiler.formatter.SyntaxAnnotator.SyntaxInfo;
 import compiler.formatter.UnwrappedLine.UnwrappedLineBuilder;
 import compiler.syntax.ConditionalCompilation;
 import compiler.syntax.Lexer;
-import compiler.syntax.Parser;
+import compiler.syntax.Token;
+import compiler.syntax.Token.TokenKind;
 
 private typedef RenderedUnit = {
 	final sourceStart:Int;
@@ -23,14 +24,19 @@ private typedef Replacement = {
 	final text:String;
 }
 
-/** Token/CST formatter facade. Parser validation remains the refusal boundary. */
+/**
+ * Token/CST formatter facade. It formats any source that lexes and whose brackets balance, including Haxe that Haxeon's parser does
+ * not accept yet (stock-Haxe tools in this repository use rest arguments, `using`, untyped catches, quoted object fields): the layout
+ * works on tokens, and TokenPreservation refuses any output whose tokens or comments differ from the input. Unbalanced brackets, as
+ * in code being typed, are refused, since their layout would only confuse.
+ */
 class Formatter {
 	public static function format(source:String, config:FormatConfig, ?rangeStart:Int, ?rangeEnd:Int, ?path:String):Null<String> {
 		var file = new SourceFile(path == null ? "<format>" : path, source);
 		var result:String;
 		try {
 			var conditional = ConditionalCompilation.process(file, []);
-			new Parser(new Lexer(file, conditional.text).tokenize()).parseProgram();
+			requireBalanced(new Lexer(file, conditional.text).tokenize());
 			var tokens = TypeArguments.splitAssignments(new FormatScanner(file).scan()),
 				comments = CommentAttachmentTools.attach(tokens),
 				syntax = SyntaxAnnotator.annotate(tokens),
@@ -48,6 +54,27 @@ class Formatter {
 		}
 		TokenPreservation.verify(file.path, source, result);
 		return result;
+	}
+
+	/** Throws unless every bracket closes the one opened last; conditional branches not taken are already blanked out. */
+	static function requireBalanced(tokens:Array<Token>):Void {
+		var open:Array<TokenKind> = [];
+		for (token in tokens)
+			switch token.kind {
+				case LeftParen | LeftBrace | LeftBracket:
+					open.push(token.kind);
+				case RightParen | RightBrace | RightBracket:
+					var expected = switch token.kind {
+						case RightParen: LeftParen;
+						case RightBrace: LeftBrace;
+						default: LeftBracket;
+					};
+					if (open.length == 0 || open.pop() != expected)
+						throw "unbalanced brackets";
+				default:
+			}
+		if (open.length > 0)
+			throw "unbalanced brackets";
 	}
 
 	static function renderUnit(unit:UnwrappedLine, syntax:SyntaxInfo, config:FormatConfig):RenderedUnit {

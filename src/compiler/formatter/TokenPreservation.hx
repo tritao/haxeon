@@ -43,6 +43,28 @@ class TokenPreservation {
 			if (left == null || right == null || left.kind != right.kind || left.text != right.text)
 				throw new TokenMismatch('Formatter changed tokens in $path at token ${index + 1}: expected ${describe(left)}, got ${describe(right)}');
 		}
+		var commentsBefore = comments(path, source), commentsAfter = comments(path, formatted);
+		for (index in 0...Std.int(Math.max(commentsBefore.length, commentsAfter.length))) {
+			var left = index < commentsBefore.length ? commentsBefore[index] : "<end>";
+			var right = index < commentsAfter.length ? commentsAfter[index] : "<end>";
+			if (left != right)
+				throw new TokenMismatch('Formatter changed comment ${index + 1} in $path: expected ${haxe.Json.stringify(left)}, got ${haxe.Json.stringify(right)}');
+		}
+	}
+
+	/**
+	 * The comments of a source in order, each with every line trimmed: the lexer drops comments, so the token comparison alone would not
+	 * notice one going missing. Re-indenting a block comment's lines is allowed; changing its words is not.
+	 */
+	static function comments(path:String, source:String):Array<String> {
+		var result = [];
+		for (token in new FormatScanner(new SourceFile(path, source)).scan())
+			switch token.kind {
+				case LineComment | BlockComment | DocComment:
+					result.push([for (line in token.text.split("\n")) StringTools.trim(line)].join("\n"));
+				default:
+			}
+		return result;
 	}
 
 	static function describe(token:Null<PreservedToken>):String

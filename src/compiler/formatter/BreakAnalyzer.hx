@@ -39,6 +39,10 @@ class BreakAnalyzer {
 				mustBreak = true;
 			else if (left.kind.match(FormatTokenKind.BlockComment) && left.text.indexOf("\n") >= 0)
 				mustBreak = true;
+			else if (line.trailingComments != null && line.trailingComments.exists(right.start)) {
+				// A comment that trails code stays on its line, however long: moving it would change what it describes, and the
+				// next pass would see a leading comment and move it again.
+			}
 			else if (leftKind == TokenKind.Comma) {
 				canBreak = true;
 				penalty = 10;

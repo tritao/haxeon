@@ -1453,8 +1453,9 @@ class LspProtocolMain {
 			method: "textDocument/formatting",
 			params: {textDocument: {uri: formattingUri}, options: {tabSize: 2, insertSpaces: true}}
 		}));
+		// The editor's options ask for two spaces, but the project setting decides (ProjectFormat): no haxeon.json here, so tabs.
 		if (formattingResponse.result.length != 1
-			|| applyLspEdit(formattingDocument, formattingResponse.result[0]).indexOf("\n    return 42;\n") < 0)
+			|| applyLspEdit(formattingDocument, formattingResponse.result[0]).indexOf("\n\t\treturn 42;\n") < 0)
 			throw "LSP document formatting did not map the compiler edit";
 		var rangeFormattingResponse = request(formattingProtocol, Json.stringify({
 			jsonrpc: "2.0",
@@ -1467,7 +1468,7 @@ class LspProtocolMain {
 			}
 		})),
 			rangeFormattedSource = applyLspEdit(formattingDocument, rangeFormattingResponse.result[0]);
-		if (rangeFormattedSource.indexOf("\nvar text") < 0 || rangeFormattedSource.indexOf("\n    return 42;\n") < 0)
+		if (rangeFormattedSource.indexOf("\nvar text") < 0 || rangeFormattedSource.indexOf("\n\t\treturn 42;\n") < 0)
 			throw "LSP range formatting changed lines outside its requested range";
 		var implementationProtocol = new LspProtocol(),
 			implementationUri = "file:///workspace/Implementation.hx",

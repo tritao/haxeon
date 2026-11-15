@@ -311,8 +311,16 @@ class FormatScanner {
 			if (position < source.length)
 				position++;
 		}
-		if (protectedStart >= 0)
-			result.push({start: protectedStart, end: source.length});
+		if (protectedStart >= 0) {
+			// Like a closed range, an open one ends before its last line's newline: the file's own trailing newline is kept by the
+			// renderer, and counting it here too doubled it.
+			var end = source.length;
+			if (end > protectedStart && source.get(end - 1) == "\n".code)
+				end--;
+			if (end > protectedStart && source.get(end - 1) == "\r".code)
+				end--;
+			result.push({start: protectedStart, end: end});
+		}
 		return result;
 	}
 
