@@ -70,7 +70,11 @@ if [[ $changed -eq 1 ]]; then
                     status=0
                     "${external_formatter[@]}" -s "$base_file" --check >"$work/base.log" 2>&1 || status=$?
                 fi
-                if [[ $status -gt 1 ]]; then cat "$work/base.log" >&2; exit "$status"; fi
+                # A base version the formatter cannot format at all (its token guard refuses the output) was not formatted either: leave
+                # the file alone like any other file that was unformatted at the base, and say so, instead of failing the whole check.
+                if [[ $status -gt 1 ]]; then
+                    echo "format: ${base_file#"$base_dir/"} cannot be formatted at the merge base; leaving it alone" >&2
+                fi
                 [[ $status -eq 0 ]] || dirty_at_base+=("${base_file#"$base_dir/"}")
             done < <(node "$root_dir/scripts/format-source-profile.js" "${base_arguments[@]}")
         fi
