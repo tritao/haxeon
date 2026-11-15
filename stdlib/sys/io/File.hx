@@ -128,7 +128,7 @@ class File {
 		haxeon.build.InputFiles.wrote(path);
 		#if wasm
 		fileSaveBytes(path, Bytes.alloc(0));
-		return new FileOutput(false, path);
+		return new FileOutput(path);
 		#else
 		return new FileOutput(fileOutputOpen(path, false, binary));
 		#end
@@ -140,7 +140,7 @@ class File {
 		#if wasm
 		if (!runtime.MemoryFileSystem.exists(path))
 			fileSaveBytes(path, Bytes.alloc(0));
-		return new FileOutput(false, path);
+		return new FileOutput(path);
 		#else
 		return new FileOutput(fileOutputOpen(path, true, binary));
 		#end

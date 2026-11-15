@@ -4,20 +4,21 @@ import haxe.io.Bytes;
 
 #if wasm
 /**
- * Standard output or error, routed to the host, or a file of the session's in-memory file system opened through
- * `File.write` or `File.append`. Bytes are held until `flush`, `close` or (for a host stream) the next string, so a
- * character written byte by byte reaches the host whole.
+ * A file of the session's in-memory file system, opened through `File.write` or `File.append`; standard output and error
+ * (`Sys.stdout()`, `Sys.stderr()`) are a subclass routed to the host. Bytes are held until `flush` or `close`, so a
+ * character written byte by byte arrives whole.
  */
 class FileOutput extends haxe.io.Output {
-	final error:Bool;
-	final path:Null<String>;
+	final path:String;
 	var pending = new haxe.io.BytesBuffer();
 
-	/** A host stream (`error` chooses standard error), or the file at `path`, which `File` has already created or truncated. */
-	public function new(error:Bool, ?path:String) {
-		this.error = error;
+	/** The file at `path`, which `File` has already created or truncated. */
+	public function new(path:String)
 		this.path = path;
-	}
+
+	/** Standard output, or standard error when `error` is set. Only programs that use them link the host's output imports. */
+	public static function host(error:Bool):FileOutput
+		return new HostOutput(error);
 
 	override public function writeByte(c:Int):Void
 		pending.addByte(c);
@@ -29,41 +30,54 @@ class FileOutput extends haxe.io.Output {
 		return len;
 	}
 
-	override public function writeString(s:String, ?encoding:haxe.io.Encoding):Void {
-		if (path != null) {
-			super.writeString(s, encoding);
-			return;
-		}
-		release();
-		haxeon.wasm.HaxeonHost.write_output(s, error ? 1 : 0);
-	}
-
-	override public function flush():Void {
-		release();
-		if (path == null)
-			haxeon.wasm.HaxeonHost.flush_output(error ? 1 : 0);
-	}
+	override public function flush():Void
+		release(taken());
 
 	override public function close():Void
 		flush();
 
-	/** Hands the pending bytes to the host stream or appends them to the file. */
-	function release():Void {
+	/** The pending bytes, leaving none. */
+	function taken():Bytes {
 		var bytes = pending.getBytes();
 		pending = new haxe.io.BytesBuffer();
+		return bytes;
+	}
+
+	/** Appends `bytes` to the file. */
+	function release(bytes:Bytes):Void {
 		if (bytes.length == 0)
 			return;
-		var file = path;
-		if (file == null) {
-			haxeon.wasm.HaxeonHost.write_output(bytes.toString(), error ? 1 : 0);
-			return;
-		}
-		var existing = runtime.MemoryFileSystem.exists(file) ? runtime.MemoryFileSystem.getBytes(file) : Bytes.alloc(0),
+		var existing = runtime.MemoryFileSystem.exists(path) ? runtime.MemoryFileSystem.getBytes(path) : Bytes.alloc(0),
 			combined = Bytes.alloc(existing.length + bytes.length);
 		combined.blit(0, existing, 0, existing.length);
 		combined.blit(existing.length, bytes, 0, bytes.length);
-		runtime.MemoryFileSystem.saveBytes(file, combined);
+		runtime.MemoryFileSystem.saveBytes(path, combined);
 	}
+}
+
+/** Standard output or error, written through the host. */
+private class HostOutput extends FileOutput {
+	final error:Bool;
+
+	public function new(error:Bool) {
+		super("");
+		this.error = error;
+	}
+
+	/** Strings go to the host directly, after any bytes still held. */
+	override public function writeString(s:String, ?encoding:haxe.io.Encoding):Void {
+		release(taken());
+		haxeon.wasm.HaxeonHost.write_output(s, error ? 1 : 0);
+	}
+
+	override public function flush():Void {
+		release(taken());
+		haxeon.wasm.HaxeonHost.flush_output(error ? 1 : 0);
+	}
+
+	override function release(bytes:Bytes):Void
+		if (bytes.length > 0)
+			haxeon.wasm.HaxeonHost.write_output(bytes.toString(), error ? 1 : 0);
 }
 #else
 private typedef OutputHandle = hl.Abstract<"realtime_file_output">;

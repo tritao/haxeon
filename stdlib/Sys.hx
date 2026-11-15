@@ -167,10 +167,10 @@ extern function sysPrint(value:String):Void;
 
 #if wasm
 function sysStdout():sys.io.FileOutput
-	return new sys.io.FileOutput(false);
+	return sys.io.FileOutput.host(false);
 
 function sysStderr():sys.io.FileOutput
-	return new sys.io.FileOutput(true);
+	return sys.io.FileOutput.host(true);
 #else
 @:hlNative("haxeon_runtime", "__sys_stdout")
 extern function sysStdoutHandle():hl.Abstract<"realtime_file_output">;
