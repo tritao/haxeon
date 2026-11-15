@@ -118,8 +118,12 @@ class IrEnumEscapeReach {
 	public function collect(roots:Array<IrType>, supportsCallableEscape:IrType->Bool):Map<String, Bool> {
 		var unsupported:Map<String, Bool> = [],
 			visited:Map<String, Bool> = [],
-			inspectedMaps:Map<String, Bool> = [],
+			inspectedMaps:Map<String,
+				Bool> = [], // What the reference walk has visited: named types by name; function and map types, the only other ones that can lead
+		// back to themselves, by identity text. Wrappers and primitives are not recorded: walking them again is cheap and finite.
 			referenceTypes:Map<String, Bool> = [],
+			referenceObjects:Map<String, Bool> = [],
+			referenceVirtuals:Map<String, Bool> = [],
 			valueTypes:Map<String, Bool> = [];
 
 		function interfaceClosure(name:String, path:Array<String>):Map<String, Bool> {
@@ -191,11 +195,14 @@ class IrEnumEscapeReach {
 		}
 		var walk:IrObject->Void = function(_) {},
 			referenceEnums:Map<String, Bool> = [];
-		function walkReferences(type:IrType):Void {
+		function firstReference(type:IrType):Bool {
 			var key = IrTypeIdentity.text(type);
 			if (referenceTypes.exists(key))
-				return;
+				return false;
 			referenceTypes.set(key, true);
+			return true;
+		}
+		function walkReferences(type:IrType):Void {
 			switch type {
 				case Enum(name), EnumTag(name):
 					if (!referenceEnums.exists(name)) {
@@ -209,6 +216,9 @@ class IrEnumEscapeReach {
 								}
 					}
 				case Obj(name):
+					if (referenceObjects.exists(name))
+						return;
+					referenceObjects.set(name, true);
 					var child = objects.get(name);
 					if (child != null) {
 						if (child.isValue)
@@ -220,6 +230,8 @@ class IrEnumEscapeReach {
 				case Nullable(inner), Array(inner), Iterator(inner):
 					walkReferences(inner);
 				case Function(arguments, result):
+					if (!firstReference(type))
+						return;
 					for (argument in arguments)
 						walkReferences(argument);
 					walkReferences(result);
@@ -228,6 +240,9 @@ class IrEnumEscapeReach {
 						for (environment in environments)
 							walkReferences(environment);
 				case Virtual(name):
+					if (referenceVirtuals.exists(name))
+						return;
+					referenceVirtuals.set(name, true);
 					var anonymous = objects.get(name);
 					if (anonymous != null && SemanticSignature.isAnonymousName(name))
 						walk(anonymous);
@@ -237,7 +252,11 @@ class IrEnumEscapeReach {
 						for (object in implementers)
 							walk(object);
 				case Abstract(_):
-					var contents = mapContents.get(IrTypeIdentity.text(type));
+					var key = IrTypeIdentity.text(type);
+					if (referenceTypes.exists(key))
+						return;
+					referenceTypes.set(key, true);
+					var contents = mapContents.get(key);
 					if (contents != null)
 						for (content in contents)
 							walkReferences(content);
