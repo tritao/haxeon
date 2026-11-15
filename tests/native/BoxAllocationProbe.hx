@@ -1,4 +1,5 @@
 @:hlNative("jitbox") private extern class BoxHooks {
+	static function supported():Bool;
 	static function mode(value:Int):Void;
 	static function eligibility():Bool;
 	static function count():Int;
@@ -37,6 +38,9 @@ class BoxAllocationProbe {
 	}
 
 	static function main():Void {
+		// Exit status 77 tells the script this target has no inline allocation to test.
+		if (!BoxHooks.supported())
+			Sys.exit(77);
 		if (!BoxHooks.eligibility())
 			fail(8);
 		if (!allocate(1000))

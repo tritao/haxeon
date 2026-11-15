@@ -52,6 +52,9 @@ HL_PRIM int HL_NAME(value)(vdynamic *v) {
 }
 DEFINE_PRIM(_I32,value,_DYN);
 
+HL_API bool hl_jit_alloc_supported(void);
+HL_PRIM bool HL_NAME(supported)(void) { return hl_jit_alloc_supported(); }
+DEFINE_PRIM(_BOOL,supported,_NO_ARG);
 HL_PRIM bool HL_NAME(eligibility)(void) {
  hl_jit_alloc_data data;
  hl_type type=hlt_i32;
