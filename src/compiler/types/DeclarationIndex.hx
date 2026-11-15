@@ -200,8 +200,15 @@ class DeclarationIndex {
 		return this;
 	}
 
+	/** No substitutions: resolution only reads them. */
+	static final noSubstitutions:Map<String, CompilerType> = [];
+
+	/**
+	 * `resolving` (the aliases and abstracts being resolved, to report cycles) is made when the first one is entered, and is
+	 * passed down from there: most types name neither.
+	 */
 	public function resolve(type:AstType, ?span:SourceSpan, ?substitutions:Map<String, CompilerType>):CompilerType
-		return resolveInner(type, span == null ? fallbackSpan : span, [], substitutions == null ? [] : substitutions);
+		return resolveInner(type, span == null ? fallbackSpan : span, null, substitutions == null ? noSubstitutions : substitutions);
 
 	/** Resolve a constructor qualifier through typedefs, preserving bound enum arguments. */
 	public function enumQualifierType(name:String):Null<CompilerType> {
@@ -309,7 +316,7 @@ class DeclarationIndex {
 			}
 	}
 
-	function resolveInner(type:AstType, span:SourceSpan, resolving:Map<String, Bool>, substitutions:Map<String, CompilerType>):CompilerType
+	function resolveInner(type:AstType, span:SourceSpan, resolving:Null<Map<String, Bool>>, substitutions:Map<String, CompilerType>):CompilerType
 		return switch type {
 			case ErrorType(_): TDynamic;
 			case IntType: TInt;
@@ -456,7 +463,7 @@ class DeclarationIndex {
 	 * Resolves declared fields into `target`, sorted by name. The fields are built aside and copied in at the end, so
 	 * a structure that refers to itself sees an empty `target` until it is complete, never a partial one.
 	 */
-	function fillAnonymousFields(parsedFields:Array<compiler.syntax.Ast.AstAnonymousField>, span:SourceSpan, resolving:Map<String, Bool>,
+	function fillAnonymousFields(parsedFields:Array<compiler.syntax.Ast.AstAnonymousField>, span:SourceSpan, resolving:Null<Map<String, Bool>>,
 			substitutions:Map<String, CompilerType>, target:Array<AnonymousField>):Void {
 		var fields:Array<AnonymousField> = [
 			for (field in parsedFields)
@@ -495,7 +502,7 @@ class DeclarationIndex {
 		}
 	}
 
-	function resolveNamedType(name:String, span:SourceSpan, resolving:Map<String, Bool>, substitutions:Map<String, CompilerType>):CompilerType {
+	function resolveNamedType(name:String, span:SourceSpan, resolving:Null<Map<String, Bool>>, substitutions:Map<String, CompilerType>):CompilerType {
 		var substituted = substitutions.get(name);
 		if (substituted != null)
 			return substituted;
@@ -571,7 +578,7 @@ class DeclarationIndex {
 	 * whichever typedef in it is resolved first: `A = Array<B>, B = {a:A}` is fine. A cycle that never enters a structure
 	 * (`A = B, B = A`, `A = Array<A>`) could never be expanded and is an error.
 	 */
-	function resolveAlias(alias:AstTypeAlias, resolving:Map<String, Bool>, substitutions:Map<String, CompilerType>):CompilerType {
+	function resolveAlias(alias:AstTypeAlias, resolving:Null<Map<String, Bool>>, substitutions:Map<String, CompilerType>):CompilerType {
 		var cacheable = alias.typeParameters.length == 0 && isEmpty(substitutions);
 		if (cacheable) {
 			var cached = resolvedAliases.get(alias.name);
@@ -579,7 +586,7 @@ class DeclarationIndex {
 				return cached;
 		}
 		var key = structureKey(alias, substitutions), reentering = false;
-		if (resolving.exists(alias.name)) {
+		if (resolving != null && resolving.exists(alias.name)) {
 			var open = openStructures.get(key);
 			if (open != null) {
 				if (open.depth < shallowestReferenced)
@@ -592,8 +599,11 @@ class DeclarationIndex {
 				fail('Cyclic type alias involving "${alias.name}"', alias.span);
 			reentering = true;
 		}
-		if (!reentering)
+		if (!reentering) {
+			if (resolving == null)
+				resolving = [];
 			resolving.set(alias.name, true);
+		}
 		var outerReferenced = shallowestReferenced,
 			outerEntry = entered.get(key),
 			opened = false,
@@ -630,7 +640,8 @@ class DeclarationIndex {
 		}
 		restoreEntry(key, outerEntry);
 		if (!reentering)
-			resolving.remove(alias.name);
+			if (resolving != null)
+				resolving.remove(alias.name);
 		// Structures at depth < openDepth are the ones still open around this alias.
 		var dependsOnOpen = shallowestReferenced < openDepth;
 		if (outerReferenced < shallowestReferenced)
@@ -729,7 +740,7 @@ class DeclarationIndex {
 		return true;
 	}
 
-	function resolveAbstract(decl:compiler.syntax.Ast.AstAbstract, span:SourceSpan, resolving:Map<String, Bool>,
+	function resolveAbstract(decl:compiler.syntax.Ast.AstAbstract, span:SourceSpan, resolving:Null<Map<String, Bool>>,
 			substitutions:Map<String, CompilerType>):CompilerType {
 		var metadata = decl.metadata;
 		if (metadata != null)
@@ -748,11 +759,12 @@ class DeclarationIndex {
 							TDynamic;
 					};
 				}
-		if (resolving.exists(decl.name))
+		if (resolving != null && resolving.exists(decl.name))
 			fail('Cyclic abstract representation involving "${decl.name}"', span);
-		resolving.set(decl.name, true);
-		var resolved = resolveInner(decl.underlying, span, resolving, substitutions);
-		resolving.remove(decl.name);
+		var cycle:Map<String, Bool> = resolving == null ? [] : resolving;
+		cycle.set(decl.name, true);
+		var resolved = resolveInner(decl.underlying, span, cycle, substitutions);
+		cycle.remove(decl.name);
 		return resolved;
 	}
 
