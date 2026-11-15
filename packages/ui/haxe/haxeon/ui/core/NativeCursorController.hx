@@ -4,8 +4,8 @@ import haxeon.ui.NativeEnums;
 import nativekit.ffi.NativeKitTypes;
 import nativekit.ffi.NativeKitTypes.NativeCursorShape;
 
-import nativekit.ffi.NativeKit;
 import haxeon.ui.core.CursorShape as UiCursorShape;
+import nativekit.ffi.NativeKit;
 
 /** Applies UI cursor intent to one NativeKit window with lazy native resources. */
 class NativeCursorController {

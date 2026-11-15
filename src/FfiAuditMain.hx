@@ -1,7 +1,7 @@
 import compiler.ffi.HxiAudit;
+import compiler.ffi.HxiModel.HxiInterface;
 import compiler.ffi.HxiParser;
 import compiler.ffi.HxiValidator;
-import compiler.ffi.HxiModel.HxiInterface;
 import haxe.Json;
 import sys.FileSystem;
 import sys.io.File;

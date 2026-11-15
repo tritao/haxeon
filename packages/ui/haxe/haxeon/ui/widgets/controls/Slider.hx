@@ -14,13 +14,13 @@ import haxeon.ui.core.UiEvent;
 import haxeon.ui.core.UiEventKind;
 import haxeon.ui.core.UiKey;
 import haxeon.ui.core.View;
-import haxeon.ui.style.StyleProperty;
-import haxeon.ui.style.StyleState;
-import haxeon.ui.style.StyleTarget;
 import haxeon.ui.semantics.AccessibilityAction;
 import haxeon.ui.semantics.AccessibilityActionData;
 import haxeon.ui.semantics.AccessibilityRole;
 import haxeon.ui.semantics.Semantics;
+import haxeon.ui.style.StyleProperty;
+import haxeon.ui.style.StyleState;
+import haxeon.ui.style.StyleTarget;
 
 /** Horizontal value slider with Haxe-owned pointer, keyboard, and semantic behavior. */
 class Slider implements View {

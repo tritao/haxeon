@@ -1,10 +1,10 @@
 package haxeon.ui.style;
 
-import haxeon.ui.style.ColorMatrixEffect;
 import haxeon.ui.style.BrightnessEffect;
+import haxeon.ui.style.ColorMatrixEffect;
 import haxeon.ui.style.ContrastEffect;
-import haxeon.ui.style.SaturateEffect;
 import haxeon.ui.style.HueRotateEffect;
+import haxeon.ui.style.SaturateEffect;
 
 /** Ordered, value-semantic collection of post-layout visual effects. */
 class EffectChain {

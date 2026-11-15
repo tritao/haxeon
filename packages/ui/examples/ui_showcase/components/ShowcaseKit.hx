@@ -1,21 +1,21 @@
 package components;
 
+import UiExplorer;
 import haxeon.ui.Color;
 import haxeon.ui.Insets;
 import haxeon.ui.LayoutAxis;
 import haxeon.ui.LayoutDirection;
 import haxeon.ui.LayoutStyle;
-import UiExplorer;
 import haxeon.ui.core.View;
+import haxeon.ui.icons.IconName;
+import haxeon.ui.theme.TextRole;
 import haxeon.ui.theme.Theme;
 import haxeon.ui.theme.ThemeTokens;
-import haxeon.ui.theme.TextRole;
-import haxeon.ui.widgets.controls.Button;
-import haxeon.ui.icons.IconName;
-import haxeon.ui.widgets.layout.Column;
 import haxeon.ui.widgets.KeyedView;
-import haxeon.ui.widgets.layout.Padding;
+import haxeon.ui.widgets.controls.Button;
 import haxeon.ui.widgets.controls.Slider;
+import haxeon.ui.widgets.layout.Column;
+import haxeon.ui.widgets.layout.Padding;
 import haxeon.ui.widgets.layout.Stack;
 import haxeon.ui.widgets.layout.StackChild;
 import haxeon.ui.widgets.text.Text;

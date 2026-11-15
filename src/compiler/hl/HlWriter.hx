@@ -1,13 +1,13 @@
 package compiler.hl;
 
+import compiler.hl.HlCode.HlTypeDef;
+import compiler.hl.HlFunction.HlDebugLocation;
+import compiler.hl.HlFunction.HlInstruction;
+import haxe.ds.ObjectMap;
 import haxe.io.Bytes as HaxeBytes;
 import haxeon.io.ByteSink;
 import haxeon.io.SegmentedBytes;
-import haxe.ds.ObjectMap;
 import sys.io.File;
-import compiler.hl.HlCode.HlTypeDef;
-import compiler.hl.HlFunction.HlInstruction;
-import compiler.hl.HlFunction.HlDebugLocation;
 
 /** The source locations of one function's opcodes, by stable function identity; `locations[i]` belongs to opcode i. */
 typedef HlOpcodeSourceSpanGroup = {

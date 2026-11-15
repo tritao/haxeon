@@ -3,9 +3,9 @@ package compiler.ffi;
 import compiler.ffi.HxiAbi.HxiAbi;
 import compiler.ffi.HxiModel.HxiDeclaration;
 import compiler.ffi.HxiModel.HxiInterface;
+import compiler.ffi.HxiProjectedModule;
 import compiler.ffi.HxiProjectionProfile;
 import compiler.ir.Ir.IrCNative;
-import compiler.ffi.HxiProjectedModule;
 
 /** Public entry points for HXI projection planning and emission. */
 class HxiProjection {

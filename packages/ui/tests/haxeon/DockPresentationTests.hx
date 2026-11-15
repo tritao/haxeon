@@ -4,8 +4,8 @@ import haxeon.ui.core.UiContext;
 import haxeon.ui.docking.DockNode;
 import haxeon.ui.docking.DockPanelDescriptor;
 import haxeon.ui.docking.DockWorkspaceModel;
-import haxeon.ui.widgets.docking.DockWorkspace;
 import haxeon.ui.widgets.docking.DockPanelContent;
+import haxeon.ui.widgets.docking.DockWorkspace;
 import haxeon.ui.widgets.text.Text;
 
 class DockPresentationTests {

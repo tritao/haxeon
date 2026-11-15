@@ -6,13 +6,13 @@ import haxeon.ui.PathBuilder;
 
 import haxeon.ui.Canvas;
 import haxeon.ui.Color;
+import haxeon.ui.GradientStop;
 import haxeon.ui.GraphicsSurface;
 import haxeon.ui.LayoutAxis;
 import haxeon.ui.LayoutStyle;
 import haxeon.ui.LayoutVisualKind;
 import haxeon.ui.Rect;
 import haxeon.ui.ResolvedLayoutItem;
-import haxeon.ui.GradientStop;
 import haxeon.ui.core.BuildContext;
 import haxeon.ui.core.CachePolicy;
 import haxeon.ui.core.GraphicsSurfaceViewportContent;

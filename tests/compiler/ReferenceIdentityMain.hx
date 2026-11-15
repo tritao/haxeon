@@ -1,11 +1,11 @@
 import compiler.Compiler;
 import compiler.Diagnostic.CompileError;
-import compiler.ir.IrInterpreter;
 import compiler.ir.Ir;
 import compiler.ir.IrBuilder;
 import compiler.ir.IrFunction;
-import compiler.ir.IrVerifier;
+import compiler.ir.IrInterpreter;
 import compiler.ir.IrReferenceIdentity;
+import compiler.ir.IrVerifier;
 
 class ReferenceIdentityMain {
  static function make(source:String):Compiler {

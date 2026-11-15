@@ -2,13 +2,13 @@ package compiler.formatter;
 
 import compiler.Diagnostic.CompileError;
 import compiler.Source.SourceFile;
+import compiler.formatter.CommentAttachment.CommentAttachmentTools;
+import compiler.formatter.FormatToken.FormatTokenTools;
+import compiler.formatter.SyntaxAnnotator.SyntaxInfo;
+import compiler.formatter.UnwrappedLine.UnwrappedLineBuilder;
 import compiler.syntax.ConditionalCompilation;
 import compiler.syntax.Lexer;
 import compiler.syntax.Parser;
-import compiler.formatter.SyntaxAnnotator.SyntaxInfo;
-import compiler.formatter.UnwrappedLine.UnwrappedLineBuilder;
-import compiler.formatter.CommentAttachment.CommentAttachmentTools;
-import compiler.formatter.FormatToken.FormatTokenTools;
 
 private typedef RenderedUnit = {
 	final sourceStart:Int;

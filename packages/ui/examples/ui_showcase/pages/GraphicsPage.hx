@@ -6,10 +6,11 @@ import haxeon.ui.widgets.text.Text;
 
 
 import UiExplorer;
+import components.CubeView;
 import haxeon.ui.Color;
-import haxeon.ui.Insets;
 import haxeon.ui.GradientStop;
 import haxeon.ui.Image;
+import haxeon.ui.Insets;
 import haxeon.ui.LayoutAxis;
 import haxeon.ui.LayoutDirection;
 import haxeon.ui.LayoutStyle;
@@ -17,20 +18,19 @@ import haxeon.ui.LineCap;
 import haxeon.ui.LineJoin;
 import haxeon.ui.PathBuilder;
 import haxeon.ui.Rect;
+import haxeon.ui.Renderer.RendererStats;
 import haxeon.ui.Transform2D;
-import haxeon.ui.core.View;
 import haxeon.ui.core.CachePolicy;
+import haxeon.ui.core.View;
 import haxeon.ui.widgets.CanvasView;
-import haxeon.ui.widgets.layout.Column;
-import haxeon.ui.widgets.KeyedView;
 import haxeon.ui.widgets.ImageFit;
 import haxeon.ui.widgets.ImageView;
+import haxeon.ui.widgets.KeyedView;
 import haxeon.ui.widgets.LayeredImageView;
 import haxeon.ui.widgets.LayeredImageView.ImageLayer;
 import haxeon.ui.widgets.NineSliceView;
+import haxeon.ui.widgets.layout.Column;
 import haxeon.ui.widgets.layout.Row;
-import haxeon.ui.Renderer.RendererStats;
-import components.CubeView;
 
 /** The original retained graphics workload, presented as an Explorer page. */
 class GraphicsPage {

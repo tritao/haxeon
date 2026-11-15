@@ -1,9 +1,9 @@
 package haxeon.ui.widgets.layout;
 
 import haxeon.ui.Color;
-import haxeon.ui.LayoutAxis;
 import haxeon.ui.LayoutAlignmentX;
 import haxeon.ui.LayoutAlignmentY;
+import haxeon.ui.LayoutAxis;
 import haxeon.ui.LayoutDirection;
 import haxeon.ui.LayoutDistribution;
 import haxeon.ui.LayoutStyle;

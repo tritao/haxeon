@@ -2,10 +2,10 @@ package haxeon.audio;
 
 import haxeon.platform.BindingError;
 
-import nativekit.ffi.NativeKit;
-import nativekit.ffi.NativeKitTypes;
 import haxeon.platform.resource.Resource;
 import haxeon.platform.resource.ResourceAsset;
+import nativekit.ffi.NativeKit;
+import nativekit.ffi.NativeKitTypes;
 
 /**
  * One named resource in an AudioBank.

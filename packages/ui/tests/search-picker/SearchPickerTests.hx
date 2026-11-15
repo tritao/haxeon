@@ -1,4 +1,3 @@
-import haxeon.ui.core.UiModifier;
 import haxeon.platform.Runtime;
 import haxeon.ui.FontCollection;
 import haxeon.ui.LayoutAxis;
@@ -10,6 +9,7 @@ import haxeon.ui.core.RenderNode;
 import haxeon.ui.core.UiContext;
 import haxeon.ui.core.UiEventKind;
 import haxeon.ui.core.UiKey;
+import haxeon.ui.core.UiModifier;
 import haxeon.ui.semantics.AccessibilityRole;
 import haxeon.ui.semantics.AccessibilityState;
 import haxeon.ui.semantics.Semantics;

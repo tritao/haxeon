@@ -1,6 +1,5 @@
 package compiler.types.typing;
 
-import compiler.types.TypedAst.TypedFunctionRole;
 import compiler.Source.SourceSpan;
 import compiler.syntax.Ast.AstFunction;
 import compiler.types.Type.CompilerType;
@@ -9,6 +8,7 @@ import compiler.types.TypedAst.TypedClass;
 import compiler.types.TypedAst.TypedExpression;
 import compiler.types.TypedAst.TypedField;
 import compiler.types.TypedAst.TypedFunction;
+import compiler.types.TypedAst.TypedFunctionRole;
 import compiler.types.TypedAst.TypedStatement;
 import haxe.crypto.Sha256;
 

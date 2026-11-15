@@ -1,11 +1,11 @@
+import compiler.backend.Backend.BackendTarget;
 import compiler.ir.Ir;
 import compiler.ir.IrBuilder;
-import compiler.ir.IrEnumTagStorage;
 import compiler.ir.IrEnumTagLowering;
+import compiler.ir.IrEnumTagStorage;
 import compiler.ir.IrFunction;
 import compiler.ir.IrScalarWordBits;
 import compiler.ir.IrVerifier;
-import compiler.backend.Backend.BackendTarget;
 
 /** The tag retains nominal identity while its physical carrier is exactly I32. */
 @:access(compiler.ir.IrBuilder)

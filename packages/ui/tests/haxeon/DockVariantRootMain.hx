@@ -1,16 +1,16 @@
-import haxeon.ui.core.UiContext;
-import haxeon.ui.core.RenderNode;
+import haxeon.ui.FontCollection;
 import haxeon.ui.LayoutFrame;
 import haxeon.ui.LayoutSession;
-import haxeon.ui.FontCollection;
+import haxeon.ui.core.RenderNode;
+import haxeon.ui.core.UiContext;
 import haxeon.ui.docking.DockNode;
+import haxeon.ui.docking.DockPanelDescriptor;
 import haxeon.ui.docking.DockSplitAxis;
 import haxeon.ui.docking.DockWorkspaceModel;
-import haxeon.ui.docking.DockPanelDescriptor;
-import haxeon.ui.widgets.docking.DockWorkspace;
-import haxeon.ui.widgets.docking.DockPanelContent;
-import haxeon.ui.widgets.text.Text;
 import haxeon.ui.semantics.AccessibilityRole;
+import haxeon.ui.widgets.docking.DockPanelContent;
+import haxeon.ui.widgets.docking.DockWorkspace;
+import haxeon.ui.widgets.text.Text;
 
 class DockVariantRootMain {
   static function main():Int {

@@ -2,13 +2,13 @@ package pages;
 
 import haxeon.ui.Image;
 
+import UiExplorer;
 import haxeon.ui.Canvas;
 import haxeon.ui.Color;
 import haxeon.ui.Insets;
 import haxeon.ui.LayoutAxis;
 import haxeon.ui.LayoutStyle;
 import haxeon.ui.Rect;
-import UiExplorer;
 import haxeon.ui.style.BackgroundDecoration;
 import haxeon.ui.style.BorderDecoration;
 import haxeon.ui.style.DecorationChain;
@@ -19,8 +19,8 @@ import haxeon.ui.style.ShadowDecoration;
 import haxeon.ui.style.StyleSelector;
 import haxeon.ui.style.StyleValue;
 import haxeon.ui.widgets.CanvasView;
-import haxeon.ui.widgets.layout.Column;
 import haxeon.ui.widgets.KeyedView;
+import haxeon.ui.widgets.layout.Column;
 import haxeon.ui.widgets.layout.Row;
 
 /** Showcase for first-class, stylesheet-driven post-layout decorations. */

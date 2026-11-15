@@ -1,14 +1,14 @@
-import compiler.ir.Ir.IrNative;
-import compiler.ir.Ir.IrType;
-import compiler.ir.IrValueLaneReference;
-import compiler.ir.Ir.IrProgram;
-import compiler.ir.IrBuilder;
-import compiler.ir.IrFunction;
+import compiler.backend.wasm.WasmEncoder;
 import compiler.backend.wasm.WasmLayout;
 import compiler.backend.wasm.WasmModule.WasmModule;
-import compiler.backend.wasm.WasmEncoder;
 import compiler.backend.wasm.WasmTarget;
 import compiler.backend.wasm.linear.WasmLinearValueArrays;
+import compiler.ir.Ir.IrNative;
+import compiler.ir.Ir.IrProgram;
+import compiler.ir.Ir.IrType;
+import compiler.ir.IrBuilder;
+import compiler.ir.IrFunction;
+import compiler.ir.IrValueLaneReference;
 
 /** Run the Wasm32 lane primitives on packed storage, including validity and adjacent fields. */
 class WasmLinearValueArrayAccessMain {

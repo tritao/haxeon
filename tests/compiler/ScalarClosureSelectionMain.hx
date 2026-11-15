@@ -1,8 +1,8 @@
+import compiler.compilation.AllocationMeter;
 import compiler.ir.Ir;
 import compiler.ir.IrBuilder;
 import compiler.ir.IrFunction;
 import compiler.ir.IrScalarClosures;
-import compiler.compilation.AllocationMeter;
 
 class ScalarClosureSelectionMain {
 	static function main():Void {

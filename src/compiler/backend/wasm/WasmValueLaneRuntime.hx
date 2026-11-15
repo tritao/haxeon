@@ -1,11 +1,11 @@
 package compiler.backend.wasm;
 
+import compiler.backend.wasm.WasmModule.WasmFunction;
+import compiler.backend.wasm.WasmModule.WasmModule;
+import compiler.backend.wasm.WasmTypes.WasmFunctionType;
 import compiler.ir.Ir;
 import compiler.ir.IrFunction;
 import compiler.ir.IrValueLaneRuntime;
-import compiler.backend.wasm.WasmModule.WasmModule;
-import compiler.backend.wasm.WasmModule.WasmFunction;
-import compiler.backend.wasm.WasmTypes.WasmFunctionType;
 
 /** Link the portable lane policy before the representation-specific storage and Dynamic array paths. */
 class WasmValueLaneRuntime {

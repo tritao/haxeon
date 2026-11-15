@@ -2,9 +2,9 @@ import compiler.Compiler;
 import compiler.Diagnostic.CompileError;
 import compiler.backend.Backend.BackendTarget;
 import compiler.backend.wasm.WasmBackend;
+import compiler.hl.HlWriter;
 import compiler.runtime.CompilerIntrinsics;
 import compiler.tools.CompilerDriver;
-import compiler.hl.HlWriter;
 import sys.io.File;
 
 /** Dynamic boundaries and collection callbacks, exercised on every runtime and with a reused compiler. */

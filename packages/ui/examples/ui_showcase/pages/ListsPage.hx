@@ -6,10 +6,10 @@ import haxeon.ui.Insets;
 import haxeon.ui.LayoutAxis;
 import haxeon.ui.LayoutStyle;
 import haxeon.ui.core.View;
+import haxeon.ui.widgets.KeyedView;
 import haxeon.ui.widgets.collections.ListView;
 import haxeon.ui.widgets.collections.ListViewModel;
 import haxeon.ui.widgets.text.Text;
-import haxeon.ui.widgets.KeyedView;
 
 /** Model-backed virtualized scrolling and visible-range reporting. */
 class ListsPage {

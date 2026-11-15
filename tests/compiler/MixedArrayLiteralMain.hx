@@ -1,8 +1,8 @@
 import compiler.Compiler;
 import compiler.Diagnostic.CompileError;
-import compiler.runtime.CompilerIntrinsics;
-import compiler.backend.wasm.WasmBackend;
 import compiler.backend.Backend.BackendTarget;
+import compiler.backend.wasm.WasmBackend;
+import compiler.runtime.CompilerIntrinsics;
 import sys.io.File;
 
 class MixedArrayLiteralMain {

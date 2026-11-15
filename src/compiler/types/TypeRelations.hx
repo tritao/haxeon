@@ -1,8 +1,8 @@
 package compiler.types;
 
+import compiler.types.StructProperties;
 import compiler.types.Type.CompilerType;
 import compiler.types.Type.NominalKind;
-import compiler.types.StructProperties;
 
 /** Explicit conversion required to assign one semantic type to another. */
 enum ConversionPlan {

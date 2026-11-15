@@ -1,6 +1,6 @@
 import compiler.Compiler;
-import compiler.runtime.CompilerIntrinsics;
 import compiler.hl.HlWriter;
+import compiler.runtime.CompilerIntrinsics;
 import sys.io.File;
 
 /** An abstract's type-only references must load source modules without help from its caller. */

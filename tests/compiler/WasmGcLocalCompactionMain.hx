@@ -2,9 +2,9 @@ import compiler.backend.wasm.WasmEncoder;
 import compiler.backend.wasm.WasmModule.WasmFunction;
 import compiler.backend.wasm.WasmModule.WasmLocal;
 import compiler.backend.wasm.WasmModule.WasmModule;
+import compiler.backend.wasm.WasmTypes.WasmFunctionType;
 import compiler.backend.wasm.WasmTypes.WasmInstruction;
 import compiler.backend.wasm.WasmTypes.WasmValueType;
-import compiler.backend.wasm.WasmTypes.WasmFunctionType;
 import compiler.backend.wasm.gc.WasmGcLocalCompaction;
 
 /** Compaction preserves live local values and does not discard trapping computations. */

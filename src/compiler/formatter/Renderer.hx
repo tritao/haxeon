@@ -1,8 +1,8 @@
 package compiler.formatter;
 
-import compiler.formatter.LayoutSolver.LineLayout;
 import compiler.formatter.FormatConfig.FormatConfigTools;
 import compiler.formatter.FormatToken.FormatTokenKind;
+import compiler.formatter.LayoutSolver.LineLayout;
 
 /** Renders a solved logical line without consulting the original whitespace. */
 class Renderer {

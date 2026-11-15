@@ -1,17 +1,17 @@
 package haxeon.ui.widgets.text;
 
 import haxeon.ui.Color;
-import haxeon.ui.LayoutVisualKind;
 import haxeon.ui.LayoutStyle;
+import haxeon.ui.LayoutVisualKind;
 import haxeon.ui.core.BuildContext;
 import haxeon.ui.core.RenderNode;
 import haxeon.ui.core.TextStyleOverride;
 import haxeon.ui.core.View;
 import haxeon.ui.core.WidgetId;
-import haxeon.ui.style.StyleTarget;
-import haxeon.ui.style.StyleProperty;
 import haxeon.ui.semantics.AccessibilityRole;
 import haxeon.ui.semantics.Semantics;
+import haxeon.ui.style.StyleProperty;
+import haxeon.ui.style.StyleTarget;
 import haxeon.ui.theme.TextRole;
 
 /** Text view backed by the NativeUI/Skribidi text layout primitive. */

@@ -1,15 +1,15 @@
 package haxeon.ui.semantics;
 
-import haxeon.ui.NativeEnums;
 import haxeon.platform.Surface;
+import haxeon.ui.NativeEnums;
 import nativekit.ffi.NativeKitConstants;
 import nativekit.ffi.NativeKitTypes;
 
-import nativekit.ffi.NativeKit;
 import haxeon.ui.Rect;
-import haxeon.ui.semantics.AccessibilityAction as UiAccessibilityAction;
 import haxeon.ui.core.RenderNode;
 import haxeon.ui.core.WidgetId;
+import haxeon.ui.semantics.AccessibilityAction as UiAccessibilityAction;
+import nativekit.ffi.NativeKit;
 
 /** Projects Haxe semantics and resolved geometry into NativeKit's virtual tree. */
 class AccessibilityBridge {

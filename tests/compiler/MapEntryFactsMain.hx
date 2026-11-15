@@ -1,5 +1,5 @@
-import compiler.Frontend;
 import compiler.Diagnostic.CompileError;
+import compiler.Frontend;
 
 /**
  * `exists` proves an entry is present until something can remove it. Calls can remove entries from any map they reach,

@@ -1,12 +1,12 @@
 package compiler.backend.wasm;
 
-import haxe.io.Bytes;
-import compiler.backend.wasm.WasmTypes.WasmFunctionType;
-import compiler.backend.wasm.WasmTypes.WasmValueType;
-import compiler.backend.wasm.WasmTypes.WasmInstruction;
 import compiler.backend.wasm.WasmTypes.WasmCompositeType;
+import compiler.backend.wasm.WasmTypes.WasmFunctionType;
+import compiler.backend.wasm.WasmTypes.WasmInstruction;
 import compiler.backend.wasm.WasmTypes.WasmSubtype;
 import compiler.backend.wasm.WasmTypes.WasmTypeGroup;
+import compiler.backend.wasm.WasmTypes.WasmValueType;
+import haxe.io.Bytes;
 
 typedef WasmDataSegment = {
 	final offset:Int;

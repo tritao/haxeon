@@ -3,8 +3,8 @@ package haxeon.ui.widgets.scroll;
 import haxeon.ui.Color;
 import haxeon.ui.LayoutAxis;
 import haxeon.ui.LayoutPositioning;
-import haxeon.ui.LayoutStyle;
 import haxeon.ui.LayoutSizing;
+import haxeon.ui.LayoutStyle;
 import haxeon.ui.LayoutVisualKind;
 import haxeon.ui.ResolvedLayoutItem;
 import haxeon.ui.Transform2D;
@@ -18,11 +18,11 @@ import haxeon.ui.core.UiKey;
 import haxeon.ui.core.UiModifier;
 import haxeon.ui.core.View;
 import haxeon.ui.semantics.AccessibilityAction;
+import haxeon.ui.semantics.AccessibilityOrientation;
 import haxeon.ui.semantics.AccessibilityRole;
 import haxeon.ui.semantics.Semantics;
-import haxeon.ui.semantics.AccessibilityOrientation;
-import haxeon.ui.style.StyleTarget;
 import haxeon.ui.style.StyleState;
+import haxeon.ui.style.StyleTarget;
 
 /** Clipped Haxe scroll container translated from its persistent controller offset. */
 class ScrollView implements View {

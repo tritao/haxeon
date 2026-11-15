@@ -1,6 +1,6 @@
 import compiler.Compiler;
-import compiler.ir.IrInterpreter;
 import compiler.Diagnostic.CompileError;
+import compiler.ir.IrInterpreter;
 
 /** Cached callers must use the current method body and payload shape for inline optional places. */
 class NullableStructIncrementalMain {

@@ -1,9 +1,9 @@
 import compiler.Compiler;
-import compiler.tools.CompilerDriver;
 import compiler.backend.Backend.BackendTarget;
 import compiler.ir.Ir;
 import compiler.ir.IrBuilder;
 import compiler.ir.IrFunction;
+import compiler.tools.CompilerDriver;
 
 /** Boxed nullary cases are immutable module roots, including when all ordinary owners have been cleared. */
 class NullaryEnumCacheMain {

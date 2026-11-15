@@ -1,3 +1,4 @@
+import haxeon.platform.RuntimeOptions;
 import haxeon.platform.SurfaceOptions;
 import haxeon.platform.WebViewOptions;
 import haxeon.platform.WindowOptions;
@@ -11,10 +12,9 @@ import haxeon.platform.dialog.MessageDialogOptions;
 import haxeon.platform.event.EventPump;
 import haxeon.platform.event.PlatformEvent;
 import haxeon.platform.internal.DisposalRegistry;
+import nativekit.ffi.NativeKitTypes;
 import nativekit.ffi.NativeKitTypes.FileDialogOptions as NativeFileDialogOptions;
 import nativekit.ffi.NativeKitTypes.SurfaceOptions as NativeSurfaceOptions;
-import haxeon.platform.RuntimeOptions;
-import nativekit.ffi.NativeKitTypes;
 
 /** Synthetic task events test routing without installing a managed worker callback. */
 class NativeKitLifetimeTests {

@@ -3,10 +3,10 @@ package components;
 import haxeon.ui.Color;
 
 import haxeon.ui.LayoutStyle;
-import haxeon.ui.widgets.layout.Column;
-import haxeon.ui.widgets.KeyedView;
-import haxeon.ui.widgets.text.Text;
 import haxeon.ui.theme.TextRole;
+import haxeon.ui.widgets.KeyedView;
+import haxeon.ui.widgets.layout.Column;
+import haxeon.ui.widgets.text.Text;
 
 /** Overview card composed from ordinary NativeKit layout and text widgets. */
 class DemoCard {

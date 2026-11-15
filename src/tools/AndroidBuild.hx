@@ -1,13 +1,14 @@
 package tools;
 
+import build.Target;
 import compiler.Compiler;
 import compiler.hl.HlWriter;
 import compiler.ir.Ir.IrType;
 import compiler.modules.ModulePath;
 import compiler.runtime.CompilerIntrinsics;
 import compiler.tools.CompilerDriver;
-import compiler.tools.SourceManifestLoader;
 import compiler.tools.CompilerRequest.PackageSourceRoot;
+import compiler.tools.SourceManifestLoader;
 import haxe.Json;
 import haxe.io.Path;
 import project.PackageLockfile;
@@ -15,7 +16,6 @@ import project.PackageResolver;
 import project.ProjectSourceAcquirer;
 import project.ResolvedProject;
 import project.SourceCache;
-import build.Target;
 import sys.FileSystem;
 import sys.io.File;
 

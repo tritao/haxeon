@@ -1,5 +1,5 @@
-import compiler.hl.HlWriter;
 import compiler.Compiler;
+import compiler.hl.HlWriter;
 import sys.io.File;
 
 /** `import pkg.Module.member` brings a static member of the module's class, or a function declared in the module, into scope. */

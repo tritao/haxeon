@@ -1,10 +1,10 @@
-import compiler.Frontend;
 import compiler.Compiler;
+import compiler.Frontend;
+import compiler.backend.wasm.WasmBackend;
+import compiler.hl.HlWriter;
 import compiler.runtime.CompilerIntrinsics;
 import compiler.tools.CompilerDriver;
 import sys.io.File;
-import compiler.hl.HlWriter;
-import compiler.backend.wasm.WasmBackend;
 
 /** A shared generic owner must not reinterpret scalar map storage as a reference map. */
 class GenericScalarMapOwnerMain {

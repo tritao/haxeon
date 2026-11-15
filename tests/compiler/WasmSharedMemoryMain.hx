@@ -1,6 +1,6 @@
-import compiler.tools.CompilerArguments;
-import compiler.backend.wasm.WasmModule;
 import compiler.backend.wasm.WasmEncoder;
+import compiler.backend.wasm.WasmModule;
+import compiler.tools.CompilerArguments;
 import sys.io.File;
 
 /** ABI regression: shared imports need a maximum and explicit admission. */

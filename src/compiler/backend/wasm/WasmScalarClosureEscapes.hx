@@ -1,10 +1,10 @@
 package compiler.backend.wasm;
 
 import compiler.ir.Ir;
-import compiler.ir.IrFunction;
 import compiler.ir.IrBuilder;
-import compiler.ir.IrValueInterfaceBoxes;
 import compiler.ir.IrCheckedDynamicCasts;
+import compiler.ir.IrFunction;
+import compiler.ir.IrValueInterfaceBoxes;
 import compiler.ir.SourceProvenance.Located;
 
 /** Adapts scalar closures only at Dynamic and exported host boundaries. */

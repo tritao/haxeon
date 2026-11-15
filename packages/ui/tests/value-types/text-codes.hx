@@ -1,11 +1,11 @@
 import haxeon.ui.FontFamily;
-import haxeon.ui.TextAlignment;
-import haxeon.ui.TextWrap;
-import haxeon.ui.TextDirection;
-import haxeon.ui.TextStyle;
-import haxeon.ui.ParagraphStyle;
 import haxeon.ui.LayoutNode;
 import haxeon.ui.LayoutTransaction;
+import haxeon.ui.ParagraphStyle;
+import haxeon.ui.TextAlignment;
+import haxeon.ui.TextDirection;
+import haxeon.ui.TextStyle;
+import haxeon.ui.TextWrap;
 function main():Int {
     var fonts = [FontFamily.Default, FontFamily.Emoji, FontFamily.Monospace];
     var fontCodes = [0, 1, 4];

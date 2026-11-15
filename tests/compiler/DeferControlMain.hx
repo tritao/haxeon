@@ -1,5 +1,5 @@
-import compiler.Frontend;
 import compiler.Diagnostic.CompileError;
+import compiler.Frontend;
 
 class DeferControlMain {
  static function reject(source:String):Void {

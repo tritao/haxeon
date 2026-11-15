@@ -3,10 +3,6 @@ import haxeon.platform.event.EventPump;
 import haxeon.platform.event.EventSubscription;
 import haxeon.platform.event.PlatformEvent;
 
-import nativekit.ffi.NativeKit;
-import nativekit.ffi.NativeKitTypes;
-import nativekit.ffi.NativeKitAudio;
-import nativekit.ffi.NativeKitAudioTypes;
 import NativeKitEventDecoderTests;
 import haxe.io.Bytes;
 import haxeon.audio.AudioBank;
@@ -22,20 +18,24 @@ import haxeon.audio.AudioTransitionOptions;
 import haxeon.audio.Bus;
 import haxeon.audio.BusConcurrencyOptions;
 import haxeon.audio.BusEffect;
-import haxeon.audio.EffectParameter;
 import haxeon.audio.Clip;
 import haxeon.audio.Cone;
-import haxeon.audio.DistanceLimits;
 import haxeon.audio.DeviceOptions;
+import haxeon.audio.DistanceLimits;
+import haxeon.audio.EffectParameter;
+import haxeon.audio.Enums.VoiceStealPolicy;
 import haxeon.audio.GainLimits;
-import haxeon.audio.Mixer;
 import haxeon.audio.MixSnapshot;
+import haxeon.audio.Mixer;
+import haxeon.audio.Vector3;
 import haxeon.audio.Voice;
 import haxeon.audio.VoiceOptions;
-import haxeon.audio.Vector3;
-import haxeon.audio.Enums.VoiceStealPolicy;
 import haxeon.platform.resource.Resource;
 import haxeon.platform.resource.ResourceCache;
+import nativekit.ffi.NativeKit;
+import nativekit.ffi.NativeKitAudio;
+import nativekit.ffi.NativeKitAudioTypes;
+import nativekit.ffi.NativeKitTypes;
 
 class AudioSmoke {
 	static function tinyWav():Bytes {

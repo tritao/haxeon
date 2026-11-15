@@ -1,7 +1,7 @@
-import compiler.ir.IrValueLaneRuntime;
 import compiler.ir.Ir;
 import compiler.ir.IrFunction;
 import compiler.ir.IrValueLaneLayout.IrValueLaneTarget;
+import compiler.ir.IrValueLaneRuntime;
 import compiler.runtime.ValueLaneNativeSource;
 import sys.io.File;
 

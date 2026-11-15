@@ -1,7 +1,7 @@
 package compiler.service;
 
-import compiler.formatter.Formatter;
 import compiler.formatter.FormatConfig.FormatConfigTools;
+import compiler.formatter.Formatter;
 
 /** Compatibility facade for the lossless, syntax-aware formatter engine. */
 class SourceFormatter {

@@ -1,7 +1,7 @@
 package haxeon.ui.widgets.overlays;
 
-import haxeon.ui.animation.DelayedAnimation;
 import haxeon.ui.animation.AnimationScheduler;
+import haxeon.ui.animation.DelayedAnimation;
 
 class TooltipHoverDelay implements DelayedAnimation {
 	final scheduler:AnimationScheduler;

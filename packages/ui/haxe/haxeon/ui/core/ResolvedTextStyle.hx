@@ -4,8 +4,8 @@ import haxeon.ui.ParagraphStyle;
 import haxeon.ui.TextStyle;
 
 import haxeon.ui.Color;
-import haxeon.ui.theme.Theme;
 import haxeon.ui.theme.TextRoleStyle;
+import haxeon.ui.theme.Theme;
 
 /** Concrete typography snapshot emitted onto a text-capable render node. */
 class ResolvedTextStyle {

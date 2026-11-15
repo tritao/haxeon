@@ -2,28 +2,28 @@ import haxeon.platform.Surface;
 import haxeon.platform.event.EventPump;
 import haxeon.platform.event.EventSubscription;
 import haxeon.platform.event.PlatformEvent;
+import haxeon.ui.UiResult.UiError;
 import nativekit.ffi.NativeKitTypes.SurfaceOptions as NativeSurfaceOptions;
 import nativekit.ffi.NativeKitTypes.WindowOptions as NativeWindowOptions;
-import haxeon.ui.UiResult.UiError;
 
 import haxeon.ui.FontCollection;
 import haxeon.ui.FontFamily;
 
-import nativekit.ffi.NativeKitTypes;
-import nativekit.ffi.NativeKit;
-import nativekit.ffi.NativeKitConstants;
-import haxe.io.Bytes;
-import haxeon.ui.core.NativeInputAdapter;
 import haxe.CallStack;
+import haxe.io.Bytes;
 import haxeon.ui.LayoutFrame;
+import haxeon.ui.core.NativeInputAdapter;
 import haxeon.ui.core.RenderNode;
 import haxeon.ui.core.UiContext;
-import haxeon.ui.host.BrowserUiHostOptions.BrowserUiFontAsset;
 import haxeon.ui.host.BrowserUiHost;
 import haxeon.ui.host.BrowserUiHostOptions;
+import haxeon.ui.host.BrowserUiHostOptions.BrowserUiFontAsset;
 import haxeon.ui.host.BrowserUiHostSession;
 import haxeon.ui.host.UiApplication;
 import haxeon.ui.host.UiHostSession.UiHostLifecycle;
+import nativekit.ffi.NativeKit;
+import nativekit.ffi.NativeKitConstants;
+import nativekit.ffi.NativeKitTypes;
 
 private class ShowcaseExplorerApplication implements UiApplication {
     final explorer:UiExplorer;

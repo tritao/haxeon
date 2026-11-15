@@ -2,9 +2,9 @@ package compiler.ir;
 
 import compiler.Provides.ProviderOperation;
 import compiler.ir.Ir;
+import compiler.ir.IrFunction.IrValueArraySlotOperation;
 import compiler.ir.IrValueLaneLayout.IrValueLaneShape;
 import compiler.ir.IrValueLaneLayout.IrValueLaneSlot;
-import compiler.ir.IrFunction.IrValueArraySlotOperation;
 
 typedef IrValueArraySlotCopy = {final source:Int; final target:Int; final type:IrType;}
 typedef IrValueArraySubslot = {final index:Int; final slot:IrValueLaneSlot;}

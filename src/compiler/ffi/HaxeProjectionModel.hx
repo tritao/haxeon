@@ -5,8 +5,8 @@ import compiler.ffi.HxiAbi.HxiAbiValue;
 import compiler.ffi.HxiModel.HxiInterface;
 import compiler.ffi.HxiModel.HxiType;
 import compiler.ffi.HxiNativeSignature.HxiFunctionAbi;
-import compiler.ffi.HxiProjectionProfile.HxiResultErrorProjection;
 import compiler.ffi.HxiProjectionProfile.HxiProjectionProfile;
+import compiler.ffi.HxiProjectionProfile.HxiResultErrorProjection;
 import compiler.ffi.HxiSemantics.HxiSemanticParameterKind;
 import compiler.ffi.HxiSemantics.HxiSemanticResultKind;
 

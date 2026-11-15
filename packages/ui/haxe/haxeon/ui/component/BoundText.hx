@@ -1,12 +1,12 @@
 package haxeon.ui.component;
 
-import haxeon.ui.core.LiveTextBinding;
+import haxeon.ui.LayoutStyle;
 import haxeon.ui.core.BuildContext;
+import haxeon.ui.core.LiveTextBinding;
 import haxeon.ui.core.RenderNode;
 import haxeon.ui.core.State;
 import haxeon.ui.core.View;
 import haxeon.ui.core.WidgetId;
-import haxeon.ui.LayoutStyle;
 import haxeon.ui.widgets.text.Text;
 
 /** Mount a text node and update its value from a tracked getter. */

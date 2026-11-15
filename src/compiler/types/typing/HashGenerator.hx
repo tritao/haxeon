@@ -1,13 +1,13 @@
 package compiler.types.typing;
 
-import compiler.types.TypedAst.TypedFunctionRole;
+import compiler.Provides;
+import compiler.Provides.ProviderOperation;
 import compiler.Source.SourceSpan;
 import compiler.types.Type.CompilerType;
 import compiler.types.Type.NominalKind;
 import compiler.types.TypedAst.TypedExpression;
-import compiler.Provides.ProviderOperation;
-import compiler.Provides;
 import compiler.types.TypedAst.TypedFunction;
+import compiler.types.TypedAst.TypedFunctionRole;
 import compiler.types.TypedAst.TypedStatement;
 import compiler.types.typing.TypingSession.EqualityRequest;
 

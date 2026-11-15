@@ -1,11 +1,11 @@
 package compiler.types;
 
-import compiler.types.NativeTypeDescriptor.NativeTypeDescriptorData;
-import compiler.types.NativeTypeDescriptor.NativeTypeDescriptorField;
-import compiler.types.NativeTypeDescriptor.NativeTypeDescriptorDefault;
-import compiler.types.NativeTypeDescriptor.NativeTypeAnnotationData;
 import compiler.types.NativeTypeDescriptor.NativeTypeAnnotationArgument;
+import compiler.types.NativeTypeDescriptor.NativeTypeAnnotationData;
 import compiler.types.NativeTypeDescriptor.NativeTypeAnnotationValue;
+import compiler.types.NativeTypeDescriptor.NativeTypeDescriptorData;
+import compiler.types.NativeTypeDescriptor.NativeTypeDescriptorDefault;
+import compiler.types.NativeTypeDescriptor.NativeTypeDescriptorField;
 import haxe.Json;
 import haxe.io.Bytes;
 import haxe.io.BytesInput;

@@ -1,7 +1,7 @@
 package compiler.ir;
 
-import compiler.ir.Ir.IrValue;
 import compiler.ir.Ir.IrBlock;
+import compiler.ir.Ir.IrValue;
 
 /** Balanced dispatch on stable type hashes. Arms must resolve hash collisions by exact type tests. */
 class IrTypeHashDispatch {

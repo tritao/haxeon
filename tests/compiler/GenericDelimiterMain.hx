@@ -1,10 +1,10 @@
 import compiler.Compiler;
 import compiler.Diagnostic.CompileError;
 import compiler.Source.SourceFile;
+import compiler.hl.HlWriter;
 import compiler.syntax.Lexer;
 import compiler.syntax.Parser;
 import compiler.syntax.Token.TokenKind;
-import compiler.hl.HlWriter;
 import sys.io.File;
 
 /** Source strings intentionally omit whitespace: formatting this test must not hide the regression. */

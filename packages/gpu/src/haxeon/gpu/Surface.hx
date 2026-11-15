@@ -9,8 +9,8 @@ import haxeon.gpu.SurfaceFrame;
 import haxeon.gpu.Renderer;
 
 import haxeon.gpu.GpuResult;
-import nativekit.ffi.NativeKitGpu;
 import nativekit.ffi.NativeKit;
+import nativekit.ffi.NativeKitGpu;
 import nativekit.ffi.NativeKitTypes;
 
 /** Owns a GPU-adapter surface associated with a NativeKit window. */

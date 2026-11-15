@@ -1,8 +1,8 @@
 package compiler.backend;
 
+import compiler.backend.MemoryContract.MemoryContract;
 import compiler.ir.Ir.IrProgram;
 import haxe.io.Bytes;
-import compiler.backend.MemoryContract.MemoryContract;
 
 /** Target selected by the compiler after canonical Haxeon IR is available. */
 enum BackendTarget {

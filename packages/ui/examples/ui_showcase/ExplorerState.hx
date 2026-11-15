@@ -1,9 +1,9 @@
 import haxeon.ui.widgets.scroll.ScrollController;
+import haxeon.ui.widgets.text.TextEditorDiagnostics;
 import state.ControlsDemoState;
 import state.GestureDemoState;
 import state.InspectorState;
 import state.OverlayState;
-import haxeon.ui.widgets.text.TextEditorDiagnostics;
 
 /** Typed, persistent showcase state, separate from runtime/render ownership. */
 class ExplorerState {

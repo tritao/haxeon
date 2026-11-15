@@ -2,12 +2,12 @@ import compiler.Compiler;
 import compiler.Diagnostic.CompileError;
 import compiler.Frontend;
 import compiler.ir.IrInterpreter;
+import compiler.semantic.ImplicitConstructors;
 import compiler.semantic.Invalidation.InvalidatedArtifact;
 import compiler.semantic.Invalidation.InvalidationKind;
 import compiler.syntax.Ast.AstClass;
-import compiler.syntax.Ast.AstType;
 import compiler.syntax.Ast.AstFunction;
-import compiler.semantic.ImplicitConstructors;
+import compiler.syntax.Ast.AstType;
 
 /**
  * A class that declares no constructor has its base class's, arguments included. Compilation gives it one that calls

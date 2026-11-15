@@ -2,9 +2,9 @@ package tools;
 
 import compiler.Compiler;
 import compiler.Compiler.CompileResult;
-import compiler.runtime.CompilerIntrinsics;
-import compiler.modules.ModulePath;
 import compiler.hl.HlWriter;
+import compiler.modules.ModulePath;
+import compiler.runtime.CompilerIntrinsics;
 import haxe.io.Bytes;
 import haxe.io.BytesOutput;
 import sys.FileSystem;

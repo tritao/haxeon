@@ -15,12 +15,12 @@ import nativekit.ffi.NativeKitTypes.WindowOptions as NativeWindowOptions;
 
 import haxeon.platform.NativeKitError;
 
-import nativekit.ffi.NativeKitConstants;
-import nativekit.ffi.NativeKit;
-import nativekit.ffi.NativeKitTypes;
 import NativeKitEventDecoderTests;
-import NativeKitHttpEventTests;
 import NativeKitFileWatchTests;
+import NativeKitHttpEventTests;
+import nativekit.ffi.NativeKit;
+import nativekit.ffi.NativeKitConstants;
+import nativekit.ffi.NativeKitTypes;
 
 class Smoke {
 	static function main():Int {

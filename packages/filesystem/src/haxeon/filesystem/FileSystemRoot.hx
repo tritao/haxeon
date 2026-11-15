@@ -1,9 +1,9 @@
 package haxeon.filesystem;
 
+import haxeon.platform.NativeKitError;
 import nativekit.ffi.NativeKitFilesystem;
 import nativekit.ffi.NativeKitFilesystemTypes.FileSystemEntry;
 import nativekit.ffi.NativeKitTypes.Result;
-import haxeon.platform.NativeKitError;
 
 /** A locally granted directory exposed through root-relative metadata calls. */
 class FileSystemRoot {

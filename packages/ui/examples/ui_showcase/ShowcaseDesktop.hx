@@ -3,19 +3,19 @@ import haxeon.platform.SurfaceFrameSubscription;
 import haxeon.platform.event.EventPump;
 import haxeon.platform.event.EventSubscription;
 import haxeon.platform.event.PlatformEvent;
+import haxeon.ui.UiResult.UiError;
 import nativekit.ffi.NativeKitTypes.SurfaceOptions as NativeSurfaceOptions;
 import nativekit.ffi.NativeKitTypes.WindowOptions as NativeWindowOptions;
-import haxeon.ui.UiResult.UiError;
 
 import haxeon.ui.FontCollection;
 
-import nativekit.ffi.NativeKitTypes;
+import WindowChromeDemo;
+import haxeon.platform.NativeKitError;
+import haxeon.ui.core.NativeInputAdapter;
 import nativekit.ffi.NativeKit;
 import nativekit.ffi.NativeKitConstants;
 import nativekit.ffi.NativeKitGpu;
-import haxeon.platform.NativeKitError;
-import haxeon.ui.core.NativeInputAdapter;
-import WindowChromeDemo;
+import nativekit.ffi.NativeKitTypes;
 
 private class ShowcaseFrameState {
     public var running:Bool = true;

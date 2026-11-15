@@ -1,6 +1,6 @@
-import haxeon.reactive.Signal;
 import haxeon.reactive.Effect;
 import haxeon.reactive.ReactiveRuntime;
+import haxeon.reactive.Signal;
 
 struct EqualWritePart implements Equatable {
 	public final value:Int;

@@ -30,13 +30,13 @@ import haxeon.ui.Surface;
 import haxeon.ui.TextLayout;
 import haxeon.ui.TextStyle;
 
-import nativekit.ffi.NativeKitTypes;
-import nativekit.ffi.NativeKit;
 import NativeKitUI;
-import nativekit.ffi.NativeKitConstants;
 import haxe.io.Bytes;
 import haxeon.ui.GradientStop;
 import haxeon.ui.LinearGradientPaint;
+import nativekit.ffi.NativeKit;
+import nativekit.ffi.NativeKitConstants;
+import nativekit.ffi.NativeKitTypes;
 
 /**
  * NativeKit Graphics Lab.

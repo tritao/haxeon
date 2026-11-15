@@ -1,7 +1,7 @@
-import compiler.runtime.CompilerIntrinsics;
-import compiler.hl.HlWriter;
 import compiler.Compiler;
 import compiler.Diagnostic.CompileError;
+import compiler.hl.HlWriter;
+import compiler.runtime.CompilerIntrinsics;
 import sys.io.File;
 
 /** Compiles a program against the selectively vendored Haxe standard library. */

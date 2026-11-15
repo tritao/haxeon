@@ -1,8 +1,8 @@
 package haxeon.ui;
 
-import nativekit.ffi.NativeKitTypes;
-import nativekit.ffi.NativeKit;
 import NativeKitUI;
+import nativekit.ffi.NativeKit;
+import nativekit.ffi.NativeKitTypes;
 
 /** Typed renderer facade for retained UI display lists. */
 class Renderer {

@@ -1,9 +1,9 @@
+import compiler.compilation.AllocationMeter;
 import compiler.ir.Ir;
 import compiler.ir.IrBuilder;
 import compiler.ir.IrFunction;
 import compiler.ir.IrNullableScalarFields;
 import compiler.ir.IrOptionalFieldStorage;
-import compiler.compilation.AllocationMeter;
 
 class FieldStorageSelectionMain {
 	static function main():Void {

@@ -11,8 +11,8 @@ import haxeon.gpu.Renderer;
 
 import haxeon.gpu.GpuResult;
 
-import nativekit.ffi.NativeKitGpu;
 import haxeon.gpu.Enums.BatchPassKind;
+import nativekit.ffi.NativeKitGpu;
 
 /** Reusable sealed submission batch owned by one renderer. */
 class Batch {

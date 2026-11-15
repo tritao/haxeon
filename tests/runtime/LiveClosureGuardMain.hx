@@ -1,5 +1,5 @@
-import compiler.hl.HlWriter;
 import compiler.Compiler;
+import compiler.hl.HlWriter;
 import compiler.runtime.CompilerIntrinsics;
 import runtime.PatchSet;
 import runtime.Runtime;

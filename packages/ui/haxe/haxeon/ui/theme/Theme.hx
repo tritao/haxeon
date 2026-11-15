@@ -7,22 +7,22 @@ import haxeon.ui.widgets.controls.Button;
 
 import haxeon.ui.Color;
 import haxeon.ui.Insets;
-import haxeon.ui.LayoutStyle;
-import haxeon.ui.ParagraphStyle;
-import haxeon.ui.TextStyle;
 import haxeon.ui.LayoutAlignmentX;
 import haxeon.ui.LayoutAxis;
 import haxeon.ui.LayoutAxis;
-import haxeon.ui.style.StyleSheet;
-import haxeon.ui.style.StyleSelector;
+import haxeon.ui.LayoutStyle;
+import haxeon.ui.ParagraphStyle;
+import haxeon.ui.TextStyle;
+import haxeon.ui.style.BackgroundDecoration;
+import haxeon.ui.style.BorderDecoration;
+import haxeon.ui.style.DecorationChain;
+import haxeon.ui.style.DropShadowEffect;
+import haxeon.ui.style.EffectChain;
 import haxeon.ui.style.StyleProperty;
+import haxeon.ui.style.StyleSelector;
+import haxeon.ui.style.StyleSheet;
 import haxeon.ui.style.StyleState;
 import haxeon.ui.style.StyleValue;
-import haxeon.ui.style.DecorationChain;
-import haxeon.ui.style.BorderDecoration;
-import haxeon.ui.style.BackgroundDecoration;
-import haxeon.ui.style.EffectChain;
-import haxeon.ui.style.DropShadowEffect;
 
 /** Theme tokens plus the stylesheet generated from those tokens. */
 class Theme {

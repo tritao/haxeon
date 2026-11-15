@@ -1,7 +1,7 @@
 package tools;
 
-import haxe.io.Path;
 import haxe.Json;
+import haxe.io.Path;
 import project.ResolvedProject;
 import sys.FileSystem;
 import sys.io.File;

@@ -1,31 +1,31 @@
 package audiolab;
 import haxeon.ui.Renderer;
 
+import StringTools;
 import haxeon.ui.Canvas;
 import haxeon.ui.Color;
 import haxeon.ui.Insets;
-import haxeon.ui.LayoutAxis;
 import haxeon.ui.LayoutAlignmentY;
+import haxeon.ui.LayoutAxis;
 import haxeon.ui.LayoutStyle;
 import haxeon.ui.LayoutWrapMode;
 import haxeon.ui.LineCap;
 import haxeon.ui.LineJoin;
 import haxeon.ui.PathBuilder;
 import haxeon.ui.Rect;
-import StringTools;
 import haxeon.ui.core.BuildContext;
 import haxeon.ui.core.RenderNode;
 import haxeon.ui.core.View;
 import haxeon.ui.theme.TextRole;
+import haxeon.ui.widgets.CanvasView;
+import haxeon.ui.widgets.KeyedView;
 import haxeon.ui.widgets.controls.Button;
 import haxeon.ui.widgets.controls.ButtonVariant;
-import haxeon.ui.widgets.CanvasView;
+import haxeon.ui.widgets.controls.Slider;
 import haxeon.ui.widgets.layout.Column;
-import haxeon.ui.widgets.KeyedView;
 import haxeon.ui.widgets.layout.Row;
 import haxeon.ui.widgets.scroll.ScrollAxis;
 import haxeon.ui.widgets.scroll.ScrollView;
-import haxeon.ui.widgets.controls.Slider;
 import haxeon.ui.widgets.text.Text;
 
 /** NativeKit UI surface for the Audio Lab companion application. */

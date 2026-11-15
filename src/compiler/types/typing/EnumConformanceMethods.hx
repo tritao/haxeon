@@ -1,15 +1,15 @@
 package compiler.types.typing;
 
-import compiler.types.TypedAst.TypedFunctionRole;
+import compiler.Provides;
+import compiler.Provides.ProviderOperation;
+import compiler.Provides.ProviderOperations;
+import compiler.Source.SourceSpan;
 import compiler.syntax.Ast.AstFunction;
 import compiler.types.Type.CompilerType;
 import compiler.types.Type.NominalKind;
-import compiler.Provides.ProviderOperation;
-import compiler.Provides.ProviderOperations;
-import compiler.Provides;
 import compiler.types.TypedAst.TypedFunction;
+import compiler.types.TypedAst.TypedFunctionRole;
 import haxe.crypto.Sha256;
-import compiler.Source.SourceSpan;
 
 /** Handwritten enum conformance methods lower to statically dispatched functions over the enum value. */
 class EnumConformanceMethods {

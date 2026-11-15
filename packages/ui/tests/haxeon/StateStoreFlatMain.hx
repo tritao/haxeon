@@ -1,5 +1,5 @@
-import haxeon.ui.core.StateStore;
 import haxeon.ui.core.ResourceId;
+import haxeon.ui.core.StateStore;
 import haxeon.ui.core.WidgetId;
 
 /** Usage spans and resource sweep lists retain capacity across captures, compaction and refills. */

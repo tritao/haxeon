@@ -1,8 +1,8 @@
 package compiler.types.typing;
 
+import compiler.semantic.SemanticSignature;
 import compiler.types.Type.CompilerType;
 import compiler.types.Type.NominalKind;
-import compiler.semantic.SemanticSignature;
 import haxe.crypto.Sha256;
 
 /** Stable runtime descriptors retain the semantic arguments of a generic boxed enum. */

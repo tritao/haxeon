@@ -1,7 +1,7 @@
 package compiler.backend.wasm;
 
-import compiler.ir.Ir.IrProgram;
 import compiler.backend.wasm.WasmModule.WasmModule;
+import compiler.ir.Ir.IrProgram;
 
 /** Object-model-neutral C kernels linked through the existing C ABI, on both browser backends. */
 class WasmCryptoRuntime {

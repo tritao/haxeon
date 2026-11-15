@@ -1,8 +1,8 @@
 import compiler.ffi.CHeaderImporter;
-import compiler.ffi.HxiParser;
-import compiler.ffi.HxiWriter;
 import compiler.ffi.HxiModel.HxiInterface;
+import compiler.ffi.HxiParser;
 import compiler.ffi.HxiProjection;
+import compiler.ffi.HxiWriter;
 import sys.FileSystem;
 
 @:access(compiler.ffi.CHeaderImporter)

@@ -1,9 +1,9 @@
 package haxeon.ui.core;
 
-import nativekit.ffi.NativeKitTypes;
-import nativekit.ffi.NativeKit;
 import haxeon.ui.core.CursorShape as UiCursorShape;
 import haxeon.ui.style.StyleState;
+import nativekit.ffi.NativeKit;
+import nativekit.ffi.NativeKitTypes;
 
 /** Capture/target/bubble dispatch with per-pointer hover and pointer capture.
  * Focus, blur and focus-lost capture root to target, then dispatch once at the target without bubbling. */

@@ -1,10 +1,10 @@
 package compiler.types.typing;
 
+import compiler.Source.SourceSpan;
 import compiler.syntax.Ast.AstExpression;
 import compiler.syntax.Ast.AstStatement;
-import compiler.Source.SourceSpan;
-import compiler.types.analysis.AstScan;
 import compiler.types.analysis.AssignedDeclarations;
+import compiler.types.analysis.AstScan;
 import compiler.types.analysis.Scope;
 
 /**

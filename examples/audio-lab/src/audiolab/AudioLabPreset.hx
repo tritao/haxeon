@@ -1,15 +1,15 @@
 package audiolab;
 
-import haxeon.audio.DspEnvelopeOptions;
 import haxeon.audio.DspEnums.DspFilterType;
 import haxeon.audio.DspEnums.DspLfoMode;
 import haxeon.audio.DspEnums.DspModulationDestination;
 import haxeon.audio.DspEnums.DspModulationPolarity;
 import haxeon.audio.DspEnums.DspModulationSource;
+import haxeon.audio.DspEnums.DspWaveform;
+import haxeon.audio.DspEnvelopeOptions;
 import haxeon.audio.DspNoiseOptions;
 import haxeon.audio.DspOscillatorOptions;
 import haxeon.audio.DspPatchBuilder;
-import haxeon.audio.DspEnums.DspWaveform;
 
 /** Presets used by Audio Lab. Each preset is materialized as a NativeKit DSP patch. */
 typedef AudioLabPresetId = String;

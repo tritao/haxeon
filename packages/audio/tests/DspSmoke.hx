@@ -1,19 +1,19 @@
-import nativekit.ffi.NativeKitAudio;
-import nativekit.ffi.NativeKitAudioTypes;
 import haxeon.audio.DspEngine;
 import haxeon.audio.DspEngineOptions;
-import haxeon.audio.DspEvent;
-import haxeon.audio.DspOscillatorOptions;
 import haxeon.audio.DspEnums.DspModulationDestination;
 import haxeon.audio.DspEnums.DspModulationPolarity;
 import haxeon.audio.DspEnums.DspModulationSource;
 import haxeon.audio.DspEnums.DspOscillatorParameter;
 import haxeon.audio.DspEnums.DspParameter;
 import haxeon.audio.DspEnums.DspWaveform;
+import haxeon.audio.DspEvent;
 import haxeon.audio.DspInstrument;
+import haxeon.audio.DspOscillatorOptions;
 import haxeon.audio.DspPatch;
 import haxeon.audio.DspRenderTarget;
 import haxeon.audio.DspWavetable;
+import nativekit.ffi.NativeKitAudio;
+import nativekit.ffi.NativeKitAudioTypes;
 
 class DspSmoke {
 	public static function run():Void {

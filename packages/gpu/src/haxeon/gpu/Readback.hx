@@ -10,9 +10,9 @@ import haxeon.gpu.Renderer;
 
 import haxeon.gpu.GpuResult;
 
-import nativekit.ffi.NativeKitGpu;
 import haxe.io.Bytes;
 import haxeon.gpu.Enums.ReadbackState;
+import nativekit.ffi.NativeKitGpu;
 
 /** Owns one asynchronous image or buffer readback request. */
 class Readback {

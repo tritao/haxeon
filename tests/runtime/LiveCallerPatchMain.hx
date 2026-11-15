@@ -1,9 +1,9 @@
-import compiler.hl.HlWriter;
 import compiler.Compiler;
-import runtime.PatchSet;
-import runtime.Runtime;
 import compiler.abi.PatchPlanner.PatchDecision;
 import compiler.hl.HlFunction;
+import compiler.hl.HlWriter;
+import runtime.PatchSet;
+import runtime.Runtime;
 
 /**
  * A function whose signature changes takes a new slot. Every caller that called its old slot is compiled again in the same

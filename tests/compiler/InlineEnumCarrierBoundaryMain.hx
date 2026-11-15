@@ -1,10 +1,10 @@
 import compiler.ir.Ir;
 import compiler.ir.IrBuilder;
 import compiler.ir.IrFunction;
-import compiler.ir.IrVerifier;
-import compiler.ir.IrValueLaneReference;
 import compiler.ir.IrHlScalarRef;
 import compiler.ir.IrScalarArguments;
+import compiler.ir.IrValueLaneReference;
+import compiler.ir.IrVerifier;
 
 /** Private payload references may cross only a verified scalar ABI. */
 class InlineEnumCarrierBoundaryMain {

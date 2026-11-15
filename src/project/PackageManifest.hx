@@ -1,8 +1,8 @@
 package project;
 
+import build.Target;
 import haxe.Json;
 import haxe.io.Path;
-import build.Target;
 
 class NativeManifest {
 	public final sources:Array<String>;

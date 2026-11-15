@@ -1,11 +1,11 @@
 package compiler.backend.wasm;
 
-import haxe.io.Bytes;
+import compiler.backend.wasm.WasmFunctionBuilder.WasmFunctionBuilder;
 import compiler.backend.wasm.WasmModule.WasmFunction;
 import compiler.backend.wasm.WasmModule.WasmModule;
 import compiler.backend.wasm.WasmTypes.WasmFunctionType;
 import compiler.backend.wasm.WasmTypes.WasmValueType;
-import compiler.backend.wasm.WasmFunctionBuilder.WasmFunctionBuilder;
+import haxe.io.Bytes;
 
 /** The versioned module contract shared by the compiler and a runtime-neutral Wasm host. */
 class WasmRuntimeNeutralProfile {

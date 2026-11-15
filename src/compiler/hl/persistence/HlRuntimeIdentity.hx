@@ -1,10 +1,10 @@
 package compiler.hl.persistence;
 
-import haxe.io.Bytes;
-import haxe.io.BytesOutput;
-import haxe.io.BytesInput;
 import compiler.abi.RuntimeAbi.RuntimeAbiDescriptor;
 import compiler.abi.RuntimeAbiCodec;
+import haxe.io.Bytes;
+import haxe.io.BytesInput;
+import haxe.io.BytesOutput;
 
 /** Compiler identity and acknowledged publication baseline restored across sessions. */
 typedef HlPersistentIdentity = {

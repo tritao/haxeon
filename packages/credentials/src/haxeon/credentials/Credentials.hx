@@ -1,9 +1,9 @@
 package haxeon.credentials;
 
 import haxe.io.Bytes;
+import haxeon.platform.NativeKitError;
 import nativekit.ffi.NativeKitCredentials;
 import nativekit.ffi.NativeKitTypes.Result;
-import haxeon.platform.NativeKitError;
 
 /** Synchronous access to the current user's NativeKit OS credential store. */
 class Credentials {

@@ -1,18 +1,18 @@
 package editor;
 
 import compiler.Diagnostic.CompileError;
-import compiler.service.LanguageService;
-import compiler.service.CancellationToken;
-import compiler.service.CancellationError;
-import compiler.service.LanguageService.DocumentSymbol;
-import compiler.service.LanguageService.SymbolLocation;
-import compiler.service.LanguageService.TextEdit;
-import compiler.hl.HlWriter;
 import compiler.abi.AbiChangeSchema;
 import compiler.compilation.CompilerPublication.ReconnectDecision;
 import compiler.compilation.CompilerPublication.ReconnectReason;
-import haxe.crypto.Base64;
+import compiler.hl.HlWriter;
+import compiler.service.CancellationError;
+import compiler.service.CancellationToken;
+import compiler.service.LanguageService;
+import compiler.service.LanguageService.DocumentSymbol;
+import compiler.service.LanguageService.SymbolLocation;
+import compiler.service.LanguageService.TextEdit;
 import haxe.Json;
+import haxe.crypto.Base64;
 import sys.thread.Mutex;
 
 /** JSON-lines adapter for the persistent compiler service.

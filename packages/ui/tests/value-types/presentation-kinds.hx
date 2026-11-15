@@ -1,6 +1,6 @@
-import haxeon.ui.theme.TextRole;
-import haxeon.ui.icons.IconName;
 import haxeon.ui.docking.DockPanelHeaderMode;
+import haxeon.ui.icons.IconName;
+import haxeon.ui.theme.TextRole;
 
 struct PresentationChoices implements Hashable {
     public var role:TextRole;

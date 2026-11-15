@@ -1,7 +1,7 @@
 import compiler.Compiler;
-import compiler.tools.CompilerDriver;
 import compiler.hl.HlWriter;
 import compiler.runtime.CompilerIntrinsics;
+import compiler.tools.CompilerDriver;
 
 class ValueConstructorWarmMain {
 	static final five = 'struct Point { public var a:Int; public var b:Int; public var c:Int; public var d:Int; public var e:Int; public var f:Int; public function new(items:Array<Int>) { a=items==null?0:items[0]; b=items==null?0:items[0]; c=items==null?0:items[0]; d=items==null?0:items[0]; e=items==null?0:items[0]; f=items[0]; } }';

@@ -1,7 +1,7 @@
 package haxeon.ui.widgets.scroll;
 
-import haxeon.ui.animation.DelayedAnimation;
 import haxeon.ui.animation.AnimationScheduler;
+import haxeon.ui.animation.DelayedAnimation;
 import haxeon.ui.animation.RetainedAnimation;
 
 /**

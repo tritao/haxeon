@@ -1,9 +1,9 @@
 import compiler.Frontend;
-import compiler.syntax.Lexer;
-import compiler.syntax.Parser;
 import compiler.Source.SourceFile;
 import compiler.ir.IrProgramAssembler;
 import compiler.ir.codec.CanonicalIrCodec;
+import compiler.syntax.Lexer;
+import compiler.syntax.Parser;
 import compiler.types.Typer;
 
 class IrProgramAssemblerMain {

@@ -1,20 +1,20 @@
 package haxeon.ui;
 
-import haxe.io.Bytes;
 import NativeKitUI;
-import haxeon.ui.CompositeMode;
+import haxe.io.Bytes;
 import haxeon.ui.Color;
+import haxeon.ui.CompositeMode;
 import haxeon.ui.LineCap;
 import haxeon.ui.LineJoin;
 import haxeon.ui.style.BlurEffect;
 import haxeon.ui.style.ColorMatrixEffect;
 import haxeon.ui.style.CustomEffect;
 import haxeon.ui.style.DropShadowEffect;
-import haxeon.ui.style.VisualEffect;
 import haxeon.ui.style.EffectChain;
 import haxeon.ui.style.EffectKind;
 import haxeon.ui.style.Mask;
 import haxeon.ui.style.MaskKind;
+import haxeon.ui.style.VisualEffect;
 
 @:noCompletion
 class CanvasCommandBuffer {

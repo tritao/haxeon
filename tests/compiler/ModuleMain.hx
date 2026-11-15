@@ -1,13 +1,13 @@
+import compiler.Compiler;
+import compiler.Diagnostic.CompileError;
+import compiler.compilation.CompilerPublication.ReconnectDecision;
 import compiler.hl.HlWriter;
 import compiler.hl.patch.HlPatchReader;
-import compiler.ir.hl.HlLower;
-import compiler.Compiler;
 import compiler.ir.IrInliner;
-import compiler.Diagnostic.CompileError;
-import sys.io.File;
-import compiler.types.Type.CompilerType;
-import compiler.compilation.CompilerPublication.ReconnectDecision;
+import compiler.ir.hl.HlLower;
 import compiler.modules.ModuleState.SemanticDependencyKind;
+import compiler.types.Type.CompilerType;
+import sys.io.File;
 
 class ModuleMain {
 	static function main():Void {

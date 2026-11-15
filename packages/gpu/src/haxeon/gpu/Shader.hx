@@ -10,10 +10,10 @@ import haxeon.gpu.Renderer;
 import haxeon.gpu.GpuResult;
 import nativekit.ffi.NativeKitGpu;
 
-import haxeon.gpu.Enums.ShaderStage;
-import haxeon.gpu.Enums.ShaderLanguage;
 import haxeon.gpu.Enums.ImageFormat;
 import haxeon.gpu.Enums.ImageType;
+import haxeon.gpu.Enums.ShaderLanguage;
+import haxeon.gpu.Enums.ShaderStage;
 import haxeon.gpu.Enums.UniformType;
 
 /** Renderer-owned shader resource. */

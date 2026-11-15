@@ -1,16 +1,16 @@
 package compiler.semantic;
 
-import compiler.syntax.Ast.AstFunction;
 import compiler.Diagnostic.CompileError;
-import compiler.syntax.Lexer;
-import compiler.syntax.ConditionalCompilation;
-import compiler.syntax.Parser;
 import compiler.QualifiedName;
+import compiler.modules.ModulePath;
+import compiler.modules.ModuleSourceLoader;
+import compiler.modules.ModuleState;
 import compiler.runtime.NativeRegistry;
 import compiler.runtime.PlatformAbi;
-import compiler.modules.ModulePath;
-import compiler.modules.ModuleState;
-import compiler.modules.ModuleSourceLoader;
+import compiler.syntax.Ast.AstFunction;
+import compiler.syntax.ConditionalCompilation;
+import compiler.syntax.Lexer;
+import compiler.syntax.Parser;
 import compiler.types.FieldInference;
 import compiler.types.TypeRegistry;
 

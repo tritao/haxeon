@@ -1,5 +1,5 @@
-import compiler.hl.HlWriter;
 import compiler.Compiler;
+import compiler.hl.HlWriter;
 import compiler.modules.ModulePath;
 import compiler.runtime.CompilerIntrinsics;
 import haxe.io.Path;

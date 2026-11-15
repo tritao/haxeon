@@ -4,11 +4,11 @@ import compiler.ir.Ir.IrInstruction;
 import compiler.ir.Ir.IrIntrinsic;
 import compiler.ir.Ir.IrType;
 import compiler.ir.Ir.IrValue;
+import compiler.ir.codec.IrTypeCodec;
+import compiler.ir.codec.IrValueTableCodec;
 import haxe.io.Bytes as HaxeBytes;
 import haxe.io.BytesInput;
 import haxe.io.BytesOutput;
-import compiler.ir.codec.IrTypeCodec;
-import compiler.ir.codec.IrValueTableCodec;
 
 /** Closed, versioned encoding for every persisted IR instruction operand. */
 class IrInstructionCodec {

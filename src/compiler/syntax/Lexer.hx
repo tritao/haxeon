@@ -1,9 +1,9 @@
 package compiler.syntax;
 
-import compiler.syntax.Token.TokenKind;
-import compiler.Source.SourceFile;
 import compiler.Diagnostic.CompileError;
 import compiler.Diagnostic.DiagnosticSeverity;
+import compiler.Source.SourceFile;
+import compiler.syntax.Token.TokenKind;
 
 /** Converts one source file into a positioned token stream or a lexical diagnostic. */
 class Lexer {

@@ -3,8 +3,8 @@ package haxeon.ui.core;
 import haxeon.platform.event.EventPump;
 import haxeon.platform.event.EventSubscription;
 import haxeon.platform.event.PlatformEvent;
-import nativekit.ffi.NativeKitTypes;
 import nativekit.ffi.NativeKit;
+import nativekit.ffi.NativeKitTypes;
 
 /** Routes decoded NativeKit window input into one Haxe UiContext. */
 class NativeInputAdapter {

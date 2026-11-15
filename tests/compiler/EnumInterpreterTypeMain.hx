@@ -1,6 +1,6 @@
 import compiler.Frontend;
-import compiler.ir.IrInterpreter;
 import compiler.ir.Ir.IrInstruction;
+import compiler.ir.IrInterpreter;
 import compiler.ir.SourceProvenance.Located;
 
 class EnumInterpreterTypeMain {

@@ -1,16 +1,16 @@
 package inspector;
 
-import haxeon.ui.core.UiEventPhase;
+import UiExplorer;
 import haxeon.ui.Canvas;
 import haxeon.ui.LayoutAxis;
 import haxeon.ui.LayoutStyle;
 import haxeon.ui.Point;
 import haxeon.ui.Rect;
 import haxeon.ui.ResolvedLayoutItem;
-import UiExplorer;
 import haxeon.ui.core.HitTest;
 import haxeon.ui.core.RenderNode;
 import haxeon.ui.core.UiEventKind;
+import haxeon.ui.core.UiEventPhase;
 import haxeon.ui.core.WidgetId;
 import haxeon.ui.debug.UiNodeSnapshot;
 import haxeon.ui.widgets.CanvasView;

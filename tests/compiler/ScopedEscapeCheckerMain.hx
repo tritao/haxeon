@@ -1,9 +1,9 @@
 import compiler.Diagnostic.CompileError;
+import compiler.Frontend;
 import compiler.Source.SourceFile;
 import compiler.syntax.Lexer;
 import compiler.syntax.Parser;
 import compiler.types.analysis.ScopedEscapeChecker;
-import compiler.Frontend;
 
 class ScopedEscapeCheckerMain {
  static function check(body:String):Void {

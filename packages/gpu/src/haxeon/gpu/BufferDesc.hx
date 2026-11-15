@@ -3,8 +3,8 @@ package haxeon.gpu;
 import haxeon.gpu.Buffer;
 import haxeon.gpu.Enums;
 
-import nativekit.ffi.NativeKitGpu;
 import haxeon.gpu.Enums.BufferUsage;
+import nativekit.ffi.NativeKitGpu;
 
 /** Portable descriptor for a NativeKit GPU buffer. */
 class BufferDesc {

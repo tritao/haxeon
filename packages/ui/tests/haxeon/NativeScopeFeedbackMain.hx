@@ -1,15 +1,15 @@
 import Equatable;
 import haxeon.reactive.Signal;
+import haxeon.ui.FontCollection;
 import haxeon.ui.LayoutAxis;
 import haxeon.ui.LayoutFrame;
 import haxeon.ui.LayoutPositioning;
 import haxeon.ui.LayoutSession;
 import haxeon.ui.LayoutStyle;
 import haxeon.ui.LayoutVisualKind;
-import haxeon.ui.FontCollection;
+import haxeon.ui.component.BoundText;
 import haxeon.ui.component.EqualChild;
 import haxeon.ui.component.TrackedScope;
-import haxeon.ui.component.BoundText;
 import haxeon.ui.core.BuildContext;
 import haxeon.ui.core.RenderNode;
 import haxeon.ui.core.UiContext;

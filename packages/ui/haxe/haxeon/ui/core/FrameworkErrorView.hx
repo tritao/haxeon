@@ -5,8 +5,8 @@ import haxeon.ui.Insets;
 import haxeon.ui.LayoutAxis;
 import haxeon.ui.LayoutStyle;
 import haxeon.ui.theme.TextRole;
-import haxeon.ui.widgets.layout.Column;
 import haxeon.ui.widgets.KeyedView;
+import haxeon.ui.widgets.layout.Column;
 import haxeon.ui.widgets.text.Text;
 
 /** Minimal last-resort view for errors raised while building or rendering a frame. */

@@ -1,11 +1,11 @@
 package compiler.ffi;
 
-import haxe.Json;
-import haxe.io.Path;
 import compiler.ffi.ClangInvocation.ClangInvocationOptions;
 import compiler.ffi.ClangRecordLayouts.RecordLayout;
 import compiler.ffi.ClangVtableLayouts.VtableLayout;
 import compiler.ffi.ProcessOutputCapture.ProcessCaptureResult;
+import haxe.Json;
+import haxe.io.Path;
 import sys.FileSystem;
 import sys.io.File;
 

@@ -1,9 +1,9 @@
-import haxeon.platform.Runtime;
-import haxeon.platform.Window;
-import haxeon.platform.event.PlatformEvent;
 import compiler.Compiler;
 import compiler.hl.HlWriter;
 import compiler.runtime.CompilerIntrinsics;
+import haxeon.platform.Runtime;
+import haxeon.platform.Window;
+import haxeon.platform.event.PlatformEvent;
 import sys.io.File;
 
 class HxiNativeKitSceneMain {

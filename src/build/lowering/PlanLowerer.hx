@@ -6,10 +6,10 @@ import build.execution.ActionId;
 import build.execution.ActionMerge;
 import build.execution.ExecutionAction;
 import build.execution.ExecutionPlan;
-import build.provider.FfiProvider;
 import build.native.NativeCMakeProvider;
 import build.native.NativeSourcesProvider;
 import build.provider.CompilerProvider;
+import build.provider.FfiProvider;
 import build.provider.RuntimeProvider;
 
 /** Orchestrates provider lowering without owning provider-specific commands. */

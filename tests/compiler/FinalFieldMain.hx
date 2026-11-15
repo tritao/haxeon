@@ -1,5 +1,5 @@
-import compiler.Frontend;
 import compiler.Diagnostic.CompileError;
+import compiler.Frontend;
 
 /**
  * A class's final instance field can only be assigned through `this` in the constructor of the class that declares it, and a static

@@ -1,11 +1,11 @@
 package compiler.backend.wasm.gc;
 
-import compiler.backend.wasm.gc.WasmGcTypePlan;
 import compiler.backend.wasm.EnumStringDescriptors;
 import compiler.backend.wasm.WasmModule.WasmModule;
+import compiler.backend.wasm.WasmTypes.WasmHeapType;
 import compiler.backend.wasm.WasmTypes.WasmInstruction;
 import compiler.backend.wasm.WasmTypes.WasmValueType;
-import compiler.backend.wasm.WasmTypes.WasmHeapType;
+import compiler.backend.wasm.gc.WasmGcTypePlan;
 
 /** Module-lifetime configuration and indices for native Wasm GC lowering. */
 class WasmGcContext {

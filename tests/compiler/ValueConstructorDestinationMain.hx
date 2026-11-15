@@ -1,7 +1,7 @@
 import compiler.Compiler;
-import compiler.tools.CompilerDriver;
 import compiler.backend.wasm.WasmBackend;
 import compiler.hl.HlWriter;
+import compiler.tools.CompilerDriver;
 import runtime.Runtime;
 import sys.FileSystem;
 import sys.io.File;

@@ -2,9 +2,9 @@ package compiler.ir.hl;
 
 import compiler.ir.Ir;
 import compiler.ir.IrFunction;
-import compiler.ir.IrVerifier;
-import compiler.ir.IrTypedInterfaceDispatch;
 import compiler.ir.IrScalarArguments;
+import compiler.ir.IrTypedInterfaceDispatch;
+import compiler.ir.IrVerifier;
 
 /** Class-owned private entries; source methods and interface views retain their semantic ABI. */
 class HlTypedInterfaceTables {

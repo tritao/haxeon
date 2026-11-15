@@ -2,9 +2,9 @@ package haxeon.audio;
 
 import haxeon.platform.BindingError;
 
+import haxe.io.Bytes;
 import nativekit.ffi.NativeKitAudio;
 import nativekit.ffi.NativeKitAudioTypes;
-import haxe.io.Bytes;
 
 /** Owns one interleaved float render block returned by a DSP engine. */
 class DspRenderTarget {

@@ -6,17 +6,17 @@ import haxeon.ui.TextLayout.TextPosition;
 import haxeon.ui.TextLayout.TextRange;
 import haxeon.ui.TextLayout.TextRangeRect;
 
-import haxeon.ui.FontCollection;
+import haxeon.editor.TextDocument.TextDocumentBuffer;
 import haxeon.ui.Canvas;
 import haxeon.ui.Color;
+import haxeon.ui.FontCollection;
 import haxeon.ui.LayoutMeasureConstraints;
 import haxeon.ui.LayoutMeasureResult;
 import haxeon.ui.ParagraphStyle;
 import haxeon.ui.Rect;
+import haxeon.ui.TextColorRange;
 import haxeon.ui.TextLayout;
 import haxeon.ui.TextStyle;
-import haxeon.ui.TextColorRange;
-import haxeon.editor.TextDocument.TextDocumentBuffer;
 
 /**
 	Retained layouts for bounded groups of paragraphs in one editor document.

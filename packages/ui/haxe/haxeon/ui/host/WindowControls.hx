@@ -1,8 +1,8 @@
 package haxeon.ui.host;
 
+import haxeon.platform.NativeKitError;
 import nativekit.ffi.NativeKit;
 import nativekit.ffi.NativeKitTypes;
-import haxeon.platform.NativeKitError;
 
 /** Borrowed desktop window operations; close always uses the host's confirmation flow. */
 class WindowControls {

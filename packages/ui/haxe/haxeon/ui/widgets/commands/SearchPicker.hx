@@ -1,6 +1,5 @@
 package haxeon.ui.widgets.commands;
 
-import haxeon.ui.core.UiEventPhase;
 import haxeon.ui.Insets;
 import haxeon.ui.LayoutAlignmentY;
 import haxeon.ui.LayoutAxis;
@@ -11,6 +10,7 @@ import haxeon.ui.core.RenderNode;
 import haxeon.ui.core.TextStyleOverride;
 import haxeon.ui.core.UiEvent;
 import haxeon.ui.core.UiEventKind;
+import haxeon.ui.core.UiEventPhase;
 import haxeon.ui.core.UiKey;
 import haxeon.ui.core.View;
 import haxeon.ui.widgets.KeyedView;

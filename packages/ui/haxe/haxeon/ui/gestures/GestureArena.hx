@@ -1,7 +1,7 @@
 package haxeon.ui.gestures;
 
-import haxeon.ui.core.UiEvent;
 import haxeon.ui.core.RenderNode;
+import haxeon.ui.core.UiEvent;
 import haxeon.ui.core.WidgetId;
 import haxeon.ui.gestures.DragRecognizer;
 import haxeon.ui.gestures.GestureEvent;

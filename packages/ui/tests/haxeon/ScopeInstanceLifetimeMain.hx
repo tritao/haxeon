@@ -1,10 +1,10 @@
+import haxeon.reactive.Signal;
 import haxeon.ui.component.TrackedScope;
 import haxeon.ui.core.BuildContext;
-import haxeon.ui.core.StateStore;
 import haxeon.ui.core.RenderNode;
+import haxeon.ui.core.StateStore;
 import haxeon.ui.theme.Theme;
 import haxeon.ui.widgets.text.Text;
-import haxeon.reactive.Signal;
 
 /** Cached component instances may share a widget identity, but never their native ownership record. */
 class ScopeInstanceLifetimeMain {

@@ -1,10 +1,10 @@
+import compiler.Source.SourceFile;
+import compiler.modules.ModuleState;
 import compiler.semantic.AliasTable;
+import compiler.semantic.ModuleCanonicalizer;
+import compiler.semantic.ModuleChangeAnalyzer;
 import compiler.syntax.Lexer;
 import compiler.syntax.Parser;
-import compiler.Source.SourceFile;
-import compiler.semantic.ModuleChangeAnalyzer;
-import compiler.semantic.ModuleCanonicalizer;
-import compiler.modules.ModuleState;
 import compiler.types.TypeRegistry;
 
 class ModuleChangeAnalyzerMain {

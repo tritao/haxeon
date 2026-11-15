@@ -1,10 +1,10 @@
 package haxeon.ui.widgets.text;
 
+import haxeon.editor.TextDocument;
 import haxeon.ui.Color;
 import haxeon.ui.LayoutStyle;
 import haxeon.ui.TextStyle;
 import haxeon.ui.core.View;
-import haxeon.editor.TextDocument;
 
 /** Multiline text editor sharing the TextField IME and selection model. */
 class TextArea extends TextField implements View {

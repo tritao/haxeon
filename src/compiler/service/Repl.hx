@@ -1,7 +1,7 @@
 package compiler.service;
 
-import compiler.hl.HlWriter;
 import compiler.Compiler;
+import compiler.hl.HlWriter;
 import haxe.io.Bytes;
 
 /** Ephemeral wrapper module and generated function used for one REPL expression. */

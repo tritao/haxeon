@@ -1,14 +1,14 @@
 package compiler.backend.wasm;
 
-import compiler.ir.Ir.IrProgram;
-import compiler.ir.Ir.IrValue;
-import compiler.ir.IrFunction;
 import compiler.backend.wasm.WasmModule.WasmLocal;
 import compiler.backend.wasm.WasmModule.WasmModule;
 import compiler.backend.wasm.WasmRepresentation.WasmFunctionRepresentationContext;
 import compiler.backend.wasm.WasmRepresentation.WasmRepresentationSet;
 import compiler.backend.wasm.WasmTypes.WasmValueType;
 import compiler.backend.wasm.gc.WasmGcRoots.WasmSafepoint;
+import compiler.ir.Ir.IrProgram;
+import compiler.ir.Ir.IrValue;
+import compiler.ir.IrFunction;
 
 typedef WasmFunctionArrayTemps = {
 	final len:Int;

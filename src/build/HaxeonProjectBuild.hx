@@ -1,12 +1,12 @@
 package build;
 
-import build.execution.ExecutionBackend.ExecutionBackendFactory;
+import build.BuildEnvironment.BuildProfile;
 import build.execution.ExecutionAction;
+import build.execution.ExecutionBackend.ExecutionBackendFactory;
 import build.execution.ExecutionPlan;
 import build.lowering.LoweringContext;
 import build.lowering.PlanLowerer;
 import build.native.NativeCache;
-import build.BuildEnvironment.BuildProfile;
 import haxe.io.Path;
 import project.ProjectDiscovery;
 import project.ResolvedProject;

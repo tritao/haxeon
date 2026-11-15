@@ -1,8 +1,8 @@
 package haxeon.audio;
 
+import haxeon.platform.NativeKitError;
 import nativekit.ffi.NativeKit;
 import nativekit.ffi.NativeKitTypes;
-import haxeon.platform.NativeKitError;
 
 /** Provides consistent diagnostics for raw audio result calls. */
 class AudioResult {

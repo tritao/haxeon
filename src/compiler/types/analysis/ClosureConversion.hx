@@ -5,8 +5,8 @@ import compiler.types.TypedAst.CellStorageKind;
 import compiler.types.TypedAst.TypedCapture;
 import compiler.types.TypedAst.TypedClosurePlan;
 import compiler.types.TypedAst.TypedEnvironmentRequirement;
-import compiler.types.TypedAst.TypedStorageRequirement;
 import compiler.types.TypedAst.TypedFunction;
+import compiler.types.TypedAst.TypedStorageRequirement;
 
 /** Collects the runtime artifacts produced by closure conversion. */
 class ClosureConversion {

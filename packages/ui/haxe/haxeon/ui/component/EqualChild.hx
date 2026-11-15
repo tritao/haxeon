@@ -1,11 +1,11 @@
 package haxeon.ui.component;
 
 import Equatable;
-import haxeon.ui.core.ResourceId;
 import haxeon.ui.core.BuildContext;
 import haxeon.ui.core.Dependencies;
 import haxeon.ui.core.InteractionStateSnapshot;
 import haxeon.ui.core.RenderNode;
+import haxeon.ui.core.ResourceId;
 import haxeon.ui.core.State;
 import haxeon.ui.core.View;
 

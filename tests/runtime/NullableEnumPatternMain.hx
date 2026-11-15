@@ -1,7 +1,7 @@
 import compiler.Compiler;
-import compiler.hl.HlWriter;
-import compiler.backend.wasm.WasmBackend;
 import compiler.backend.Backend.BackendTarget;
+import compiler.backend.wasm.WasmBackend;
+import compiler.hl.HlWriter;
 import sys.io.File;
 
 class NullableEnumPatternMain {

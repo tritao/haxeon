@@ -1,8 +1,8 @@
 import compiler.ir.Ir;
 import compiler.ir.IrBuilder;
 import compiler.ir.IrFunction;
-import compiler.ir.IrInlineEnumLayout;
 import compiler.ir.IrInlineEnumCaseAccess;
+import compiler.ir.IrInlineEnumLayout;
 import compiler.ir.IrObjectTable;
 import compiler.ir.IrValueLaneLayout.IrValueLaneTarget;
 

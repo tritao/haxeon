@@ -5,9 +5,9 @@ import compiler.abi.RuntimeAbi.RuntimeAbiDescriptor;
 import compiler.hl.incremental.HlModuleAssembler;
 import compiler.ir.Ir.IrObject;
 import compiler.modules.ModuleState;
+import compiler.semantic.SemanticProgram;
 import compiler.types.TypeRegistry;
 import compiler.types.TypedAst.TypedProgram;
-import compiler.semantic.SemanticProgram;
 
 /** Compiler-owned semantic state captured before staging a publication. */
 typedef CompilerSnapshot = {

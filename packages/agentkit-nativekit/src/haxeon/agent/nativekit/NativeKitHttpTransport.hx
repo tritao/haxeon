@@ -5,15 +5,15 @@ import haxeon.agent.Cancelable;
 import haxeon.agent.HttpStreamRequest;
 import haxeon.agent.HttpStreamSink;
 import haxeon.agent.HttpTransport;
-import haxeon.platform.event.PlatformEvent;
 import haxeon.platform.event.EventPump;
 import haxeon.platform.event.EventSubscription;
+import haxeon.platform.event.PlatformEvent;
 import nativekit.ffi.NativeKitNet;
 import nativekit.ffi.NativeKitNetTypes.HttpClientOptions;
-import nativekit.ffi.NativeKitNetTypes.NativeHttpHeader;
 import nativekit.ffi.NativeKitNetTypes.HttpMethod;
 import nativekit.ffi.NativeKitNetTypes.HttpRequestMode;
 import nativekit.ffi.NativeKitNetTypes.HttpRequestOptions;
+import nativekit.ffi.NativeKitNetTypes.NativeHttpHeader;
 import nativekit.ffi.NativeKitNetTypes.OwnedHttpClientHandle;
 import nativekit.ffi.NativeKitTypes.Result;
 

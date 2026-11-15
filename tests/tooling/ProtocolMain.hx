@@ -1,5 +1,5 @@
-import editor.LanguageServiceProtocol;
 import compiler.service.CancellationToken;
+import editor.LanguageServiceProtocol;
 import haxe.Json;
 
 class CheckpointCancellationToken extends CancellationToken {

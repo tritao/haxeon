@@ -1,7 +1,7 @@
 import compiler.Compiler;
 import compiler.backend.Backend.BackendTarget;
-import compiler.backend.wasm.WasmBackend;
 import compiler.backend.hl.HlBackend;
+import compiler.backend.wasm.WasmBackend;
 import compiler.ir.IrBuilder;
 import compiler.ir.IrFunction;
 import compiler.tools.CompilerDriver;

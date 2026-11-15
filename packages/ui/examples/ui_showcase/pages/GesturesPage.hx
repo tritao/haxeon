@@ -6,11 +6,11 @@ import haxeon.ui.widgets.controls.Button;
 import haxeon.ui.widgets.text.Text;
 
 
+import UiExplorer;
 import haxeon.ui.Color;
 import haxeon.ui.Insets;
 import haxeon.ui.LayoutAxis;
 import haxeon.ui.LayoutStyle;
-import UiExplorer;
 import haxeon.ui.core.View;
 import haxeon.ui.gestures.DoubleTapRecognizer;
 import haxeon.ui.gestures.DragRecognizer;

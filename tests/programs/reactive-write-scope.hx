@@ -1,6 +1,6 @@
 import haxeon.reactive.Effect;
-import haxeon.reactive.Signal;
 import haxeon.reactive.ReactiveRuntime;
+import haxeon.reactive.Signal;
 
 class ScopeModel implements Observable {
  public var value:Int = 0;

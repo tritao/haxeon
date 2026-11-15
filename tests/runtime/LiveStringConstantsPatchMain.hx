@@ -1,8 +1,8 @@
-import compiler.abi.PatchPlanner.AbiChange;
-import compiler.hl.patch.HlPatchReader;
-import compiler.hl.HlWriter;
-import compiler.types.Type.CompilerType;
 import compiler.Compiler;
+import compiler.abi.PatchPlanner.AbiChange;
+import compiler.hl.HlWriter;
+import compiler.hl.patch.HlPatchReader;
+import compiler.types.Type.CompilerType;
 import runtime.PatchSet;
 import runtime.Runtime;
 

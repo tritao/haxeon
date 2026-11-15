@@ -2,8 +2,8 @@ package tools;
 
 import haxe.Json;
 import haxeon.ProfileSpan;
-import runtime.LoadedModule;
 import runtime.LiveRefusal;
+import runtime.LoadedModule;
 import runtime.PatchSet;
 import runtime.Runtime;
 import runtime.RuntimeError;

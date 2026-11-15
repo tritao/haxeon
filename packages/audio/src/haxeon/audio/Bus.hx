@@ -2,11 +2,11 @@ package haxeon.audio;
 
 import haxeon.platform.BindingError;
 
+import haxeon.platform.NativeKitError;
+import nativekit.ffi.NativeKit;
 import nativekit.ffi.NativeKitAudio;
 import nativekit.ffi.NativeKitAudioTypes;
-import nativekit.ffi.NativeKit;
 import nativekit.ffi.NativeKitTypes;
-import haxeon.platform.NativeKitError;
 
 /** A mixer bus that groups sounds under shared volume and transport controls. */
 class Bus {

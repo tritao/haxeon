@@ -3,8 +3,8 @@ package compiler.ir;
 import compiler.Provides.ProviderOperation;
 import compiler.ir.Ir;
 import compiler.ir.IrInlineValueLayout.IrInlineValueSlot;
-import compiler.types.typing.HashGenerator;
 import compiler.ir.SourceProvenance.Located;
+import compiler.types.typing.HashGenerator;
 
 private typedef OptionalAlias = {final root:Int; final path:Array<String>; final typeName:String;}
 private typedef OptionalClosure = {final name:String; final receiver:Null<IrValue>;}

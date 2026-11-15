@@ -1,15 +1,8 @@
-import haxeon.platform.Runtime;
-import haxeon.platform.Window;
-import haxeon.platform.event.PlatformEvent;
-import nativekit.ffi.NativeKitTypes.WindowOptions as NativeWindowOptions;
-import nativekit.ffi.NativeKit;
-import nativekit.ffi.NativeKitTypes;
-import nativekit.ffi.NativeKitGpu;
-import haxeon.platform.GraphicsImageRef;
+import haxe.io.Bytes;
+import haxeon.gpu.AttachmentAction;
 import haxeon.gpu.Buffer;
 import haxeon.gpu.BufferDesc;
 import haxeon.gpu.CommandBuffer;
-import haxeon.gpu.AttachmentAction;
 import haxeon.gpu.Enums.BufferUsage;
 import haxeon.gpu.Enums.Filter;
 import haxeon.gpu.Enums.ImageFormat;
@@ -17,8 +10,8 @@ import haxeon.gpu.Enums.ImageUsage;
 import haxeon.gpu.Enums.IndexType;
 import haxeon.gpu.Enums.LoadAction;
 import haxeon.gpu.Enums.ReadbackState;
-import haxeon.gpu.Enums.ShaderStage;
 import haxeon.gpu.Enums.ShaderLanguage;
+import haxeon.gpu.Enums.ShaderStage;
 import haxeon.gpu.Enums.StoreAction;
 import haxeon.gpu.Enums.TimestampState;
 import haxeon.gpu.Enums.UniformType;
@@ -34,7 +27,14 @@ import haxeon.gpu.Sampler;
 import haxeon.gpu.Shader;
 import haxeon.gpu.Surface;
 import haxeon.gpu.Timestamp;
-import haxe.io.Bytes;
+import haxeon.platform.GraphicsImageRef;
+import haxeon.platform.Runtime;
+import haxeon.platform.Window;
+import haxeon.platform.event.PlatformEvent;
+import nativekit.ffi.NativeKit;
+import nativekit.ffi.NativeKitGpu;
+import nativekit.ffi.NativeKitTypes;
+import nativekit.ffi.NativeKitTypes.WindowOptions as NativeWindowOptions;
 
 class Triangle {
 	static function verifyGeneratedEnumMembers():Void {

@@ -1,8 +1,8 @@
 package compiler.semantic;
 
 import compiler.modules.ModuleState;
-import compiler.types.FieldInference;
 import compiler.semantic.SemanticSignature;
+import compiler.types.FieldInference;
 import compiler.types.TypeRegistry;
 import compiler.types.TypeRegistry.TypeCompatibility;
 

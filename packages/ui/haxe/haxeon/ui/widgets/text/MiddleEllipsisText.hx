@@ -1,11 +1,11 @@
 package haxeon.ui.widgets.text;
 
-import haxeon.ui.FontFamily;
 import haxeon.editor.TextDocument;
+import haxeon.ui.FontFamily;
 import haxeon.ui.LayoutAxis;
 import haxeon.ui.LayoutStyle;
-import haxeon.ui.ResolvedLayoutItem;
 import haxeon.ui.ParagraphStyle;
+import haxeon.ui.ResolvedLayoutItem;
 import haxeon.ui.TextAlignment;
 import haxeon.ui.TextDirection;
 import haxeon.ui.TextLayout;

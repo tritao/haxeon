@@ -1,10 +1,10 @@
 package project;
 
 import haxe.Json;
-import sys.io.File;
 import haxe.io.Path;
-import sys.FileSystem;
 import project.PackageManifest.NativeManifest;
+import sys.FileSystem;
+import sys.io.File;
 
 /** Immutable release metadata used by the registry source adapter. */
 class RegistryVersion {

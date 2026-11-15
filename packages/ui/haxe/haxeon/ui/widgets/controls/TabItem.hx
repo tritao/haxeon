@@ -1,7 +1,7 @@
 package haxeon.ui.widgets.controls;
 
-import haxeon.ui.icons.IconName;
 import haxeon.ui.core.View;
+import haxeon.ui.icons.IconName;
 
 /** One stable tab key, accessible label, and lazily built page. */
 class TabItem {

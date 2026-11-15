@@ -1,12 +1,12 @@
+import compiler.Source.SourceFile;
 import compiler.semantic.AliasTable;
+import compiler.semantic.LocalScope;
+import compiler.semantic.ModuleCanonicalizer;
 import compiler.syntax.Ast.AstExpression;
 import compiler.syntax.Ast.AstStatement;
 import compiler.syntax.Ast.AstType;
 import compiler.syntax.Lexer;
 import compiler.syntax.Parser;
-import compiler.Source.SourceFile;
-import compiler.semantic.ModuleCanonicalizer;
-import compiler.semantic.LocalScope;
 
 class ModuleCanonicalizerMain {
 	static function main():Void {

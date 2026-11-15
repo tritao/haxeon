@@ -1,13 +1,11 @@
 package audiolab;
 
 import haxe.io.Bytes;
-import haxeon.audio.DspEngine;
 import haxeon.audio.Bus;
 import haxeon.audio.BusEffect;
 import haxeon.audio.BusSend;
 import haxeon.audio.DeviceOptions;
-import haxeon.audio.Mixer;
-import nativekit.ffi.NativeKitAudioTypes.EffectParameter;
+import haxeon.audio.DspEngine;
 import haxeon.audio.DspEngineOptions;
 import haxeon.audio.DspEnums.DspParameter;
 import haxeon.audio.DspEvent;
@@ -15,6 +13,8 @@ import haxeon.audio.DspInstrument;
 import haxeon.audio.DspPatch;
 import haxeon.audio.DspPatchBuilder;
 import haxeon.audio.DspRenderTarget;
+import haxeon.audio.Mixer;
+import nativekit.ffi.NativeKitAudioTypes.EffectParameter;
 
 private class PendingNote {
 	public final voiceId:Int;

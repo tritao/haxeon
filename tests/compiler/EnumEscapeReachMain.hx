@@ -1,8 +1,8 @@
 import compiler.ir.Ir;
-import compiler.ir.IrBuilder;
-import compiler.ir.IrFunction;
-import compiler.ir.IrEnumEscapeReach;
 import compiler.ir.IrArrayFactory;
+import compiler.ir.IrBuilder;
+import compiler.ir.IrEnumEscapeReach;
+import compiler.ir.IrFunction;
 
 /** Both enum storage decisions consume the same reference, container and capture reach. */
 @:access(compiler.ir.IrBuilder)

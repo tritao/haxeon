@@ -1,10 +1,10 @@
+import compiler.Source.SourceFile;
 import compiler.syntax.Lexer;
 import compiler.syntax.Parser;
-import compiler.Source.SourceFile;
-import compiler.types.analysis.BindingStoragePlan;
-import compiler.types.analysis.LexicalStorageAnalysis;
 import compiler.types.Type.CompilerType;
 import compiler.types.TypedAst.CellStorageKind;
+import compiler.types.analysis.BindingStoragePlan;
+import compiler.types.analysis.LexicalStorageAnalysis;
 
 class CaptureAnalysisMain {
 	static function main():Void {

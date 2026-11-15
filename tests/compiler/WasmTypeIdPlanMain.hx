@@ -1,11 +1,11 @@
-import compiler.backend.wasm.WasmTypeIdPlan;
-import compiler.ir.Ir.IrType;
-import compiler.ir.IrTypeIdentity;
-import compiler.ir.Ir.IrProgram;
-import compiler.ir.IrBuilder;
-import compiler.ir.IrFunction;
 import compiler.backend.wasm.WasmBackend;
 import compiler.backend.wasm.WasmPatch;
+import compiler.backend.wasm.WasmTypeIdPlan;
+import compiler.ir.Ir.IrProgram;
+import compiler.ir.Ir.IrType;
+import compiler.ir.IrBuilder;
+import compiler.ir.IrFunction;
+import compiler.ir.IrTypeIdentity;
 
 class WasmTypeIdPlanMain {
 	static function main():Void run();

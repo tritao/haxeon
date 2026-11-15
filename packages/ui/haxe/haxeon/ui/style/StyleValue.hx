@@ -8,17 +8,17 @@ import haxeon.ui.Insets;
 import haxeon.ui.LayoutAlignmentX;
 import haxeon.ui.LayoutAlignmentY;
 import haxeon.ui.LayoutAxis;
-import haxeon.ui.LayoutDistribution;
 import haxeon.ui.LayoutDirection;
+import haxeon.ui.LayoutDistribution;
 import haxeon.ui.LayoutPositioning;
 import haxeon.ui.LayoutSelfAlignment;
 import haxeon.ui.LayoutWrapMode;
 import haxeon.ui.Transform2D;
-import haxeon.ui.style.StyleProperty.StylePropertyBase;
-import haxeon.ui.style.StyleProperty.StyleInterpolatedProperty;
+import haxeon.ui.style.StyleProperty.StyleAxisProperty;
 import haxeon.ui.style.StyleProperty.StyleColorProperty;
 import haxeon.ui.style.StyleProperty.StyleInsetsProperty;
-import haxeon.ui.style.StyleProperty.StyleAxisProperty;
+import haxeon.ui.style.StyleProperty.StyleInterpolatedProperty;
+import haxeon.ui.style.StyleProperty.StylePropertyBase;
 import haxeon.ui.style.StyleProperty.StyleTransformProperty;
 
 /** One typed declaration passed to a StyleRule. */

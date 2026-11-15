@@ -10,30 +10,30 @@ import haxeon.ui.LayoutStyle;
 import haxeon.ui.core.UiContext;
 import haxeon.ui.core.View;
 import haxeon.ui.debug.UiNodeSnapshot;
+import haxeon.ui.widgets.KeyedView;
 import haxeon.ui.widgets.controls.Button;
 import haxeon.ui.widgets.controls.ButtonVariant;
 import haxeon.ui.widgets.controls.Checkbox;
-import haxeon.ui.widgets.layout.Column;
-import haxeon.ui.widgets.KeyedView;
 import haxeon.ui.widgets.controls.ProgressBar;
 import haxeon.ui.widgets.controls.ProgressMode;
 import haxeon.ui.widgets.controls.RadioGroup;
 import haxeon.ui.widgets.controls.RadioOption;
-import haxeon.ui.widgets.layout.Row;
 import haxeon.ui.widgets.controls.Select;
 import haxeon.ui.widgets.controls.SelectOption;
+import haxeon.ui.widgets.controls.Slider;
+import haxeon.ui.widgets.controls.TabItem;
+import haxeon.ui.widgets.controls.Tabs;
+import haxeon.ui.widgets.controls.Toggle;
+import haxeon.ui.widgets.layout.Column;
+import haxeon.ui.widgets.layout.Row;
 import haxeon.ui.widgets.layout.SizedBox;
 import haxeon.ui.widgets.layout.SplitOrientation;
 import haxeon.ui.widgets.layout.SplitSide;
 import haxeon.ui.widgets.layout.SplitView;
 import haxeon.ui.widgets.layout.SplitViewOptions;
-import haxeon.ui.widgets.controls.Slider;
-import haxeon.ui.widgets.controls.TabItem;
-import haxeon.ui.widgets.controls.Tabs;
 import haxeon.ui.widgets.text.Text;
 import haxeon.ui.widgets.text.TextArea;
 import haxeon.ui.widgets.text.TextField;
-import haxeon.ui.widgets.controls.Toggle;
 
 /** Interactive Storybook-style surface backed by ordinary UIKit views. */
 class ComponentLab implements Observable {

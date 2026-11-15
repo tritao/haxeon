@@ -6,8 +6,8 @@ import compiler.ffi.HxiWriter;
 import haxe.io.Path;
 import project.FfiManifest.FfiImportManifest;
 import project.FfiManifest.ResolvedFfiImport;
-import sys.io.File;
 import sys.FileSystem;
+import sys.io.File;
 
 /** Standalone C/C++ header to raw-HXI importer. */
 class FfiImportMain {

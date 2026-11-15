@@ -4,8 +4,8 @@ import haxeon.platform.event.EventPump;
 import haxeon.platform.event.PlatformEvent;
 
 import haxe.Json;
-import sys.io.File;
 import nativekit.ffi.NativeKitTypes;
+import sys.io.File;
 
 /** Timed, window-local logical input through the normal managed event pump.
     Times are seconds after the first content-ready frame; coordinates are window logical pixels.

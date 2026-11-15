@@ -1,13 +1,13 @@
 package compiler.backend.wasm;
 
-import haxe.io.Bytes;
-import haxe.io.BytesOutput;
 import compiler.backend.wasm.WasmModule.WasmFunction;
 import compiler.backend.wasm.WasmModule.WasmGlobal;
 import compiler.backend.wasm.WasmModule.WasmModule;
 import compiler.backend.wasm.WasmTypes.WasmFunctionType;
 import compiler.backend.wasm.WasmTypes.WasmInstruction;
 import compiler.backend.wasm.WasmTypes.WasmValueType;
+import haxe.io.Bytes;
+import haxe.io.BytesOutput;
 
 /**
  * Links a precompiled runtime module into a module being built (docs/WASM_LINEAR_RUNTIME.md).

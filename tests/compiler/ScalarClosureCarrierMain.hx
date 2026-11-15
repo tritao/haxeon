@@ -1,9 +1,9 @@
 import compiler.ir.Ir;
 import compiler.ir.IrBuilder;
 import compiler.ir.IrFunction;
-import compiler.ir.IrValueLaneReference;
 import compiler.ir.IrScalarArguments;
 import compiler.ir.IrValueLaneLayout.IrValueLaneTarget;
+import compiler.ir.IrValueLaneReference;
 @:access(compiler.ir.IrBuilder)
 class ScalarClosureCarrierMain {
  static function global(b:IrBuilder,name:String,type:IrType):IrValue {var v=b.temporary(type);b.emit(GlobalGet(v,name));return v;}

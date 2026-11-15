@@ -1,8 +1,8 @@
 package compiler.compilation;
 
-import compiler.Diagnostic;
 import compiler.Compiler;
 import compiler.Compiler.CompileResult;
+import compiler.Diagnostic;
 import compiler.hl.incremental.HlModuleAssembler;
 import compiler.service.CancellationToken;
 

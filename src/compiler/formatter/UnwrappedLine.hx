@@ -1,11 +1,11 @@
 package compiler.formatter;
 
-import compiler.syntax.Token.TokenKind;
-import compiler.formatter.SyntaxAnnotator.SyntaxInfo;
+import compiler.formatter.CommentAttachment.CommentAttachmentKind;
+import compiler.formatter.CommentAttachment.CommentAttachments;
 import compiler.formatter.FormatToken.FormatTokenKind;
 import compiler.formatter.FormatToken.FormatTokenTools;
-import compiler.formatter.CommentAttachment.CommentAttachments;
-import compiler.formatter.CommentAttachment.CommentAttachmentKind;
+import compiler.formatter.SyntaxAnnotator.SyntaxInfo;
+import compiler.syntax.Token.TokenKind;
 
 typedef UnwrappedLine = {
 	final tokens:Array<FormatToken>;

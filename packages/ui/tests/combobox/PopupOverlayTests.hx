@@ -13,8 +13,8 @@ import haxeon.ui.core.UiContext;
 import haxeon.ui.core.View;
 import haxeon.ui.semantics.AccessibilityRole;
 import haxeon.ui.widgets.controls.ComboBox;
-import haxeon.ui.widgets.controls.SelectOption;
 import haxeon.ui.widgets.controls.Select;
+import haxeon.ui.widgets.controls.SelectOption;
 import haxeon.ui.widgets.overlays.Dialog;
 import haxeon.ui.widgets.text.Text;
 

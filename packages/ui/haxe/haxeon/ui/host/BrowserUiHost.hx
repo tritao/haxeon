@@ -6,8 +6,8 @@ import haxeon.platform.event.PlatformEvent;
 import nativekit.ffi.NativeKitTypes.SurfaceOptions as NativeSurfaceOptions;
 import nativekit.ffi.NativeKitTypes.WindowOptions as NativeWindowOptions;
 
-import haxeon.ui.FontCollection;
 import haxe.io.Bytes;
+import haxeon.ui.FontCollection;
 import nativekit.ffi.NativeKit;
 import nativekit.ffi.NativeKitConstants;
 import nativekit.ffi.NativeKitTypes;

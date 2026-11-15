@@ -8,10 +8,10 @@ import haxeon.ui.TextLayout.TextRangeRect;
 
 import haxeon.ui.widgets.text.Text;
 
-import nativekit.ffi.NativeKitTypes.Result;
-import nativekit.ffi.NativeKitTypes.TextInputFlags;
 import haxeon.ui.Rect;
 import haxeon.ui.widgets.text.TextInputWindow;
+import nativekit.ffi.NativeKitTypes.Result;
+import nativekit.ffi.NativeKitTypes.TextInputFlags;
 
 /** Synchronizes Haxe editor state with NativeKit's custom-surface IME API. */
 class TextInputBridge {

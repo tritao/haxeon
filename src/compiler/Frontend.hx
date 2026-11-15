@@ -1,12 +1,12 @@
 package compiler;
 
+import compiler.Source.SourceFile;
 import compiler.ir.Ir.IrProgram;
 import compiler.ir.IrProgramAssembler;
 import compiler.ir.TargetProfile;
-import compiler.types.Typer;
-import compiler.Source.SourceFile;
 import compiler.syntax.Lexer;
 import compiler.syntax.Parser;
+import compiler.types.Typer;
 
 /** Stateless convenience pipeline from source text through typed SSA IR. */
 class Frontend {

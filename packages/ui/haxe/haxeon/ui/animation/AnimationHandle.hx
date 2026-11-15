@@ -1,7 +1,7 @@
 package haxeon.ui.animation;
 
-import haxeon.ui.animation.RetainedAnimation;
 import haxeon.ui.animation.DelayedAnimation;
+import haxeon.ui.animation.RetainedAnimation;
 
 /** Stable registration returned by AnimationScheduler.track. */
 class AnimationHandle {

@@ -2,13 +2,13 @@ package compiler.tools;
 
 import compiler.Diagnostic.CompileError;
 import compiler.service.CancellationToken;
-import sys.thread.Thread;
-import sys.thread.Lock;
 import haxe.Json;
-import sys.io.File;
 import sys.FileSystem;
+import sys.io.File;
 import sys.net.Host;
 import sys.net.Socket;
+import sys.thread.Lock;
+import sys.thread.Thread;
 
 /**
  * Private loopback worker for one project's build session. Exits after `HAXEON_COMPILER_IDLE_SECONDS`

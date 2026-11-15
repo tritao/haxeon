@@ -1,9 +1,9 @@
 package build;
 
-import haxe.io.Path;
-import sys.FileSystem;
 import build.Target.TargetAbi;
 import build.Target.TargetArch;
+import haxe.io.Path;
+import sys.FileSystem;
 
 enum abstract BuildProfile(String) from String to String {
 	var Debug = "debug";

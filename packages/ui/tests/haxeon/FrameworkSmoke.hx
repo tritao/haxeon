@@ -1,11 +1,11 @@
-import haxeon.ui.core.UiEventPhase;
 import haxeon.platform.Runtime;
 import haxeon.platform.event.EventPump;
 import haxeon.platform.event.PlatformEvent;
 import haxeon.platform.input.TextEdit as PlatformTextEdit;
-import nativekit.ffi.NativeKitTypes.WindowOptions as NativeWindowOptions;
 import haxeon.ui.TextLayout.TextPosition;
 import haxeon.ui.TextLayout.TextRangeRect;
+import haxeon.ui.core.UiEventPhase;
+import nativekit.ffi.NativeKitTypes.WindowOptions as NativeWindowOptions;
 
 import haxeon.ui.LayoutSession;
 import haxeon.ui.Paint;

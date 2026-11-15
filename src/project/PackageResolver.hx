@@ -1,12 +1,12 @@
 package project;
 
+import build.Target;
 import haxe.io.Path;
+import project.FfiManifest.FfiImportManifest;
+import project.FfiManifest.ResolvedFfiImport;
+import project.PackageLockfile.PackageLockEntry;
 import sys.FileSystem;
 import sys.io.File;
-import project.PackageLockfile.PackageLockEntry;
-import project.FfiManifest.ResolvedFfiImport;
-import project.FfiManifest.FfiImportManifest;
-import build.Target;
 
 /** Resolves a package graph independently of the source acquisition mechanism. */
 class PackageResolver {

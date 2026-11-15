@@ -12,11 +12,11 @@ import haxeon.ui.core.View;
 import haxeon.ui.icons.IconName;
 import haxeon.ui.semantics.AccessibilityAction;
 import haxeon.ui.style.StyleState;
+import haxeon.ui.widgets.collections.VirtualGrid;
 import haxeon.ui.widgets.controls.Button;
 import haxeon.ui.widgets.controls.Checkbox;
 import haxeon.ui.widgets.controls.IconButton;
 import haxeon.ui.widgets.controls.Radio;
-import haxeon.ui.widgets.collections.VirtualGrid;
 import haxeon.ui.widgets.text.Text;
 
 class ActivationTests {

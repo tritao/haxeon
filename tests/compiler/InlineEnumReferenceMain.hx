@@ -2,8 +2,8 @@ import compiler.ir.Ir;
 import compiler.ir.IrBuilder;
 import compiler.ir.IrFunction;
 import compiler.ir.IrInlineEnumReferenceAccess;
-import compiler.ir.IrValueLaneReference;
 import compiler.ir.IrInterpreter;
+import compiler.ir.IrValueLaneReference;
 import compiler.ir.IrVerifier;
 
 @:access(compiler.ir.IrBuilder)

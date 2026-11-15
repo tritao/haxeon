@@ -1,8 +1,8 @@
 import compiler.Frontend;
 import compiler.hl.HlFunction;
-import compiler.hl.incremental.HlSymbolTable;
 import compiler.hl.incremental.HlLoweredCache;
 import compiler.hl.incremental.HlLoweredFunction;
+import compiler.hl.incremental.HlSymbolTable;
 import compiler.ir.hl.HlLower;
 
 /**

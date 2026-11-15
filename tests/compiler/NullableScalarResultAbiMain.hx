@@ -1,7 +1,7 @@
+import compiler.backend.Backend.BackendTarget;
 import compiler.ir.Ir;
 import compiler.ir.IrBuilder;
 import compiler.ir.IrFunction;
-import compiler.backend.Backend.BackendTarget;
 /** Nullable argument expansion must preserve the scalar ABI used for value results. */
 class NullableScalarResultAbiMain {
 	static function main():Void {

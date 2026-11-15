@@ -1,11 +1,11 @@
 import haxeon.reactive.Signal;
+import haxeon.ui.LayoutVisualKind;
+import haxeon.ui.component.BoundText;
 import haxeon.ui.core.BuildContext;
 import haxeon.ui.core.StateStore;
-import haxeon.ui.component.BoundText;
-import haxeon.ui.theme.Theme;
 import haxeon.ui.core.UiDirtyFlag;
 import haxeon.ui.debug.UiStyleInvalidationMetrics;
-import haxeon.ui.LayoutVisualKind;
+import haxeon.ui.theme.Theme;
 
 class BoundTextMain {
   static function main():Int {

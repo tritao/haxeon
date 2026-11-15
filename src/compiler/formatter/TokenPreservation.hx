@@ -1,7 +1,7 @@
 package compiler.formatter;
 
-import compiler.Source.SourceFile;
 import compiler.Diagnostic.CompileError;
+import compiler.Source.SourceFile;
 import compiler.syntax.Lexer;
 import compiler.syntax.Token;
 

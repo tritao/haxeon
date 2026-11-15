@@ -4,8 +4,8 @@ import compiler.semantic.GenericSpecializationRegistry;
 import compiler.semantic.SemanticProgram;
 import compiler.syntax.Lexer;
 import compiler.syntax.Parser;
-import compiler.types.Typer;
 import compiler.types.TypedAst.TypedProgram;
+import compiler.types.Typer;
 
 class TyperBoundaryMain {
 	static function main():Void {

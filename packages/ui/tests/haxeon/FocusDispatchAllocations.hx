@@ -1,4 +1,3 @@
-import haxeon.ui.core.UiEventPhase;
 import haxeon.ui.Rect;
 import haxeon.ui.ResolvedLayoutItem;
 import haxeon.ui.Transform2D;
@@ -7,6 +6,7 @@ import haxeon.ui.core.FocusManager;
 import haxeon.ui.core.RenderNode;
 import haxeon.ui.core.UiEvent;
 import haxeon.ui.core.UiEventKind;
+import haxeon.ui.core.UiEventPhase;
 import haxeon.ui.core.WidgetId;
 
 /** Event construction and listener setup precede the measured dispatch interval. */

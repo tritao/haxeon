@@ -2,10 +2,10 @@ import haxeon.reactive.Signal;
 import haxeon.ui.component.TrackedScope;
 import haxeon.ui.core.BuildContext;
 import haxeon.ui.core.RenderNode;
+import haxeon.ui.core.RetainedVariants;
 import haxeon.ui.core.StateStore;
 import haxeon.ui.core.View;
 import haxeon.ui.theme.Theme;
-import haxeon.ui.core.RetainedVariants;
 
 class ScopeLegacyCacheLifetimeMain implements View {
   final choice = new Signal<Bool>(true);

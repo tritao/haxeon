@@ -10,17 +10,14 @@ import haxeon.ui.LayoutVisualKind;
 import haxeon.ui.Rect;
 import haxeon.ui.TextLayout;
 import haxeon.ui.TextWrap;
-import haxeon.ui.core.TextStyleOverride;
-import haxeon.ui.theme.TextRole;
 import haxeon.ui.core.BuildContext;
 import haxeon.ui.core.RenderNode;
-import haxeon.ui.core.View;
-import haxeon.ui.core.WidgetId;
-import haxeon.ui.widgets.scroll.ScrollView;
-import haxeon.ui.widgets.scroll.ScrollAxis;
+import haxeon.ui.core.TextStyleOverride;
 import haxeon.ui.core.UiEvent;
 import haxeon.ui.core.UiEventKind;
 import haxeon.ui.core.UiKey;
+import haxeon.ui.core.View;
+import haxeon.ui.core.WidgetId;
 import haxeon.ui.semantics.AccessibilityAction;
 import haxeon.ui.semantics.AccessibilityOrientation;
 import haxeon.ui.semantics.AccessibilityRole;
@@ -30,6 +27,9 @@ import haxeon.ui.style.ShadowDecoration;
 import haxeon.ui.style.StyleProperty;
 import haxeon.ui.style.StyleSource;
 import haxeon.ui.style.StyleTarget;
+import haxeon.ui.theme.TextRole;
+import haxeon.ui.widgets.scroll.ScrollAxis;
+import haxeon.ui.widgets.scroll.ScrollView;
 
 /** Mutable bridge for active-option visibility across rebuilt render trees. */
 class SelectionPopupVisibility {

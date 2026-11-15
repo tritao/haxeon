@@ -1,5 +1,5 @@
-import runtime.FloatBits;
 import haxeon.Hashing;
+import runtime.FloatBits;
 
 struct ScalarMapValue {
 	public final number:Int;

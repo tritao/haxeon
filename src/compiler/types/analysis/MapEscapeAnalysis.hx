@@ -1,11 +1,11 @@
 package compiler.types.analysis;
 
 import compiler.Source.SourceSpan;
-import compiler.types.analysis.BindingWalker.BindingKind;
 import compiler.syntax.Ast.AstArgument;
 import compiler.syntax.Ast.AstExpression;
 import compiler.syntax.Ast.AstStatement;
 import compiler.syntax.Ast.AstType;
+import compiler.types.analysis.BindingWalker.BindingKind;
 
 /**
  * Finds local maps that nothing else can reach.

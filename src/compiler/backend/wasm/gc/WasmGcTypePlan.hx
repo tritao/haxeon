@@ -1,7 +1,7 @@
 package compiler.backend.wasm.gc;
 
-import compiler.ir.IrProgramIndex;
 import compiler.backend.wasm.WasmValueLayout;
+import compiler.ir.IrProgramIndex;
 
 import compiler.ir.Ir.IrEnum;
 import compiler.ir.Ir.IrEnumCase;

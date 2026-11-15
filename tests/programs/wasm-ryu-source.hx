@@ -1,5 +1,5 @@
-import runtime.Ryu;
 import runtime.FloatBits;
+import runtime.Ryu;
 
 #if wasm
 function decimalMatches(value:Float, significand:Int, exponent:Int):Bool {

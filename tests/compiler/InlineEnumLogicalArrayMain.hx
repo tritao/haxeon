@@ -1,8 +1,8 @@
 import compiler.ir.Ir;
 import compiler.ir.IrBuilder;
 import compiler.ir.IrFunction;
-import compiler.ir.IrValueLaneReference;
 import compiler.ir.IrValueLaneLayout.IrValueLaneTarget;
+import compiler.ir.IrValueLaneReference;
 /** Logical enum array descriptors with private lanes; source enum activation remains separate. */
 @:access(compiler.ir.IrBuilder)
 class InlineEnumLogicalArrayMain {

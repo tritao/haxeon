@@ -1,21 +1,21 @@
 package haxeon.ui.widgets.overlays;
 
-import haxeon.ui.core.UiEventPhase;
-import haxeon.ui.LayoutAxis;
-import haxeon.ui.Rect;
 import haxeon.ui.Insets;
+import haxeon.ui.LayoutAxis;
 import haxeon.ui.LayoutPositioning;
 import haxeon.ui.LayoutStyle;
 import haxeon.ui.LayoutVisualKind;
+import haxeon.ui.Rect;
 import haxeon.ui.core.BuildContext;
-import haxeon.ui.core.Key;
 import haxeon.ui.core.HitTestBehavior;
+import haxeon.ui.core.Key;
 import haxeon.ui.core.RenderNode;
 import haxeon.ui.core.State;
 import haxeon.ui.core.UiEventKind;
+import haxeon.ui.core.UiEventPhase;
 import haxeon.ui.core.View;
-import haxeon.ui.style.StyleTarget;
 import haxeon.ui.style.StyleState;
+import haxeon.ui.style.StyleTarget;
 
 /** Informational tooltip layered above its anchor. Content never participates in pointer hit testing. */
 class Tooltip implements View {

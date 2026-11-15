@@ -1,7 +1,7 @@
 package build.execution;
 
-import build.execution.ActionResult.ExecutionResult;
 import build.BuildEnvironment;
+import build.execution.ActionResult.ExecutionResult;
 import build.execution.ExecutionAction.ActionKind;
 #if (target.threaded && !eval)
 import sys.thread.Lock;

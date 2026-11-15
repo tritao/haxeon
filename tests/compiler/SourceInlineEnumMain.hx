@@ -1,7 +1,7 @@
 import compiler.Compiler;
-import compiler.tools.CompilerDriver;
 import compiler.backend.wasm.WasmBackend;
 import compiler.hl.HlWriter;
+import compiler.tools.CompilerDriver;
 
 class SourceInlineEnumMain {
 	static function assertInline(program:compiler.ir.Ir.IrProgram, expected:Bool) {

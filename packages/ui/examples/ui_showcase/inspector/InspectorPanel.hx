@@ -2,22 +2,22 @@ package inspector;
 
 import components.ShowcaseKit;
 
+import UiExplorer;
+import components.CodeSample;
+import components.PropertyRow;
+import haxeon.ui.Insets;
 import haxeon.ui.LayoutAxis;
 import haxeon.ui.LayoutStyle;
-import haxeon.ui.Insets;
-import UiExplorer;
 import haxeon.ui.debug.AccessibilityIssue;
 import haxeon.ui.debug.UiNodeSnapshot;
+import haxeon.ui.widgets.KeyedView;
 import haxeon.ui.widgets.controls.Button;
 import haxeon.ui.widgets.layout.Column;
-import haxeon.ui.widgets.KeyedView;
 import haxeon.ui.widgets.layout.Row;
 import haxeon.ui.widgets.scroll.ScrollAxis;
 import haxeon.ui.widgets.scroll.ScrollView;
 import inspector.InspectionOverlay;
 import inspector.WidgetDocsRegistry;
-import components.CodeSample;
-import components.PropertyRow;
 
 /** Inspector drawer: selected render node, state, semantics, and ancestry. */
 class InspectorPanel {

@@ -2,10 +2,10 @@ import haxeon.reactive.Signal;
 import haxeon.ui.LayoutFrame;
 import haxeon.ui.LayoutSession;
 import haxeon.ui.component.BoundText;
-import haxeon.ui.core.UiContext;
-import haxeon.ui.core.View;
 import haxeon.ui.core.BuildContext;
 import haxeon.ui.core.StateStore;
+import haxeon.ui.core.UiContext;
+import haxeon.ui.core.View;
 import haxeon.ui.theme.Theme;
 
 /** A failed binding must not suppress the next host frame request. */

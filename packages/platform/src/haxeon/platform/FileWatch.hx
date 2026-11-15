@@ -1,11 +1,11 @@
 package haxeon.platform;
 
 import haxe.io.Bytes;
+import haxeon.platform.event.EventPump;
+import haxeon.platform.event.EventSubscription;
+import haxeon.platform.event.PlatformEvent;
 import nativekit.ffi.NativeKit;
 import nativekit.ffi.NativeKitTypes;
-import haxeon.platform.event.EventSubscription;
-import haxeon.platform.event.EventPump;
-import haxeon.platform.event.PlatformEvent;
 
 /**
 	A NativeKit file watch: directories registered recursively or not, subtrees left out, and typed events.

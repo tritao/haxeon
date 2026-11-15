@@ -1,11 +1,11 @@
 import compiler.Compiler;
-import compiler.runtime.CompilerIntrinsics;
-import compiler.tools.CompilerDriver;
 import compiler.backend.Backend.BackendTarget;
 import compiler.backend.wasm.WasmBackend;
 import compiler.ir.Ir;
 import compiler.ir.IrBuilder;
 import compiler.ir.IrFunction;
+import compiler.runtime.CompilerIntrinsics;
+import compiler.tools.CompilerDriver;
 import sys.io.File;
 
 /** Verify each closure ABI after its adapters, including the session's auxiliary HashLink assembly. */

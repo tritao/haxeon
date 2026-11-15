@@ -1,3 +1,5 @@
+import audiolab.AudioLabEngine;
+import audiolab.AudioLabView;
 import haxeon.platform.Runtime;
 import haxeon.platform.Surface as PlatformSurface;
 import haxeon.platform.SurfaceFrameSubscription;
@@ -10,14 +12,12 @@ import haxeon.ui.FrameInfo;
 import haxeon.ui.LayoutFrame;
 import haxeon.ui.Renderer;
 import haxeon.ui.Surface;
-import nativekit.ffi.NativeKit;
-import nativekit.ffi.NativeKitTypes;
-import nativekit.ffi.NativeKitGpu;
-import audiolab.AudioLabEngine;
-import audiolab.AudioLabView;
-import haxeon.ui.core.NativeInputAdapter;
 import haxeon.ui.core.FrameworkErrorView;
+import haxeon.ui.core.NativeInputAdapter;
 import haxeon.ui.core.UiContext;
+import nativekit.ffi.NativeKit;
+import nativekit.ffi.NativeKitGpu;
+import nativekit.ffi.NativeKitTypes;
 
 /** Desktop entry point for NativeKit Audio Lab. */
 class Main {

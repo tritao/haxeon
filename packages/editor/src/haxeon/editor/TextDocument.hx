@@ -1,7 +1,7 @@
 package haxeon.editor;
 
-import haxe.io.Bytes;
 import Observable;
+import haxe.io.Bytes;
 
 /** Caller-owned editable text whose public revision participates in reactive builds. */
 @:allow(haxeon.ui.widgets.text.TextEditorState)

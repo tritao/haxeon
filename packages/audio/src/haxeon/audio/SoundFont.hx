@@ -2,12 +2,12 @@ package haxeon.audio;
 
 import haxeon.platform.BindingError;
 
+import haxe.io.Bytes;
+import haxeon.platform.NativeKitError;
 import nativekit.ffi.NativeKit;
-import nativekit.ffi.NativeKitTypes;
 import nativekit.ffi.NativeKitAudio;
 import nativekit.ffi.NativeKitAudioTypes;
-import haxeon.platform.NativeKitError;
-import haxe.io.Bytes;
+import nativekit.ffi.NativeKitTypes;
 import sys.io.File;
 
 typedef SoundFontPresetInfo = {

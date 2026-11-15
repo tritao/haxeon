@@ -1,10 +1,10 @@
 import Equatable;
-import haxeon.ui.component.EqualChild;
-import haxeon.ui.core.View;
 import haxeon.ui.LayoutVisualKind;
+import haxeon.ui.component.EqualChild;
 import haxeon.ui.core.BuildContext;
 import haxeon.ui.core.RenderNode;
 import haxeon.ui.core.StateStore;
+import haxeon.ui.core.View;
 import haxeon.ui.icons.IconName;
 import haxeon.ui.semantics.AccessibilityAction;
 import haxeon.ui.semantics.AccessibilityRole;

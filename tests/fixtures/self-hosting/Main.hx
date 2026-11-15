@@ -1,10 +1,10 @@
 import compiler.Compiler;
+import compiler.Compiler.CompileResult;
 import compiler.hl.HlWriter;
 import compiler.runtime.CompilerIntrinsics;
 import runtime.Runtime;
-import compiler.Compiler.CompileResult;
-import sys.thread.Thread;
 import sys.thread.Mutex;
+import sys.thread.Thread;
 
 class Completion {
     public var done:Bool = false;

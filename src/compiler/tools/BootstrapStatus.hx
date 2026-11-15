@@ -1,12 +1,12 @@
 package compiler.tools;
 
+import compiler.Compiler;
+import compiler.Diagnostic.CompileError;
+import compiler.Source.SourceFile;
+import compiler.runtime.CompilerIntrinsics as CompilerRuntimeAbi;
 import compiler.syntax.Lexer;
 import compiler.syntax.Parser;
 import compiler.syntax.Token.TokenKind;
-import compiler.Source.SourceFile;
-import compiler.Compiler;
-import compiler.runtime.CompilerIntrinsics as CompilerRuntimeAbi;
-import compiler.Diagnostic.CompileError;
 import haxe.Json;
 import sys.FileSystem;
 import sys.io.File;

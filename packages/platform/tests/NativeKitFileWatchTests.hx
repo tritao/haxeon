@@ -1,6 +1,6 @@
-import haxeon.platform.event.EventPump;
 import haxeon.platform.FileWatch;
 import haxeon.platform.FileWatchEvent;
+import haxeon.platform.event.EventPump;
 import nativekit.ffi.NativeKit;
 import nativekit.ffi.NativeKitTypes;
 import sys.FileSystem;

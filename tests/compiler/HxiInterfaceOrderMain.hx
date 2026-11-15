@@ -1,7 +1,7 @@
-import compiler.ffi.HxiInterfaceOrder;
 import compiler.Compiler;
 import compiler.Compiler.FfiConfiguration;
 import compiler.Compiler.FfiInterfaceSource;
+import compiler.ffi.HxiInterfaceOrder;
 
 /** FFI interfaces are registered dependencies first, whatever order their files sort in. */
 class HxiInterfaceOrderMain {

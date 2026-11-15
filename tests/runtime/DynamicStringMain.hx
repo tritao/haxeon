@@ -1,6 +1,6 @@
 import compiler.Compiler;
-import compiler.runtime.CompilerIntrinsics;
 import compiler.hl.HlWriter;
+import compiler.runtime.CompilerIntrinsics;
 import sys.io.File;
 
 /** Use a child VM: a signal must fail the test rather than terminate the test driver. */

@@ -2,8 +2,8 @@ package compiler.semantic;
 
 import compiler.ffi.NativeLayout;
 import compiler.runtime.RuntimeShape.RuntimeShapes;
-import compiler.syntax.Ast.AstFunction;
 import compiler.syntax.Ast.AstClass;
+import compiler.syntax.Ast.AstFunction;
 import compiler.syntax.Ast.AstType;
 import compiler.types.Type.CompilerType;
 

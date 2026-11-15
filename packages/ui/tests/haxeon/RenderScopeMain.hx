@@ -1,17 +1,17 @@
-import haxeon.ui.core.BuildContext;
-import haxeon.ui.core.StateStore;
-import haxeon.ui.component.ScopeView;
-import haxeon.ui.theme.Theme;
 import haxeon.reactive.Signal;
-import haxeon.ui.core.RenderNode;
-import haxeon.ui.core.RenderScope;
-import haxeon.ui.core.WidgetId;
+import haxeon.ui.Insets;
 import haxeon.ui.LayoutAxis;
+import haxeon.ui.LayoutPositioning;
 import haxeon.ui.LayoutSizing;
 import haxeon.ui.LayoutStyle;
-import haxeon.ui.LayoutPositioning;
 import haxeon.ui.LayoutVisualKind;
-import haxeon.ui.Insets;
+import haxeon.ui.component.ScopeView;
+import haxeon.ui.core.BuildContext;
+import haxeon.ui.core.RenderNode;
+import haxeon.ui.core.RenderScope;
+import haxeon.ui.core.StateStore;
+import haxeon.ui.core.WidgetId;
+import haxeon.ui.theme.Theme;
 
 /** Native structural ownership does not reconcile or redirect removed nodes. */
 class RenderScopeMain {

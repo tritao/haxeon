@@ -1,7 +1,7 @@
 package compiler.ir;
 
-import compiler.ir.Ir.IrType;
 import compiler.ir.Ir.IrEnum;
+import compiler.ir.Ir.IrType;
 import compiler.ir.IrValueLaneLayout.IrValueLaneShape;
 import compiler.ir.IrValueLaneLayout.IrValueLaneTarget;
 

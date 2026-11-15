@@ -1,11 +1,11 @@
+import compiler.compilation.AllocationMeter;
 import compiler.ir.Ir;
 import compiler.ir.IrBuilder;
 import compiler.ir.IrFunction;
-import compiler.ir.IrScalarReplacement;
-import compiler.ir.IrValuePhiScalarization;
 import compiler.ir.IrNullableScalarFlow;
 import compiler.ir.IrObjectTable;
-import compiler.compilation.AllocationMeter;
+import compiler.ir.IrScalarReplacement;
+import compiler.ir.IrValuePhiScalarization;
 
 /** A value declaration must not make unrelated scalar CFGs pay for value analyses. */
 class ScalarPreflightSelectionMain {

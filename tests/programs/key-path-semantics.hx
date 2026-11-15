@@ -1,9 +1,9 @@
 #if !wasm
 import runtime.memory.Arena;
 #end
-import runtime.memory.RawPtr;
 import haxeon.reactive.Effect;
 import haxeon.reactive.ReactiveRuntime;
+import runtime.memory.RawPtr;
 
 struct SpecPoint {
 	public var x:Int;

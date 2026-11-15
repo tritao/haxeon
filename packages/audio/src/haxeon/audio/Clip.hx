@@ -2,14 +2,14 @@ package haxeon.audio;
 
 import haxeon.platform.BindingError;
 
-import nativekit.ffi.NativeKit;
-import nativekit.ffi.NativeKitTypes;
-import nativekit.ffi.NativeKitAudio;
-import nativekit.ffi.NativeKitAudioTypes;
-import haxeon.platform.NativeKitError;
 import haxe.io.Bytes;
+import haxeon.platform.NativeKitError;
 import haxeon.platform.resource.Resource;
 import haxeon.platform.resource.ResourceAsset;
+import nativekit.ffi.NativeKit;
+import nativekit.ffi.NativeKitAudio;
+import nativekit.ffi.NativeKitAudioTypes;
+import nativekit.ffi.NativeKitTypes;
 
 /** Reusable audio source that can create multiple independent voices. */
 class Clip {

@@ -1,9 +1,9 @@
 package haxeon.filesystem;
 
+import haxeon.platform.NativeKitError;
 import nativekit.ffi.NativeKitFilesystem;
 import nativekit.ffi.NativeKitFilesystemTypes.FileSystemEntry;
 import nativekit.ffi.NativeKitTypes.Result;
-import haxeon.platform.NativeKitError;
 
 /** Native directory cursor owned by a root. */
 class FileSystemDirectory {

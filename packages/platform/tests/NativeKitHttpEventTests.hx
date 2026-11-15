@@ -1,11 +1,11 @@
-import haxeon.platform.event.EventPump;
 import haxe.io.Bytes;
+import haxeon.platform.event.EventPump;
 import nativekit.ffi.NativeKitNet;
 import nativekit.ffi.NativeKitNetTypes.HttpClientOptions;
-import nativekit.ffi.NativeKitNetTypes.NativeHttpHeader;
 import nativekit.ffi.NativeKitNetTypes.HttpMethod;
 import nativekit.ffi.NativeKitNetTypes.HttpRequestMode;
 import nativekit.ffi.NativeKitNetTypes.HttpRequestOptions;
+import nativekit.ffi.NativeKitNetTypes.NativeHttpHeader;
 import nativekit.ffi.NativeKitTypes.Result;
 
 /** Loopback contract test for copied NativeKit HTTP events and byte-span headers. */

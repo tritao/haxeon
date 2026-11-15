@@ -1,11 +1,11 @@
-import compiler.syntax.Lexer;
-import compiler.syntax.Parser;
 import compiler.Source.SourceFile;
-import compiler.types.DeclarationIndex.DeclarationKind;
-import compiler.semantic.SemanticProgram;
-import compiler.types.Typer;
 import compiler.semantic.DeclarationLifecycle;
 import compiler.semantic.DeclarationLifecycle.DeclarationStage;
+import compiler.semantic.SemanticProgram;
+import compiler.syntax.Lexer;
+import compiler.syntax.Parser;
+import compiler.types.DeclarationIndex.DeclarationKind;
+import compiler.types.Typer;
 
 class SemanticProgramMain {
 	static function main():Void {

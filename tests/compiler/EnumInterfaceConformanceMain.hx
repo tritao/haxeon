@@ -1,5 +1,5 @@
-import compiler.Frontend;
 import compiler.Diagnostic.CompileError;
+import compiler.Frontend;
 
 class EnumInterfaceConformanceMain {
  static function checkError(label:String, source:String, code:String):Void {

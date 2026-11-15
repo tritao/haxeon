@@ -1,8 +1,8 @@
 package compiler.formatter;
 
-import compiler.syntax.Token.TokenKind;
 import compiler.formatter.FormatToken.FormatTokenKind;
 import compiler.formatter.FormatToken.FormatTokenTools;
+import compiler.syntax.Token.TokenKind;
 
 /** Matched `<` and `>` token indexes of every type argument list in a token array. */
 typedef TypeArgumentPairs = {

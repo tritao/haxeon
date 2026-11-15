@@ -5,9 +5,9 @@ import haxe.Json;
 import haxe.crypto.Sha256;
 import haxe.ds.ReadOnlyArray;
 import haxe.io.Path;
+import project.ProjectDiscovery;
 import sys.FileSystem;
 import sys.io.File;
-import project.ProjectDiscovery;
 
 class HaxeProjectConfiguration {
 	public final id:String;

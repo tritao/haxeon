@@ -1,10 +1,10 @@
 package compiler.types;
 
-import compiler.syntax.Ast.AstClass;
 import compiler.syntax.Ast.AstArgument;
+import compiler.syntax.Ast.AstClass;
 import compiler.syntax.Ast.AstEnum;
-import compiler.syntax.Ast.AstFieldAccess;
 import compiler.syntax.Ast.AstExpression;
+import compiler.syntax.Ast.AstFieldAccess;
 import compiler.syntax.Ast.AstFunction;
 import compiler.syntax.Ast.AstProgram;
 import compiler.syntax.Ast.AstStatement;

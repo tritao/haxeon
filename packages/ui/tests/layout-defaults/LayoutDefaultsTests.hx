@@ -1,6 +1,6 @@
 import haxeon.ui.LayoutAxis;
-import haxeon.ui.LayoutStyle;
 import haxeon.ui.LayoutSizing;
+import haxeon.ui.LayoutStyle;
 
 /** Capture defaults during module initialization, before application startup. */
 class LayoutDefaultsTests {

@@ -1,6 +1,6 @@
 import compiler.Compiler;
-import compiler.runtime.CompilerIntrinsics;
 import compiler.Diagnostic.CompileError;
+import compiler.runtime.CompilerIntrinsics;
 
 class RawBytePointerMain {
 	static final source = 'import haxe.io.Bytes; @:hlNative("std") class Raw { '

@@ -1,5 +1,5 @@
-import haxeon.ui.component.TrackedScope;
 import haxeon.ui.FontCollection;
+import haxeon.ui.component.TrackedScope;
 import haxeon.ui.core.BuildContext;
 import haxeon.ui.core.StateStore;
 import haxeon.ui.theme.Theme;

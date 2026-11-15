@@ -1,8 +1,8 @@
 package compiler.formatter;
 
+import compiler.formatter.FormatConfig.FormatConfigTools;
 import compiler.formatter.FormatDoc.FormatDocTools;
 import compiler.formatter.FormatToken.FormatTokenTools;
-import compiler.formatter.FormatConfig.FormatConfigTools;
 import compiler.syntax.Token.TokenKind;
 
 typedef LayoutLine = {

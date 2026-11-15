@@ -2,11 +2,11 @@ package haxeon.audio;
 
 import haxeon.platform.BindingError;
 
+import haxeon.platform.NativeKitError;
 import nativekit.ffi.NativeKit;
-import nativekit.ffi.NativeKitTypes;
 import nativekit.ffi.NativeKitAudio;
 import nativekit.ffi.NativeKitAudioTypes;
-import haxeon.platform.NativeKitError;
+import nativekit.ffi.NativeKitTypes;
 
 /** One independent playback instance created from a reusable audio clip. */
 class Voice {

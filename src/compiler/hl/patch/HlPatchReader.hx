@@ -1,7 +1,5 @@
 package compiler.hl.patch;
 
-import haxe.io.Bytes;
-import haxe.io.BytesInput;
 import compiler.hl.HlCode.HlTypeDef;
 import compiler.hl.HlOpcode;
 import compiler.hl.HlOpcodeSchema;
@@ -10,6 +8,8 @@ import compiler.hl.patch.HlPatch.HlPatchAddedFunction;
 import compiler.hl.patch.HlPatch.HlPatchFunction;
 import compiler.hl.patch.HlPatch.HlPatchGlobal;
 import compiler.hl.patch.HlPatch.HlPatchInstruction;
+import haxe.io.Bytes;
+import haxe.io.BytesInput;
 
 /** Strict HLP decoder used as the Haxe-side oracle for native patch validation. */
 class HlPatchReader {

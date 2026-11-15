@@ -1,5 +1,6 @@
 package compiler.semantic;
 
+import compiler.semantic.DeclarationLifecycle.DeclarationStage;
 import compiler.syntax.Ast.AstAbstract;
 import compiler.syntax.Ast.AstClass;
 import compiler.syntax.Ast.AstFunction;
@@ -8,7 +9,6 @@ import compiler.syntax.Ast.AstProgram;
 import compiler.types.DeclarationIndex;
 import compiler.types.SignatureInference;
 import compiler.types.TypeRelations;
-import compiler.semantic.DeclarationLifecycle.DeclarationStage;
 
 typedef SemanticLifecycleMetrics = {
 	final declarationMs:Float;

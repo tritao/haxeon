@@ -2,8 +2,8 @@ package haxeon.ui.host;
 
 import haxeon.platform.event.EventPump;
 
-import haxeon.ui.FontCollection;
 import haxe.Int64;
+import haxeon.ui.FontCollection;
 import nativekit.ffi.NativeKit;
 
 /** Live, platform-neutral services available to a hosted application. */

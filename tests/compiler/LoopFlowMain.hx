@@ -1,5 +1,5 @@
-import compiler.Frontend;
 import compiler.Diagnostic.CompileError;
+import compiler.Frontend;
 
 /**
  * A loop body runs again after itself, so a fact proved before the loop only holds inside it, and after it, when

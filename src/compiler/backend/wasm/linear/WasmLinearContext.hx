@@ -1,8 +1,8 @@
 package compiler.backend.wasm.linear;
 
 import compiler.backend.Backend.BackendOptions;
-import compiler.backend.wasm.WasmLayout;
 import compiler.backend.wasm.EnumStringDescriptors;
+import compiler.backend.wasm.WasmLayout;
 import compiler.backend.wasm.WasmModule.WasmModule;
 import compiler.ir.Ir.IrProgram;
 

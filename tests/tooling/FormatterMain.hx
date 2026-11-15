@@ -1,8 +1,8 @@
 import compiler.Source.SourceFile;
+import compiler.formatter.FormatConfig.FormatConfigTools;
 import compiler.formatter.FormatScanner;
 import compiler.formatter.FormatToken.FormatTokenKind;
 import compiler.formatter.Formatter;
-import compiler.formatter.FormatConfig.FormatConfigTools;
 import compiler.service.SourceFormatter;
 import compiler.syntax.Lexer;
 import compiler.syntax.Token.TokenKind;

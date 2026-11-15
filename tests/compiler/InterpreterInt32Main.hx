@@ -1,9 +1,9 @@
 import compiler.Compiler;
-import compiler.tools.CompilerDriver;
 import compiler.backend.Backend.BackendTarget;
 import compiler.ir.Ir;
 import compiler.ir.IrBuilder;
 import compiler.ir.IrFunction;
+import compiler.tools.CompilerDriver;
 
 class InterpreterInt32Main {
 	static function main():Void {

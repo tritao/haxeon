@@ -1,6 +1,6 @@
-import sys.thread.Thread;
-import sys.thread.Lock;
 import haxe.CallStack;
+import sys.thread.Lock;
+import sys.thread.Thread;
 
 class Target {
 	public var value:Int = 42;

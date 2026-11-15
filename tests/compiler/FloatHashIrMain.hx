@@ -1,7 +1,7 @@
-import compiler.Frontend;
 import compiler.Compiler;
-import compiler.runtime.CompilerIntrinsics;
+import compiler.Frontend;
 import compiler.ir.IrInterpreter;
+import compiler.runtime.CompilerIntrinsics;
 
 /** The reference interpreter and generated code use the same Float value hash. */
 class FloatHashIrMain {

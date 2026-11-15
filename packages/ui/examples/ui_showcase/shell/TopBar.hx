@@ -2,20 +2,20 @@ package shell;
 
 import components.ShowcaseKit;
 
-import nativekit.ffi.NativeKitTypes.WindowDecorationRegionKind;
+import UiExplorer;
+import haxeon.ui.Insets;
 import haxeon.ui.LayoutAlignmentY;
 import haxeon.ui.LayoutAxis;
-import haxeon.ui.LayoutDistribution;
 import haxeon.ui.LayoutDirection;
+import haxeon.ui.LayoutDistribution;
 import haxeon.ui.LayoutStyle;
-import haxeon.ui.Insets;
-import UiExplorer;
-import haxeon.ui.icons.IconName;
-import haxeon.ui.widgets.controls.Button;
 import haxeon.ui.core.View;
+import haxeon.ui.icons.IconName;
 import haxeon.ui.widgets.KeyedView;
-import haxeon.ui.widgets.layout.Row;
 import haxeon.ui.widgets.WindowChrome;
+import haxeon.ui.widgets.controls.Button;
+import haxeon.ui.widgets.layout.Row;
+import nativekit.ffi.NativeKitTypes.WindowDecorationRegionKind;
 
 /** Top-level branding and global Explorer actions. */
 class TopBar {

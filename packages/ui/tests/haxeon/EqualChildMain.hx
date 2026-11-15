@@ -1,13 +1,13 @@
 import Equatable;
 import haxeon.reactive.Signal;
 import haxeon.ui.LayoutVisualKind;
+import haxeon.ui.component.BoundText;
+import haxeon.ui.component.EqualChild;
+import haxeon.ui.component.TrackedScope;
 import haxeon.ui.core.BuildContext;
 import haxeon.ui.core.RenderNode;
 import haxeon.ui.core.StateStore;
 import haxeon.ui.core.View;
-import haxeon.ui.component.EqualChild;
-import haxeon.ui.component.TrackedScope;
-import haxeon.ui.component.BoundText;
 import haxeon.ui.theme.Theme;
 
 struct Props implements Equatable {

@@ -1,9 +1,9 @@
-import compiler.service.LanguageService;
 import compiler.Diagnostic.CompileError;
 import compiler.Source.SourceFile;
+import compiler.service.LanguageService;
+import compiler.syntax.Ast.AstStatement;
 import compiler.syntax.Lexer;
 import compiler.syntax.Parser;
-import compiler.syntax.Ast.AstStatement;
 
 class ParserRecoveryMain {
 	static function main():Void {

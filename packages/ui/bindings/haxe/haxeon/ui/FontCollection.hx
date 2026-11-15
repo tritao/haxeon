@@ -1,8 +1,8 @@
 package haxeon.ui;
 
 /** Collection of fonts used to create text layouts. */
-import haxeon.ui.FontFamily;
 import haxe.io.Bytes;
+import haxeon.ui.FontFamily;
 
 class FontCollection extends NativeKitUIResource {
 	private function new(value:nkui_resource)

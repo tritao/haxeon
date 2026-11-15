@@ -1,10 +1,10 @@
+import haxeon.reactive.Signal;
 import haxeon.ui.FontCollection;
-import haxeon.ui.LayoutSession;
 import haxeon.ui.LayoutFrame;
+import haxeon.ui.LayoutSession;
 import haxeon.ui.component.TrackedScope;
 import haxeon.ui.core.UiContext;
 import haxeon.ui.widgets.controls.Button;
-import haxeon.reactive.Signal;
 
 /** Replacing child descriptions through independent native updates must retire their ownership records. */
 class ScopePatchLifetimeMain {

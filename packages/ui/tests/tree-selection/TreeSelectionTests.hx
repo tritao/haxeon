@@ -1,9 +1,11 @@
 import haxeon.platform.Runtime;
+import haxeon.reactive.Signal;
 import haxeon.ui.FontCollection;
 import haxeon.ui.LayoutAxis;
 import haxeon.ui.LayoutFrame;
 import haxeon.ui.LayoutStyle;
 import haxeon.ui.core.RenderNode;
+import haxeon.ui.core.RetainedView;
 import haxeon.ui.core.UiContext;
 import haxeon.ui.core.UiModifier;
 import haxeon.ui.core.View;
@@ -13,8 +15,6 @@ import haxeon.ui.widgets.collections.TreeRootMetadata;
 import haxeon.ui.widgets.collections.TreeView;
 import haxeon.ui.widgets.collections.TreeViewModel;
 import haxeon.ui.widgets.text.Text;
-import haxeon.ui.core.RetainedView;
-import haxeon.reactive.Signal;
 
 private class Items implements TreeViewModel {
   public function new() {}

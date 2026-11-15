@@ -1,12 +1,12 @@
 package compiler.modules;
 
-import compiler.syntax.Ast.AstProgram;
-import compiler.syntax.Ast.AstFunction;
-import compiler.syntax.Token;
 import compiler.Diagnostic;
 import compiler.Source.SourceFile;
 import compiler.ir.IrFunction;
 import compiler.semantic.SemanticModel;
+import compiler.syntax.Ast.AstFunction;
+import compiler.syntax.Ast.AstProgram;
+import compiler.syntax.Token;
 import compiler.types.TypedAst.TypedFunction;
 
 /** Artifact boundary at which a dependent declaration observes a change. */

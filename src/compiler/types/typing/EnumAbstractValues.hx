@@ -1,11 +1,11 @@
 package compiler.types.typing;
 
+import compiler.Source.SourceSpan;
 import compiler.syntax.Ast.AstEnumAbstract;
-import compiler.types.analysis.Scope;
 import compiler.syntax.Ast.AstEnumAbstractValue;
 import compiler.types.Type.CompilerType;
 import compiler.types.TypedAst.TypedExpression;
-import compiler.Source.SourceSpan;
+import compiler.types.analysis.Scope;
 
 /** Constants keep their abstract identity; only declaration initializers read their raw storage. */
 @:access(compiler.types.typing.BodyTyper)

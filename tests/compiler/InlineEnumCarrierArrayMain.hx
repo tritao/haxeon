@@ -1,8 +1,8 @@
 import compiler.ir.Ir;
 import compiler.ir.IrBuilder;
 import compiler.ir.IrFunction;
-import compiler.ir.IrValueLaneReference;
 import compiler.ir.IrValueLaneLayout.IrValueLaneTarget;
+import compiler.ir.IrValueLaneReference;
 /** Internal packet storage only: public source enum array descriptors are not activated. */
 @:access(compiler.ir.IrBuilder)
 class InlineEnumCarrierArrayMain {

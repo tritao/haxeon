@@ -1,13 +1,13 @@
 package build;
 
-import build.Artifact.ArtifactKind.NativeRuntime;
 import build.Artifact.ArtifactKind.Diagnostics;
 import build.Artifact.ArtifactKind.Executable;
+import build.Artifact.ArtifactKind.FfiInterface;
+import build.Artifact.ArtifactKind.FfiNativeSharedLibrary;
 import build.Artifact.ArtifactKind.HashLinkModule;
 import build.Artifact.ArtifactKind.NativeObject;
+import build.Artifact.ArtifactKind.NativeRuntime;
 import build.Artifact.ArtifactKind.NativeSharedLibrary;
-import build.Artifact.ArtifactKind.FfiNativeSharedLibrary;
-import build.Artifact.ArtifactKind.FfiInterface;
 import build.Artifact.ArtifactKind.NativeStaticLibrary;
 import build.Artifact.ArtifactKind.WasmModule;
 import build.NativeArtifactDemand.NativeArtifactDemand;

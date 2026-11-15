@@ -1,7 +1,7 @@
-import compiler.service.LanguageService;
-import compiler.service.CancellationToken;
-import compiler.service.SourceFormatter;
 import compiler.Diagnostic.CompileError;
+import compiler.service.CancellationToken;
+import compiler.service.LanguageService;
+import compiler.service.SourceFormatter;
 
 class LanguageServiceMain {
 	static function main():Void {

@@ -1,7 +1,7 @@
 package compiler.ir;
 
-import compiler.ir.Ir.IrObject;
 import compiler.ir.Ir.IrIntrinsic;
+import compiler.ir.Ir.IrObject;
 import compiler.ir.Ir.IrObjectTools;
 import compiler.ir.Ir.IrProgram;
 import compiler.ir.Ir.IrType;

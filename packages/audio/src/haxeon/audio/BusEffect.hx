@@ -2,11 +2,11 @@ package haxeon.audio;
 
 import haxeon.platform.BindingError;
 
+import haxeon.platform.NativeKitError;
 import nativekit.ffi.NativeKit;
-import nativekit.ffi.NativeKitTypes;
 import nativekit.ffi.NativeKitAudio;
 import nativekit.ffi.NativeKitAudioTypes;
-import haxeon.platform.NativeKitError;
+import nativekit.ffi.NativeKitTypes;
 
 /** One processing node in a mixer bus's ordered effect chain. */
 class BusEffect {

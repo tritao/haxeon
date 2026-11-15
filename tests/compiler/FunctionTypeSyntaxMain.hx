@@ -1,6 +1,6 @@
 import compiler.Compiler;
-import compiler.Frontend;
 import compiler.Diagnostic.CompileError;
+import compiler.Frontend;
 import compiler.ir.IrInterpreter;
 import compiler.runtime.CompilerIntrinsics;
 

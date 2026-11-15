@@ -1,10 +1,10 @@
 import haxeon.reactive.Signal;
 import haxeon.ui.LayoutFrame;
 import haxeon.ui.LayoutSession;
+import haxeon.ui.component.BoundText;
+import haxeon.ui.component.TrackedScope;
 import haxeon.ui.core.UiContext;
 import haxeon.ui.core.View;
-import haxeon.ui.component.TrackedScope;
-import haxeon.ui.component.BoundText;
 import haxeon.ui.widgets.text.Text;
 
 /** Mount either component in memory, then exercise real cached submissions without a native host. */

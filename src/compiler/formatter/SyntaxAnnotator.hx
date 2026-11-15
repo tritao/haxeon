@@ -1,8 +1,8 @@
 package compiler.formatter;
 
-import compiler.syntax.Token.TokenKind;
 import compiler.formatter.FormatToken.FormatTokenKind;
 import compiler.formatter.FormatToken.FormatTokenTools;
+import compiler.syntax.Token.TokenKind;
 
 enum FormatNodeKind {
 	Block;

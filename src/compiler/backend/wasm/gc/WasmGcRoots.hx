@@ -1,16 +1,16 @@
 package compiler.backend.wasm.gc;
 
-import compiler.ir.Ir.IrInstruction;
-import compiler.ir.Ir.IrValue;
-import compiler.ir.Ir.IrTerminator;
 import compiler.ir.Ir.IrBlock;
-import compiler.ir.IrOperands;
+import compiler.ir.Ir.IrInstruction;
+import compiler.ir.Ir.IrProgram;
+import compiler.ir.Ir.IrTerminator;
+import compiler.ir.Ir.IrValue;
 import compiler.ir.IrFunction;
 import compiler.ir.IrGraph;
+import compiler.ir.IrOperands;
+import compiler.ir.codec.IrTypeCodec;
 import haxe.io.Bytes;
 import haxe.io.BytesOutput;
-import compiler.ir.codec.IrTypeCodec;
-import compiler.ir.Ir.IrProgram;
 
 typedef WasmSafepoint = {
 	final block:Int;

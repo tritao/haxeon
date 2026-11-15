@@ -1,7 +1,7 @@
+import compiler.Compiler.CompileResult;
 import compiler.tools.CompilerArguments;
 import compiler.tools.CompilerDriver;
 import compiler.tools.CompilerSession;
-import compiler.Compiler.CompileResult;
 import sys.FileSystem;
 import sys.io.File;
 

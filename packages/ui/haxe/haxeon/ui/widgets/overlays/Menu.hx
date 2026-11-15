@@ -14,21 +14,21 @@ import haxeon.ui.theme.TextRole;
 import haxeon.ui.style.StyleTarget;
 import haxeon.ui.style.StyleProperty;
 
-import haxeon.ui.Rect;
-import haxeon.ui.LayoutAxis;
-import haxeon.ui.widgets.scroll.ScrollView;
-import haxeon.ui.LayoutStyle;
-import haxeon.ui.Insets;
 import haxeon.ui.Color;
+import haxeon.ui.Insets;
+import haxeon.ui.LayoutAxis;
+import haxeon.ui.LayoutStyle;
+import haxeon.ui.Rect;
 import haxeon.ui.core.BuildContext;
-import haxeon.ui.core.View;
 import haxeon.ui.core.RenderNode;
-import haxeon.ui.core.UiKey;
 import haxeon.ui.core.UiEventKind;
+import haxeon.ui.core.UiKey;
+import haxeon.ui.core.View;
 import haxeon.ui.semantics.AccessibilityAction;
 import haxeon.ui.semantics.AccessibilityRole;
 import haxeon.ui.semantics.AccessibilityState;
 import haxeon.ui.semantics.Semantics;
+import haxeon.ui.widgets.scroll.ScrollView;
 
 /** Keyboard-focusable popup menu composed from ordinary Haxe buttons. */
 class Menu implements View {

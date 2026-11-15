@@ -1,8 +1,8 @@
 import compiler.Frontend;
+import compiler.Source.SourceFile;
 import compiler.ir.Ir.IrType;
 import compiler.ir.IrInlineValueLayout;
 import compiler.ir.IrProgramAssembler;
-import compiler.Source.SourceFile;
 import compiler.syntax.Lexer;
 import compiler.syntax.Parser;
 import compiler.types.Typer;

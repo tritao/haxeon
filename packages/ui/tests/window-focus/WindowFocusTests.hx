@@ -1,6 +1,4 @@
 import haxeon.platform.event.PlatformEvent;
-import nativekit.ffi.NativeKitTypes.Handle;
-import nativekit.ffi.NativeKitTypes.WindowStateFlags;
 import haxeon.ui.LayoutAxis;
 import haxeon.ui.LayoutFrame;
 import haxeon.ui.LayoutStyle;
@@ -13,6 +11,8 @@ import haxeon.ui.core.View;
 import haxeon.ui.widgets.CanvasView;
 import haxeon.ui.widgets.KeyedView;
 import haxeon.ui.widgets.layout.Column;
+import nativekit.ffi.NativeKitTypes.Handle;
+import nativekit.ffi.NativeKitTypes.WindowStateFlags;
 
 private class FocusView implements View {
 	public var showFirst = true;

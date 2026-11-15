@@ -2,8 +2,8 @@ package tools;
 
 import compiler.Compiler;
 import compiler.Compiler.CompileResult;
-import compiler.runtime.CompilerIntrinsics;
 import compiler.modules.ModulePath;
+import compiler.runtime.CompilerIntrinsics;
 import sys.FileSystem;
 import sys.io.File;
 

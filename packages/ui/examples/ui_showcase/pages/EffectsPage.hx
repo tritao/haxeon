@@ -1,5 +1,6 @@
 package pages;
 
+import UiExplorer;
 import haxeon.ui.Canvas;
 import haxeon.ui.Color;
 import haxeon.ui.GradientStop;
@@ -7,7 +8,6 @@ import haxeon.ui.Insets;
 import haxeon.ui.LayoutAxis;
 import haxeon.ui.LayoutStyle;
 import haxeon.ui.Rect;
-import UiExplorer;
 import haxeon.ui.style.BlurEffect;
 import haxeon.ui.style.BrightnessEffect;
 import haxeon.ui.style.ContrastEffect;
@@ -19,8 +19,8 @@ import haxeon.ui.style.SaturateEffect;
 import haxeon.ui.style.StyleSelector;
 import haxeon.ui.style.StyleValue;
 import haxeon.ui.widgets.CanvasView;
-import haxeon.ui.widgets.layout.Column;
 import haxeon.ui.widgets.KeyedView;
+import haxeon.ui.widgets.layout.Column;
 import haxeon.ui.widgets.layout.Row;
 
 /** Showcase for post-layout effects and their stylesheet-facing contracts. */

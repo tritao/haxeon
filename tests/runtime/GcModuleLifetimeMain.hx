@@ -1,7 +1,7 @@
 import compiler.Compiler;
 import compiler.hl.HlWriter;
-import runtime.Runtime;
 import hl.Gc;
+import runtime.Runtime;
 
 private extern class BoundaryGc {
 	@:hlNative("std", "gc_step") static function step(budget:Float):Bool;

@@ -1,7 +1,7 @@
 package compiler.ir.cfg;
 
-import compiler.ir.cfg.Cfg;
 import compiler.ir.Ir.IrType;
+import compiler.ir.cfg.Cfg;
 
 /** Enforces the mutable CFG contract before dominance and SSA construction. */
 class CfgVerifier {

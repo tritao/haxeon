@@ -11,11 +11,11 @@ import haxeon.ui.core.View;
 import haxeon.ui.widgets.collections.TreeRootMetadata;
 import haxeon.ui.widgets.collections.TreeView;
 import haxeon.ui.widgets.collections.TreeViewModel;
-import haxeon.ui.widgets.collections.VirtualList;
 import haxeon.ui.widgets.collections.VirtualGrid;
+import haxeon.ui.widgets.collections.VirtualList;
+import haxeon.ui.widgets.layout.Spacer;
 import haxeon.ui.widgets.scroll.ScrollController;
 import haxeon.ui.widgets.scroll.ScrollView;
-import haxeon.ui.widgets.layout.Spacer;
 import haxeon.ui.widgets.text.Text;
 
 private class Items implements TreeViewModel {

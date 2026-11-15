@@ -3,18 +3,18 @@ package haxeon.ui.host;
 import haxeon.platform.Surface as PlatformSurface;
 import haxeon.platform.event.EventPump;
 
+import NativeKitUI.UiStatus;
 import haxeon.ProfileCounter;
 import haxeon.ProfileRecording;
 import haxeon.ProfileSpan;
 import haxeon.ui.FrameInfo;
-import haxeon.ui.UiResult.UiError;
-import NativeKitUI.UiStatus;
 import haxeon.ui.LayoutFrame;
 import haxeon.ui.Renderer;
 import haxeon.ui.Surface;
+import haxeon.ui.UiResult.UiError;
+import haxeon.ui.core.NativeInputAdapter;
 import haxeon.ui.debug.AllocationProbe;
 import nativekit.ffi.NativeKitTypes;
-import haxeon.ui.core.NativeInputAdapter;
 
 /** Shared application, input, frame, and disposal ownership used by host adapters. */
 class UiHostRuntime {

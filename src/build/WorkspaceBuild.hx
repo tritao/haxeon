@@ -1,11 +1,11 @@
 package build;
 
 import build.BuildEnvironment.BuildProfile;
+import build.WorkspaceManifest.WorkspaceProject;
 import build.execution.ActionId;
 import build.execution.ActionMerge;
 import build.execution.ExecutionAction;
 import build.execution.ExecutionPlan;
-import build.WorkspaceManifest.WorkspaceProject;
 import build.lowering.LoweringContext;
 import build.lowering.PlanLowerer;
 import build.native.NativeCMakeProvider;

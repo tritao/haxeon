@@ -2,13 +2,13 @@ package components;
 
 import haxeon.ui.Image;
 
+import ShowcaseCube;
+import haxeon.ui.Canvas;
 import haxeon.ui.GraphicsSurface;
 import haxeon.ui.LayoutAxis;
 import haxeon.ui.LayoutStyle;
 import haxeon.ui.LayoutVisualKind;
 import haxeon.ui.Rect;
-import ShowcaseCube;
-import haxeon.ui.Canvas;
 import haxeon.ui.ResolvedLayoutItem;
 import haxeon.ui.animation.Animation;
 import haxeon.ui.animation.AnimationHandle;

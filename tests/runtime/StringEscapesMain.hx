@@ -1,7 +1,7 @@
-import compiler.hl.HlWriter;
 import compiler.Compiler;
-import runtime.Runtime;
+import compiler.hl.HlWriter;
 import compiler.runtime.CompilerIntrinsics;
+import runtime.Runtime;
 
 /**
  * Both string decode paths, plain literals and single-quoted literals with interpolation, read \xHH, \uHHHH,

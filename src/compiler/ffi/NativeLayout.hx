@@ -5,8 +5,8 @@ import compiler.ffi.HxiModel.HxiDeclaration;
 import compiler.ffi.HxiModel.HxiType;
 import compiler.types.Type.CompilerType;
 import compiler.types.Type.NominalKind;
-import compiler.types.TypedAst.TypedNativeLayout;
 import compiler.types.TypedAst.TypedNativeFieldLayout;
+import compiler.types.TypedAst.TypedNativeLayout;
 
 /**
  * C record layout shared by source-declared native values and HXI imports.

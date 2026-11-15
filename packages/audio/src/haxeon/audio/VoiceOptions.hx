@@ -1,8 +1,8 @@
 package haxeon.audio;
 
+import haxeon.audio.Enums.VoiceLoadFlags;
 import nativekit.ffi.NativeKitAudio;
 import nativekit.ffi.NativeKitAudioTypes;
-import haxeon.audio.Enums.VoiceLoadFlags;
 
 /** Configures a voice's primitive playback behavior. */
 class VoiceOptions {

@@ -3,13 +3,13 @@ package compiler.types.typing;
 import compiler.Source.SourceSpan;
 import compiler.syntax.Ast.AstExpression;
 import compiler.types.Type.CompilerType;
+import compiler.types.TypeRelations;
 import compiler.types.TypedAst.TypedExpression;
 import compiler.types.TypedAst.TypedStatement;
-import compiler.types.TypeRelations;
 import compiler.types.analysis.Scope;
-import compiler.types.typing.CallResolver.TypeExpressionCallback;
 import compiler.types.typing.CallResolver.CoerceCallback;
 import compiler.types.typing.CallResolver.TypeCallMemberWithFlowCallback;
+import compiler.types.typing.CallResolver.TypeExpressionCallback;
 
 /** Path operations preserve typed field access instead of crossing Dynamic. */
 class KeyPathOperations {

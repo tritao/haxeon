@@ -5,10 +5,10 @@ import haxeon.ui.Insets;
 import haxeon.ui.LayoutAxis;
 import haxeon.ui.LayoutStyle;
 import haxeon.ui.Transform2D;
-import haxeon.ui.style.StyleProperty.StylePropertyBase;
+import haxeon.ui.style.StyleProperty.StyleAxisProperty;
 import haxeon.ui.style.StyleProperty.StyleColorProperty;
 import haxeon.ui.style.StyleProperty.StyleInsetsProperty;
-import haxeon.ui.style.StyleProperty.StyleAxisProperty;
+import haxeon.ui.style.StyleProperty.StylePropertyBase;
 import haxeon.ui.style.StyleProperty.StyleTransformProperty;
 
 private class InheritedKeyCache {

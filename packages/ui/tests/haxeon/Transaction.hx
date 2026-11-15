@@ -1,9 +1,9 @@
 import haxeon.platform.Runtime;
 import haxeon.platform.event.EventPump;
 import haxeon.platform.event.PlatformEvent;
+import haxeon.ui.Paint.SolidPaint;
 import nativekit.ffi.NativeKitTypes.SurfaceOptions as NativeSurfaceOptions;
 import nativekit.ffi.NativeKitTypes.WindowOptions as NativeWindowOptions;
-import haxeon.ui.Paint.SolidPaint;
 
 import haxeon.ui.Canvas;
 import haxeon.ui.Color;
@@ -27,10 +27,10 @@ import haxeon.ui.TextLayout;
 import haxeon.ui.TextStyle;
 import haxeon.ui.TextWrap;
 
-import nativekit.ffi.NativeKitTypes;
-import nativekit.ffi.NativeKitConstants;
-import nativekit.ffi.NativeKit;
 import haxe.io.Bytes;
+import nativekit.ffi.NativeKit;
+import nativekit.ffi.NativeKitConstants;
+import nativekit.ffi.NativeKitTypes;
 
 class Transaction {
 	static function main():Int {

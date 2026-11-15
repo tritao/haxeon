@@ -6,10 +6,10 @@ import haxe.io.FPHelper;
 import profiler.HldiTypes.HldiClockPair;
 import profiler.HldiTypes.HldiDataFrame;
 import profiler.HldiTypes.HldiMetadata;
-import profiler.HldiTypes.HldiSessionInfo;
-import profiler.HldiTypes.HldiStats;
 import profiler.HldiTypes.HldiRecord;
+import profiler.HldiTypes.HldiSessionInfo;
 import profiler.HldiTypes.HldiSourceLine;
+import profiler.HldiTypes.HldiStats;
 import profiler.HldiTypes.HldiSymbol;
 
 class HldiReader {

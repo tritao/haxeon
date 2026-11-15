@@ -1,5 +1,5 @@
-import compiler.hl.HlWriter;
 import compiler.Compiler;
+import compiler.hl.HlWriter;
 import compiler.types.Type.CompilerType;
 import sys.io.File;
 

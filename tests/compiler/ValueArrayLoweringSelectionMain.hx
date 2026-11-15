@@ -1,8 +1,8 @@
+import compiler.compilation.AllocationMeter;
 import compiler.ir.Ir;
 import compiler.ir.IrBuilder;
 import compiler.ir.IrFunction;
 import compiler.ir.IrValueArrayProgramRewrite;
-import compiler.compilation.AllocationMeter;
 
 /** Adding element shapes must not multiply allocation for bodies with no array operations. */
 class ValueArrayLoweringSelectionMain {

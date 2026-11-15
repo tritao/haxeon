@@ -3,9 +3,9 @@ package haxeon.gpu;
 import haxeon.gpu.Enums;
 import haxeon.gpu.RenderPassDesc;
 
-import nativekit.ffi.NativeKitGpu;
 import haxeon.gpu.Enums.LoadAction;
 import haxeon.gpu.Enums.StoreAction;
+import nativekit.ffi.NativeKitGpu;
 
 /** Clear and store behavior for one render-pass attachment. */
 class AttachmentAction {

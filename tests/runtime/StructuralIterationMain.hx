@@ -1,10 +1,10 @@
 import compiler.Compiler;
-import compiler.runtime.CompilerIntrinsics;
+import compiler.backend.Backend.BackendTarget;
+import compiler.backend.wasm.WasmBackend;
 import compiler.hl.HlWriter;
+import compiler.runtime.CompilerIntrinsics;
 import runtime.Runtime;
 import sys.io.File;
-import compiler.backend.wasm.WasmBackend;
-import compiler.backend.Backend.BackendTarget;
 
 class StructuralIterationMain {
 	static function main():Void {

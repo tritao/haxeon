@@ -2,9 +2,9 @@ package haxeon.audio;
 
 import haxeon.platform.BindingError;
 
+import haxeon.audio.Enums.VoiceStealPolicy;
 import nativekit.ffi.NativeKitAudio;
 import nativekit.ffi.NativeKitAudioTypes;
-import haxeon.audio.Enums.VoiceStealPolicy;
 
 /** Configures voice admission for a bus and all of its child buses. */
 class BusConcurrencyOptions {

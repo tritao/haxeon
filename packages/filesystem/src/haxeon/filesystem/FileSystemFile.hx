@@ -2,10 +2,10 @@ package haxeon.filesystem;
 
 import haxe.Int64;
 import haxe.io.Bytes;
+import haxeon.platform.NativeKitError;
 import nativekit.ffi.NativeKitFilesystem;
 import nativekit.ffi.NativeKitFilesystemTypes.FileSystemEntry;
 import nativekit.ffi.NativeKitTypes.Result;
-import haxeon.platform.NativeKitError;
 
 /** A root-owned regular file handle for bounded positional reads. */
 class FileSystemFile {

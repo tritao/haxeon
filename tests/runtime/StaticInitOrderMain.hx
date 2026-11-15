@@ -1,11 +1,11 @@
-import compiler.hl.HlWriter;
 import compiler.Compiler;
 import compiler.Frontend;
-import compiler.ir.hl.HlLower;
-import compiler.backend.wasm.WasmBackend;
 import compiler.backend.Backend.BackendTarget;
-import sys.io.File;
+import compiler.backend.wasm.WasmBackend;
+import compiler.hl.HlWriter;
+import compiler.ir.hl.HlLower;
 import runtime.Runtime;
+import sys.io.File;
 
 class StaticInitOrderMain {
 	static function main():Void {

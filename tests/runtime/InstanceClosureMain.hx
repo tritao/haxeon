@@ -1,9 +1,9 @@
 import compiler.hl.HlWriter;
-import compiler.ir.hl.HlLower;
 import compiler.ir.Ir.IrProgram;
 import compiler.ir.Ir.IrType;
 import compiler.ir.IrBuilder;
 import compiler.ir.IrFunction;
+import compiler.ir.hl.HlLower;
 import sys.io.File;
 
 class InstanceClosureMain {

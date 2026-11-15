@@ -1,9 +1,9 @@
 package compiler.ir.cfg;
 
-import compiler.ir.Ir.IrType;
-import compiler.ir.Ir.IrIntrinsic;
-import compiler.ir.SourceProvenance.Located;
 import compiler.Source.SourceSpan;
+import compiler.ir.Ir.IrIntrinsic;
+import compiler.ir.Ir.IrType;
+import compiler.ir.SourceProvenance.Located;
 
 /** Function-local identity for a value in mutable control-flow form. */
 abstract CfgValueId(Int) from Int to Int {}

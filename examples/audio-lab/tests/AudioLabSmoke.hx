@@ -1,7 +1,7 @@
-import nativekit.ffi.NativeKit;
-import nativekit.ffi.NativeKitTypes;
 import audiolab.AudioLabEngine;
 import audiolab.AudioLabPreset;
+import nativekit.ffi.NativeKit;
+import nativekit.ffi.NativeKitTypes;
 
 /** Native DSP smoke test for the Audio Lab's preset and event host. */
 class AudioLabSmoke {

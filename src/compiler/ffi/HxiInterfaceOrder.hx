@@ -1,7 +1,7 @@
 package compiler.ffi;
 
-import compiler.ffi.HxiModel.HxiInterface;
 import compiler.Compiler.FfiInterfaceSource;
+import compiler.ffi.HxiModel.HxiInterface;
 
 /**
  * Orders FFI interface sources so each comes after the interfaces it depends

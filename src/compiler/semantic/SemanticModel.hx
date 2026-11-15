@@ -1,10 +1,10 @@
 package compiler.semantic;
 
-import compiler.syntax.Ast.AstProgram;
 import compiler.Source.SourceFile;
-import compiler.types.DeclarationIndex;
+import compiler.syntax.Ast.AstProgram;
 import compiler.syntax.Lexer;
 import compiler.syntax.Token;
+import compiler.types.DeclarationIndex;
 
 /** Immutable, revision-bound semantic facts derived from one parsed module. */
 class SemanticModel {

@@ -1,11 +1,11 @@
 package compiler.ir;
 
-import compiler.ir.Ir.IrInstruction;
-import compiler.ir.Ir.IrTerminator;
 import compiler.ir.Ir.IrBlock;
+import compiler.ir.Ir.IrInstruction;
 import compiler.ir.Ir.IrProgram;
-import compiler.ir.Ir.IrValue;
+import compiler.ir.Ir.IrTerminator;
 import compiler.ir.Ir.IrType;
+import compiler.ir.Ir.IrValue;
 import compiler.ir.IrFunction;
 
 /** Reference executor for the semantic SSA IR, independent of any target ABI. */

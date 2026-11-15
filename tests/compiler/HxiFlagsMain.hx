@@ -1,9 +1,9 @@
-import haxe.Int64;
 import compiler.Compiler;
 import compiler.ffi.HxiModel.HxiDeclaration;
 import compiler.ffi.HxiParser;
-import compiler.ffi.HxiValidator;
 import compiler.ffi.HxiProjection;
+import compiler.ffi.HxiValidator;
+import haxe.Int64;
 
 class HxiFlagsMain {
 	static function main():Void {

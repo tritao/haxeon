@@ -8,8 +8,8 @@ import haxeon.gpu.Renderer;
 
 import haxeon.gpu.GpuResult;
 
-import nativekit.ffi.NativeKitGpu;
 import haxeon.gpu.Enums.TimestampState;
+import nativekit.ffi.NativeKitGpu;
 
 /** Owns one asynchronous GPU timestamp interval. */
 class Timestamp {

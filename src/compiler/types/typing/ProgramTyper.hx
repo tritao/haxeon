@@ -1,31 +1,31 @@
 package compiler.types.typing;
 
-import compiler.types.TypedAst.TypedFunctionRole;
-import compiler.semantic.SemanticProgram;
+import compiler.Source.SourceSpan;
+import compiler.compilation.AllocationMeter;
 import compiler.ffi.HxiModel.HxiDeclaration;
 import compiler.ffi.NativeLayout;
 import compiler.semantic.DeclarationLifecycle.DeclarationStage;
+import compiler.semantic.SemanticProgram;
 import compiler.syntax.Ast.AstClass;
 import compiler.syntax.Ast.AstFunction;
-import compiler.Source.SourceSpan;
+import compiler.types.StructProperties;
+import compiler.types.Type.CompilerType;
 import compiler.types.Type.NominalKind;
 import compiler.types.TypeRelations;
-import compiler.types.StructProperties;
-import compiler.types.typing.TypingMetrics.MeasuredTypedProgram;
-import compiler.types.Type.CompilerType;
 import compiler.types.TypedAst.NativeConvention;
 import compiler.types.TypedAst.TypedClass;
-import compiler.types.TypedAst.TypedExpression;
 import compiler.types.TypedAst.TypedEnum;
+import compiler.types.TypedAst.TypedExpression;
 import compiler.types.TypedAst.TypedField;
 import compiler.types.TypedAst.TypedFunction;
+import compiler.types.TypedAst.TypedFunctionRole;
 import compiler.types.TypedAst.TypedInterface;
 import compiler.types.TypedAst.TypedNative;
 import compiler.types.TypedAst.TypedNativeLayout;
 import compiler.types.TypedAst.TypedProgram;
 import compiler.types.TypedAst.TypedStatement;
 import compiler.types.analysis.Scope;
-import compiler.compilation.AllocationMeter;
+import compiler.types.typing.TypingMetrics.MeasuredTypedProgram;
 
 /** Coordinates the program-level typing phases and their lifecycle transitions. */
 class ProgramTyper {

@@ -1,5 +1,5 @@
-import haxeon.reactive.Effect;
 import haxeon.reactive.Derived;
+import haxeon.reactive.Effect;
 import haxeon.reactive.ReactiveRuntime;
 import haxeon.reactive.Signal;
 

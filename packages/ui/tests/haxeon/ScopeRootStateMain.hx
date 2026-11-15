@@ -1,9 +1,9 @@
+import haxeon.reactive.Signal;
 import haxeon.ui.component.TrackedScope;
 import haxeon.ui.core.BuildContext;
 import haxeon.ui.core.StateStore;
 import haxeon.ui.theme.Theme;
 import haxeon.ui.widgets.controls.Checkbox;
-import haxeon.reactive.Signal;
 
 /** A scope owner and a stateful body root occupy distinct resource identities. */
 @:access(haxeon.ui.core.BuildContext) class ScopeRootStateMain {

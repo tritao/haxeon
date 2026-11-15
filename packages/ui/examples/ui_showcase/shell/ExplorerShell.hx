@@ -1,21 +1,21 @@
 package shell;
 
+import UiExplorer;
 import haxeon.ui.Insets;
 import haxeon.ui.LayoutAxis;
 import haxeon.ui.LayoutStyle;
-import UiExplorer;
-import shell.CatalogSidebar;
-import shell.TopBar;
 import haxeon.ui.core.TextStyleOverride;
 import haxeon.ui.core.View;
 import haxeon.ui.widgets.layout.AppShell;
 import haxeon.ui.widgets.layout.Column;
-import haxeon.ui.widgets.text.DefaultTextStyle;
 import haxeon.ui.widgets.layout.SplitSide;
 import haxeon.ui.widgets.layout.SplitView;
 import haxeon.ui.widgets.layout.SplitViewOptions;
 import haxeon.ui.widgets.scroll.ScrollAxis;
 import haxeon.ui.widgets.scroll.ScrollView;
+import haxeon.ui.widgets.text.DefaultTextStyle;
+import shell.CatalogSidebar;
+import shell.TopBar;
 
 /** Persistent resizable catalog/content/inspector shell around Explorer pages. */
 class ExplorerShell {

@@ -1,6 +1,6 @@
 import compiler.Compiler;
-import compiler.hl.HlWriter;
 import compiler.hl.HlType;
+import compiler.hl.HlWriter;
 import compiler.runtime.CompilerIntrinsics;
 import compiler.tools.CompilerDriver;
 import runtime.PatchSet;

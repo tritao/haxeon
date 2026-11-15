@@ -1,9 +1,9 @@
 import compiler.Compiler;
 import compiler.hl.HlWriter;
+import hl.Gc;
 import runtime.LoadedModule;
 import runtime.RetainedValue;
 import runtime.Runtime;
-import hl.Gc;
 
 /**
 	A module is retired only once nothing it allocated is reachable. Its objects live in pages of its own, and the

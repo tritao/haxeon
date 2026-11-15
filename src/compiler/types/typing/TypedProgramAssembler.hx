@@ -1,14 +1,14 @@
 package compiler.types.typing;
 
+import compiler.types.NativeTypeDescriptor.NativeTypeDescriptorData;
 import compiler.types.Type.CompilerType;
 import compiler.types.Type.NominalKind;
+import compiler.types.TypedAst.TypedClass;
 import compiler.types.TypedAst.TypedEnum;
 import compiler.types.TypedAst.TypedFunction;
 import compiler.types.TypedAst.TypedInterface;
 import compiler.types.TypedAst.TypedNative;
 import compiler.types.TypedAst.TypedProgram;
-import compiler.types.TypedAst.TypedClass;
-import compiler.types.NativeTypeDescriptor.NativeTypeDescriptorData;
 
 typedef AnonymousTypeRegistrar = CompilerType->Void;
 

@@ -1,8 +1,8 @@
 package components;
 
+import haxeon.ui.theme.TextRole;
 import haxeon.ui.widgets.KeyedView;
 import haxeon.ui.widgets.text.Text;
-import haxeon.ui.theme.TextRole;
 
 /** Small muted label for catalog groups and demo sections. */
 class SectionHeader {

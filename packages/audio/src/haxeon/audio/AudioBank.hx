@@ -6,10 +6,10 @@ import haxeon.platform.event.EventSubscription;
 import haxeon.platform.event.PlatformEvent;
 import haxeon.platform.resource.ResourceCacheLoad;
 
-import nativekit.ffi.NativeKit;
-import nativekit.ffi.NativeKitTypes;
 import haxeon.platform.resource.Resource;
 import haxeon.platform.resource.ResourceCache;
+import nativekit.ffi.NativeKit;
+import nativekit.ffi.NativeKitTypes;
 
 /**
  * Named audio resource catalog built on NativeKit's general ResourceCache.

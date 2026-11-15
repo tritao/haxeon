@@ -1,10 +1,10 @@
+import compiler.backend.Backend.BackendTarget;
 import compiler.ir.Ir;
 import compiler.ir.IrBuilder;
 import compiler.ir.IrFunction;
-import compiler.ir.IrScalarWordBits;
 import compiler.ir.IrInlineEnumWordAccess;
+import compiler.ir.IrScalarWordBits;
 import compiler.ir.IrValueLaneLayout.IrValueLaneSlot;
-import compiler.backend.Backend.BackendTarget;
 
 /** Physical pointer/type-ID words are never managed-reference casts or Dynamic boxes. */
 @:access(compiler.ir.IrBuilder)

@@ -1,8 +1,8 @@
 package haxeon.ui.widgets.docking;
-import haxeon.ui.widgets.controls.TabsSelectionMode;
 import haxeon.ui.core.KeyHash;
 import haxeon.ui.widgets.KeyedView;
 import haxeon.ui.widgets.controls.TabItem;
+import haxeon.ui.widgets.controls.TabsSelectionMode;
 import haxeon.ui.widgets.layout.Column;
 import haxeon.ui.widgets.layout.SizedBox;
 import haxeon.ui.widgets.layout.SplitOrientation;
@@ -23,11 +23,11 @@ import haxeon.ui.TextLayout;
 import haxeon.ui.TextStyle;
 import haxeon.ui.TextWrap;
 import haxeon.ui.core.BuildContext;
-import haxeon.ui.core.ResourceId;
 import haxeon.ui.core.InteractionStateSnapshot;
 import haxeon.ui.core.Key;
 import haxeon.ui.core.KeyScope;
 import haxeon.ui.core.RenderNode;
+import haxeon.ui.core.ResourceId;
 import haxeon.ui.core.State;
 import haxeon.ui.core.TextStyleOverride;
 import haxeon.ui.core.View;
@@ -36,11 +36,11 @@ import haxeon.ui.docking.DockNode;
 import haxeon.ui.docking.DockPanelDescriptor;
 import haxeon.ui.docking.DockSplitAxis;
 import haxeon.ui.docking.DockWorkspaceModel;
+import haxeon.ui.theme.TextRole;
+import haxeon.ui.widgets.controls.TabsOptions;
 import haxeon.ui.widgets.docking.DockDropTarget;
 import haxeon.ui.widgets.docking.DockTabDropTarget;
 import haxeon.ui.widgets.docking.DockWorkspaceInteraction;
-import haxeon.ui.widgets.controls.TabsOptions;
-import haxeon.ui.theme.TextRole;
 
 /** Renders a DockWorkspaceModel using split panes, tab groups, and lazy panels. */
 class DockWorkspace implements View {

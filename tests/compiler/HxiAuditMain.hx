@@ -1,5 +1,5 @@
-import compiler.ffi.HxiAudit;
 import compiler.ffi.HxiAbi;
+import compiler.ffi.HxiAudit;
 import compiler.ffi.HxiParser;
 
 class HxiAuditMain {

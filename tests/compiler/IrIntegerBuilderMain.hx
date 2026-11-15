@@ -1,12 +1,12 @@
+import compiler.backend.Backend.BackendTarget;
+import compiler.backend.hl.HlBackend;
+import compiler.backend.wasm.WasmBackend;
 import compiler.ir.Ir.IrProgram;
 import compiler.ir.Ir.IrType;
 import compiler.ir.IrBuilder;
 import compiler.ir.IrFunction;
 import compiler.ir.IrInterpreter;
 import compiler.ir.IrVerifier;
-import compiler.backend.Backend.BackendTarget;
-import compiler.backend.hl.HlBackend;
-import compiler.backend.wasm.WasmBackend;
 
 class IrIntegerBuilderMain {
 	static function main():Void {

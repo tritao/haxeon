@@ -1,6 +1,6 @@
 import compiler.Compiler;
-import compiler.runtime.CompilerIntrinsics;
 import compiler.Diagnostic.CompileError;
+import compiler.runtime.CompilerIntrinsics;
 
 class PrimitiveMapEffectsMain {
 	static final support = 'class Support { public static var view:View; var flags:Map<String,Bool> = ["x"=>true]; '

@@ -4,8 +4,8 @@ import haxeon.ui.TextLayout.TextPosition;
 
 import haxeon.ui.Canvas;
 import haxeon.ui.Color;
-import haxeon.ui.Rect;
 import haxeon.ui.PathBuilder;
+import haxeon.ui.Rect;
 
 /** Immutable decoration in absolute document codepoint coordinates. */
 class TextDecoration {

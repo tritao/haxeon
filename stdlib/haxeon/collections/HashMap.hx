@@ -1,7 +1,7 @@
 package haxeon.collections;
 
-import haxeon.Hashing;
 import Hashable;
+import haxeon.Hashing;
 
 /** Dense entries and open-addressed buckets for keys with declared value equality. */
 class HashMap<K:Hashable, V> {

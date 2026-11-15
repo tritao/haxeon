@@ -1,9 +1,9 @@
 package compiler.formatter;
 
 import compiler.Source.SourceFile;
+import compiler.formatter.FormatToken.FormatTokenKind;
 import compiler.syntax.ConditionalCompilation;
 import compiler.syntax.Token.TokenKind;
-import compiler.formatter.FormatToken.FormatTokenKind;
 
 private typedef CommentMarkers = {
 	final off:Int;

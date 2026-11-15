@@ -1,9 +1,9 @@
 import compiler.Compiler;
-import compiler.types.Type.CompilerType;
 import compiler.hl.HlWriter;
 import compiler.runtime.CompilerIntrinsics;
-import sys.io.File;
+import compiler.types.Type.CompilerType;
 import sys.FileSystem;
+import sys.io.File;
 
 /** The malformed sequences use stock Haxe/HL results; NUL rejection is the native String contract. */
 class BytesAsciiMain {

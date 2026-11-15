@@ -11,8 +11,8 @@ import components.DemoCard;
 import components.DemoGrid;
 import haxeon.ui.LayoutAxis;
 import haxeon.ui.LayoutStyle;
-import haxeon.ui.widgets.layout.Column;
 import haxeon.ui.widgets.KeyedView;
+import haxeon.ui.widgets.layout.Column;
 import haxeon.ui.widgets.layout.Row;
 
 /** Landing page for the Haxeon UI framework and its live catalog. */

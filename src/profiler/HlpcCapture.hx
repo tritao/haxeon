@@ -3,10 +3,10 @@ package profiler;
 import haxe.Int64;
 import haxe.Timer;
 import haxe.io.Bytes;
-import sys.io.File;
-import sys.io.FileOutput;
 import profiler.HldiCodec.HldiFrames;
 import profiler.HldiTypes.HldiFrame;
+import sys.io.File;
+import sys.io.FileOutput;
 
 /** Streaming writer for the native hlprof-live HLPC/2 capture format: the pushed frames, written as they arrive. */
 class HlpcCapture {

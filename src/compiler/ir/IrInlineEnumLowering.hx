@@ -4,8 +4,8 @@ import compiler.Provides.ProviderOperation;
 import compiler.Provides.ProviderOperations;
 import compiler.ir.Ir;
 import compiler.ir.IrFunction;
-import compiler.ir.SourceProvenance.Located;
 import compiler.ir.IrValueLaneLayout.IrValueLaneTarget;
+import compiler.ir.SourceProvenance.Located;
 
 /** Select one program-wide representation, then lower eligible enum values to their lane packets. */
 class IrInlineEnumLowering {

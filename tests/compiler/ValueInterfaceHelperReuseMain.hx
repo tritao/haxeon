@@ -1,7 +1,7 @@
 import compiler.Compiler;
-import compiler.tools.CompilerDriver;
 import compiler.backend.wasm.WasmBackend;
 import compiler.hl.HlWriter;
+import compiler.tools.CompilerDriver;
 
 /** Generated closure conversions reuse interface helpers already assembled by earlier passes. */
 class ValueInterfaceHelperReuseMain {

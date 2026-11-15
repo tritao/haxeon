@@ -1,9 +1,9 @@
 package haxeon.ui.widgets.properties;
-import haxeon.ui.widgets.controls.ButtonVariant;
-import haxeon.ui.widgets.scroll.ScrollAxis;
 import haxeon.ui.widgets.KeyedView;
 import haxeon.ui.widgets.controls.Button;
+import haxeon.ui.widgets.controls.ButtonVariant;
 import haxeon.ui.widgets.layout.Column;
+import haxeon.ui.widgets.scroll.ScrollAxis;
 import haxeon.ui.widgets.scroll.ScrollController;
 import haxeon.ui.widgets.scroll.ScrollView;
 
@@ -11,13 +11,13 @@ import haxeon.ui.LayoutAxis;
 import haxeon.ui.LayoutStyle;
 import haxeon.ui.core.BuildContext;
 import haxeon.ui.core.Key;
+import haxeon.ui.core.RenderNode;
+import haxeon.ui.core.View;
+import haxeon.ui.icons.IconName;
 import haxeon.ui.properties.PropertyDescriptor;
 import haxeon.ui.properties.PropertyEditorRegistry;
 import haxeon.ui.properties.PropertyInspectorSection;
 import haxeon.ui.properties.PropertyValue;
-import haxeon.ui.core.RenderNode;
-import haxeon.ui.core.View;
-import haxeon.ui.icons.IconName;
 import haxeon.ui.semantics.AccessibilityRole;
 import haxeon.ui.semantics.Semantics;
 

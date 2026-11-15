@@ -1,10 +1,10 @@
 package compiler.semantic;
 
+import compiler.semantic.SemanticSignature;
+import compiler.types.Type.CompilerType;
 import haxe.io.Bytes;
 import haxe.io.BytesInput;
 import haxe.io.BytesOutput;
-import compiler.types.Type.CompilerType;
-import compiler.semantic.SemanticSignature;
 
 /** Structured identity and deterministic naming for generated generic ABI bodies. */
 typedef GenericSpecialization = {

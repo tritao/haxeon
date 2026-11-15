@@ -3,10 +3,10 @@ package haxeon.gpu;
 import haxeon.gpu.Enums;
 import haxeon.gpu.Image;
 
-import nativekit.ffi.NativeKitGpu;
 import haxeon.gpu.Enums.ImageFormat;
 import haxeon.gpu.Enums.ImageType;
 import haxeon.gpu.Enums.ImageUsage;
+import nativekit.ffi.NativeKitGpu;
 
 /** Portable descriptor for a NativeKit GPU image. */
 class ImageDesc {

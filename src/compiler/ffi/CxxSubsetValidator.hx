@@ -1,9 +1,9 @@
 package compiler.ffi;
 
 import compiler.Source.SourceSpan;
-import compiler.ffi.CxxModel.CxxFunction;
-import compiler.ffi.CxxModel.CxxEnum;
 import compiler.ffi.CxxModel.CxxAlias;
+import compiler.ffi.CxxModel.CxxEnum;
+import compiler.ffi.CxxModel.CxxFunction;
 import compiler.ffi.CxxModel.CxxMethod;
 import compiler.ffi.CxxModel.CxxModel;
 import compiler.ffi.CxxModel.CxxRecord;

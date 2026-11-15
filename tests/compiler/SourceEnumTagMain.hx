@@ -1,9 +1,9 @@
 import compiler.Compiler;
-import compiler.tools.CompilerDriver;
 import compiler.backend.Backend.BackendTarget;
 import compiler.ir.Ir;
 import compiler.ir.IrBuilder;
 import compiler.ir.IrFunction;
+import compiler.tools.CompilerDriver;
 
 /** Payload-free source enums use nominal scalar storage even in fields, reflection and arrays. */
 class SourceEnumTagMain {

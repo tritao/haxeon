@@ -2,14 +2,14 @@ package haxeon.audio;
 
 import haxeon.platform.BindingError;
 
+import haxe.Int64;
+import haxe.io.Bytes;
+import haxeon.audio.DspTransport;
+import haxeon.platform.NativeKitError;
 import nativekit.ffi.NativeKit;
-import nativekit.ffi.NativeKitTypes;
 import nativekit.ffi.NativeKitAudio;
 import nativekit.ffi.NativeKitAudioTypes;
-import haxeon.platform.NativeKitError;
-import haxe.io.Bytes;
-import haxe.Int64;
-import haxeon.audio.DspTransport;
+import nativekit.ffi.NativeKitTypes;
 
 /** Owns a standalone native DSP renderer and its instruments. */
 class DspEngine {

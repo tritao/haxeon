@@ -8,18 +8,18 @@ import haxeon.platform.event.PlatformEvent;
 import nativekit.ffi.NativeKitTypes.SurfaceOptions as NativeSurfaceOptions;
 import nativekit.ffi.NativeKitTypes.WindowOptions as NativeWindowOptions;
 
-import hl.Gc;
 import haxeon.ProfileFrame;
 import haxeon.ProfileNativeTrace;
 import haxeon.ProfileSpan;
+import hl.Gc;
 
-import haxeon.ui.FontCollection;
-import nativekit.ffi.NativeKit;
-import nativekit.ffi.NativeKitTypes;
-import nativekit.ffi.NativeKitGpu;
-import haxeon.ui.Renderer;
 import haxe.Json;
 import haxe.io.Bytes;
+import haxeon.ui.FontCollection;
+import haxeon.ui.Renderer;
+import nativekit.ffi.NativeKit;
+import nativekit.ffi.NativeKitGpu;
+import nativekit.ffi.NativeKitTypes;
 import sys.FileSystem;
 import sys.io.File;
 

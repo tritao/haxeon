@@ -1,8 +1,8 @@
 import haxeon.reactive.Signal;
 import haxeon.ui.component.TrackedScope;
 import haxeon.ui.core.BuildContext;
-import haxeon.ui.core.StateStore;
 import haxeon.ui.core.RetainedVariants;
+import haxeon.ui.core.StateStore;
 import haxeon.ui.theme.Theme;
 import haxeon.ui.widgets.text.Text;
 

@@ -2,11 +2,11 @@ package haxeon.ui;
 
 import haxeon.ui.debug.RenderCost;
 
-import nativekit.ffi.NativeKitTypes;
-import nativekit.ffi.NativeKit;
 import NativeKitUI;
 import NativeKitUI.nkui_layout_measure_callbackCallback;
 import haxe.io.Bytes;
+import nativekit.ffi.NativeKit;
+import nativekit.ffi.NativeKitTypes;
 
 /** Batched bridge from a Haxe-owned render tree to NativeKit layout/rendering. */
 class LayoutSession {

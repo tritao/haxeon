@@ -1,11 +1,11 @@
 import compiler.Compiler;
-import compiler.tools.CompilerDriver;
 import compiler.Compiler.CompileResult;
 import compiler.Diagnostic.CompileError;
+import compiler.backend.Backend.BackendTarget;
+import compiler.backend.wasm.WasmBackend;
 import compiler.hl.HlWriter;
 import compiler.runtime.CompilerIntrinsics;
-import compiler.backend.wasm.WasmBackend;
-import compiler.backend.Backend.BackendTarget;
+import compiler.tools.CompilerDriver;
 import sys.io.File;
 
 class EnumTypedefConstructorMain {

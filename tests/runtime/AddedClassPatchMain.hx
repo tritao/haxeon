@@ -1,7 +1,7 @@
+import compiler.Compiler;
 import compiler.hl.HlCode.HlTypeDef;
 import compiler.hl.HlWriter;
 import compiler.hl.patch.HlPatchReader;
-import compiler.Compiler;
 import runtime.PatchSet;
 import runtime.Runtime;
 

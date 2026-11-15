@@ -1,7 +1,7 @@
 package compiler.types.typing;
 
-import compiler.types.TypedAst.TypedProgram;
 import compiler.compilation.AllocationMeter.PhaseAllocation;
+import compiler.types.TypedAst.TypedProgram;
 
 typedef TyperPhaseMetrics = {
 	final allocationPhases:Array<PhaseAllocation>;

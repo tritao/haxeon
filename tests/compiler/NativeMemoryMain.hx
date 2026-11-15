@@ -1,9 +1,9 @@
 import compiler.Compiler;
 import compiler.Diagnostic.CompileError;
-import compiler.runtime.CompilerIntrinsics;
 import compiler.ir.Ir.IrInstruction;
 import compiler.ir.Ir.IrType;
 import compiler.ir.codec.IrFunctionStateCodec;
+import compiler.runtime.CompilerIntrinsics;
 import sys.io.File;
 
 class NativeMemoryMain {

@@ -1,7 +1,7 @@
 package haxeon.ui;
 
-import haxe.io.Bytes;
 import NativeKitUI.NkuiLayoutClipFlags;
+import haxe.io.Bytes;
 
 /** Encodes a retained Haxe node tree into the single native frame payload. */
 @:noCompletion

@@ -3,9 +3,9 @@ import compiler.ir.Ir;
 import compiler.ir.IrBuilder;
 import compiler.ir.IrFunction;
 import compiler.ir.IrFunction.IrFunctionKind;
-import compiler.ir.TypeKey;
 import compiler.ir.IrProviders;
 import compiler.ir.IrTypeAwareWalk;
+import compiler.ir.TypeKey;
 
 /** The type-aware reachability walk on small IR graphs (docs/REACHABILITY_WALK.md). */
 class TypeAwareWalkMain {
