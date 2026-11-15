@@ -68,9 +68,9 @@ class DirectCallPatchMain {
 		};
 		check("loading", 1, false);
 
-		// The callers reach their callees with a call to the callee's own entry, not through the stub table. Only x86-64 calls a
-		// patchable function directly (HL_JIT_DIRECT_PATCHABLE_CALLS); elsewhere the hooks answer -1, every call goes through the
-		// function's stub, and only the results below are checked.
+		// The callers reach their callees with a call to the callee's own entry, not through the stub table. x86-64 and AArch64
+		// call a patchable function directly (HL_JIT_DIRECT_PATCHABLE_CALLS); elsewhere the hooks answer -1, every call goes
+		// through the function's stub, and only the results below are checked.
 		var directCalls = Runtime.callsDirectly(live, build.functionIds.get("Main.callLeaf"), build.functionIds.get("Calc.leaf")) >= 0;
 		var direct = [
 			"Main.callLeaf" => "Calc.leaf",
