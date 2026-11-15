@@ -531,19 +531,18 @@ class WasmFunctionLower {
       var pa = graph.predecessors.get(first.id), pb = graph.predecessors.get(second.id);
       if (joinPreds == null || joinPreds.length != 2 || pa == null
         || pb == null || pa.length != 1 || pb.length != 1 || pa[0] != pb[0] || first.instructions.length != 1
-        || second.instructions.length != 1 || first.terminator == null || second.terminator == null) return false;
-      var branch = graph.block(pa[0]);
-      if (branch.terminator == null) return false;
-      switch [
-        branch.terminator.value,
-        first.terminator.value,
-        second.terminator.value,
-        first.instructions[0].value,
-        second.instructions[0].value
-      ] {
-        case [Branch(condition, yes, no), Jump(a), Jump(b), ConstInt(v1,
-          n1), ConstInt(v2, n2)] if (yes != no && a == block.id && b == block.id && v1.id == inputs[0].value.id && v2.id
-          == inputs[1].value.id && ((yes == first.id && no == second.id) || (yes == second.id && no == first.id))):
+        || second.instructions.length != 1) return false;
+      // Locals, not fields: the call to graph.block below would end a null check on a field.
+      var firstTerminator = first.terminator, secondTerminator = second.terminator;
+      if (firstTerminator == null || secondTerminator == null) return false;
+      var branchTerminator = graph.block(pa[0]).terminator;
+      if (branchTerminator == null) return false;
+      // Terminators and instructions are different enums, so they are matched in two switches: one array literal must have one element type.
+      switch [branchTerminator.value, firstTerminator.value, secondTerminator.value] {
+        case [Branch(condition, yes, no), Jump(a), Jump(b)] if (yes != no && a == block.id && b == block.id
+          && ((yes == first.id && no == second.id) || (yes == second.id && no == first.id))):
+          switch [first.instructions[0].value, second.instructions[0].value] {
+            case [ConstInt(v1, n1), ConstInt(v2, n2)] if (v1.id == inputs[0].value.id && v2.id == inputs[1].value.id):
           // Blockful WasmValuePlacement does not coalesce, so the dominating
           // condition keeps its value at the join, including across back edges.
           var trueValue = yes == first.id ? n1 : n2, falseValue = yes == first.id ? n2 : n1;
@@ -568,6 +567,8 @@ class WasmFunctionLower {
             ]
           );
           return true;
+            default:
+          }
         default:
       }
       default:
