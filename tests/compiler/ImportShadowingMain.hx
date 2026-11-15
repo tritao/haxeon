@@ -23,7 +23,10 @@ class ImportShadowingMain {
 			false);
 		// A local variable that happens to share the name is not a type use.
 		accepted('package app; import native.Types; class User { public static function value():Int { var Kind = 3; return Kind; } }');
-		Sys.println("PASS: a whole-module import cannot silently shadow a same-package type");
+		// A module imported under an alias is a namespace: its types are Native.Kind, and nothing comes in by its bare name.
+		accepted('package app; import native.Types as Native; class User { public static function value():Int { var own:Kind = Kind.One; var native:Native.Kind = Native.Kind.One; return own + native; } }');
+		rejectedAs('package app; import native.Types as Native; class User { public static function value():Int return Other.Two; }', "E1005");
+		Sys.println("PASS: a whole-module import cannot silently shadow a same-package type, and an aliased module is a namespace");
 	}
 
 	static function compiler(user:String, withOwn:Bool = true):Compiler {
@@ -38,6 +41,16 @@ class ImportShadowingMain {
 
 	static function accepted(user:String, withOwn:Bool = true):Void
 		compiler(user, withOwn).analyze("Main");
+
+	static function rejectedAs(user:String, code:String):Void {
+		var error:Null<CompileError> = null;
+		try
+			compiler(user).analyze("Main")
+		catch (caught:CompileError)
+			error = caught;
+		if (error == null || error.diagnostic.code != code)
+			throw 'Expected $code, got ${error == null ? "success" : error.diagnostic.code + " " + error.diagnostic.message}';
+	}
 
 	static function rejected(user:String, file:String, message:String):Void {
 		var error:Null<CompileError> = null;

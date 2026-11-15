@@ -24,6 +24,10 @@ The current subset includes:
   implementation. An enum with no constructor that has fields compares by
   constructor, and so does an abstract over an enum. A null operand equals only another null.
   A cycle that does not pass through a structure (`A = B, B = A`, `A = Array<A>`) is still an error.
+- Imports as in Haxe, with two stricter rules. A type that an import of a whole module or package brings in only as a side
+  effect cannot silently replace a type the current package declares: using that name is `E1029`, reported at the use, and
+  naming the import (`import pack.Module.Type;`) or the module's own declaration settles it. `import pack.Module as M;` is a
+  namespace: the module's types are `M.Type` and none come in by their bare names (stock Haxe rejects this form).
 - Haxe-compatible `Sys` operations through the stable runtime ABI
 
 Inherited methods share a virtual slot by name. A subclass cannot reuse that name with incompatible

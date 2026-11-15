@@ -210,7 +210,12 @@ class SemanticAssembly {
 			// in `package nav`, a plain `Path` is `nav.Path`, as in Haxe.
 			aliases.attach(dottedSourceAliases);
 			var constructorTargets:Map<String, String> = [],
-				ambiguousConstructors:Map<String, Bool> = [];
+				ambiguousConstructors:Map<String,
+					Bool> = [], // `import pack.Module as M;` makes M a namespace; nothing of the module comes in by its bare name.
+				namespaceImports:Map<String, Bool> = [
+					for (alias => path in ast.importAliases)
+						if (alias != QualifiedName.last(path)) path => true
+				];
 			for (importPath in ast.imports) {
 				if (ModuleAnalyzer.isWildcardImport(importPath))
 					continue;
@@ -222,7 +227,7 @@ class SemanticAssembly {
 					importedTypes.push(importedType);
 				// Importing a module imports every type declared in it, and with
 				// each enum its constructors, as in Haxe.
-				if (aliasesByModule.exists(importPath))
+				if (aliasesByModule.exists(importPath) && !namespaceImports.exists(importPath))
 					for (entry in aliasesByModule.get(importPath))
 						if (importedTypes.indexOf(entry.declarationName) < 0)
 							importedTypes.push(entry.declarationName);
@@ -247,7 +252,7 @@ class SemanticAssembly {
 			}
 			for (importPath in ast.imports) {
 				var importedModule = ModuleAnalyzer.importModulePath(importPath);
-				if (aliasesByModule.exists(importedModule))
+				if (aliasesByModule.exists(importedModule) && !namespaceImports.exists(importPath))
 					for (entry in aliasesByModule.get(importedModule)) {
 						var qualifiedSourceName = entry.sourceName;
 						if (StringTools.startsWith(qualifiedSourceName, importedModule + ".")) {

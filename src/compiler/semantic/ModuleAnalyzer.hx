@@ -292,7 +292,7 @@ class ModuleAnalyzer {
 			var modulePath = importModulePath(path);
 			if (isWildcardImport(path)) {
 				for (sourceModule in importedSourceModules(path))
-					addModuleAliases(sourceModule, aliases, true, QualifiedName.last(sourceModule));
+					addModuleAliases(sourceModule, aliases, true, QualifiedName.last(sourceModule), true);
 				continue;
 			}
 			var alias = QualifiedName.last(path),
@@ -304,8 +304,10 @@ class ModuleAnalyzer {
 				}
 			aliases.set(alias, importedName);
 			aliases.set(path, importedName);
+			// `import pack.Module;` brings in each type of the module by name, as in Haxe. `import pack.Module as M;` is a
+			// namespace: its types are reached only as `M.Type`, so they cannot shadow anything.
 			if (modules.exists(modulePath))
-				addModuleAliases(modulePath, aliases, false, alias);
+				addModuleAliases(modulePath, aliases, false, alias, alias == QualifiedName.last(path));
 		}
 		for (alias => path in explicit) {
 			aliases.set(alias, importedDeclarationName(path));
@@ -322,31 +324,31 @@ class ModuleAnalyzer {
 	public static inline function importModulePath(path:String):String
 		return isWildcardImport(path) ? path.substring(0, path.length - 2) : path;
 
-	function addModuleAliases(moduleName:String, aliases:Map<String, String>, includeFunctions:Bool, moduleAlias:String):Void {
+	function addModuleAliases(moduleName:String, aliases:Map<String, String>, includeFunctions:Bool, moduleAlias:String, bare:Bool):Void {
 		var ast = moduleAst(moduleName);
 		if (ast == null)
 			return;
 		for (declaration in ast.aliases)
-			addDeclarationAlias(moduleName, declaration.name, aliases, moduleAlias);
+			addDeclarationAlias(moduleName, declaration.name, aliases, moduleAlias, bare);
 		for (declaration in ast.enums)
-			addDeclarationAlias(moduleName, declaration.name, aliases, moduleAlias);
+			addDeclarationAlias(moduleName, declaration.name, aliases, moduleAlias, bare);
 		for (declaration in ast.enumAbstracts)
-			addDeclarationAlias(moduleName, declaration.name, aliases, moduleAlias);
+			addDeclarationAlias(moduleName, declaration.name, aliases, moduleAlias, bare);
 		for (declaration in ast.abstracts)
-			addDeclarationAlias(moduleName, declaration.name, aliases, moduleAlias);
+			addDeclarationAlias(moduleName, declaration.name, aliases, moduleAlias, bare);
 		for (declaration in ast.interfaces)
-			addDeclarationAlias(moduleName, declaration.name, aliases, moduleAlias);
+			addDeclarationAlias(moduleName, declaration.name, aliases, moduleAlias, bare);
 		for (declaration in ast.classes)
-			addDeclarationAlias(moduleName, declaration.name, aliases, moduleAlias);
+			addDeclarationAlias(moduleName, declaration.name, aliases, moduleAlias, bare);
 		if (includeFunctions)
 			for (declaration in ast.functions)
-				addDeclarationAlias(moduleName, declaration.name, aliases, moduleAlias);
+				addDeclarationAlias(moduleName, declaration.name, aliases, moduleAlias, bare);
 	}
 
-	function addDeclarationAlias(moduleName:String, declarationName:String, aliases:Map<String, String>, moduleAlias:String):Void {
+	function addDeclarationAlias(moduleName:String, declarationName:String, aliases:Map<String, String>, moduleAlias:String, bare:Bool):Void {
 		var sourceName = ModuleCanonicalizer.sourceDeclarationPath(moduleName, declarationName),
 			importedName = importedDeclarationName(sourceName);
-		if (!aliases.exists(declarationName))
+		if (bare && !aliases.exists(declarationName))
 			aliases.set(declarationName, importedName);
 		aliases.set(sourceName, importedName);
 		aliases.set(moduleAlias + "." + declarationName, importedName);
