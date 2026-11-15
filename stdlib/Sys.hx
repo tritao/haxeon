@@ -177,6 +177,9 @@ extern function sysStdout():sys.io.FileOutput;
 
 @:hlNative("haxeon_runtime", "__sys_stderr")
 extern function sysStderr():sys.io.FileOutput;
+
+@:hlNative("haxeon_runtime", "__sys_stdin")
+extern function sysStdinHandle():hl.Abstract<"realtime_file_input">;
 #end
 
 /** Supported host and process operations exposed through HashLink. */
@@ -291,4 +294,12 @@ class Sys {
 
 	public static inline function stderr():sys.io.FileOutput
 		return sysStderr();
+
+	public static function stdin():sys.io.FileInput {
+		#if wasm
+		return new sys.io.FileInput();
+		#else
+		return new sys.io.FileInput(sysStdinHandle());
+		#end
+	}
 }

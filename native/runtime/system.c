@@ -92,6 +92,36 @@ HL_PRIM realtime_file_output *HL_NAME(__sys_stdout)( void ) {
 	return &realtime_stdout;
 }
 
+typedef struct realtime_file_input { FILE *stream; } realtime_file_input;
+static realtime_file_input realtime_stdin = {NULL};
+
+HL_PRIM realtime_file_input *HL_NAME(__sys_stdin)( void ) {
+	realtime_stdin.stream = stdin;
+	return &realtime_stdin;
+}
+
+/* The next line of `input` without its "\n" or "\r\n", or NULL at the end of the input. */
+HL_PRIM vstring *HL_NAME(__file_input_read_line)( realtime_file_input *input ) {
+	size_t capacity = 256, length = 0;
+	char *buffer = (char *)malloc(capacity);
+	int code = EOF;
+	if( buffer == NULL ) hl_error("Out of memory reading a line");
+	while( (code = fgetc(input->stream)) != EOF && code != '\n' ) {
+		if( length + 1 >= capacity ) {
+			char *grown = (char *)realloc(buffer, capacity * 2);
+			if( grown == NULL ) { free(buffer); hl_error("Out of memory reading a line"); }
+			buffer = grown;
+			capacity *= 2;
+		}
+		buffer[length++] = (char)code;
+	}
+	if( code == EOF && length == 0 ) { free(buffer); return NULL; }
+	if( length > 0 && buffer[length - 1] == '\r' ) length--;
+	vstring *line = realtime_string_from_utf8_bytes((const vbyte *)buffer, (int)length);
+	free(buffer);
+	return line;
+}
+
 HL_PRIM realtime_file_output *HL_NAME(__sys_stderr)( void ) {
 	realtime_stderr.stream = stderr;
 	return &realtime_stderr;

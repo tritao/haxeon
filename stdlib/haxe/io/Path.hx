@@ -11,6 +11,17 @@ class Path {
 		return path.substr(0, separator);
 	}
 
+	/**
+	 * `path` without the extension of its last segment (from that segment's last "."). As in Haxe, "." and ".." are directories:
+	 * they come back as "./" and "../".
+	 */
+	public static function withoutExtension(path:String):String {
+		if (path == "." || path == "..")
+			return path + "/";
+		var dot = path.lastIndexOf(".");
+		return dot > lastSeparator(path) ? path.substr(0, dot) : path;
+	}
+
 	public static function withoutDirectory(path:String):String {
 		var separator = lastSeparator(path);
 		return separator < 0 ? path : path.substr(separator + 1);
