@@ -614,3 +614,4 @@ local-inference-type-variables	42
 module-level-variables	42
 array-concat-nullable	42
 abstract-equality-conformance	42
+wire-final-record	42

@@ -36,6 +36,7 @@ class TestCatalog {
 		"ValueLaneRuntimeMain",
 		"ValueConstructorDestinationMain",
 		"ValueConstructorWarmMain",
+		"WireFinalWarmMain",
 		"EnumTagStorageMain",
 		"RawRepresentableMain",
 		"FlagsMain",

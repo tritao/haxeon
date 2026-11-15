@@ -421,9 +421,6 @@ class WireCodecGenerator {
 					};
 					break;
 				}
-			if (field.isFinal)
-				BodyTyper.fail("E1024",
-					'MessagePack record field "${declaration.name}.${field.name}" cannot be final yet', field.span);
 			if (!hasDirectStorage(field))
 				BodyTyper.fail("E1024",
 					'MessagePack record field "${declaration.name}.${field.name}" must have direct storage',
@@ -814,8 +811,7 @@ class WireCodecGenerator {
 					},
 						countName = "__wire_count",
 						indexName = "__wire_index",
-						keyName = "__wire_key",
-						resultName = "__wire_result";
+						keyName = "__wire_key";
 				statements.push(TVar(countName, method(reader, "readMapHeader", [], TInt, request.span), request.span));
 				statements.push(TVar(indexName, intLiteral(0, request.span), request.span));
 				for (index in 0...fields.length) {
@@ -846,35 +842,42 @@ class WireCodecGenerator {
 									request.span), request.span)
 							], [], request.span));
 				}
-				if (switch type {
-					case TAnonymous(_, _): true;
-					default: false;
-				}) {
-					var objectFields:Array<compiler.types.TypedAst.TypedObjectField> = [for (index in 0...fields.length)
-						{
-							name:fields[index].field.name,
-								value:local(fieldLocal(index), fields[index].field.type, request.span)
-						}];
-					statements.push(TReturn(new TypedExpression(TObjectLiteral(name, objectFields, false), type,
-						request.span), request.span));
-				} else {
-					var newValue = new TypedExpression(TNew(name, [], false), type, request.span);
-					statements.push(TVar(resultName, newValue, request.span));
-					var declaration = requiredClass(classes, name, request.span);
-					for (index in 0...fields.length) {
-						var wireField = fields[index].field;
-						var storedType = wireField.type;
+				var declaration = switch type {
+					case TAnonymous(_, _): null;
+					default: requiredClass(classes, name, request.span);
+				};
+				var initialized:Map<String, Bool> = [],
+					objectFields:Array<compiler.types.TypedAst.TypedObjectField> = [];
+				for (index in 0...fields.length) {
+					var wireField = fields[index].field;
+					if (initialized.exists(wireField.name))
+						throw 'Wire decoder initializes "${name}.${wireField.name}" twice';
+					initialized.set(wireField.name, true);
+					var storedType = wireField.type;
+					if (declaration != null) {
+						var found = false;
 						for (declaredField in declaration.fields)
-							if (declaredField.name == wireField.name) {
+							if (!declaredField.isStatic && declaredField.name == wireField.name) {
 								storedType = declaredField.type;
+								found = true;
 								break;
 							}
-						var decoded = local(fieldLocal(index), wireField.type, request.span);
-						statements.push(TFieldAssign(local(resultName, type, request.span), wireField.name,
-							new TypedExpression(TCast(decoded), storedType, request.span), request.span));
+						if (!found)
+							throw 'Wire decoder has no field "${name}.${wireField.name}"';
 					}
-					statements.push(TReturn(local(resultName, type, request.span), request.span));
+					var decoded = local(fieldLocal(index), wireField.type, request.span);
+					objectFields.push({
+						name: wireField.name,
+						value: declaration == null ? decoded : new TypedExpression(TCast(decoded), storedType,
+							request.span)
+					});
 				}
+				if (declaration != null)
+					for (field in declaration.fields)
+						if (!field.isStatic && !initialized.exists(field.name))
+							throw 'Wire decoder does not initialize "${name}.${field.name}"';
+				statements.push(TReturn(new TypedExpression(TObjectLiteral(name, objectFields, false), type,
+					request.span), request.span));
 			case TArray(element):
 				var countName = "__wire_count",
 					indexName = "__wire_index",

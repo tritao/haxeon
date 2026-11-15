@@ -2817,13 +2817,13 @@ class IrGenerator {
 						+ 'object-literal:${expression.span.start}:${object.id}';
 					localTypes.set(objectName, objectType);
 					builder.store(objectName, object);
-					if (facts.observableStateOwner(physicalName) != null)
-						builder.call(ReactiveRuntimeClass + ".recordObservableCreation",
-							[builder.toDyn(builder.load(objectName, objectType))], Void);
 					for (field in fields) {
 						var fieldValue = lowerExpression(field.value, builder, localTypes);
 						builder.fieldSet(builder.load(objectName, objectType), field.name, fieldValue);
 					}
+					if (facts.observableStateOwner(physicalName) != null)
+						builder.call(ReactiveRuntimeClass + ".recordObservableCreation",
+							[builder.toDyn(builder.load(objectName, objectType))], Void);
 					builder.load(objectName, objectType);
 				}
 			case TArrayLiteral(values):

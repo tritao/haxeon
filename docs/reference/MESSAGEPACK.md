@@ -62,8 +62,8 @@ var decoded:User = MessagePack.decode(bytes);
 The initial compiler profile supports non-generic, non-inheriting records with
 directly stored `Int`, `Int64`, `Float`, `Bool`, `String`, or `Bytes` fields, plus
 nullable versions of those types, arrays of supported values, and nested
-`@:wire` records. Every instance field requires one positive, unique
-`@:id(n)` annotation. IDs are permanent schema identities: once an ID has been
+`@:wire` records. Fields may be `final` or mutable. Every instance field requires
+one positive, unique `@:id(n)` annotation. IDs are permanent schema identities: once an ID has been
 used for a field or enum constructor, it must never be reused for a different
 semantic member. Deleting a member reserves its old ID forever.
 
@@ -75,7 +75,9 @@ values receive `null`, and missing arrays and maps receive empty collections.
 Missing non-null records and enums are errors unless the field has a supported
 initializer. Supported field initializers are literals, `null`, enum
 constructors, and simple array/map literals; the generated decoder evaluates
-these defaults directly and never invokes a record constructor. Unsupported
+these defaults directly and never invokes a record constructor. The decoder
+validates required fields, then initializes each field once before returning the
+new record. Unsupported
 initializer expressions are rejected by the compiler. Recursive record schemas
 are rejected because the value codec does not represent object identity or
 cycles.
