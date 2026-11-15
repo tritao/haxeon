@@ -266,7 +266,7 @@ class InspectorPanel {
     }
     for (record in records) if (record.focused && InspectionOverlay.isRecordInPreview(explorer, record)) return record;
     for (record in records) if (record.visible
-      && record.focusable && record.role >= 0 && InspectionOverlay.isRecordInPreview(
+      && record.focusable && record.role != null && InspectionOverlay.isRecordInPreview(
         explorer,
         record
       )) return record;

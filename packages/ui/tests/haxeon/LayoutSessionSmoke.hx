@@ -415,7 +415,7 @@ class LayoutSessionSmoke {
     if (paintCalls != 2) return 52;
     renderable.dispose();
 
-    var image = Image.create(8, 6, ImageFormat.RGBA8, Bytes.alloc(8 * 6 * 4));
+    var image = Image.create(8, 6, ImageFormat.Rgba8, Bytes.alloc(8 * 6 * 4));
     panel.add(LayoutNode.custom(104, new LayoutImageContent(image)));
     resolved = session.submit(root, frame);
     var imageItem:Null<ResolvedLayoutItem> = null;

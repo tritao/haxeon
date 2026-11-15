@@ -372,7 +372,7 @@ private class StyleDirectionValue extends StyleValue {
 	public final value:LayoutDirection;
 	public function new(property:StyleProperty<LayoutDirection>, value:LayoutDirection) { super(property); this.value = value; }
 	override public function inspect():Dynamic return value;
-	override public function key():String return Std.string(Type.enumIndex(value));
+	override public function key():String return Std.string(value.rawValue());
 	override public function sameAs(other:StyleValue):Bool
 		return other != null && property == other.property && Std.isOfType(other, StyleDirectionValue) &&
 			value == (cast other:StyleDirectionValue).value;
@@ -402,7 +402,7 @@ private class StyleChildDistributionValue extends StyleValue {
 	public final value:LayoutDistribution;
 	public function new(property:StyleProperty<LayoutDistribution>, value:LayoutDistribution) { super(property); this.value = value; }
 	override public function inspect():Dynamic return value;
-	override public function key():String return Std.string(Type.enumIndex(value));
+	override public function key():String return Std.string(value.rawValue());
 	override public function sameAs(other:StyleValue):Bool
 		return other != null && property == other.property && Std.isOfType(other, StyleChildDistributionValue) &&
 			value == (cast other:StyleChildDistributionValue).value;
@@ -422,7 +422,7 @@ private class StyleWrapModeValue extends StyleValue {
 	public final value:LayoutWrapMode;
 	public function new(property:StyleProperty<LayoutWrapMode>, value:LayoutWrapMode) { super(property); this.value = value; }
 	override public function inspect():Dynamic return value;
-	override public function key():String return Std.string(Type.enumIndex(value));
+	override public function key():String return Std.string(value.rawValue());
 	override public function sameAs(other:StyleValue):Bool
 		return other != null && property == other.property && Std.isOfType(other, StyleWrapModeValue) &&
 			value == (cast other:StyleWrapModeValue).value;
@@ -432,7 +432,7 @@ private class StyleAlignSelfValue extends StyleValue {
 	public final value:LayoutSelfAlignment;
 	public function new(property:StyleProperty<LayoutSelfAlignment>, value:LayoutSelfAlignment) { super(property); this.value = value; }
 	override public function inspect():Dynamic return value;
-	override public function key():String return Std.string(Type.enumIndex(value));
+	override public function key():String return Std.string(value.rawValue());
 	override public function sameAs(other:StyleValue):Bool
 		return other != null && property == other.property && Std.isOfType(other, StyleAlignSelfValue) &&
 			value == (cast other:StyleAlignSelfValue).value;

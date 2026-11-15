@@ -96,7 +96,7 @@ class AccessibilityContract {
     var nativeNodes = AccessibilityBridge.buildNodes(tabsSnapshot);
     var firstNativeRole = nativeNodes[0].get_role();
     if (nativeNodes.length != tabsSnapshot.length || nativeNodes[0].get_struct_size() != AccessibilityNode.size()
-      || firstNativeRole != nativekit.ffi.NativeKitTypes.AccessibilityRole.TabList) return 6;
+      || firstNativeRole != nativekit.ffi.NativeKitTypes.NativeAccessibilityRole.TabList) return 6;
 
     var dismissals = 0;
     var dialog = new Dialog("accessibility-dialog", "Preferences", new Button("Apply"), function() {
@@ -286,13 +286,13 @@ class AccessibilityContract {
     var nativeRow:Null<AccessibilityNode> = null;
     for (node in metadataNative) {
       var nativeRole = node.get_role();
-      if (nativeRole == nativekit.ffi.NativeKitTypes.AccessibilityRole.Cell) nativeCell = node;
-      else if (nativeRole == nativekit.ffi.NativeKitTypes.AccessibilityRole.Grid) nativeGrid = node;
-      else if (nativeRole == nativekit.ffi.NativeKitTypes.AccessibilityRole.Row) nativeRow = node;
+      if (nativeRole == nativekit.ffi.NativeKitTypes.NativeAccessibilityRole.Cell) nativeCell = node;
+      else if (nativeRole == nativekit.ffi.NativeKitTypes.NativeAccessibilityRole.Grid) nativeGrid = node;
+      else if (nativeRole == nativekit.ffi.NativeKitTypes.NativeAccessibilityRole.Row) nativeRow = node;
     }
     if (nativeCell == null || nativeGrid == null
       || nativeRow == null || nativeGrid.get_row_count() != 2 || nativeGrid.get_column_count() != 3
-      || nativeGrid.get_orientation() != nativekit.ffi.NativeKitTypes.AccessibilityOrientation.Horizontal
+      || nativeGrid.get_orientation() != nativekit.ffi.NativeKitTypes.NativeAccessibilityOrientation.Horizontal
       || nativeCell.get_row_index() != 1 || nativeCell.get_column_index() != 2 || nativeCell.get_row_span() != 1
       || nativeCell.get_column_span() != 1 || nativeRow.get_hierarchy_level() != 1) return 14;
 

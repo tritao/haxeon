@@ -51,7 +51,7 @@ class CanvasCommandBuffer {
 
 	public function composite(mode:CompositeMode):Void {
 		header(NativeKitUI.CommandOpcode.SetCompositeMode, 12);
-		word(NativeEnums.compositeMode(mode).rawValue());
+		word(mode.rawValue());
 	}
 
 	public function paint(value:Paint):Void
@@ -115,7 +115,7 @@ class CanvasCommandBuffer {
 		header(NativeKitUI.CommandOpcode.BeginLayer, commandSize,
 			NativeKitUIConstants.NKUI_LAYER_COMMAND_VERSION);
 		float(opacity);
-		word(NativeEnums.compositeMode(mode).rawValue());
+		word(mode.rawValue());
 		if (bounds == null) {
 			float(0.0); float(0.0); float(0.0); float(0.0);
 		} else {
@@ -159,7 +159,7 @@ class CanvasCommandBuffer {
 		word(kind.rawValue());
 		for (component in matrix)
 			float(component);
-		if (kind == NativeKitUI.NkuiEffectKind.Custom) {
+		if (kind == NativeKitUI.UiEffectKind.Custom) {
 			var custom:CustomEffect = cast value;
 			word(custom.definition.id);
 			word(custom.components.length);
@@ -186,13 +186,13 @@ class CanvasCommandBuffer {
 
 	function writeMask(value:Mask):Void {
 		if (value == null) {
-			word(NativeKitUI.NkuiMaskKind.None.rawValue());
+			word(NativeKitUI.UiMaskKind.None.rawValue());
 			word(0);
 			for (index in 0...8)
 				float(0.0);
 			return;
 		}
-		word(NativeEnums.maskKind(value.kind).rawValue());
+		word(value.kind.rawValue());
 		word(value.image == null ? 0 : value.image.nativeHandle().rawValue());
 		for (index in 0...8) {
 			var parameter = 0.0;
@@ -223,8 +223,8 @@ class CanvasCommandBuffer {
 		header(NativeKitUI.CommandOpcode.StrokePath, 28);
 		word(path.nativeHandle().rawValue());
 		float(width);
-		word(NativeEnums.lineCap(cap).rawValue());
-		word(NativeEnums.lineJoin(join).rawValue());
+		word(cap.rawValue());
+		word(join.rawValue());
 		float(miterLimit);
 	}
 

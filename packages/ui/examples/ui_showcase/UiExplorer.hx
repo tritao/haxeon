@@ -454,7 +454,7 @@ class UiExplorer {
 				pixels.set(offset, red); pixels.set(offset + 1, green);
 				pixels.set(offset + 2, blue); pixels.set(offset + 3, 255);
 			}
-		return Image.create(width, height, ImageFormat.RGBA8, pixels);
+		return Image.create(width, height, ImageFormat.Rgba8, pixels);
 	}
 
 	static function createOverlayImage(size:Int):Image {
@@ -469,7 +469,7 @@ class UiExplorer {
 				pixels.set(offset, inside ? 132 : 0); pixels.set(offset + 1, inside ? 92 : 0);
 				pixels.set(offset + 2, inside ? 242 : 0); pixels.set(offset + 3, inside ? 255 : 0);
 			}
-		return Image.create(size, size, ImageFormat.RGBA8, pixels);
+		return Image.create(size, size, ImageFormat.Rgba8, pixels);
 	}
 
 	static function createNineSliceImage(size:Int):Image {
@@ -484,7 +484,7 @@ class UiExplorer {
 				pixels.set(offset + 2, corner ? 205 : edge ? 224 : 248);
 				pixels.set(offset + 3, 255);
 			}
-		return Image.create(size, size, ImageFormat.RGBA8, pixels);
+		return Image.create(size, size, ImageFormat.Rgba8, pixels);
 	}
 
 	static function loadDemoImage(path:Null<String>):Image {
@@ -508,7 +508,7 @@ class UiExplorer {
 				pixels.set(offset + 2, bright ? 74 : 214);
 				pixels.set(offset + 3, 255);
 			}
-		return Image.create(size, size, ImageFormat.RGBA8, pixels, filter);
+		return Image.create(size, size, ImageFormat.Rgba8, pixels, filter);
 	}
 
 	public function getDiagnosticStage():Int

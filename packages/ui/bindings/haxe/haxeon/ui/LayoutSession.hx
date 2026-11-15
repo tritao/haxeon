@@ -255,7 +255,7 @@ class LayoutSession {
 	}
 
 	/** Selects vector or persistent GPU-raster rendering for a custom paint plane. */
-	public function setCustomPaintCachePolicy(nodeId:Int, policy:NativeKitUI.NkuiLayoutCachePolicy):Void {
+	public function setCustomPaintCachePolicy(nodeId:Int, policy:NativeKitUI.UiLayoutCachePolicy):Void {
 		ensureLive();
 		if (nodeId <= 0)
 			throw "Custom paint cache policy is invalid";
@@ -264,7 +264,7 @@ class LayoutSession {
 	}
 
 	/** Selects vector or persistent GPU-raster rendering for a render-node subtree. */
-	public function setCachePolicy(nodeId:Int, policy:NativeKitUI.NkuiLayoutCachePolicy):Void {
+	public function setCachePolicy(nodeId:Int, policy:NativeKitUI.UiLayoutCachePolicy):Void {
 		ensureLive();
 		if (nodeId <= 0)
 			throw "Render subtree cache policy is invalid";

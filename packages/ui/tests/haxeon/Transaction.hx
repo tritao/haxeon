@@ -70,7 +70,7 @@ class Transaction {
 		var paint = SolidPaint.create(Color.rgba(0.2, 0.6, 0.9));
 		var pixels = Bytes.alloc(4);
 		pixels.set(0, 20); pixels.set(1, 80); pixels.set(2, 220); pixels.set(3, 255);
-		var image = Image.create(1, 1, ImageFormat.RGBA8, pixels);
+		var image = Image.create(1, 1, ImageFormat.Rgba8, pixels);
 		var fonts = FontCollection.create();
 		var fontPath = Sys.getEnv("NKUI_TEST_FONT_PATH");
 		if (fontPath == null)

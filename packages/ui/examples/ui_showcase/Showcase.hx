@@ -373,7 +373,7 @@ class Showcase {
         return caretPosition.affinity;
 
     public function caretDirection():Int
-        return haxeon.ui.NativeEnums.textDirection(multilingual.caret(caretPosition).direction).rawValue();
+        return multilingual.caret(caretPosition).direction.rawValue();
 
     function submitLayoutFrame(logicalWidth:Float, logicalHeight:Float):Void {
         layoutRoot.style.width = LayoutAxis.fixed(logicalWidth);
@@ -772,7 +772,7 @@ class Showcase {
                 pixels.set(offset + 2, bright ? 239 : 161);
                 pixels.set(offset + 3, 255);
             }
-        return Image.create(width, height, ImageFormat.RGBA8, pixels);
+        return Image.create(width, height, ImageFormat.Rgba8, pixels);
     }
 
 }

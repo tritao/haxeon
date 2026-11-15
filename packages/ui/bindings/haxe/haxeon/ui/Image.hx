@@ -28,11 +28,11 @@ class Image extends NativeKitUIResource {
 			filter:ImageFilter = ImageFilter.Linear):Image {
 		if (width <= 0 || height <= 0)
 			throw "Image dimensions must be positive";
-		var bytesPerPixel = format == ImageFormat.R8 ? 1 : format == ImageFormat.RGBA8 ? 4 : 0;
+		var bytesPerPixel = format == ImageFormat.R8 ? 1 : format == ImageFormat.Rgba8 ? 4 : 0;
 		if (bytesPerPixel == 0 || pixels == null || pixels.length != width * height * bytesPerPixel)
 			throw "Image pixel data does not match its dimensions and format";
-		var made = NativeKitUI.nkui_image_create_filtered(width, height, NativeEnums.imageFormat(format), pixels,
-			NativeEnums.imageFilter(filter));
+		var made = NativeKitUI.nkui_image_create_filtered(width, height, format, pixels,
+			filter);
 		UiResult.check(made.status, "image.create");
 		return new Image(made.out_image, width, height, format, filter);
 	}
@@ -42,9 +42,9 @@ class Image extends NativeKitUIResource {
 			filter:ImageFilter = ImageFilter.Linear):Image {
 		if (path == null || path.length == 0)
 			throw "Image path must not be empty";
-		var made = NativeKitUI.nkui_image_load_file(path, NativeEnums.imageFilter(filter));
+		var made = NativeKitUI.nkui_image_load_file(path, filter);
 		UiResult.check(made.status, "image.loadFile");
 		return new Image(made.out_image, made.out_width, made.out_height,
-			ImageFormat.RGBA8, filter);
+			ImageFormat.Rgba8, filter);
 	}
 }

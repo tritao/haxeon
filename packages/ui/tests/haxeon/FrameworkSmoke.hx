@@ -1819,7 +1819,7 @@ class FrameworkSmoke {
       || context.animations.activeCount == 0) return 232;
     var imageBytes = haxe.io.Bytes.alloc(16);
     for (index in 0...16) imageBytes.set(index, 255);
-    var image = Image.create(2, 2, ImageFormat.RGBA8, imageBytes);
+    var image = Image.create(2, 2, ImageFormat.Rgba8, imageBytes);
     var loadedImage = Image.loadFile(Sys.getEnv("NKUI_TEST_IMAGE_PATH"), ImageFilter.Nearest);
     if (loadedImage.width != 22 || loadedImage.height != 22 || loadedImage.filter != ImageFilter.Nearest) return 239;
     loadedImage.dispose();
@@ -5177,7 +5177,7 @@ class FrameworkSmoke {
         new WindowChrome("chrome-diagonal", WindowDecorationRegionKind.ResizeNortheast, new Text("Resize")),
         new LayoutFrame(320.0, 192.0)
       );
-      result = result && diagonal.cursor == UiCursorShape.DiagonalResizeNesw && diagonal.windowDecorationCursor == null;
+      result = result && diagonal.cursor == UiCursorShape.NeswResize && diagonal.windowDecorationCursor == null;
       var custom = context.submit(
         new WindowChrome("chrome-custom", WindowDecorationRegionKind.Client, new Text("Custom"), UiCursorShape.Hand),
         new LayoutFrame(320.0, 192.0)

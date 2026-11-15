@@ -2640,6 +2640,24 @@ The latest measured release sizes are 6,595,956 bytes for Showcase Wasm32, 3,982
 24–26 bytes less on HashLink. The final 15-action census recorded 16,251 objects / 1,048,304 bytes, with `type-char` at
 417 / 16,360; all other action counts matched the checkpoint.
 
+### UI enums are the generated native types (2026-11-15)
+
+The decision above to keep the migrated UI enums as plain UI enums is reversed. Their only advantage over the generated
+types was exhaustive switches, and switch expressions over enum abstracts are now checked for exhaustiveness too
+(a missing value is `E1021`; an unknown native code throws at the switch). Each of `LayoutSizing`, `LayoutVisualKind`,
+`FontFamily`, `TextAlignment`, `TextWrap`, `TextDirection`, `CompositeMode`, `LineCap`, `LineJoin`, `ImageFormat`,
+`ImageFilter`, `LayoutDirection`, `LayoutDistribution`, `LayoutWrapMode`, `LayoutSelfAlignment`, `CachePolicy`,
+`MaskKind`, `AccessibilityRole`, `AccessibilityOrientation`, `CursorShape`, `AccessibilityAction` and
+`AccessibilityState` is now a typedef of its generated NativeKit type, so the values are the native codes and the
+boundaries pass them through. `NativeEnums` keeps only what has no single native counterpart: the per-axis
+`LayoutAlignmentX`/`LayoutAlignmentY` choices over one native alignment enum, and `EffectKind`, whose operations
+normalization removes before the compositor sees them.
+
+Consequences: fingerprints and keys that used `Type.enumIndex` use `rawValue()`; `UiNodeSnapshot` carries a typed
+`visualKind` and a `Null<AccessibilityRole>` instead of integers with a `-1` sentinel, which also fixes the inspector
+naming every visual kind from an off-by-one case index. Value names follow the generated ones (`ImageFormat.Rgba8`,
+`CursorShape.NwseResize`/`NeswResize`) except `CursorShape.Text`, which the projection names for `NK_CURSOR_IBEAM`.
+
 ### Final release attribution and physical closure probes
 
 The development modules measured 11,581,890 bytes on Wasm32, 6,038,119 on Wasm GC and 101,643,349 for the HashLink

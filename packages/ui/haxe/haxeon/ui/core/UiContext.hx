@@ -7,7 +7,7 @@ import haxeon.platform.Surface as PlatformSurface;
 import nativekit.ffi.NativeKitTypes.WindowDecorationRegion as NativeWindowDecorationRegion;
 import haxeon.ui.widgets.text.Text;
 import nativekit.ffi.NativeKitTypes;
-import nativekit.ffi.NativeKitTypes.CursorShape as NativeCursorShape;
+import nativekit.ffi.NativeKitTypes.NativeCursorShape;
 import haxeon.ui.LayoutFrame;
 import haxeon.ui.LayoutSession;
 import haxeon.ui.LayoutChanges;
@@ -956,7 +956,7 @@ class UiContext {
       var nodeId = node.id.value;
       if (node.resolved != null && node.cachePolicy != CachePolicy.None) session.setCachePolicy(
         node.id.value,
-        NativeEnums.cachePolicy(node.cachePolicy)
+        node.cachePolicy
       );
       if (!node.hasPaintHandler() || node.resolved == null) {
         clearCustomPaintBindings(node.id.value);
@@ -980,7 +980,7 @@ class UiContext {
           }
           if (node.cachePolicy != CachePolicy.None) session.setCustomPaintCachePolicy(
             nodeId,
-            NativeEnums.cachePolicy(node.cachePolicy)
+            node.cachePolicy
           );
         }
       } else {
@@ -1022,7 +1022,7 @@ class UiContext {
         }
         if (hasCommands && node.cachePolicy != CachePolicy.None) session.setCustomPaintCachePolicy(
           nodeId,
-          NativeEnums.cachePolicy(node.cachePolicy)
+          node.cachePolicy
         );
         customGeometries.set(nodeId, geometry);
         customPaintKeys.set(nodeId, node.retainedPaintKey());
@@ -1811,7 +1811,7 @@ class UiContext {
       case UiCursorShape.Arrow:
         NativeCursorShape.Arrow;
       case UiCursorShape.Text:
-        NativeCursorShape.Ibeam;
+        NativeCursorShape.Text;
       case UiCursorShape.Crosshair:
         NativeCursorShape.Crosshair;
       case UiCursorShape.Hand:
@@ -1820,9 +1820,9 @@ class UiContext {
         NativeCursorShape.HorizontalResize;
       case UiCursorShape.VerticalResize:
         NativeCursorShape.VerticalResize;
-      case UiCursorShape.DiagonalResize:
+      case UiCursorShape.NwseResize:
         NativeCursorShape.NwseResize;
-      case UiCursorShape.DiagonalResizeNesw:
+      case UiCursorShape.NeswResize:
         NativeCursorShape.NeswResize;
       case UiCursorShape.Move:
         NativeCursorShape.Move;

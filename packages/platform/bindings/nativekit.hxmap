@@ -40,9 +40,15 @@
     }
   },
   "enumNames": {
-    "nk_resource_asset_load_state": "ResourceAssetLoadState"
+    "nk_resource_asset_load_state": "ResourceAssetLoadState",
+    "nk_cursor_shape": "NativeCursorShape",
+    "nk_accessibility_role": "NativeAccessibilityRole",
+    "nk_accessibility_orientation": "NativeAccessibilityOrientation"
   },
   "enumValueNames": {
+    "nk_cursor_shape": {
+      "NK_CURSOR_IBEAM": "Text"
+    },
     "nk_result": {
       "NK_RESULT_HTTP_DNS": "HttpDns",
       "NK_RESULT_HTTP_CONNECTION": "HttpConnection",

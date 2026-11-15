@@ -2,7 +2,7 @@ package haxeon.ui.core;
 
 import haxeon.ui.NativeEnums;
 import nativekit.ffi.NativeKitTypes;
-import nativekit.ffi.NativeKitTypes.CursorShape as NativeCursorShape;
+import nativekit.ffi.NativeKitTypes.NativeCursorShape;
 
 import nativekit.ffi.NativeKit;
 import haxeon.ui.core.CursorShape as UiCursorShape;
@@ -38,7 +38,7 @@ class NativeCursorController {
 		if (!supportsCursor())
 			return;
 
-		var key = NativeEnums.cursorShape(shape);
+		var key = shape;
 		var owner = cursors.get(key);
 		if (owner == null || owner.isClosed()) {
 			try {

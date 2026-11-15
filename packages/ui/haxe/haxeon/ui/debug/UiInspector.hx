@@ -1,6 +1,8 @@
 package haxeon.ui.debug;
 
+import haxeon.ui.LayoutVisualKind;
 import haxeon.ui.Rect;
+import haxeon.ui.semantics.AccessibilityRole;
 
 import haxeon.ui.widgets.text.Text;
 
@@ -91,8 +93,9 @@ class UiInspector {
 				line += " focusable";
 			if (record.zIndex != 0)
 				line += " z=" + Std.string(record.zIndex);
-			if (record.role >= 0)
-				line += " role=" + Std.string(record.role) + " states=" + Std.string(record.semanticStates.rawValue());
+			var role = record.role;
+			if (role != null)
+				line += " role=" + Std.string(role.rawValue()) + " states=" + Std.string(record.semanticStates.rawValue());
 			if (record.label != null && record.label.length > 0)
 				line += ' label="' + escape(record.label) + '"';
 			if (record.value != null)
@@ -110,7 +113,7 @@ class UiInspector {
 		var bounds = geometry == null ? new Rect(0.0, 0.0, 0.0, 0.0) : geometry.bounds();
 		var clip = geometry == null ? new Rect(0.0, 0.0, 0.0, 0.0) : geometry.clipBounds;
 		var content = geometry == null ? new Rect(0.0, 0.0, 0.0, 0.0) : geometry.contentBounds;
-		var role = semantics == null ? -1 : Type.enumIndex(semantics.role);
+		var role:Null<AccessibilityRole> = semantics == null ? null : semantics.role;
 		var styleEntries:Array<StyleInspectionEntry> = includeStyleDetails ? [] : NoEntries;
 		var matchingStyleRules:Array<StyleSource> = includeStyleDetails ? [] : NoRules;
 		if (node.computedStyle != null) {
@@ -154,7 +157,7 @@ class UiInspector {
 		var effectDescriptions = describeEffects(effects);
 		var backdropEffectDescriptions = describeEffects(backdropEffects);
 		output.push(new UiNodeSnapshot(node.id.value, parentId, depth,
-			Type.enumIndex(node.layout.visualKind), bounds, clip, content,
+			node.layout.visualKind, bounds, clip, content,
 			geometry != null && geometry.visible, node.enabled, node.focusable,
 			focused != null && focused.equals(node.id),
 			(node.states).contains(StyleState.Hovered) ||
@@ -229,13 +232,12 @@ class UiInspector {
 		return semantic == null ? id : semantic;
 	}
 
-	static function visualName(kind:Int):String {
+	static function visualName(kind:LayoutVisualKind):String {
 		return switch kind {
-			case 1: "Box";
-			case 2: "Text";
-			case 3: "Image";
-			case 4: "Custom";
-			default: "Unknown";
+			case LayoutVisualKind.Box: "Box";
+			case LayoutVisualKind.Text: "Text";
+			case LayoutVisualKind.Image: "Image";
+			case LayoutVisualKind.Custom: "Custom";
 		};
 	}
 

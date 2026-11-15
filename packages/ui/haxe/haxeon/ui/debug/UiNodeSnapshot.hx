@@ -1,6 +1,8 @@
 package haxeon.ui.debug;
 
+import haxeon.ui.LayoutVisualKind;
 import haxeon.ui.Rect;
+import haxeon.ui.semantics.AccessibilityRole;
 import haxeon.ui.semantics.AccessibilityState;
 import haxeon.ui.semantics.AccessibilityAction;
 import haxeon.ui.style.StyleState;
@@ -37,7 +39,7 @@ class UiNodeSnapshot {
 	public final id:Int;
 	public final parentId:Int;
 	public final depth:Int;
-	public final visualKind:Int;
+	public final visualKind:LayoutVisualKind;
 	public final bounds:Rect;
 	public final clipBounds:Rect;
 	public final contentBounds:Rect;
@@ -75,15 +77,16 @@ class UiNodeSnapshot {
 	/** Logical RGBA bytes estimated for the node's intermediate targets. */
 	public final estimatedRenderTargetBytes:Float;
 	public final zIndex:Int;
-	public final role:Int;
+	/** The semantic role, or null for a node without semantics. */
+	public final role:Null<AccessibilityRole>;
 	public final semanticStates:AccessibilityState;
 	public final label:Null<String>;
 	public final value:Null<String>;
 	public final actions:AccessibilityAction;
 
-	public function new(id:Int, parentId:Int, depth:Int, visualKind:Int, bounds:Rect,
+	public function new(id:Int, parentId:Int, depth:Int, visualKind:LayoutVisualKind, bounds:Rect,
 			clipBounds:Rect, contentBounds:Rect, visible:Bool, enabled:Bool,
-			focusable:Bool, focused:Bool, hovered:Bool, pressed:Bool, zIndex:Int, role:Int,
+			focusable:Bool, focused:Bool, hovered:Bool, pressed:Bool, zIndex:Int, role:Null<AccessibilityRole>,
 			semanticStates:AccessibilityState, label:Null<String>, value:Null<String>, actions:AccessibilityAction,
 			interactionStates:StyleState = StyleState.empty(), styleType:Null<String> = null,
 			computedStyle:Null<ComputedStyle> = null,

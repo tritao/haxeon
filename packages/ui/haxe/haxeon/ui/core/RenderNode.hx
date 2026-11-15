@@ -303,7 +303,7 @@ class RenderNode {
 
   function fingerprintText(text:Null<String>, label:Null<String>):Int {
     var hash = fingerprintHash.reset();
-    hash.addInt(haxeon.Diff.fingerprint(layout.style)).addInt(Type.enumIndex(layout.visualKind)).addString(text)
+    hash.addInt(haxeon.Diff.fingerprint(layout.style)).addInt(layout.visualKind.rawValue()).addString(text)
       .addInt(layout.measureVersion).addBool(hitTestSelf).addBool(focusable).addBool(enabled).addString(label);
     var color = layout.textColor;
     if (color != null) hash.addInt(haxeon.Hashing.hash(color));
@@ -662,9 +662,9 @@ class RenderNode {
       case WindowDecorationRegionKind.ResizeWest | WindowDecorationRegionKind.ResizeEast:
         CursorShape.HorizontalResize;
       case WindowDecorationRegionKind.ResizeNorthwest | WindowDecorationRegionKind.ResizeSoutheast:
-        CursorShape.DiagonalResize;
+        CursorShape.NwseResize;
       case WindowDecorationRegionKind.ResizeNortheast | WindowDecorationRegionKind.ResizeSouthwest:
-        CursorShape.DiagonalResizeNesw;
+        CursorShape.NeswResize;
       case WindowDecorationRegionKind.Client:
         CursorShape.Arrow;
       case _:

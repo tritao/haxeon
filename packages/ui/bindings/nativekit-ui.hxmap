@@ -21,7 +21,13 @@
     "nkui_layout_visual_kind": "UiLayoutVisualKind",
     "nkui_layout_sizing": "UiLayoutSizing",
     "nkui_layout_direction": "UiLayoutDirection",
-    "nkui_layout_alignment": "UiLayoutAlignment"
+    "nkui_layout_alignment": "UiLayoutAlignment",
+    "nkui_layout_distribution": "UiLayoutDistribution",
+    "nkui_layout_wrap_mode": "UiLayoutWrapMode",
+    "nkui_layout_self_alignment": "UiLayoutSelfAlignment",
+    "nkui_layout_cache_policy": "UiLayoutCachePolicy",
+    "nkui_mask_kind": "UiMaskKind",
+    "nkui_effect_kind": "UiEffectKind"
   },
   "typeNames": {
     "nk_handle": "nativekit.ffi.NativeKitTypes.Handle",

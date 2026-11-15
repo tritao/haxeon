@@ -123,7 +123,7 @@ class AccessibilityBridge {
 		node.set_id(item.id);
 		node.set_parent_id(item.parentId);
 		node.set_child_index(item.childIndex);
-		node.set_role(NativeEnums.accessibilityRole(item.role));
+		node.set_role(item.role);
 		node.set_states(AccessibilityStates.fromRaw(item.states.rawValue()));
 		node.set_actions(AccessibilityActions.fromRaw(item.actions.rawValue()));
 		node.set_reserved0(0);
@@ -149,7 +149,7 @@ class AccessibilityBridge {
 		node.set_row_span(item.rowSpan);
 		node.set_column_span(item.columnSpan);
 		node.set_hierarchy_level(item.hierarchyLevel);
-		node.set_orientation(NativeEnums.accessibilityOrientation(item.orientation));
+		node.set_orientation(item.orientation);
 		return node;
 	}
 
