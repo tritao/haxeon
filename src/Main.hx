@@ -7,8 +7,49 @@ import sys.io.File;
 
 /** Command-line compiler entry point for producing a complete HashLink module. */
 class Main {
+	/** Ends each compile's output in `--batch` mode, followed by the compile's exit status. */
+	static inline final BATCH_DONE = "@@haxeon-batch-done@@ ";
+
 	static function main():Void {
 		var arguments = Sys.args();
+		if (arguments.length == 1 && arguments[0] == "--batch")
+			batch();
+		else
+			compileRequest(arguments);
+	}
+
+	/**
+	 * Compiles one request per line of standard input (its arguments separated by tabs, as on the command line) in this process,
+	 * so a test driver does not start the VM and compile the compiler for every program. Each request is built by a compiler of
+	 * its own; its output ends with `BATCH_DONE` and the status a separate process would have exited with. An empty line, or the
+	 * end of the input, ends the process: the end of a pipe is not seen while another process still holds its writing end.
+	 */
+	static function batch():Void {
+		var input = Sys.stdin(),
+			initialPrune = Sys.getEnv("HAXEON_EARLY_PRUNE");
+		while (true) {
+			var line:String;
+			try
+				line = input.readLine()
+			catch (_:haxe.io.Eof)
+				break;
+			if (line == "")
+				break;
+			// `--no-early-prune` sets this for its own request only.
+			Sys.putEnv("HAXEON_EARLY_PRUNE", initialPrune == null ? "" : initialPrune);
+			var status = 0;
+			try
+				compileRequest(line.split("\t"))
+			catch (error:Dynamic) {
+				Sys.println("Uncaught exception: " + Std.string(error));
+				status = 1;
+			}
+			Sys.println(BATCH_DONE + status);
+			Sys.stdout().flush();
+		}
+	}
+
+	static function compileRequest(arguments:Array<String>):Void {
 		// `--plain` builds as `haxeon build` does: not for live patching, so what nothing reaches is not in the module.
 		var plain = arguments.indexOf("--plain") >= 0;
 		// `--no-early-prune` is a migration reference, not a product option: it keeps every function through the passes (`IrEntryPrune`), as

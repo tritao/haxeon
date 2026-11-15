@@ -39,6 +39,74 @@ private typedef ActiveProgram = {
 	var process:Process;
 }
 
+/** A compile in flight: `finish` waits for it and returns its status and output. */
+private typedef PendingCompile = {
+	var finish:Void->CommandResult;
+}
+
+private typedef ActiveCompile = {
+	var index:Int;
+	var run:ProgramRun;
+	var compile:PendingCompile;
+}
+
+/**
+ * Compiler processes kept running across compiles (`Main --batch`), so a program's compile does not pay for starting the VM and
+ * compiling the compiler: that was most of a small program's compile time. Each request is still built by a compiler of its own.
+ * A process serves one request at a time and returns to the pool when its answer has been read; one that dies is not reused.
+ */
+private class BatchCompilers {
+	static inline final DONE = "@@haxeon-batch-done@@ ";
+
+	final hl:String;
+	final main:String;
+	final idle:Array<Process> = [];
+
+	public function new(hl:String, main:String) {
+		this.hl = hl;
+		this.main = main;
+	}
+
+	public function start(arguments:Array<String>):PendingCompile {
+		// Standard error joins standard output, so no pipe is left unread while the process waits for its next request.
+		var worker = idle.length > 0 ? idle.pop() : new Process("sh", ["-c", 'exec "$0" "$@" 2>&1', hl, main, "--batch"]);
+		worker.stdin.writeString(arguments.join("\t") + "\n");
+		worker.stdin.flush();
+		return {
+			finish: function():CommandResult {
+				var output = new StringBuf();
+				while (true) {
+					var line:String;
+					try
+						line = worker.stdout.readLine()
+					catch (_:haxe.io.Eof) {
+						var status = worker.exitCode();
+						worker.close();
+						return {status: status == 0 ? 1 : status, output: output.toString() + "the batch compiler process ended before answering\n"};
+					}
+					if (StringTools.startsWith(line, DONE)) {
+						idle.push(worker);
+						return {status: Std.parseInt(line.substr(DONE.length)), output: output.toString()};
+					}
+					output.add(line);
+					output.add("\n");
+				}
+			}
+		};
+	}
+
+	/** Ends every process with an empty request: each child holds the other pipes' writing ends, so closing ours ends none. */
+	public function close():Void {
+		for (worker in idle) {
+			worker.stdin.writeString("\n");
+			worker.stdin.flush();
+			worker.exitCode();
+			worker.close();
+		}
+		idle.resize(0);
+	}
+}
+
 /** One command of a test pipeline; `failure` returns a message when the exit status fails the test. */
 private typedef PipelineStep = {
 	var start:Void->Process;
@@ -77,11 +145,17 @@ class TestRunner {
 		configureRuntimeLibraryPath();
 	}
 
-	/** Compile a program to HashLink: with the prebuilt compiler when available, else `haxe --run Main`. */
-	function compileProgram(source:String, output:String, run:ProgramRun):Process {
+	/** Set while programs are compiled with the prebuilt compiler (HAXEON_BATCH_COMPILE=0 compiles each in a process of its own). */
+	var batch:Null<BatchCompilers> = null;
+
+	/** Compile a program to HashLink: with the prebuilt compiler when available (in a batch process), else `haxe --run Main`. */
+	function compileProgram(source:String, output:String, run:ProgramRun):PendingCompile {
 		var arguments = [source, output].concat((run.warm ? ["--warm-edit"] : run.plain ? ["--plain"] : []).concat(run.unpruned ? ["--no-early-prune"] : []));
-		return prebuiltMain != null ? new Process(hl,
+		if (batch != null)
+			return batch.start(arguments);
+		var process = prebuiltMain != null ? new Process(hl,
 			[prebuiltMain].concat(arguments)) : new Process(haxe, ["--cwd", root, "common.hxml", "--run", "Main"].concat(arguments));
+		return {finish: () -> finishCommand(process)};
 	}
 
 	/**
@@ -312,17 +386,23 @@ class TestRunner {
 			return named.length;
 		}
 		var runs:Array<ProgramRun> = [for (test in tests) for (run in runsOf(test)) run];
+		if (prebuiltMain != null && Sys.getEnv("HAXEON_BATCH_COMPILE") != "0")
+			batch = new BatchCompilers(hl, prebuiltMain);
+		var failures = 0;
 		if (jobs == 1) {
-			var failures = 0;
 			for (run in runs) {
 				var result = runProgramCaptured(run, 0);
 				Sys.print(result.output);
 				if (!result.passed)
 					failures++;
 			}
-			return failures;
+		} else
+			failures = reportResults(runProgramsParallel(runs, Std.int(Math.min(jobs, runs.length))));
+		if (batch != null) {
+			batch.close();
+			batch = null;
 		}
-		return reportResults(runProgramsParallel(runs, Std.int(Math.min(jobs, runs.length))));
+		return failures;
 	}
 
 	function reportResults(results:Array<ProgramResult>):Int {
@@ -340,20 +420,20 @@ class TestRunner {
 		var compileOutput:Array<String> = [];
 		var compiled = [];
 		var next = 0;
-		var active:Array<ActiveProgram> = [];
-		while (next < runs.length || active.length > 0) {
-			while (next < runs.length && active.length < jobs) {
+		var compiling:Array<ActiveCompile> = [];
+		while (next < runs.length || compiling.length > 0) {
+			while (next < runs.length && compiling.length < jobs) {
 				var run = runs[next];
 				var source = Path.join([root, "tests", "programs", run.test.name + ".hx"]);
-				active.push({
+				compiling.push({
 					index: next,
 					run: run,
-					process: compileProgram(source, runOutput(root, run), run)
+					compile: compileProgram(source, runOutput(root, run), run)
 				});
 				next++;
 			}
-			var job = active.shift();
-			var compilation = finishCommand(job.process);
+			var job = compiling.shift();
+			var compilation = job.compile.finish();
 			compileOutput[job.index] = compilation.output;
 			var known = knownWarmFailure(job.run, compilation);
 			if (known != null)
@@ -369,7 +449,7 @@ class TestRunner {
 		}
 
 		next = 0;
-		active = [];
+		var active:Array<ActiveProgram> = [];
 		while (next < compiled.length || active.length > 0) {
 			while (next < compiled.length && active.length < jobs) {
 				var index = compiled[next++];
@@ -393,7 +473,7 @@ class TestRunner {
 	function runProgramCaptured(run:ProgramRun, index:Int):ProgramResult {
 		var source = Path.join([root, "tests", "programs", run.test.name + ".hx"]);
 		var output = runOutput(root, run), test = run.test;
-		var compilation = finishCommand(compileProgram(source, output, run));
+		var compilation = compileProgram(source, output, run).finish();
 		var known = knownWarmFailure(run, compilation);
 		if (known != null)
 			return {index: index, passed: known.passed, output: known.output};
