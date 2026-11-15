@@ -231,6 +231,12 @@ HL_PRIM realtime_date *HL_NAME(__date_now)( void ) {
 
 HL_PRIM double HL_NAME(__date_get_time)( realtime_date *date ) { return date->milliseconds; }
 
+HL_PRIM realtime_date *HL_NAME(__date_from_time)( double milliseconds ) {
+	realtime_date *date = (realtime_date *)hl_gc_alloc_noptr(sizeof(realtime_date));
+	date->milliseconds = milliseconds;
+	return date;
+}
+
 /* An `Unreachable` IR terminator on HashLink: not an exception, so no Haxe code can catch it. */
 HL_PRIM void HL_NAME(__unreachable)( void ) {
 	hl_fatal("unreachable: control reached a method of a class that has no instance");

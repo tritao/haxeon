@@ -680,6 +680,7 @@ DEFINE_PRIM(_VOID,__file_save_bytes,_STRING _ABSTRACT(realtime_bytes));
 DEFINE_PRIM(_ABSTRACT(realtime_bytes),__file_get_bytes,_STRING);
 DEFINE_PRIM(_ABSTRACT(realtime_date),__date_now,_NO_ARG);
 DEFINE_PRIM(_F64,__date_get_time,_ABSTRACT(realtime_date));
+DEFINE_PRIM(_ABSTRACT(realtime_date),__date_from_time,_F64);
 DEFINE_PRIM(_STRING,__array_join_bytes,_ARR _STRING);
 DEFINE_PRIM(_STRING,__string_substring,_STRING _I32 _I32);
 DEFINE_PRIM(_ABSTRACT(realtime_string_buffer),__string_buffer_new,_NO_ARG);

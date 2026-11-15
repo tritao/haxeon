@@ -31,6 +31,10 @@ class Date {
 	public static function now():Date
 		return new Date(haxeon.wasm.HaxeonHost.date_now());
 
+	/** The date `t` milliseconds after the Unix epoch. */
+	public static function fromTime(t:Float):Date
+		return new Date(t);
+
 	public function getTime():Float
 		return time;
 }
@@ -42,5 +46,9 @@ extern abstract Date(hl.Abstract<"realtime_date">) {
 
 	@:hlNative("haxeon_runtime", "__date_get_time")
 	public function getTime():Float;
+
+	/** The date `t` milliseconds after the Unix epoch. */
+	@:hlNative("haxeon_runtime", "__date_from_time")
+	public static function fromTime(t:Float):Date;
 }
 #end

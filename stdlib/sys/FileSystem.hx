@@ -144,6 +144,26 @@ class FileSystem {
 	}
 
 	/** Lightweight metadata for change detection, or null when the path is unavailable. */
+	/** The file's status, as in Haxe; throws when there is no file at `path`. */
+	public static function stat(path:String):FileStat {
+		var values = fileSystemMetadata(path);
+		if (values == null)
+			throw 'Could not stat "$path"';
+		return {
+			gid: values[0],
+			uid: values[1],
+			atime: Date.fromTime(values[2] * 1000.0),
+			mtime: Date.fromTime(values[3] * 1000.0),
+			ctime: Date.fromTime(values[4] * 1000.0),
+			size: values[5],
+			dev: values[6],
+			ino: values[7],
+			nlink: values[8],
+			rdev: values[9],
+			mode: values[10]
+		};
+	}
+
 	public static function metadata(path:String):Null<FileMetadata> {
 		var values = fileSystemMetadata(path);
 		return values == null ? null : new FileMetadata(values[5], values[3], values[4]);
