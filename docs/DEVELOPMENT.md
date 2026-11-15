@@ -15,12 +15,25 @@ the integration suites:
 ./tests/integration/test-hot-reload.sh
 ```
 
-The full test script runs program fixtures with 16 workers by default. Set
-`TEST_JOBS=1` for the sequential baseline, or invoke the driver directly to
-select a suite or test:
+### Test suites: `haxeon dev test`
+
+Every suite is one line of `tests/suites.txt`, in the order it runs, with its groups and how it is scheduled (the file's header
+documents the format). `scripts/haxeon dev test MODE` runs a mode: `quick`, `wave` (quick and wave), `ci` (what CI runs) or `full`
+(all of them, each suite once). Before the first suite it builds the native runtime and resolves the prebuilt tools, once. Every suite
+runs even when an earlier one fails, and the exit code is 0 only if all that ran passed. Each suite writes a log to `out/test/<time>-<mode>/`,
+next to `summary.txt`.
 
 ```sh
-TEST_JOBS=1 ./scripts/test.sh
+./scripts/test.sh                                  # dev test ci; TEST_JOBS sets the jobs (default 16), SKIP_FORMAT_CHECK=1 skips the format check
+./scripts/test.sh --only driver-default,wasm-backend
+scripts/haxeon dev test full --list                # the suites a mode runs, with their lanes and pools
+./scripts/gate.sh quick|wave|full [jobs]           # dev test MODE --gate: a report in out/gate (docs/TEST_SUITE_COST.md section 8)
+```
+
+A new suite is a line in `tests/suites.txt`, not a stage in a script. Give it the groups it belongs to; put it in a `lane` or `pool`
+only when it shares no files with what runs beside it. Invoke the driver directly to select a driver suite or test:
+
+```sh
 .tools/haxe/haxe -cp tests --run driver.TestDriver --suite programs --jobs 16
 .tools/haxe/haxe -cp tests --run driver.TestDriver --suite compiler --test ParserRecovery
 ```
@@ -67,8 +80,8 @@ are removed once they are an hour old. A build in `out/tools` does not sit next 
 `out` and the HashLink directory on the library path, as every launcher here does.
 
 `HAXEON_MAIN_HL`, `HAXEON_COMPILER_HL` and `HAXEON_BUILD_HL` remain as pins: when set, a script uses that exact build instead
-(a frozen control compiler, for example). `scripts/test.sh` and `scripts/gate.sh` resolve the tools once and export them, so every
-stage of one run uses the same builds even if the sources change while it runs.
+(a frozen control compiler, for example). `haxeon dev test` resolves the tools once and exports them, so every suite of one run uses
+the same builds even if the sources change while it runs.
 
 `bootstrap/compiler.hl` is checked in. For ordinary compiler development,
 `bootstrap-compiler.sh --self` rebuilds it with the checked-in compiler and

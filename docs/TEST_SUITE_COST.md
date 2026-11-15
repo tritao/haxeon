@@ -118,14 +118,19 @@ number taken with a different app tree or at a different load.
 
 ## 8. The gate
 
-`scripts/gate.sh quick|wave|full [jobs]` is the one way to run the suites for a report. It builds the compiler entry point and the build tool
-once (a failed build stops it), refuses a tree with tracked changes (`GATE_ALLOW_DIRTY=1` runs and records "dirty"), and runs, in order:
+`scripts/gate.sh quick|wave|full [jobs]` is the one way to run the suites for a report. It runs `scripts/haxeon dev test MODE --gate`: the
+modes are groups of `tests/suites.txt`, which lists the suites in order. It builds the native runtime and the prebuilt tools once (a failed
+build stops it), refuses a tree with tracked changes (`GATE_ALLOW_DIRTY=1` runs and records "dirty"), and runs every suite of the mode,
+continuing past a failing one:
 
 | mode | suites |
 |---|---|
-| quick | the NUL guard; the driver in its default configuration (each program built live and plain, named cases, executables) |
-| wave | quick, then the driver with `HAXEON_CHECK_REUSE=1` (adds the warm-edit rebuilds and the reuse comparisons), then `scripts/test-wasm-backend.sh` the self-hosting compile (`tests/integration/test-compiler-embedding.sh`) and the external-tool build (`tests/integration/test-external-tool-build.sh`) |
-| full | wave, then `scripts/test.sh` run to the end (a copy that continues past a failing stage; the summary lists every failing stage) |
+| quick | the whole-tree type check; the NUL guard; the driver in its default configuration (each program built live and plain, named cases, executables); the UI Showcase builds |
+| wave | quick, then the driver with `HAXEON_CHECK_REUSE=1` (adds the warm-edit rebuilds and the reuse comparisons), `scripts/test-wasm-backend.sh`, the self-hosting compile (`tests/integration/test-compiler-embedding.sh`) and the external-tool build (`tests/integration/test-external-tool-build.sh`) |
+| full | wave and every suite `scripts/test.sh` runs (the `ci` group), each once: the default driver run is shared, where the gate used to run it twice |
+
+Since 2026-11-15 a suite in a `lane` runs alongside the suites after it (in wave, `scripts/test-wasm-backend.sh` beside the self-hosting
+compile), so its seconds are not measured on an otherwise idle machine; compare a lane's seconds only between runs of the same mode.
 
 Results go to `out/gate/<commit>-<mode>-<time>/`: a log per suite and `summary.txt` with the commit, mode, jobs, load at start and end,
 cores, per suite the exit code, seconds and the driver's pass/fail line, a coverage line per driver run (`programs: N live, N plain,
