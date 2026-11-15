@@ -12,21 +12,35 @@ class AllocationCensus {
 		var file = Sys.getEnv("HAXEON_COMPILER_ALLOC_CENSUS");
 		if (file == null || file == "")
 			return false;
-		var bytes = Sys.getEnv("HAXEON_COMPILER_ALLOC_CENSUS_BYTES");
-		Census.start(bytes == null ? 1 << 20 : Std.parseInt(bytes));
+		var bytes = Sys.getEnv("HAXEON_COMPILER_ALLOC_CENSUS_BYTES"),
+			every = bytes == null ? 1 << 20 : Std.parseInt(bytes);
+		#if haxeon
+		hl.Gc.censusStart(every == null ? 1 << 20 : every);
+		#else
+		Census.start(every);
+		#end
 		return true;
 	}
 
 	/** Stops the census begun by `begin` and writes it. */
 	public static function end():Void {
+		var file = Sys.getEnv("HAXEON_COMPILER_ALLOC_CENSUS");
+		#if haxeon
+		hl.Gc.censusStop();
+		if (file != null)
+			hl.Gc.censusDump(file);
+		#else
 		Census.stop();
-		@:privateAccess Census.dump(Sys.getEnv("HAXEON_COMPILER_ALLOC_CENSUS").toUtf8());
+		@:privateAccess Census.dump(file.toUtf8());
+		#end
 	}
 }
 
-/** The runtime's census primitives, bound directly: the worker is built with stock Haxe, whose hl.Gc has no census. */
+#if !haxeon
+/** The runtime's census primitives, bound directly: stock Haxe's hl.Gc has no census (the Haxeon stdlib's has). */
 @:keep private extern class Census {
 	@:hlNative("std", "gc_census_start") static function start(stackEveryBytes:Int):Void;
 	@:hlNative("std", "gc_census_stop") static function stop():Void;
 	@:hlNative("std", "gc_census_dump") static function dump(path:hl.Bytes):Void;
 }
+#end

@@ -66,10 +66,10 @@ entry_sources="$work/entry-sources.txt"
 (cd "$root_dir" && find src stdlib lib/haxeon-io -name '*.hx' | LC_ALL=C sort) >"$entry_sources"
 building_entries=(compiler.tools.HaxeonCompiler Main FfiImportMain FfiAuditMain)
 declare -A entry_gaps=(
-	[compiler.tools.CompilerServer]="sys.net sockets are not in the Haxeon stdlib"
-	[tools.HaxeonCli]="sys.net sockets (CompilerClient) are not in the Haxeon stdlib"
-	[build.HaxeonBuild]="sys.net sockets (CompilerClient) are not in the Haxeon stdlib"
-	[LspMain]="sys.net sockets (HldiClient) are not in the Haxeon stdlib"
+	[compiler.tools.CompilerServer]="the Haxeon stdlib has no sys.io.File.append"
+	[tools.HaxeonCli]="the Haxeon stdlib's sys.io.Process has its own API, not Haxe's new Process(command, arguments)"
+	[build.HaxeonBuild]="the Haxeon stdlib's sys.io.Process has its own API, not Haxe's new Process(command, arguments)"
+	[LspMain]="the Haxeon stdlib's sys.io.FileOutput is not a haxe.io.Output (no write)"
 	[EditorServiceMain]="nullable values the language service reads without a check"
 )
 build_entry() {
