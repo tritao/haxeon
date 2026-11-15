@@ -578,3 +578,4 @@ equality-array-conformance	42
 equality-anonymous-conformance	42
 equality-self-hosting-guard	42
 enum-abstract-typedef	42
+enum-abstract-exhaustive	42

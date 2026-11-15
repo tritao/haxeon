@@ -88,7 +88,10 @@ typedef ExpressionSwitchRules = {
 	enumLiteral:TypedExpression->Null<{name:String, index:Int}>,
 	isEnum:CompilerType->Bool,
 	isNullableEnum:CompilerType->Bool,
-	enumName:CompilerType->Null<String>
+	enumName:CompilerType->Null<String>,
+
+	/** The values of a closed enum abstract keyed as switch cases are, or null when the subject is not one. */
+	closedEnumAbstractValues:CompilerType->Null<Array<{name:String, key:String}>>
 };
 
 /** Dispatches source expressions and owns their expression-specific typing rules. */
@@ -1650,6 +1653,8 @@ class ExpressionTyper {
 		];
 		if (deferredDefault != null)
 			typedDefault = typeExpressionCallback(deferredDefault.expression, deferredDefault.scope, resultType, false);
+		if (typedDefault == null && !seenCases.exists("$catchall"))
+			typedDefault = exhaustiveEnumAbstractDefault(typedSubject.type, seenCases, span);
 		if (typedDefault != null)
 			typedDefault = branchResult(typedDefault, resultType, "switch branch");
 		if (typedDefault == null && !switchRules.isEnum(typedSubject.type) && !seenCases.exists("$catchall"))
@@ -2155,6 +2160,22 @@ class ExpressionTyper {
 		if (overloaded != null)
 			return overloaded;
 		return compareTyped(left, right, operation, span, reversed);
+	}
+
+	/**
+	 * A switch expression over a closed enum abstract must cover every declared value, as one over an enum covers every
+	 * constructor. Its implicit default throws: a value outside the declared set, such as a native code newer than the
+	 * binding, fails at the switch instead of reaching an arm that does not belong to it.
+	 */
+	function exhaustiveEnumAbstractDefault(subject:CompilerType, seenCases:Map<String, Bool>, span:SourceSpan):Null<TypedExpression> {
+		var values = switchRules.closedEnumAbstractValues(subject);
+		if (values == null)
+			return null;
+		var missing = [for (value in values) if (!seenCases.exists(value.key)) value.name];
+		if (missing.length > 0)
+			fail("E1021", 'Enum abstract switch is missing values: ${missing.join(", ")}', span);
+		var message = new TypedExpression(TStringLiteral('Unmatched ${compiler.semantic.SemanticSignature.display(subject)} value'), TString, span);
+		return new TypedExpression(TThrowExpression(message), TNever, span);
 	}
 
 	function compareTyped(left:TypedExpression, right:TypedExpression, operation:Int, span:SourceSpan, reversed:Bool):TypedExpression {

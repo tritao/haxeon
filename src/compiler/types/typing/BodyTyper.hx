@@ -102,7 +102,8 @@ class BodyTyper {
 			enumLiteral: function(value:TypedExpression) return enumLiteral(value),
 			isEnum: function(type:CompilerType) return isEnum(type),
 			isNullableEnum: function(type:CompilerType) return isNullableEnum(type),
-			enumName: function(type:CompilerType) return enumName(type)
+			enumName: function(type:CompilerType) return enumName(type),
+			closedEnumAbstractValues: function(type:CompilerType) return this.closedEnumAbstractValues(type)
 		};
 		this.genericInstantiation = new GenericInstantiation(session,
 			function(expression, scope, expected, inferDynamicLambdaResult) return this.typeExpression(expression, scope, expected, inferDynamicLambdaResult),
@@ -2632,6 +2633,28 @@ class BodyTyper {
 					return true;
 			}
 		return false;
+	}
+
+	/**
+	 * The declared values of a closed enum abstract, keyed as switch cases are (`int:N`, `string:S`), or null when `type`
+	 * is not one. Flags combine their values, so their switches have no fixed set to cover.
+	 */
+	function closedEnumAbstractValues(type:CompilerType):Null<Array<{name:String, key:String}>> {
+		var name = switch type {
+			case TAbstract(name, _, _): name;
+			default: null;
+		};
+		var declaration = name == null ? null : session.enumAbstractDecls.get(name);
+		if (declaration == null || FlagsGenerator.conforms(session, declaration))
+			return null;
+		var values = [];
+		for (value in declaration.values) {
+			var key = constantPatternKey(EnumAbstractValues.raw(this, declaration, value));
+			if (key == null)
+				return null;
+			values.push({name: value.name, key: key});
+		}
+		return values;
 	}
 
 	function exhaustiveEnum(type:CompilerType, cases:Array<TypedSwitchCase>):Bool {

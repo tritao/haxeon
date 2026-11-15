@@ -34,6 +34,9 @@ class FlagsMain {
 		rejected(declaration + 'function main():Int { var value:Access=1; return 42; }', "Type mismatch");
 		rejected(declaration + 'function main():Int { var value:Int=Access.Read; return 42; }', "Type mismatch");
 		rejected(declaration + 'function main():Int { var value=Access.Read|1; return 42; }', "same flags type");
+		// Flags combine their values, so a switch over them has no fixed set to cover.
+		rejected(declaration + 'function main():Int { var access = Access.Read; return switch access { case Read: 42; case Write: 1; }; }',
+			"requires a default branch");
 		rejected('enum abstract Access(Int) from Int implements Flags { var A=1; } function main():Int return 42;', "cannot declare implicit");
 		rejected('enum abstract Access(Int) to Int implements Flags { var A=1; } function main():Int return 42;', "cannot declare implicit");
 		rejected('enum abstract Access(String) implements Flags { var A="x"; } function main():Int return 42;', "requires an Int");
