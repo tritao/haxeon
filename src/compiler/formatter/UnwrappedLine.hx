@@ -15,13 +15,15 @@ typedef UnwrappedLine = {
 	final sourceEnd:Int;
 
 	/** Start offsets of the comments that trail code on their source line; layout keeps each on that line. */
-	final ?trailingComments:Map<Int, Bool>;
+	final ?trailingComments:Map<Int,
+	Bool>;
 
 	/**
 	 * Start offsets of the tokens that began a source line inside this logical line. Layout keeps two of the author's choices from
 	 * them: a literal written one element per line, and a declaration written one declarator per line.
 	 */
-	final ?newlineBefore:Map<Int, Bool>;
+	final ?newlineBefore:Map<Int,
+	Bool>;
 }
 
 class UnwrappedLineTools {
@@ -40,23 +42,29 @@ class UnwrappedLineTools {
 
 /** Builds logical lines from statement/block boundaries before line layout. */
 class UnwrappedLineBuilder {
-	public static function build(tokens:Array<FormatToken>, syntax:SyntaxInfo, ?comments:CommentAttachments):Array<UnwrappedLine> {
-		var result:Array<UnwrappedLine> = [], current:Array<FormatToken> = [], depth = 0, blankBefore = 0, pendingNewlines = 0,
-			conditionalBases:Array<{depth:Int, nesting:Int, bodyLevels:Array<Int>}> = [], switchBases:Array<Int> = [],
-			// The token index of each open switch's closing brace, from the bracket matching: a `}` closes the switch only if it is
-			// that one, not whenever the depth looks like it (a case arm's own block closes at the same depth).
-			switchCloses:Array<Int> = [], opaqueBlockDepth = 0, lastClosedBlock = false,
+	public static function build(tokens:Array<FormatToken>, syntax:SyntaxInfo,
+			?comments:CommentAttachments):Array<UnwrappedLine> {
+		var result:Array<UnwrappedLine> = [],
+			current:Array<FormatToken> = [],
+			depth = 0,
+			blankBefore = 0,
+			pendingNewlines = 0,
+			conditionalBases:Array<{depth:Int, nesting:Int, bodyLevels:Array<Int>}> = [],
+			switchBases:Array<Int> = [],
+		// The token index of each open switch's closing brace, from the bracket matching: a `}` closes the switch only if it is
+		// that one, not whenever the depth looks like it (a case arm's own block closes at the same depth).
+		switchCloses:Array<Int> = [], opaqueBlockDepth = 0, lastClosedBlock = false,
 			trailingComments = new Map<Int, Bool>(),
-			// A control statement's single-statement body (`if (c)` then `x;` on the next line) is indented one level until the
-			// statement ends; each open body records the bracket nesting it started at.
-			nesting = 0, bodyLevels:Array<Int> = [], pendingDedent = 0, previousSyntax = -1,
-			// The `}` of an empty block (`{}`), which stays on the line of its `{`.
-			emptyBlockCloses = new Map<Int, Bool>(),
+		// A control statement's single-statement body (`if (c)` then `x;` on the next line) is indented one level until the
+		// statement ends; each open body records the bracket nesting it started at.
+		nesting = 0, bodyLevels:Array<Int> = [], pendingDedent = 0, previousSyntax = -1,
+		// The `}` of an empty block (`{}`), which stays on the line of its `{`.
+		emptyBlockCloses = new Map<Int, Bool>(),
 			newlineBefore = new Map<Int, Bool>(),
-			// The indentation of the lines after an inline case arm (`case 0: x;`), taken when that arm's line ends.
-			pendingDepth:Null<Int> = null,
-			// After the `)` of a function declaration's parameters: whether its return type is being read, and how deep in it.
-			awaitingFunctionBody = false, inReturnType = false, returnTypeDepth = 0, returnTypeName = false;
+		// The indentation of the lines after an inline case arm (`case 0: x;`), taken when that arm's line ends.
+		pendingDepth:Null<Int> = null,
+		// After the `)` of a function declaration's parameters: whether its return type is being read, and how deep in it.
+		awaitingFunctionBody = false, inReturnType = false, returnTypeDepth = 0, returnTypeName = false;
 
 		function begin(token:FormatToken):Void {
 			if (current.length > 0 && pendingNewlines > 0)
@@ -65,9 +73,9 @@ class UnwrappedLineBuilder {
 				blankBefore = pendingNewlines > 1 ? pendingNewlines - 1 : 0;
 				pendingNewlines = 0;
 			} else
-				// Newlines inside an unwrapped construct are not blank lines
-				// once another token continues that construct.
-				pendingNewlines = 0;
+			// Newlines inside an unwrapped construct are not blank lines
+			// once another token continues that construct.
+			pendingNewlines = 0;
 			current.push(token);
 		}
 
@@ -105,9 +113,13 @@ class UnwrappedLineBuilder {
 			var token = tokens[index];
 			switch token.kind {
 				case FormatTokenKind.Whitespace:
-					// Whitespace is represented by boundary policy, not copied to output.
+				// Whitespace is represented by boundary policy, not copied to output.
 				case FormatTokenKind.Newline:
 					pendingNewlines++;
+				case FormatTokenKind.Directive if (current.length > 0 && pendingNewlines == 0):
+					// A directive written inside a line (`x = #if eval a #else b #end;`, `Array<#if hl Int #else Float #end>`) stays in
+					// it: its branches are expressions or types of that line, not lines of their own.
+					begin(token);
 				case FormatTokenKind.Directive:
 					var name = FormatScanner.directiveName(token.text);
 					// The line before the directive ends in its own branch first, at its own depth and with its pending dedent.
@@ -177,8 +189,9 @@ class UnwrappedLineBuilder {
 						isCloseBlock = !isEmptyClose
 							&& kind == TokenKind.RightBrace
 							&& (syntax.blockCloses.exists(token.start) || opaqueBlockDepth > 0),
-						isSwitchBlock = isBlock && containsKind(current, TokenKind.Switch),
-						closesSwitch = isCloseBlock
+							isSwitchBlock = isBlock && containsKind(current,
+						TokenKind.Switch),
+							closesSwitch = isCloseBlock
 							&& switchCloses.length > 0
 							&& index == switchCloses[switchCloses.length - 1];
 					if (current.length > 0 && endsDeclaration(current[current.length - 1], syntax))
@@ -187,7 +200,7 @@ class UnwrappedLineBuilder {
 					var functionBody = false;
 					if (awaitingFunctionBody) {
 						// A name right after a name ends the type: `):Void AudioResult.check(...)` is a body after `Void`.
-						var name = isTypeName(kind);
+						var name = TypeArguments.isTypeName(kind);
 						if (inReturnType && !(name && returnTypeName && returnTypeDepth == 0)
 							&& continuesReturnType(tokens, index, returnTypeDepth, syntax)) {
 							returnTypeDepth += returnTypeNesting(tokens, index, syntax);
@@ -205,8 +218,8 @@ class UnwrappedLineBuilder {
 					if (previousSyntax >= 0
 						&& brokenBefore(tokens, previousSyntax, index)
 						&& (functionBody
-							|| kind != TokenKind.LeftBrace && kind != TokenKind.Semicolon && current.length > 0
-							&& opensSingleBody(tokens, previousSyntax, current, syntax, kind))) {
+						|| kind != TokenKind.LeftBrace && kind != TokenKind.Semicolon && current.length > 0
+						&& opensSingleBody(tokens, previousSyntax, current, syntax, kind))) {
 						flush();
 						depth++;
 						bodyLevels.push(nesting);
@@ -226,15 +239,18 @@ class UnwrappedLineBuilder {
 						&& (lastClosedBlock || startsDeclaration(kind))
 						&& kind != TokenKind.Else
 						&& kind != TokenKind.Catch
-						&& !(kind == TokenKind.While && closesDoBlock(tokens, lastSyntaxBefore(tokens, index), syntax))
+						&& !(kind == TokenKind.While && syntax.roles.doBlockCloses.exists(current[current.length - 1].start))
 						&& kind != TokenKind.Semicolon
-						// A bracket that closes after a block (`call(function() {...})`) closes the expression around it.
+						// A bracket that closes after a block (`call(function() {...})`) closes the expression around it, and an operator
+						// or a conditional's `?` or `:` after one (`f == null ? function() {} : f`) continues it.
 						&& kind != TokenKind.RightParen
 						&& kind != TokenKind.RightBracket
+						&& kind != TokenKind.Question
+						&& !(kind == TokenKind.Colon && syntax.roles.ternaryColons.exists(token.start))
+						&& !TokenRoles.isBinaryOperator(kind)
 						&& kind != TokenKind.Comma
 						&& kind != TokenKind.Dot
-						&& kind != TokenKind.Greater)
-						flush();
+						&& kind != TokenKind.Greater) flush();
 					if (isCloseBlock) {
 						flush();
 						if (closesSwitch)
@@ -252,7 +268,7 @@ class UnwrappedLineBuilder {
 					} else if (isBlock) {
 						flush();
 						if (isSwitchBlock)
-						{
+							{
 							switchBases.push(depth);
 							switchCloses.push(syntax.matching.exists(index) ? syntax.matching.get(index) : -1);
 						}
@@ -263,7 +279,7 @@ class UnwrappedLineBuilder {
 					} else if (kind == TokenKind.Colon && switchBases.length > 0 && isCaseHeader(current)) {
 						// An arm its author wrote on the case's line (`case 0: x;`, `case A: {`) stays there; otherwise its body starts
 						// the next line. Either way the lines after it are the arm's body.
-						var body = nextSyntax(tokens, index);
+						var body = FormatTokenTools.nextSyntax(tokens, index);
 						if (body < 0 || brokenBefore(tokens, index, body)) {
 							flush();
 							depth = switchBases[switchBases.length - 1] + 2;
@@ -285,7 +301,7 @@ class UnwrappedLineBuilder {
 								endBodies();
 						case TokenKind.Semicolon:
 							// `else` next continues the `if` whose body just ended; the bodies around that `if` go on.
-							var next = nextSyntax(tokens, index);
+							var next = FormatTokenTools.nextSyntax(tokens, index);
 							if (next >= 0 && FormatTokenTools.syntaxKind(tokens[next]) == TokenKind.Else) {
 								if (bodyLevels.length > 0 && bodyLevels[bodyLevels.length - 1] == nesting) {
 									bodyLevels.pop();
@@ -326,7 +342,8 @@ class UnwrappedLineBuilder {
 	 * `)` of `if (...)`, `for (...)` or `while (...)` or a bare `else`, at the start of `current` (after a `}` and `else`, for
 	 * `} else if (...)`). An `if` inside an expression (`var x = if (a) 1 else 2;`) does not begin its line and stays as written.
 	 */
-	static function opensSingleBody(tokens:Array<FormatToken>, previous:Int, current:Array<FormatToken>, syntax:SyntaxInfo,
+	static function opensSingleBody(tokens:Array<FormatToken>, previous:Int, current:Array<FormatToken>,
+			syntax:SyntaxInfo,
 			next:TokenKind):Bool {
 		var keyword:Null<FormatToken> = null;
 		switch FormatTokenTools.syntaxKind(tokens[previous]) {
@@ -367,12 +384,6 @@ class UnwrappedLineBuilder {
 		return false;
 	}
 
-	static function nextSyntax(tokens:Array<FormatToken>, index:Int):Int {
-		var next = index + 1;
-		while (next < tokens.length && !FormatTokenTools.isSyntax(tokens[next]))
-			next++;
-		return next < tokens.length ? next : -1;
-	}
 
 	/** Whether a line break or a comment separates tokens `from` and `to`. */
 	static function brokenBefore(tokens:Array<FormatToken>, from:Int, to:Int):Bool {
@@ -386,22 +397,23 @@ class UnwrappedLineBuilder {
 	 * Whether the `)` at `close` ends the parameters of a function declaration that begins its line (after metadata and modifiers):
 	 * `function name(...)`, `function new(...)`, `function name<T>(...)`. A function expression (`var f = function() ...`) does not.
 	 */
-	static function closesDeclarationParameters(tokens:Array<FormatToken>, close:Int, current:Array<FormatToken>, syntax:SyntaxInfo):Bool {
+	static function closesDeclarationParameters(tokens:Array<FormatToken>, close:Int, current:Array<FormatToken>,
+			syntax:SyntaxInfo):Bool {
 		var open = syntax.matching.get(close);
 		if (open == null)
 			return false;
-		var index = previousSyntaxIndex(tokens, open);
+		var index = FormatTokenTools.previousSyntax(tokens, open);
 		if (index >= 0 && syntax.typeArgumentCloses.exists(tokens[index].start)) {
 			var typeOpen = syntax.matching.get(index);
 			if (typeOpen == null)
 				return false;
-			index = previousSyntaxIndex(tokens, typeOpen);
+			index = FormatTokenTools.previousSyntax(tokens, typeOpen);
 		}
 		if (index < 0)
 			return false;
 		switch FormatTokenTools.syntaxKind(tokens[index]) {
 			case TokenKind.Identifier, TokenKind.New:
-				index = previousSyntaxIndex(tokens, index);
+				index = FormatTokenTools.previousSyntax(tokens, index);
 			default:
 				return false;
 		}
@@ -422,7 +434,8 @@ class UnwrappedLineBuilder {
 				continue;
 			}
 			switch kind {
-				case TokenKind.Public, TokenKind.Private, TokenKind.Static, TokenKind.Inline, TokenKind.At, TokenKind.Colon, TokenKind.Identifier:
+				case TokenKind.Public, TokenKind.Private, TokenKind.Static, TokenKind.Inline, TokenKind.At,
+					TokenKind.Colon, TokenKind.Identifier:
 				case TokenKind.LeftParen if (position >= 2):
 					metadataDepth = 1;
 				default:
@@ -439,18 +452,15 @@ class UnwrappedLineBuilder {
 		if (syntax.typeArgumentOpens.exists(tokens[index].start))
 			return true;
 		return switch FormatTokenTools.syntaxKind(tokens[index]) {
-			case TokenKind.Identifier, TokenKind.Dot, TokenKind.Arrow, TokenKind.Question, TokenKind.LeftParen, TokenKind.TypeInt, TokenKind.TypeBool,
+			case TokenKind.Identifier, TokenKind.Dot, TokenKind.Arrow, TokenKind.Question, TokenKind.LeftParen,
+				TokenKind.TypeInt, TokenKind.TypeBool,
 				TokenKind.TypeFloat, TokenKind.TypeString, TokenKind.Void:
 				true;
 			default: false;
 		};
 	}
 
-	static function isTypeName(kind:TokenKind):Bool
-		return switch kind {
-			case TokenKind.Identifier, TokenKind.Void, TokenKind.TypeInt, TokenKind.TypeBool, TokenKind.TypeFloat, TokenKind.TypeString: true;
-			default: false;
-		};
+
 
 	/** How the token at `index` changes the bracket depth inside a return type. */
 	static function returnTypeNesting(tokens:Array<FormatToken>, index:Int, syntax:SyntaxInfo):Int {
@@ -463,13 +473,6 @@ class UnwrappedLineBuilder {
 			case TokenKind.RightParen, TokenKind.RightBrace: -1;
 			default: 0;
 		};
-	}
-
-	static function previousSyntaxIndex(tokens:Array<FormatToken>, index:Int):Int {
-		var previous = index - 1;
-		while (previous >= 0 && !FormatTokenTools.isSyntax(tokens[previous]))
-			previous--;
-		return previous;
 	}
 
 	/** Whether the token after `open` is its matching closer, with nothing between them but whitespace (a comment counts). */
@@ -495,28 +498,12 @@ class UnwrappedLineBuilder {
 			return false;
 		return switch FormatTokenTools.syntaxKind(tokens[index]) {
 			case TokenKind.Else, TokenKind.Catch: true;
-			case TokenKind.While: closesDoBlock(tokens, close, syntax);
+			case TokenKind.While: syntax.roles.doBlockCloses.exists(tokens[close].start);
 			default: false;
 		};
 	}
 
-	static function lastSyntaxBefore(tokens:Array<FormatToken>, index:Int):Int {
-		var previous = index - 1;
-		while (previous >= 0 && !FormatTokenTools.isSyntax(tokens[previous]))
-			previous--;
-		return previous;
-	}
 
-	/** Whether the block that `close` ends was opened by `do`, so a `while` after it belongs to the same statement. */
-	static function closesDoBlock(tokens:Array<FormatToken>, close:Int, syntax:SyntaxInfo):Bool {
-		var open = syntax.matching.get(close);
-		if (open == null)
-			return false;
-		var index = open - 1;
-		while (index >= 0 && !FormatTokenTools.isSyntax(tokens[index]))
-			index--;
-		return index >= 0 && FormatTokenTools.syntaxKind(tokens[index]) == TokenKind.Do;
-	}
 
 	static function endsDeclaration(token:FormatToken, syntax:SyntaxInfo):Bool
 		return switch FormatTokenTools.syntaxKind(token) {
@@ -527,8 +514,10 @@ class UnwrappedLineBuilder {
 
 	static function startsDeclaration(kind:TokenKind):Bool
 		return switch kind {
-			case TokenKind.Class, TokenKind.Typedef, TokenKind.Enum, TokenKind.Interface, TokenKind.Struct, TokenKind.Public, TokenKind.Private,
-				TokenKind.Static, TokenKind.Function, TokenKind.Var, TokenKind.Final, TokenKind.Inline, TokenKind.Import, TokenKind.Package, TokenKind.At:
+			case TokenKind.Class, TokenKind.Typedef, TokenKind.Enum, TokenKind.Interface, TokenKind.Struct,
+				TokenKind.Public, TokenKind.Private,
+				TokenKind.Static, TokenKind.Function, TokenKind.Var, TokenKind.Final, TokenKind.Inline,
+				TokenKind.Import, TokenKind.Package, TokenKind.At:
 				true;
 			default: false;
 		};

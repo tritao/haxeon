@@ -6,8 +6,10 @@ import compiler.syntax.Token.TokenKind;
 
 /** Matched `<` and `>` token indexes of every type argument list in a token array. */
 typedef TypeArgumentPairs = {
-	final opens:Map<Int, Int>;
-	final closes:Map<Int, Int>;
+	final opens:Map<Int,
+	Int>;
+	final closes:Map<Int,
+	Int>;
 
 	/** Indexes of `>=` tokens that really close a list and start an assignment: `Array<Int>= []`. */
 	final splits:Array<Int>;
@@ -40,7 +42,8 @@ class TypeArguments {
 		return {opens: opens, closes: closes, splits: splits};
 	}
 
-	static function scan(tokens:Array<FormatToken>, syntax:Array<Int>, start:Int, opens:Map<Int, Int>, closes:Map<Int, Int>, splits:Array<Int>):Void {
+	static function scan(tokens:Array<FormatToken>, syntax:Array<Int>, start:Int, opens:Map<Int, Int>,
+			closes:Map<Int, Int>, splits:Array<Int>):Void {
 		var open:Array<Int> = [], hasContent:Array<Bool> = [], found:Array<{open:Int, close:Int}> = [], groups = 0;
 		for (position in start...syntax.length) {
 			var kind = kindAt(tokens, syntax, position);
@@ -73,7 +76,8 @@ class TypeArguments {
 						return;
 					}
 				// A string is a constant type parameter: `hl.Abstract<"handle">`.
-				case TokenKind.Identifier, TokenKind.TypeInt, TokenKind.TypeBool, TokenKind.TypeFloat, TokenKind.TypeString, TokenKind.Void, TokenKind.Comma,
+				case TokenKind.Identifier, TokenKind.TypeInt, TokenKind.TypeBool, TokenKind.TypeFloat,
+					TokenKind.TypeString, TokenKind.Void, TokenKind.Comma,
 					TokenKind.Dot, TokenKind.StringLiteral:
 					hasContent[hasContent.length - 1] = true;
 				case TokenKind.Question, TokenKind.Colon:
@@ -100,8 +104,9 @@ class TypeArguments {
 	static function kindAt(tokens:Array<FormatToken>, syntax:Array<Int>, position:Int):Null<TokenKind>
 		return FormatTokenTools.syntaxKind(tokens[syntax[position]]);
 
-	static function isTypeName(kind:Null<TokenKind>):Bool
-		return kind == TokenKind.Identifier || kind == TokenKind.TypeInt || kind == TokenKind.TypeBool || kind == TokenKind.TypeFloat
+	public static function isTypeName(kind:Null<TokenKind>):Bool
+		return kind == TokenKind.Identifier || kind == TokenKind.TypeInt || kind == TokenKind.TypeBool
+			|| kind == TokenKind.TypeFloat
 			|| kind == TokenKind.TypeString || kind == TokenKind.Void;
 
 	static function mayFollowType(kind:Null<TokenKind>):Bool
