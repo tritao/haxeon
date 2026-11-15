@@ -1,5 +1,6 @@
 package compiler.ir.cfg;
 
+import compiler.Arrays;
 import compiler.ir.cfg.Cfg;
 import compiler.ir.cfg.CfgVerifier;
 import compiler.ir.Ir;
@@ -19,7 +20,6 @@ class SsaBuilder {
 	var reachable:Array<Bool> = [];
 	var immediate:Array<Int> = [];
 	var children:Array<Array<Int>> = [];
-	var frontiers:Array<Map<Int, Bool>> = [];
 	var frontierKeys:Array<Array<Int>> = [];
 	var liveIn:Array<Array<Int>> = [];
 
@@ -35,8 +35,13 @@ class SsaBuilder {
 
 	static final emptyWords:Array<Int> = [];
 
-	var phis:Array<Map<Int, SsaPhi>> = [];
+	/** The shared empty per-block list; `append` replaces it with a list of the block's own on first use. */
+	static final noBlocks:Array<Int> = [];
+
+	/** Per block, the slots that get a phi and, at the same positions, their phis. */
 	var phiSlots:Array<Array<Int>> = [];
+
+	var phiNodes:Array<Null<Array<SsaPhi>>> = [];
 	var roots:Array<Int> = [];
 	var stackBySlot:Array<Null<Array<IrValue>>> = [];
 	var temporaries:Array<Null<IrValue>> = [];
@@ -59,18 +64,19 @@ class SsaBuilder {
 
 	function run():IrFunction {
 		output = [for (block in cfg.blocks) new IrBlock(block.id)];
-		predecessors = [for (_ in cfg.blocks) []];
-		successors = [for (_ in cfg.blocks) []];
-		reachable = [for (_ in cfg.blocks) false];
-		immediate = [for (_ in cfg.blocks) -1];
-		children = [for (_ in cfg.blocks) []];
-		frontiers = [for (_ in cfg.blocks) []];
-		frontierKeys = [for (_ in cfg.blocks) []];
-		liveIn = [for (_ in cfg.blocks) []];
-		phis = [for (_ in cfg.blocks) []];
-		phiSlots = [for (_ in cfg.blocks) []];
-		renamed = [for (_ in cfg.blocks) false];
-		temporaries = [for (_ in 0...cfg.valueCount) null];
+		var count = cfg.blocks.length;
+		predecessors = Arrays.shared(count, noBlocks);
+		successors = Arrays.shared(count, noBlocks);
+		reachable = Arrays.bools(count, false);
+		immediate = Arrays.ints(count, -1);
+		children = Arrays.shared(count, noBlocks);
+		frontierKeys = Arrays.shared(count, noBlocks);
+		phiSlots = Arrays.shared(count, noBlocks);
+		phiNodes = [];
+		phiNodes.resize(count);
+		renamed = Arrays.bools(count, false);
+		temporaries = [];
+		temporaries.resize(cfg.valueCount);
 		buildGraph();
 		computeDominators();
 		computeFrontiers();
@@ -93,6 +99,15 @@ class SsaBuilder {
 			if (reachable[block.id] && roots.indexOf(block.id) < 0 && immediate[block.id] == -1)
 				rename(block.id);
 		return new IrFunction(cfg.name, arguments, cfg.result, output, Ordinary, debugBindings);
+	}
+
+	/** Adds `value` to the list of `index`, giving the index a list of its own if it still has the shared empty one. */
+	static function append(lists:Array<Array<Int>>, index:Int, value:Int):Void {
+		var list = lists[index];
+		if (list == noBlocks)
+			lists[index] = [value];
+		else
+			list.push(value);
 	}
 
 	function buildGraph():Void {
@@ -126,19 +141,19 @@ class SsaBuilder {
 					next.push(handler);
 			successors[id] = next;
 			for (target in next) {
-				predecessors[target].push(id);
+				append(predecessors, target, id);
 				work.push(target);
 			}
 		}
 	}
 
 	function computeDominators():Void {
-		var visited:Array<Bool> = [for (_ in cfg.blocks) false],
+		var visited = Arrays.bools(cfg.blocks.length, false),
 			postorder:Array<Int> = [];
 		for (root in roots)
 			dominancePostorder(root, visited, postorder);
 		postorder.reverse();
-		var order:Array<Int> = [for (_ in cfg.blocks) -1];
+		var order = Arrays.ints(cfg.blocks.length, -1);
 		for (index in 0...postorder.length)
 			order[postorder[index]] = index;
 		for (root in roots)
@@ -164,7 +179,7 @@ class SsaBuilder {
 			if (roots.indexOf(id) < 0) {
 				if (immediate[id] < 0)
 					throw 'Reachable SSA block $id has no immediate dominator';
-				children[immediate[id]].push(id);
+				append(children, immediate[id], id);
 			}
 		for (nested in children)
 			nested.sort(function(a, b) return a - b);
@@ -205,9 +220,9 @@ class SsaBuilder {
 	}
 
 	function computeFrontiers():Void {
-		for (block in cfg.blocks)
-			if (reachable[block.id])
-				frontiers[block.id] = [];
+		// Every (runner, join) pair for one join is found while that join is visited, so the last join recorded for a runner
+		// tells whether the pair is already in its frontier.
+		var lastJoin = Arrays.ints(cfg.blocks.length, -1);
 		for (cfgBlock in cfg.blocks) {
 			var block = cfgBlock.id;
 			if (!reachable[block])
@@ -218,9 +233,9 @@ class SsaBuilder {
 			for (pred in preds) {
 				var runner = pred;
 				while (runner != immediate[block]) {
-					if (!frontiers[runner].exists(block)) {
-						frontiers[runner].set(block, true);
-						frontierKeys[runner].push(block);
+					if (lastJoin[runner] != block) {
+						lastJoin[runner] = block;
+						append(frontierKeys, runner, block);
 					}
 					if (runner == 0 || roots.indexOf(runner) >= 0)
 						break;
@@ -249,7 +264,7 @@ class SsaBuilder {
 	function numberLocals():Void {
 		slots = [];
 		slotNames = [];
-		blockSlots = [for (_ in cfg.blocks) emptyWords];
+		blockSlots = Arrays.shared(cfg.blocks.length, emptyWords);
 		for (argument in cfg.arguments)
 			slotFor(argument.name);
 		for (block in cfg.blocks)
@@ -270,16 +285,16 @@ class SsaBuilder {
 	function computeLiveness():Void {
 		var count = slotNames.length;
 		var words = (count + 31) >> 5,
-			uses:Array<Array<Int>> = [for (_ in cfg.blocks) emptyWords],
-			defs:Array<Array<Int>> = [for (_ in cfg.blocks) emptyWords];
-		liveIn = [for (_ in cfg.blocks) emptyWords];
+			uses = Arrays.shared(cfg.blocks.length, emptyWords),
+			defs = Arrays.shared(cfg.blocks.length, emptyWords);
+		liveIn = Arrays.shared(cfg.blocks.length, emptyWords);
 		if (words == 0)
 			return;
 		for (block in cfg.blocks) {
 			var id = block.id;
 			if (!reachable[id])
 				continue;
-			var use = [for (_ in 0...words) 0], def = [for (_ in 0...words) 0], mine = blockSlots[id], cursor = 0;
+			var use = Arrays.ints(words, 0), def = Arrays.ints(words, 0), mine = blockSlots[id], cursor = 0;
 			for (located in cfg.blocks[id].instructions)
 				switch located.value {
 					case LoadLocal(_, _):
@@ -293,10 +308,10 @@ class SsaBuilder {
 				}
 			uses[id] = use;
 			defs[id] = def;
-			liveIn[id] = [for (_ in 0...words) 0];
+			liveIn[id] = Arrays.ints(words, 0);
 		}
 		var work:Array<Int> = [],
-			queued:Array<Bool> = [for (_ in cfg.blocks) false];
+			queued = Arrays.bools(cfg.blocks.length, false);
 		for (block in cfg.blocks)
 			if (reachable[block.id]) {
 				work.push(block.id);
@@ -364,8 +379,8 @@ class SsaBuilder {
 					}
 			}
 		// Stamps replace a set per slot: a block is in the slot's set when its stamp is the slot's.
-		var defined:Array<Int> = [for (_ in cfg.blocks) -1],
-			placed:Array<Int> = [for (_ in cfg.blocks) -1];
+		var defined = Arrays.ints(cfg.blocks.length, -1),
+			placed = Arrays.ints(cfg.blocks.length, -1);
 		for (slot in definitionSlots) {
 			var blocks = definitionBlocks[slot];
 			if (blocks == null)
@@ -380,8 +395,13 @@ class SsaBuilder {
 					if (placed[join] != slot && isLiveIn(join, slot)) {
 						placed[join] = slot;
 						var name = slotNames[slot];
-						phis[join].set(slot, {output: allocate(name, cfg.localTypes.get(name)), inputs: []});
-						phiSlots[join].push(slot);
+						append(phiSlots, join, slot);
+						var nodes = phiNodes[join];
+						if (nodes == null) {
+							nodes = [];
+							phiNodes[join] = nodes;
+						}
+						nodes.push({output: allocate(name, cfg.localTypes.get(name)), inputs: []});
 						if (defined[join] != slot)
 							work.push(join);
 					}
@@ -435,11 +455,9 @@ class SsaBuilder {
 	function renameBlock(id:Int):Array<Int> {
 		var block = cfg.blocks[id], target = output[id], mine = blockSlots[id], cursor = 0, pushed:Array<Int> = [];
 		if (phiSlots[id].length > 0) {
-			var blockPhis = phis[id];
-			for (slot in phiSlots[id]) {
-				var phi = blockPhis.get(slot);
-				if (phi == null)
-					throw 'Missing SSA phi "${slotNames[slot]}" for block $id';
+			var blockSlotsWithPhis = phiSlots[id], blockPhis = phiNodes[id];
+			for (index in 0...blockSlotsWithPhis.length) {
+				var slot = blockSlotsWithPhis[index], phi = blockPhis[index];
 				target.instructions.push(new Located(Phi(phi.output, phi.inputs), phiProvenance(id)));
 				addDebugBinding(debugLocalBySlot[slot], phi.output);
 				push(slot, phi.output);
@@ -639,12 +657,11 @@ class SsaBuilder {
 		}, terminator.provenance);
 		for (successor in successors[id])
 			if (phiSlots[successor].length > 0) {
-				var successorPhis = phis[successor];
-				for (slot in phiSlots[successor]) {
-					var phi = successorPhis.get(slot);
-					if (phi == null)
-						throw 'Missing SSA phi "${slotNames[slot]}" for successor block $successor';
-					var inputs = phi.inputs;
+				var successorSlots = phiSlots[successor],
+					successorPhis = phiNodes[successor];
+				for (index in 0...successorSlots.length) {
+					var slot = successorSlots[index],
+						inputs = successorPhis[index].inputs;
 					inputs.push({block: id, value: current(slot)});
 				}
 			}
