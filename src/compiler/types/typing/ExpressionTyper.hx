@@ -2148,6 +2148,11 @@ class ExpressionTyper {
 	}
 
 	function compareTyped(left:TypedExpression, right:TypedExpression, operation:Int, span:SourceSpan, reversed:Bool):TypedExpression {
+		if (operation == 2) {
+			var test = constructorComparison(left, right, span);
+			if (test != null)
+				return test;
+		}
 		var result = compareOperands(left, right, operation, span, reversed);
 		return operation == 2 ? enumValueComparison(result) : result;
 	}
@@ -2173,17 +2178,6 @@ class ExpressionTyper {
 						payload = true;
 				if (!payload)
 					return comparison;
-				// Comparing with a constructor that has no arguments asks which constructor a value is, as in Haxe: it needs no
-				// Equatable conformance and compares constructor indices.
-				var literal = constructorWithoutArguments(right), other = left;
-				if (literal < 0) {
-					literal = constructorWithoutArguments(left);
-					other = right;
-				}
-				if (literal >= 0 && enumNameOf(other.type) == name && !other.type.match(TNullable(_)))
-					return new TypedExpression(TEqual(new TypedExpression(TEnumIndex(other), TInt, comparison.span),
-						new TypedExpression(TIntLiteral(literal), TInt, comparison.span)),
-						TBool, comparison.span);
 				var type = left.type;
 				if (!DeclaredConformance.has(session, type, "Equatable"))
 					fail("E1025", 'Enum "$name" does not conform to Equatable', comparison.span);
@@ -2192,6 +2186,50 @@ class ExpressionTyper {
 			default:
 				return comparison;
 		}
+	}
+
+	/**
+	 * `value == Constructor` for a constructor without arguments of an enum whose other constructors have some asks which
+	 * constructor the value is, as in Haxe: it compares constructor indices and needs no Equatable conformance. Null for any other
+	 * comparison. Enums without arguments anywhere already compare that way.
+	 */
+	function constructorComparison(left:TypedExpression, right:TypedExpression, span:SourceSpan):Null<TypedExpression> {
+		var literal = constructorWithoutArguments(right), other = left;
+		if (literal < 0) {
+			literal = constructorWithoutArguments(left);
+			other = right;
+		}
+		var name = enumNameOf(other.type);
+		if (literal < 0
+			|| name == null
+			|| name != enumNameOf((other == left ? right : left).type)
+			|| !session.enumDecls.exists(name))
+			return null;
+		for (constructor in session.enumDecls.get(name).cases)
+			if (constructor.params.length > 0)
+				return constructorTest(other, literal, span);
+		return null;
+	}
+
+	/** Whether `value` is the constructor at `index`; a null value is none, so a nullable one is read once and checked first. */
+	function constructorTest(value:TypedExpression, index:Int, span:SourceSpan):TypedExpression {
+		function indexIs(subject:TypedExpression):TypedExpression
+			return new TypedExpression(TEqual(new TypedExpression(TEnumIndex(subject), TInt, span), new TypedExpression(TIntLiteral(index), TInt, span)),
+				TBool, span);
+		var element = switch value.type {
+			case TNullable(inner): inner;
+			default: return indexIs(value);
+		};
+		var statements:Array<TypedStatement> = [], held = value;
+		if (!value.expression.match(TLocal(_))) {
+			var name = '$$constructor-test:${span.start}:${span.end}';
+			statements.push(TVar(name, value, span));
+			held = new TypedExpression(TLocal(name), value.type, span);
+		}
+		var absent = compareOperands(held, new TypedExpression(TNullLiteral, TNull, span), 2, span, false),
+			present = new TypedExpression(TNot(absent), TBool, span),
+			test = new TypedExpression(TAnd(present, indexIs(new TypedExpression(held.expression, element, span))), TBool, span);
+		return statements.length == 0 ? test : new TypedExpression(TBlockExpression(statements, test), TBool, span);
 	}
 
 	/** The index of the constructor `expression` names when it is one without arguments, or -1. */

@@ -572,7 +572,7 @@ class StatementTyper {
 						fail("E1022", "Dynamic catch must be the final catch clause", catchClause.span);
 				case TInt, TFloat, TBool, TString:
 				case TInstance(kind, _, arguments):
-					if (Std.string(kind) != "class" && Std.string(kind) != "interface")
+					if (Std.string(kind) != "class" && Std.string(kind) != "interface" && Std.string(kind) != "enum")
 						fail("E1022", "Unsupported catch binding type", catchClause.span);
 					if (arguments.length != 0)
 						fail("E1022", "Unsupported generic catch binding type", catchClause.span);

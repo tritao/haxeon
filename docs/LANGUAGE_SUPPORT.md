@@ -14,6 +14,8 @@ The current subset includes:
   `Flags` combine their values, so their switches still need a default.
 - A switch over a nullable `Int`, `String` or enum abstract matches `case null` apart from its values; a switch over a
   nullable enum abstract without a default must cover `null` too. A catch-all or capture binds the nullable value.
+- `try`/`catch` binding `Dynamic`, `Int`, `Float`, `Bool`, `String`, a class, an interface or an enum
+  (`catch (e:haxe.io.Error)`); a clause catches the values of its type and lets the others reach the next clause.
 - Closures with generated environments and shared cells for mutable captures
 - Arrays and compiler-owned primitive, string, and reference array operations
 - `Map` keyed by `String`, `Int`, an enum, or a struct that conforms to `Hashable`, holding primitive, reference or
@@ -36,7 +38,9 @@ The current subset includes:
   came about; values of constructors with fields compare by identity, so `Circle(1) == Circle(1)` is false for two separately
   built values and `Circle(1) == Circle(2)` is false. `Array<Enum>.indexOf` and `remove` use the same rule. For declared value equality, a type must conform to `Equatable`; `==` and `haxeon.Equality.equals` then use the same
   implementation. An enum with no constructor that has fields compares by
-  constructor, and so does an abstract over an enum. A null operand equals only another null.
+  constructor, and so does an abstract over an enum. A value compared with a constructor without fields
+  (`error == Overflow`) is compared by constructor too, needing no conformance even when other constructors have fields.
+  A null operand equals only another null.
   A cycle that does not pass through a structure (`A = B, B = A`, `A = Array<A>`) is still an error.
 - Imports as in Haxe, with two stricter rules. A type that an import of a whole module or package brings in only as a side
   effect cannot silently replace a type the current package declares: using that name is `E1029`, reported at the use, and

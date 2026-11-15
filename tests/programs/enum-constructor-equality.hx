@@ -1,5 +1,5 @@
 // `==` and `!=` against a constructor without arguments ask which constructor a value is, as in Haxe, even for an enum whose
-// other constructors have arguments and that does not conform to Equatable.
+// other constructors have arguments and that does not conform to Equatable; a null value is none of them.
 enum Direction {
 	In;
 	Out;
@@ -24,5 +24,20 @@ function main():Int {
 	for (direction in [pick(0), pick(1), pick(2), pick(1)])
 		if (direction == Direction.InOut)
 			matches++;
-	return matches == 2 ? 42 : 3;
+	if (matches != 2)
+		return 3;
+	var maybe:Null<Direction> = null;
+	if (maybe == In || !(maybe != Out))
+		return 4;
+	maybe = pick(1);
+	if (!(maybe == InOut) || maybe == In)
+		return 5;
+	var calls = 0;
+	function counted():Null<Direction> {
+		calls++;
+		return calls > 5 ? null : pick(2);
+	}
+	if (counted() == InOut || calls != 1)
+		return 6;
+	return 42;
 }

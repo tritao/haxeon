@@ -1,5 +1,6 @@
 import haxe.io.Bytes;
 import haxe.io.Eof;
+import haxe.io.Error;
 import sys.net.Host;
 import sys.net.Socket;
 
@@ -53,9 +54,8 @@ function streams():Int {
 	try {
 		output.writeInt8(200);
 		return 6;
-	} catch (error:Dynamic) {
-		// Haxeon does not catch by enum type yet, so the value is checked.
-		if (Std.string(error) != "Overflow")
+	} catch (error:Error) {
+		if (error != Overflow)
 			return 7;
 	}
 	return 0;

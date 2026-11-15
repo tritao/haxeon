@@ -317,8 +317,8 @@ still make their usual independent copies. Wasm GC uses flattened fields for the
 An enum value has no identity. Recursive enums, enums with a disproportionately large case, and values boxed at Dynamic,
 reflection or native boundaries retain exactly the same value semantics as inline values. A payload enum declares
 `enum E implements Equatable` or `enum E implements Hashable` to use `==` and `!=`; comparing a payload enum without that conformance is
-an error, as for structs. Checking a payload enum against a payload-free case uses a `switch` or pattern match; the
-constant case does not create an exception to the conformance rule. App and library code use declared equality or case
+an error, as for structs. Comparing a value with a constructor without fields (`value == Blocked`) asks which constructor
+the value is, as in Haxe: it compares case tags, is false for a null value, and needs no conformance. App and library code use declared equality or case
 patterns rather than reflective `Type.enumEq`. Synthesized equality compares the case tag and then its payload fields
 according to their own declared equality. Synthesized hashing uses the same tag and payload distinctions. Handwritten
 implementations are allowed under the same equality/hash contract as structs. Enums without payloads have tag equality and are trivially
