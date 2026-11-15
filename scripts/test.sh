@@ -27,47 +27,32 @@ build_native_quietly() {
 	"$root_dir/scripts/build-native.sh" >/dev/null
 }
 
-run_isolated_integration_batch() {
+start_isolated_integration_test() {
+	local test=$1
+	local log=$2
+
+	if [[ -n "$test_cli_hl" ]]; then
+		HAXEON_HAXE="$root_dir/scripts/test-cli-launcher.sh" HAXEON_REAL_HAXE="$haxe" HAXEON_TEST_CLI_HL="$test_cli_hl" \
+			run_timed "$(basename "$test")" bash "$root_dir/$test" >"$log" 2>&1 &
+	else
+		run_timed "$(basename "$test")" bash "$root_dir/$test" >"$log" 2>&1 &
+	fi
+}
+
+# Run the tests on a rolling pool of at most 6 slots: a slot takes the next test as soon as its test ends, so one long
+# test no longer holds the rest back until a whole batch finishes. List the longest tests first. Logs print in list order.
+# Polls with kill -0 rather than `wait -n`, which macOS's bash 3.2 lacks.
+run_isolated_integration_group() {
+	local integration_jobs=${TEST_JOBS:-16}
 	local logs_dir
-	local test
-	local log
 	local index
+	local next=0
+	local running
 	local status=0
 	local -a tests=("$@")
 	local -a logs=()
 	local -a pids=()
-
-	logs_dir=$(mktemp -d "${TMPDIR:-/tmp}/haxeon-ci-integration.XXXXXX")
-	echo "Running isolated integration tests in parallel: ${tests[*]}"
-	for test in "${tests[@]}"; do
-		log="$logs_dir/$(basename "$test").log"
-		logs+=("$log")
-		if [[ -n "$test_cli_hl" ]]; then
-			HAXEON_HAXE="$root_dir/scripts/test-cli-launcher.sh" HAXEON_REAL_HAXE="$haxe" HAXEON_TEST_CLI_HL="$test_cli_hl" \
-				run_timed "$(basename "$test")" bash "$root_dir/$test" >"$log" 2>&1 &
-		else
-			run_timed "$(basename "$test")" bash "$root_dir/$test" >"$log" 2>&1 &
-		fi
-		pids+=("$!")
-	done
-
-	for index in "${!pids[@]}"; do
-		if wait "${pids[$index]}"; then
-			:
-		else
-			status=1
-		fi
-		cat "${logs[$index]}"
-	done
-	rm -rf -- "$logs_dir"
-	return "$status"
-}
-
-run_isolated_integration_group() {
-	local integration_jobs=${TEST_JOBS:-16}
-	local start
-	local -a tests=("$@")
-	local -a batch=()
+	local -a finished=()
 
 	if ((integration_jobs < 1)); then
 		integration_jobs=1
@@ -75,10 +60,39 @@ run_isolated_integration_group() {
 	if ((integration_jobs > 6)); then
 		integration_jobs=6
 	fi
-	for ((start = 0; start < ${#tests[@]}; start += integration_jobs)); do
-		batch=("${tests[@]:start:integration_jobs}")
-		run_isolated_integration_batch "${batch[@]}"
+	logs_dir=$(mktemp -d "${TMPDIR:-/tmp}/haxeon-ci-integration.XXXXXX")
+	echo "Running isolated integration tests on $integration_jobs slots: ${tests[*]}"
+	while true; do
+		running=0
+		for index in "${!pids[@]}"; do
+			if [[ -n ${finished[$index]:-} ]]; then
+				continue
+			fi
+			if kill -0 "${pids[$index]}" 2>/dev/null; then
+				running=$((running + 1))
+			else
+				wait "${pids[$index]}" || status=1
+				finished[$index]=1
+			fi
+		done
+		while ((running < integration_jobs && next < ${#tests[@]})); do
+			logs[$next]="$logs_dir/$(basename "${tests[$next]}").log"
+			start_isolated_integration_test "${tests[$next]}" "${logs[$next]}"
+			pids[$next]=$!
+			next=$((next + 1))
+			running=$((running + 1))
+		done
+		if ((running == 0 && next == ${#tests[@]})); then
+			break
+		fi
+		sleep 1
 	done
+
+	for index in "${!logs[@]}"; do
+		cat "${logs[$index]}"
+	done
+	rm -rf -- "$logs_dir"
+	return "$status"
 }
 
 if [[ ${SKIP_FORMAT_CHECK:-0} != 1 ]]; then
@@ -167,15 +181,15 @@ if [[ -z ${HAXEON_HAXE:-} ]]; then
 	run_timed test-cli-build "$haxe" --cwd "$root_dir" common.hxml -hl "$test_cli_hl" -main tools.HaxeonCli
 fi
 run_isolated_integration_group \
-	tests/integration/test-cxx-project-ffi.sh \
-	tests/integration/test-cxx-project-ffi-thunks.sh \
-	tests/integration/test-cxx-project-ffi-cmake.sh \
 	tests/integration/test-cmake-native-package.sh \
+	tests/integration/test-cxx-project-ffi-cmake.sh \
+	tests/integration/test-cxx-project-ffi-thunks.sh \
+	tests/integration/test-cxx-project-ffi.sh \
 	tests/integration/test-git-package-lock.sh \
 	tests/integration/test-workspace.sh \
-	tests/integration/test-loaded-source-invalidation.sh \
+	tests/integration/test-workspace-shards.sh \
 	tests/integration/test-compiler-embedding.sh \
-	tests/integration/test-workspace-shards.sh
+	tests/integration/test-loaded-source-invalidation.sh
 
 # The C++ FFI fixtures write distinct out/ files; with the native runtime already built
 # (HAXEON_NATIVE_READY) they share no build tree, so they share runner slots too.
