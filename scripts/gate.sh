@@ -19,5 +19,8 @@ mode=${1:?usage: gate.sh quick|wave|full [jobs]}
 jobs=${2:-4}
 case "$mode" in quick | wave | full) ;; *) echo "unknown mode: $mode" >&2; exit 2 ;; esac
 root=$(cd "$(dirname "$0")/.." && pwd)
+work=$(mktemp -d "${TMPDIR:-/tmp}/haxeon-gate.XXXXXX")
+trap 'rm -rf -- "$work"' EXIT
+export TMPDIR="$work"
 "$root/scripts/build-native.sh" >/dev/null
-exec "$root/scripts/haxeon" dev test "$mode" --gate --jobs "$jobs"
+"$root/scripts/haxeon" dev test "$mode" --gate --jobs "$jobs"

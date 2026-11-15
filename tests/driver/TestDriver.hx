@@ -12,7 +12,24 @@ private typedef DriverOptions = {
 
 class TestDriver {
 	static function main():Void {
-		ensureTemporaryDirectory();
+		var previous = Sys.getEnv("TMPDIR"),
+			temporary = createTemporaryDirectory();
+		Sys.putEnv("TMPDIR", temporary);
+		var status:Int;
+		try
+			status = run()
+		catch (error:Dynamic) {
+			removeTemporaryDirectory(temporary);
+			Sys.putEnv("TMPDIR", previous);
+			throw error;
+		}
+		removeTemporaryDirectory(temporary);
+		Sys.putEnv("TMPDIR", previous);
+		if (status != 0)
+			Sys.exit(status);
+	}
+
+	static function run():Int {
 		var options = parseOptions(Sys.args());
 		var runner = new TestRunner(options.root);
 		var failures = 0;
@@ -80,21 +97,38 @@ class TestDriver {
 		if (selected == 0)
 			throw "No tests matched the requested suite and filter";
 		if (options.listOnly)
-			return;
+			return 0;
 		Sys.println('Test driver: ${selected - failures} passed, $failures failed, $selected total');
-		if (failures != 0)
-			Sys.exit(1);
+		return failures == 0 ? 0 : 1;
 	}
 
-	/** Test mains write scratch files under TMPDIR, so every process the driver starts inherits one even when the shell sets none. */
-	static function ensureTemporaryDirectory():Void {
-		var current = Sys.getEnv("TMPDIR");
-		if (current != null && current != "")
+	/** Every driver run owns its scratch directory, including direct Windows invocations. */
+	static function createTemporaryDirectory():String {
+		var parent = Sys.getEnv("TMPDIR");
+		if (parent == null || parent == "")
+			parent = Sys.systemName() == "Windows" ? Sys.getEnv("TEMP") : "/tmp";
+		if (parent == null || parent == "" || !FileSystem.exists(parent) || !FileSystem.isDirectory(parent))
+			throw "No system temporary directory was found";
+		for (_ in 0...100) {
+			var path = haxe.io.Path.join([parent, 'haxeon-test-${Date.now().getTime()}-${Std.random(1000000000)}']);
+			if (!FileSystem.exists(path)) {
+				FileSystem.createDirectory(path);
+				return path;
+			}
+		}
+		throw "Cannot create a unique test temporary directory";
+	}
+
+	static function removeTemporaryDirectory(path:String):Void {
+		if (!FileSystem.exists(path))
 			return;
-		var fallback = Sys.systemName() == "Windows" ? Sys.getEnv("TEMP") : "/tmp";
-		if (fallback == null || fallback == "")
-			throw "TMPDIR is unset and no system temporary directory was found";
-		Sys.putEnv("TMPDIR", fallback);
+		if (!FileSystem.isDirectory(path)) {
+			FileSystem.deleteFile(path);
+			return;
+		}
+		for (entry in FileSystem.readDirectory(path))
+			removeTemporaryDirectory(haxe.io.Path.join([path, entry]));
+		FileSystem.deleteDirectory(path);
 	}
 
 	static function printTiming(phase:String, started:Float):Void {
