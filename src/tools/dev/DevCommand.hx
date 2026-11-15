@@ -7,6 +7,9 @@ package tools.dev;
  *       Print the path of a HashLink build of the entry point MAIN, built with the pinned Haxe and cached by content (ToolArtifacts).
  *       Build diagnostics go to stderr; stdout is only the path.
  *
+ *   haxeon dev format [--check] [--changed]
+ *       Format the Haxe sources of the checkout, or check them (FormatCommand). scripts/format.sh runs it.
+ *
  *   haxeon dev test quick|wave|ci|full [--jobs N] [--gate] [--only NAME,...] [--list]
  *       Run a mode of tests/suites.txt (SuiteRunner). scripts/test.sh runs `ci`; scripts/gate.sh runs the others with --gate.
  */
@@ -16,6 +19,7 @@ class DevCommand {
 		return switch command {
 			case "tool-path": toolPath(arguments, home);
 			case "test": test(arguments, home);
+			case "format": FormatCommand.run(arguments, home);
 			case "help", "--help", "-h", "": usage(command == "" ? 2 : 0);
 			case _:
 				Sys.stderr().writeString('Unknown dev command: $command\n');
@@ -90,6 +94,8 @@ class DevCommand {
 		out.writeString("Usage: haxeon dev <command>   (commands for working on a Haxeon checkout)\n");
 		out.writeString("  tool-path [--cp DIR]... [--define NAME[=VALUE]]... MAIN\n");
 		out.writeString("      Print the path of a cached HashLink build of the entry point MAIN (built with the pinned Haxe)\n");
+		out.writeString("  format [--check] [--changed]\n");
+		out.writeString("      Format the checkout's Haxe sources, or check them; --changed: only files that differ from origin/main\n");
 		out.writeString("  test quick|wave|ci|full [--jobs N] [--gate] [--only NAME,...] [--list]\n");
 		out.writeString("      Run a mode of tests/suites.txt; --gate writes a report to out/gate (default jobs: TEST_JOBS, else 16)\n");
 		return status;

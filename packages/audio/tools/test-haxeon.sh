@@ -12,7 +12,8 @@ ctest --test-dir "$build_dir" --output-on-failure -R '^(audio|audio_dsp|audio_ds
 if [[ ! -f "$haxeon_dir/out/haxeon_runtime.hdll" ]]; then
     (cd "$haxeon_dir" && ./scripts/build-native.sh)
 fi
-mapfile -t sources < <(find "$package_dir/src" "$haxeon_dir/packages/platform/src" -name '*.hx' -print | sort)
+sources=()  # read line by line: macOS's bash 3.2 has no mapfile
+while IFS= read -r source; do sources+=("$source"); done < <(find "$package_dir/src" "$haxeon_dir/packages/platform/src" -name '*.hx' -print | sort)
 for fixture in AudioSmoke; do
     (cd "$haxeon_dir" && .tools/haxe/haxe common.hxml --run compiler.tools.HaxeonCompiler \
         --output="$build_dir/$fixture.hl" --entry="$fixture" \

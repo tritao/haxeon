@@ -65,12 +65,13 @@ echo "PASS: the compiler builds itself to a fixed point"
 entry_sources="$work/entry-sources.txt"
 (cd "$root_dir" && find src stdlib lib/haxeon-io -name '*.hx' | LC_ALL=C sort) >"$entry_sources"
 building_entries=(compiler.tools.HaxeonCompiler Main FfiImportMain FfiAuditMain)
-declare -A entry_gaps=(
-	[compiler.tools.CompilerServer]="the Haxeon stdlib has no sys.io.File.append"
-	[tools.HaxeonCli]="the Haxeon stdlib's sys.io.Process has its own API, not Haxe's new Process(command, arguments)"
-	[build.HaxeonBuild]="the Haxeon stdlib's sys.io.Process has its own API, not Haxe's new Process(command, arguments)"
-	[LspMain]="the Haxeon stdlib's sys.io.FileOutput is not a haxe.io.Output (no write)"
-	[EditorServiceMain]="nullable values the language service reads without a check"
+# Each gap is "entry|why it does not build yet" (a plain list: macOS's bash 3.2 has no associative arrays).
+entry_gaps=(
+	"compiler.tools.CompilerServer|the Haxeon stdlib has no sys.io.File.append"
+	"tools.HaxeonCli|the Haxeon stdlib's sys.io.Process has its own API, not Haxe's new Process(command, arguments)"
+	"build.HaxeonBuild|the Haxeon stdlib's sys.io.Process has its own API, not Haxe's new Process(command, arguments)"
+	"LspMain|the Haxeon stdlib's sys.io.FileOutput is not a haxe.io.Output (no write)"
+	"EditorServiceMain|nullable values the language service reads without a check"
 )
 build_entry() {
 	(cd "$root_dir" && "$hl" "$work/stage-1.hl" --entry="$1" --root=src --root=stdlib --root=lib/haxeon-io \
@@ -83,9 +84,10 @@ for entry in "${building_entries[@]}"; do
 		exit 1
 	}
 done
-for entry in "${!entry_gaps[@]}"; do
+for gap in "${entry_gaps[@]}"; do
+	entry=${gap%%|*}
 	if build_entry "$entry"; then
-		echo "FAIL: $entry now builds with the self-hosted compiler (${entry_gaps[$entry]}); move it to building_entries" >&2
+		echo "FAIL: $entry now builds with the self-hosted compiler (${gap#*|}); move it to building_entries" >&2
 		exit 1
 	fi
 done
