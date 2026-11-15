@@ -4,10 +4,7 @@ root=$(cd "$(dirname "$0")/../../.." && pwd)
 cd "$root"
 tmp=$(mktemp -d "${TMPDIR:-$root/out}/haxeon-state-census.XXXXXXXX")
 trap 'rm -rf -- "$tmp"' EXIT
-compiler=${HAXEON_COMPILER_HL:-"$tmp/compiler.hl"}
-if [[ ! -f "$compiler" ]]; then
-  .tools/haxe/haxe common.hxml -hl "$compiler" -main compiler.tools.HaxeonCompiler
-fi
+compiler=${HAXEON_COMPILER_HL:-$("$root/scripts/haxeon" dev tool-path compiler.tools.HaxeonCompiler)}
 export LD_LIBRARY_PATH="$root/out:$("$root/scripts/hashlink-path.sh")${LD_LIBRARY_PATH:+:$LD_LIBRARY_PATH}"
 roots=(--root=stdlib --root=packages/ui/haxe --root=packages/ui/bindings/haxe --root=packages/platform/src --root=packages/editor/src --root=packages/ui/tests/haxeon)
 for fixture in state pointer; do

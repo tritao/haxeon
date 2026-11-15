@@ -222,7 +222,7 @@ class HxiProjectionProfileValidator {
 				case Enumeration(name, _, _, values, _):
 					HxiHaxeEmitter.addProjectedName(path, "module", HxiHaxeEmitter.enumTypeName(name, profile), 'enum "$name"', typeNames);
 					var members:Map<String, String> = [],
-						prefix = HxiHaxeEmitter.enumValuePrefix(values, profile);
+						prefix = HxiHaxeEmitter.enumValuePrefix(values, profile, name);
 					for (value in values)
 						HxiHaxeEmitter.addProjectedName(path, 'enum "$name"', HxiHaxeEmitter.enumValueName(value.name, prefix, name, profile),
 							'enum value "$name.${value.name}"', members, true);

@@ -8,10 +8,7 @@ work=$(mktemp -d "${TMPDIR:-$root/out}/haxeon-idle-metrics.XXXXXXXX")
 capture=$(mktemp -d "${TMPDIR:-/tmp}/haxeon-idle-metrics.XXXXXXXX")
 trap 'rm -rf -- "$work" "$capture"' EXIT
 cmake --build "$native" --target nativekit_ui
-compiler=${HAXEON_COMPILER_HL:-"$work/compiler.hl"}
-if [[ ! -f "$compiler" ]]; then
-  "$root/.tools/haxe/haxe" -cp "$root/src" -hl "$compiler" -main compiler.tools.HaxeonCompiler
-fi
+compiler=${HAXEON_COMPILER_HL:-$("$root/scripts/haxeon" dev tool-path compiler.tools.HaxeonCompiler)}
 export LD_LIBRARY_PATH="$native:$native/nativekit/modules/gpu:$native/nativekit:$root/out:$("$root/scripts/hashlink-path.sh")${LD_LIBRARY_PATH:+:$LD_LIBRARY_PATH}"
 "$hl" "$compiler" --output="$work/test.hl" --entry=IdleMetricsMain \
   --root="$ui/tests/haxeon" --root="$ui/haxe" --root="$ui/bindings/haxe" \

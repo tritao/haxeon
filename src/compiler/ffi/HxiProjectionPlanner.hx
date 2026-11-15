@@ -36,7 +36,7 @@ class HxiProjectionPlanner {
 				continue;
 			switch declaration {
 				case Enumeration(name, _, flags, values, _):
-					var prefix = HxiHaxeEmitter.enumValuePrefix(values, profile);
+					var prefix = HxiHaxeEmitter.enumValuePrefix(values, profile, name);
 					enums.push({
 						nativeName: name,
 						name: HxiHaxeEmitter.enumTypeName(name, profile),

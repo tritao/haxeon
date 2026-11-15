@@ -85,7 +85,7 @@ class AccessibilityContract {
     if (atomic.nativeUpdate.get_struct_size() != AccessibilityUpdate.size()
       || atomic.nativeUpdate.get_node_count() != tabsSnapshot.length
       || atomic.removedNodeCount != 0 || atomic.nativeUpdate.get_focus() != secondTabNode.id.value
-      || !atomic.nativeUpdate.get_flags().contains(AccessibilityUpdateFlags.NkAccessibilityUpdateFocus)) return 4;
+      || !atomic.nativeUpdate.get_flags().contains(AccessibilityUpdateFlags.Focus)) return 4;
     var allRemoved = AccessibilityBridge.buildUpdate([], parents, NativeKitConstants.NK_ACCESSIBILITY_ROOT);
     var removedId = tabsSnapshot[0].id;
     if (allRemoved.nativeUpdate.get_node_count() != 0 || allRemoved.removedNodeCount != 1

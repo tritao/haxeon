@@ -74,7 +74,7 @@ class AccessibilityBridge {
 
 		var update = new AccessibilityUpdate();
 		update.set_struct_size(AccessibilityUpdate.size());
-		update.set_flags(AccessibilityUpdateFlags.NkAccessibilityUpdateFocus);
+		update.set_flags(AccessibilityUpdateFlags.Focus);
 		update.set_nodes(nodes);
 		update.set_node_count(nodes.length);
 		var removedBytes = haxe.io.Bytes.alloc(removed.length * 4);

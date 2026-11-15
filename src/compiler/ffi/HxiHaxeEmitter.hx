@@ -1374,7 +1374,7 @@ class HxiHaxeEmitter {
 		for (declaration in declarations)
 			switch declaration {
 				case Enumeration(name, _, _, values, _) if (name == enumName):
-					var prefix = enumValuePrefix(values, profile);
+					var prefix = enumValuePrefix(values, profile, name);
 					for (value in values)
 						if (value.name == nativeValue)
 							return enumValueName(value.name, prefix, name, profile);
@@ -2402,7 +2402,12 @@ class HxiHaxeEmitter {
 		return (separator < 0 ? "" : projected.substr(0, separator + 1)) + "Owned" + projected.substr(separator + 1);
 	}
 
-	public static function enumValuePrefix(values:Array<HxiEnumValue>, ?profile:HxiProjectionProfile):Array<String> {
+	/**
+	 * The words every value name starts with, which projected value names drop. When they would be a whole value name (a
+	 * single value, or one value naming another's prefix), a configured prefix or else the words the value shares with the
+	 * enum's own C name (`nkui_composite_mode` for `NKUI_COMPOSITE_SOURCE_OVER`) are dropped instead.
+	 */
+	public static function enumValuePrefix(values:Array<HxiEnumValue>, ?profile:HxiProjectionProfile, ?enumName:String):Array<String> {
 		if (values.length == 0)
 			return [];
 		var prefix = values[0].name.split("_");
@@ -2428,6 +2433,13 @@ class HxiHaxeEmitter {
 					}
 				}
 			}
+		if (prefix.length == values[0].name.split("_").length && enumName != null) {
+			var typeParts = enumName.split("_"), length = 0;
+			while (length < prefix.length - 1 && length < typeParts.length && prefix[length].toUpperCase() == typeParts[length].toUpperCase())
+				length++;
+			if (length > 0)
+				prefix = prefix.slice(0, length);
+		}
 		return prefix;
 	}
 

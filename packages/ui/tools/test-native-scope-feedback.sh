@@ -7,10 +7,7 @@ runtime=$("$root/scripts/hashlink-path.sh")
 work=$(mktemp -d "${TMPDIR:-/tmp}/haxeon-native-scope-feedback.XXXXXXXX")
 trap 'rm -rf -- "$work"' EXIT
 cmake --build "$native" --target nativekit_ui
-compiler=${HAXEON_COMPILER_HL:-"$work/compiler.hl"}
-if [[ ! -f "$compiler" ]]; then
-  "$root/.tools/haxe/haxe" --cwd "$root" common.hxml -hl "$compiler" -main compiler.tools.HaxeonCompiler
-fi
+compiler=${HAXEON_COMPILER_HL:-$("$root/scripts/haxeon" dev tool-path compiler.tools.HaxeonCompiler)}
 export LD_LIBRARY_PATH="$native:$native/nativekit:$native/nativekit/modules/gpu:$root/out:$runtime${LD_LIBRARY_PATH:+:$LD_LIBRARY_PATH}"
 export NKUI_TEST_FONT_PATH=${NKUI_TEST_FONT_PATH:-"$ui/vendor/skribidi/example/data/IBMPlexSans-Regular.ttf"}
 for inline in 0 1; do

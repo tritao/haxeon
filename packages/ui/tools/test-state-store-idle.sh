@@ -6,10 +6,7 @@ hl_dir=$("$root/scripts/hashlink-path.sh")
 work=$(mktemp -d "${TMPDIR:-$root/out}/haxeon-state-idle.XXXXXXXX")
 capture=$(mktemp -d "${TMPDIR:-/tmp}/haxeon-state-idle.XXXXXXXX")
 trap 'rm -rf -- "$work" "$capture"' EXIT
-compiler=${HAXEON_COMPILER_HL:-"$work/compiler.hl"}
-if [[ ! -f "$compiler" ]]; then
-  "$root/.tools/haxe/haxe" -cp "$root/src" -hl "$compiler" -main compiler.tools.HaxeonCompiler
-fi
+compiler=${HAXEON_COMPILER_HL:-$("$root/scripts/haxeon" dev tool-path compiler.tools.HaxeonCompiler)}
 export LD_LIBRARY_PATH="$root/out:$hl_dir${LD_LIBRARY_PATH:+:$LD_LIBRARY_PATH}"
 "$hl_dir/hl" "$compiler" --target=hl --output="$work/test.hl" --entry=StateStoreIdleCensus \
   --root="$ui/tests/haxeon" --root="$ui/haxe" --root="$ui/bindings/haxe" \

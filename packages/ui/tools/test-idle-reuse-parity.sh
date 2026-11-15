@@ -6,10 +6,7 @@ hl="$("$root/scripts/hashlink-path.sh")/hl"
 work=$(mktemp -d "${TMPDIR:-$root/out}/haxeon-idle-parity.XXXXXXXX")
 capture=$(mktemp -d "${TMPDIR:-/tmp}/haxeon-idle-parity.XXXXXXXX")
 trap 'rm -rf -- "$work" "$capture"' EXIT
-compiler=${HAXEON_COMPILER_HL:-"$work/compiler.hl"}
-if [[ ! -f "$compiler" ]]; then
-  "$root/.tools/haxe/haxe" -cp "$root/src" -hl "$compiler" -main compiler.tools.HaxeonCompiler
-fi
+compiler=${HAXEON_COMPILER_HL:-$("$root/scripts/haxeon" dev tool-path compiler.tools.HaxeonCompiler)}
 export LD_LIBRARY_PATH="$root/out:$("$root/scripts/hashlink-path.sh")${LD_LIBRARY_PATH:+:$LD_LIBRARY_PATH}"
 for inline in 0 1; do
   for target in hl wasm32 wasm-gc; do

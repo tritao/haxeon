@@ -26,10 +26,11 @@ if [[ ! -x "$hashlink_runtime" ]]; then
 	exit 2
 fi
 
-compiler_command=("$haxeon_dir/.tools/haxe/haxe" common.hxml --run compiler.tools.HaxeonCompiler)
-if [[ -n ${HAXEON_COMPILER_HL:-} && -f ${HAXEON_COMPILER_HL} ]]; then
-	compiler_command=("$hashlink_runtime" "$HAXEON_COMPILER_HL")
+compiler=${HAXEON_COMPILER_HL:-}
+if [[ -z $compiler || ! -f $compiler ]]; then
+	compiler=$("$haxeon_dir/scripts/haxeon" dev tool-path compiler.tools.HaxeonCompiler)
 fi
+compiler_command=("$hashlink_runtime" "$compiler")
 
 (cd "$haxeon_dir" && \
 	LD_LIBRARY_PATH="$haxeon_dir/out:$("$haxeon_dir/scripts/hashlink-path.sh")${LD_LIBRARY_PATH:+:$LD_LIBRARY_PATH}" \

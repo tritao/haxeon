@@ -5,11 +5,8 @@ root=$(cd "$(dirname "${BASH_SOURCE[0]}")/../../.." && pwd)
 ui="$root/packages/ui"
 work=$(mktemp -d "${TMPDIR:-/tmp}/haxeon-showcase-builds.XXXXXXXX")
 trap 'rm -rf -- "$work"' EXIT
-compiler=${HAXEON_COMPILER_HL:-"$work/compiler.hl"}
+compiler=${HAXEON_COMPILER_HL:-$("$root/scripts/haxeon" dev tool-path compiler.tools.HaxeonCompiler)}
 hl="$("$root/scripts/hashlink-path.sh")/hl"
-if [[ ! -f "$compiler" ]]; then
-    "$root/.tools/haxe/haxe" --cwd "$root" common.hxml -main compiler.tools.HaxeonCompiler -hl "$compiler"
-fi
 export LD_LIBRARY_PATH="$root/out:$("$root/scripts/hashlink-path.sh")${LD_LIBRARY_PATH:+:$LD_LIBRARY_PATH}"
 cat > "$work/memory.json" <<'JSON'
 {"name":"nativekit-haxeon-linear-memory","version":1,"address_model":"wasm32","page_size":65536,"host_base":0,"host_limit":134217728,"guest_base":134217728,"guest_limit":268435456,"memory_size":268435456}

@@ -77,7 +77,7 @@ class NativeEnums {
 
 	public static function compositeMode(value:CompositeMode):NativeCompositeMode {
 		return switch value {
-			case CompositeMode.SourceOver: NativeCompositeMode.NkuiCompositeSourceOver;
+			case CompositeMode.SourceOver: NativeCompositeMode.SourceOver;
 		};
 	}
 
