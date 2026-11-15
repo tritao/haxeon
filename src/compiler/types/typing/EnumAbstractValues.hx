@@ -45,6 +45,25 @@ class EnumAbstractValues {
 		}
 	}
 
+	/**
+	 * The text of an enum abstract value that names its values (`RawRepresentable` or `Flags`), or null for any other value.
+	 * String conversion uses it, so `"Role: " + role` and `Std.string(role)` print a name as an enum constructor does.
+	 */
+	public static function nameOf(session:TypingSession, value:TypedExpression, span:SourceSpan):Null<TypedExpression> {
+		var owner = switch value.type {
+			case TAbstract(name, _, _): name;
+			default: null;
+		};
+		var declaration = owner == null ? null : session.enumAbstractDecls.get(owner);
+		if (declaration == null)
+			return null;
+		if (FlagsGenerator.conforms(session, declaration))
+			return new TypedExpression(TCall(FlagsGenerator.request(session, owner, "toString", span), [value]), TString, span);
+		if (RawRepresentableGenerator.conforms(session, declaration))
+			return new TypedExpression(TCall(RawRepresentableGenerator.request(session, owner, "toString", span), [value]), TString, span);
+		return null;
+	}
+
 	/** The value at a use site: the cached constant, typed as the abstract and located at `span`, where it is used. */
 	public static function typed(typer:BodyTyper, declaration:AstEnumAbstract, value:AstEnumAbstractValue, span:SourceSpan):TypedExpression {
 		typer.recordInlineConstantDependency(declaration.name);

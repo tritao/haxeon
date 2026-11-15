@@ -579,3 +579,4 @@ equality-anonymous-conformance	42
 equality-self-hosting-guard	42
 enum-abstract-typedef	42
 enum-abstract-exhaustive	42
+enum-abstract-names	42

@@ -2440,11 +2440,7 @@ class ExpressionTyper {
 	}
 
 	function isStringConvertible(type:CompilerType):Bool
-		return switch type {
-			case TString: true;
-			case TAbstract(_, _, _): session.relations.isAssignable(type, TString);
-			default: false;
-		};
+		return StringConversion.isStringConvertible(session, type);
 
 	/** A `+` with an operand of this type concatenates: a String, or a nullable one. */
 	function isStringOperand(type:CompilerType):Bool
@@ -2453,23 +2449,8 @@ class ExpressionTyper {
 			default: isStringConvertible(type);
 		};
 
-	function stringify(value:TypedExpression):TypedExpression {
-		if (isStringConvertible(value.type))
-			return coerce(value, TString, "string concatenation", "E1010");
-		// A Null<String> is the same reference as a String, and concatenation itself writes null as "null".
-		switch value.type {
-			case TNullable(inner) if (sameType(inner, TString)):
-				return new TypedExpression(TCast(value), TString, value.span);
-			default:
-		}
-		if (sameType(value.type, TFloat) || sameType(value.type, TDynamic)) {
-			session.runtimeDependencyTracker.record(session.currentContext.name, "Std");
-			var dynamicValue = coerce(value, TDynamic, "string concatenation", "E1010");
-			return new TypedExpression(TCall("Std.string", [dynamicValue]), TString, value.span);
-		}
-		var dynamicValue = coerce(value, TDynamic, "string concatenation", "E1010");
-		return new TypedExpression(TCall("__std_string", [dynamicValue]), TString, value.span);
-	}
+	function stringify(value:TypedExpression):TypedExpression
+		return StringConversion.convert(session, value, coerce);
 
 	static function sameType(left:CompilerType, right:CompilerType):Bool
 		return TypeRelations.equals(left, right);

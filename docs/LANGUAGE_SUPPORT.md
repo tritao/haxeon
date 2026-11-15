@@ -5,6 +5,9 @@ The current subset includes:
 - `Int`, `Bool`, `Float`, `String`, nullable values, and dynamic values
 - Local variables, functions, methods, recursion, and expression statements
 - Classes, interfaces, anonymous structures, enums, and enum abstracts
+- An enum abstract that names its values (`RawRepresentable` or `Flags`) prints its name wherever it becomes a String:
+  concatenation, interpolation, `Std.string` and `toString()` (`Button`, `Access[Read | Write]`; an undeclared raw value
+  prints as `Kind(9)`, and a nullable one as `null`).
 - A switch expression over an enum abstract that covers every declared value needs no default, as one over an enum
   covers every constructor; a missing value is `E1021`, naming it. A value outside the declared set (a native code newer
   than its binding, or a cast) throws at the switch. `Flags` combine their values, so their switches still need a default.

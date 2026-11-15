@@ -43,8 +43,11 @@ class FlagsMain {
 		rejected('enum abstract Access(Int) implements Flags { var Invalid=3; } function main():Int return 42;', "without a declared single-bit");
 		rejected(declaration + 'function accepts<T:Flags>(value:T):Int return 42; function main():Int return accepts(1);', "constraint");
 		for (name in [
-			  "haxeon.ui.core.UiModifier",             "haxeon.ui.core.UiDirtyFlag",            "haxeon.ui.style.StyleState",
-			"haxeon.ui.style.StyleImpact", "haxeon.ui.semantics.AccessibilityState", "haxeon.ui.semantics.AccessibilityAction"
+			// The UI's own Flags types; the accessibility flags are the generated native ones, covered with the other native flags.
+			"haxeon.ui.core.UiModifier",
+			"haxeon.ui.core.UiDirtyFlag",
+			"haxeon.ui.style.StyleState",
+			"haxeon.ui.style.StyleImpact"
 		]) {
 			var local = name.substr(name.lastIndexOf(".") + 1),
 				header = 'import $name; ';

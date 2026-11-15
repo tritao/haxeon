@@ -725,11 +725,13 @@ class CallResolver {
 			return new TypedExpression(TCall(FlagsGenerator.request(session, abstractName, name, span), [receiver].concat(typed)), info.result, span);
 		}
 
-		if (name == "rawValue" && rawDeclaration != null && RawRepresentableGenerator.conforms(session, rawDeclaration)) {
+		if ((name == "rawValue" || name == "toString")
+			&& rawDeclaration != null
+			&& RawRepresentableGenerator.conforms(session, rawDeclaration)) {
 			if (arguments.length != 0)
-				fail("E1008", "rawValue expects no arguments", span);
+				fail("E1008", '$name expects no arguments', span);
 			return new TypedExpression(TCall(RawRepresentableGenerator.request(session, abstractName, name, span), [receiver]),
-				lowerType(rawDeclaration.underlying, rawDeclaration.span), span);
+				name == "toString" ? TString : lowerType(rawDeclaration.underlying, rawDeclaration.span), span);
 		}
 		var declaration = session.declarations.abstractDeclaration(abstractName);
 		if (declaration == null)
@@ -1571,10 +1573,18 @@ class CallResolver {
 					new TypedExpression(TIntLiteral(0), TInt, span);
 			};
 		}
+		// Std.string, and the string interpolation that lowers to it, convert as concatenation does. Dynamic is the expected
+		// type, as the stdlib signature gives it, so mixed branches such as `cond ? "a" : 1` still join.
+		if (name == "Std.string" && arguments.length == 1)
+			return StringConversion.convert(session, typeExpression(arguments[0], scope, TDynamic, false), coerce);
 		if (name == "Std.stdString") {
 			if (arguments.length != 1)
 				fail("E1008", 'Function "Std.string" expects 1 argument, got ${arguments.length}', span);
-			var value = coerce(typeExpressionValue(arguments[0], scope), TDynamic, "Std.string value", "E1002");
+			var typed = typeExpressionValue(arguments[0], scope),
+				named = EnumAbstractValues.nameOf(session, typed, span);
+			if (named != null)
+				return named;
+			var value = coerce(typed, TDynamic, "Std.string value", "E1002");
 			return new TypedExpression(TCall("__std_string", [value]), TString, span);
 		}
 		if (name == "String.__alloc__") {

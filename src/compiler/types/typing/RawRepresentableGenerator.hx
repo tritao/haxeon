@@ -33,7 +33,7 @@ class RawRepresentableGenerator {
 		if (declaration.fromTypes.length != 0 || declaration.toTypes.length != 0)
 			BodyTyper.fail("E1025", "RawRepresentable enum abstracts cannot declare implicit from/to conversions", declaration.span);
 		for (value in declaration.values) {
-			if (value.name == "rawValue" || value.name == "fromRaw")
+			if (value.name == "rawValue" || value.name == "fromRaw" || value.name == "toString")
 				BodyTyper.fail("E1000", 'Constant "${declaration.name}.${value.name}" conflicts with a synthesized RawRepresentable member', value.span);
 			if (InlineConstantEvaluator.evaluate(EnumAbstractValues.raw(typer, declaration, value)) == null)
 				BodyTyper.fail("E1002", "RawRepresentable requires compile-time constant raw values", value.span);
@@ -41,7 +41,7 @@ class RawRepresentableGenerator {
 	}
 
 	public static function request(session:TypingSession, owner:String, method:String, span:SourceSpan):String {
-		if (method != "rawValue" && method != "fromRaw")
+		if (method != "rawValue" && method != "fromRaw" && method != "toString")
 			throw 'Unknown synthesized raw member "$method"';
 		var helper = name(owner, method);
 		if (!session.rawRepresentableRequests.exists(helper))
@@ -52,6 +52,35 @@ class RawRepresentableGenerator {
 				span: span
 			});
 		return helper;
+	}
+
+	/**
+	 * `toString` names the value as a Haxe enum constructor prints (`Button`); the first of several names for one raw value
+	 * wins. A raw value outside the declared set, such as a newer native code, prints as `Owner(raw)`.
+	 */
+	static function nameStatements(typer:BodyTyper, declaration:AstEnumAbstract, raw:CompilerType, rawValue:TypedExpression,
+			span:SourceSpan):Array<TypedStatement> {
+		function text(value:String):TypedExpression
+			return new TypedExpression(TStringLiteral(value), TString, span);
+		var statements:Array<TypedStatement> = [], seen:Map<String, Bool> = [];
+		for (value in declaration.values) {
+			var constant = InlineConstantEvaluator.evaluate(EnumAbstractValues.raw(typer, declaration, value));
+			if (constant == null)
+				throw "Nonconstant raw value after conformance validation";
+			var key = Std.string(constant.expression);
+			if (seen.exists(key))
+				continue;
+			seen.set(key, true);
+			statements.push(TIf(new TypedExpression(TEqual(rawValue, constant), TBool, span), [TReturn(text(value.name), span)], [], span));
+		}
+		var shown = switch raw {
+			case TString: rawValue;
+			default: new TypedExpression(TCall("__std_string", [new TypedExpression(TToDynamic(rawValue), TDynamic, span)]), TString, span);
+		};
+		var owner = compiler.QualifiedName.last(declaration.name);
+		statements.push(TReturn(new TypedExpression(TAdd(text(owner + "("), new TypedExpression(TAdd(shown, text(")")), TString, span)), TString,
+			span), span));
+		return statements;
 	}
 
 	/** Drain only newly requested members when dependency completion makes another pass. */
@@ -70,12 +99,18 @@ class RawRepresentableGenerator {
 			var raw = typer.lowerType(declaration.underlying, declaration.span),
 				nominal:CompilerType = TAbstract(declaration.name, [], raw),
 				span = declaration.span,
-				inputType = request.method == "rawValue" ? nominal : raw,
+				inputType = request.method == "fromRaw" ? raw : nominal,
 				input = new TypedExpression(TLocal("value"), inputType, span),
-				outputType:CompilerType = request.method == "rawValue" ? raw : TNullable(nominal),
+				outputType:CompilerType = switch request.method {
+					case "rawValue": raw;
+					case "toString": TString;
+					default: TNullable(nominal);
+				},
 				statements:Array<TypedStatement> = [];
 			if (request.method == "rawValue")
 				statements.push(TReturn(new TypedExpression(TAbiCast(input), raw, span), span));
+			else if (request.method == "toString")
+				statements = nameStatements(typer, declaration, raw, new TypedExpression(TAbiCast(input), raw, span), span);
 			else {
 				var present = new TypedExpression(TNullableWrap(new TypedExpression(TAbiCast(input), nominal, span)), outputType, span),
 					missing = TReturn(new TypedExpression(TNullableWrap(new TypedExpression(TNullLiteral, TNull, span)), outputType, span), span),
@@ -126,7 +161,8 @@ class RawRepresentableGenerator {
 				owner: null,
 				isStatic: true,
 				isConstructor: false,
-				isInline: true,
+				// A name lookup has a branch per value: keep it one call, not a copy at every string conversion.
+				isInline: request.method != "toString",
 				arguments: [{name: "value", type: inputType}],
 				result: outputType,
 				statements: statements,
