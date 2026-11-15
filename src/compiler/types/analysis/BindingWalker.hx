@@ -5,6 +5,7 @@ import compiler.syntax.Ast.AstArgument;
 import compiler.syntax.Ast.AstExpression;
 import compiler.syntax.Ast.AstStatement;
 import compiler.syntax.Ast.AstType;
+import compiler.syntax.AstChildren;
 
 /** Why a name is bound. Only a `Local` can be initialized with a value of its own. */
 enum BindingKind {
@@ -25,8 +26,14 @@ enum BindingKind {
  * to the innermost declaration visible at that point. Subclasses override the hooks and, to look at a construct in
  * context, `expression` and `statement`, calling the inherited version to keep walking.
  */
-class BindingWalker {
-	final environments:Array<Map<String, String>> = [[]];
+class BindingWalker implements AstChildVisitor {
+	/**
+	 * The visible bindings, innermost last: a name and the declaration it refers to. A scope is the height the stack had when
+	 * it was entered, so entering and leaving one allocates nothing.
+	 */
+	final bindingNames:Array<String> = [];
+
+	final bindingDeclarations:Array<String> = [];
 	var lambdaDepth:Int = 0;
 
 	/** How many `try` bodies of the function itself enclose the walk; a lambda's own `try` blocks are its own. */
@@ -48,41 +55,66 @@ class BindingWalker {
 	/** `map.field` style names refer to the local before the first dot. */
 	public static function rootOf(name:String):String {
 		var dot = name.indexOf(".");
-		return dot < 0 ? name : name.substr(0, dot);
+		return dot < 0 ? name : name.substring(0, dot);
 	}
 
 	/** Whether the walk is inside a lambda body, which may run at any time. */
 	function insideLambda():Bool
 		return lambdaDepth > 0;
 
-	/** The declaration a name refers to here, or null when it names something else (a field, function or type). */
+	/**
+	 * The declaration a name refers to here, or null when it names something else (a field, function or type). A dotted name
+	 * refers to the binding of its root, which is matched in place rather than cut out.
+	 */
 	function resolve(name:String):Null<String> {
-		var root = rootOf(name), index = environments.length;
+		var dot = name.indexOf("."),
+			rootLength = dot < 0 ? name.length : dot,
+			index = bindingNames.length;
 		while (index > 0) {
 			index--;
-			var found = environments[index].get(root);
-			if (found != null)
-				return found;
+			if (isRoot(bindingNames[index], name, rootLength))
+				return bindingDeclarations[index];
 		}
 		return null;
 	}
 
+	static function isRoot(candidate:String, name:String, rootLength:Int):Bool {
+		if (candidate.length != rootLength)
+			return false;
+		if (rootLength == name.length)
+			return candidate == name;
+		for (index in 0...rootLength)
+			if (StringTools.fastCodeAt(candidate, index) != StringTools.fastCodeAt(name, index))
+				return false;
+		return true;
+	}
+
 	function declare(name:String, span:SourceSpan, kind:BindingKind, ?type:AstType, ?initializer:AstExpression):String {
 		var declaration = key(name, span);
-		environments[environments.length - 1].set(name, declaration);
+		bindingNames.push(name);
+		bindingDeclarations.push(declaration);
 		declared(name, declaration, kind, type, initializer);
 		return declaration;
 	}
 
 	/** Makes a name visible as the given declaration without reporting a declaration, for a scope entered from outside. */
-	function bind(name:String, declaration:String):Void
-		environments[environments.length - 1].set(name, declaration);
-
-	function scoped(action:() -> Void):Void {
-		environments.push([]);
-		action();
-		environments.pop();
+	function bind(name:String, declaration:String):Void {
+		bindingNames.push(name);
+		bindingDeclarations.push(declaration);
 	}
+
+	/** Enters a scope; pass the result to `leaveScope`. */
+	inline function enterScope():Int
+		return bindingNames.length;
+
+	function leaveScope(height:Int):Void {
+		bindingNames.resize(height);
+		bindingDeclarations.resize(height);
+	}
+
+	/** A child expression found by `AstChildren.visit`. */
+	public function visitChild(child:AstExpression):Void
+		expression(child);
 
 	// Hooks.
 
@@ -119,11 +151,12 @@ class BindingWalker {
 			this.statement(statement);
 	}
 
-	function statements(list:Array<AstStatement>):Void
-		scoped(() -> {
-			for (entry in list)
-				statement(entry);
-		});
+	function statements(list:Array<AstStatement>):Void {
+		var scope = enterScope();
+		for (entry in list)
+			statement(entry);
+		leaveScope(scope);
+	}
 
 	function statement(value:AstStatement):Void {
 		switch value {
@@ -160,48 +193,49 @@ class BindingWalker {
 				statements(body);
 			case DoWhile(body, test, _):
 				// The condition is typed in the body's scope, so it sees what the body declares.
-				scoped(() -> {
-					for (entry in body)
-						statement(entry);
-					expression(test);
-				});
+				var scope = enterScope();
+				for (entry in body)
+					statement(entry);
+				expression(test);
+				leaveScope(scope);
 			case ForIn(name, valueName, iterable, body, span):
 				receiver(iterable, "iterator");
-				scoped(() -> {
-					declare(name, span, Loop);
-					if (valueName != null)
-						declare(valueName, span, Loop);
-					for (entry in body)
-						statement(entry);
-				});
+				var scope = enterScope();
+				declare(name, span, Loop);
+				if (valueName != null)
+					declare(valueName, span, Loop);
+				for (entry in body)
+					statement(entry);
+				leaveScope(scope);
 			case Try(tryBranch, catches, _):
 				if (lambdaDepth == 0)
 					tryDepth++;
 				statements(tryBranch);
 				if (lambdaDepth == 0)
 					tryDepth--;
-				for (caught in catches)
-					scoped(() -> {
-						declare(caught.name, caught.span, Catch);
-						for (entry in caught.statements)
-							statement(entry);
-					});
+				for (caught in catches) {
+					var scope = enterScope();
+					declare(caught.name, caught.span, Catch);
+					for (entry in caught.statements)
+						statement(entry);
+					leaveScope(scope);
+				}
 			case Defer(body, _):
 				statements(body);
 			case Switch(subject, cases, defaultBranch, _, _):
 				expression(subject);
-				for (entry in cases)
-					scoped(() -> {
-						bindPattern(entry.value, entry.span);
-						if (entry.guard != null)
-							expression(entry.guard);
-						for (inner in entry.statements)
-							statement(inner);
-					});
+				for (entry in cases) {
+					var scope = enterScope();
+					bindPattern(entry.value, entry.span);
+					if (entry.guard != null)
+						expression(entry.guard);
+					for (inner in entry.statements)
+						statement(inner);
+					leaveScope(scope);
+				}
 				statements(defaultBranch);
 			default:
-				for (expression in compiler.syntax.AstChildren.statementExpressions(value))
-					this.expression(expression);
+				AstChildren.visitStatement(value, this);
 		}
 	}
 
@@ -216,7 +250,7 @@ class BindingWalker {
 			case Call(name, arguments, span):
 				var dot = name.indexOf(".");
 				if (dot > 0)
-					memberCall(name.substr(0, dot), resolve(name), name.substr(dot + 1), span);
+					memberCall(name.substring(0, dot), resolve(name), name.substring(dot + 1, name.length), span);
 				else
 					callee(name, resolve(name), span);
 				for (argument in arguments)
@@ -236,49 +270,51 @@ class BindingWalker {
 				expression(target);
 			case Lambda(arguments, body, _, _):
 				lambdaDepth++;
-				scoped(() -> walkFunction(arguments, body));
+				var scope = enterScope();
+				walkFunction(arguments, body);
+				leaveScope(scope);
 				lambdaDepth--;
 			case BlockExpression(body, result, _):
-				scoped(() -> {
-					for (entry in body)
-						statement(entry);
-					expression(result);
-				});
+				var scope = enterScope();
+				for (entry in body)
+					statement(entry);
+				expression(result);
+				leaveScope(scope);
 			case SwitchExpression(subject, cases, fallback, _):
 				expression(subject);
-				for (arm in cases)
-					scoped(() -> {
-						bindPattern(arm.value, arm.span);
-						if (arm.guard != null)
-							expression(arm.guard);
-						expression(arm.result);
-					});
+				for (arm in cases) {
+					var scope = enterScope();
+					bindPattern(arm.value, arm.span);
+					if (arm.guard != null)
+						expression(arm.guard);
+					expression(arm.result);
+					leaveScope(scope);
+				}
 				if (fallback != null)
 					expression(fallback);
 			case ArrayComprehension(keyName, valueName, iterable, test, result, _, span):
 				receiver(iterable, "iterator");
-				scoped(() -> {
-					declare(keyName, span, Comprehension);
-					if (valueName != null)
-						declare(valueName, span, Comprehension);
-					if (test != null)
-						expression(test);
-					expression(result);
-				});
+				var scope = enterScope();
+				declare(keyName, span, Comprehension);
+				if (valueName != null)
+					declare(valueName, span, Comprehension);
+				if (test != null)
+					expression(test);
+				expression(result);
+				leaveScope(scope);
 			case MapComprehension(keyName, valueName, iterable, test, key, result, span):
 				receiver(iterable, "iterator");
-				scoped(() -> {
-					declare(keyName, span, Comprehension);
-					if (valueName != null)
-						declare(valueName, span, Comprehension);
-					if (test != null)
-						expression(test);
-					expression(key);
-					expression(result);
-				});
+				var scope = enterScope();
+				declare(keyName, span, Comprehension);
+				if (valueName != null)
+					declare(valueName, span, Comprehension);
+				if (test != null)
+					expression(test);
+				expression(key);
+				expression(result);
+				leaveScope(scope);
 			default:
-				for (child in compiler.syntax.AstChildren.expressions(value))
-					expression(child);
+				AstChildren.visit(value, this);
 		}
 	}
 
