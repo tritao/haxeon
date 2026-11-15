@@ -21,9 +21,12 @@ class Arrays {
 		return result;
 	}
 
-	/** `count` references to the same `list`: per-index lists that start out shared and empty, replaced on first use. */
-	public static function shared(count:Int, list:Array<Int>):Array<Array<Int>> {
-		var result:Array<Array<Int>> = [];
+	/**
+	 * `count` references to the same read-only `list`: per-index lists that start out shared and empty, and are replaced by a list
+	 * of their own on first use. The type keeps every list read-only; only the code that replaces them writes.
+	 */
+	public static function shared(count:Int, list:haxe.ds.ReadOnlyArray<Int>):Array<haxe.ds.ReadOnlyArray<Int>> {
+		var result:Array<haxe.ds.ReadOnlyArray<Int>> = [];
 		result.resize(count);
 		for (index in 0...count)
 			result[index] = list;

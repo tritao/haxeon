@@ -1,6 +1,7 @@
 package compiler.ir.cfg;
 
 import compiler.Arrays;
+import haxe.ds.ReadOnlyArray;
 import compiler.ir.cfg.Cfg;
 import compiler.ir.cfg.CfgVerifier;
 import compiler.ir.Ir;
@@ -15,13 +16,14 @@ private typedef SsaPhi = {output:IrValue, inputs:Array<IrPhiInput>};
 class SsaBuilder {
 	var cfg:CfgFunction;
 	var output:Array<IrBlock>;
-	var predecessors:Array<Array<Int>> = [];
-	var successors:Array<Array<Int>> = [];
+	// The per-block lists are read-only: blocks start with the shared empty list, and only `append` gives one a list of its own.
+	var predecessors:Array<ReadOnlyArray<Int>> = [];
+	var successors:Array<ReadOnlyArray<Int>> = [];
 	var reachable:Array<Bool> = [];
 	var immediate:Array<Int> = [];
-	var children:Array<Array<Int>> = [];
-	var frontierKeys:Array<Array<Int>> = [];
-	var liveIn:Array<Array<Int>> = [];
+	var children:Array<ReadOnlyArray<Int>> = [];
+	var frontierKeys:Array<ReadOnlyArray<Int>> = [];
+	var liveIn:Array<ReadOnlyArray<Int>> = [];
 
 	/** Every local gets a dense number once; everything after that is indexed by it, so a name is hashed once per use. */
 	var slots:Map<String, Int> = [];
@@ -29,17 +31,17 @@ class SsaBuilder {
 	var slotNames:Array<String> = [];
 
 	/** The slot of each LoadLocal and StoreLocal of a block, in the order they appear. */
-	var blockSlots:Array<Array<Int>> = [];
+	var blockSlots:Array<ReadOnlyArray<Int>> = [];
 
 	var debugLocalBySlot:Array<Null<compiler.ir.cfg.Cfg.CfgDebugLocal>> = [];
 
-	static final emptyWords:Array<Int> = [];
+	static final emptyWords:ReadOnlyArray<Int> = ([] : Array<Int>);
 
 	/** The shared empty per-block list; `append` replaces it with a list of the block's own on first use. */
-	static final noBlocks:Array<Int> = [];
+	static final noBlocks:ReadOnlyArray<Int> = ([] : Array<Int>);
 
 	/** Per block, the slots that get a phi and, at the same positions, their phis. */
-	var phiSlots:Array<Array<Int>> = [];
+	var phiSlots:Array<ReadOnlyArray<Int>> = [];
 
 	var phiNodes:Array<Null<Array<SsaPhi>>> = [];
 	var roots:Array<Int> = [];
@@ -102,12 +104,12 @@ class SsaBuilder {
 	}
 
 	/** Adds `value` to the list of `index`, giving the index a list of its own if it still has the shared empty one. */
-	static function append(lists:Array<Array<Int>>, index:Int, value:Int):Void {
+	static function append(lists:Array<ReadOnlyArray<Int>>, index:Int, value:Int):Void {
 		var list = lists[index];
 		if (list == noBlocks)
 			lists[index] = [value];
 		else
-			list.push(value);
+			(cast list : Array<Int>).push(value); // a list of its own, made just above on an earlier append
 	}
 
 	function buildGraph():Void {
@@ -181,8 +183,10 @@ class SsaBuilder {
 					throw 'Reachable SSA block $id has no immediate dominator';
 				append(children, immediate[id], id);
 			}
+		// Only a list of its own can hold two children; the shared empty one is never written.
 		for (nested in children)
-			nested.sort(function(a, b) return a - b);
+			if (nested.length > 1)
+				(cast nested : Array<Int>).sort(function(a, b) return a - b);
 	}
 
 	function dominancePostorder(id:Int, visited:Array<Bool>, result:Array<Int>):Void {
@@ -290,6 +294,9 @@ class SsaBuilder {
 		liveIn = Arrays.shared(cfg.blocks.length, emptyWords);
 		if (words == 0)
 			return;
+		// The sets the fixpoint updates, for the reachable blocks; `liveIn` reads them.
+		var live:Array<Null<Array<Int>>> = [];
+		live.resize(cfg.blocks.length);
 		for (block in cfg.blocks) {
 			var id = block.id;
 			if (!reachable[id])
@@ -308,7 +315,9 @@ class SsaBuilder {
 				}
 			uses[id] = use;
 			defs[id] = def;
-			liveIn[id] = Arrays.ints(words, 0);
+			var set = Arrays.ints(words, 0);
+			live[id] = set;
+			liveIn[id] = set;
 		}
 		var work:Array<Int> = [],
 			queued = Arrays.bools(cfg.blocks.length, false);
@@ -320,10 +329,12 @@ class SsaBuilder {
 		while (work.length > 0) {
 			var id = work.pop();
 			queued[id] = false;
-			var input = liveIn[id],
+			var input = live[id],
 				use = uses[id],
 				def = defs[id],
 				changed = false;
+			if (input == null)
+				continue;
 			for (word in 0...words) {
 				var out = 0;
 				for (successor in successors[id]) {
