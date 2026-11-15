@@ -2173,6 +2173,17 @@ class ExpressionTyper {
 						payload = true;
 				if (!payload)
 					return comparison;
+				// Comparing with a constructor that has no arguments asks which constructor a value is, as in Haxe: it needs no
+				// Equatable conformance and compares constructor indices.
+				var literal = constructorWithoutArguments(right), other = left;
+				if (literal < 0) {
+					literal = constructorWithoutArguments(left);
+					other = right;
+				}
+				if (literal >= 0 && enumNameOf(other.type) == name && !other.type.match(TNullable(_)))
+					return new TypedExpression(TEqual(new TypedExpression(TEnumIndex(other), TInt, comparison.span),
+						new TypedExpression(TIntLiteral(literal), TInt, comparison.span)),
+						TBool, comparison.span);
 				var type = left.type;
 				if (!DeclaredConformance.has(session, type, "Equatable"))
 					fail("E1025", 'Enum "$name" does not conform to Equatable', comparison.span);
@@ -2182,6 +2193,14 @@ class ExpressionTyper {
 				return comparison;
 		}
 	}
+
+	/** The index of the constructor `expression` names when it is one without arguments, or -1. */
+	static function constructorWithoutArguments(expression:TypedExpression):Int
+		return switch expression.expression {
+			case TEnumLiteral(_, index): index;
+			case TEnumConstruct(_, index, arguments) if (arguments.length == 0): index;
+			default: -1;
+		};
 
 	/** The enum a plain or nullable enum type names, or null for any other type (an abstract over an enum included). */
 	static function enumNameOf(type:CompilerType):Null<String>
