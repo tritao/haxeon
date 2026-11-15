@@ -13,7 +13,6 @@ import compiler.types.Type.CompilerType;
 import compiler.types.Type.NominalKind;
 import compiler.types.analysis.AstScan;
 import compiler.types.analysis.ControlFlow;
-import compiler.types.analysis.AssignedDeclarations;
 import compiler.types.analysis.FlowAnalysis;
 import compiler.types.analysis.LexicalStorageAnalysis;
 import compiler.types.TypeRelations;
@@ -107,8 +106,8 @@ class StatementTyper {
 				hasOptional = true;
 		if (!hasOptional)
 			return null;
-		var self = LexicalStorageAnalysis.key(name, span);
-		if (AssignedDeclarations.within(statements.slice(statementIndex + 1), [name => self]).declarations.exists(self))
+		// A local can only be written in its scope, which the body's assigned declarations already cover.
+		if (session.currentContext.assignedDeclarations.exists(LexicalStorageAnalysis.key(name, span)))
 			return null;
 		return {
 			arguments: signature.arguments,
@@ -195,9 +194,8 @@ class StatementTyper {
 				}
 				switch lambda {
 					case Lambda(arguments, body, _, _):
-						var self = LexicalStorageAnalysis.key(name, span),
-							assignments = AssignedDeclarations.within(body.concat(statements.slice(statementIndex + 1)), [name => self]).declarations;
-						if (!assignments.exists(self)) localFunction = {
+						// Its writes, in its own body or after it, are in the body's assigned declarations.
+						if (!context.assignedDeclarations.exists(LexicalStorageAnalysis.key(name, span))) localFunction = {
 							arguments: arguments,
 							body: body,
 							outerLocals: scope.visibleLocalNames(),
