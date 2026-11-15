@@ -256,6 +256,7 @@ class TestCatalog {
 		"StructSyntaxMain",
 		"EnumConformanceMain",
 		"EqualityConformanceMain",
+		"ImportShadowingMain",
 		"AnonymousConformanceMain",
 		"EnumEqualityIncrementalMain",
 		"StructPropertiesMain",

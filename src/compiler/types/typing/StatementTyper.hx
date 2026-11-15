@@ -37,7 +37,7 @@ typedef TypeStatementsCallback = (Array<AstStatement>, Scope, Null<CompilerType>
 typedef ExhaustiveEnumCallback = (CompilerType, Array<TypedSwitchCase>) -> Bool;
 typedef SwitchArrayPatternCallback = (AstExpression, CompilerType, Scope) -> Null<TypedSwitchArrayPattern>;
 typedef SwitchArrayPatternKeyCallback = TypedSwitchArrayPattern->Null<String>;
-typedef LowerTypeCallback = AstType->CompilerType;
+typedef LowerTypeCallback = (type:AstType, span:SourceSpan) -> CompilerType;
 typedef NullableUnwrapper = TypedExpression->TypedExpression;
 typedef MapKeyIteratorSource = TypedExpression->Null<TypedExpression>;
 
@@ -592,7 +592,7 @@ class StatementTyper {
 			typedTry = typeStatements(tryBranch, tryScope, result);
 		for (i in 0...catches.length) {
 			var catchClause = catches[i],
-				loweredCatchType = lowerType(catchClause.type);
+				loweredCatchType = lowerType(catchClause.type, catchClause.span);
 			switch loweredCatchType {
 				case TDynamic:
 					if (i != catches.length - 1)

@@ -332,11 +332,12 @@ class TestMain {
 		Frontend.compile('class MapPlan { public var wrapperTypeIndex:Int; public function new(index:Int) this.wrapperTypeIndex = index; } function main():Int { var values:Map<String, MapPlan> = []; var result = [for (key in values.keys()) values.get(key).wrapperTypeIndex]; return result.length; }');
 		Frontend.compile('class MapPlan { public var wrapperTypeIndex:Int; public function new(index:Int) this.wrapperTypeIndex = index; } class MapOwner { public var values:Map<String, MapPlan>; public function new(values:Map<String, MapPlan>) this.values = values; public function collect():Array<Int> return [for (key in values.keys()) values.get(key).wrapperTypeIndex]; } function main():Int return new MapOwner([]).collect().length;');
 		Frontend.compile('function consume(values:Iterator<Int>):Int { var total = 0; while (values.hasNext()) total += values.next(); return total; } function main():Int return consume([20, 22].iterator());');
-		expectCompileError('function main():Int { var values:Map<String, Int> = []; return values.get("answer"); }', "Type mismatch for return");
+		expectCompileError('function main():Int { var values:Map<String, Int> = []; return values.get("answer"); }',
+			"Type mismatch for return: expected Int, got Null<Int>");
 		expectCompileError('function main():Int { var values:Map<String, Int> = []; if (values.exists("answer")) { values.remove("answer"); return values.get("answer"); } return 0; }',
-			"Type mismatch for return");
+			"Type mismatch for return: expected Int, got Null<Int>");
 		expectCompileError('function main():Int { var values:Map<String, Int> = ["answer" => 42]; for (key in values.keys()) { values.remove(key); return values.get(key); } return 0; }',
-			"Type mismatch for return");
+			"Type mismatch for return: expected Int, got Null<Int>");
 		Frontend.compile('function value(flag:Bool):Int { var result:Null<Int> = flag ? 1 : null; if (result == null) result = 2; return result; } function main():Int return value(false);');
 		Frontend.compile('function main():Int { return "A".charCodeAt(0); }');
 		Frontend.compile('function main():Int { return "A".charAt(0) == "A" ? 42 : 0; }');
@@ -350,7 +351,7 @@ class TestMain {
 		Frontend.compile('function make():String return "value"; function main():Int { var value = null; if (true) value = make(); return value == null ? 0 : 42; }');
 		Frontend.compile('function make():String return "value"; function main():Int { var values = []; values.push(make()); return values.length; }');
 		Frontend.compile('function main():Int { var values = [3, 1, 2]; values.sort(function(left, right) return left - right); return values[0] + values[1] + values[2] + 36; }');
-		expectCompileError('function invalid():Void return 42; function main():Int return 0;', 'Type mismatch for return');
+		expectCompileError('function invalid():Void return 42; function main():Int return 0;', 'Type mismatch for return: expected Void, got Int');
 		Frontend.compile('function main():Int { var values = ["a", "b"]; return values.join(",") == "a,b" ? 42 : 0; }');
 		Frontend.compile('function apply(callback:(Int, Int)->Int):Int return callback(1, 2); function main():Int return apply(function(_, _) return 42);');
 		Frontend.compile('function choose<T>(value:T, enabled:Bool = true):T return value; function main():Int return choose(42);');
@@ -541,13 +542,14 @@ class TestMain {
 		Frontend.compile('function choose(value:Null<String>):Int return switch 1 { case 1 if (value != null): value.length; default: 0; }; function main():Int return choose(null);');
 		expectCompileError('function main():Int { var value = true ? 1 : "wrong"; return 0; }', 'Conditional branches must have matching types');
 		expectCompileError('function main():Int { return switch 1 { case 1: 42; }; }', 'Switch expression requires a default branch');
-		expectCompileError('function main():Int { return switch 1 { case 1: 42; default: "wrong"; }; }', 'Type mismatch for switch branch');
+		expectCompileError('function main():Int { return switch 1 { case 1: 42; default: "wrong"; }; }',
+			'Type mismatch for switch branch: expected Int, got String');
 		expectCompileError('function main():Int { return switch 1 { case 1: 40; case 1: 2; default: 0; }; }', 'Duplicate switch case');
 		Frontend.compile('function main():Int { var value = switch 2 { case 1, 2: 42; default: 0; }; switch (value) { case 41, 42: return value; default: return 0; } }');
 		Frontend.compile('function number(value:Int):Float return switch value { case 0: 0; default: 1.5; }; function main():Int return Std.int(number(0));');
 		Frontend.compile('function main():Int { switch 42 { case 42: return 42; default: return 0; } }');
 		expectCompileError('function text():String { return "hello"; } function main():Int { var value:Float = 1.25; var wrong:String = value; return 0; }',
-			'Type mismatch for local "wrong"');
+			'Type mismatch for local "wrong": expected String, got Float');
 		expectCompileError('function main():Int { missing = 1; return 0; }', 'Unknown variable "missing"');
 		expectCompileError('function main():Int { var value:Int; return value; }', 'Local "value" may be used before assignment');
 		// A literal-true condition always runs its body (as a bare block, which parses to `if (true)`, must), a literal-false one never does.
@@ -562,7 +564,8 @@ class TestMain {
 		expectCompileError('function main():Int { var text = "x"; return text++; }', 'Postfix increment requires a numeric target');
 		expectCompileError('function main():Int { var value; return 0; }',
 			'Cannot infer type of local "value"; add a type annotation or make its first assignment typeable at the declaration');
-		expectCompileError('function main():Int { var value; value = 1; value = "text"; return 0; }', 'Type mismatch for local "value"');
+		expectCompileError('function main():Int { var value; value = 1; value = "text"; return 0; }',
+			'Type mismatch for local "value": expected Int, got String');
 		expectCompileError('class S { public static var cur:Null<P>; } class P { public var v = 1; public function new() {} } function f():Int { if (S.cur != null) { S.cur = null; return S.cur.v; } return 0; } function main():Int return f();',
 			'Field "v" requires an object');
 		expectCompileError('class S { public static var cur:Null<P>; public static function clear():Void { cur = null; } } class P { public var v = 1; public function new() {} } function f():Int { if (S.cur != null) { S.clear(); return S.cur.v; } return 0; } function main():Int return f();',
@@ -637,14 +640,15 @@ class TestMain {
 			+ 'var half:Float = Units.HALF; var name:String = Units.NAME; return count; }');
 		expectCompileError('class Units { public static final HALF = Other.N / 2; } class Other { public static final N:Int = 4; } '
 			+ 'function main():Int { var half:Int = Units.HALF; return half; }',
-			'Type mismatch for local "half"');
+			'Type mismatch for local "half": expected Int, got Float');
 		expectCompileError('class Invalid { static final value = Other.S * 2; } class Other { public static final S = "b"; } function main():Int { return 0; }',
 			'Cannot infer type of field "value" from this initializer');
 		expectCompileError('class Invalid { static final value = Other.F % 2; } class Other { public static final F = 3.5; } function main():Int { return 0; }',
 			'Cannot infer type of field "value" from this initializer');
 		expectCompileError('class Invalid { static final value:Int = "wrong"; } function main():Int { return 0; }',
-			'Type mismatch for static field "Invalid.value"');
-		expectCompileError('function main():Int { var value:Int = 1; value = "wrong"; return value; }', 'Type mismatch for local "value"');
+			'Type mismatch for static field "Invalid.value": expected Int, got String');
+		expectCompileError('function main():Int { var value:Int = 1; value = "wrong"; return value; }',
+			'Type mismatch for local "value": expected Int, got String');
 		expectCompileError('function main():Int { throw; }', 'Expected expression');
 		expectCompileError('function noop():Void { return; } function main():Int { throw noop(); }', 'Cannot throw a Void value');
 		expectCompileError('function main():Int { throw null; }', 'Cannot throw null');
@@ -1497,13 +1501,13 @@ class TestMain {
 		if (new IrInterpreter(underlyingThisProgram).run("main") != 42)
 			throw "Abstract receivers did not expose their underlying values inside their implementation";
 		expectCompileError('abstract Voltage(Float) { public function new(value:Float) this = value; } function read(value:Voltage):Float return value; function main():Int return 42;',
-			"Type mismatch for return");
+			"Type mismatch for return: expected Float, got Voltage");
 		expectCompileError('abstract Voltage(Float) { public function new(value:Float) this = value; } function main():Int { var value:Voltage = 48.0; return 42; }',
-			'Type mismatch for local "value"');
+			'Type mismatch for local "value": expected Voltage, got Float');
 		expectCompileError('abstract DcVoltage(Float) { public function new(value:Float) this = value; } abstract AcVoltage(Float) { public function new(value:Float) this = value; } function read(value:DcVoltage):Int return 42; function main():Int return read(new AcVoltage(400.0));',
-			'Type mismatch for argument 1 to "read"');
+			'Type mismatch for argument 1 to "read": expected DcVoltage, got AcVoltage');
 		expectCompileError('abstract Voltage(Float) { public function new(value:Float) this = value; public function same():Voltage return this; } function main():Int { var value = new Voltage(1.0).same(); return 42; }',
-			"Type mismatch for return");
+			"Type mismatch for return: expected Voltage, got Float");
 		Sys.println("PASS: abstract underlying receivers preserve nominal boundaries outside their implementation");
 		var genericAbstractProgram = new Parser(new Lexer(new SourceFile("generic-abstracts.hx",
 			"abstract Identity<T>(T) from T to T { public function new(value:T) { this = value; } public static function wrap(value:T):Identity<T> return value; public function unwrap():T return this; } function read(value:Identity<Int>):Int return value; function main():Int return read(Identity.wrap(42)) + new Identity<Int>(0).unwrap();"))
@@ -1522,7 +1526,7 @@ class TestMain {
 			throw "Bounded specialization did not persist its concrete policy";
 		Frontend.compile("interface Readable { function read():Int; } interface Writable { function write():Int; } class Both implements Readable implements Writable { public function new() {} public function read():Int return 40; public function write():Int return 2; } function consume<T:(Readable, Writable)>(value:T):Int return value.read() + value.write(); function main():Int return consume(new Both());");
 		expectCompileError('interface Readable { function read():Int; } interface Writable { function write():Int; } class OnlyRead implements Readable {public function new() {} public function read():Int return 42;} class Reader {public function new(?v:Readable) {}} class Writer {public function new(?v:Writable) {}} function test(flag:Bool):Int {var v=flag ? new OnlyRead() : null;var r=new Reader(v);var w=new Writer(v);return 0;} function main():Int return test(true);',
-			'Type mismatch for argument 1 to "Writer.new"');
+			'Type mismatch for argument 1 to "Writer.new": expected Null<Writable>, got Null<OnlyRead>');
 		Frontend.compile("interface Readable { function read():Int; } class Value implements Readable { public function new() {} public function read():Int return 42; } class Pair<T, U:T> {} function main():Int { var pair:Pair<Readable, Value>; return 42; }");
 		Frontend.compile("interface Readable { function read():Int; } class Value implements Readable { public function new() {} public function read():Int return 42; } class Box<T:Readable> { public function new() {} } function main():Int { var box:Box<Value> = new Box<Value>(); return 42; }");
 		expectCompileError("interface Readable { function read():Int; } class Box<T:Readable> {} function main():Int { var box:Box<Int>; return 0; }",
@@ -1541,9 +1545,10 @@ class TestMain {
 			'Type "Identity" expects 1 type arguments, got 0');
 		expectCompileError("abstract Identity<T>(T) {} function main():Int { var value:Identity<Int, String> = 42; return value; }",
 			'Type "Identity" expects 1 type arguments, got 2');
-		expectCompileError("abstract Wrapped<T>(T) {} function main():Int { var value:Wrapped<Int> = 42; return 0; }", 'Type mismatch for local "value"');
+		expectCompileError("abstract Wrapped<T>(T) {} function main():Int { var value:Wrapped<Int> = 42; return 0; }",
+			'Type mismatch for local "value": expected Wrapped<Int>, got Int');
 		expectCompileError("abstract Wrapped<T>(T) from T {} function unwrap(value:Wrapped<Int>):Int return value; function main():Int return 0;",
-			'Type mismatch for return');
+			'Type mismatch for return: expected Int, got Wrapped<Int>');
 		expectCompileError("abstract Wrapped<T>(T) from T from T {} function main():Int return 0;",
 			'Duplicate from conversion "type-parameter:Wrapped:T" on abstract "Wrapped"');
 		expectCompileError("abstract A(Int) from B {} abstract B(Int) from A {} function main():Int return 0;", 'Cyclic from conversion involving "A"');
@@ -1554,7 +1559,7 @@ class TestMain {
 			'Ambiguous from conversion paths from "D" to "A"');
 		Frontend.compile("abstract A<T>(T) to B<T> to B<Array<T>> {} abstract B<T>(T) {} function main():Int return 0;");
 		expectCompileError("abstract A(Int) from Int to B {} abstract B(Int) from A to Int {} function read(value:A):Int return value; function main():Int return 0;",
-			"Type mismatch for return");
+			"Type mismatch for return: expected Int, got A");
 		expectCompileError("abstract Bad(Int) { public function new(value:String) { this = value; } } function main():Int { new Bad(\"bad\"); return 0; }",
 			'Type mismatch for abstract constructor "Bad.new"');
 		var computedAbstract = new Parser(new Lexer(new SourceFile("computed-abstract.hx",
@@ -1666,7 +1671,7 @@ class TestMain {
 			conversionCompiler.compile("Main");
 			throw "Removing an abstract conversion did not retype its cross-module consumer";
 		} catch (error:CompileError) {
-			if (error.diagnostic.message != "Type mismatch for return")
+			if (error.diagnostic.message != "Type mismatch for return: expected Int, got Value")
 				throw error;
 		}
 		Sys.println("PASS: abstract conversion edits invalidate cross-module consumers");
@@ -1684,7 +1689,7 @@ class TestMain {
 		Frontend.compile('interface Source<T> { function get():T; } class IntSource implements Source<Int> { public function new() {} public function get():Int return 42; } function consume<T>(source:Source<T>):T return source.get(); function main():Int return consume(new IntSource());');
 		Sys.println("PASS: generic function arguments infer through implemented interfaces");
 		expectCompileError("interface Source<T> { function get():T; } class TextSource implements Source<String> { public function get():String return \"no\"; } function consume(value:Source<Int>):Int return 42; function main():Int return consume(new TextSource());",
-			'Type mismatch for argument 1 to "consume"');
+			'Type mismatch for argument 1 to "consume": expected Source<Int>, got TextSource');
 		var genericReloadCompiler = new Compiler();
 		genericReloadCompiler.update("Main.hx",
 			"class Box<T> { public function new() {} } function main():Int { var value:Box<Int> = new Box<Int>(); return 42; }");

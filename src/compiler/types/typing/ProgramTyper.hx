@@ -37,7 +37,7 @@ class ProgramTyper {
 	public function new(bodyTyper:BodyTyper) {
 		this.bodyTyper = bodyTyper;
 		this.session = bodyTyper.session;
-		this.externTyper = new ExternTyper(argument -> bodyTyper.argumentType(argument), type -> bodyTyper.lowerType(type));
+		this.externTyper = new ExternTyper(argument -> bodyTyper.argumentType(argument), (type, span) -> bodyTyper.lowerType(type, span));
 		this.assembler = new TypedProgramAssembler(session, function(type) bodyTyper.registerAnonymousTypes(type));
 	}
 
@@ -62,7 +62,7 @@ class ProgramTyper {
 		bodyTyper.expressionTyper.prepareNativeTypeAnnotations(program);
 		for (alias in program.aliases) {
 			if (alias.typeParameters.length == 0) {
-				var aliasType = bodyTyper.lowerType(alias.type);
+				var aliasType = bodyTyper.lowerType(alias.type, alias.span);
 				bodyTyper.registerAnonymousTypes(aliasType);
 			}
 		}
@@ -143,10 +143,10 @@ class ProgramTyper {
 				main = BodyTyper.requiredMapValue(session.signatures, "Main.main");
 			else
 				throw 'Program must define executable entry point "${entryPoint == null ? "main" : entryPoint}"';
-			if (main.arguments.length != 0 || ((switch (bodyTyper.lowerType(main.result)) {
+			if (main.arguments.length != 0 || ((switch (bodyTyper.lowerType(main.result, main.span)) {
 				case TInt: false;
 				default: true;
-			}) && (switch (bodyTyper.lowerType(main.result)) {
+			}) && (switch (bodyTyper.lowerType(main.result, main.span)) {
 				case TVoid: false;
 				default: true;
 			})))
@@ -1193,7 +1193,7 @@ class ProgramTyper {
 					name: argument.name,
 					type: bodyTyper.argumentType(argument, substitutions)
 				}
-		], result = substitutions == null ? bodyTyper.lowerType(method.result) : session.declarations.resolve(method.result, method.span, substitutions);
+		], result = substitutions == null ? bodyTyper.lowerType(method.result, method.span) : session.declarations.resolve(method.result, method.span, substitutions);
 		for (argument in arguments)
 			if (NativeLayout.containsUnsupportedRuntimeValueType(argument.type))
 				BodyTyper.fail("E1022", 'Native layout types cannot be passed by value in function "${owner}.${method.name}" yet', method.span);

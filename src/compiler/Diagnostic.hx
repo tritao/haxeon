@@ -29,8 +29,11 @@ class Diagnostic {
 	public final fixes:Array<DiagnosticFix>;
 
 	public function new(code, message, span, ?severity = Error, ?fixes:Array<DiagnosticFix>) {
-		this.code = code;
-		this.message = message;
+		// A name an import made ambiguous resolves to a marker that matches nothing, so whichever check rejects it first
+		// reports the ambiguity instead, at its own span; the marker never reaches a message.
+		var ambiguity = AmbiguousName.describe(message);
+		this.code = ambiguity == null ? code : AmbiguousName.CODE;
+		this.message = ambiguity == null ? message : ambiguity;
 		this.span = span;
 		this.severity = severity;
 		this.fixes = fixes == null ? [] : fixes;

@@ -201,8 +201,9 @@ class SemanticAssembly {
 				contributionReuseMs += Sys.time() * 1000.0 - contributionStartedAt;
 				continue;
 			}
-			var locals = LocalScope.ofNames([]),
-				aliases = AliasTable.of(context.importAliases(ast.imports, ast.importAliases));
+			var importedTypes = context.importAliases(ast.imports, ast.importAliases),
+				locals = LocalScope.ofNames([]),
+				aliases = AliasTable.of(importedTypes);
 			// An explicit import outranks a same-named type elsewhere in the
 			// program, such as an unpackaged `Path` shadowing `import nav.Path`.
 			// Unpackaged names wait until the current package's own types are in:
@@ -258,8 +259,13 @@ class SemanticAssembly {
 					}
 			}
 			var visiblePackage = ast.packageName;
-			if (visiblePackage != null)
-				aliases.attach(visibleTypeAliases(visiblePackage, aliasesByPackage, visibleAliasesByPackage));
+			if (visiblePackage != null) {
+				var packageTypes = visibleTypeAliases(visiblePackage, aliasesByPackage, visibleAliasesByPackage);
+				// A name an import would silently take from this package resolves to a marker the typer reports where it is used.
+				for (name => marker in ImportShadowing.ambiguousNames(ast, importedTypes, packageTypes))
+					aliases.set(name, marker);
+				aliases.attach(packageTypes);
+			}
 			aliases.attach(plainSourceAliases);
 			ModuleCanonicalizer.addDeclaredTypeAliases(aliases, ast, ast.packageName);
 			// Enum constructors imported through their enum type are expression

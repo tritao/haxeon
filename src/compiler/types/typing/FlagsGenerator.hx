@@ -56,7 +56,7 @@ class FlagsGenerator {
 	public static function validate(session:TypingSession, typer:BodyTyper, declaration:AstEnumAbstract):Void {
 		if (!conforms(session, declaration))
 			return;
-		if (!compiler.types.TypeRelations.equals(typer.lowerType(declaration.underlying), TInt))
+		if (!compiler.types.TypeRelations.equals(typer.lowerType(declaration.underlying, declaration.span), TInt))
 			BodyTyper.fail("E1025", "Flags requires an Int enum abstract", declaration.span);
 		if (declaration.fromTypes.length != 0 || declaration.toTypes.length != 0)
 			BodyTyper.fail("E1025", "Flags enum abstracts cannot declare implicit from/to conversions", declaration.span);

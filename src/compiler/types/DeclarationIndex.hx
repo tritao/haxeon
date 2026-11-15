@@ -217,6 +217,19 @@ class DeclarationIndex {
 		};
 	}
 
+	/** The enum abstract `name` declares or, through typedefs, names; values are reached through either, as in Haxe. */
+	public function enumAbstractQualifier(name:String):Null<String> {
+		if (enumAbstracts.exists(name))
+			return name;
+		var alias = aliases.get(name);
+		if (alias == null)
+			return null;
+		return switch resolve(NamedType(name), alias.span) {
+			case TAbstract(target, _, _) if (enumAbstracts.exists(target)): target;
+			case _: null;
+		};
+	}
+
 	public function resolvedFieldType(owner:String, field:compiler.syntax.Ast.AstField):AstType
 		return FieldInference.resolvedType(field, owner, classes, new compiler.semantic.AliasTable(), enums, enumAbstracts);
 

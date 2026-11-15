@@ -12,7 +12,7 @@ import compiler.types.TypedAst.NativeConvention;
 import compiler.types.TypedAst.TypedNative;
 
 typedef ArgumentTypeResolver = AstArgument->CompilerType;
-typedef TypeResolver = AstType->CompilerType;
+typedef TypeResolver = (type:AstType, span:SourceSpan) -> CompilerType;
 
 /** Projects extern and native declarations into the typed native boundary. */
 class ExternTyper {
@@ -69,7 +69,7 @@ class ExternTyper {
 		for (argument in arguments)
 			if (NativeLayout.containsNativeLayoutType(argument))
 				fail("E1022", 'Native layout types cannot cross a foreign function boundary by value yet', fn.span);
-		var result = resultOverride == null ? lowerType(fn.result) : resultOverride;
+		var result = resultOverride == null ? lowerType(fn.result, fn.span) : resultOverride;
 		if (NativeLayout.containsNativeLayoutType(result))
 			fail("E1022", 'Native layout types cannot cross a foreign function boundary by value yet', fn.span);
 		return {

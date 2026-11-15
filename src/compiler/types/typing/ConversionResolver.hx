@@ -4,6 +4,7 @@ import compiler.types.TypedAst.TypedFunctionRole;
 import compiler.Diagnostic;
 import compiler.Diagnostic.CompileError;
 import compiler.Source.SourceSpan;
+import compiler.semantic.SemanticSignature;
 import compiler.types.Type.CompilerType;
 import compiler.types.Type.NominalKind;
 import compiler.types.TypeRelations;
@@ -134,7 +135,8 @@ class ConversionResolver {
 			case UnwrapNullable:
 				new TypedExpression(TCast(value), expected, value.span);
 			case Incompatible:
-				fail(code, 'Type mismatch for $context', value.span);
+				fail(code, 'Type mismatch for $context: expected ${SemanticSignature.display(expected)}, got ${SemanticSignature.display(value.type)}',
+					value.span);
 				value;
 		};
 	}

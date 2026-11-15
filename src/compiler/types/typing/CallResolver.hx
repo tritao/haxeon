@@ -35,7 +35,7 @@ typedef DefaultExpressionCallback = (AstExpression, CompilerType, String) -> Typ
 typedef InferTypeParametersCallback = (AstType, CompilerType, Array<String>, Map<String, CompilerType>, SourceSpan) -> Void;
 typedef FindCallableFieldTypeCallback = (CompilerType, String) -> Null<CompilerType>;
 typedef TypeCallableFieldCallback = (TypedExpression, String, SourceSpan) -> TypedExpression;
-typedef LowerCallTypeCallback = AstType->CompilerType;
+typedef LowerCallTypeCallback = (type:AstType, span:SourceSpan) -> CompilerType;
 typedef CallArrayElementTypeCallback = (CompilerType, SourceSpan) -> CompilerType;
 typedef ResolveCallReceiverCallback = (String, SourceSpan, Scope) -> Null<TypedExpression>;
 typedef TypeCallMemberWithFlowCallback = (TypedExpression, String, SourceSpan, Scope) -> TypedExpression;
@@ -183,7 +183,7 @@ class CallResolver {
 			return null;
 		if (ambiguous != null)
 			fail("E1010", 'Ambiguous abstract operator "$symbol" between "${selected.key}" and "$ambiguous"', span);
-		var resultType = lowerType(selected.method.result);
+		var resultType = lowerType(selected.method.result, selected.method.span);
 		if ((symbol == "<" || symbol == "<=" || symbol == ">" || symbol == ">=" || symbol == "==" || symbol == "!=")
 			&& (switch (resultType) {
 				case TBool: false;
@@ -676,7 +676,7 @@ class CallResolver {
 				return genericInstantiation.specialize(methodKey, method, prepared.arguments, span, scope, methodInfo.owner, true, prepared.substitutions);
 			}
 			var typed = typeDeclaredCallArguments(arguments, method.arguments, scope, methodKey, span);
-			return applyCallEffect(new TypedExpression(TCall(methodKey, typed), lowerType(method.result), span), methodKey, scope);
+			return applyCallEffect(new TypedExpression(TCall(methodKey, typed), lowerType(method.result, method.span), span), methodKey, scope);
 		}
 		if (methodInfo == null || methodInfo.isStatic)
 			fail("E1007", 'Unknown instance method "$className.$name"', span);
@@ -729,7 +729,7 @@ class CallResolver {
 			if (arguments.length != 0)
 				fail("E1008", "rawValue expects no arguments", span);
 			return new TypedExpression(TCall(RawRepresentableGenerator.request(session, abstractName, name, span), [receiver]),
-				lowerType(rawDeclaration.underlying), span);
+				lowerType(rawDeclaration.underlying, rawDeclaration.span), span);
 		}
 		var declaration = session.declarations.abstractDeclaration(abstractName);
 		if (declaration == null)
@@ -902,7 +902,7 @@ class CallResolver {
 		if (hasSignature) {
 			var signature = requiredMapValue(session.signatures, name);
 			expectedArguments = [for (argument in signature.arguments) argumentType(argument, null)];
-			result = lowerType(signature.result);
+			result = lowerType(signature.result, signature.span);
 		} else if (session.externals.exists(name)) {
 			var external = requiredMapValue(session.externals, name);
 			expectedArguments = external.arguments;
@@ -968,7 +968,7 @@ class CallResolver {
 		}
 		if (methodInfo.isStatic) {
 			var typed = typeDeclaredCallArguments(arguments, method.arguments, scope, methodKey, span);
-			return applyCallEffect(new TypedExpression(TCall(methodKey, typed), lowerType(method.result), span), methodKey, scope);
+			return applyCallEffect(new TypedExpression(TCall(methodKey, typed), lowerType(method.result, method.span), span), methodKey, scope);
 		}
 		if (scope.resolve("this") == null)
 			fail("E1007", 'Instance method "$methodKey" requires an object', span);
@@ -985,9 +985,11 @@ class CallResolver {
 	public function typeNamedCall(name:String, arguments:Array<AstExpression>, span:SourceSpan, scope:Scope, expectedType:Null<CompilerType>):TypedExpression {
 		var rawOwnerEnd = name.lastIndexOf(".");
 		if (rawOwnerEnd > 0) {
-			var owner = name.substring(0, rawOwnerEnd),
+			var written = name.substring(0, rawOwnerEnd),
+				abstractName = session.enumAbstractName(written),
+				owner = abstractName == null ? written : abstractName,
 				member = name.substring(rawOwnerEnd + 1),
-				declaration = session.enumAbstractDecls.get(owner);
+				declaration = abstractName == null ? null : session.enumAbstractDecls.get(abstractName);
 			if (declaration != null && FlagsGenerator.conforms(session, declaration) && FlagsGenerator.isMember(member, true)) {
 				var info = FlagsGenerator.signature(owner, member),
 					typed = typeCallArguments(arguments, info.arguments, scope, name);
@@ -996,12 +998,12 @@ class CallResolver {
 		}
 
 		if (rawOwnerEnd > 0 && name.substring(rawOwnerEnd + 1) == "fromRaw") {
-			var rawOwner = name.substring(0, rawOwnerEnd),
-				declaration = session.enumAbstractDecls.get(rawOwner);
+			var rawOwner = session.enumAbstractName(name.substring(0, rawOwnerEnd)),
+				declaration = rawOwner == null ? null : session.enumAbstractDecls.get(rawOwner);
 			if (declaration != null && RawRepresentableGenerator.conforms(session, declaration)) {
 				if (arguments.length != 1)
 					fail("E1008", "fromRaw expects one argument", span);
-				var raw = lowerType(declaration.underlying),
+				var raw = lowerType(declaration.underlying, declaration.span),
 					argument = coerce(typeExpression(arguments[0], scope, raw, false), raw, "fromRaw argument", "E1009");
 				return new TypedExpression(TCall(RawRepresentableGenerator.request(session, rawOwner, "fromRaw", span), [argument]),
 					TNullable(TAbstract(rawOwner, [], raw)), span);
@@ -1052,9 +1054,10 @@ class CallResolver {
 				var prefixLength = parts.length - 1;
 				while (receiver == null && prefixLength >= 1) {
 					var prefix = parts.slice(0, prefixLength).join(".");
-					if (isTypeReference(prefix)) {
+					var referenced = typeReference(prefix);
+					if (referenced != null) {
 						receiverName = prefix;
-						receiver = new TypedExpression(TClassRef(prefix), TInstance(NominalKind.Class, prefix, []), span);
+						receiver = new TypedExpression(TClassRef(referenced), TInstance(NominalKind.Class, referenced, []), span);
 						firstMember = prefixLength;
 					}
 					prefixLength--;
@@ -1189,9 +1192,12 @@ class CallResolver {
 	static function splitPath(path:String):Array<String>
 		return path.split(".");
 
-	/** Whether a qualified name denotes a type whose static members can be accessed. */
-	function isTypeReference(name:String):Bool
-		return session.classDecls.exists(name) || session.enumAbstractDecls.exists(name) || PlatformAbi.isType(name);
+	/** The type a qualified name denotes, when its static members can be accessed: the name itself, or the enum abstract a typedef names. */
+	function typeReference(name:String):Null<String> {
+		if (session.classDecls.exists(name) || PlatformAbi.isType(name))
+			return name;
+		return session.enumAbstractName(name);
+	}
 
 	static function unwrapNullable(value:TypedExpression):TypedExpression
 		return switch value.type {

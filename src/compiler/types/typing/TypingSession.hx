@@ -60,6 +60,15 @@ class TypingSession {
 
 	public final enumRepresentations:EnumRuntimeRepresentations;
 	public var enumAbstractDecls:Map<String, compiler.syntax.Ast.AstEnumAbstract> = [];
+
+	/**
+	 * The enum abstract a source name denotes, directly or through typedefs, or null. Every lookup of an enum abstract by a
+	 * name written in source goes through this, so `typedef K = E;` reaches E's values, statics and conversions as E does.
+	 */
+	public function enumAbstractName(name:String):Null<String> {
+		var resolved = declarations.enumAbstractQualifier(name);
+		return resolved != null && enumAbstractDecls.exists(resolved) ? resolved : null;
+	}
 	public var declarations:DeclarationIndex;
 	public var relations:TypeRelations;
 	public final closureConversion = new ClosureConversion();
@@ -407,7 +416,8 @@ class TypingSession {
 	}
 
 	function isTypeName(name:String):Bool
-		return compiler.types.analysis.PurityAnnotations.isTypeName(name, classDecls, interfaceDecls, enumDecls, enumAbstractDecls, declarations.abstracts);
+		return compiler.types.analysis.PurityAnnotations.isTypeName(name, classDecls, interfaceDecls, enumDecls, enumAbstractDecls, declarations.abstracts)
+			|| enumAbstractName(name) != null;
 
 	public function hasPureAnnotation(name:String):Bool
 		return compiler.types.analysis.PurityAnnotations.hasPureAnnotation(name, signatures, classDecls);

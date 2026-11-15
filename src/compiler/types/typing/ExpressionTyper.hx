@@ -53,7 +53,7 @@ typedef ExpressionSwitchArrayPatternCallback = (AstExpression, CompilerType, Sco
 typedef ExpressionSwitchArrayPatternKeyCallback = TypedSwitchArrayPattern->Null<String>;
 typedef ExpressionArrayElementTypeCallback = (CompilerType, SourceSpan) -> CompilerType;
 typedef ContextualExpressionTypeCallback = (AstExpression, Scope) -> Null<CompilerType>;
-typedef LowerExpressionTypeCallback = AstType->CompilerType;
+typedef LowerExpressionTypeCallback = (type:AstType, span:SourceSpan) -> CompilerType;
 typedef ExpressionVariableCallback = (String, SourceSpan, Scope, Null<CompilerType>) -> TypedExpression;
 typedef ExpressionLambdaCallback = (Array<AstArgument>, Array<AstStatement>, String, SourceSpan, Scope, Null<CompilerType>, Bool) -> TypedExpression;
 typedef ExpressionMemberCallback = (AstExpression, String, SourceSpan, Scope) -> TypedExpression;
@@ -1509,12 +1509,13 @@ class ExpressionTyper {
 			default: true;
 		}))
 			fail("E1014", "Array length must be Int", typedLength.span);
-		var loweredElement = lowerType(element);
+		var loweredElement = lowerType(element, span);
 		return new TypedExpression(TNewArray(loweredElement, typedLength), TArray(loweredElement), span);
 	}
 
 	public function typeNewMap(key:AstType, value:AstType, span:SourceSpan, lowerType:LowerExpressionTypeCallback):TypedExpression {
-		var loweredKey = lowerType(key), loweredValue = lowerType(value);
+		var loweredKey = lowerType(key, span),
+			loweredValue = lowerType(value, span);
 		DeclaredConformance.requestHashableMapKey(session, loweredKey, span);
 		if (session.mapName(loweredKey, loweredValue) == null)
 			fail("E1016", "This map key/value type has no compiler-owned runtime ABI", span);
@@ -1775,7 +1776,7 @@ class ExpressionTyper {
 
 	public function typeCast(value:AstExpression, target:Null<AstType>, span:SourceSpan, scope:Scope, expectedType:Null<CompilerType>,
 			lowerType:LowerExpressionTypeCallback):TypedExpression {
-		var targetType = target == null ? expectedType : lowerType(target);
+		var targetType = target == null ? expectedType : lowerType(target, span);
 		if (targetType == null)
 			fail("E1003", "Untyped cast requires an expected type", span);
 		// An explicit type ascription guides its operand; an untyped cast separates source inference from its destination.

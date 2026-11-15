@@ -85,7 +85,7 @@ class BodyTyper {
 		this.anonymousTypeRegistry = new AnonymousTypeRegistry(session);
 		this.closureTyper = new ClosureTyper(session,
 			function(expression, scope, expected, inferDynamicLambdaResult) return this.typeExpression(expression, scope, expected, inferDynamicLambdaResult),
-			function(type) return this.lowerType(type), function(name) return this.lexicalMethod(name),
+			function(type, span) return this.lowerType(type, span), function(name) return this.lexicalMethod(name),
 			function(type, name) return this.findFieldType(type, name), function(name, scope) return this.boundCell(name, scope),
 			function(name, substitutions, owner) return this.enterBody(name, substitutions, owner), function(body) this.leaveBody(body),
 			function(name, span, scope, type) this.bindCell(name, span, scope, type),
@@ -121,13 +121,13 @@ class BodyTyper {
 			function(pattern, actual, parameters, substitutions,
 					span) this.genericInstantiation.inferTypeParameters(pattern, actual, parameters, substitutions, span),
 			inheritanceName, function(type, name) return this.findFieldType(type, name),
-			function(receiver, name, span) return this.typedMember(receiver, name, span), function(type) return this.lowerType(type),
+			function(receiver, name, span) return this.typedMember(receiver, name, span), function(type, span) return this.lowerType(type, span),
 			function(type, span) return this.arrayElementType(type, span), function(name, span, scope) return this.resolveReceiver(name, span, scope),
 			function(receiver, name, span, scope) return this.typedMemberWithFlow(receiver, name, span, scope));
 		this.expressionTyper = new ExpressionTyper(session, conversionResolver, callResolver,
 			function(expression, scope, expected, inferDynamicLambdaResult) return this.typeExpression(expression, scope, expected, inferDynamicLambdaResult),
 			function(value, expected, context, code) return this.coerce(value, expected, context, code), switchRules, anonymousTypeRegistry,
-			function(type, span) return this.arrayElementType(type, span), function(type) return this.lowerType(type), {
+			function(type, span) return this.arrayElementType(type, span), function(type, span) return this.lowerType(type, span), {
 				variable: function(name, span, scope, expected) return this.typeVariableExpression(name, span, scope, expected),
 				lambda: function(arguments, body, identity, span, scope, expected,
 						inferDynamicLambdaResult) return this.closureTyper.typeLambda(arguments, body, identity, span, scope, expected,
@@ -144,7 +144,7 @@ class BodyTyper {
 			function(name, initializer, statements, start, scope) return this.expectedInitializerType(name, initializer, statements, start, scope),
 			function(name, span, scope, type) this.bindCell(name, span, scope, type),
 			function(statements, scope, result) return this.typeStatements(statements, scope, result),
-			function(type, cases) return this.exhaustiveEnum(type, cases), function(type) return this.lowerType(type), unwrapNullable,
+			function(type, cases) return this.exhaustiveEnum(type, cases), function(type, span) return this.lowerType(type, span), unwrapNullable,
 			CallResolver.mapKeyIteratorSource, switchRules, {
 				findStaticField: function(owner, name) return this.findStaticFieldNullable(owner, name),
 				requireStaticField: function(owner, name, span) return this.findStaticField(owner, name, span),
@@ -269,7 +269,7 @@ class BodyTyper {
 			if (compiler.ffi.NativeLayout.containsUnsupportedRuntimeValueType(argumentValueType))
 				fail("E1022", 'Native layout type "$argumentValueType" cannot be passed or stored as a Haxe runtime value yet', argument.span);
 		}
-		var result = substitutions == null ? lowerType(fn.result) : session.declarations.resolve(fn.result, fn.span, substitutions);
+		var result = substitutions == null ? lowerType(fn.result, fn.span) : session.declarations.resolve(fn.result, fn.span, substitutions);
 		if (compiler.ffi.NativeLayout.containsUnsupportedRuntimeValueType(result))
 			fail("E1022", 'Native layout type "$result" cannot be returned as a Haxe runtime value yet', fn.span);
 		var functionContext = enterBody(functionName, substitutions, specializedName == null ? null : owner,
@@ -478,7 +478,7 @@ class BodyTyper {
 						case TNullable(inner): inner;
 						default: boundType;
 					};
-					var contract = lowerType(NamedType("Disposable"));
+					var contract = lowerType(NamedType("Disposable"), span);
 					if (!satisfiesDisposable(element, contract))
 						fail("E1002", 'Scoped binding "$name" requires Disposable conformance', span);
 					scope.markScoped(name);
@@ -756,7 +756,7 @@ class BodyTyper {
 					declareSpeculative(scope, declaredName, declared == null || (switch (declared) {
 						case InferredType: true;
 						default: false;
-					}) ? speculativeValueType(initializer, scope) : lowerType(declared), span);
+					}) ? speculativeValueType(initializer, scope) : lowerType(declared, span), span);
 					switch initializer {
 						case Lambda(arguments, body, _, _):
 							var inside = new Scope(scope);
@@ -765,7 +765,7 @@ class BodyTyper {
 									case InferredType: false;
 									default: true;
 								}))
-									declareSpeculative(inside, argument.name, lowerType(argument.type), argument.span);
+									declareSpeculative(inside, argument.name, lowerType(argument.type, argument.span), argument.span);
 							found = storedIn(name, body, 0, inside, probe);
 						default:
 					}
@@ -776,7 +776,7 @@ class BodyTyper {
 						case InferredType: false;
 						default: true;
 					}))
-						declareSpeculative(scope, declaredName, lowerType(declared), span);
+						declareSpeculative(scope, declaredName, lowerType(declared, span), span);
 				case If(_, yes, no, _):
 					found = storedIn(name, yes, 0, scope, probe);
 					if (found == null)
@@ -807,7 +807,7 @@ class BodyTyper {
 						if (found != null)
 							break;
 						var caught = new Scope(scope);
-						declareSpeculative(caught, catchClause.name, lowerType(catchClause.type), catchClause.span);
+						declareSpeculative(caught, catchClause.name, lowerType(catchClause.type, catchClause.span), catchClause.span);
 						found = storedIn(name, catchClause.statements, 0, caught, probe);
 					}
 				case Defer(body, _):
@@ -953,7 +953,7 @@ class BodyTyper {
 		return switch expression {
 			case Variable(name, _): name.indexOf(".") >= 0 ? typeExpression(expression, scope).type : scope.resolve(name);
 			case Member(_, _, _): typeExpression(expression, scope).type;
-			case Cast(_, target, _): target == null ? null : lowerType(target);
+			case Cast(_, target, castSpan): target == null ? null : lowerType(target, castSpan);
 			default: null;
 		};
 	}
@@ -963,7 +963,7 @@ class BodyTyper {
 		if (!session.signatures.exists(signatureName))
 			return null;
 		var signature = requiredMapValue(session.signatures, signatureName);
-		return isGeneric(signature) ? null : lowerType(signature.result);
+		return isGeneric(signature) ? null : lowerType(signature.result, signature.span);
 	}
 
 	function resolvedCallName(name:String):String {
@@ -1018,9 +1018,9 @@ class BodyTyper {
 		var changed = false;
 		for (statement in statements)
 			switch statement {
-				case VarDeclaration(name, declared, initializer, _):
+				case VarDeclaration(name, declared, initializer, declarationSpan):
 					if (declared != null)
-						changed = constrainLocal(name, lowerType(declared)) || changed;
+						changed = constrainLocal(name, lowerType(declared, declarationSpan)) || changed;
 					changed = constrainLocalExpression(initializer, context.localExpectedTypes.exists(name) ? context.localExpectedTypes.get(name) : TVoid)
 						|| changed;
 				case Return(expression, _):
@@ -1520,7 +1520,7 @@ class BodyTyper {
 
 	function enumAbstractPatternName(type:AstType):Null<String>
 		return switch type {
-			case NamedType(name), AppliedType(name, _): session.enumAbstractDecls.exists(name) ? name : null;
+			case NamedType(name), AppliedType(name, _): session.enumAbstractName(name);
 			default: null;
 		};
 
@@ -1713,7 +1713,10 @@ class BodyTyper {
 			else if (session.externals.exists(name)) {
 				var external = session.externals.get(name);
 				new TypedExpression(TFunctionRef(name), TFunction(external.arguments, external.result), span);
-			} else if (session.classDecls.exists(name) || session.enumAbstractDecls.exists(name) || PlatformAbi.isType(name))
+			} else if (session.enumAbstractName(name) != null) {
+				var abstractName = session.enumAbstractName(name);
+				new TypedExpression(TClassRef(abstractName), TInstance(NominalKind.Class, abstractName, []), span);
+			} else if (session.classDecls.exists(name) || PlatformAbi.isType(name))
 				new TypedExpression(TClassRef(name), TInstance(NominalKind.Class, name, []), span);
 			else {
 				var owner = context.lexicalOwner,
@@ -1763,14 +1766,14 @@ class BodyTyper {
 					if (expectedAbstract != null) {
 						for (value in expectedAbstract.values)
 							if (value.name == name)
-								return EnumAbstractValues.typed(this, expectedAbstract, value);
+								return EnumAbstractValues.typed(this, expectedAbstract, value, span);
 					}
 					// Without an expected type, resolve a uniquely visible constant.
 					var unqualifiedAbstract = findBareEnumAbstract(name, span);
 					if (unqualifiedAbstract != null)
 						for (value in unqualifiedAbstract.values)
 							if (value.name == name)
-								return EnumAbstractValues.typed(this, unqualifiedAbstract, value);
+								return EnumAbstractValues.typed(this, unqualifiedAbstract, value, span);
 					var thisType = scope.resolve("this");
 					if (thisType == null)
 						fail("E1005", 'Unknown variable "$name"', span);
@@ -1784,11 +1787,12 @@ class BodyTyper {
 						fieldName = parts[1],
 						enumName = pathBeforeLast(name),
 						enumCaseName = lastPathSegment(name);
-					if (session.enumAbstractDecls.exists(enumName)) {
-						var enumAbstract = session.enumAbstractDecls.get(enumName);
+					var enumAbstractName = session.enumAbstractName(enumName);
+					if (enumAbstractName != null) {
+						var enumAbstract = requiredMapValue(session.enumAbstractDecls, enumAbstractName);
 						for (value in enumAbstract.values)
 							if (value.name == enumCaseName)
-								return EnumAbstractValues.typed(this, enumAbstract, value);
+								return EnumAbstractValues.typed(this, enumAbstract, value, span);
 					}
 					var qualifiedEnum = session.declarations.enumQualifierType(enumName),
 						resolvedEnumName = BodyTyper.enumName(qualifiedEnum),
@@ -1826,9 +1830,10 @@ class BodyTyper {
 					var classEnd = parts.length - 1;
 					while (classEnd > 0) {
 						var className = parts.slice(0, classEnd).join(".");
-						if (session.classDecls.exists(className)
-							|| session.enumAbstractDecls.exists(className)
-							|| PlatformAbi.isType(className)) {
+						var abstractName = session.enumAbstractName(className);
+						if (abstractName != null)
+							className = abstractName;
+						if (session.classDecls.exists(className) || abstractName != null || PlatformAbi.isType(className)) {
 							var classObject = new TypedExpression(TClassRef(className), TInstance(NominalKind.Class, className, []), span);
 							for (index in classEnd...parts.length)
 								classObject = typedMemberWithFlow(classObject, parts[index], referencePrefixSpan(parts.slice(0, index + 1).join("."), span),
@@ -2117,7 +2122,7 @@ class BodyTyper {
 					var abstractDecl = requiredMapValue(session.enumAbstractDecls, className);
 					for (value in abstractDecl.values)
 						if (value.name == name)
-							return EnumAbstractValues.typed(this, abstractDecl, value);
+							return EnumAbstractValues.typed(this, abstractDecl, value, span);
 				}
 				var staticField = findStaticField(className, name, span);
 				var inlineValue = inlineStaticFieldExpression(staticField.owner, name, span);
@@ -2264,7 +2269,7 @@ class BodyTyper {
 		var classDecl = requiredMapValue(session.classDecls, className);
 		for (field in classDecl.fields)
 			if (field.name == name && field.isStatic)
-				return {owner: className, type: lowerType(session.declarations.resolvedFieldType(className, field))};
+				return {owner: className, type: lowerType(session.declarations.resolvedFieldType(className, field), field.span)};
 		var base = classDecl.base;
 		return base == null ? null : findStaticFieldNullable(inheritanceName(base), name);
 	}
@@ -2287,7 +2292,7 @@ class BodyTyper {
 	}
 
 	function functionType(fn:AstFunction):CompilerType
-		return TFunction([for (argument in fn.arguments) argumentType(argument)], lowerType(fn.result));
+		return TFunction([for (argument in fn.arguments) argumentType(argument)], lowerType(fn.result, fn.span));
 
 	function coerceArguments(arguments:Array<TypedExpression>, expected:Array<CompilerType>, name:String):Array<TypedExpression> {
 		return callResolver.coerceArguments(arguments, expected, name);
@@ -2309,7 +2314,7 @@ class BodyTyper {
 		}) && argument.defaultValue != null) {
 			var inferred = knownExpressionType(argument.defaultValue);
 			inferred == null ? TDynamic : inferred;
-		} else substitutions == null ? lowerType(argument.type) : session.declarations.resolve(argument.type, argument.span, substitutions);
+		} else substitutions == null ? lowerType(argument.type, argument.span) : session.declarations.resolve(argument.type, argument.span, substitutions);
 		return argument.optional == true
 			&& AstPredicates.isNullExpression(argument.defaultValue)
 			&& !isNullable(type) ? CompilerType.TNullable(type) : type;
@@ -2469,7 +2474,7 @@ class BodyTyper {
 		if (declaration != null)
 			for (value in declaration.values)
 				if (value.name == valueName)
-					return EnumAbstractValues.typed(this, declaration, value);
+					return EnumAbstractValues.typed(this, declaration, value, span);
 		return null;
 	}
 
@@ -2652,8 +2657,9 @@ class BodyTyper {
 		return true;
 	}
 
-	function lowerType(type:AstType):CompilerType
-		return session.representation.semanticType(type, null, context.typeSubstitutions);
+	/** `span` is where `type` is written: a name that fails to resolve, or resolves ambiguously, is reported there. */
+	function lowerType(type:AstType, span:SourceSpan):CompilerType
+		return session.representation.semanticType(type, span, context.typeSubstitutions);
 
 	static function copyMap<T>(source:Map<String, T>):Map<String, T> {
 		var result:Map<String, T> = [];

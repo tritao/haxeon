@@ -5,6 +5,7 @@ import compiler.types.analysis.Scope;
 import compiler.syntax.Ast.AstEnumAbstractValue;
 import compiler.types.Type.CompilerType;
 import compiler.types.TypedAst.TypedExpression;
+import compiler.Source.SourceSpan;
 
 /** Constants keep their abstract identity; only declaration initializers read their raw storage. */
 @:access(compiler.types.typing.BodyTyper)
@@ -31,7 +32,7 @@ class EnumAbstractValues {
 		var previous = session.enumAbstractConstantOwner;
 		session.enumAbstractConstantOwner = declaration.name;
 		try {
-			var storage = typer.lowerType(declaration.underlying);
+			var storage = typer.lowerType(declaration.underlying, declaration.span);
 			var expression = typer.coerce(typer.typeExpression(value.value, new Scope(), storage), storage, 'enum abstract value "$key"', "E1002");
 			session.enumAbstractConstantOwner = previous;
 			session.enumAbstractConstantsInProgress.remove(key);
@@ -44,10 +45,11 @@ class EnumAbstractValues {
 		}
 	}
 
-	public static function typed(typer:BodyTyper, declaration:AstEnumAbstract, value:AstEnumAbstractValue):TypedExpression {
+	/** The value at a use site: the cached constant, typed as the abstract and located at `span`, where it is used. */
+	public static function typed(typer:BodyTyper, declaration:AstEnumAbstract, value:AstEnumAbstractValue, span:SourceSpan):TypedExpression {
 		typer.recordInlineConstantDependency(declaration.name);
 		var expression = raw(typer, declaration, value);
-		return typer.session.enumAbstractConstantOwner == declaration.name ? expression : new TypedExpression(TAbiCast(expression),
-			TAbstract(declaration.name, [], expression.type), expression.span);
+		return typer.session.enumAbstractConstantOwner == declaration.name ? new TypedExpression(expression.expression, expression.type,
+			span) : new TypedExpression(TAbiCast(expression), TAbstract(declaration.name, [], expression.type), span);
 	}
 }

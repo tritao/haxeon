@@ -26,7 +26,7 @@ import compiler.types.analysis.LexicalStorageAnalysis;
 import compiler.types.analysis.Scope;
 
 typedef ClosureExpressionCallback = (AstExpression, Scope, Null<CompilerType>, Bool) -> TypedExpression;
-typedef ClosureLowerTypeCallback = AstType->CompilerType;
+typedef ClosureLowerTypeCallback = (type:AstType, span:SourceSpan) -> CompilerType;
 typedef ClosureMethodLookupCallback = String->Null<SemanticMethodInfo>;
 typedef ClosureFieldLookupCallback = (CompilerType, String) -> Null<CompilerType>;
 typedef ClosureBoundCellCallback = (String, Scope) -> Null<String>;
@@ -79,7 +79,7 @@ class ClosureTyper {
 		for (i in 0...arguments.length) {
 			var argument = arguments[i],
 				localName = argument.name == "_" ? '$' + 'discard:$i' : argument.name;
-			var argumentType = (switch (argument.type) { case InferredType: true; default: false; }) ? (expectedFunction == null ? null : expectedFunction.arguments[i]) : lowerType(argument.type);
+			var argumentType = (switch (argument.type) { case InferredType: true; default: false; }) ? (expectedFunction == null ? null : expectedFunction.arguments[i]) : lowerType(argument.type, argument.span);
 			if (argumentType != null
 				&& (switch (argument.type) { case InferredType: false; default: true; })
 				&& argument.optional == true

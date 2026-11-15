@@ -126,6 +126,9 @@ class ModuleAnalyzer {
 			dependencies.remove(abstractDecl.name);
 		for (abstractDecl in ast.abstracts)
 			dependencies.remove(abstractDecl.name);
+		// A typedef this module declares is local too: `Code.High` through `typedef Code = ...` names no module.
+		for (alias in ast.aliases)
+			dependencies.remove(alias.name);
 		for (importPath in ast.imports) {
 			var modulePath = importModulePath(importPath),
 				alias = QualifiedName.last(modulePath);

@@ -24,7 +24,7 @@ class RawRepresentableGenerator {
 	public static function validate(session:TypingSession, typer:BodyTyper, declaration:AstEnumAbstract):Void {
 		if (!conforms(session, declaration))
 			return;
-		var raw = typer.lowerType(declaration.underlying);
+		var raw = typer.lowerType(declaration.underlying, declaration.span);
 		switch raw {
 			case TInt, TString:
 			default:
@@ -67,7 +67,7 @@ class RawRepresentableGenerator {
 				declaration = session.enumAbstractDecls.get(request.owner);
 			if (declaration == null || !conforms(session, declaration))
 				throw 'Missing RawRepresentable declaration "${request.owner}"';
-			var raw = typer.lowerType(declaration.underlying),
+			var raw = typer.lowerType(declaration.underlying, declaration.span),
 				nominal:CompilerType = TAbstract(declaration.name, [], raw),
 				span = declaration.span,
 				inputType = request.method == "rawValue" ? nominal : raw,
