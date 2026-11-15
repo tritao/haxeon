@@ -1152,10 +1152,10 @@ class Parser {
 				var catchStart = consume(TokenKind.Catch).span;
 				consume(TokenKind.LeftParen);
 				var catchName = consume(TokenKind.Identifier).text;
-				consume(TokenKind.Colon);
-				var catchType = parseType();
+				// As in Haxe, `catch (e)` with no type catches everything.
+				var catchType = match(TokenKind.Colon) ? parseType() : NamedType("Dynamic");
 				consume(TokenKind.RightParen);
-				var catchBranch = parseStatementOrBlock();
+				var catchBranch = parseTryBody();
 				end = catchBranch.length == 0 ? previous().span : statementSpan(catchBranch[catchBranch.length - 1]);
 				catches.push({
 					name: catchName,
@@ -1329,11 +1329,12 @@ class Parser {
 		return Expression(expression, expressionSpan(expression).merge(end));
 	}
 
+	/** The body of a `try` or of one of its `catch`es. */
 	function parseTryBody():Array<AstStatement> {
 		if (check(TokenKind.LeftBrace))
 			return parseStatementOrBlock();
-		// Any single statement (`try return f() catch ...`, `try x = f() catch
-		// ...`); the semicolon before `catch` is optional.
+		// Any single statement (`try return f() catch ...`, `catch (e:E) throw e catch ...`); as in Haxe, the semicolon before a
+		// following `catch` is optional.
 		tryBodyDepth++;
 		try {
 			var statements = parseStatements();
@@ -1387,6 +1388,9 @@ class Parser {
 			returnArrowValue(statements);
 			return statements;
 		}
+		// A loop body is the loop, which has no value, as in Haxe (where a loop is an expression of type Void): `() -> for (x in xs) f(x)`.
+		if (check(TokenKind.For) || check(TokenKind.While) || check(TokenKind.Do))
+			return [parseStatement()];
 		var value = parseExpression();
 		return [Return(value, expressionSpan(value))];
 	}
@@ -1450,9 +1454,9 @@ class Parser {
 	function parseExpression():AstExpression {
 		var expression = parseNullCoalesce();
 		if (match(TokenKind.Question)) {
-			var whenTrue = parseExpressionBranch();
+			var whenTrue = parseConditionalOperand();
 			consume(TokenKind.Colon);
-			var whenFalse = parseExpressionBranch();
+			var whenFalse = parseConditionalOperand();
 			expression = Conditional(expression, whenTrue, whenFalse, expressionSpan(expression).merge(expressionSpan(whenFalse)));
 		}
 		if (check(TokenKind.Assign) && peekKind(1) != TokenKind.Greater) {
@@ -1994,19 +1998,22 @@ class Parser {
 			var expression:AstExpression = Variable(name, referenceSpan);
 			return parsePostfix(expression);
 		}
-		// `{` opens an object literal when empty or starting with `name:`, and a block expression valued by its last expression otherwise.
+		// `{` opens an object literal when empty or starting with `name:` or `"name":`, and a block expression valued by its last expression
+		// otherwise.
 		if (check(TokenKind.LeftBrace)
 			&& peekKind(1) != TokenKind.RightBrace
-			&& !(peekKind(1) == TokenKind.Identifier && peekKind(2) == TokenKind.Colon))
+			&& !((peekKind(1) == TokenKind.Identifier || peekKind(1) == TokenKind.StringLiteral) && peekKind(2) == TokenKind.Colon))
 			return parseExpressionBranch();
 		if (match(TokenKind.LeftBrace)) {
 			var start = previous().span, fields = [];
 			if (!check(TokenKind.RightBrace)) {
 				while (true) {
-					var name = consume(TokenKind.Identifier);
+					// As in Haxe, a field may be named by a string, as JSON-shaped data names fields that are keywords: `{"package": p}`.
+					var name = check(TokenKind.StringLiteral) ? advance() : consume(TokenKind.Identifier),
+						fieldName = name.kind == TokenKind.StringLiteral ? decodeString(name.text, name.span) : name.text;
 					consume(TokenKind.Colon);
-					var value = parseAnchoredExpression("{" + name.text + "}");
-					fields.push({name: name.text, value: value, span: name.span.merge(expressionSpan(value))});
+					var value = parseAnchoredExpression("{" + fieldName + "}");
+					fields.push({name: fieldName, value: value, span: name.span.merge(expressionSpan(value))});
 					if (!match(TokenKind.Comma) || check(TokenKind.RightBrace))
 						break;
 				}
@@ -2194,8 +2201,13 @@ class Parser {
 		return ArrayComprehension(keyName, valueName, iterable, condition, value, true, start.merge(expressionSpan(value)));
 	}
 
+	/** An operand of `c ? a : b`: a value, so `{}` is an empty object there, as in Haxe, not an empty block. */
+	function parseConditionalOperand():AstExpression
+		return check(TokenKind.LeftBrace) && peekKind(1) == TokenKind.RightBrace ? parseExpression() : parseExpressionBranch();
+
 	function parseExpressionBranch(comprehensionValue:Bool = false):AstExpression {
-		if (!check(TokenKind.LeftBrace) || (peekKind(1) == TokenKind.Identifier && peekKind(2) == TokenKind.Colon))
+		if (!check(TokenKind.LeftBrace)
+			|| ((peekKind(1) == TokenKind.Identifier || peekKind(1) == TokenKind.StringLiteral) && peekKind(2) == TokenKind.Colon))
 			return parseExpression();
 		advance();
 		var start = previous().span, statements = [];
@@ -2389,8 +2401,8 @@ class Parser {
 			var catchStart = consume(TokenKind.Catch).span;
 			consume(TokenKind.LeftParen);
 			var name = consume(TokenKind.Identifier).text;
-			consume(TokenKind.Colon);
-			var type = parseType();
+			// As in Haxe, `catch (e)` with no type catches everything.
+			var type = match(TokenKind.Colon) ? parseType() : NamedType("Dynamic");
 			consume(TokenKind.RightParen);
 			var caught = parseExpressionBranch();
 			end = expressionSpan(caught);
@@ -2775,8 +2787,12 @@ class Parser {
 	function expressionEnd(expression:AstExpression):SourceSpan {
 		if (match(TokenKind.Semicolon))
 			return previous().span;
-		// As in Haxe, an expression whose last token closes a brace needs no semicolon: `var x = try f() catch (e:Dynamic) { 0; }`.
-		if (isBracedExpression(expression) || previous().kind == TokenKind.RightBrace || (tryBodyDepth > 0 && check(TokenKind.Catch)))
+		// As in Haxe, an expression whose last token closes a brace needs no semicolon: `var x = try f() catch (e:Dynamic) { 0; }`; nor does
+		// one whose last token ended a statement, as an arrow function with a loop body does: `var f = () -> for (x in xs) g(x);`.
+		if (isBracedExpression(expression)
+			|| previous().kind == TokenKind.RightBrace
+			|| previous().kind == TokenKind.Semicolon
+			|| (tryBodyDepth > 0 && check(TokenKind.Catch)))
 			return expressionSpan(expression);
 		// `if (c) a else b`: the `then` branch needs no semicolon before its `else`.
 		if (check(TokenKind.Else))
