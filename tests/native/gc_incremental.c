@@ -63,6 +63,25 @@ static void *setup(void *unused) {
 	hl_unregister_thread();
 	return NULL;
 }
+// Reads what the collection kept on a worker: a target pointer main loaded could stay in its registers or stack and
+// keep the object alive past the final drop (the conservative scan sees it), so main never loads one.
+static int retained_status;
+static void *verify_retained(void *unused) {
+	int marker = 0;
+	(void)unused;
+	hl_register_thread(&marker);
+	retained_status = 0;
+	if( ((void**)parent[0])[2] != (void*)100 || ((void**)newborn[7])[2] != (void*)107 || retained_array->size != 16 || ((void**)hl_aptr(retained_array,void*)[15])[2] != (void*)115 ) retained_status = 7;
+	else if( hl_dyn_getp(copied_object,hl_hash_utf8("first"),&hlt_bytes) != hidden[16] ||
+			hl_dyn_getp(copied_object,hl_hash_utf8("second"),&hlt_bytes) != hidden[17] ||
+			hl_higet(retained_map,1) != hidden[18] || hl_hi64get(retained_map64,1) != hidden[19] ||
+			retained_closure->value != hidden[20] ||
+			hl_dyn_getp((vdynamic*)retained_virtual,virtual_fields[0].hashed_name,&hlt_bytes) != hidden[21] ||
+			hl_dyn_getp(copied_virtual,virtual_fields[1].hashed_name,&hlt_bytes) != hidden[22] ||
+			hl_dyn_getp(copied_inline_virtual,virtual_fields[0].hashed_name,&hlt_bytes) != hidden[23] ) retained_status = 16;
+	hl_unregister_thread();
+	return NULL;
+}
 static void *mutate(void *unused) {
 	int marker = 0;
 	(void)unused;
@@ -188,14 +207,9 @@ int main(int argc, char **argv) {
 	} else if( strcmp(argv[1],"pressure") == 0 ) {
 		if( metrics.cycles_completed || metrics.pressure_fallbacks != 1 || metrics.tracking_fallbacks ) return 24;
 	} else if( metrics.cycles_completed || metrics.pressure_fallbacks || metrics.tracking_fallbacks != 1 ) return 25;
-	if( finalized || ((void**)parent[0])[2] != (void*)100 || ((void**)newborn[7])[2] != (void*)107 || retained_array->size != 16 || ((void**)hl_aptr(retained_array,void*)[15])[2] != (void*)115 ) return 7;
-	if( hl_dyn_getp(copied_object,hl_hash_utf8("first"),&hlt_bytes) != hidden[16] ||
-		hl_dyn_getp(copied_object,hl_hash_utf8("second"),&hlt_bytes) != hidden[17] ||
-		hl_higet(retained_map,1) != hidden[18] || hl_hi64get(retained_map64,1) != hidden[19] ||
-		retained_closure->value != hidden[20] ||
-		hl_dyn_getp((vdynamic*)retained_virtual,virtual_fields[0].hashed_name,&hlt_bytes) != hidden[21] ||
-		hl_dyn_getp(copied_virtual,virtual_fields[1].hashed_name,&hlt_bytes) != hidden[22] ||
-		hl_dyn_getp(copied_inline_virtual,virtual_fields[0].hashed_name,&hlt_bytes) != hidden[23] ) return 16;
+	if( finalized ) return 7;
+	if( !worker(verify_retained) ) return 16;
+	if( retained_status ) return retained_status;
 	if( !worker(stabilize) ) return 13;
 	// Explicit full collection must safely cancel an unfinished cycle and its queue.
 	if( argc == 1 ) {

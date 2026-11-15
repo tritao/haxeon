@@ -4,7 +4,8 @@ root=$(cd "$(dirname "$0")/../.." && pwd)
 case "$(uname -s)" in
 	MINGW*|MSYS*|CYGWIN*) echo 'SKIP: shell stub launcher regression requires Unix'; exit 0 ;;
 esac
-work=$(mktemp -d "${TMPDIR:-/tmp}/haxeon-vm-launchers.XXXXXX")
+# The launchers name paths as `cd … && pwd` does, so spell $work the same way: macOS's TMPDIR ends in a slash.
+work=$(cd "$(mktemp -d "${TMPDIR:-/tmp}/haxeon-vm-launchers.XXXXXX")" && pwd)
 trap 'rm -rf -- "$work"' EXIT
 mkdir -p "$work/scripts" "$work/cmake" "$work/out/cmake/release/hashlink-runtime"
 cp "$root/scripts/hl" "$root/scripts/hlprof-live" "$root/scripts/hashlink-launch.sh" "$root/scripts/hashlink-path.sh" "$work/scripts/"

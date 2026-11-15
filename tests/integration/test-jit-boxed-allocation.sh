@@ -1,6 +1,11 @@
 #!/usr/bin/env bash
 set -euo pipefail
 root=$(cd "$(dirname "$0")/../.." && pwd)
+# Compiled code boxes values inline only on Linux x86-64 (hl_jit_box_prepare).
+if [[ $(uname -s) != Linux || $(uname -m) != x86_64 ]]; then
+	echo 'SKIP: inline boxed allocation is supported only on Linux x86-64'
+	exit 0
+fi
 work=$(mktemp -d "${TMPDIR:-/tmp}/haxeon-jit-box.XXXXXX")
 trap 'rm -rf "$work"' EXIT
 library=${HL_GC_TEST_LIBRARY_DIR:-$("$root/scripts/hashlink-path.sh")}
