@@ -14,8 +14,10 @@ import haxe.crypto.Sha256;
 
 /** Fieldwise declared equality, including nested value helpers. */
 class ValueEqualityGenerator {
+	public static inline final PREFIX = "$value$equality:";
+
 	public static function equalsName(type:CompilerType):String
-		return "$value$equality:" + Sha256.encode(compiler.semantic.SemanticSignature.type(type)).substr(0, 32);
+		return PREFIX + Sha256.encode(compiler.semantic.SemanticSignature.type(type)).substr(0, 32);
 
 	public static function request(session:TypingSession, type:CompilerType, origin:String, span:SourceSpan):Void {
 		var name = equalsName(type);

@@ -191,9 +191,10 @@ class TypingSession {
 			case TNullable(element): helperSpan(element, fallback);
 			case TInstance(_, name, _), TAbstract(name, _, _):
 				var span = helperSpans.get(name);
-				span == null ? fallback : span;
-			case TInt, TInt64, TFloat, TBool, TString, TNativeScalar(_), TKeyPath(_, _, _): builtinHelperSpan;
-			case _: fallback;
+				span == null ? builtinHelperSpan : span;
+			// A structural type (an array, a map, an anonymous structure, a function) belongs to no declaration: its helper carries the
+			// generated span, never the span of whichever caller asked first.
+			case _: builtinHelperSpan;
 		};
 	}
 

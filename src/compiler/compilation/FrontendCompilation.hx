@@ -243,6 +243,8 @@ class FrontendCompilation {
 					retyped: build.retyped
 				});
 		}
+		if (context.options.checkReuse)
+			checkHelperCalls(build.context.state.modules, build.names);
 		finishTyping(build);
 		if (!lowerToIr)
 			return result(build, null, [], build.typingLoweringDoneAt, null, null);
@@ -1523,6 +1525,55 @@ class FrontendCompilation {
 	 * build or its origin is unchanged. Required helper owners join the artifact assembly/pruning set even when
 	 * their source module is no longer reachable; unrelated functions in that module are still pruned.
 	 */
+	/** The names of the helpers the typer generates, by what they implement (equality, hash, enum methods, flags, raw values, key paths). */
+	static final helperPrefixes = [
+		compiler.types.typing.ValueEqualityGenerator.PREFIX,
+		compiler.types.typing.EnumEqualityGenerator.EQUALS_PREFIX,
+		compiler.types.typing.EnumEqualityGenerator.REFLECTIVE_PREFIX,
+		compiler.types.typing.HashGenerator.HASH_PREFIX,
+		compiler.types.typing.EnumConformanceMethods.PREFIX,
+		compiler.types.typing.FlagsGenerator.PREFIX,
+		compiler.types.typing.RawRepresentableGenerator.PREFIX,
+		compiler.types.typing.KeyPathTyping.HELPER_PREFIX
+	];
+
+	/**
+	 * Check mode, at publication: every call of a generated helper in a function of the program names a function the program holds. A helper dropped with
+	 * its first requester while another function still calls it would otherwise surface as an unknown call when the IR is verified, or not at all.
+	 */
+	static function checkHelperCalls(modules:Map<String, compiler.modules.ModuleState>, names:Array<String>):Void {
+		var held:Map<String, Bool> = [];
+		for (name in names) {
+			var state = modules.get(name);
+			if (state != null) {
+				// An analysis (no IR) holds typed functions only; a build holds both.
+				for (cached in state.typedFunctions.keys())
+					held.set(cached, true);
+				for (cached in state.irFunctions.keys())
+					held.set(cached, true);
+			}
+		}
+		for (name in names) {
+			var state = modules.get(name);
+			if (state == null)
+				continue;
+			for (cached => body in state.irFunctions) {
+				// An analysis retypes a function without lowering it again: until it is, the body kept is the old one, which is not the program.
+				if (state.pendingIrFunctions.exists(cached))
+					continue;
+				for (block in body.blocks)
+					for (instruction in block.instructions)
+						switch instruction.value {
+							case Call(_, callee, _) if (!held.exists(callee)):
+								for (prefix in helperPrefixes)
+									if (StringTools.startsWith(callee, prefix))
+										throw 'generated helper "$callee" is called by "$cached" but the program holds no such function';
+							default:
+						}
+			}
+		}
+	}
+
 	static function generatedHelpersStillCalled(modules:Map<String, compiler.modules.ModuleState>, names:Array<String>,
 			typedByName:Map<String, compiler.types.TypedAst.TypedFunction>, owners:Map<String, String>,
 			invalidated:Map<String, Bool>):Map<String, Bool> {
@@ -1551,6 +1602,32 @@ class FrontendCompilation {
 			}
 		}
 		var result:Map<String, Bool> = [];
+		// A function that stays and was not typed again calls its helpers by name, whoever the helpers were made for: the helper stays
+		// while any such caller does. Only the helpers a retyped function requested were made again.
+		for (name => state in modules) {
+			if (!reachable.exists(name))
+				continue;
+			for (cached => body in state.irFunctions) {
+				if (!owners.exists(cached) || typedByName.exists(cached))
+					continue;
+				for (block in body.blocks)
+					for (instruction in block.instructions)
+						switch instruction.value {
+							case Call(_, callee, _) if (holders.exists(callee) && !invalidated.exists(callee)):
+								result.set(callee, true);
+								var dependencyOwner = holders.get(callee).name;
+								if (!reachable.exists(dependencyOwner)) {
+									reachable.set(dependencyOwner, true);
+									names.push(dependencyOwner);
+								}
+								if (!kept.exists(callee)) {
+									kept.set(callee, true);
+									pending.push(callee);
+								}
+							default:
+						}
+			}
+		}
 		while (pending.length > 0) {
 			var current = pending.pop(), holder = holders.get(current);
 			if (holder == null)

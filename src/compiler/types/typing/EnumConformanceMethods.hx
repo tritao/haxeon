@@ -24,8 +24,10 @@ class EnumConformanceMethods {
 		};
 	}
 
+	public static inline final PREFIX = "$enum-custom:";
+
 	public static function name(type:CompilerType, method:String):String
-		return "$enum-custom:" + method + ":" + Sha256.encode(compiler.semantic.SemanticSignature.type(type)).substr(0,
+		return PREFIX + method + ":" + Sha256.encode(compiler.semantic.SemanticSignature.type(type)).substr(0,
 			32);
 
 	public static function request(session:TypingSession, type:CompilerType, method:String, origin:String,

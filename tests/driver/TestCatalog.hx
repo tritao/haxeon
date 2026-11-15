@@ -208,6 +208,7 @@ class TestCatalog {
 		"ClassIdMain",
 		"UnusedModuleInvarianceMain",
 		"TrimTablesMain",
+		"HelperRequesterIndependenceMain",
 		"GenericDelimiterMain",
 		"LoopNarrowingMain",
 		"MapEntryFactsMain",
