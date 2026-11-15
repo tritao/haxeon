@@ -77,6 +77,7 @@ class AudioSmoke {
 		var init = new InitOptions();
 		init.set_api_version(NativeKit.nk_api_version());
 		var runtime = Runtime.startNative(init);
+		DspEnumBoundary.run();
 		DspSmoke.run();
 		DaisySourceSmoke.run();
 		var bus:Bus = null;
