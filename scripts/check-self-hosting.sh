@@ -59,6 +59,38 @@ for suffix in "" ".functions"; do
 done
 echo "PASS: the compiler builds itself to a fixed point"
 
+# Every entry point that ships or that the tools run is built by the self-hosted compiler, so a construct Haxeon does not
+# compile cannot slip into one unnoticed. An entry with a known gap is listed with it; the check fails once it builds, so the
+# list is cut as the gaps close.
+entry_sources="$work/entry-sources.txt"
+(cd "$root_dir" && find src stdlib lib/haxeon-io -name '*.hx' | LC_ALL=C sort) >"$entry_sources"
+building_entries=(compiler.tools.HaxeonCompiler Main FfiImportMain FfiAuditMain)
+declare -A entry_gaps=(
+	[compiler.tools.CompilerServer]="sys.net sockets are not in the Haxeon stdlib"
+	[tools.HaxeonCli]="sys.net sockets (CompilerClient) are not in the Haxeon stdlib"
+	[build.HaxeonBuild]="sys.net sockets (CompilerClient) are not in the Haxeon stdlib"
+	[LspMain]="sys.net sockets (HldiClient) are not in the Haxeon stdlib"
+	[EditorServiceMain]="nullable values the language service reads without a check"
+)
+build_entry() {
+	(cd "$root_dir" && "$hl" "$work/stage-1.hl" --entry="$1" --root=src --root=stdlib --root=lib/haxeon-io \
+		"--sources-file=$entry_sources" "--output=$work/entry-$1.hl") >"$work/entry-$1.log" 2>&1
+}
+for entry in "${building_entries[@]}"; do
+	build_entry "$entry" || {
+		tail -n 5 "$work/entry-$entry.log" >&2
+		echo "FAIL: the self-hosted compiler does not build $entry" >&2
+		exit 1
+	}
+done
+for entry in "${!entry_gaps[@]}"; do
+	if build_entry "$entry"; then
+		echo "FAIL: $entry now builds with the self-hosted compiler (${entry_gaps[$entry]}); move it to building_entries" >&2
+		exit 1
+	fi
+done
+echo "PASS: the self-hosted compiler builds ${#building_entries[@]} entry points; ${#entry_gaps[@]} have known gaps"
+
 # Run the same equality semantics through a stock-Haxe-built compiler and the self-hosted compiler.
 echo "equality guard: building the compiler with stock Haxe"
 haxe_built_compiler=$("$root_dir/scripts/haxeon" dev tool-path compiler.tools.HaxeonCompiler)
