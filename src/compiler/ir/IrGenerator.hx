@@ -1691,9 +1691,15 @@ class IrGenerator {
 		return {owner: owner, field: "value", path: []};
 	}
 
+	function valueRepresentationName(type:CompilerType):Null<String>
+		return switch TypeRelations.abstractRepresentation(type) {
+			case TInstance(NominalKind.Class, name, _) if (facts.valueClasses.exists(name)): name;
+			default: null;
+		};
+
 	function isNullableValueType(type:CompilerType):Bool
 		return switch type {
-			case TNullable(TInstance(NominalKind.Class, name, _)): facts.valueClasses.exists(name);
+			case TNullable(element): valueRepresentationName(element) != null;
 			default: false;
 		};
 
@@ -2524,8 +2530,8 @@ class IrGenerator {
 				// non-null value must raise a language exception before reading it: linear memory address zero
 				// can be readable and a Wasm GC null dereference is an uncatchable engine trap.
 				var unwrapValue = switch value.type {
-					case TNullable(TInstance(NominalKind.Class, name, _)): facts.valueClasses.exists(name)
-						&& sameIrType(target, Obj(name));
+					case TNullable(element): var name = valueRepresentationName(element);
+						name != null && sameIrType(target, Obj(name));
 					default: false;
 				};
 				if (unwrapValue) {
@@ -3985,10 +3991,14 @@ class IrGenerator {
 			case TNull: Void;
 			// Preserve the payload type in IR so stored optionals can acquire a flag and inline layout. The
 			// existing backends still use the boxed dynamic representation until that lowering is implemented.
-			case TNullable(TInstance(NominalKind.Class, name, _)) if (facts.valueClasses.exists(name))
-				: Nullable(Obj(name));
-			case TNullable(element): TypeRelations.isReference(element)
-				? lowerType(element) : nullablePrimitive(lowerType(element));
+			case TNullable(element):
+				var representation = TypeRelations.abstractRepresentation(element);
+				switch representation {
+					case TInstance(NominalKind.Class, name,
+						_) if (facts.valueClasses.exists(name)): Nullable(Obj(name));
+					default: TypeRelations.isReference(element)
+						? lowerType(element) : nullablePrimitive(lowerType(element));
+				}
 			case TArray(element): Array(lowerType(element));
 			case TIterator(element): Iterator(lowerType(element));
 			case TFunction(arguments, result): Function([for (argument in arguments) lowerType(argument)],

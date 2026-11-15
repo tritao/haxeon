@@ -806,10 +806,17 @@ class TypeRelations {
 	public inline function isStruct(type:CompilerType):Bool
 		return isStructType(type);
 
+	/** The runtime representation shared by transparent abstract layers. */
+	public static function abstractRepresentation(type:CompilerType):CompilerType
+		return switch type {
+			case TAbstract(_, _, representation): abstractRepresentation(representation);
+			default: type;
+		};
+
 	/** `Null<V>` for a value class V, which cannot be stored in an inline field. */
 	public function isNullableValueClass(type:CompilerType):Bool
 		return switch type {
-			case TNullable(element): isValueClass(element);
+			case TNullable(element): isValueClass(abstractRepresentation(element));
 			default: false;
 		};
 

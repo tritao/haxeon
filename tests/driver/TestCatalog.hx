@@ -37,6 +37,7 @@ class TestCatalog {
 		"ValueConstructorDestinationMain",
 		"ValueConstructorWarmMain",
 		"WireFinalWarmMain",
+		"NullableAbstractWarmMain",
 		"EnumTagStorageMain",
 		"RawRepresentableMain",
 		"FlagsMain",
