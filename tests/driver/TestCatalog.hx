@@ -268,6 +268,7 @@ class TestCatalog {
 		"FormatterMain",
 		"FormatterGoldenMain",
 		"UnusedImportsMain",
+		"ImportOrderMain",
 		"LanguageServiceMain",
 		"ImplicitConstructorServiceMain",
 		"ProtocolMain",

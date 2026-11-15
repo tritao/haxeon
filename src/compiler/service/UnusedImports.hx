@@ -97,8 +97,11 @@ class UnusedImports {
 		return false;
 	}
 
-	/** The names an import of `member` (or of the whole module) makes usable, or null when implicit conversions make that open-ended. */
-	static function visibleNames(program:AstProgram, member:Null<String>):Null<Array<String>> {
+	/**
+	 * The names an import of `member` (or of the whole module) makes usable, or null when implicit conversions make that open-ended.
+	 * ImportOrder uses it too: two imports that make one name visible must keep their order.
+	 */
+	public static function visibleNames(program:AstProgram, member:Null<String>):Null<Array<String>> {
 		var names:Array<String> = [];
 		function wants(name:String):Bool
 			return member == null || member == name;

@@ -1,34 +1,34 @@
 package tools;
 
+import build.BuildSession;
 import build.CompilerSources;
 import build.HashLinkPath;
-import tools.WatchRun.WatchChange;
-import tools.WatchRun.WatchProfiling;
-import haxe.Json;
-import haxe.io.Path;
-import build.BuildSession;
-import build.HaxeonProjectBuild;
 import build.HaxeonNativePackageBuild;
-import build.Target;
+import build.HaxeonProjectBuild;
 import build.NativeTargetSupport;
+import build.Target;
 import build.WorkspaceBuild;
+import build.WorkspaceManifest;
 import build.execution.Executor;
 import build.execution.JobServer;
-import build.native.NativeCMakeProvider;
-import build.WorkspaceManifest;
 import build.execution.ProcessRunner;
+import build.native.NativeCMakeProvider;
+import compiler.formatter.FormatConfig.FormatConfigTools;
+import compiler.formatter.Formatter;
+import haxe.Json;
+import haxe.io.Path;
 import project.PackageLockfile;
 import project.PackageResolver;
 import project.PackageSourceTools;
 import project.ProjectSourceAcquirer;
+import project.RegistryPublisher;
 import project.ResolvedPackage;
 import project.ResolvedProject;
 import project.SourceCache;
-import project.RegistryPublisher;
 import sys.FileSystem;
 import sys.io.File;
-import compiler.formatter.Formatter;
-import compiler.formatter.FormatConfig.FormatConfigTools;
+import tools.WatchRun.WatchChange;
+import tools.WatchRun.WatchProfiling;
 
 private typedef ProjectConfig = {
 	final entry:String;
@@ -1551,7 +1551,8 @@ class HaxeonCli {
 		Sys.println("  fmt [options] PATH...          Format Haxe source files");
 		Sys.println("       [--check] [--stdin]      Check files or format stdin");
 		Sys.println("       [--line-width N]         Set the formatter column limit (default 120)");
-		Sys.println("  lint [--fix] [--manifest FILE]... FILE...  Report (or remove) unused imports");
+		Sys.println("  lint [--fix] [--only RULE] [--manifest FILE]... FILE...  Report (or fix) unused imports and imports out of order;");
+		Sys.println("                                    RULE is unused-imports or import-order");
 		Sys.println("  build [--target TARGET]        Build project in haxeon.json (host, wasm32, android)");
 		Sys.println("       [--plan] [--explain] [--timings] [--compiler-only] [--jobs COUNT]");
 		Sys.println("                                    Inspect planning details or timings");

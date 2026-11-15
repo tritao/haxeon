@@ -3,6 +3,7 @@ package tools;
 import compiler.Source.SourceFile;
 import compiler.formatter.FormatConfig.FormatConfigTools;
 import compiler.formatter.Formatter;
+import compiler.service.ImportOrder;
 import compiler.service.UnusedImports;
 import compiler.service.UnusedImports.ImportTarget;
 import compiler.service.UnusedImports.UnusedImport;
@@ -15,11 +16,13 @@ import sys.FileSystem;
 import sys.io.File;
 
 /**
- * `haxeon lint [--fix] [--manifest FILE]... FILE...` reports unused imports.
+ * `haxeon lint [--fix] [--only RULE] [--manifest FILE]... FILE...` reports unused imports (rule `unused-imports`) and runs of
+ * imports out of order (rule `import-order`, see ImportOrder); `--only` checks one rule.
  *
  * Imports resolve against the source roots of the given manifests and of the directory each file's package declaration implies. An
  * import that resolves nowhere is assumed used, so a missing manifest makes the check quieter, never wrong. `--fix` deletes the
- * statements and reformats a file that was formatted before.
+ * statements, sorts the runs that can be sorted without changing what a name means, and reformats a file that was formatted before.
+ * A run whose order matters (two imports of one name) is left as written and not reported.
  */
 class LintCommand {
 	final roots:Array<String> = [];
@@ -28,11 +31,20 @@ class LintCommand {
 	function new() {}
 
 	public static function run(arguments:Array<String>):Int {
-		var fix = false, manifests:Array<String> = [], paths:Array<String> = [], index = 0;
+		var fix = false, manifests:Array<String> = [], paths:Array<String> = [], index = 0, checkUnused = true, checkOrder = true;
 		while (index < arguments.length) {
 			var argument = arguments[index++];
 			if (argument == "--fix")
 				fix = true;
+			else if (argument == "--only") {
+				if (index >= arguments.length)
+					throw 'Option "--only" requires a rule: unused-imports or import-order';
+				switch arguments[index++] {
+					case "unused-imports": checkOrder = false;
+					case "import-order": checkUnused = false;
+					case other: throw 'Unknown lint rule "$other" (known: unused-imports, import-order)';
+				}
+			}
 			else if (argument == "--manifest") {
 				if (index >= arguments.length)
 					throw 'Option "--manifest" requires a value';
@@ -49,22 +61,31 @@ class LintCommand {
 			command.addManifest(manifest);
 		var config = FormatConfigTools.defaults(2, true), found = 0;
 		for (path in SourceFiles.expand(paths)) {
-			var source = File.getContent(path), file = new SourceFile(path, source), tokens;
-			try
-				tokens = new Lexer(file).tokenize()
-			catch (_:Dynamic)
+			var source = File.getContent(path), file = new SourceFile(path, source);
+			// Unused imports read the raw tokens: with directives blanked out, an import used only in an inactive branch would look
+			// unused, so a file the raw lexer rejects (it has `#if`) is not judged. Order reads through the directives.
+			var tokens:Null<Array<compiler.syntax.Token>> = try new Lexer(file).tokenize() catch (_:Dynamic) null;
+			var orderTokens:Null<Array<compiler.syntax.Token>> = checkOrder ? (try ImportOrder.tokens(path, source) catch (_:Dynamic) null) : null;
+			var rootTokens = tokens ?? orderTokens;
+			if (rootTokens == null)
 				continue;
-			var root = packageRoot(path, tokens);
+			var root = packageRoot(path, rootTokens);
 			if (root != null)
 				command.addRoot(root);
-			var unused = UnusedImports.find(tokens, command.resolve);
-			if (unused.length == 0)
+			var unused = checkUnused && tokens != null ? UnusedImports.find(tokens, command.resolve) : [];
+			var unordered = orderTokens != null ? ImportOrder.find(source, orderTokens, command.resolve).filter(block -> block.sorted != null) : [];
+			if (unused.length == 0 && unordered.length == 0)
 				continue;
-			found += unused.length;
+			found += unused.length + unordered.length;
 			for (item in unused)
 				Sys.println('$path:${lineOf(source, item.start)}: unused import ${item.path}');
+			for (block in unordered)
+				Sys.println('$path:${lineOf(source, block.start)}: imports not in order');
 			if (fix) {
 				var wasFormatted = Formatter.format(source, config) == source, edited = remove(source, unused);
+				// Sorted after the removal, which can join two runs or empty one.
+				if (orderTokens != null)
+					edited = ImportOrder.sort(edited, ImportOrder.tokens(path, edited), command.resolve);
 				if (wasFormatted) {
 					var formatted = Formatter.format(edited, config);
 					if (formatted != null)

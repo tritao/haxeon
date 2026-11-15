@@ -26,6 +26,18 @@ trap 'rm -rf -- "$work"' EXIT
 "$root_dir/.tools/haxe/haxe" --cwd "$root_dir" common.hxml -main tools.FormatterTokenGuard -js "$work/token-guard.js"
 external_formatter=(node "$root_dir/scripts/format-external.js" "$work/token-guard.js")
 
+# Import order (`haxeon lint --only import-order`, see src/compiler/service/ImportOrder.hx) covers every file in order_files: with
+# --changed every changed file, including one that was unformatted at the merge base, so a file is sorted when it is touched.
+order_files=()
+import_order() {
+    [[ ${#order_files[@]} -gt 0 ]] || return 0
+    if [[ $check -eq 1 ]]; then
+        "$root_dir/scripts/haxeon" lint --only import-order "${order_files[@]}"
+    else
+        "$root_dir/scripts/haxeon" lint --fix --only import-order "${order_files[@]}" >/dev/null
+    fi
+}
+
 if [[ $changed -eq 1 ]]; then
     # Until the one-shot reformat after the branches merge, a changed file must not become dirty: a file this branch adds must be clean, and a file
     # that was clean at the merge base with origin/main must still be. A file that was already unformatted at the base is left alone.
@@ -33,6 +45,7 @@ if [[ $changed -eq 1 ]]; then
     # Untracked files count as added: a new file must be clean before its first commit, not only after it.
     mapfile -t changed_files < <(cd "$root_dir" && { git diff --name-only --diff-filter=d "$base" -- src tests benchmarks
         git ls-files --others --exclude-standard -- src tests benchmarks; } | rg '\.hx$' | sort -u)
+    for relative in "${changed_files[@]}"; do order_files+=("$root_dir/$relative"); done
     source_files=()
     if [[ ${#changed_files[@]} -gt 0 ]]; then
         base_dir="$work/base"
@@ -71,10 +84,12 @@ if [[ $changed -eq 1 ]]; then
     fi
     if [[ ${#source_files[@]} -eq 0 ]]; then
         echo "format: every changed .hx file was already unformatted at the merge base with origin/main (or none changed)"
-        exit 0
+        import_order
+        exit $?
     fi
 else
     mapfile -t source_files < <(rg --files "$root_dir/src" "$root_dir/tests" "$root_dir/benchmarks" -g '*.hx' | sort)
+    order_files=("${source_files[@]}")
 fi
 external_files=()
 struct_files=()
@@ -103,8 +118,14 @@ if [[ $check -eq 1 ]]; then
 		"$struct_formatter" fmt --check "${struct_files[@]}" || struct_status=$?
 		[[ $struct_status -le $status ]] || status=$struct_status
 	fi
+    order_status=0
+    import_order || order_status=$?
+    [[ $order_status -le $status ]] || status=$order_status
     exit "$status"
 fi
+
+# Sorted first: the formatters then see the final order.
+import_order
 
 for _ in 1 2 3; do
     "${external_formatter[@]}" "${external_arguments[@]}"
