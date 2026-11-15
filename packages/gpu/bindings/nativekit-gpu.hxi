@@ -999,7 +999,9 @@ interface NativeKitGpu @target("portable-abi64") @library("nativekit_gpu") @depe
 	 */
 	extern fn nkgpu_pipeline_color_target(builder: nkgpu_pipeline_builder, color_index: u32, format: nkgpu_image_format, write_mask: nkgpu_color_write_mask, blend: ptr<const<nkgpu_blend_state>>) -> nkgpu_result;
 	/**
-	 * Selects the color channels written by a pipeline.
+	 * Selects the color channels written by a pipeline, for every color target; a later
+	 * nkgpu_pipeline_color_target call sets its own target's mask. NKGPU_COLORMASK_NONE writes
+	 * nothing.
 	 */
 	extern fn nkgpu_pipeline_color_write_mask(builder: nkgpu_pipeline_builder, mask: nkgpu_color_write_mask) -> nkgpu_result;
 	/**
