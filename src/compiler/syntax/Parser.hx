@@ -52,6 +52,9 @@ class Parser {
 
 	var recovering:Bool = false;
 
+	/** Case patterns being parsed: inside one, `name = pattern` is a capture rather than an assignment. */
+	var patternDepth:Int = 0;
+
 	/** The declaration whose lambdas are being numbered (see `LambdaName`). */
 	var lambdaMember:String = "";
 
@@ -1133,9 +1136,7 @@ class Parser {
 			var cases = [];
 			while (match(TokenKind.Case)) {
 				var caseStart = previous().span,
-					values = expandPatternAlternatives(parseExpression());
-				while (match(TokenKind.Comma))
-					appendExpressions(values, expandPatternAlternatives(parseExpression()));
+					values = parseCasePatterns();
 				var guard = parseSwitchGuard();
 				consume(TokenKind.Colon);
 				var statements = [];
@@ -1420,6 +1421,7 @@ class Parser {
 			var value = parseExpression(),
 				span = expressionSpan(expression).merge(expressionSpan(value));
 			expression = switch expression {
+				case Variable(name, _) if (patternDepth > 0): Capture(name, value, span);
 				case Variable(name, _): BlockExpression([Assignment(name, value, span)], Variable(name, span), span);
 				// `a[i] = v` as a value is `v`; the array and index are evaluated once, as in the statement.
 				case Index(array, position, _):
@@ -1991,7 +1993,7 @@ class Parser {
 			var referenceSpan = new SourceSpan(start.file, start.start, end.end, name.indexOf(".") < 0);
 			var expression:AstExpression = Variable(name, referenceSpan);
 			if (match(TokenKind.LeftParen)) {
-				var arguments = parseCallArguments(name);
+				var arguments = StringTools.endsWith(name, ".match") ? parseMatchPattern(name) : parseCallArguments(name);
 				var end = consume(TokenKind.RightParen).span;
 				expression = Call(name, arguments, new SourceSpan(referenceSpan.file, referenceSpan.start, end.end, referenceSpan.isBareReference));
 			}
@@ -2244,9 +2246,7 @@ class Parser {
 		var cases = [];
 		while (match(TokenKind.Case)) {
 			var caseStart = previous().span,
-				values = expandPatternAlternatives(parseExpression());
-			while (match(TokenKind.Comma))
-				appendExpressions(values, expandPatternAlternatives(parseExpression()));
+				values = parseCasePatterns();
 			var guard = parseSwitchGuard();
 			consume(TokenKind.Colon);
 			var result = parseSwitchExpressionBranch();
@@ -2265,6 +2265,34 @@ class Parser {
 		}
 		var end = consume(TokenKind.RightBrace).span;
 		return parsePostfix(SwitchExpression(subject, cases, fallback, start.merge(end)));
+	}
+
+	/** The comma-separated patterns of one `case`, with `|` alternatives expanded into separate patterns. */
+	function parseCasePatterns():Array<AstExpression> {
+		patternDepth++;
+		try {
+			var values = expandPatternAlternatives(parseExpression());
+			while (match(TokenKind.Comma))
+				appendExpressions(values, expandPatternAlternatives(parseExpression()));
+			patternDepth--;
+			return values;
+		} catch (error:CompileError) {
+			patternDepth--;
+			throw error;
+		}
+	}
+
+	/** The argument of `value.match(pattern)`, parsed as a case pattern so it may capture. */
+	function parseMatchPattern(callee:String):Array<AstExpression> {
+		patternDepth++;
+		try {
+			var arguments = parseCallArguments(callee);
+			patternDepth--;
+			return arguments;
+		} catch (error:CompileError) {
+			patternDepth--;
+			throw error;
+		}
 	}
 
 	static function appendExpressions(target:Array<AstExpression>, values:Array<AstExpression>):Void
@@ -2293,6 +2321,8 @@ class Parser {
 				[for (combination in combinations) ArrayLiteral(combination, span)];
 			case Call(name, arguments, span):
 				expandCallPattern(name, arguments, span);
+			case Capture(name, inner, span):
+				[for (alternative in expandPatternAlternatives(inner)) Capture(name, alternative, span)];
 			case _: [pattern];
 		};
 
@@ -2450,7 +2480,7 @@ class Parser {
 				}
 				var nameToken = consumeName(), name = nameToken.text;
 				if (match(TokenKind.LeftParen)) {
-					var arguments = parseCallArguments(name);
+					var arguments = name == "match" ? parseMatchPattern(name) : parseCallArguments(name);
 					var end = consume(TokenKind.RightParen).span;
 					expression = MethodCall(expression, name, arguments, expressionSpan(expression).merge(end));
 				} else
@@ -2816,7 +2846,7 @@ class Parser {
 				Equal(_, _, span), NotEqual(_, _, span), Not(_, span), Call(_, _, span), ClosureCall(_, _, span), MethodCall(_, _, _, span), New(_, _, span),
 				NewGeneric(_, _, _, span), NativeLayoutQuery(_, _, _, span), KeyPathLiteral(_, _, span), NewArray(_, _, span), NewMap(_, _, span), Index(_, _, span),
 				PostfixIncrement(_, _, span), Lambda(_, _, _, span), And(_, _, span), Or(_, _, span), Conditional(_, _, _, span), BlockExpression(_, _, span),
-				ThrowExpression(_, span), SwitchExpression(_, _, _, span), Cast(_, _, span): span;
+				ThrowExpression(_, span), SwitchExpression(_, _, _, span), Cast(_, _, span), Capture(_, _, span): span;
 			case ObjectLiteral(_, span), ArrayLiteral(_, span), MapLiteral(_, span), ArrayComprehension(_, _, _, _, _, _, span),
 				MapComprehension(_, _, _, _, _, _, span), Range(_, _, span): span;
 		}

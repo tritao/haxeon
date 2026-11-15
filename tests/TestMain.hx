@@ -546,6 +546,12 @@ class TestMain {
 			'Enum abstract switch is missing values: Triangle');
 		expectCompileError('enum abstract Shape(Int) { var Circle = 1; var Square = 2; } function main():Int { var shape = Shape.Square; switch shape { case Circle: return 0; } return 42; }',
 			'Enum abstract switch is missing values: Square');
+		// A capture still matches its pattern, so it neither ends the switch nor binds outside it.
+		expectCompileError('enum E { A(value:Int); B; } function main():Int { var e = A(1); return switch e { case all = A(_): 1; }; }',
+			'Enum switch is missing cases: B');
+		expectCompileError('function main():Int { var x = 1; return switch x { case a = b = 1: 1; default: 0; }; }',
+			'A case value can be captured by only one name');
+		expectCompileError('enum E { A(value:Int); } function main():Int { var e = A(1); return e.match(A(x = 1)) ? x : 0; }', 'Unknown variable "x"');
 		expectCompileError('function main():Int { return switch 1 { case 1: 42; default: "wrong"; }; }',
 			'Type mismatch for switch branch: expected Int, got String');
 		expectCompileError('function main():Int { return switch 1 { case 1: 40; case 1: 2; default: 0; }; }', 'Duplicate switch case');

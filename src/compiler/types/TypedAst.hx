@@ -143,11 +143,14 @@ typedef TypedMapEntry = {final key:TypedExpression; final value:TypedExpression;
 /** Type-checked, guarded arm of a switch expression. */
 typedef TypedSwitchExpressionCase = {
 	final value:TypedExpression;
+
+	/** The local the matched subject is bound to: `case name:` or the capture `case name = pattern:`. */
 	final subjectBinding:Null<String>;
+
 	final arrayPattern:Null<TypedSwitchArrayPattern>;
 	final span:SourceSpan;
 
-	/** True when the source arm is the wildcard pattern `_`, which has no binding name. */
+	/** True when the arm matches every value: the wildcard `_`, or a bare name (which also sets `subjectBinding`). */
 	final isCatchAll:Bool;
 
 	final guard:Null<TypedExpression>;
@@ -193,10 +196,13 @@ enum TypedStatement {
 /** Type-checked switch arm with resolved enum bindings, when applicable. */
 typedef TypedSwitchCase = {
 	final value:TypedExpression;
+
+	/** The local the matched subject is bound to: `case name:` or the capture `case name = pattern:`. */
 	final subjectBinding:Null<String>;
+
 	final arrayPattern:Null<TypedSwitchArrayPattern>;
 
-	/** True when the source arm is the wildcard pattern `_`, which has no binding name. */
+	/** True when the arm matches every value: the wildcard `_`, or a bare name (which also sets `subjectBinding`). */
 	final isCatchAll:Bool;
 
 	final guard:Null<TypedExpression>;

@@ -996,7 +996,7 @@ class IrGenerator {
 						matchesEverything = false;
 					for (caseIndex in 0...cases.length) {
 						var switchCase = cases[caseIndex];
-						if (switchCase.guard == null && (switchCase.isCatchAll || switchCase.subjectBinding != null))
+						if (switchCase.guard == null && switchCase.isCatchAll)
 							matchesEverything = true;
 						var matchBlock = builder.createBlock(),
 							bodyBlock = switchCase.guard == null ? matchBlock : builder.createBlock(),
@@ -1013,10 +1013,7 @@ class IrGenerator {
 								builder.select(nonNullBlock);
 								subjectValue = builder.load(switchName, switchType);
 							}
-							if (isNullableStringType(expression.type)
-								&& !isNullExpression(switchCase.value)
-								&& !switchCase.isCatchAll
-								&& switchCase.subjectBinding == null) {
+							if (isNullableStringType(expression.type) && !isNullExpression(switchCase.value) && !switchCase.isCatchAll) {
 								var nonNullBlock = builder.createBlock();
 								builder.branch(builder.equal(subjectValue, builder.constNull(switchType)), nextBlock, nonNullBlock);
 								builder.select(nonNullBlock);
@@ -1027,7 +1024,7 @@ class IrGenerator {
 								caseValue = switchCase.constructorIndex >= 0 ? builder.constInt(switchCase.constructorIndex) : lowerExpression(switchCase.value,
 									builder, localTypes);
 							var predicateBlock = switchCase.predicates.length == 0 ? matchBlock : builder.createBlock();
-							if (switchCase.isCatchAll || switchCase.subjectBinding != null)
+							if (switchCase.isCatchAll)
 								builder.jump(predicateBlock);
 							else {
 								var matches = if (isNullExpression(switchCase.value)) builder.equal(switchValue,
@@ -1042,15 +1039,15 @@ class IrGenerator {
 									nextBlock, builder, localTypes);
 						}
 						builder.select(matchBlock);
+						var subjectBinding = switchCase.subjectBinding;
+						if (subjectBinding != null && subjectBinding.length > 0) {
+							localTypes.set(subjectBinding, switchType);
+							initializeLocal(subjectBinding, builder.load(switchName, switchType), builder, localTypes);
+							builder.debugLocal(subjectBinding, switchCase.span, switchCase.span.end);
+						}
 						if (switchCase.arrayPattern != null)
 							lowerSwitchArrayPatternBindings(switchCase.arrayPattern, switchName, switchType, switchCase.span, builder, localTypes);
 						else {
-							var subjectBinding = switchCase.subjectBinding;
-							if (subjectBinding != null && subjectBinding.length > 0) {
-								localTypes.set(subjectBinding, switchType);
-								initializeLocal(subjectBinding, builder.load(switchName, switchType), builder, localTypes);
-								builder.debugLocal(subjectBinding, switchCase.span, switchCase.span.end);
-							}
 							if (switchCase.constructorIndex >= 0)
 								for (binding in switchCase.bindings) {
 									localTypes.set(binding.name, lowerType(binding.type));
@@ -2461,8 +2458,7 @@ class IrGenerator {
 							builder.select(nonNullBlock);
 							subjectValue = builder.load(subjectName, subjectType);
 						}
-						if (isNullableStringType(subject.type) && !isNullExpression(switchCase.value) && !switchCase.isCatchAll
-							&& switchCase.subjectBinding == null) {
+						if (isNullableStringType(subject.type) && !isNullExpression(switchCase.value) && !switchCase.isCatchAll) {
 							var nonNullBlock = builder.createBlock();
 							builder.branch(builder.equal(subjectValue, builder.constNull(subjectType)), nextBlock, nonNullBlock);
 							builder.select(nonNullBlock);
@@ -2477,7 +2473,7 @@ class IrGenerator {
 								case Bytes: true;
 								default: false;
 							})) builder.call("__string_equal", [comparisonValue, caseValue], Bool); else builder.equal(comparisonValue, caseValue);
-						if (switchCase.isCatchAll || switchCase.subjectBinding != null || isExhaustiveFinalCase)
+						if (switchCase.isCatchAll || isExhaustiveFinalCase)
 							builder.jump(bodyBlock);
 						else {
 							var predicateBlock = switchCase.predicates.length == 0 ? matchBlock : builder.createBlock();
@@ -2488,14 +2484,14 @@ class IrGenerator {
 						}
 					}
 					builder.select(matchBlock);
+					var subjectBinding = switchCase.subjectBinding;
+					if (subjectBinding != null && subjectBinding.length > 0) {
+						localTypes.set(subjectBinding, subjectType);
+						initializeLocal(subjectBinding, builder.load(subjectName, subjectType), builder, localTypes);
+					}
 					if (switchCase.arrayPattern != null)
 						lowerSwitchArrayPatternBindings(switchCase.arrayPattern, subjectName, subjectType, switchCase.span, builder, localTypes);
 					else {
-						var subjectBinding = switchCase.subjectBinding;
-						if (subjectBinding != null && subjectBinding.length > 0) {
-							localTypes.set(subjectBinding, subjectType);
-							initializeLocal(subjectBinding, builder.load(subjectName, subjectType), builder, localTypes);
-						}
 						for (binding in switchCase.bindings) {
 							localTypes.set(binding.name, lowerType(binding.type));
 							initializeLocal(binding.name,
@@ -3362,7 +3358,7 @@ class IrGenerator {
 			var elementPattern = pattern.elements[index],
 				successBlock = index + 1 == pattern.elements.length ? matchBlock : builder.createBlock();
 			builder.select(elementCheck);
-			if (elementPattern.isCatchAll || elementPattern.subjectBinding != null)
+			if (elementPattern.isCatchAll)
 				builder.jump(successBlock);
 			else {
 				var elementType = lowerType(elementPattern.type),

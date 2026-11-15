@@ -198,6 +198,10 @@ enum AstExpression {
 	Or(left:AstExpression, right:AstExpression, span:SourceSpan);
 	Conditional(condition:AstExpression, whenTrue:AstExpression, whenFalse:AstExpression, span:SourceSpan);
 	BlockExpression(statements:Array<AstStatement>, result:AstExpression, span:SourceSpan);
+
+	/** The switch pattern `name = pattern`: matches what `pattern` matches and binds the matched value to `name`. Only valid in a case. */
+	Capture(name:String, pattern:AstExpression, span:SourceSpan);
+
 	ThrowExpression(expression:AstExpression, span:SourceSpan);
 	Cast(expression:AstExpression, target:Null<AstType>, span:SourceSpan);
 	SwitchExpression(expression:AstExpression, cases:Array<AstSwitchExpressionCase>, defaultExpression:Null<AstExpression>, span:SourceSpan);

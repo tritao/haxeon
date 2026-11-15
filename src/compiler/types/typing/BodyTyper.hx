@@ -92,10 +92,7 @@ class BodyTyper {
 			function(statements, scope, result) return this.typeStatements(statements, scope, result),
 			function(statements) return ControlFlow.returnsOnEveryPath(statements, function(type, cases) return this.exhaustiveEnum(type, cases)));
 		var switchRules:SwitchTypingRules = {
-			subjectBinding: function(value:AstExpression, expected:CompilerType, scope:Scope) return this.switchSubjectBinding(value, expected, scope),
-			catchAll: function(value:AstExpression) return isSwitchCatchAll(value),
-			enumPattern: function(value:AstExpression, expected:CompilerType, scope:Scope) return this.typeEnumPattern(value, expected, scope),
-			arrayPattern: function(value:AstExpression, expected:CompilerType, scope:Scope) return this.typeSwitchArrayPattern(value, expected, scope),
+			casePattern: function(value:AstExpression, expected:CompilerType, scope:Scope) return this.switchCasePattern(value, expected, scope),
 			arrayPatternKey: function(pattern:TypedSwitchArrayPattern) return this.switchArrayPatternKey(pattern),
 			caseKey: function(value:TypedExpression, predicates:Array<TypedSwitchPredicate>) return this.switchCaseKey(value, predicates),
 			enumCaseCovered: function(type:CompilerType, index:Int, cases:Array<TypedSwitchCoverageCase>) return this.enumCaseCovered(type, index, cases),
@@ -1153,9 +1150,12 @@ class BodyTyper {
 				};
 				var elements:Array<TypedSwitchArrayElement> = [];
 				for (pattern in values) {
-					var isCatchAll = isSwitchCatchAll(pattern),
-						subjectBinding = isCatchAll ? null : switchSubjectBinding(pattern, elementType, scope),
-						enumPattern = subjectBinding == null && !isCatchAll ? typeEnumPattern(pattern, elementType, scope) : null,
+					var capture = switchCapture(pattern, elementType, scope),
+						elementPattern = capture == null ? pattern : capture.pattern,
+						isWildcard = isSwitchCatchAll(elementPattern),
+						subjectBinding = capture != null ? capture.name : isWildcard ? null : switchSubjectBinding(elementPattern, elementType, scope),
+						isCatchAll = isWildcard || capture == null && subjectBinding != null,
+						enumPattern = isCatchAll ? null : typeEnumPattern(elementPattern, elementType, scope),
 						typedValue:Null<TypedExpression> = null,
 						equalityFunction:Null<String> = null,
 						constructorIndex = -1,
@@ -1166,12 +1166,12 @@ class BodyTyper {
 						constructorIndex = enumPattern.index;
 						bindings = enumPattern.bindings;
 						predicates = enumPattern.predicates;
-					} else if (subjectBinding == null && !isCatchAll) {
-						typedValue = coerce(typeExpression(pattern, scope, elementType), elementType, "array switch pattern", "E1019");
+					} else if (!isCatchAll) {
+						typedValue = coerce(typeExpression(elementPattern, scope, elementType), elementType, "array switch pattern", "E1019");
 						var literal = enumLiteral(typedValue);
 						if (literal != null)
 							constructorIndex = literal.index;
-						if (literal == null && !AstPredicates.isNullExpression(pattern)) {
+						if (literal == null && !AstPredicates.isNullExpression(elementPattern)) {
 							var valueType = switch elementType {
 								case TNullable(inner): inner;
 								default: elementType;
@@ -1208,7 +1208,7 @@ class BodyTyper {
 	function switchArrayPatternKey(pattern:TypedSwitchArrayPattern):Null<String> {
 		var keys:Array<String> = [];
 		for (element in pattern.elements) {
-			if (element.isCatchAll || element.subjectBinding != null || element.value == null)
+			if (element.isCatchAll || element.value == null)
 				return null;
 			var key = switchCaseKey(element.value, element.predicates);
 			if (key == null)
@@ -1268,7 +1268,19 @@ class BodyTyper {
 						parameterType = enumParameterType(info.typeParameters, parameter, instanceType),
 						abstractName = enumAbstractPatternName(parameter.type),
 						storageType = session.representation.enumStorageType(info.typeParameters, parameter, instanceType);
-					switch arguments[index] {
+					var argument = arguments[index];
+					// `name = pattern` binds the whole payload value, then matches it against `pattern` as usual.
+					while (true) {
+						switch argument {
+							case Capture(binding, pattern, bindingSpan):
+								bindings.push(bindPatternName(binding, bindingSpan, scope, parameterType, storageType, index));
+								argument = pattern;
+								continue;
+							default:
+						}
+						break;
+					}
+					switch argument {
 						case Variable(binding, bindingSpan):
 							var constantName = enumAbstractPatternConstant(abstractName, binding),
 								owner = context.lexicalOwner,
@@ -1278,23 +1290,12 @@ class BodyTyper {
 								|| binding.indexOf(".") >= 0
 								|| inlineField != null
 								|| enumLiteralPattern(parameterType, binding)) {
-								predicates.push(typeEnumPredicate(arguments[index], parameterType, storageType, index, constantName));
-							} else {
-								scope.define(binding, parameterType, bindingSpan);
-								bindCell(binding, bindingSpan, scope, parameterType);
-								bindings.push({
-									name: scope.requireId(binding),
-									type: parameterType,
-									storageType: storageType,
-									fieldStorageType: storageType,
-									index: index,
-									arrayIndex: -1
-								});
-							}
+								predicates.push(typeEnumPredicate(argument, parameterType, storageType, index, constantName));
+							} else bindings.push(bindPatternName(binding, bindingSpan, scope, parameterType, storageType, index));
 						case Call(_, _, _):
-							var nested = typeEnumPattern(arguments[index], parameterType, scope);
+							var nested = typeEnumPattern(argument, parameterType, scope);
 							if (nested == null) {
-								predicates.push(typeEnumPredicate(arguments[index], parameterType, storageType, index, null));
+								predicates.push(typeEnumPredicate(argument, parameterType, storageType, index, null));
 							} else {
 								predicates.push({
 									value: null,
@@ -1424,7 +1425,7 @@ class BodyTyper {
 									fail("E1019", "Array payload pattern requires an Array value", patternSpan);
 							}
 						default:
-							predicates.push(typeEnumPredicate(arguments[index], parameterType, storageType, index, null));
+							predicates.push(typeEnumPredicate(argument, parameterType, storageType, index, null));
 					}
 				}
 				{
@@ -1434,6 +1435,57 @@ class BodyTyper {
 					bindings: bindings,
 					predicates: predicates
 				};
+			default: null;
+		};
+	}
+
+	/** Classifies one case pattern, declaring the names it binds in `scope`. */
+	function switchCasePattern(value:AstExpression, expected:CompilerType, scope:Scope):SwitchTypingRules.SwitchCasePattern {
+		var capture = switchCapture(value, expected, scope),
+			pattern = capture == null ? value : capture.pattern,
+			isWildcard = isSwitchCatchAll(pattern),
+			subjectBinding = capture != null ? capture.name : isWildcard ? null : switchSubjectBinding(pattern, expected,
+				scope), // A bare name binds and matches everything; a capture binds and still matches its pattern.
+			isCatchAll = isWildcard || capture == null && subjectBinding != null,
+			arrayPattern = isCatchAll ? null : typeSwitchArrayPattern(pattern, expected, scope),
+			enumPattern = isCatchAll || arrayPattern != null ? null : typeEnumPattern(pattern, expected, scope);
+		return {
+			value: pattern,
+			subjectBinding: subjectBinding,
+			isCatchAll: isCatchAll,
+			arrayPattern: arrayPattern,
+			enumPattern: enumPattern
+		};
+	}
+
+	/** Declares a name a pattern binds to the enum payload at `index`. */
+	function bindPatternName(name:String, span:SourceSpan, scope:Scope, type:CompilerType, storageType:CompilerType, index:Int):TypedSwitchBinding {
+		scope.define(name, type, span);
+		bindCell(name, span, scope, type);
+		return {
+			name: scope.requireId(name),
+			type: type,
+			storageType: storageType,
+			fieldStorageType: storageType,
+			index: index,
+			arrayIndex: -1
+		};
+	}
+
+	/**
+	 * A case written `name = pattern`: declares `name` as the matched subject and returns the pattern still to match, or null for
+	 * any other case.
+	 */
+	function switchCapture(value:AstExpression, expected:CompilerType, scope:Scope):Null<{name:String, pattern:AstExpression}> {
+		return switch value {
+			case Capture(name, pattern, span):
+				switch pattern {
+					case Capture(_, _, innerSpan): fail("E1019", "A case value can be captured by only one name", innerSpan);
+					default:
+				}
+				scope.define(name, expected, span);
+				bindCell(name, span, scope, expected);
+				{name: scope.requireId(name), pattern: pattern};
 			default: null;
 		};
 	}
@@ -2587,10 +2639,7 @@ class BodyTyper {
 			return false;
 		for (switchCase in cases)
 			if (switchCase.guard == null
-				&& (switchCase.isCatchAll
-					|| switchCase.subjectBinding != null
-					|| switchCase.constructorIndex == constructorIndex
-					&& switchCase.predicates.length == 0))
+				&& (switchCase.isCatchAll || switchCase.constructorIndex == constructorIndex && switchCase.predicates.length == 0))
 				return true;
 		var groups:Map<String, {enumName:String, constructors:Map<Int, Bool>}> = [];
 		for (switchCase in cases) {

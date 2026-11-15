@@ -219,7 +219,7 @@ class SemanticDependencyCollector {
 			case BlockExpression(statements, value, _):
 				scanNativeLayoutQueryStatements(result, owner, statements, aliases);
 				scanNativeLayoutQueryExpression(result, owner, value, aliases);
-			case Cast(value, _, _):
+			case Cast(value, _, _), Capture(_, value, _):
 				scanNativeLayoutQueryExpression(result, owner, value, aliases);
 			case SwitchExpression(subject, cases, fallback, _):
 				scanNativeLayoutQueryExpression(result, owner, subject, aliases);
@@ -414,7 +414,7 @@ class SemanticDependencyCollector {
 				for (statement in statements)
 					scanCalls(statement, calls, aliases);
 				scanCallExpression(value, calls, aliases);
-			case ThrowExpression(value, _):
+			case ThrowExpression(value, _), Capture(_, value, _):
 				scanCallExpression(value, calls, aliases);
 			case Cast(value, _, _):
 				scanCallExpression(value, calls, aliases);

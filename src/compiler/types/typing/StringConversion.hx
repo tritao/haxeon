@@ -44,19 +44,15 @@ class StringConversion {
 	static function name(session:TypingSession, value:TypedExpression):Null<TypedExpression> {
 		var span = value.span;
 		switch value.type {
-			case TNullable(inner):
-				var isAbstract = switch inner {
-					case TAbstract(_, _, _): true;
-					default: false;
-				};
-				if (!isAbstract)
-					return null;
+			case TNullable(inner = TAbstract(_, _, _)):
 				var present = EnumAbstractValues.nameOf(session, new TypedExpression(TCast(value), inner, span), span);
 				if (present == null)
 					return null;
 				var absent = new TypedExpression(TNullableWrap(new TypedExpression(TNullLiteral, TNull, span)), value.type, span),
 					isAbsent = new TypedExpression(TEqual(value, absent), TBool, span);
 				return new TypedExpression(TConditional(isAbsent, new TypedExpression(TStringLiteral("null"), TString, span), present), TString, span);
+			case TNullable(_):
+				return null;
 			default:
 				return EnumAbstractValues.nameOf(session, value, span);
 		}

@@ -17,6 +17,9 @@ The current subset includes:
 - Primitive, reference and value-class valued `Map<String, T>` and `Map<Int, T>` forms
 - Arithmetic, bitwise operations, comparisons, string operations, and casts
 - `if`/`else`, `switch`, `while`, `do`/`while`, `for`, `break`, and `continue`
+- Capture patterns: `name = pattern` matches what `pattern` matches and binds the matched value, as a whole case
+  (`case moving = Fast | Slow:`), an enum payload (`case Group(lead = Circle(_), _):`), an array element
+  (`case [first = 1, _]:`) or the pattern of `value.match(...)`. Over alternatives it binds whichever one matched.
 - Array iteration and comprehensions
 - Exceptions
 - Simple `typedef` aliases and generics, including typedefs of anonymous structures that refer to themselves

@@ -494,7 +494,7 @@ class SignatureInference {
 					if (caseDecl.name == caseName)
 						for (index in 0...arguments.length)
 							switch arguments[index] {
-								case Variable(binding, _) if (binding != "_" && index < caseDecl.params.length):
+								case Variable(binding, _) | Capture(binding, _, _) if (binding != "_" && index < caseDecl.params.length):
 									environment.set(binding, caseDecl.params[index].type);
 								default:
 							}

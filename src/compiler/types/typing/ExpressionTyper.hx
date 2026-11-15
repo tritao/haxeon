@@ -128,6 +128,9 @@ class ExpressionTyper {
 				typeConditional(predicate, whenTrue, whenFalse, span, scope, expectedType, dispatchRules.contextualType);
 			case BlockExpression(statements, result, span): dispatchRules.block(statements, result, span, scope, expectedType);
 			case ThrowExpression(value, span): throwExpression(value, span, scope);
+			case Capture(_, _, span):
+				fail("E1019", "A capture `name = pattern` binds only where the pattern itself is matched", span);
+				null;
 			case Cast(value, target, span): typeCast(value, target, span, scope, expectedType, lowerType);
 			case PostfixIncrement(target, delta, span): postfixIncrement(target, delta, span, scope);
 			case SwitchExpression(subject, cases, defaultExpression, span): typeSwitchExpression(subject, cases, defaultExpression, span, scope, expectedType);
@@ -1530,14 +1533,13 @@ class ExpressionTyper {
 			resultType = typedDefault.type;
 		for (switchCase in cases) {
 			var caseScope = new Scope(scope),
-				subjectBinding = switchRules.subjectBinding(switchCase.value, typedSubject.type, caseScope),
-				isCatchAll = switchRules.catchAll(switchCase.value),
-				arrayPattern = subjectBinding == null ? switchRules.arrayPattern(switchCase.value, typedSubject.type, caseScope) : null,
-				pattern = subjectBinding == null
-					&& arrayPattern == null ? switchRules.enumPattern(switchCase.value, typedSubject.type, caseScope) : null,
+				classified = switchRules.casePattern(switchCase.value, typedSubject.type, caseScope),
+				subjectBinding = classified.subjectBinding,
+				isCatchAll = classified.isCatchAll,
+				arrayPattern = classified.arrayPattern,
+				pattern = classified.enumPattern,
 				typedValue = isCatchAll
-					|| subjectBinding != null
-					|| arrayPattern != null ? typedSubject : pattern == null ? coerce(typeExpressionCallback(switchCase.value, scope, typedSubject.type,
+					|| arrayPattern != null ? typedSubject : pattern == null ? coerce(typeExpressionCallback(classified.value, scope, typedSubject.type,
 						false), typedSubject.type, "switch case", "E1019") : pattern.value;
 			var parsedGuard = switchCase.guard,
 				typedGuard = parsedGuard == null ? null : coerce(typeExpressionCallback(parsedGuard, caseScope, null, false), TBool, "switch guard", "E1003"),
@@ -1570,7 +1572,7 @@ class ExpressionTyper {
 				}
 			}
 			var caseKey = arrayPattern == null ? switchRules.caseKey(typedValue, predicates) : switchRules.arrayPatternKey(arrayPattern);
-			if (isCatchAll || subjectBinding != null)
+			if (isCatchAll)
 				seenCases.set("$catchall", true);
 			if (caseKey != null && typedGuard == null) {
 				if (seenCases.exists(caseKey))

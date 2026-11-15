@@ -110,7 +110,7 @@ class DependencyScanner {
 				for (statement in statements)
 					scanStatement(statement, dependencies, typeParameters);
 				scanExpression(value, dependencies, typeParameters);
-			case ThrowExpression(value, _):
+			case ThrowExpression(value, _), Capture(_, value, _):
 				scanExpression(value, dependencies, typeParameters);
 			case Cast(value, type, _):
 				if (type != null)

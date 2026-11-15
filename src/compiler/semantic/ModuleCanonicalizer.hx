@@ -475,6 +475,7 @@ class ModuleCanonicalizer {
 				var block = canonicalScope(statements, value, module, entry, locals, aliases, null);
 				BlockExpression(block.statements, block.value, s);
 			case ThrowExpression(value, s): ThrowExpression(canonicalExpression(value, module, entry, locals, aliases), s);
+			case Capture(name, pattern, s): Capture(name, canonicalExpression(pattern, module, entry, locals, aliases), s);
 			case Cast(value, target, s):
 				Cast(canonicalExpression(value, module, entry, locals, aliases), canonicalOptionalType(target, aliases), s);
 			case SwitchExpression(subject, cases, fallback, s):

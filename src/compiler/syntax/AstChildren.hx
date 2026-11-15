@@ -9,7 +9,7 @@ class AstChildren {
 			case IntegerLiteral(_, _), FloatLiteral(_, _), StringLiteral(_, _), BoolLiteral(_, _), NullLiteral(_), Unreachable(_), EmptyExpression(_),
 				ErrorExpression(_), Variable(_, _), NativeLayoutQuery(_, _, _, _), KeyPathLiteral(_, _, _), NewMap(_, _, _), Lambda(_, _, _, _): [];
 			case Member(value, _, _), Negate(value, _), Not(value, _), ThrowExpression(value, _), Cast(value, _, _), NewArray(_, value, _),
-				PostfixIncrement(value, _, _), BlockExpression(_, value, _): [value];
+				PostfixIncrement(value, _, _), BlockExpression(_, value, _), Capture(_, value, _): [value];
 			case Add(a, b, _), Sub(a, b, _), Mul(a, b, _), Div(a, b, _), Mod(a, b, _), BitAnd(a, b, _), BitXor(a, b, _), BitOr(a, b, _), ShiftLeft(a, b, _),
 				ShiftRight(a, b, _), UnsignedShiftRight(a, b, _), Less(a, b, _), LessEqual(a, b, _), Greater(a, b, _), GreaterEqual(a, b, _), Equal(a, b, _),
 				NotEqual(a, b, _), And(a, b, _), Or(a, b, _), Range(a, b, _), Index(a, b, _): [a, b];

@@ -9,7 +9,6 @@ import compiler.types.TypedAst.TypedSwitchCoverageCase;
 import compiler.types.TypedAst.TypedSwitchPredicate;
 import compiler.types.analysis.Scope;
 
-typedef SwitchArrayPatternCallback = (AstExpression, CompilerType, Scope) -> Null<TypedSwitchArrayPattern>;
 typedef SwitchArrayPatternKeyCallback = TypedSwitchArrayPattern->Null<String>;
 
 typedef SwitchPattern = {
@@ -20,16 +19,24 @@ typedef SwitchPattern = {
 	predicates:Array<TypedSwitchPredicate>
 };
 
+/** One case pattern, classified: the name it binds the subject to, whether it matches every value, and what it tests. */
+typedef SwitchCasePattern = {
+	/** The pattern left to match once a `name =` capture is removed. */
+	value:AstExpression,
+
+	subjectBinding:Null<String>,
+	isCatchAll:Bool,
+	arrayPattern:Null<TypedSwitchArrayPattern>,
+	enumPattern:Null<SwitchPattern>
+};
+
 /**
  * The switch rules BodyTyper implements, shared by statement switches (StatementTyper) and switch expressions (ExpressionTyper).
  * Both receive the same object, so this is the one declaration of its shape: two copies drifted once, which stock Haxe accepted and
  * Haxeon, which does not take a structure with fields its type does not list, rejected.
  */
 typedef SwitchTypingRules = {
-	subjectBinding:(AstExpression, CompilerType, Scope) -> Null<String>,
-	catchAll:AstExpression->Bool,
-	enumPattern:(AstExpression, CompilerType, Scope) -> Null<SwitchPattern>,
-	arrayPattern:SwitchArrayPatternCallback,
+	casePattern:(AstExpression, CompilerType, Scope) -> SwitchCasePattern,
 	arrayPatternKey:SwitchArrayPatternKeyCallback,
 	caseKey:(TypedExpression, Array<TypedSwitchPredicate>) -> Null<String>,
 	enumCaseCovered:(CompilerType, Int, Array<TypedSwitchCoverageCase>) -> Bool,

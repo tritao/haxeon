@@ -615,7 +615,7 @@ private class PurityWalker {
 				BitOr(left, right, _), ShiftLeft(left, right, _), ShiftRight(left, right, _), UnsignedShiftRight(left, right, _), Less(left, right, _),
 				LessEqual(left, right, _), Greater(left, right, _), GreaterEqual(left, right, _), Equal(left, right, _), NotEqual(left, right, _),
 				And(left, right, _), Or(left, right, _), Range(left, right, _), Index(left, right, _): expression(left) && expression(right);
-			case Negate(value, _), Not(value, _), ThrowExpression(value, _), Cast(value, _, _), NewArray(_, value, _): expression(value);
+			case Negate(value, _), Not(value, _), ThrowExpression(value, _), Cast(value, _, _), NewArray(_, value, _), Capture(_, value, _): expression(value);
 			case Conditional(test, yes, no, _): expression(test) && expression(yes) && expression(no);
 			case BlockExpression(body, result, _):
 				scoped(() -> {
@@ -936,6 +936,9 @@ private class PurityWalker {
 		switch pattern {
 			case Variable(name, _):
 				declare(name);
+			case Capture(name, inner, _):
+				declare(name);
+				bindPattern(inner);
 			case Call(_, arguments, _):
 				for (argument in arguments)
 					bindPattern(argument);

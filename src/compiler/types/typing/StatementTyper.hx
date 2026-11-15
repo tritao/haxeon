@@ -768,14 +768,13 @@ class StatementTyper {
 			seenCases:Map<String, Bool> = [];
 		for (switchCase in cases) {
 			var caseScope = new Scope(scope),
-				subjectBinding = switchRules.subjectBinding(switchCase.value, typedExpression.type, caseScope),
-				isCatchAll = switchRules.catchAll(switchCase.value),
-				arrayPattern = subjectBinding == null ? switchRules.arrayPattern(switchCase.value, typedExpression.type, caseScope) : null,
-				pattern = subjectBinding == null
-					&& arrayPattern == null ? switchRules.enumPattern(switchCase.value, typedExpression.type, caseScope) : null,
+				classified = switchRules.casePattern(switchCase.value, typedExpression.type, caseScope),
+				subjectBinding = classified.subjectBinding,
+				isCatchAll = classified.isCatchAll,
+				arrayPattern = classified.arrayPattern,
+				pattern = classified.enumPattern,
 				typedValue = isCatchAll
-					|| subjectBinding != null
-					|| arrayPattern != null ? typedExpression : pattern == null ? coerce(typeExpression(switchCase.value, scope, typedExpression.type, false),
+					|| arrayPattern != null ? typedExpression : pattern == null ? coerce(typeExpression(classified.value, scope, typedExpression.type, false),
 						typedExpression.type, "switch case", "E1019") : pattern.value;
 			var parsedGuard = switchCase.guard,
 				typedGuard = parsedGuard == null ? null : coerce(typeExpression(parsedGuard, caseScope, null, false), TBool, "switch guard", "E1003");
@@ -795,7 +794,7 @@ class StatementTyper {
 				}
 			}
 			var caseKey = arrayPattern == null ? switchRules.caseKey(typedValue, predicates) : switchRules.arrayPatternKey(arrayPattern);
-			if (isCatchAll || subjectBinding != null)
+			if (isCatchAll)
 				seenCases.set("$catchall", true);
 			if (caseKey != null && typedGuard == null) {
 				if (seenCases.exists(caseKey))

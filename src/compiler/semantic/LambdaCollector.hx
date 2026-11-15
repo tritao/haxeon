@@ -101,7 +101,7 @@ class LambdaCollector {
 			case BlockExpression(statements, value, _):
 				collect(statements, functionName, module, generatedByModule);
 				collectLambdaExpression(value, functionName, module, generatedByModule);
-			case ThrowExpression(value, _):
+			case ThrowExpression(value, _), Capture(_, value, _):
 				collectLambdaExpression(value, functionName, module, generatedByModule);
 			case Cast(value, _, _):
 				collectLambdaExpression(value, functionName, module, generatedByModule);
