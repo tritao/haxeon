@@ -755,13 +755,9 @@ class StatementTyper {
 
 	public function typeSwitch(expression:AstExpression, cases:Array<AstSwitchCase>, defaultBranch:Array<AstStatement>, hasDefault:Bool, span:SourceSpan,
 			scope:Scope, result:Null<CompilerType>):TypedStatement {
-		var typedExpression = typeExpression(expression, scope, null, false);
-		if (!TypeRelations.equals(typedExpression.type, TInt)
-			&& !TypeRelations.equals(typedExpression.type, TString)
-			&& !isNullableString(typedExpression.type)
-			&& !isArraySwitchable(typedExpression.type)
-			&& !switchRules.isEnum(typedExpression.type)
-			&& !EnumAbstractValues.switchable(session, typedExpression.type))
+		var typedExpression = typeExpression(expression, scope, null, false),
+			constantType = switchRules.constantType(typedExpression.type);
+		if (constantType == null && !isArraySwitchable(typedExpression.type) && !switchRules.isEnum(typedExpression.type))
 			fail("E1019", "Switch requires an Int, String, array, or enum value", typedExpression.span);
 		var typedCases:Array<TypedSwitchCase> = [],
 			caseScopes:Array<Scope> = [],
@@ -774,8 +770,8 @@ class StatementTyper {
 				arrayPattern = classified.arrayPattern,
 				pattern = classified.enumPattern,
 				typedValue = isCatchAll
-					|| arrayPattern != null ? typedExpression : pattern == null ? coerce(typeExpression(classified.value, scope, typedExpression.type, false),
-						typedExpression.type, "switch case", "E1019") : pattern.value;
+					|| arrayPattern != null ? typedExpression : pattern == null ? typeCaseConstant(classified.value, typedExpression.type, constantType,
+						scope) : pattern.value;
 			var parsedGuard = switchCase.guard,
 				typedGuard = parsedGuard == null ? null : coerce(typeExpression(parsedGuard, caseScope, null, false), TBool, "switch guard", "E1003");
 			if (typedGuard != null)
@@ -871,11 +867,11 @@ class StatementTyper {
 		return TSwitch(typedExpression, typedCases, typedDefault, hasDefault, span);
 	}
 
-	static function isNullableString(type:CompilerType):Bool
-		return switch type {
-			case TNullable(TString): true;
-			default: false;
-		};
+	/** A constant case, typed as the subject's value: `case null` alone is typed as the (nullable) subject. */
+	function typeCaseConstant(value:AstExpression, subjectType:CompilerType, constantType:Null<CompilerType>, scope:Scope):TypedExpression {
+		var type = constantType == null || compiler.syntax.AstPredicates.isNullExpression(value) ? subjectType : constantType;
+		return coerce(typeExpression(value, scope, type, false), type, "switch case", "E1019");
+	}
 
 	static function isArraySwitchable(type:CompilerType):Bool
 		return switch type {

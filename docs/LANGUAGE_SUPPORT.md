@@ -12,6 +12,8 @@ The current subset includes:
   constructor: a missing value is `E1021`, naming it, and a switch that covers them all returns on every path when its
   arms do. A value outside the declared set (a native code newer than its binding, or a cast) throws at the switch.
   `Flags` combine their values, so their switches still need a default.
+- A switch over a nullable `Int`, `String` or enum abstract matches `case null` apart from its values; a switch over a
+  nullable enum abstract without a default must cover `null` too. A catch-all or capture binds the nullable value.
 - Closures with generated environments and shared cells for mutable captures
 - Arrays and compiler-owned primitive, string, and reference array operations
 - Primitive, reference and value-class valued `Map<String, T>` and `Map<Int, T>` forms

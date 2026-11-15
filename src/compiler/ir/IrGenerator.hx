@@ -1013,11 +1013,12 @@ class IrGenerator {
 								builder.select(nonNullBlock);
 								subjectValue = builder.load(switchName, switchType);
 							}
-							if (isNullableStringType(expression.type) && !isNullExpression(switchCase.value) && !switchCase.isCatchAll) {
+							var valueType = nullableSwitchValueType(expression.type);
+							if (valueType != null && !isNullExpression(switchCase.value) && !switchCase.isCatchAll) {
 								var nonNullBlock = builder.createBlock();
 								builder.branch(builder.equal(subjectValue, builder.constNull(switchType)), nextBlock, nonNullBlock);
 								builder.select(nonNullBlock);
-								subjectValue = builder.load(switchName, switchType);
+								subjectValue = abiBoundaryCast(builder, builder.load(switchName, switchType), lowerType(valueType));
 							}
 							var switchValue = switchCase.constructorIndex >= 0
 								&& isEnumType(expression.type) ? builder.enumIndex(subjectValue) : subjectValue,
@@ -1028,7 +1029,7 @@ class IrGenerator {
 								builder.jump(predicateBlock);
 							else {
 								var matches = if (isNullExpression(switchCase.value)) builder.equal(switchValue,
-									builder.constNull(switchType)); else if ((switch (switchType) {
+									builder.constNull(switchType)); else if ((switch (switchValue.type) {
 									case Bytes: true;
 									default: false;
 								})) builder.call("__string_equal", [switchValue, caseValue], Bool); else builder.equal(switchValue, caseValue);
@@ -2458,18 +2459,19 @@ class IrGenerator {
 							builder.select(nonNullBlock);
 							subjectValue = builder.load(subjectName, subjectType);
 						}
-						if (isNullableStringType(subject.type) && !isNullExpression(switchCase.value) && !switchCase.isCatchAll) {
+						var valueType = nullableSwitchValueType(subject.type);
+						if (valueType != null && !isNullExpression(switchCase.value) && !switchCase.isCatchAll) {
 							var nonNullBlock = builder.createBlock();
 							builder.branch(builder.equal(subjectValue, builder.constNull(subjectType)), nextBlock, nonNullBlock);
 							builder.select(nonNullBlock);
-							subjectValue = builder.load(subjectName, subjectType);
+							subjectValue = abiBoundaryCast(builder, builder.load(subjectName, subjectType), lowerType(valueType));
 						}
 						var comparisonValue = switchCase.constructorIndex >= 0
 							&& isEnumType(subject.type) ? builder.enumIndex(subjectValue) : subjectValue;
 						var caseValue = switchCase.constructorIndex >= 0 ? builder.constInt(switchCase.constructorIndex) : lowerExpression(switchCase.value,
 							builder, localTypes),
 							matches = if (isNullExpression(switchCase.value)) builder.equal(comparisonValue,
-								builder.constNull(subjectType)); else if ((switch (subjectType) {
+								builder.constNull(subjectType)); else if ((switch (comparisonValue.type) {
 								case Bytes: true;
 								default: false;
 							})) builder.call("__string_equal", [comparisonValue, caseValue], Bool); else builder.equal(comparisonValue, caseValue);
@@ -3494,10 +3496,14 @@ class IrGenerator {
 			default: false;
 		};
 
-	function isNullableStringType(type:CompilerType):Bool
+	/**
+	 * The value type a nullable switch subject compares its constant cases as (`Null<Int>`, `Null<String>`, or a nullable enum
+	 * abstract over one), or null for any other subject. A constant case first rules out null, then compares the value.
+	 */
+	function nullableSwitchValueType(type:CompilerType):Null<CompilerType>
 		return switch type {
-			case TNullable(TString): true;
-			default: false;
+			case TNullable(inner = TInt | TString | TAbstract(_, _, TInt | TString)): inner;
+			default: null;
 		};
 
 	function isEnumType(type:CompilerType):Bool

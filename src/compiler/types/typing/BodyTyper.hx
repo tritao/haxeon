@@ -93,6 +93,7 @@ class BodyTyper {
 			function(statements) return ControlFlow.returnsOnEveryPath(statements, function(type, cases) return this.exhaustiveEnum(type, cases)));
 		var switchRules:SwitchTypingRules = {
 			casePattern: function(value:AstExpression, expected:CompilerType, scope:Scope) return this.switchCasePattern(value, expected, scope),
+			constantType: function(subject:CompilerType) return this.switchConstantType(subject),
 			arrayPatternKey: function(pattern:TypedSwitchArrayPattern) return this.switchArrayPatternKey(pattern),
 			caseKey: function(value:TypedExpression, predicates:Array<TypedSwitchPredicate>) return this.switchCaseKey(value, predicates),
 			enumCaseCovered: function(type:CompilerType, index:Int, cases:Array<TypedSwitchCoverageCase>) return this.enumCaseCovered(type, index, cases),
@@ -2688,7 +2689,26 @@ class BodyTyper {
 	 * The declared values of a closed enum abstract, keyed as switch cases are (`int:N`, `string:S`), or null when `type`
 	 * is not one. Flags combine their values, so their switches have no fixed set to cover.
 	 */
+	/**
+	 * The type a switch over `subject` compares its constant cases as: Int, String, or an enum abstract over one, each also
+	 * nullable, when `case null` is matched apart from the value. Null for subjects without constant cases.
+	 */
+	function switchConstantType(subject:CompilerType):Null<CompilerType>
+		return switch subject {
+			case TInt | TString: subject;
+			case TNullable(inner): switchConstantType(inner);
+			default: EnumAbstractValues.switchable(session, subject) ? subject : null;
+		};
+
 	function closedEnumAbstractValues(type:CompilerType):Null<Array<{name:String, key:String}>> {
+		switch type {
+			case TNullable(inner):
+				var values = closedEnumAbstractValues(inner);
+				if (values != null)
+					values.push({name: "null", key: "null"});
+				return values;
+			default:
+		}
 		var name = switch type {
 			case TAbstract(name, _, _): name;
 			default: null;

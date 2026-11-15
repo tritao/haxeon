@@ -37,6 +37,10 @@ typedef SwitchCasePattern = {
  */
 typedef SwitchTypingRules = {
 	casePattern:(AstExpression, CompilerType, Scope) -> SwitchCasePattern,
+
+	/** The type constant cases compare as (the subject's, or the value type of a nullable one), or null when none apply. */
+	constantType:CompilerType->Null<CompilerType>,
+
 	arrayPatternKey:SwitchArrayPatternKeyCallback,
 	caseKey:(TypedExpression, Array<TypedSwitchPredicate>) -> Null<String>,
 	enumCaseCovered:(CompilerType, Int, Array<TypedSwitchCoverageCase>) -> Bool,
@@ -45,6 +49,6 @@ typedef SwitchTypingRules = {
 	isNullableEnum:CompilerType->Bool,
 	enumName:CompilerType->Null<String>,
 
-	/** The values of a closed enum abstract keyed as switch cases are, or null when the subject is not one. */
+	/** The values of a closed enum abstract keyed as switch cases are (with `null` for a nullable one), or null when the subject is not one. */
 	closedEnumAbstractValues:CompilerType->Null<Array<{name:String, key:String}>>
 };

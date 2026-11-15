@@ -581,3 +581,4 @@ enum-abstract-typedef	42
 enum-abstract-exhaustive	42
 enum-abstract-names	42
 switch-capture	42
+nullable-enum-abstract-switch	42
