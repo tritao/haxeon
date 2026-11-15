@@ -1,6 +1,6 @@
 # Language roadmap
 
-Status: plan (2026-11-01). Collects the language and compiler features Haxeon has decided on or is considering, beyond
+Status: plan (2026-11-01, Haxe compatibility gaps added 2026-11-15). Collects the language and compiler features Haxeon has decided on or is considering, beyond
 what the UI needs ([UI_LANGUAGE_FEATURES.md](UI_LANGUAGE_FEATURES.md)). Each feature gets its own design document, or a
 section in an existing one, before it is implemented.
 
@@ -211,12 +211,19 @@ the IR); Wasm32 and Wasm GC would need field-index tables like the typed interfa
 exactly keeps the fixed-layout path, so only the widening conversion pays. Needs a design document before it is
 implemented.
 
+### Other Haxe compatibility gaps
+
+[LANGUAGE_SUPPORT.md](LANGUAGE_SUPPORT.md#not-yet-supported) lists ordinary Haxe that Haxeon rejects. By reach:
+`using` static extensions first (parsed, then resolved as a static call during typing, so no backend changes), then
+indexing `Dynamic` values (JSON), structure and extractor patterns, rest parameters, and the missing standard library
+types and functions. Each is plain Haxe semantics, so it needs a test per backend, not a design document.
+
 ### Smaller conveniences
 
 Check each against what Haxeon already supports before designing it.
 
 - **`if let` / `guard let`:** unwrap an optional, including `Null<S>`, and narrow in one step.
-- **Default interface methods:** static extensions cover most uses; add on demand.
+- **Default interface methods:** static extensions would cover most uses once `using` is supported; add on demand.
 - **`Codable`** (= `Encodable` + `Decodable`): format-independent field encoding for value types, synthesized when every
   field conforms; `Encodable`/`Decodable` alone for one-way data. Not object-graph serialization (objects have identity;
   graphs stay explicit), and distinct from Haxe's `haxe.Serializer` format. Replaces the MessagePack attributes and the

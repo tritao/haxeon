@@ -16,7 +16,9 @@ The current subset includes:
   nullable enum abstract without a default must cover `null` too. A catch-all or capture binds the nullable value.
 - Closures with generated environments and shared cells for mutable captures
 - Arrays and compiler-owned primitive, string, and reference array operations
-- Primitive, reference and value-class valued `Map<String, T>` and `Map<Int, T>` forms
+- `Map` keyed by `String`, `Int`, an enum, or a struct that conforms to `Hashable`, holding primitive, reference or
+  value-class values. A class or interface cannot be a key (classes cannot conform to `Hashable`), so there is no
+  identity-keyed map like Haxe's `ObjectMap`.
 - Arithmetic, bitwise operations, comparisons, string operations, and casts
 - `if`/`else`, `switch`, `while`, `do`/`while`, `for`, `break`, and `continue`
 - Capture patterns: `name = pattern` matches what `pattern` matches and binds the matched value, as a whole case
@@ -78,6 +80,26 @@ realtime operations remain in a separately versioned ABI.
 
 Unsupported ABI combinations produce explicit typed diagnostics instead of
 silently falling back to dynamic behavior.
+
+## Not yet supported
+
+Haxe that stock Haxe 4.3.7 compiles and runs but Haxeon rejects (checked 2026-11-15 by compiling small programs on
+HashLink):
+
+- `using` static extensions: `using StringTools;` is a parse error.
+- Indexing a `Dynamic` value, such as a parsed JSON array (`json.items[0]`): `E1015`. Convert it to a typed array first.
+- Structure patterns (`case {x: 0, y: y}:`) and extractor patterns (`case parse(_) => value:`).
+- Rest parameters (`function sum(...values:Int)`).
+- In the standard library: `haxe.ds.List`, `haxe.ds.Vector`, `Lambda.fold`, the file handles of `sys.io.File.read` and
+  `write` (`getContent` and `saveContent` work), and `Type.getClass` / `Type.getClassName`.
+- A method whose return type would be inferred from `++field` (`function next() return ++i;`): `E1020`. Declare the
+  return type.
+
+Stricter than Haxe:
+
+- A statement after a `try` whose every branch returns is `E1012` (unreachable); Haxe accepts it.
+- `Null<T>` does not convert implicitly to `T`: returning `map.get(key)` from a function declared `:Int` is `E1003`.
+- Map keys must be `Hashable` (above).
 
 ## C header import
 

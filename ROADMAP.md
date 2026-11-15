@@ -1,274 +1,109 @@
-# Realtime Haxe / Pragtical migration roadmap
+# Roadmap
 
-This project is a Haxe-compatible compiler whose primary target is HashLink.
-The official Haxe compiler is a bootstrap and differential-testing oracle only;
-it is not part of the normal editor build.
+Haxeon is a Haxe-compatible compiler and runtime. It targets HashLink (desktop and Android, with live patching) and
+WebAssembly (`wasm32`, `wasm-gc`) from one IR. The official Haxe compiler is the bootstrap and differential-testing
+oracle only; it is not part of a normal build.
 
-## Non-negotiable architecture
+This file tracks the compiler, runtime and editor gates toward converting the Pragtical editor. Language features are
+planned in [docs/LANGUAGE_ROADMAP.md](docs/LANGUAGE_ROADMAP.md). What the language supports, and the ordinary Haxe it
+does not yet compile, is in [docs/LANGUAGE_SUPPORT.md](docs/LANGUAGE_SUPPORT.md). Status as of 2026-11-15.
+
+## Architecture
 
 ```text
-source -> tokens -> AST -> typed AST -> SSA IR -> HL lowering -> HLB/HLP
+source -> tokens -> AST -> typed AST -> SSA IR -> backend (HLB/HLP, Wasm32, Wasm GC)
 ```
 
 - The frontend owns Haxe semantics, source spans, symbols, and diagnostics.
-- SSA is an internal compiler representation. HashLink does not need to know
-  about SSA, phi nodes, or source locals.
-- The HL backend owns encoding, stable append-only symbol tables, and ABI
-  validation. It must never infer semantics from debug names.
-- The forked HashLink owns live-module dispatch, patch staging, JIT lifetime,
-  and the non-moving runtime type arena needed for safe reloads.
-- The editor talks to a persistent compiler service, never to individual
-  compiler passes or the official Haxe executable.
+- SSA is internal to the compiler. HashLink does not need to know about SSA, phi nodes, or source locals.
+- Each backend owns its encoding, stable append-only symbol tables, and ABI validation. It never infers semantics from
+  debug names.
+- The forked HashLink owns live-module dispatch, patch staging, JIT lifetime, and the non-moving runtime type arena
+  needed for safe reloads.
+- The editor talks to a persistent compiler service, never to individual compiler passes or the official Haxe executable.
+- Every feature goes typed AST -> SSA IR -> backend lowering; no feature-specific shortcuts to native code. Unsupported
+  syntax and types are rejected with source diagnostics.
 
-## Gates before Pragtical conversion
+## Gates before the Pragtical conversion
 
-### A. Language and backend core
+### A. Language and backends
 
-- [x] Integer/float/string/bool expressions and literals, arithmetic (including
-  modulo and unary negation), branches, loops,
-  recursion.
-- [x] Typed locals, nominal classes, fields, constructors, inheritance, and
-	instance field initializers injected into explicit or implicit constructors;
-	constructor availability changes invalidate `new` callers incrementally.
-- [x] Static fields and unqualified static access lower to persistent HashLink
-	globals; literal and expression initializers run through a stable `__init`
-	entry at normal startup and live-module load, while compatible body patches
-	preserve global state.
-- [x] SSA construction, verification, phi elimination, deterministic lowering.
-- [x] Function values for non-capturing references.
-- [x] Capturing closures and instance closures, including shared generated
-  capture cells for mutable locals.
-- [~] `Array<T>` typing, indexed reads/writes, `.length`, and compiler-owned
-	`Int`/`Float`/`Bool`/`String` plus reference-array allocation lower directly
-	to HashLink array operations and the runtime ABI; `for (item in array)` is
-	lowered to a bounds-checked SSA loop with `break`/`continue` control edges.
-	Immutable `copy`, `concat`, `slice`, and primitive/String `indexOf` are
-	now ABI-backed and tested. ABI-backed primitive/string maps and reference-valued
-	`Map<String,T>`/`Map<Int,T>` specializations support construction,
-	indexed set/get, `set`, `exists`, key-array iteration, `remove`, and `clear`;
-	reference-valued maps for classes, interfaces, arrays, and function values
-	use the same dynamic pointer representation;
-	immutable array operations cover primitive, string, and reference arrays;
-	primitive/String/reference `push` and `pop` now use capacity-aware HashLink
-	arrays whose backing storage grows without changing array identity; local,
-	mutable-field, and alias mutation are covered, while broader key/value
-	collections remain future work. `for (key in map)` now snapshots typed map
-	keys through the same bounds-checked array loop lowering.
-	Our HashLink fork
-	enforces bounds in the JIT.
-- [~] Explicit `Null<T>` values for reference types lower to HashLink's native
-	 null representation, support equality, and reject implicit untyped null
-	 locals; null-guard narrowing now flows through `&&`, `||`, and `!=`, while migration-safe
-	 object arrays remain future work.
-- [~] Enums lower to HashLink tagged values, including payload constructors,
-  payload extraction, equality by constructor tag, typed enum/int `switch`
-  cases, duplicate-case diagnostics, and exhaustive enum return-path analysis;
-  richer pattern forms remain future work.
-- [~] Primitive and array type aliases resolve in the frontend; cross-module
-	alias identity and generic aliases remain future work.
-- [~] Prototype-dispatched instance calls and inheritance are live, including
-  stable override slots and arbitrary fixed-arity calls. Basic HashLink virtual
-	interface values now lower through `OToVirtual`, support inherited interface
-	slots, and dispatch through `OCallMethod`; generic interfaces and advanced
-	variance remain future work.
+Done: classes, interfaces (including generic ones and constrained type parameters), inheritance with stable override
+slots, statics with a stable `__init`, closures with shared capture cells, arrays, maps, `Null<T>` with narrowing, enums
+with payloads, enum abstracts, abstracts with operators, properties, typedefs (generic and cross-module), imports
+(wildcard and `as` namespaces), pattern matching (nested, alternatives with guards, arrays, captures), exceptions with
+typed catch filters, dynamic objects and reflection, structs with `Equatable`/`Hashable`, key paths, and scoped cleanup.
+What the Wasm backends cover is in [docs/WASM_BACKEND.md](docs/WASM_BACKEND.md).
 
-- [~] A documented runtime library ABI for strings, collections, IO, and time
-	(compiler-owned string concatenation, length, equality, search, slicing, and
-	typed `trace` plus the standard `Sys` time/filesystem/process surface are
-	exercised end-to-end; typed `throw` and catch-all `try`/`catch` now lower
-	through HashLink's dynamic exception ABI. Locals mutated across a handler
-	boundary use selective stable cells rather than blanket register spills, and
-	HashLink validates branch and trap targets before JIT compilation. Typed catch filters, file
-	handles, generic collections, and richer IO remain future work).
+- [ ] The Haxe compatibility gaps in [LANGUAGE_SUPPORT.md](docs/LANGUAGE_SUPPORT.md#not-yet-supported): `using` static
+  extensions, indexing `Dynamic` values, structure and extractor patterns, rest parameters.
+- [ ] Runtime library: file handles (`sys.io.File.read`/`write`), `haxe.ds.List`, `haxe.ds.Vector`, the rest of `Lambda`,
+  `Type.getClass`/`getClassName`.
+- [~] Typed storage for the standard reference maps and nullable-element arrays, and inline `Null<T>` through the callable
+  ABI ([LANGUAGE_ROADMAP.md](docs/LANGUAGE_ROADMAP.md#order), items 7 and 8).
+- [ ] Width subtyping for anonymous structures (needs a design document).
 
 ### B. Incremental compiler service
 
-- [x] Persistent module state and dependency graph.
-- [x] Separate signature/body fingerprints and selective regeneration.
-- [x] Stable function IDs, tombstones, compaction, and identity persistence.
-- [x] Typed function-value dependency invalidation.
-- [~] Package-qualified module paths and imported function/module aliases plus
-	imported class names/type annotations resolve incrementally; nominal class,
-	interface, enum, and alias identities now retain their package-qualified names,
-	while wildcard/alias imports and deeper namespace semantics remain.
-- [~] Unsaved edits can be validated transactionally against a forked compiler
-  snapshot without mutating the live source, including through the JSON-lines
-  protocol; cooperative request cancellation now unwinds compiler phase
-  boundaries, while shared snapshots and one-pass commit/rollback remain.
-- [ ] Parallel parse/type work with deterministic assembly on the editor thread.
-- [ ] Memory and latency budgets measured on a realistic Pragtical project.
+Done: persistent module state and dependency graph, separate signature and body fingerprints with selective
+regeneration, stable function IDs with tombstones and compaction, typed dependency invalidation, and package-qualified
+identities for every nominal type.
+
+- [~] Unsaved edits validate transactionally against a forked snapshot without touching the live source, with cooperative
+  cancellation at phase boundaries; shared snapshots and one-pass commit/rollback remain.
+- [ ] Parallel parse and type work with deterministic assembly.
+- [ ] Memory and latency budgets measured on a realistic Pragtical project. This decides whether the parallel work is
+  needed yet.
 
 ### C. Runtime and hot reload
 
-- [x] Forked HashLink submodule and reproducible local tool bootstrap.
-- [x] HLP framing, strict validation, stable-target relocations, and atomic
-  compatible function patching.
-- [x] Revision checks, stale-patch rejection, call synchronization, and JIT
-	allocation reclamation.
-- [x] Functions containing `OTrap`, `OThrow`, and handler control flow patch in
-  place and execute their replacement handlers without restarting the module.
-- [x] A representative multi-module plugin now loads through the native runtime,
-	patches compatible closure/method bodies in place, and replaces the live module
-	on structural edits (`tests/hxml/plugin-test.hxml`).
-- [x] Non-moving type arena for compatible primitive, abstract, and function
-  type-table growth, with transactional publication and domain-owned cleanup.
-- [~] Structural class layout/base changes are classified as full-reload
-	generations and rebuild HashLink type metadata; compatible appended metadata
-	retains stable addresses within the live domain arena.
-- [x] Loaded modules expose typed lifecycle calls by stable function ID, and
-	`LoadedPlugin` exercises activation, deactivation, state save/restore, staged
-	disposal, and recovery through `RuntimeDomain`.
-- [x] In-memory module loading and patching without temporary `.hl` files.
-- [~] Native runtime call/patch failures return typed status codes and preserve
-	last-good domain ownership; crash-safe diagnostics and automatic recovery for
-	all native faults remain.
+Done: HLP framing and validation, atomic compatible function patching (including functions with traps and handlers),
+revision checks and stale-patch rejection, JIT allocation reclamation, in-memory module loading and patching, the
+non-moving type arena, typed lifecycle calls through `RuntimeDomain`, and a multi-module plugin that patches bodies in
+place and reloads on structural edits (`tests/hxml/plugin-test.hxml`).
+
+- [~] Structural class layout and base changes are classified as full-reload generations and rebuild HashLink type
+  metadata; compatible appended metadata keeps stable addresses.
+- [~] Native call and patch failures return typed status codes and keep the last good domain; crash-safe diagnostics
+  and automatic recovery for every native fault remain.
 
 ### D. Language service
 
-- [~] Persistent AST snapshots, diagnostics, document symbols, completion,
-  hover, definition, references, and rename are exposed through
-  `LanguageService`; typed local member completion now covers classes,
-  interfaces, arrays, maps, and strings, and semantic symbol identity now
-  follows local bindings, class/interface members, and imported module
-  functions. Full semantic resolution remains.
-- [~] Definition, references, and rename now use compiler symbol identity for
-  locals, members, and imported functions; full type-aware navigation remains.
-- [~] Completion-safe partial parsing and error recovery through last-good
-  snapshots; true partial parsing remains.
-- [x] A small JSON-lines protocol adapter for Pragtical; it exposes diagnostics,
-  semantic queries, transactional validation, and base64 HLB/HLP payloads with
-  runtime identity, plus a caller-owned cancellation token and `cancel` method.
-  There is no second typechecker.
-- [x] Representative multi-module plugin workload with an editor facade,
-	interface lifecycle, arrays/maps, callbacks, incremental body patching, and
-	class-layout reload classification (`tests/hxml/plugin-test.hxml`).
+Done: diagnostics, document symbols, completion, hover, definition, references and rename from one compiler snapshot,
+served over LSP (`scripts/haxeon-lsp`) and the JSON-lines protocol.
 
-### E. Self-hosting and release engineering
+- [~] Navigation follows compiler symbol identity for locals, members and imported functions; full type-aware navigation
+  remains.
+- [~] Editing recovers through last-good snapshots; true partial parsing of incomplete code remains.
 
-- [x] Keep compiler sources inside the implemented subset; the bootstrap
-  dashboard lexes, parses, and compiles all 82 compiler source files.
-- [x] Bootstrap compiler A with official Haxe.
-- [x] Build compiler B using A; the resulting HLB is byte-for-byte identical.
-- [x] Check in a reproducible `bootstrap/compiler.hl`; `bootstrap-compiler.sh
-  --self` rebuilds it identically without invoking official Haxe.
-- [x] Build/test in CI from the pinned HashLink fork and formatter version,
-  including an exact self-hosted compiler rebuild.
-- [~] Differential suite: four paired programs currently compare official HL
-	and realtime HL behavior in the normal gate; broader collections, diagnostics,
-	and reload-classification coverage remain.
+### E. Self-hosting and release
 
-## Feature order after the current milestone
+Done: the compiler's own sources compile with Haxeon; compiler A (built by official Haxe) and compiler B (built by A) are
+byte-identical; `bootstrap/compiler.hl` is checked in and rebuilt identically by `bootstrap-compiler.sh --self`; CI checks
+self-hosted convergence.
 
+- [~] The differential suite compares official Haxe and Haxeon on ten paired programs (`tests/differential`); collections,
+  diagnostics and reload classification need more coverage.
 
-1. Extend the first-class `Array<T>` and map runtime types with broader key/value
-	operations and iterator compatibility; keep bounds checks in the HashLink
-	operation contract.
-2. Complete package/import resolution for nominal types, then migrate the
-	fixture into a real Pragtical utility plugin.
-3. Expose compiler snapshots through a thin editor protocol adapter and finish
-	semantic definition/references/rename.
-4. Add structural reload domains and state migration, then move larger editor
-	subsystems and finally the editor core.
+## Next
+
+1. Close the Haxe compatibility gaps in section A, `using` first, so ordinary Haxe and Pragtical code compiles.
+2. Measure memory and latency on a realistic Pragtical project, then decide on parallel typing.
+3. Turn the Pragtical fixture (`tests/fixtures/pragtical`) into a real Pragtical utility plugin running in a reload
+   domain.
+4. Structural reload domains with state migration, then larger editor subsystems, then the editor core.
 
 ## Definition of Pragtical-ready
 
-The compiler is ready for a staged Pragtical conversion when a representative
-plugin can be edited and saved while the editor keeps running; compatible
-function edits patch in place; class-layout edits reload only that plugin
-domain; diagnostics and completion come from the same compiler snapshot; a
-clean build works from the checked-in bootstrap compiler; and the differential
-suite covers every language feature used by the migrated code.
+A representative plugin can be edited and saved while the editor keeps running; compatible function edits patch in
+place; class-layout edits reload only that plugin's domain; diagnostics and completion come from the same compiler
+snapshot; a clean build works from the checked-in bootstrap compiler; and the differential suite covers every language
+feature the migrated code uses.
 
-## Long-term delivery sequence
+## How to spend complexity
 
-This is the order in which the project should spend complexity budget. Each
-stage has a usable exit condition; later stages must not silently become a
-second compiler or a second runtime.
-
-### 0. Contract and instrumentation
-
-- Keep the supported syntax/type/runtime subset explicit and reject everything
-  else with source diagnostics.
-- Pin Haxe Formatter, the reference Haxe toolchain, and the HashLink fork.
-- Keep HLB/HLP readers, writers, and the native fork under differential tests.
-- Add latency, module-size, patch-size, and JIT-reclamation measurements to the
-	normal test run before optimizing; compile latency and patch metrics are now
-	exposed in `CompileResult` and the editor protocol.
-
-### 1. Language kernel
-
-- Finish nominal interfaces, nullable values, enums, pattern matching, and
-  compiler-owned array/map operations.
-- Add type aliases and the small generic forms needed by editor APIs; defer
-  macros, abstracts, build-time metaprogramming, and cross-target semantics.
-- Make diagnostics and source spans stable enough for editor edits while a
-  file is incomplete.
-- Keep every new feature represented as typed AST -> SSA IR -> HL lowering;
-  no feature-specific AST-to-native shortcuts.
-
-### 2. Runtime/ABI hardening
-
-- Define the supported runtime ABI for strings, arrays, maps, IO, time, and
-	exceptions, with Haxe declarations and native implementations versioned
-	together. Typed `throw` and catch-all `try`/`catch` are the first exception
-	ABI milestones; finish typed filters and uncaught-exception diagnostics
-	before migration.
-- Keep exceptional state explicit at the typed-local boundary: values mutated
-  in a protected region and observed by its handler use stable cells, while SSA
-  remains responsible for ordinary control-flow merging.
-- Finish the non-moving type arena and explicit reload domains in the fork.
-- Add in-memory module load/patch APIs, failure recovery, and state migration
-  hooks; preserve ordinary `.hl` compatibility for non-realtime builds.
-- Make structural changes report a domain boundary before any native staging,
-  so a failed patch cannot disturb the running editor.
-
-### 3. Persistent compiler and language service
-
-- Turn edits into transactions: parse/type/codegen failures retain the last
-  good snapshot and return diagnostics without mutating live compiler state.
-- Add dependency-aware parallel work with deterministic assembly on the editor
-  thread, plus measured budgets for a representative Pragtical workspace.
-- Complete definition, references, rename, semantic completion, hover, and
-  document symbols from one compiler snapshot.
-- Add a small protocol adapter for Pragtical and keep it deliberately thinner
-  than the compiler service.
-
-### 4. Plugin-first migration
-
-- Select one small, representative Pragtical plugin and make it compile with
-  the supported subset and runtime ABI.
-- Run it in a reload domain with activate/deactivate and optional state
-  save/restore; exercise body edits, signature edits, and class-layout edits.
-- Migrate utility modules and shared editor services incrementally, maintaining
-  an official-Haxe differential build until each feature is covered.
-- Keep the editor process authoritative: a bad edit must leave the previous
-  plugin generation running and diagnostics visible.
-
-### 5. Editor integration
-
-- Embed the persistent compiler service in a Pragtical-like host, wire save
-  events to transactional compile/patch, and expose diagnostics/completion.
-- [x] Compile and execute integer REPL expressions against a forked compiler
-  snapshot; editor-scope values and richer result types remain.
-- Measure end-to-end save latency, memory growth, patch churn, and recovery
-  behavior under realistic multi-module edits.
-- Expand domains from plugins to selected editor subsystems only after the
-  plugin workflow is boring and repeatable.
-
-### 6. Bootstrap and self-hosting
-
-- Constrain compiler sources to the implemented subset and track unsupported
-  syntax in the bootstrap dashboard.
-- Keep the exact compiler A/compiler B HLB comparison and broaden diagnostic
-  and differential comparisons as the supported language surface grows.
-- Use the checked-in bootstrap compiler for normal development; retain official
-  Haxe as the reproducible bootstrap and differential oracle.
-
-### 7. Production conversion
-
-- Convert the remaining Pragtical services and editor core in dependency order,
-  retaining a fallback build while each domain is validated.
-- Freeze the runtime/compiler protocol versions, document extension points, and
-  publish compatibility and rollback procedures.
-- Treat optimization (SSA quality, JIT tuning, parallelism) as a measured
-  follow-up after correctness, reload safety, and editor UX are stable.
+- Keep the editor process authoritative: a bad edit leaves the previous plugin generation running and its diagnostics
+  visible. Structural changes report a domain boundary before any native staging.
+- Migrate plugins first, then shared services, then the editor core, keeping an official-Haxe differential build until
+  each feature is covered.
+- Measure before optimizing. SSA quality, JIT tuning and parallelism follow correctness, reload safety and editor UX.
