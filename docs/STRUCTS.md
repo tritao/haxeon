@@ -868,6 +868,10 @@ including declared equality for a boxed struct or enum.
 
 Generic `T:Equatable` and `T:Hashable` bounds admit value types only; classes and interface-typed views do not satisfy
 them. Primitives, integer enum abstracts and key paths retain their value semantics. Floats retain IEEE equality.
+A plain abstract has exactly its representation's equality: `==` and `haxeon.Equality.equals` compare the underlying
+value by that type's rules (an abstract over an array is identity under `==` and element-wise under
+`Equality.equals`), and it conforms to `Equatable` when its representation does. An `@:op(==)` overload on an Int or
+Float abstract still replaces `==`.
 Float hashing folds the IEEE bits after canonicalizing both zero signs and all NaNs, so equal values hash alike and
 infinities or large finite values do not require a numeric conversion. Value bounds on generic classes and functions, including `Map<K:Hashable, V>`,
 are checked at compile time and struct-bound calls dispatch without boxing. `haxeon.Equality.equals` requires

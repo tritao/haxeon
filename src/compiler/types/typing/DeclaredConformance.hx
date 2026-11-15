@@ -4,6 +4,7 @@ import compiler.types.Type.CompilerType;
 import compiler.types.Type.NominalKind;
 import compiler.Source.SourceSpan;
 import compiler.runtime.RuntimeType;
+import compiler.types.TypedAst;
 
 /** Queries declared value capabilities using the same inheritance graph as interface bounds. */
 class DeclaredConformance {
@@ -20,11 +21,15 @@ class DeclaredConformance {
 			default: false;
 		};
 
-	/** A field can be synthesized only when its own equality is defined. */
+	/**
+	 * A field can be synthesized only when its own equality is defined. An abstract's `==` compares its representation
+	 * (or calls an `@:op(==)` overload, which only Int and Float abstracts may declare), and generated helpers compare
+	 * elements through that same `==`, so every abstract has exactly its representation's equality.
+	 */
 	public static function supportsEquality(session:TypingSession, type:CompilerType):Bool
 		return switch type {
 			case TInt, TInt64, TFloat, TBool, TString, TNativeScalar(_), TKeyPath(_, _, _): true;
-			case TAbstract(name, _, representation) if (session.declarations.enumAbstracts.exists(name)): supportsEquality(session, representation);
+			case TAbstract(_, _, representation): supportsEquality(session, representation);
 			case TNullable(element): supportsEquality(session, element);
 			case TArray(element): supportsEquality(session, element);
 			case TAnonymous(_, _): has(session, type, "Equatable");
@@ -32,6 +37,29 @@ class DeclaredConformance {
 			case TInstance(NominalKind.Enum, _, _), TTypeParameter(_, _): has(session, type, "Equatable");
 			default: false;
 		};
+
+	/**
+	 * A plain abstract (not an enum abstract) compares as its representation. Returns the operand viewed as that
+	 * representation, or null when it is not a plain abstract or its representation is a primitive that already
+	 * compares correctly as it is.
+	 */
+	public static function abstractEqualityOperand(session:TypingSession, operand:TypedExpression):Null<TypedExpression> {
+		var nullable = false, type = operand.type;
+		switch type {
+			case TNullable(element):
+				nullable = true;
+				type = element;
+			default:
+		}
+		return switch type {
+			case TAbstract(name, _, representation) if (!session.declarations.enumAbstracts.exists(name)):
+				switch representation {
+					case TInt | TInt64 | TFloat | TBool | TString | TNativeScalar(_): null;
+					default: new TypedExpression(TCast(operand), nullable ? TNullable(representation) : representation, operand.span);
+				}
+			default: null;
+		};
+	}
 
 	public static function supportsHash(session:TypingSession, type:CompilerType):Bool
 		return switch type {

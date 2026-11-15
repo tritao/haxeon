@@ -2217,6 +2217,13 @@ class ExpressionTyper {
 		};
 
 	function compareOperands(left:TypedExpression, right:TypedExpression, operation:Int, span:SourceSpan, reversed:Bool):TypedExpression {
+		if (operation == 2 && TypeRelations.equals(left.type, right.type)) {
+			// A plain abstract without an `==` overload compares as its representation.
+			var leftValue = DeclaredConformance.abstractEqualityOperand(session, left),
+				rightValue = DeclaredConformance.abstractEqualityOperand(session, right);
+			if (leftValue != null && rightValue != null)
+				return compareOperands(leftValue, rightValue, operation, span, reversed);
+		}
 		if (operation == 2 && !isNullOperand(left) && !isNullOperand(right))
 			for (operand in [left, right]) {
 				var valueType = switch operand.type {

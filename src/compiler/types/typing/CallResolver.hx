@@ -1335,6 +1335,15 @@ class CallResolver {
 			var explicitEquality = name == "Equality.equals" || name == "haxeon.Equality.equals";
 			if (explicitEquality && !DeclaredConformance.supportsEquality(session, left.type))
 				fail("E1025", DeclaredConformance.capabilityError(session, left.type, "Equatable"), span);
+			if (explicitEquality) {
+				// A plain abstract compares as its representation, as its == does.
+				var leftValue = DeclaredConformance.abstractEqualityOperand(session, left),
+					rightValue = DeclaredConformance.abstractEqualityOperand(session, right);
+				if (leftValue != null && rightValue != null) {
+					left = leftValue;
+					right = rightValue;
+				}
+			}
 			if (!explicitEquality && !mapKeyEquality && (switch left.type {
 				case TArray(_) | TNullable(TArray(_)) | TAnonymous(_, _) | TNullable(TAnonymous(_, _)): true;
 				default: false;
