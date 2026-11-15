@@ -6,6 +6,9 @@ import compiler.types.typing.EnumRuntimeType;
 
 /** Dispatch Dynamic enum operations by the concrete runtime enum descriptor. */
 class IrEnumDynamicDispatch {
+	/** Read-only: no type values in a function. */
+	static final noTypeValues:Map<Int, IrType> = [];
+
 	public static inline final EQUAL = "$enum-dynamic-equal";
 	public static inline final REFLECT = "$enum-dynamic-reflect";
 
@@ -97,35 +100,36 @@ class IrEnumDynamicDispatch {
 				rewritten.push(fn);
 				continue;
 			}
-			var blocks:Array<IrBlock> = [], changed = false, typeValues:Map<Int, IrType> = [];
+			var typeValues:Null<Map<Int, IrType>> = null;
 			for (block in fn.blocks) for (located in block.instructions) switch located.value {
-				case TypeValue(output, type): typeValues.set(output.id, type);
+				case TypeValue(output, type):
+					if (typeValues == null) typeValues = [];
+					typeValues.set(output.id, type);
 				default:
 			}
-			for (block in fn.blocks) {
-				var target = new IrBlock(block.id);
-				for (located in block.instructions) switch located.value {
+			var types:Map<Int, IrType> = typeValues == null ? noTypeValues : typeValues;
+			// Only the blocks with an instruction to replace are copied; a function without one comes back as it is.
+			rewritten.push(IrFunctionRewrite.instructions(fn, function(located) {
+				return switch located.value {
 					case Intrinsic(output, EnumDynamicBox(type), arguments):
-						target.instructions.push(new Located(Call(output, boxNames.get(key(type)), arguments), located.provenance)); changed = true;
+						[new Located(Call(output, boxNames.get(key(type)), arguments), located.provenance)];
 					case Intrinsic(output, EnumDynamicView(type), arguments):
-						target.instructions.push(new Located(Call(output, viewNames.get(key(type)), arguments), located.provenance)); changed = true;
+						[new Located(Call(output, viewNames.get(key(type)), arguments), located.provenance)];
 					case Call(output, "__dynamic_equal", arguments) if (names.length > 0):
-						target.instructions.push(new Located(Call(output, EQUAL, arguments), located.provenance)); changed = true;
+						[new Located(Call(output, EQUAL, arguments), located.provenance)];
 					case SafeCast(output, input) if (IrVerifier.sameType(input.type, Dyn) && isEnum(output.type)):
 						var id = key(output.type), helper = unboxNames.get(id);
 						if (helper == null) { helper = symbol(occupied, "$haxeon_enum_dynamic_unbox_extra_" + nextExtraUnbox++); unboxNames.set(id, helper); }
 						unboxes.set(helper, output.type);
-						target.instructions.push(new Located(Call(output, helper, [input]), located.provenance)); changed = true;
+						[new Located(Call(output, helper, [input]), located.provenance)];
 					case Call(output, name, arguments) if (names.length > 0 && (name == "__std_is_of_type" || name == "__std_is_exact_type")
-						&& arguments.length == 2 && typeValues.exists(arguments[1].id) && isEnum(typeValues.get(arguments[1].id))):
-						var type = typeValues.get(arguments[1].id), exact = name == "__std_is_exact_type", helper = typeTestName(type, exact);
+						&& arguments.length == 2 && types.exists(arguments[1].id) && isEnum(types.get(arguments[1].id))):
+						var type = types.get(arguments[1].id), exact = name == "__std_is_exact_type", helper = typeTestName(type, exact);
 						typeTests.set(helper, {type: type, exact: exact});
-						target.instructions.push(new Located(Call(output, helper, [arguments[0]]), located.provenance)); changed = true;
-					default: target.instructions.push(located);
-				}
-				target.terminator = block.terminator; blocks.push(target);
-			}
-			rewritten.push(changed ? fn.withBlocks(blocks) : fn);
+						[new Located(Call(output, helper, [arguments[0]]), located.provenance)];
+					default: null;
+				};
+			}));
 		}
 		var usedUnboxNames = [for (name in unboxes.keys()) name]; usedUnboxNames.sort(Reflect.compare);
 		for (name in usedUnboxNames) rewritten.push(unbox(name, unboxes.get(name)));
