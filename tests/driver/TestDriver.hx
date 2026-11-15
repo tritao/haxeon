@@ -111,24 +111,25 @@ class TestDriver {
 			throw "No system temporary directory was found";
 		for (_ in 0...100) {
 			var path = haxe.io.Path.join([parent, 'haxeon-test-${Date.now().getTime()}-${Std.random(1000000000)}']);
-			if (!FileSystem.exists(path)) {
-				FileSystem.createDirectory(path);
+			// mkdir must claim the name atomically; another driver may choose the same name.
+			var status = Sys.systemName() == "Windows" ? Sys.command("cmd",
+				["/c", "mkdir", path]) : Sys.command("mkdir", [path]);
+			if (status == 0)
 				return path;
-			}
 		}
 		throw "Cannot create a unique test temporary directory";
 	}
 
 	static function removeTemporaryDirectory(path:String):Void {
-		if (!FileSystem.exists(path))
-			return;
-		if (!FileSystem.isDirectory(path)) {
-			FileSystem.deleteFile(path);
-			return;
-		}
-		for (entry in FileSystem.readDirectory(path))
-			removeTemporaryDirectory(haxe.io.Path.join([path, entry]));
-		FileSystem.deleteDirectory(path);
+		// Native recursive deletion removes links themselves, never their targets.
+		var status = Sys.systemName() == "Windows" ? Sys.command("cmd",
+			["/c", "rmdir", "/s", "/q", path]) : Sys.command("rm", [
+				"-rf",
+				"--",
+				path
+			]);
+		if (status != 0)
+			throw 'Cannot remove test temporary directory "$path"';
 	}
 
 	static function printTiming(phase:String, started:Float):Void {

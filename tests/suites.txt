@@ -51,6 +51,7 @@ sha256-runtime                   ci          -- bash tests/integration/test-sha2
 wasm-runtime-boundaries          ci          -- bash tests/integration/test-wasm-runtime-boundaries.sh
 build-executor                   ci          -- bash tests/integration/test-build-executor.sh
 differential-tests               ci          -- tests/differential/run.sh
+driver-temp                      quick       -- .tools/haxe/haxe --cwd . common.hxml -cp tests -cp tests/compiler --run DriverTemporaryDirectoryMain
 
 # Both Wasm backends: backend-specific checks, then every manifest program against HL's exit codes. The lane starts before the driver
 # and runs beside it, although the driver runs several of the same test mains: every file a lane suite writes and reads back is in its
