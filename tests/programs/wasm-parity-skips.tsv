@@ -1,4 +1,4 @@
-# Manifest programs the Wasm parity suite does not require yet (scripts/test-wasm-gc-parity.sh).
+# Manifest programs the Wasm parity suite does not require yet (tests/wasm/test-wasm-parity.sh).
 # Every other program in expected-exits.tsv must exit as it does on HL on both Wasm targets.
 # mode: skip = known not to work on Wasm yet (the suite fails once it passes on both targets).
 # mode: gc-linear-memory = supported C-native scratch memory; execution is still required.

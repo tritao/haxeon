@@ -1,7 +1,7 @@
 #!/usr/bin/env bash
 set -euo pipefail
 
-root_dir=$(cd "$(dirname "$0")/.." && pwd)
+root_dir=$(cd "$(dirname "$0")/../.." && pwd)
 haxe_bin="$root_dir/.tools/haxe/haxe"
 if [[ ! -x "$haxe_bin" ]]; then
 	echo "missing local Haxe compiler: $haxe_bin" >&2

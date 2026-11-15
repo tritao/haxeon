@@ -1,6 +1,6 @@
 #!/usr/bin/env bash
 set -euo pipefail
-root_dir="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
+root_dir="$(cd "$(dirname "${BASH_SOURCE[0]}")/../.." && pwd)"
 hashlink_dir=$("$root_dir/scripts/hashlink-path.sh")
 build_dir=$(mktemp -d)
 trap 'rm -rf -- "$build_dir"' EXIT

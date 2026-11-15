@@ -1,7 +1,7 @@
 #!/usr/bin/env bash
 set -euo pipefail
 
-root_dir=$(cd "$(dirname "$0")/.." && pwd)
+root_dir=$(cd "$(dirname "$0")/../.." && pwd)
 haxe_bin="$root_dir/.tools/haxe/haxe"
 parity_output_dir=${HAXEON_WASM_PARITY_OUTPUT_DIR:-"$root_dir/out"}
 mkdir -p "$parity_output_dir"

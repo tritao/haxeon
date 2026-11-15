@@ -30,7 +30,9 @@ if [[ $changed -eq 1 ]]; then
     # Until the one-shot reformat after the branches merge, a changed file must not become dirty: a file this branch adds must be clean, and a file
     # that was clean at the merge base with origin/main must still be. A file that was already unformatted at the base is left alone.
     base=$(git -C "$root_dir" merge-base HEAD origin/main)
-    mapfile -t changed_files < <(cd "$root_dir" && git diff --name-only --diff-filter=d "$base" -- src tests benchmarks | rg '\.hx$' | sort)
+    # Untracked files count as added: a new file must be clean before its first commit, not only after it.
+    mapfile -t changed_files < <(cd "$root_dir" && { git diff --name-only --diff-filter=d "$base" -- src tests benchmarks
+        git ls-files --others --exclude-standard -- src tests benchmarks; } | rg '\.hx$' | sort -u)
     source_files=()
     if [[ ${#changed_files[@]} -gt 0 ]]; then
         base_dir="$work/base"

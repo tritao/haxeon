@@ -2,4 +2,6 @@
 set -euo pipefail
 root_dir=$(cd "$(dirname "$0")/.." && pwd)
 haxe_bin=${NATIVEKIT_HAXE_BIN:-"$root_dir/.tools/haxe/haxe"}
-exec "$haxe_bin" -cp "$root_dir/src" -cp "$root_dir/lib/haxeon-io" --run FfiAuditMain "$@"
+# The class paths common.hxml lists, as absolute paths: callers pass paths relative to their own directory, so no --cwd.
+mapfile -t class_paths < <("$root_dir/scripts/compiler-class-paths.sh" --cp-args)
+exec "$haxe_bin" "${class_paths[@]}" --run FfiAuditMain "$@"

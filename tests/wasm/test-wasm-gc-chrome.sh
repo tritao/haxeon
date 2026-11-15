@@ -1,7 +1,7 @@
 #!/usr/bin/env bash
 set -euo pipefail
 
-root_dir=$(cd "$(dirname "$0")/.." && pwd)
+root_dir=$(cd "$(dirname "$0")/../.." && pwd)
 haxe_bin="$root_dir/.tools/haxe/haxe"
 chrome_bin=${CHROME_BIN:-google-chrome}
 wasm_path="$root_dir/out/wasm-gc-chrome-smoke.wasm"

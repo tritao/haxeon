@@ -1,7 +1,7 @@
 #!/usr/bin/env bash
 set -euo pipefail
 
-root_dir=$(cd "$(dirname "$0")/.." && pwd)
+root_dir=$(cd "$(dirname "$0")/../.." && pwd)
 haxe_bin="$root_dir/.tools/haxe/haxe"
 mkdir -p "$root_dir/out"
 if [[ ! -x "$haxe_bin" ]]; then
@@ -13,9 +13,9 @@ source "$root_dir/scripts/haxeon-compiler.sh"
 # The committed C runtime every wasm32 module links must match native/wasm (docs/WASM_LINEAR_RUNTIME.md).
 bash "$root_dir/scripts/build-wasm-runtime.sh" --check
 "$haxe_bin" --cwd "$root_dir" common.hxml -cp tests/compiler --run WasmBackendMain
-bash "$root_dir/scripts/test-wasm-shared-memory.sh"
-bash "$root_dir/scripts/test-wasm-gc-reuse.sh"
-bash "$root_dir/scripts/test-wasm-gc-invariants.sh"
+bash "$root_dir/tests/wasm/test-wasm-shared-memory.sh"
+bash "$root_dir/tests/wasm/test-wasm32-gc-reuse.sh"
+bash "$root_dir/tests/wasm/test-wasm32-gc-invariants.sh"
 haxeon_compile_async \
 	--target=wasm32 --output=out/wasm-cli-backend.wasm --entry=add \
 	--root=tests/programs tests/programs/add.hx

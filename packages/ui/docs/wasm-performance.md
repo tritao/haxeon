@@ -62,7 +62,7 @@ The text-heavy baseline uses eight repetitions of the multilingual sample. The
 previous eight-repeat trap was a stale nullable field in a GC-reused Wasm heap
 block: newly grown memory was zeroed, but the free-list reuse path was not.
 Haxeon's allocator now zero-fills recycled blocks, and its focused
-`scripts/test-wasm-gc-reuse.sh` regression proves an old reference does not leak
+`tests/wasm/test-wasm32-gc-reuse.sh` regression proves an old reference does not leak
 into a fresh object's default-null field, and that recycled array elements and
 `Bytes` storage are zeroed. The Showcase passed 4×, 8×, 16×, and 32× text-repeat
 smoke runs; 16× and 32× were one-frame stress checks, not timing baselines.

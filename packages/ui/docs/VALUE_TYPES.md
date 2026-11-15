@@ -247,7 +247,7 @@ varargs helper instead of generating a duplicate.
 
 The ten existing UI scripts exercise HashLink, and the Showcase builds a
 different reachable graph. The omitted `test-value-snapshot-parity.sh` is now
-part of `scripts/test-wasm-gc-parity.sh`. The full parity gate passed 491 fixtures
+part of `tests/wasm/test-wasm-parity.sh`. The full parity gate passed 491 fixtures
 (14 existing skips), followed by all six UI snapshot combinations: HashLink,
 Wasm32 and Wasm GC, with inlining on and off. The reduced callback regression
 also passes all six combinations. It crosses genuine Dynamic/variadic escapes;

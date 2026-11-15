@@ -47,8 +47,8 @@ All 18 suite/mode combinations passed with defaults and with `HAXEON_INLINE=0`:
 | --- | --- | --- |
 | Every non-Wasm manifest program on HashLink | 320 passed | 320 passed |
 | Compiler/runtime driver, `build.hl test 8` | 463 passed | 463 passed |
-| `scripts/test-wasm-backend.sh` | passed | passed |
-| `scripts/test-wasm-gc-parity.sh` | 317 passed, 14 existing skips | 317 passed, 14 existing skips |
+| `tests/wasm/test-wasm-backend.sh` | passed | passed |
+| `tests/wasm/test-wasm-parity.sh` | 317 passed, 14 existing skips | 317 passed, 14 existing skips |
 | `tests/differential/run.sh` | passed (10 cases) | passed (10 cases) |
 | `scripts/check-self-hosting.sh` | byte-identical stages 1/2 | byte-identical stages 1/2 |
 | `tests/integration/test-workspace.sh` | passed | passed |

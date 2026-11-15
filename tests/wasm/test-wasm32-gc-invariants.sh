@@ -1,7 +1,7 @@
 #!/usr/bin/env bash
 set -euo pipefail
 
-root_dir=$(cd "$(dirname "$0")/.." && pwd)
+root_dir=$(cd "$(dirname "$0")/../.." && pwd)
 haxe_bin="$root_dir/.tools/haxe/haxe"
 artifact="$root_dir/out/wasm-gc-invariants.wasm"
 normal_artifact="$root_dir/out/wasm-gc-budget.wasm"

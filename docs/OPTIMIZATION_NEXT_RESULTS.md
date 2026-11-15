@@ -27,8 +27,8 @@ These runs use the resulting source tree and restored HashLink/runtime, with fre
 | Non-Wasm manifest sweep, defaults and off | 324/324 in each mode | `accepted-sweep-on.log`, `accepted-sweep-off.log` |
 | GC controls, collection pacing, thread stress | Each x10 at default and 65536 trigger, in each mode; 120 runs | Same sweep logs |
 | `build.hl test 8`, defaults and off | 471/471 in each mode | `accepted-driver-on.log`, `accepted-driver-off.log` |
-| `scripts/test-wasm-backend.sh` | Passed | `accepted-wasm.log` |
-| `scripts/test-wasm-gc-parity.sh` | 321 fixtures agree; 14 established skips | `accepted-parity.log`, `tests/programs/wasm-parity-skips.tsv` |
+| `tests/wasm/test-wasm-backend.sh` | Passed | `accepted-wasm.log` |
+| `tests/wasm/test-wasm-parity.sh` | 321 fixtures agree; 14 established skips | `accepted-parity.log`, `tests/programs/wasm-parity-skips.tsv` |
 | `tests/differential/run.sh` | Passed | `accepted-differential.log` |
 | `scripts/check-self-hosting.sh` | Seed, stage 1 and stage 2 reach a byte-for-byte fixed point | `accepted-self-host.log` |
 | `scripts/bootstrap-compiler.sh`, then `--self` | Converged; checked-in compiler and function map rebuild identically | `accepted-bootstrap.log`, `accepted-bootstrap-self.log` |

@@ -41,7 +41,7 @@ memory. Linear memory can still be added for raw-memory FFI operations.
 The GC type plan covers the currently supported object and inheritance,
 enum, array, map, iterator, closure, dynamic-value, string, and byte layouts.
 The supported IR subset is still growing; unsupported operations and native
-signatures fail explicitly during compilation. `scripts/test-wasm-gc-parity.sh`
+signatures fail explicitly during compilation. `tests/wasm/test-wasm-parity.sh`
 compiles shared language fixtures for both targets and checks their results.
 
 String storage remains UTF-8 for ABI transfers. `String.length`, `charCodeAt`,
@@ -77,7 +77,7 @@ allocation for collector tests.
 `--wasm-memory-stats` adds exports for heap, root-stack, allocation, and
 collection counters. The legacy `metadata_base` and `metadata_top` exports
 remain temporarily available and report an empty region. Run
-`scripts/benchmark-wasm-gc.sh [samples]` for a non-gating comparison of stress
+`scripts/benchmark-wasm32-gc.sh [samples]` for a non-gating comparison of stress
 and budgeted collection, including deep and wide graph tracing.
 
 ## Wasm GC references and linear memory
@@ -223,8 +223,8 @@ Bootstrap the pinned local compiler tools once:
 Run the focused backend tests and Wasm32/GC parity suite:
 
 ```sh
-./scripts/test-wasm-backend.sh
-./scripts/test-wasm-gc-parity.sh
+./tests/wasm/test-wasm-backend.sh
+./tests/wasm/test-wasm-parity.sh
 ```
 
 The command-line compiler accepts `--target=wasm32` and `--target=wasm-gc`:

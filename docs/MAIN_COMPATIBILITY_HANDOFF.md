@@ -145,7 +145,7 @@ All commands below were run in this review worktree with local outputs/caches:
   `out/gates/compiler-driver-final-20261009.log`.
 - Wasm parity: 356 fixtures agree across Wasm32, Wasm GC, and HashLink; 15
   declared skips. This includes the nested narrow-store and `UInt32` cases.
-- `scripts/test-hxi-value-records.sh`: HXI fixed-layout ABI checks pass for
+- `tests/integration/test-hxi-value-records.sh`: HXI fixed-layout ABI checks pass for
   Linux, Windows, Android, and Wasm.
 - `tests/integration/test-world-native-record-layout.sh`: passes, including
   Transform and the exact World Entity source.

@@ -35,8 +35,8 @@ gc-flush-scan                    ci          -- bash tests/integration/test-gc-f
 external-tool-build              wave,ci     -- bash tests/integration/test-external-tool-build.sh
 no-nul-literals                  quick,ci    -- bash tests/integration/test-no-nul-literals.sh
 runtime-build-isolation          ci          -- bash tests/integration/test-driver-runtime-isolation.sh
-hxi-value-records                ci          -- bash scripts/test-hxi-value-records.sh
-messagepack-interop              ci          -- bash scripts/test-messagepack-interop.sh
+hxi-value-records                ci          -- bash tests/integration/test-hxi-value-records.sh
+messagepack-interop              ci          -- bash tests/integration/test-messagepack-interop.sh
 run-output                       ci          -- bash tests/integration/test-run-output.sh
 wire-incremental-helpers         ci          -- bash tests/integration/test-wire-incremental-helpers.sh
 differential-tests               ci          -- tests/differential/run.sh
@@ -49,8 +49,8 @@ driver-checked                   wave        -- env HAXEON_CHECK_REUSE=1 scripts
 # Both Wasm backends: backend-specific checks, then every manifest program against HL's exit codes. The lane starts after the driver
 # suites, never alongside them: the driver's WasmBackendMain case rewrites the out/wasm-backend-* files these read. The suites listed
 # after it never touch Wasm artifacts.
-wasm-backend                     wave,ci     lane=wasm -- bash scripts/test-wasm-backend.sh
-wasm-parity                      ci          lane=wasm -- bash scripts/test-wasm-gc-parity.sh
+wasm-backend                     wave,ci     lane=wasm -- bash tests/wasm/test-wasm-backend.sh
+wasm-parity                      ci          lane=wasm -- bash tests/wasm/test-wasm-parity.sh
 static-init-order-wasm           ci          lane=wasm requires=wasmtime -- bash tests/integration/test-static-init-order-wasm.sh
 structural-iteration-wasm        ci          lane=wasm requires=wasmtime -- bash tests/integration/test-structural-iteration-wasm.sh
 dynamic-string-wasm              ci          lane=wasm requires=wasmtime -- bash tests/integration/test-dynamic-string-wasm.sh
@@ -59,7 +59,7 @@ null-reassignment-wasm           ci          lane=wasm requires=wasmtime -- bash
 mixed-array-wasm                 ci          lane=wasm requires=wasmtime -- bash tests/integration/test-mixed-array-wasm.sh
 enum-typedef-wasm                ci          lane=wasm requires=wasmtime -- bash tests/integration/test-enum-typedef-wasm.sh
 nullable-enum-pattern-wasm       ci          lane=wasm requires=wasmtime -- bash tests/integration/test-nullable-enum-pattern-wasm.sh
-wasm-gc-wasmtime                 ci          lane=wasm requires=wasmtime -- bash scripts/test-wasm-gc-wasmtime.sh
+wasm-gc-wasmtime                 ci          lane=wasm requires=wasmtime -- bash tests/wasm/test-wasm-gc-wasmtime.sh
 
 formatter-integration            ci          -- tests/integration/test-haxeon-formatter.sh
 native-publish-integration       ci          -- bash tests/integration/test-native-publish.sh

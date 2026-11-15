@@ -126,10 +126,10 @@ continuing past a failing one:
 | mode | suites |
 |---|---|
 | quick | the whole-tree type check; the NUL guard; the driver in its default configuration (each program built live and plain, named cases, executables); the UI Showcase builds |
-| wave | quick, then the driver with `HAXEON_CHECK_REUSE=1` (adds the warm-edit rebuilds and the reuse comparisons), `scripts/test-wasm-backend.sh`, the self-hosting compile (`tests/integration/test-compiler-embedding.sh`) and the external-tool build (`tests/integration/test-external-tool-build.sh`) |
+| wave | quick, then the driver with `HAXEON_CHECK_REUSE=1` (adds the warm-edit rebuilds and the reuse comparisons), `tests/wasm/test-wasm-backend.sh`, the self-hosting compile (`tests/integration/test-compiler-embedding.sh`) and the external-tool build (`tests/integration/test-external-tool-build.sh`) |
 | full | wave and every suite `scripts/test.sh` runs (the `ci` group), each once: the default driver run is shared, where the gate used to run it twice |
 
-Since 2026-11-15 a suite in a `lane` runs alongside the suites after it (in wave, `scripts/test-wasm-backend.sh` beside the self-hosting
+Since 2026-11-15 a suite in a `lane` runs alongside the suites after it (in wave, `tests/wasm/test-wasm-backend.sh` beside the self-hosting
 compile), so its seconds are not measured on an otherwise idle machine; compare a lane's seconds only between runs of the same mode.
 
 Results go to `out/gate/<commit>-<mode>-<time>/`: a log per suite and `summary.txt` with the commit, mode, jobs, load at start and end,

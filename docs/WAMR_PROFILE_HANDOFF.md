@@ -51,7 +51,7 @@ not affect default `wasm32` or `wasm-gc` output.
 - A generated start wrapper preserves the normal instantiation-time
   initializer and is itself charged. Export wrappers preserve results and
   trap on an unhandled Haxe exception.
-- `scripts/test-wasm-backend.sh` has a profile CLI regression for the exact
+- `tests/wasm/test-wasm-backend.sh` has a profile CLI regression for the exact
   import signature, profile/root sections, EH absence, throw/catch/rethrow,
   fuel traps at entry/back-edge/start, and unchanged default profile
   selection. `tests/compiler/WasmBackendMain.hx` also compiles with GC stress.

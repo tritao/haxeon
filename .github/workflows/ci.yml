@@ -128,15 +128,15 @@ jobs:
         if: matrix.platform == 'test'
         env:
           CHROME_BIN: ${{ steps.setup-chrome.outputs.chrome-path }}
-        run: scripts/test-wasm-gc-chrome.sh
+        run: tests/wasm/test-wasm-gc-chrome.sh
 
       - name: Wasm backend runtime gates
         if: matrix.platform == 'test'
-        run: scripts/test-wasm-backend.sh
+        run: tests/wasm/test-wasm-backend.sh
 
       - name: Wasm GC parity gate
         if: matrix.platform == 'test'
-        run: scripts/test-wasm-gc-parity.sh
+        run: tests/wasm/test-wasm-parity.sh
 
       - name: Set up Wasmtime GC runtime
         if: matrix.platform == 'test'
@@ -146,7 +146,7 @@ jobs:
 
       - name: Wasm GC runtime gate
         if: matrix.platform == 'test'
-        run: scripts/test-wasm-gc-wasmtime.sh
+        run: tests/wasm/test-wasm-gc-wasmtime.sh
 
       - name: Compiler, differential, and runtime gates
         if: matrix.platform != 'windows'

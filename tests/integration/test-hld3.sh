@@ -18,5 +18,5 @@ cc -shared -fPIC -DHL_NAME\(n\)=realtime_\#\#n \
 (
   cd "$repo_dir/out"
   LD_LIBRARY_PATH="$repo_dir/vendor/hashlink${LD_LIBRARY_PATH:+:$LD_LIBRARY_PATH}" \
-    python3 "$repo_dir/scripts/hld3-harness.py" dap-hot-reload-probe.hl --hl "$repo_dir/vendor/hashlink/hl" --timeout 20
+    python3 "$repo_dir/tests/integration/hld3-harness.py" dap-hot-reload-probe.hl --hl "$repo_dir/vendor/hashlink/hl" --timeout 20
 )

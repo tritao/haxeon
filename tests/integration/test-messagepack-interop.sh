@@ -1,7 +1,7 @@
 #!/usr/bin/env bash
 set -euo pipefail
 
-root_dir=$(cd "$(dirname "$0")/.." && pwd)
+root_dir=$(cd "$(dirname "$0")/../.." && pwd)
 haxe="$root_dir/.tools/haxe/haxe"
 hashlink_dir=$("$root_dir/scripts/hashlink-path.sh")
 hl="$hashlink_dir/hl"

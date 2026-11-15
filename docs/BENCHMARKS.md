@@ -23,7 +23,7 @@ Generate scaling results and compare two runs:
 
 ```sh
 ./scripts/benchmark.sh --only-scale --json out/benchmark-scale.json
-./scripts/benchmark-compare.sh baseline.json out/benchmark-scale.json
+./scripts/benchmark-compare.py baseline.json out/benchmark-scale.json
 ```
 
 Use `--iterations`, `--warmup`, `--soak`, `--scales`, and
