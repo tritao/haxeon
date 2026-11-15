@@ -841,9 +841,25 @@ class StatementTyper {
 			if (missing.length > 0)
 				fail("E1021", 'Enum switch is missing cases: ${missing.join(", ")}', span);
 		}
+		// A switch over a closed enum abstract covers every declared value, as one over an enum covers every constructor.
+		// Its implicit default throws, so a value outside the declared set fails at the switch rather than skipping it.
+		var unmatchedEnumAbstract:Null<String> = null;
+		if (!hasDefault && !seenCases.exists("$catchall")) {
+			var values = switchRules.closedEnumAbstractValues(typedExpression.type);
+			if (values != null) {
+				var missing = [for (value in values) if (!seenCases.exists(value.key)) value.name];
+				if (missing.length > 0)
+					fail("E1021", 'Enum abstract switch is missing values: ${missing.join(", ")}', span);
+				unmatchedEnumAbstract = 'Unmatched ${compiler.semantic.SemanticSignature.display(typedExpression.type)} value';
+			}
+		}
 		var defaultScope = new Scope(scope),
 			typedDefault = typeStatements(defaultBranch, defaultScope, result),
 			continuing:Array<Scope> = [];
+		if (unmatchedEnumAbstract != null) {
+			typedDefault = [TThrow(new TypedExpression(TStringLiteral(unmatchedEnumAbstract), TString, span), span)];
+			hasDefault = true;
+		}
 		for (i in 0...typedCases.length)
 			if (!ControlFlow.alwaysExits(typedCases[i].statements, exhaustiveEnum))
 				continuing.push(caseScopes[i]);

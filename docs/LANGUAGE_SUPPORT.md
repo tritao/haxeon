@@ -8,9 +8,10 @@ The current subset includes:
 - An enum abstract that names its values (`RawRepresentable` or `Flags`) prints its name wherever it becomes a String:
   concatenation, interpolation, `Std.string` and `toString()` (`Button`, `Access[Read | Write]`; an undeclared raw value
   prints as `Kind(9)`, and a nullable one as `null`).
-- A switch expression over an enum abstract that covers every declared value needs no default, as one over an enum
-  covers every constructor; a missing value is `E1021`, naming it. A value outside the declared set (a native code newer
-  than its binding, or a cast) throws at the switch. `Flags` combine their values, so their switches still need a default.
+- A switch over an enum abstract without a default covers every declared value, as one over an enum covers every
+  constructor: a missing value is `E1021`, naming it, and a switch that covers them all returns on every path when its
+  arms do. A value outside the declared set (a native code newer than its binding, or a cast) throws at the switch.
+  `Flags` combine their values, so their switches still need a default.
 - Closures with generated environments and shared cells for mutable captures
 - Arrays and compiler-owned primitive, string, and reference array operations
 - Primitive, reference and value-class valued `Map<String, T>` and `Map<Int, T>` forms

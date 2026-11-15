@@ -544,6 +544,8 @@ class TestMain {
 		expectCompileError('function main():Int { return switch 1 { case 1: 42; }; }', 'Switch expression requires a default branch');
 		expectCompileError('enum abstract Shape(Int) { var Circle = 1; var Square = 2; var Triangle = 3; } function main():Int { var shape = Shape.Square; return switch shape { case Circle: 0; case Square: 42; }; }',
 			'Enum abstract switch is missing values: Triangle');
+		expectCompileError('enum abstract Shape(Int) { var Circle = 1; var Square = 2; } function main():Int { var shape = Shape.Square; switch shape { case Circle: return 0; } return 42; }',
+			'Enum abstract switch is missing values: Square');
 		expectCompileError('function main():Int { return switch 1 { case 1: 42; default: "wrong"; }; }',
 			'Type mismatch for switch branch: expected Int, got String');
 		expectCompileError('function main():Int { return switch 1 { case 1: 40; case 1: 2; default: 0; }; }', 'Duplicate switch case');

@@ -24,6 +24,18 @@ function mimeCode(mime:Mime):Int
 		case Json: 2;
 	};
 
+// A statement switch that covers every value returns on every path, with no trailing return.
+function corners(shape:Shape):Int {
+	switch shape {
+		case Circle:
+			return 0;
+		case Square:
+			return 4;
+		case Triangle:
+			return 3;
+	}
+}
+
 function main():Int {
 	if (sides(Square) != 4 || sides(Triangle) != 3 || sides(Circle) != 0)
 		return 1;
@@ -36,5 +48,14 @@ function main():Int {
 		unmatched = Std.string(error).indexOf("Unmatched") >= 0;
 	if (!unmatched)
 		return 4;
+	if (corners(Square) != 4 || corners(Circle) != 0)
+		return 5;
+	var skipped = false;
+	try
+		corners(9)
+	catch (error:Dynamic)
+		skipped = Std.string(error).indexOf("Unmatched") >= 0;
+	if (!skipped)
+		return 6;
 	return 42;
 }
