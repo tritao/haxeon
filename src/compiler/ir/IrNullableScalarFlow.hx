@@ -257,7 +257,7 @@ class IrNullableScalarFlow {
 						var left = required(args[0]),
 							right = required(args[1]),
 							type = inner(args[0].type),
-							name = EQUAL_PREFIX + Std.string(type);
+							name = EQUAL_PREFIX + IrTypeIdentity.text(type);
 						checks.set(name, type);
 						target.instructions.push(new Located(Call(out, name, [left.present, left.payload, right.present, right.payload]), located.provenance));
 					case ConstNull(out) if (parts.exists(out.id)):

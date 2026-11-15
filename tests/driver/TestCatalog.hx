@@ -91,6 +91,7 @@ class TestCatalog {
 		"GenericStructOwnerMain",
 		"WasmHandleGcLeafMain",
 		"IteratorTypeDescriptorMain",
+		"IrTypeIdentityMain",
 		"InterpreterClosureCastMain",
 		"SpecializedMapIncrementalMain",
 		"FieldAliasFlowMain",

@@ -1,5 +1,6 @@
 package compiler.backend.wasm.linear;
 
+import compiler.ir.IrTypeIdentity;
 import compiler.ir.IrReachability;
 import compiler.ir.Ir.IrProgram;
 import compiler.ir.Ir.IrType;
@@ -2904,8 +2905,8 @@ class WasmLinearRuntime {
 						switch located.value {
 							case TypeValue(_, type):
 								switch type {
-									case Iterator(_) if (!iteratorTypes.exists(Std.string(type))):
-										iteratorTypes.set(Std.string(type), true);
+									case Iterator(_) if (!iteratorTypes.exists(IrTypeIdentity.text(type))):
+										iteratorTypes.set(IrTypeIdentity.text(type), true);
 										builder.localGet(typeId);
 										builder.i32Const(module.runtimeTypeId(type));
 										builder.emit(I32Eq);

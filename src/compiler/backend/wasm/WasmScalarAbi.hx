@@ -9,6 +9,7 @@ import compiler.ir.IrInlineValueLayout.IrInlineValueSlot;
 import compiler.ir.IrOperands;
 import compiler.ir.IrProgramIndex;
 import compiler.ir.IrReachability;
+import compiler.ir.IrTypeIdentity;
 import compiler.ir.IrVerifier;
 import compiler.ir.SourceProvenance.Located;
 
@@ -519,7 +520,7 @@ class WasmScalarAbi {
 						hasValue = true;
 					if (!scalarizable(argument))
 						safe = false;
-				} if (hasValue && safe) candidates.set(Std.string(signature), true); hasValue && safe;
+				} if (hasValue && safe) candidates.set(IrTypeIdentity.text(signature), true); hasValue && safe;
 			default: false;
 		};
 	}

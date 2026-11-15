@@ -4,6 +4,7 @@ import compiler.ir.Ir;
 import compiler.ir.IrBuilder;
 import compiler.ir.IrCheckedDynamicCasts;
 import compiler.ir.IrFunction;
+import compiler.ir.IrTypeIdentity;
 import compiler.ir.IrValueInterfaceBoxes;
 import compiler.ir.SourceProvenance.Located;
 
@@ -132,7 +133,9 @@ class WasmScalarClosureEscapes {
 	function needsAdapter(type:IrType):Bool {
 		var signature = functionType(type);
 		return signature != null
-			&& (scalar.exists(Std.string(type)) || scalar.exists(Std.string(signature)) || hasInlineEnumSignature(signature));
+			&& (scalar.exists(IrTypeIdentity.text(type))
+				|| scalar.exists(IrTypeIdentity.text(signature))
+				|| hasInlineEnumSignature(signature));
 	}
 
 	/** Reflection can synthesize a Dynamic closure escape after the language-level enum pass. */
@@ -219,7 +222,8 @@ class WasmScalarClosureEscapes {
 		var signature = functionType(type);
 		if (signature == null)
 			throw 'Expected closure signature, got $type';
-		var key = Std.string(signature), existing = signatureChecks.get(key);
+		var key = IrTypeIdentity.text(signature),
+			existing = signatureChecks.get(key);
 		if (existing != null)
 			return existing;
 		var suffix = haxe.crypto.Sha256.encode(key).substr(0, 32),
@@ -255,7 +259,7 @@ class WasmScalarClosureEscapes {
 	}
 
 	function adapter(type:IrType):String {
-		var key = Std.string(type), found = adapters.get(key);
+		var key = IrTypeIdentity.text(type), found = adapters.get(key);
 		if (found != null)
 			return found;
 		switch type {
@@ -349,7 +353,7 @@ class WasmScalarClosureEscapes {
 
 	/** A restored closure keeps the Dynamic call on its boundary while publishing the typed scalar ABI. */
 	function restoration(type:IrType):String {
-		var key = Std.string(type), found = restorations.get(key);
+		var key = IrTypeIdentity.text(type), found = restorations.get(key);
 		if (found != null)
 			return found;
 		switch type {

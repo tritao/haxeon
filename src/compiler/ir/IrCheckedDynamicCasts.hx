@@ -13,7 +13,7 @@ class IrCheckedDynamicCasts {
 			helpers:Map<String, String> = [], generated:Array<IrFunction> = [],
 			known = new IrFunctionIndex("checked-dynamic-casts", existingFunctions == null ? functions : existingFunctions.concat(functions));
 		function helperFor(type:IrType, checkedType:IrType, typeName:String, allowNull:Bool):String {
-			var key = Std.string(type), existing = helpers.get(key);
+			var key = IrTypeIdentity.text(type), existing = helpers.get(key);
 			if (existing != null) return existing;
 			var name = PREFIX + key, builder = new IrBuilder(), input = builder.argument("value", Dyn),
 				check = builder.createBlock(), accepted = builder.createBlock(), rejected = builder.createBlock();

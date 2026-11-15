@@ -178,7 +178,7 @@ class IrEnumEscapeReach {
 				values(type, unsupported, valueTypes);
 			switch type {
 				case Abstract(_):
-					var key = Std.string(type);
+					var key = IrTypeIdentity.text(type);
 					if (inspectedMaps.exists(key))
 						return;
 					inspectedMaps.set(key, true);
@@ -192,7 +192,7 @@ class IrEnumEscapeReach {
 		var walk:IrObject->Void = function(_) {},
 			referenceEnums:Map<String, Bool> = [];
 		function walkReferences(type:IrType):Void {
-			var key = Std.string(type);
+			var key = IrTypeIdentity.text(type);
 			if (referenceTypes.exists(key))
 				return;
 			referenceTypes.set(key, true);
@@ -223,7 +223,7 @@ class IrEnumEscapeReach {
 					for (argument in arguments)
 						walkReferences(argument);
 					walkReferences(result);
-					var environments = closureEnvironments.get(Std.string(type));
+					var environments = closureEnvironments.get(IrTypeIdentity.text(type));
 					if (environments != null)
 						for (environment in environments)
 							walkReferences(environment);
@@ -237,7 +237,7 @@ class IrEnumEscapeReach {
 						for (object in implementers)
 							walk(object);
 				case Abstract(_):
-					var contents = mapContents.get(Std.string(type));
+					var contents = mapContents.get(IrTypeIdentity.text(type));
 					if (contents != null)
 						for (content in contents)
 							walkReferences(content);

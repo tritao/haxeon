@@ -1,5 +1,6 @@
 package compiler.hl.incremental;
 
+import compiler.ir.IrTypeIdentity;
 import compiler.abi.NameRewrite;
 import compiler.hl.HlCode.HlTypeDef;
 import compiler.hl.HlCode.HlVirtualField;
@@ -477,7 +478,7 @@ class HlSymbolTable {
 			}
 		}
 		for (method in interfaceDecl.methods)
-			contract.push(method.name + ":" + Std.string(method.arguments) + "->" + Std.string(method.result));
+			contract.push(method.name + ":" + IrTypeIdentity.listText(method.arguments) + "->" + IrTypeIdentity.text(method.result));
 		var identity = internString(name + "#" + haxe.crypto.Sha256.encode(contract.join("\n")));
 		var index = typeIndices.exists(key) ? typeIndices.get(key) : types.length;
 		if (pendingTypes.exists(key)) {

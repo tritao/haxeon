@@ -2,6 +2,7 @@ package compiler.backend.wasm.gc;
 
 import compiler.backend.wasm.WasmValueLayout;
 import compiler.ir.IrProgramIndex;
+import compiler.ir.IrTypeIdentity;
 
 import compiler.ir.Ir.IrEnum;
 import compiler.ir.Ir.IrEnumCase;
@@ -66,7 +67,7 @@ class WasmGcTypePlan {
 
 	/** Closure cast targets distinguish source types even when their Wasm signatures coincide. */
 	public function closureSignatureId(type:IrType):Int {
-		var key = Std.string(type), existing = closureSignatureIds.get(key);
+		var key = IrTypeIdentity.text(type), existing = closureSignatureIds.get(key);
 		if (existing != null)
 			return existing;
 		var result = nextClosureSignatureId++;
@@ -353,7 +354,7 @@ class WasmGcTypePlan {
 
 	public function closureFunctionType(type:IrType):WasmFunctionType
 		return switch type {
-			case Function(arguments, result): scalarClosures.exists(Std.string(type)) ? scalarFunctionType(arguments, result) : wasmFunctionType(arguments, result);
+			case Function(arguments, result): scalarClosures.exists(IrTypeIdentity.text(type)) ? scalarFunctionType(arguments, result) : wasmFunctionType(arguments, result);
 			default: throw 'Not a Wasm GC closure type: $type';
 		};
 

@@ -12,7 +12,7 @@ class WasmTypeIdPlan {
 	public function new(types:Array<IrType>) {
 		var keys:Map<String, IrType> = [];
 		function add(type:IrType):Void {
-			var key = Std.string(type);
+			var key = IrTypeIdentity.text(type);
 			if (keys.exists(key)) return;
 			keys.set(key, type);
 			switch type {
@@ -48,7 +48,7 @@ class WasmTypeIdPlan {
 	}
 
 	public function id(type:IrType):Int {
-		var key = Std.string(type), result = ids.get(key);
+		var key = IrTypeIdentity.text(type), result = ids.get(key);
 		if (result == null) throw 'Wasm runtime type was not planned: $key';
 		return result;
 	}

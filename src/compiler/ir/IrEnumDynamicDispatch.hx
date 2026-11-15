@@ -16,7 +16,7 @@ class IrEnumDynamicDispatch {
 			equalities:Map<String, String> = [], reflectiveEqualities:Map<String, String> = [],
 			occupied:Map<String, Bool> = [for (fn in functions) fn.name => true],
 			needsEqual = false, needsReflect = false;
-		function key(type:IrType):String return Std.string(type);
+		function key(type:IrType):String return IrTypeIdentity.text(type);
 		function register(type:IrType):String { var id = key(type); requests.set(id, type); return id; }
 		for (fn in functions) {
 			switch fn.kind {

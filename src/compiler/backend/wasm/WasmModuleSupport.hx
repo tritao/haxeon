@@ -1,5 +1,6 @@
 package compiler.backend.wasm;
 
+import compiler.ir.IrTypeIdentity;
 import compiler.ir.IrProgramIndex;
 import compiler.ir.IrReachability;
 import compiler.ir.IrEnumEscapeReach;
@@ -308,7 +309,7 @@ class WasmModuleSupport {
 	}
 
 	static function closureFunctionType(type:IrType, arguments:Array<IrType>, result:IrType, abi:Null<WasmScalarAbi>):WasmFunctionType {
-		if (abi == null || !abi.scalarClosures.exists(Std.string(type)))
+		if (abi == null || !abi.scalarClosures.exists(IrTypeIdentity.text(type)))
 			return {parameters: [for (argument in arguments) requireValueType(argument)], results: resultTypes(result)};
 		var parameters:Array<WasmValueType> = [],
 			results:Array<WasmValueType> = [];

@@ -1,5 +1,6 @@
 package compiler.backend.wasm.linear;
 
+import compiler.ir.IrTypeIdentity;
 import compiler.ir.Ir.IrType;
 import compiler.ir.Ir.IrValue;
 import compiler.ir.Ir.IrInstruction;
@@ -283,7 +284,7 @@ class WasmLinearRepresentation implements WasmValueRepresentation implements Was
 		return scalarAbi != null && scalarAbi.signatures.exists(name);
 
 	public function hasScalarClosure(type:IrType):Bool
-		return scalarAbi != null && scalarAbi.scalarClosures.exists(Std.string(type));
+		return scalarAbi != null && scalarAbi.scalarClosures.exists(IrTypeIdentity.text(type));
 
 	public function scalarClosureCall(type:IrType, staticType:Int, instanceType:Int, closureLocal:Int, output:IrValue, outputLocal:Int,
 			argumentLocals:Array<Int>):Array<WasmInstruction> {

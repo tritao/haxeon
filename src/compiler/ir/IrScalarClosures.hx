@@ -773,7 +773,7 @@ class IrScalarClosures {
 		};
 
 	static function key(type:IrType):String
-		return Std.string(type);
+		return IrTypeIdentity.text(type);
 
 	static function nextId(fn:IrFunction):Int {
 		var max = -1;

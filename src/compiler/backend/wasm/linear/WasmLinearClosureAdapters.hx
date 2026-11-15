@@ -1,5 +1,6 @@
 package compiler.backend.wasm.linear;
 
+import compiler.ir.IrTypeIdentity;
 import compiler.ir.Ir.IrProgram;
 import compiler.ir.Ir.IrType;
 import compiler.ir.Ir.IrValue;
@@ -25,7 +26,7 @@ class WasmLinearClosureAdapters {
 	public static inline final SIGNATURE_FUNCTION = "__haxeon_closure_signature";
 
 	public static function staticDescriptorKey(name:String, type:IrType):String
-		return haxe.Json.stringify([name, Std.string(type)]);
+		return haxe.Json.stringify([name, IrTypeIdentity.text(type)]);
 
 	final program:IrProgram;
 	final signatureIds:Map<String, Int> = [];
@@ -39,7 +40,7 @@ class WasmLinearClosureAdapters {
 	}
 
 	public function signatureId(type:IrType):Int {
-		var id = signatureIds.get(Std.string(type));
+		var id = signatureIds.get(IrTypeIdentity.text(type));
 		if (id == null)
 			throw 'Unplanned Wasm32 closure signature ${Std.string(type)}';
 		return id;
@@ -52,7 +53,7 @@ class WasmLinearClosureAdapters {
 		return '__haxeon_closure_adapter_${source}_$target';
 
 	static function closureKey(type:IrType):String
-		return Std.string(type);
+		return IrTypeIdentity.text(type);
 
 	static function arguments(type:IrType):Array<IrType>
 		return switch type {
@@ -77,7 +78,7 @@ class WasmLinearClosureAdapters {
 		function noteType(type:IrType):Void {
 			switch type {
 				case Function(args, result):
-					var text = Std.string(type);
+					var text = IrTypeIdentity.text(type);
 					if (signatureTypes.exists(text))
 						return;
 					signatureTypes.set(text, true);
@@ -201,7 +202,7 @@ class WasmLinearClosureAdapters {
 					switch located.value {
 						case Call(out, "__closure_is_of_type", arguments) if (arguments.length == 2 && types.exists(arguments[1].id)):
 							var type = types.get(arguments[1].id),
-								name = "$wasm:closure-type-check:" + haxe.crypto.Sha256.encode(Std.string(type)).substr(0, 32);
+								name = "$wasm:closure-type-check:" + haxe.crypto.Sha256.encode(IrTypeIdentity.text(type)).substr(0, 32);
 							helpers.set(name, type);
 							target.instructions.push(new Located(IrInstruction.Call(out, name, [arguments[0]]), located.provenance));
 							changed = true;

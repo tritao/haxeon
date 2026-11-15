@@ -1,5 +1,6 @@
 package compiler.backend.wasm.linear;
 
+import compiler.ir.IrTypeIdentity;
 import compiler.ir.Ir.IrProgram;
 import compiler.ir.Ir.IrType;
 import compiler.backend.wasm.WasmLayout;
@@ -125,8 +126,8 @@ class WasmLinearDynamicArrays {
 					switch located.value {
 						case Call(_, "__array_check_cast" | "__array_alloc_typed_ref", arguments) if (arguments.length == 2):
 							var type = typeValues.get(arguments[1].id);
-							if (type != null && !seen.exists(Std.string(type))) {
-								seen.set(Std.string(type), true);
+							if (type != null && !seen.exists(IrTypeIdentity.text(type))) {
+								seen.set(IrTypeIdentity.text(type), true);
 								result.push(type);
 							}
 						default:

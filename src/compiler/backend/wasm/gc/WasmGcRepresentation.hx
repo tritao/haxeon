@@ -1,5 +1,6 @@
 package compiler.backend.wasm.gc;
 
+import compiler.ir.IrTypeIdentity;
 import compiler.ir.IrReachability;
 import compiler.backend.wasm.WasmFlattenValueFields;
 import haxe.io.Bytes as HaxeBytes;
@@ -176,7 +177,7 @@ class WasmGcRepresentation implements WasmValueRepresentation implements WasmAgg
 		return plan.scalarSignatures.exists(name);
 
 	public function hasScalarClosure(type:IrType):Bool
-		return plan.scalarClosures.exists(Std.string(type));
+		return plan.scalarClosures.exists(IrTypeIdentity.text(type));
 
 	public function hasScalarVirtual(receiver:IrType, method:String):Bool
 		return plan.scalarVirtuals.exists(WasmScalarAbi.virtualKey(receiver, method));
@@ -1125,8 +1126,8 @@ class WasmGcRepresentation implements WasmValueRepresentation implements WasmAgg
 					switch located.value {
 						case TypeValue(_, type):
 							switch type {
-								case Iterator(element) if (!iteratorTypes.exists(Std.string(type))):
-									iteratorTypes.set(Std.string(type), true);
+								case Iterator(element) if (!iteratorTypes.exists(IrTypeIdentity.text(type))):
+									iteratorTypes.set(IrTypeIdentity.text(type), true);
 									appendTypeTest(body, valueLocal, typeLocal, outputLocal, type, plan.iteratorType(element));
 								default:
 							}
@@ -1193,8 +1194,8 @@ class WasmGcRepresentation implements WasmValueRepresentation implements WasmAgg
 					switch located.value {
 						case TypeValue(_, type):
 							switch type {
-								case Function(_, _) if (!seen.exists(Std.string(type))):
-									seen.set(Std.string(type), true);
+								case Function(_, _) if (!seen.exists(IrTypeIdentity.text(type))):
+									seen.set(IrTypeIdentity.text(type), true);
 									body = body.concat([
 										LocalGet(typeLocal),
 										I32Const(plan.runtimeTypeIds.id(type)),

@@ -1,6 +1,7 @@
 package compiler.abi;
 
 import compiler.ir.Ir;
+import compiler.ir.IrTypeIdentity;
 
 /** Deterministic semantic descriptions of every runtime-visible declaration. */
 typedef RuntimeAbiDescriptor = {
@@ -79,6 +80,6 @@ class RuntimeAbi {
 		return switch type {
 			case Array(element): 'Array<${typeKey(element)}>';
 			case Function(arguments, result): signature(arguments, result);
-			default: Std.string(type);
+			default: IrTypeIdentity.text(type);
 		};
 }

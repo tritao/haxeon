@@ -1,5 +1,6 @@
 package compiler.ir.hl;
 
+import compiler.ir.IrTypeIdentity;
 import compiler.hl.HlCode;
 import compiler.hl.HlCode.HlTypeDef;
 import compiler.hl.HlFunction;
@@ -689,7 +690,7 @@ class HlLower {
 		for (native in natives)
 			if (native.name == name) {
 				if (native.arguments.length != arguments.length
-					|| Std.string(native.result) != Std.string(result)
+					|| IrTypeIdentity.text(native.result) != IrTypeIdentity.text(result)
 					|| native.library != nativeLibrary
 					|| native.symbol != nativeSymbol)
 					throw 'Conflicting HashLink runtime native signature for "$name": ${native.arguments} -> ${native.result}, expected $arguments -> $result';

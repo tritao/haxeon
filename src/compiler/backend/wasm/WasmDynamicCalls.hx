@@ -1,5 +1,6 @@
 package compiler.backend.wasm;
 
+import compiler.ir.IrTypeIdentity;
 import compiler.ir.Ir;
 import compiler.ir.IrBuilder;
 import compiler.ir.IrFunction;
@@ -85,8 +86,8 @@ class WasmDynamicCalls {
 								needsFunctionTest = true;
 							var signature:IrType = dynamicCall ? Function([for (a in args) a.type], out.type) : closure.type;
 							if (dynamicCall)
-								targets.set(Std.string(signature), signature);
-							var key = (dynamicCall ? "dynamic:" : "typed:") + Std.string(signature);
+								targets.set(IrTypeIdentity.text(signature), signature);
+							var key = (dynamicCall ? "dynamic:" : "typed:") + IrTypeIdentity.text(signature);
 							if (!helpers.exists(key)) {
 								var privateAbi = !dynamicCall && compiler.ir.IrScalarArguments.isPrivateClosureType(signature),
 									prefix = privateAbi ? compiler.ir.IrScalarArguments.PREFIX + "$wasm:closure-check:" : "__haxeon_invoke_";
@@ -180,7 +181,7 @@ class WasmDynamicCalls {
 	}
 
 	public static function varargsAdapterName(type:IrType):String
-		return "__haxeon_varargs_adapter_" + Std.string(type);
+		return "__haxeon_varargs_adapter_" + IrTypeIdentity.text(type);
 
 	public static function varargsAdapter(name:String, type:IrType, enums:Array<IrEnum>):IrFunction {
 		var b = new IrBuilder(),

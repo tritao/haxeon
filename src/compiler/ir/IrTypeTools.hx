@@ -33,7 +33,7 @@ class IrTypeTools {
 			case Function(arguments, result):
 				var erasedArguments = [for (argument in arguments) erase(argument)],
 					erasedResult = erase(result);
-				var same = Std.string(erasedResult) == Std.string(result);
+				var same = IrTypeIdentity.text(erasedResult) == IrTypeIdentity.text(result);
 				for (index in 0...arguments.length)
 					if (Std.string(erasedArguments[index]) != Std.string(arguments[index]))
 						same = false;
@@ -64,5 +64,5 @@ class IrTypeTools {
 		return Std.string(expected) == Std.string(actual) || ((switch (expected) { case Dyn: true; default: false; }) && nullableElement(actual) != null);
 
 	static function changed(original:IrType, replacement:IrType, element:IrType):IrType
-		return Std.string(erase(element)) == Std.string(element) ? original : replacement;
+		return IrTypeIdentity.text(erase(element)) == IrTypeIdentity.text(element) ? original : replacement;
 }
