@@ -9,9 +9,9 @@ import haxeon.platform.internal.event.EventBytes;
 import haxeon.platform.internal.event.NativeEvent;
 import nativekit.ffi.NativeKit;
 import nativekit.ffi.NativeKitNet;
-import nativekit.ffi.NativeKitNetTypes.HttpHeader as NativeHttpHeader;
+import nativekit.ffi.NativeKitNetTypes.NativeHttpHeader;
 import nativekit.ffi.NativeKitNetTypes.HttpProgress;
-import nativekit.ffi.NativeKitNetTypes.HttpResponse as NativeHttpResponse;
+import nativekit.ffi.NativeKitNetTypes.NativeHttpResponse;
 import nativekit.ffi.NativeKitTypes.EventKind;
 import nativekit.ffi.NativeKitTypes.Result;
 

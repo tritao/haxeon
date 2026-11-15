@@ -28,11 +28,11 @@
     "nk_resource_stream": "NativeKitTypes.ResourceStreamHandle",
     "nk_http_client": "HttpClientHandle",
     "nk_http_stream": "HttpStreamHandle",
-    "nk_http_header": "HttpHeader",
+    "nk_http_header": "NativeHttpHeader",
     "nk_http_client_options": "HttpClientOptions",
     "nk_http_proxy_options": "HttpProxyOptions",
     "nk_http_request_options": "HttpRequestOptions",
-    "nk_http_response": "HttpResponse",
+    "nk_http_response": "NativeHttpResponse",
     "nk_http_stream_info": "HttpStreamInfo",
     "nk_http_progress": "HttpProgress",
     "nk_http_tls_options": "HttpTlsOptions"

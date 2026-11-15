@@ -22,6 +22,7 @@ import haxeon.audio.AudioTransitionOptions;
 import haxeon.audio.Bus;
 import haxeon.audio.BusConcurrencyOptions;
 import haxeon.audio.BusEffect;
+import haxeon.audio.EffectParameter;
 import haxeon.audio.Clip;
 import haxeon.audio.Cone;
 import haxeon.audio.DistanceLimits;

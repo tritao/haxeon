@@ -2,7 +2,7 @@ import haxeon.platform.event.EventPump;
 import haxe.io.Bytes;
 import nativekit.ffi.NativeKitNet;
 import nativekit.ffi.NativeKitNetTypes.HttpClientOptions;
-import nativekit.ffi.NativeKitNetTypes.HttpHeader;
+import nativekit.ffi.NativeKitNetTypes.NativeHttpHeader;
 import nativekit.ffi.NativeKitNetTypes.HttpMethod;
 import nativekit.ffi.NativeKitNetTypes.HttpRequestMode;
 import nativekit.ffi.NativeKitNetTypes.HttpRequestOptions;
@@ -51,7 +51,7 @@ class NativeKitHttpEventTests {
 				case _:
 			});
 
-			var headers = new HttpHeader();
+			var headers = new NativeHttpHeader();
 			headers.set_name_bytes(Bytes.ofString("Content-Type"));
 			headers.set_value_bytes(Bytes.ofString("application/json"));
 			var requestOptions = new HttpRequestOptions();
