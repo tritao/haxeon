@@ -110,7 +110,7 @@ class TestDriver {
 		if (parent == null || parent == "" || !FileSystem.exists(parent) || !FileSystem.isDirectory(parent))
 			throw "No system temporary directory was found";
 		for (_ in 0...100) {
-			var path = haxe.io.Path.join([parent, 'haxeon-test-${Date.now().getTime()}-${Std.random(1000000000)}']);
+			var path = haxe.io.Path.join([parent, 'haxeon-test-${Std.random(1000000000)}-${Std.random(1000000000)}']);
 			// mkdir must claim the name atomically; another driver may choose the same name.
 			var status = Sys.systemName() == "Windows" ? Sys.command("cmd",
 				["/c", "mkdir", path]) : Sys.command("mkdir", [path]);
