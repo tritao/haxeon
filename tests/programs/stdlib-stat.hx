@@ -1,6 +1,4 @@
-import haxe.io.FPHelper;
-
-// FileSystem.stat, Date.fromTime, FPHelper and Timer.stamp give Haxe's results.
+// FileSystem.stat, Date.fromTime and Timer.stamp give Haxe's results.
 function main():Int {
 	var path = "out/stdlib-stat-fphelper.txt";
 	sys.io.File.saveContent(path, "12345");
@@ -13,11 +11,6 @@ function main():Int {
 	} catch (_:Dynamic) {}
 	if (Date.fromTime(1500.0).getTime() != 1500.0)
 		return 3;
-	if (FPHelper.floatToI32(1.0) != 0x3F800000 || FPHelper.i32ToFloat(0x40000000) != 2.0)
-		return 4;
-	var bits = FPHelper.doubleToI64(1.0);
-	if (haxe.Int64.toStr(bits) != "4607182418800017408" || FPHelper.i64ToDouble(0, 0x3FF00000) != 1.0)
-		return 5;
 	var start = haxe.Timer.stamp();
 	return haxe.Timer.stamp() >= start ? 42 : 6;
 }

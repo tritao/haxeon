@@ -800,10 +800,11 @@ class WasmLinearRepresentation implements WasmValueRepresentation implements Was
 				throw "Invalid Wasm runtime memory.load i32 signature";
 			return [LocalGet(argumentLocals[0]), I32Load(0), LocalSet(outputLocal)];
 		}
-		if (name == "__f32_to_i32_bits") {
+		// Float32 values live in f64 locals, so a Float rounded to 32 bits (FloatBits.toInt32) converts the same way.
+		if (name == "__f32_to_i32_bits" || name == "__float_to_f32_bits" || name == "runtime.FloatBits.toInt32") {
 			if (!compiler.ir.IrVerifier.sameType(output.type, I32)
 				|| arguments.length != 1
-				|| !compiler.ir.IrVerifier.sameType(arguments[0].type, F32)
+				|| !compiler.ir.IrVerifier.sameType(arguments[0].type, name == "__f32_to_i32_bits" ? F32 : F64)
 				|| argumentLocals.length != 1)
 				throw "Invalid Wasm Float32 bit conversion signature";
 			return [
@@ -813,8 +814,8 @@ class WasmLinearRepresentation implements WasmValueRepresentation implements Was
 				LocalSet(outputLocal)
 			];
 		}
-		if (name == "__i32_to_f32_bits") {
-			if (!compiler.ir.IrVerifier.sameType(output.type, F32)
+		if (name == "__i32_to_f32_bits" || name == "__f32_bits_to_float" || name == "runtime.FloatBits.fromInt32") {
+			if (!compiler.ir.IrVerifier.sameType(output.type, name == "__i32_to_f32_bits" ? F32 : F64)
 				|| arguments.length != 1
 				|| !compiler.ir.IrVerifier.sameType(arguments[0].type, I32)
 				|| argumentLocals.length != 1)

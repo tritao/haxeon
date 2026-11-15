@@ -31,6 +31,21 @@ HL_PRIM double HL_NAME(__i64_to_f64_bits)(int64_t bits) {
 	return value;
 }
 
+/* The bits of `value` rounded to a 32-bit float, for callers whose floats are all doubles. */
+HL_PRIM int HL_NAME(__float_to_f32_bits)(double value) {
+	float single = (float)value;
+	int bits;
+	memcpy(&bits, &single, sizeof(bits));
+	return bits;
+}
+
+/* The 32-bit float whose bits are `bits`, as a double. */
+HL_PRIM double HL_NAME(__f32_bits_to_float)(int bits) {
+	float single;
+	memcpy(&single, &bits, sizeof(single));
+	return (double)single;
+}
+
 HL_PRIM int HL_NAME(__f32_to_i32_bits)(float value) {
 	int bits;
 	memcpy(&bits, &value, sizeof(bits));

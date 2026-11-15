@@ -3,18 +3,12 @@ package haxe.io;
 /** The IEEE 754 bits of floating-point numbers, as in Haxe. */
 class FPHelper {
 	/** The bits of `f` rounded to a 32-bit float. */
-	public static function floatToI32(f:Float):Int {
-		var bytes = Bytes.alloc(4);
-		bytes.setFloat(0, f);
-		return bytes.getInt32(0);
-	}
+	public static inline function floatToI32(f:Float):Int
+		return runtime.FloatBits.toInt32(f);
 
 	/** The 32-bit float whose bits are `i`. */
-	public static function i32ToFloat(i:Int):Float {
-		var bytes = Bytes.alloc(4);
-		bytes.setInt32(0, i);
-		return bytes.getFloat(0);
-	}
+	public static inline function i32ToFloat(i:Int):Float
+		return runtime.FloatBits.fromInt32(i);
 
 	/** The bits of the double `v`. */
 	public static inline function doubleToI64(v:Float):haxe.Int64
