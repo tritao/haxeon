@@ -7,7 +7,15 @@ if [[ $(uname -s) != Linux ]]; then
 fi
 work=$(mktemp -d "${TMPDIR:-/tmp}/haxeon-checkout-hl.XXXXXX")
 trap 'rm -rf -- "$work"' EXIT
-snapshot() { find -L "$root/.tools/hashlink" -type f -printf '%p %T@ %s\n' | LC_ALL=C sort; }
+# The checkout builds its VM under out/cmake; a build must leave the shared toolchain directory as it was, including absent
+# (a fresh checkout has none).
+snapshot() {
+	if [[ -e "$root/.tools/hashlink" ]]; then
+		find -L "$root/.tools/hashlink" -type f -printf '%p %T@ %s\n' | LC_ALL=C sort
+	else
+		echo 'absent'
+	fi
+}
 snapshot > "$work/before"
 df -h /
 "$root/scripts/build-native.sh" > "$work/build.log" 2>&1
