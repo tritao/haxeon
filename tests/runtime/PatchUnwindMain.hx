@@ -14,7 +14,7 @@ class PatchUnwindMain {
 		CompilerIntrinsics.register(compiler);
 		compiler.addStandardLibrarySourceRoot("stdlib");
 		var program = (message:String) -> "import haxe.CallStack;\n"
-			+ "function fail():Void { throw '"
+			+ "@:noReturn function fail():Void { throw '"
 			+ message
 			+ "'; }\n"
 			+ "function probe():Int { try { fail(); } catch (error:Dynamic) { var stack = CallStack.toString(CallStack.exceptionStack());"
