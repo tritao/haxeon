@@ -151,7 +151,7 @@ class SourceEnumTagMain {
 				+ 'for(const n of [8,1024]){const before=c();if(e["Probe.perform"](n)!==42*n)throw Error("case result");'
 				+ 'if(c()!==before)throw Error("nullary references allocated "+(c()-before)+" objects for "+n+" iterations");}'
 				+ 'e["Probe.allocateArray"](1024);const counts=[];for(const n of [8,1024]){const before=c();if(e["Probe.allocateArray"](n)!==n)throw Error("array length");counts.push(c()-before);}if(counts[0]!==counts[1])throw Error("per-element array allocations: "+counts);';
-			var child = new sys.io.Process(target == "hl" ? "scripts/hl" : "node", target == "hl" ? [path] : [
+			var child = new sys.io.Process(target == "hl" ? TestHashLink.vm() : "node", target == "hl" ? [path] : [
 				"--expose-gc",
 				"-e",
 				js,

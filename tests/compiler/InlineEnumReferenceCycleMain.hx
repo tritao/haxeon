@@ -149,7 +149,7 @@ function main():Int return 42;
 				+ 'const count=e.__allocation_count||e["haxeon.memory.allocation_count"];'
 				+ 'for(const n of [8,1024]){const before=count();for(let i=0;i<n;i++)if(e.main()!==42)throw Error("payload");'
 				+ 'if(count()!==before)throw Error("reference-cycle carrier allocated "+(count()-before)+" objects for "+n+" calls");}';
-			var child = new sys.io.Process(target == HashLink ? "scripts/hl" : "node", target == HashLink ? [path] : [
+			var child = new sys.io.Process(target == HashLink ? TestHashLink.vm() : "node", target == HashLink ? [path] : [
 				"--expose-gc",
 				"-e",
 				js,

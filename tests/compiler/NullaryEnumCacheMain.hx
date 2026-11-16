@@ -94,7 +94,7 @@ class NullaryEnumCacheMain {
 				+ 'const c=e.__allocation_count||e["haxeon.memory.allocation_count"];'
 				+ 'for(const n of [8,1024]){const before=c();if(e["CaseProbe.perform"](n)!==42*n)throw Error("case result");'
 				+ 'if(c()!==before)throw Error("nullary references allocated "+(c()-before)+" objects for "+n+" iterations");}';
-			var child = new sys.io.Process(target == "hl" ? "scripts/hl" : "node",
+			var child = new sys.io.Process(target == "hl" ? TestHashLink.vm() : "node",
 				target == "hl" ? [path] : [
 					"--expose-gc",
 					"-e",

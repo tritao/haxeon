@@ -123,7 +123,7 @@ class ReflectionTagProjectionMain {
 			var script =
 				'const e=new WebAssembly.Instance(new WebAssembly.Module(require("fs").readFileSync(process.argv[1]))).exports;'
 				+ '\nif(e.main()!==42)throw Error("tag reflection");';
-			var child = new sys.io.Process(target == "hl" ? "scripts/hl" : "node", target == "hl" ? [path] : [
+			var child = new sys.io.Process(target == "hl" ? TestHashLink.vm() : "node", target == "hl" ? [path] : [
 				"-e",
 				script,
 				path

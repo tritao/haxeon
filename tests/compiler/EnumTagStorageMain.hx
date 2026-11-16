@@ -366,7 +366,7 @@ class EnumTagStorageMain {
 							}).bytes;
 						sys.io.File.saveBytes(path, bytes);
 						var vm = Sys.getEnv("HAXEON_HASHLINK_DIR"),
-							command = target == HashLink ? (vm == null ? "scripts/hl" : vm + "/hl") : "node";
+							command = target == HashLink ? (vm == null ? TestHashLink.vm() : vm + "/hl") : "node";
 						var script =
 							'const fs=require("fs");const e=new WebAssembly.Instance(new WebAssembly.Module(fs.readFileSync(process.argv[1]))).exports;if(e.main()!==42)throw Error("tag roundtrip failed");';
 						if (!arrays)

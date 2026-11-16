@@ -205,7 +205,7 @@ class RawRepresentableMain {
 				+ 'if(e.main()!==42)throw Error("raw semantics"); const count=e.__allocation_count||e["haxeon.memory.allocation_count"];'
 				+ 'e["Probe.raw"](2);for(const n of [8,1024]){const before=count();if(e["Probe.raw"](n)!==11*n)throw Error("raw loop");if(count()!==before)throw Error("raw values boxed");}'
 				+ 'e["Probe.fromRaw32"](2);for(const n of [8,1024]){const before=count();if(e["Probe.fromRaw32"](n)!==(n===8?28:15872))throw Error("raw switch result");const objects=count()-before;if(objects>n)throw Error("extra raw switch boxes");console.log("CENSUS fromRaw32 n="+n+" objects="+objects);}';
-			var child = new sys.io.Process(target == "hl" ? "scripts/hl" : "node", target == "hl" ? [path] : [
+			var child = new sys.io.Process(target == "hl" ? TestHashLink.vm() : "node", target == "hl" ? [path] : [
 				"--expose-gc",
 				"-e",
 				js,

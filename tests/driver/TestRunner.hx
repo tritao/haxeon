@@ -456,7 +456,9 @@ class TestRunner {
 			return named.length;
 		}
 		var runs:Array<ProgramRun> = [for (test in tests) for (run in runsOf(test)) run];
-		if (prebuiltMain != null && Sys.getEnv("HAXEON_BATCH_COMPILE") != "0")
+		// A batch process merges its streams through sh, which Windows may not have: there each program compiles in a process of
+		// its own, still with the prebuilt compiler.
+		if (prebuiltMain != null && Sys.getEnv("HAXEON_BATCH_COMPILE") != "0" && Sys.systemName() != "Windows")
 			batch = new BatchCompilers(hl, prebuiltMain);
 		var failures = 0;
 		if (jobs == 1) {

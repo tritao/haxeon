@@ -29,7 +29,7 @@ class NullStringMapMain {
 					wasmGcAllocationCount: target == "wasm-gc", exports: exports
 				}).bytes);
 			if (target == "hl") {
-				var status = Sys.command("scripts/hl", [path]);
+				var status = Sys.command(TestHashLink.vm(), [path]);
 				if (status != 42) throw "HL null map returned " + status;
 				var live = runtime.Runtime.load(sys.io.File.getBytes(path), result.runtimeIdentity);
 				if (runtime.Runtime.callInt(live, result.functionIds.get("Main.census")) != 42)

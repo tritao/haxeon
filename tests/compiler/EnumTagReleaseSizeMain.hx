@@ -89,7 +89,7 @@ class EnumTagReleaseSizeMain {
 			var script =
 				'const e=new WebAssembly.Instance(new WebAssembly.Module(require("fs").readFileSync(process.argv[1]))).exports;'
 				+ 'if(e.main()!==42)throw Error("release enum tag semantics");';
-			var child = new sys.io.Process(target == "hl" ? "scripts/hl" : "node", target == "hl" ? [path] : [
+			var child = new sys.io.Process(target == "hl" ? TestHashLink.vm() : "node", target == "hl" ? [path] : [
 				"-e",
 				script,
 				path

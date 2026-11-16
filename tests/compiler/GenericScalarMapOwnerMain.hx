@@ -110,7 +110,7 @@ class GenericScalarMapOwnerMain {
 			}).bytes);
 		var js =
 			'const e=new WebAssembly.Instance(new WebAssembly.Module(require("fs").readFileSync(process.argv[1]))).exports;const r=e.main();if(r!==42)throw Error("owned map "+r);';
-		var child = new sys.io.Process(target == "hl" ? "scripts/hl" : "node", target == "hl" ? [path] : [
+		var child = new sys.io.Process(target == "hl" ? TestHashLink.vm() : "node", target == "hl" ? [path] : [
 			"-e",
 			js,
 			path

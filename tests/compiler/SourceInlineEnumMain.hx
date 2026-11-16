@@ -92,7 +92,7 @@ class SourceInlineEnumMain {
 				sys.io.File.saveBytes(path, bytes);
 				var js =
 					'const e=new WebAssembly.Instance(new WebAssembly.Module(require("fs").readFileSync(process.argv[1]))).exports;if(e.main()!==42)throw Error("result");e["EnumCensus.prepareRoots"]();global.gc();if(e["EnumCensus.checkRoots"]()!==42)throw Error("enum-only roots lost");const c=e.__allocation_count||e["haxeon.memory.allocation_count"];for(const n of [8,1024]){const before=c();if(e["EnumCensus.perform"](n)!==42*n)throw Error("repeat");if(c()!==before)throw Error("enum transport allocated "+(c()-before));}';
-				var status = Sys.command(target == "hl" ? "scripts/hl" : "node", target == "hl" ? [path] : [
+				var status = Sys.command(target == "hl" ? TestHashLink.vm() : "node", target == "hl" ? [path] : [
 					"--expose-gc",
 					"-e",
 					js,
@@ -123,7 +123,7 @@ class SourceInlineEnumMain {
 		if (target == "hl") {
 			sys.io.File.saveBytes(path, HlWriter.encode(compiled.module).flatten());
 			var vm = Sys.getEnv("HAXEON_HASHLINK_DIR"),
-				process = new sys.io.Process(vm == null ? "scripts/hl" : vm + "/hl", [path]),
+				process = new sys.io.Process(vm == null ? TestHashLink.vm() : vm + "/hl", [path]),
 				error = process.stderr.readAll().toString(),
 				status = process.exitCode();
 			process.close();

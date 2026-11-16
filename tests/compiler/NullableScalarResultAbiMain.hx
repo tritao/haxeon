@@ -88,7 +88,7 @@ class NullableScalarResultAbiMain {
 				+ 'for(const n of [8,1024]){const b=c();for(let i=0;i<n;i++)if(e.main()!==42)throw Error("result");'
 				+ 'if(c()!==b)throw Error("nullable/value ABI allocated "+(c()-b));}';
 			var vm = Sys.getEnv("HAXEON_HASHLINK_DIR"),
-				command = target == HashLink ? (vm == null ? "scripts/hl" : vm + "/hl") : "node";
+				command = target == HashLink ? (vm == null ? TestHashLink.vm() : vm + "/hl") : "node";
 			var child = new sys.io.Process(command, target == HashLink ? [path] : ["-e", js, path]);
 			var error = child.stderr.readAll().toString(), code = child.exitCode();
 			child.close();

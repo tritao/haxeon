@@ -61,7 +61,7 @@ class MethodClosureValueMain {
 				sys.io.File.saveBytes(path, bytes);
 				var js =
 					'const e=new WebAssembly.Instance(new WebAssembly.Module(require("fs").readFileSync(process.argv[1]))).exports;if(e.main()!==42)throw Error("result");const c=e.__allocation_count||e["haxeon.memory.allocation_count"];for(const name of ["enums","records","concrete"])for(const n of [8,1024]){const before=c();if(e["CallbackMethodCensus."+name](n)!==84*n)throw Error(name);if(c()!==before)throw Error(name+" allocated "+(c()-before));}';
-				var status = Sys.command(target == "hl" ? "scripts/hl" : "node", target == "hl" ? [path] : [
+				var status = Sys.command(target == "hl" ? TestHashLink.vm() : "node", target == "hl" ? [path] : [
 					"-e",
 					js,
 					path

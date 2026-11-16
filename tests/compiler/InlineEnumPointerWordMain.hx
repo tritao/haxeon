@@ -187,7 +187,7 @@ class InlineEnumPointerWordMain {
 		sys.io.File.saveBytes(path, bytes);
 		var js =
 			'const fs=require("fs"),e=new WebAssembly.Instance(new WebAssembly.Module(fs.readFileSync(process.argv[1]))).exports,c=e.__allocation_count||e["haxeon.memory.allocation_count"];e.main();for(const n of [8,1024]){const before=c();for(let i=0;i<n;i++)if(e.main()!==42)throw Error("pointer/type bits");if(c()!==before)throw Error("pointer/type boxing");}';
-		var child = new sys.io.Process(target == HashLink ? "scripts/hl" : "node", target == HashLink ? [path] : [
+		var child = new sys.io.Process(target == HashLink ? TestHashLink.vm() : "node", target == HashLink ? [path] : [
 			"-e",
 			js,
 			path

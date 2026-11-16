@@ -147,7 +147,7 @@ class IrIntegerBuilderMain {
 					{target: target, debugNames: true}).bytes
 					: new WasmBackend().compile(program, {target: target, debugNames: true}).bytes;
 				sys.io.File.saveBytes(path, bytes);
-				var command = target == HashLink ? (hashlink == null ? "scripts/hl" : hashlink + "/hl") : "node";
+				var command = target == HashLink ? (hashlink == null ? TestHashLink.vm() : hashlink + "/hl") : "node";
 				var js =
 					'const fs=require("fs");const e=new WebAssembly.Instance(new WebAssembly.Module(fs.readFileSync(process.argv[1]))).exports;if(e.main()!==42)throw Error("wide arithmetic failed");';
 				var process = new sys.io.Process(command, target == HashLink ? [path] : ["-e", js, path]);

@@ -87,7 +87,7 @@ class EnumTagPatchMain {
 		if (directory == null) directory = "out";
 		var invalidPath = directory + "/invalid-enum-cache-" + Std.random(0x7fffffff) + ".hl";
 		sys.io.File.saveBytes(invalidPath, uncheckedWriter.bytes());
-		var child = new sys.io.Process("scripts/hl", [invalidPath]);
+		var child = new sys.io.Process(TestHashLink.vm(), [invalidPath]);
 		var output = child.stdout.readAll().toString(),
 			error = child.stderr.readAll().toString(),
 			status = child.exitCode();

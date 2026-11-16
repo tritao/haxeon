@@ -73,7 +73,7 @@ class EnumTagEqualityMain {
 			var js =
 				'const e=new WebAssembly.Instance(new WebAssembly.Module(require("fs").readFileSync(process.argv[1]))).exports;'
 				+ 'if(e.main()!==42||!e["Compare.same"](32,32)||e["Compare.same"](1,32))throw Error("tag equality");';
-			var child = new sys.io.Process(target == "hl" ? "scripts/hl" : "node", target == "hl" ? [path] : [
+			var child = new sys.io.Process(target == "hl" ? TestHashLink.vm() : "node", target == "hl" ? [path] : [
 				"-e",
 				js,
 				path

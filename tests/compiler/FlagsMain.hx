@@ -233,7 +233,7 @@ class FlagsMain {
 				+ 'if(e.main()!==42)throw Error("raw semantics"); const count=e.__allocation_count||e["haxeon.memory.allocation_count"];'
 				+ 'e["Probe.perform"](2);for(const n of [8,1024]){const before=count();if(e["Probe.perform"](n)!==n)throw Error("raw loop");if(count()!==before)throw Error("raw values boxed");}'
 				+ 'for(const n of [8,1024]){const measures=[],bytes=e["haxeon.memory.allocated_bytes"];for(const checked of [false,true]){e["Probe.scalarChecks"](2,checked);const before=count(),beforeBytes=bytes?bytes():0;if(e["Probe.scalarChecks"](n,checked)!==n)throw Error("scalar map semantics");measures.push({objects:count()-before,bytes:bytes?bytes()-beforeBytes:null});}console.log("scalar map",n,JSON.stringify(measures));if(measures[1].objects>measures[0].objects||measures[1].bytes>measures[0].bytes)throw Error("checked map read allocated more");}';
-			var child = new sys.io.Process(target == "hl" ? "scripts/hl" : "node", target == "hl" ? [path] : [
+			var child = new sys.io.Process(target == "hl" ? TestHashLink.vm() : "node", target == "hl" ? [path] : [
 				"--expose-gc",
 				"-e",
 				js,

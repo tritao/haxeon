@@ -384,7 +384,7 @@ class InlineEnumLogicalArrayMain {
 		sys.io.File.saveBytes(path, bytes);
 		var js =
 			'const fs=require("fs"),e=new WebAssembly.Instance(new WebAssembly.Module(fs.readFileSync(process.argv[1]))).exports,c=e.__allocation_count||e["haxeon.memory.allocation_count"];e.prepare();const collections=e["haxeon.memory.collection_count"],beforeGC=collections?collections():0;global.gc();e.churn();global.gc();if(collections&&collections()<=beforeGC)throw Error("guest did not collect");if(e.dynamicCheck()!==42||e.mutationCheck()!==42)throw Error("dynamic or typed enum array");e.main();for(const n of [8,1024]){const before=c();for(let i=0;i<n;i++)if(e.main()!==42)throw Error("result");if(c()!==before)throw Error("carrier array boxing: "+(c()-before));}let allocationSlope;for(const n of [8,1024]){const before=c();if(e.buildAndIterate(n)!==37*n)throw Error("iteration result");const allocations=c()-before;if(allocationSlope!==undefined&&allocations!==allocationSlope)throw Error("per-element construction boxing: "+allocationSlope+" -> "+allocations);allocationSlope=allocations;}';
-		var child = new sys.io.Process(target == HashLink ? "scripts/hl" : "node", target == HashLink ? [path] : [
+		var child = new sys.io.Process(target == HashLink ? TestHashLink.vm() : "node", target == HashLink ? [path] : [
 			"--expose-gc",
 			"-e",
 			js,

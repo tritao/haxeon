@@ -158,7 +158,7 @@ class InlineEnumReferenceMain {
 			var path = tempRoot() + "/" + uniqueStem + "reference-payload-" + Std.string(target)
 				+ (target == HashLink ? ".hl" : ".wasm");
 			sys.io.File.saveBytes(path, bytes);
-			var command = target == HashLink ? "scripts/hl" : "node";
+			var command = target == HashLink ? TestHashLink.vm() : "node";
 			var js =
 				'const fs=require("fs");const e=new WebAssembly.Instance(new WebAssembly.Module(fs.readFileSync(process.argv[1]))).exports;const count=e.__allocation_count||e["haxeon.memory.allocation_count"];const before=count();if(e.main()!==42)throw Error("reference payload");if(count()-before>1)throw Error("reference-slot box allocation: "+(count()-before));console.log(count()-before);';
 			var child = new sys.io.Process(command, target == HashLink ? [path] : ["-e", js, path]);
@@ -262,7 +262,7 @@ class InlineEnumReferenceMain {
 			try {
 				var js =
 					'const fs=require("fs"),e=new WebAssembly.Instance(new WebAssembly.Module(fs.readFileSync(process.argv[1]))).exports;e.prepareRoot();for(let i=0;i<3;i++)global.gc();if(e.main()!==42)throw Error("reference payload lost its only root");';
-				var child = new sys.io.Process(target == HashLink ? "scripts/hl" : "node",
+				var child = new sys.io.Process(target == HashLink ? TestHashLink.vm() : "node",
 					target == HashLink ? [path] : [
 						"--expose-gc",
 						"-e",

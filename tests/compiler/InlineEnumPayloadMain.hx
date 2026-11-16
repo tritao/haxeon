@@ -246,7 +246,7 @@ class InlineEnumPayloadMain {
 		sys.io.File.saveBytes(path, bytes);
 		var js =
 			'const fs=require("fs"),e=new WebAssembly.Instance(new WebAssembly.Module(fs.readFileSync(process.argv[1]))).exports;const count=e.__allocation_count||e["haxeon.memory.allocation_count"];for(const n of [8,1024]){const before=count();for(let i=0;i<n;i++)if(e.main()!==42)throw Error("case result");const allocated=count()-before;if(allocated!==n)throw Error("extra enum payload boxes: "+allocated+" / "+n);}';
-		var child = new sys.io.Process(target == HashLink ? "scripts/hl" : "node", target == HashLink ? [path] : [
+		var child = new sys.io.Process(target == HashLink ? TestHashLink.vm() : "node", target == HashLink ? [path] : [
 			"-e",
 			js,
 			path

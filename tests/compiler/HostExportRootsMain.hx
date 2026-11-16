@@ -72,7 +72,7 @@ class HostExportRootsMain {
 				+ 'if(typeof cached!=="function")throw Error("missing declared host root");const first=cached();'
 				+ 'for(const n of [8,1024]){const before=count();for(let i=0;i<n;i++)if(cached()!==first)throw Error("cached enum changed");'
 				+ 'if(perform(n)!==42*n||count()!==before)throw Error("host enum result allocated");}';
-			var status = Sys.command(target == "hl" ? "scripts/hl" : "node",
+			var status = Sys.command(target == "hl" ? TestHashLink.vm() : "node",
 				target == "hl" ? [path] : ["-e", js, path]);
 			sys.FileSystem.deleteFile(path);
 			if (status != (target == "hl" ? 42 : 0)) throw 'Host root failed: $target inline=$inlineEnabled';

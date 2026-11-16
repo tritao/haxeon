@@ -46,7 +46,7 @@ class EnumDynamicOrderMain {
 			+ 'for(const n of [8,1024]){const before=c();'
 			+ 'if(e["CompareCensus.perform"](n)!==42*n)throw Error("comparison result");'
 			+ 'if(c()!==before)throw Error("enum kind allocated "+(c()-before));}';
-		var status = Sys.command(target == "hl" ? "scripts/hl" : "node",
+		var status = Sys.command(target == "hl" ? TestHashLink.vm() : "node",
 			target == "hl" ? [path] : [
 				"-e",
 				wasmCheck,

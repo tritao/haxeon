@@ -20,7 +20,7 @@ class ValueInterfaceHelperReuseMain {
 					target: target == "wasm32" ? Wasm32 : WasmGc,
 					debugNames: true
 				}).bytes);
-			var status = Sys.command(target == "hl" ? "scripts/hl" : "node", target == "hl" ? [path] : [
+			var status = Sys.command(target == "hl" ? TestHashLink.vm() : "node", target == "hl" ? [path] : [
 				"-e",
 				'const e=new WebAssembly.Instance(new WebAssembly.Module(require("fs").readFileSync(process.argv[1]))).exports;if(e.main()!==42)throw Error("interface callback result");',
 				path
