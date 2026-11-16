@@ -1231,8 +1231,9 @@ class BuildSystemMain {
 		var environment = new BuildEnvironment(project.root, Path.join([project.root, "build"])),
 			plan = BuildPlanner.project(project, BuildIntent.Build, environment.target, NativeArtifactDemand.Shared),
 			execution = PlanLowerer.lower(plan,
+				// The FFI import runs the compiler checkout's own `haxeon`, found through its HashLink path table.
 				new LoweringContext(environment, null, project,
-				new TargetLayout(environment).hashLinkModulePath("main"), project.root)),
+				new TargetLayout(environment).hashLinkModulePath("main"), Sys.getCwd())),
 			planText = plan.toDebugString(),
 			executionText = execution.toDebugString();
 		expect(planText.indexOf("app:FfiInterface") >= 0
