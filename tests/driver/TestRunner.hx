@@ -37,18 +37,18 @@ private typedef ProgramRun = {
 private typedef ActiveProgram = {
 	var index:Int;
 	var run:ProgramRun;
-	var process:Process;
+	var command:RunningCommand;
 }
 
-/** A compile in flight: `finish` waits for it and returns its status and output. */
-private typedef PendingCompile = {
+/** A command in flight, its output drained as it runs: `finish` waits for it and returns its status and output. */
+private typedef RunningCommand = {
 	var finish:Void->CommandResult;
 }
 
 private typedef ActiveCompile = {
 	var index:Int;
 	var run:ProgramRun;
-	var compile:PendingCompile;
+	var compile:RunningCommand;
 }
 
 /** One command of a test pipeline; `failure` returns a message when the exit status fails the test. */
@@ -67,7 +67,7 @@ private typedef ActivePipeline = {
 	var index:Int;
 	var pipeline:Pipeline;
 	var step:Int;
-	var process:Process;
+	var command:RunningCommand;
 	var output:String;
 }
 
@@ -147,7 +147,7 @@ class TestRunner {
 	}
 
 	/** Compiles a program to HashLink in a compile server, in a fresh session; a warm run builds and rebuilds it in one. */
-	function compileProgram(source:String, output:String, run:ProgramRun):PendingCompile {
+	function compileProgram(source:String, output:String, run:ProgramRun):RunningCommand {
 		if (run.warm)
 			return {finish: () -> warmEdit(source, output, run)};
 		var pending = compileWorkers().start(programRequest(source, output, run, [Path.directory(source)])
@@ -424,19 +424,19 @@ class TestRunner {
 					index: next,
 					pipeline: pipeline,
 					step: 0,
-					process: pipeline.steps[0].start(),
+					command: drain(pipeline.steps[0].start()),
 					output: ""
 				});
 				next++;
 			}
 			var current = active.shift(),
-				command = finishCommand(current.process),
+				command = current.command.finish(),
 				failure = current.pipeline.steps[current.step].failure(command.status);
 			current.output += command.output;
 			if (failure != null)
 				results[current.index] = {index: current.index, passed: false, output: current.output + failure + "\n"};
 			else if (++current.step < current.pipeline.steps.length) {
-				current.process = current.pipeline.steps[current.step].start();
+				current.command = drain(current.pipeline.steps[current.step].start());
 				active.push(current);
 			} else {
 				var success = current.pipeline.success;
@@ -593,10 +593,10 @@ class TestRunner {
 				if (position < 0)
 					break;
 				var index = pending.splice(position, 1)[0], run = runs[index];
-				active.push({index: index, run: run, process: startProgram(runOutput(root, run))});
+				active.push({index: index, run: run, command: drain(startProgram(runOutput(root, run)))});
 			}
 			var job = active.shift();
-			var execution = finishCommand(job.process);
+			var execution = job.command.finish();
 			var expected = job.run.test.expectedExit;
 			var passed = execution.status == expected;
 			var message = passed ? 'PASS: ${runName(job.run)} source compiled and executed (exit $expected)\n'
@@ -645,21 +645,34 @@ class TestRunner {
 		return finishCommand(new Process(command, arguments));
 	}
 
+	function finishCommand(process:Process):CommandResult
+		return drain(process).finish();
+
 	/**
-	 * Waits for `process`, draining both of its streams at once: one read to its end while the process fills the other
-	 * would wait forever once that pipe is full, and on Windows a pipe holds 4 KB.
+	 * Drains both of `process`'s streams from now until it exits. Reading one to its end while the process fills the other
+	 * would wait forever once that pipe is full (on Windows a pipe holds 4 KB), and so would a process started alongside
+	 * others whose streams are read only when the driver comes to collect it.
 	 */
-	function finishCommand(process:Process):CommandResult {
-		var stderr = "", drained = new sys.thread.Lock();
+	static function drain(process:Process):RunningCommand {
+		var stdout = "", stderr = "", drained = new sys.thread.Lock();
+		sys.thread.Thread.create(() -> {
+			stdout = process.stdout.readAll().toString();
+			drained.release();
+		});
 		sys.thread.Thread.create(() -> {
 			stderr = process.stderr.readAll().toString();
 			drained.release();
 		});
-		var stdout = process.stdout.readAll().toString();
-		drained.wait();
-		var status = process.exitCode();
-		process.close();
-		return {status: status, output: stdout + stderr};
+		return {finish: () -> {
+			drained.wait();
+			drained.wait();
+			var status = process.exitCode();
+			process.close();
+			{
+				status:status, output:stdout + stderr
+			};
+		}
+		};
 	}
 
 	public function runPosInfos():Bool {
