@@ -197,13 +197,13 @@ class Std {
 	}
 
 	#if wasm
-	/** Arrays print their elements as HashLink does: `[a, b]`. */
+	/** Arrays print as Haxe's Array.toString does, and as HashLink does here: `[a,b]`. */
 	static function arrayString(values:Array<Dynamic>):String {
 		var output = new StringBuf();
 		output.add("[");
 		for (index in 0...values.length) {
 			if (index > 0)
-				output.add(", ");
+				output.add(",");
 			output.add(Std.string(values[index]));
 		}
 		output.add("]");

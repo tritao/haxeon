@@ -91,7 +91,7 @@ function main():Int {
 		return 13;
 	var items:Dynamic = AuditPayload.Items([1, 2]),
 		erasedItems:Dynamic = AuditPayload.Erased([3, 4]);
-	if (Std.string(items) != "Items([1, 2])" || Std.string(erasedItems) != "Erased([3, 4])")
+	if (Std.string(items) != "Items([1,2])" || Std.string(erasedItems) != "Erased([3,4])")
 		return 14;
 	var restored:AuditKey = cast erased;
 	if (Hashing.hash(restored) != Hashing.hash(same))

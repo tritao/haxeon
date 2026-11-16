@@ -39,7 +39,7 @@ function main():Int {
 	Reflect.setField(record, "field", "value");
 	if (Reflect.field(record, "field") != "value" || Reflect.fields(record)[0].length != 5)
 		return 8;
-	if (Std.string(new Box("boxed")).indexOf("Box") < 0 || Std.string(["a", "b"]) != "[a, b]")
+	if (Std.string(new Box("boxed")).indexOf("Box") < 0 || Std.string(["a", "b"]) != "[a,b]")
 		return 9;
 	try {
 		throw "thrown";
