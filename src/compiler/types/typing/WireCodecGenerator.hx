@@ -821,8 +821,9 @@ class WireCodecGenerator {
 							? null : (field.initializer == null ? defaultValue(field.type,
 							request.span) : field.initializer);
 					if (defaultExpression == null)
-						statements.push(TVar(fieldLocal(index), missingFieldSentinel(field.type, request.span),
-							request.span));
+						statements.push(TVar(fieldLocal(index),
+							nullableValueField(session, field) ? nullValue(TNullable(field.type), request.span)
+							: missingFieldSentinel(field.type, request.span), request.span));
 					else
 						statements.push(TVar(fieldLocal(index), defaultExpression, request.span));
 					if (requiresWirePresence(field.type) && field.initializer == null)
@@ -865,7 +866,10 @@ class WireCodecGenerator {
 						if (!found)
 							throw 'Wire decoder has no field "${name}.${wireField.name}"';
 					}
-					var decoded = local(fieldLocal(index), wireField.type, request.span);
+					var decoded = nullableValueField(session, wireField)
+						? new TypedExpression(TCast(local(fieldLocal(index), TNullable(wireField.type), request.span)),
+						wireField.type, request.span)
+						: local(fieldLocal(index), wireField.type, request.span);
 					objectFields.push({
 						name: wireField.name,
 						value: declaration == null ? decoded : new TypedExpression(TCast(decoded), storedType,
@@ -1071,9 +1075,18 @@ class WireCodecGenerator {
 	function decodeFieldAssignment(session:TypingSession, classes:Map<String, TypedClass>, enums:Map<String, TypedEnum>,
 			field:TypedField,
 			fieldIndex:Int, reader:TypedExpression, span:SourceSpan):Array<TypedStatement> {
+		if (nullableValueField(session, field)) {
+			var nullable = TNullable(field.type),
+				decoded = decodeValueExpression(session, classes, enums, reader, field.type, span);
+			return [TAssign(fieldLocal(fieldIndex), new TypedExpression(TNullableWrap(decoded), nullable, span), span)];
+		}
 		return decodeValueAssignment(session, classes, enums, local(fieldLocal(fieldIndex), field.type, span),
 			field.type, reader, span);
 	}
+
+	function nullableValueField(session:TypingSession, field:TypedField):Bool
+		return field.initializer == null && requiresWirePresence(field.type)
+			&& session.relations.isValueClass(TypeRelations.abstractRepresentation(field.type));
 
 	function decodeValueAssignment(session:TypingSession, classes:Map<String, TypedClass>, enums:Map<String, TypedEnum>,
 			target:TypedExpression,
