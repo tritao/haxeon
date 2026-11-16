@@ -2,114 +2,26 @@ package compiler.hl.lower;
 
 import compiler.ir.Ir;
 import compiler.ir.IrFunction;
-import compiler.ir.IrOperands;
+import compiler.ir.IrScalarValuePlaces;
 
 typedef HlScalarValueLocal = {
 	final fields:Map<String, Int>;
 	final declarations:Array<IrObjectField>;
 }
 
-/** Frame-owned scalar slots for nonescaping value places, including across exception handlers. */
+/** Frame-owned scalar slots for nonescaping value places (`IrScalarValuePlaces`), including across exception handlers. */
 class HlScalarValueLocals {
 	final candidates:Map<Int, HlScalarValueLocal> = [];
 
 	public function new(fn:IrFunction, objects:HlLoweringView, allocate:IrType->Int) {
-		var roots:Map<Int, String> = [], valid:Map<Int, Bool> = [];
-		for (block in fn.blocks)
-			for (located in block.instructions)
-				switch located.value {
-					case ValueInit(out)
-						if (objects.hasObject(compiler.ir.IrTypeTools.valueObjectName(out.type))
-						&& scalarFields(objects.object(compiler.ir.IrTypeTools.valueObjectName(out.type)), objects)):
-						var name = compiler.ir.IrTypeTools.valueObjectName(out.type);
-						roots.set(out.id, name);
-						valid.set(out.id, true);
-					default:
-				}
-		for (block in fn.blocks) {
-			for (located in block.instructions) {
-				switch located.value {
-					case Phi(_, inputs):
-						for (input in inputs)
-							if (roots.exists(input.value.id))
-								valid.set(input.value.id, false);
-					default:
-				}
-				for (inputIndex in 0...IrOperands.count(located.value)) {
-					var input = IrOperands.at(located.value, inputIndex);
-					if (roots.exists(input.id)) {
-						var allowed = switch located.value {
-							case FieldGet(_, owner,
-								field) if (owner.id == input.id): hasField(objects.object(roots.get(input.id)), field);
-							case FieldSet(owner, field,
-								value) if (owner.id == input.id
-								&& value.id != input.id): hasField(objects.object(roots.get(input.id)), field);
-							default: false;
-						};
-						if (!allowed)
-							valid.set(input.id, false);
-					}
-				}
-			}
-			if (block.terminator != null)
-				switch block.terminator.value {
-					case Return(value), Throw(value), Rethrow(value), Branch(value, _, _) if (roots.exists(value.id)):
-						valid.set(value.id, false);
-					default:
-				}
+		for (out in new IrScalarValuePlaces(fn, objects.object).places) {
+			var fields:Map<String, Int> = [],
+				declaration:IrObject = cast objects.object(compiler.ir.IrTypeTools.valueObjectName(out.type)),
+				declarations = declaration.fields;
+			for (field in declarations)
+				fields.set(field.name, allocate(field.type));
+			candidates.set(out.id, {fields: fields, declarations: declarations});
 		}
-		for (block in fn.blocks)
-			for (located in block.instructions)
-				switch located.value {
-					case ValueInit(out) if (roots.exists(out.id) && valid.get(out.id) == true):
-						var name = compiler.ir.IrTypeTools.valueObjectName(out.type);
-						var fields:Map<String, Int> = [],
-							declaration:IrObject = cast objects.object(name),
-							declarations = declaration.fields;
-						for (field in declarations)
-							fields.set(field.name, allocate(field.type));
-						candidates.set(out.id, {fields: fields, declarations: declarations});
-					default:
-				}
-	}
-
-	static function hasField(object:IrObject, name:String):Bool {
-		for (field in object.fields)
-			if (field.name == name)
-				return true;
-		return false;
-	}
-
-	static function scalarFields(object:IrObject, objects:HlLoweringView):Bool {
-		if (!object.isValue)
-			return false;
-		for (field in object.fields) {
-			// Native storage is scalar-safe only when the register has the same representation as the field.
-			// Narrow integer fields still need truncation and sign extension on every store/load.
-			if (field.nativeLayout != null && field.nativeLayout.inlineRecord)
-				return false;
-			var native = compiler.ir.IrFieldStorage.scalar(field);
-			if (native != null) {
-				var exact = switch field.type {
-					case I32: native.size == 4;
-					case I64: native.size == 8;
-					case F32: native.size == 4;
-					case F64: native.size == 8;
-					case Bool: native.size == 1;
-					default: false;
-				};
-				if (!exact)
-					return false;
-			}
-			switch field.type {
-				case Obj(name), Nullable(Obj(name)):
-					var object = objects.object(name);
-					if (object != null && object.isValue)
-						return false;
-				default:
-			}
-		}
-		return true;
 	}
 
 	public function get(value:IrValue):Null<HlScalarValueLocal>

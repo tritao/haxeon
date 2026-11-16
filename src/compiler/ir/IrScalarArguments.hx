@@ -139,8 +139,7 @@ class IrScalarArguments {
 					// judging whether the specialized callee can keep its value arguments and result in registers.
 					prepared = IrValuePhiScalarization.rewriteFunction(prepared, objects, table, layouts);
 					var specialized = IrScalarReplacement.rewrite(prepared, table, true, true);
-					var scalarLocals = new compiler.hl.lower.HlScalarValueLocals(specialized,
-						new compiler.hl.lower.HlLoweringView([], objects), _ -> 0);
+					var places = new IrScalarValuePlaces(specialized, name -> objects.get(name));
 					for (block in specialized.blocks)
 						for (located in block.instructions)
 							switch located.value {
@@ -148,10 +147,10 @@ class IrScalarArguments {
 									var name = compiler.ir.IrTypeTools.valueObjectName(out.type);
 									for (arg in fn.arguments)
 										if (isValue(arg.type, objects) && out.id == arg.id
-											&& scalarLocals.get(out) == null)
+											&& !places.contains(out))
 											retained = true;
 									if (isValue(fn.result, objects) && Type.enumEq(fn.result, Obj(name))
-										&& scalarLocals.get(out) == null)
+										&& !places.contains(out))
 										retained = true;
 								case Call(out, _, _) | MethodCall(out, _, _, _, _) | CallClosure(out, _, _):
 									if (isValue(fn.result, objects) && isValue(out.type, objects))
@@ -180,8 +179,7 @@ class IrScalarArguments {
 						terminalOnly, argumentsOnly);
 					prepared = IrValuePhiScalarization.rewriteFunction(prepared, objects, table, layouts);
 					var specialized = IrScalarReplacement.rewrite(prepared, table, true, true);
-					var scalarLocals = new compiler.hl.lower.HlScalarValueLocals(specialized,
-						new compiler.hl.lower.HlLoweringView([], objects), _ -> 0);
+					var places = new IrScalarValuePlaces(specialized, name -> objects.get(name));
 					for (block in specialized.blocks)
 						for (located in block.instructions)
 							switch located.value {
@@ -190,10 +188,10 @@ class IrScalarArguments {
 									for (index in 1...fn.arguments.length)
 										if (isValue(fn.arguments[index].type, objects)
 											&& out.id == fn.arguments[index].id
-											&& scalarLocals.get(out) == null)
+											&& !places.contains(out))
 											retained = true;
 									if (isValue(fn.result, objects) && Type.enumEq(fn.result, Obj(name))
-										&& scalarLocals.get(out) == null)
+										&& !places.contains(out))
 										retained = true;
 								case Call(out, _, _) | MethodCall(out, _, _, _, _) | CallClosure(out, _, _):
 									if (isValue(fn.result, objects) && isValue(out.type, objects))

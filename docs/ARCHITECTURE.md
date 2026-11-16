@@ -78,8 +78,9 @@ and `ffi`, which import each other) <- `ir` <- `abi` <- the backends <- `compila
 `tools`. The backends are `compiler.hl`, the one home of HashLink (lowering in `compiler.hl.lower`, then the bytecode model, writer,
 incremental assembly, patches and persistence), and `compiler.backend.wasm`; both implement `compiler.backend.Backend` and neither
 imports the other. A name the IR and a backend both use, such as `IrProgramAssembler.LIVE_INITIALIZER` or
-`IrReceiverCheck.CHECK_FIELD`, is declared in `ir` and read by the backend. The exceptions that remain: `IrScalarArguments` asks
-HashLink lowering (`HlScalarValueLocals`, `HlLoweringView`) which value places stay in registers, also on Wasm; `ir` imports
+`IrReceiverCheck.CHECK_FIELD`, is declared in `ir` and read by the backend. Which value places can live in registers is
+answered in `ir` (`IrScalarValuePlaces`): `IrScalarArguments` and HashLink lowering (`HlScalarValueLocals`) both ask it, so `ir`
+no longer imports HashLink lowering. The exceptions that remain: `ir` imports
 `runtime` and `ffi` and is imported by `runtime`, `ffi`, `modules.ModuleState` and `semantic.SemanticAssembly`;
 `semantic.SemanticAssembly` and `modules.CodeIdentityTable` import `compilation.CompilationContext`, which refers back to the root
 `Compiler`; `ffi.HxiInterfaceOrder` and `runtime.CompilerIntrinsics` also name types declared beside the root `Compiler`; and
