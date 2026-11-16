@@ -53,8 +53,9 @@ class CompilerMemoryLog {
 				encoded = session.encodedModule == null ? null : session.encodedModule.code;
 			return 'result==snapshot:${result == snapshot} result==encoded:${result == encoded} snapshot==encoded:${snapshot == encoded} result:${result != null} snapshot:${snapshot != null} encoded:${encoded != null}';
 		}
-		#end
+		#else
 		return "";
+		#end
 	}
 
 	static function gb(bytes:Float):String

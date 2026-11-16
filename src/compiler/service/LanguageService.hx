@@ -1635,7 +1635,9 @@ class LanguageService {
 	}
 
 	function semanticTokenType(model:Null<SemanticModel>, position:Int, cache:Map<String, String>):String {
-		var id = model == null ? null : model.index.symbolIdAt(position + 1);
+		if (model == null)
+			return "variable";
+		var id = model.index.symbolIdAt(position + 1);
 		if (id == null)
 			return "variable";
 		var key = Std.string(id), cached = cache.get(key);
@@ -1894,9 +1896,9 @@ class LanguageService {
 					case LeftBrace:
 						braces.push(token);
 					case RightBrace:
-						if (braces.length > 0) {
-							var open = braces.pop(),
-								span = source.span(open.span.start, token.span.end);
+						var open = braces.pop();
+						if (open != null) {
+							var span = source.span(open.span.start, token.span.end);
 							folds.push({span: span, kind: "region"});
 							containers.push(span);
 						}

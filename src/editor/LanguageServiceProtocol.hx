@@ -113,10 +113,11 @@ class LanguageServiceProtocol {
 							diagnostic:validation.diagnostic == null ? null : diagnosticJson(validation.diagnostic)
 					};
 				case "diagnostics":
-					result = cast[
+					var diagnostics:Array<Dynamic> = [
 						for (diagnostic in service.diagnostics(requiredString(request, "path")))
-							cast diagnosticJson(diagnostic)
+							diagnosticJson(diagnostic)
 					];
+					result = diagnostics;
 				case "symbols":
 					result = cast[
 						for (symbol in service.documentSymbols(requiredString(request, "path")))
