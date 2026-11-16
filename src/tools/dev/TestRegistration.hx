@@ -155,8 +155,11 @@ class TestRegistration {
 	/** A binary or unreadable file names nothing. */
 	static function content(home:String, path:String):String {
 		try {
-			var text = File.getContent(Path.join([home, path]));
-			return text.indexOf("\x00") >= 0 ? "" : text;
+			var bytes = File.getBytes(Path.join([home, path]));
+			for (index in 0...bytes.length)
+				if (bytes.get(index) == 0)
+					return "";
+			return bytes.toString();
 		} catch (_:Dynamic) {
 			return "";
 		}
