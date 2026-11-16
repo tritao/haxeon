@@ -109,9 +109,10 @@ class CompilerClient {
 							+ SysTools.quoteUnixArg(libraryPath) // A resident compiler allocates about 90 GB while compiling an app and keeps ~1.5 GB live. Collecting
 					// once the heap has grown by 40% of itself, not HashLink's 20%, runs a third as many major collections
 					// (cold app compile: 12 s of GC to 5 s) for about 0.5 GB more resident memory. An explicit setting wins.
-					+ " && export HL_GC_MARK_THRESHOLD=\"${HL_GC_MARK_THRESHOLD:-0.4}\" && "
+					// The shell ignores SIGHUP for the worker instead of nohup: macOS strips DYLD_* from what a system
+					// binary such as nohup starts, and the worker would start without the runtime's library path.
+					+ " && export HL_GC_MARK_THRESHOLD=\"${HL_GC_MARK_THRESHOLD:-0.4}\" && trap '' HUP && "
 						+ detach
-						+ "nohup "
 						+ launch
 						+ " > "
 						+ SysTools.quoteUnixArg(logPath)
