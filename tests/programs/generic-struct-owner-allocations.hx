@@ -53,7 +53,7 @@ function main():Int {
 	var owner = new AllocationOwner();
 	var values = [new AllocationValue(1, owner), new AllocationValue(2, owner)];
 	var popped = values.pop();
-	if (popped.number != 2 || popped.owner != owner || values[0].number != 1) return 11;
+	if (popped == null || popped.number != 2 || popped.owner != owner || values[0].number != 1) return 11;
 	var box = new AllocationBox<AllocationValue>(new AllocationValue(0, owner));
 	var meter = new AllocationMeter<AllocationValue>(new AllocationValue(0, owner));
 	AllocationClosure.read = box.get;
