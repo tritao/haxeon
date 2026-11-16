@@ -8,6 +8,7 @@ if [[ $# -gt 1 ]]; then
 fi
 
 root=$(cd "$(dirname "$0")/../.." && pwd)
+source "$root/scripts/lib/env.sh"
 profiler_tool="${HLPROF_LIVE:-$("$root/scripts/hashlink-path.sh")/hlprof-live}"
 scratch=$(mktemp -d /tmp/haxeon-perfetto-XXXXXX)
 output_file="$scratch/trace.json"
@@ -34,7 +35,7 @@ class Main {
 }
 HAXE
   capture="$scratch/capture/profile.hlpc"
-  timeout 60s "$root/scripts/haxeon" run --project "$scratch/haxeon.json" --profile=sampling,alloc \
+  haxeon_timeout 60s "$root/scripts/haxeon" run --project "$scratch/haxeon.json" --profile=sampling,alloc \
     --profile-output "$capture" > "$scratch/run.log" 2>&1 || {
       cat "$scratch/run.log" >&2
       exit 1

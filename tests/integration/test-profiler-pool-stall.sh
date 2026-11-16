@@ -5,6 +5,7 @@
 set -euo pipefail
 
 repo_dir=$(cd "$(dirname "$0")/../.." && pwd)
+source "$repo_dir/scripts/lib/env.sh"
 runtime="$("$repo_dir/scripts/hashlink-path.sh")/hl"
 client="$("$repo_dir/scripts/hashlink-path.sh")/hlprof-live"
 port=${1:-24030}
@@ -64,7 +65,7 @@ class Main {
 HAXE
 
 # Builds the instrumented flavor; a run of no work records next to nothing.
-timeout 300s "$repo_dir/scripts/haxeon" run --project "$scratch/haxeon.json" --profile=instrument \
+haxeon_timeout 300s "$repo_dir/scripts/haxeon" run --project "$scratch/haxeon.json" --profile=instrument \
 	--profile-output "$scratch/build-capture/profile.hlpc" -- 0 > "$scratch/build.log" 2>&1 || {
 	cat "$scratch/build.log" >&2
 	exit 1

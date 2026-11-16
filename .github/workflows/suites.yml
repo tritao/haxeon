@@ -1,0 +1,51 @@
+name: suites
+
+# Runs chosen suites of tests/suites.txt on one platform, for a platform no one here has at hand: `gh workflow run suites.yml
+# -f platform=macos-arm64 -f suites=fatal-stack-integration`. A command, when given, runs afterwards on the same checkout,
+# for what a suite log does not show (a debugger session, say). It runs whatever the dispatcher passes, and only those with
+# write access to the repository can dispatch a workflow.
+on:
+  workflow_dispatch:
+    inputs:
+      platform:
+        description: Platform, as ci.yml names it
+        type: choice
+        options: [macos-arm64, macos, linux-arm64, test]
+        default: macos-arm64
+      suites:
+        description: Suite names, comma-separated (scripts/test.sh --only); empty runs none
+        type: string
+        default: ''
+      command:
+        description: A bash command to run afterwards from the repository root (optional)
+        type: string
+        default: ''
+
+jobs:
+  suites:
+    name: ${{ inputs.platform }}
+    runs-on: ${{ fromJSON('{"macos-arm64":"macos-15","macos":"macos-15-intel","linux-arm64":"ubuntu-24.04-arm","test":"ubuntu-24.04"}')[inputs.platform] }}
+    timeout-minutes: 60
+    env:
+      TEST_JOBS: 4
+      SKIP_FORMAT_CHECK: 1
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          submodules: recursive
+
+      - uses: ./.github/actions/setup-host
+
+      - name: Suites
+        if: inputs.suites != ''
+        env:
+          SUITES: ${{ inputs.suites }}
+        run: scripts/test.sh --only "$SUITES"
+
+      - name: Command
+        if: always() && inputs.command != ''
+        env:
+          COMMAND: ${{ inputs.command }}
+        run: |
+          scripts/build-native.sh >/dev/null
+          bash -c "$COMMAND"

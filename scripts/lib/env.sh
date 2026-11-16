@@ -4,6 +4,7 @@
 #   haxeon_require_haxe                 # exit 1, saying how to fix it, unless the pinned Haxe is installed
 #   haxeon_require_hashlink             # exit 1 unless the checkout-built HashLink is
 #   haxeon_export_library_path [DIR...] # put out/, the HashLink directory and DIRs on the library path
+#   haxeon_timeout SECONDS COMMAND...   # run COMMAND, stopped after SECONDS, like GNU timeout (macOS has none)
 #
 # haxeon_root is the repository root and haxeon_haxe the pinned Haxe, wherever the sourcing script lives. haxeon_suite_out is where a
 # test writes the files it reads back: HAXEON_SUITE_OUT, the directory of its own the suite runner gives each suite, else out/ (a run by
@@ -42,4 +43,37 @@ haxeon_export_library_path() {
 	case "$(uname -s)" in
 	MINGW* | MSYS* | CYGWIN*) export PATH="$directories:$PATH" ;;
 	esac
+}
+
+# Runs COMMAND, stopped after SECONDS (a trailing s is allowed), with GNU timeout's statuses: COMMAND's own, 124 when the limit
+# stopped it, 128+N when signal N ended it. macOS has no timeout(1), and Perl is on every host the tests run on. COMMAND runs in
+# a process group of its own and the whole group is stopped, so a launcher's children (scripts/haxeon run starts hl) stop with
+# it. COMMAND must be a program, not a shell function.
+haxeon_timeout() {
+	local limit=${1%s}
+	shift
+	perl -e '
+		my $limit = shift;
+		my $pid = fork() // die "haxeon_timeout: fork: $!\n";
+		if ($pid == 0) {
+			setpgrp(0, 0);
+			exec { $ARGV[0] } @ARGV;
+			print STDERR "haxeon_timeout: $ARGV[0]: $!\n";
+			exit 127;
+		}
+		for my $signal (qw(HUP INT TERM)) {
+			$SIG{$signal} = sub { kill $signal, -$pid; };
+		}
+		$SIG{ALRM} = sub {
+			print STDERR "haxeon_timeout: $ARGV[0] still running after ${limit}s; stopping it\n";
+			kill "TERM", -$pid;
+			sleep 2;
+			kill "KILL", -$pid;
+			waitpid($pid, 0);
+			exit 124;
+		};
+		alarm $limit;
+		while (waitpid($pid, 0) != $pid) {}
+		exit(($? & 127) ? 128 + ($? & 127) : $? >> 8);
+	' "$limit" "$@"
 }

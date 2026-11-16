@@ -4,6 +4,7 @@
 set -euo pipefail
 
 repo_dir=$(cd "$(dirname "$0")/../.." && pwd)
+source "$repo_dir/scripts/lib/env.sh"
 scratch=$(mktemp -d)
 trap 'rm -rf "$scratch"' EXIT
 mkdir -p "$scratch/src"
@@ -43,7 +44,7 @@ HAXE
 capture() {
 	local name=$1
 	shift
-	timeout 600s "$repo_dir/scripts/haxeon" run --project "$scratch/haxeon.json" "$@" \
+	haxeon_timeout 600s "$repo_dir/scripts/haxeon" run --project "$scratch/haxeon.json" "$@" \
 		--profile-output "$scratch/$name/profile.hlpc" > "$scratch/$name.log" 2>&1 || {
 		cat "$scratch/$name.log" >&2
 		exit 1

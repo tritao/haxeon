@@ -4,6 +4,7 @@ set -euo pipefail
 # A function left out of the instrumentation scope that catches a throw through instrumented calls still closes their
 # slices, so calls after the catch do not nest under them.
 repo_dir=$(cd "$(dirname "$0")/../.." && pwd)
+source "$repo_dir/scripts/lib/env.sh"
 scratch=$(mktemp -d /tmp/haxeon-excluded-catch-XXXXXX)
 trap 'rm -rf "$scratch"' EXIT
 mkdir -p "$scratch/src"
@@ -47,7 +48,7 @@ class Main {
 }
 HAXE
 
-timeout 60s "$repo_dir/scripts/haxeon" run --project "$scratch/haxeon.json" --profile \
+haxeon_timeout 60s "$repo_dir/scripts/haxeon" run --project "$scratch/haxeon.json" --profile \
   --profile-output "$scratch/capture/profile.hlpc" > "$scratch/run.log" 2>&1 || {
     cat "$scratch/run.log" >&2
     exit 1

@@ -6,11 +6,15 @@ import re
 import resource
 import signal
 import subprocess
+import sys
 import tempfile
 import select
 
 ROOT = Path(__file__).resolve().parents[2]
 HASHLINK_DIR = Path(subprocess.check_output([str(ROOT / "scripts/hashlink-path.sh")], text=True).strip())
+# A native library's hl_* symbols resolve against the VM that loads it; macOS's linker needs to be told so, as CMakeLists.txt
+# does for the runtime library.
+HOST_SYMBOLS = ["-Wl,-undefined,dynamic_lookup"] if sys.platform == "darwin" else []
 
 
 def main():
@@ -26,11 +30,12 @@ def main():
         subprocess.run([os.environ.get("CC", "cc"), "-shared", "-fPIC",
                         "-fno-omit-frame-pointer", "-I", str(ROOT / "vendor/hashlink/src"),
                         str(ROOT / "vendor/hashlink/other/tests/crash_test.c"),
-                        "-o", str(project / "crash_test.hdll")], check=True)
+                        "-o", str(project / "crash_test.hdll")] + HOST_SYMBOLS, check=True)
         environment = os.environ.copy()
-        environment["LD_LIBRARY_PATH"] = os.pathsep.join([
-            str(project), str(ROOT / "out"), str(HASHLINK_DIR),
-            environment.get("LD_LIBRARY_PATH", "")])
+        for variable in ["LD_LIBRARY_PATH", "DYLD_LIBRARY_PATH"]:
+            environment[variable] = os.pathsep.join([
+                str(project), str(ROOT / "out"), str(HASHLINK_DIR),
+                environment.get(variable, "")])
         command = [str(HASHLINK_DIR / "hl"), str(bytecode)]
         for mode in ["main", "worker", "overflow"]:
             result = subprocess.run(command + [mode], env=environment,

@@ -12,6 +12,7 @@ import re
 import resource
 import signal
 import subprocess
+import sys
 import tempfile
 
 ROOT = Path(__file__).resolve().parents[2]
@@ -70,6 +71,9 @@ class Main {{
 	}}
 }}
 '''
+# A native library's hl_* symbols resolve against the VM that loads it; macOS's linker needs to be told so, as CMakeLists.txt
+# does for the runtime library.
+HOST_SYMBOLS = ["-Wl,-undefined,dynamic_lookup"] if sys.platform == "darwin" else []
 
 
 def main():
@@ -77,13 +81,15 @@ def main():
     with tempfile.TemporaryDirectory(prefix="haxeon-stack-probe-") as directory:
         work = Path(directory)
         subprocess.run([os.environ.get("CC", "cc"), "-shared", "-fPIC", "-I", str(ROOT / "vendor/hashlink/src"),
-                        str(ROOT / "tests/native/stack_probe_hooks.c"), "-o", str(work / "stack_probe.hdll")], check=True)
+                        str(ROOT / "tests/native/stack_probe_hooks.c"), "-o", str(work / "stack_probe.hdll")] + HOST_SYMBOLS,
+                       check=True)
         (work / "Main.hx").write_text(program())
         subprocess.run([str(ROOT / ".tools/haxe/haxe"), "-cp", str(work), "-main", "Main", "-hl", str(work / "probe.hl")],
                        check=True, capture_output=True, text=True)
         environment = os.environ.copy()
-        environment["LD_LIBRARY_PATH"] = os.pathsep.join([str(work), str(ROOT / "out"), str(HASHLINK_DIR),
-                                                          environment.get("LD_LIBRARY_PATH", "")])
+        for variable in ["LD_LIBRARY_PATH", "DYLD_LIBRARY_PATH"]:
+            environment[variable] = os.pathsep.join([str(work), str(ROOT / "out"), str(HASHLINK_DIR),
+                                                     environment.get(variable, "")])
         for padding in range(STARTS):
             result = subprocess.run([VM, str(work / "probe.hl"), str(padding)], env=environment, capture_output=True,
                                     text=True, timeout=120)

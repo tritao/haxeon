@@ -68,26 +68,7 @@ jobs:
         if: matrix.platform == 'macos-arm64'
         run: test "$(uname -m)" = arm64
 
-      - name: Install Linux build dependencies
-        if: matrix.os == 'linux'
-        run: sudo apt-get update && sudo apt-get install -y build-essential cmake ninja-build curl unzip nodejs python3-msgpack ripgrep gdb autoconf automake libtool libpcre2-dev libuv1-dev
-
-      - name: Install macOS build dependencies
-        if: matrix.os == 'macos'
-        run: brew install cmake ninja node ripgrep autoconf automake libtool
-
-      - name: Set up Windows toolchain
-        if: matrix.platform == 'windows'
-        uses: ilammy/msvc-dev-cmd@v1
-
-      - name: Bootstrap pinned tools
-        if: matrix.os != 'windows'
-        run: ./scripts/bootstrap-tools.sh
-
-      - name: Bootstrap pinned tools and native runtime
-        if: matrix.platform == 'windows'
-        shell: pwsh
-        run: ./scripts/setup.ps1
+      - uses: ./.github/actions/setup-host
 
       - name: Set up Node.js runtime
         if: matrix.platform == 'test'

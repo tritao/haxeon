@@ -10,6 +10,7 @@ if [[ $(uname -s) != Linux || $(uname -m) != x86_64 ]]; then
 fi
 
 repo_dir=$(cd "$(dirname "$0")/../.." && pwd)
+source "$repo_dir/scripts/lib/env.sh"
 scratch=$(mktemp -d)
 trap 'rm -rf "$scratch"' EXIT
 mkdir -p "$scratch/src"
@@ -52,7 +53,7 @@ HAXE
 record() {
 	local name=$1 trace=$2
 	shift 2
-	BOUNDARY_DIR="$scratch" timeout 600s "$repo_dir/scripts/haxeon" run --project "$scratch/haxeon.json" --profile "$@" \
+	BOUNDARY_DIR="$scratch" haxeon_timeout 600s "$repo_dir/scripts/haxeon" run --project "$scratch/haxeon.json" --profile "$@" \
 		--profile-output "$scratch/$name/profile.hlpc" > "$scratch/$name.log" 2>&1 || {
 		cat "$scratch/$name.log" >&2
 		exit 1

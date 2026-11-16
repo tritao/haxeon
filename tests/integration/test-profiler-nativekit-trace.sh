@@ -5,6 +5,7 @@
 set -euo pipefail
 
 repo_dir=$(cd "$(dirname "$0")/../.." && pwd)
+source "$repo_dir/scripts/lib/env.sh"
 platform_dir="$repo_dir/packages/platform"
 
 if [[ $(uname -s) != Linux ]] || ! command -v xvfb-run >/dev/null || ! command -v xdotool >/dev/null; then
@@ -114,7 +115,7 @@ SESSION
 chmod +x "$scratch/session.sh"
 
 status=0
-timeout 120 xvfb-run -a "$scratch/session.sh" || status=$?
+haxeon_timeout 120 xvfb-run -a "$scratch/session.sh" || status=$?
 if [[ $status -ne 42 ]]; then
 	cat "$scratch/app.log" "$scratch/profiler.log" >&2
 	echo "NativeKit trace test: probe returned $status, expected 42" >&2

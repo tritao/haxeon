@@ -14,6 +14,7 @@ case "$(uname -s)" in
 esac
 
 repo_dir=$(cd "$(dirname "$0")/../.." && pwd)
+source "$repo_dir/scripts/lib/env.sh"
 scratch=$(mktemp -d "${TMPDIR:-/tmp}/hpms-XXXXXX")
 trap 'rm -rf "$scratch"' EXIT
 mkdir -p "$scratch/app/src/app" "$scratch/mixed/src/mixed" "$scratch/mixed/native"
@@ -121,7 +122,7 @@ class Main {
 }
 HAXE
 
-timeout 600s "$repo_dir/scripts/haxeon" run --project "$scratch/app/haxeon.json" --profile=sampling \
+haxeon_timeout 600s "$repo_dir/scripts/haxeon" run --project "$scratch/app/haxeon.json" --profile=sampling \
 	--profile-output "$scratch/capture/profile.hlpc" > "$scratch/run.log" 2>&1 || {
 	cat "$scratch/run.log" >&2
 	exit 1
