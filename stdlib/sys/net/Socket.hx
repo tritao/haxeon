@@ -209,7 +209,7 @@ class Socket {
 		#end
 	}
 
-	public function peer(): {host: Host, port: Int} {
+	public function peer():{host:Host, port:Int} {
 		#if wasm
 		throw "Sockets are not available on Wasm";
 		#else
@@ -217,7 +217,7 @@ class Socket {
 		#end
 	}
 
-	public function host(): {host: Host, port: Int} {
+	public function host():{host:Host, port:Int} {
 		#if wasm
 		throw "Sockets are not available on Wasm";
 		#else
@@ -244,10 +244,10 @@ class Socket {
 	 * `timeout` seconds, or until one is ready without a timeout.
 	 */
 	public static function select(read:Array<Socket>, write:Array<Socket>, others:Array<Socket>,
-			?timeout:Float): {
-				read: Array<Socket>,
-				write: Array<Socket>,
-				others: Array<Socket>
+			?timeout:Float):{
+				read:Array<Socket>,
+				write:Array<Socket>,
+				others:Array<Socket>
 			} {
 		#if wasm
 		throw "Sockets are not available on Wasm";

@@ -322,7 +322,7 @@ class LambdaAlignment {
 			return count;
 		}
 		var gaps:Map<Int, {olds:Array<Int>, news:Array<Int>}> = [];
-		function at(index:Int): {olds: Array<Int>, news: Array<Int>} {
+		function at(index:Int):{olds:Array<Int>, news:Array<Int>} {
 			var entry = gaps.get(index);
 			if (entry == null) {
 				entry = {olds: [], news: []};

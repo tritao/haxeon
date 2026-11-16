@@ -285,9 +285,9 @@ class ScrollView implements View {
 			viewport:RenderNode,
 			visibility:ScrollbarVisibilityController,
 			vertical:Bool,
-			overlaySize: {
-				width: Float,
-				height: Float
+			overlaySize:{
+				width:Float,
+				height:Float
 			}):RenderNode {
 		var name = vertical ? "vertical" : "horizontal";
 		var trackStyle = new LayoutStyle();

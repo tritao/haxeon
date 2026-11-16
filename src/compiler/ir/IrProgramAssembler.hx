@@ -170,19 +170,21 @@ class IrProgramAssembler {
 					initializer, field.span));
 			}
 			if (statements.length > 0)
-				functions.push(generator.generateFunction({name: classDecl.name + "."
-					+ LIVE_INITIALIZER,
+				functions.push(generator.generateFunction({
+					name: classDecl.name + "."
+						+ LIVE_INITIALIZER,
 					role: UserFunction,
 					owner: classDecl.name,
 					isStatic: false,
-				// Gives it a receiver without a prototype slot, as a constructor has.
-				isConstructor: true,
+					// Gives it a receiver without a prototype slot, as a constructor has.
+					isConstructor: true,
 					arguments: [],
 					result: TVoid,
 					statements: statements,
 					cells: [],
 					cellCaptures: [],
-					span: classDecl.span}));
+					span: classDecl.span
+				}));
 		}
 		return functions;
 	}
@@ -531,7 +533,7 @@ class IrProgramAssembler {
 				var bits = name == "c_size" ? abi.pointerBits : name == "c_wchar" ? abi.wcharBits : abi.longBits;
 				var registerBits = name == "c_wchar" ? 32 : 64;
 				bits < registerBits ? {
-					size:Std.int(bits / 8), signed:name == "c_long" || (name == "c_wchar" && bits == 32)
+					size: Std.int(bits / 8), signed: name == "c_long" || (name == "c_wchar" && bits == 32)
 				} : null;
 			case TAbstract(_, _, representation): narrowScalarStorage(representation, target);
 			default: null;

@@ -103,7 +103,7 @@ class WorkspaceManifest {
 					projectDirectory,
 					input
 				]))],
-					declaredShards == null ? 1 : Std.int(declaredShards)));
+				declaredShards == null ? 1 : Std.int(declaredShards)));
 		}
 		return new WorkspaceManifest(absolute, root, Path.normalize(Path.join([
 			root,

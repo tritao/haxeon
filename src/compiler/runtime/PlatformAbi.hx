@@ -52,19 +52,19 @@ class PlatformAbi {
 		return switch type {
 			case CompilerType.TString:
 				name == "bytes" ? {
-					type:CompilerType.THlBytes,
-						get:"__string_bytes",
-						set:null
+					type: CompilerType.THlBytes,
+					get: "__string_bytes",
+					set: null
 				} : null;
 			case CompilerType.TBytes: name == "length" ? {
-					type:CompilerType.TInt, get:"__bytes_length", set:null
-				} : null;
+				type: CompilerType.TInt, get: "__bytes_length", set: null
+			} : null;
 			// Haxe source in the stdlib (haxe/Int64.hx), the same on every target.
 			case CompilerType.TInt64: name == "low" ? {
-					type:CompilerType.TInt, get:"haxe.Int64.int64Low", set:null
-				} : name == "high" ? {
-					type:CompilerType.TInt, get:"haxe.Int64.int64High", set:null
-				} : null;
+				type: CompilerType.TInt, get: "haxe.Int64.int64Low", set: null
+			} : name == "high" ? {
+				type: CompilerType.TInt, get: "haxe.Int64.int64High", set: null
+			} : null;
 			case CompilerType.TAbstract(_, _, underlying): field(underlying, name);
 			default: null;
 		};
@@ -78,7 +78,7 @@ class PlatformAbi {
 			case CompilerType.TBytes: bytesMethod(name);
 			case CompilerType.THlBytes:
 				name == "ucs2Length" ? {
-					arguments:[CompilerType.TInt], result:CompilerType.TInt, nativeName:"__hl_bytes_ucs2_length"
+					arguments: [CompilerType.TInt], result: CompilerType.TInt, nativeName: "__hl_bytes_ucs2_length"
 				} : null;
 			case CompilerType.TAbstract(_, _, underlying): method(underlying, name);
 			default: null;

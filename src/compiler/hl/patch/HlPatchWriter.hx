@@ -32,14 +32,14 @@ class HlPatchWriter {
 				tag:Int,
 				bytes:HaxeBytes
 			}>,
-					?addedFunctions:Array<{
-						slot:Int,
-						name:String
-					}>, baseGlobals:Int = -1, ?layout:HlObjectLayout, ?guards:Array<{
-						stableId:Int,
-						description:String
-					}>,
-							?globalNames:Map<String, Int>):HaxeBytes {
+			?addedFunctions:Array<{
+				slot:Int,
+				name:String
+			}>, baseGlobals:Int = -1, ?layout:HlObjectLayout, ?guards:Array<{
+				stableId:Int,
+				description:String
+			}>,
+			?globalNames:Map<String, Int>):HaxeBytes {
 		if (baseRevision < 0 || revision <= baseRevision)
 			throw "Invalid patch revision range";
 		var selected:Array<HlFunction> = [];

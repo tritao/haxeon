@@ -1189,18 +1189,22 @@ class TestMain {
 		voidEntryCompiler.update("Main.hx", "class Main { public static function main():Void {} }");
 		voidEntryCompiler.compile("Main");
 		Sys.println("PASS: constructor parameters infer from declared field constraints");
-		expectDependentAnswerInvalidated([{
-			path: "Helper.hx",
-			source: "class Helper { public static function check(v:Float):Bool return v > 0; }"
-		},
-			{path: "Main.hx",
-		// A nullable reference keeps its null check only while nothing can change it, so the impure call ends it.
-		source: "class Bound { public final value:Float; public function new(value:Float) this.value = value; } typedef Limits = {var lower:Null<Bound>;}; function ok(l:Limits):Bool return l.lower != null && Helper.check(l.lower.value) && l.lower.value < 10; function main():Int return ok({lower: new Bound(1.0)}) ? 42 : 0;"}],
+		expectDependentAnswerInvalidated([
+			{
+				path: "Helper.hx",
+				source: "class Helper { public static function check(v:Float):Bool return v > 0; }"
+			},
+			{
+				path: "Main.hx",
+				// A nullable reference keeps its null check only while nothing can change it, so the impure call ends it.
+				source: "class Bound { public final value:Float; public function new(value:Float) this.value = value; } typedef Limits = {var lower:Null<Bound>;}; function ok(l:Limits):Bool return l.lower != null && Helper.check(l.lower.value) && l.lower.value < 10; function main():Int return ok({lower: new Bound(1.0)}) ? 42 : 0;"
+			}
+		],
 			{
 				path: "Helper.hx",
 				source: "class Helper { public static var count = 0; public static function check(v:Float):Bool { count++; return v > 0; } }"
 			},
-				"requires an object", "a pure helper's body gaining a field write");
+			"requires an object", "a pure helper's body gaining a field write");
 		expectDependentAnswerInvalidated([
 			{
 				path: "Base.hx",
@@ -1228,7 +1232,7 @@ class TestMain {
 				path: "Guard.hx",
 				source: "class Guard { public static function fail():Void {} }"
 			}, "requires an object",
-				"a static helper no longer declared @:noReturn");
+			"a static helper no longer declared @:noReturn");
 		Sys.println("PASS: incremental recompiles retype callers whose purity or no-return dependency changed");
 		// A call never returns only when its target is declared @:noReturn, whatever its body: whether a caller type-checks
 		// depends on signatures, not on another function's body or on which subclasses a program contains.
@@ -2385,9 +2389,9 @@ class TestMain {
 	 * answer (not its own caller's source) must still retype every caller that relied on the
 	 * old answer, on the very next `compile` call.
 	 */
-	static function expectDependentAnswerInvalidated(initial:Array<{path:String, source:String}>, edit: {
-		path: String,
-		source: String
+	static function expectDependentAnswerInvalidated(initial:Array<{path:String, source:String}>, edit:{
+		path:String,
+		source:String
 	}, expectedSubstring:String,
 			label:String):Void {
 		var compiler = new Compiler(null, CompilerIntrinsics.configuration());

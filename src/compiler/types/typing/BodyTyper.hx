@@ -1871,9 +1871,9 @@ class BodyTyper {
 		return typedMemberWithFlow(typeExpression(object, scope), name, span, scope);
 	}
 
-	function typeGenericCallArguments(fn:AstFunction, arguments:Array<AstExpression>, scope:Scope, span:SourceSpan): {
-		arguments: Array<TypedExpression>,
-		substitutions: Map<String, CompilerType>
+	function typeGenericCallArguments(fn:AstFunction, arguments:Array<AstExpression>, scope:Scope, span:SourceSpan):{
+		arguments:Array<TypedExpression>,
+		substitutions:Map<String, CompilerType>
 	} {
 		return callResolver.typeGenericCallArguments(fn, arguments, scope, span);
 	}
@@ -2219,7 +2219,7 @@ class BodyTyper {
 	function fieldRepresentationType(type:CompilerType, name:String, span:SourceSpan):CompilerType
 		return session.representation.resolveField(type, name, span).physical;
 
-	function findStaticField(className:String, name:String, span:SourceSpan): {owner: String, type: CompilerType} {
+	function findStaticField(className:String, name:String, span:SourceSpan):{owner:String, type:CompilerType} {
 		var result = findStaticFieldNullable(className, name);
 		if (result != null)
 			return result;

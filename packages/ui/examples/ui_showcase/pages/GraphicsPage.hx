@@ -262,15 +262,15 @@ class GraphicsPage {
 				explorer.keyed("submit", explorer.caption(submitSummary)),
 				explorer.keyed("cache", explorer.caption(cacheSummary))
 			], metricsStyle)),
-				explorer.keyed("preview", retainedRevisionPreview(explorer, offset)),
-				explorer.keyed("controls", new Row("retained-revisions-controls",
-				[explorer.keyed("move", explorer.button(offset == 0.0 ? "Move cached layer" : "Reset cached layer",
-				"move-cached-layer", function() {
-					explorer.state.retainedLayerOffset = offset == 0.0 ? 42.0 : 0.0;
-				})),
-					explorer.keyed("hint",
-					explorer.caption("Expected: transform changes update composition and picking, while raster cache hits continue rising."))],
-					controlsStyle(explorer)))]);
+			explorer.keyed("preview", retainedRevisionPreview(explorer, offset)),
+			explorer.keyed("controls", new Row("retained-revisions-controls",
+			[explorer.keyed("move", explorer.button(offset == 0.0 ? "Move cached layer" : "Reset cached layer",
+			"move-cached-layer", function() {
+				explorer.state.retainedLayerOffset = offset == 0.0 ? 42.0 : 0.0;
+			})),
+				explorer.keyed("hint",
+				explorer.caption("Expected: transform changes update composition and picking, while raster cache hits continue rising."))],
+				controlsStyle(explorer)))]);
 	}
 
 	static function retainedRevisionPreview(explorer:UiExplorer, offset:Float):CanvasView {

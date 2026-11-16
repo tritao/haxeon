@@ -33,8 +33,8 @@ import haxeon.ui.semantics.AccessibilityState;
 
 /** API synopsis keyed by the UI enum case index stored in inspector snapshots. */
 class WidgetDocsRegistry {
-	public static function describe(role:Null<AccessibilityRole>): {description: String, behavior: String,
-		code: String} {
+	public static function describe(role:Null<AccessibilityRole>):{description:String, behavior:String,
+		code:String} {
 		if (role == null)
 			return primitiveDocs();
 		return switch role {
@@ -141,7 +141,7 @@ class WidgetDocsRegistry {
 		};
 	}
 
-	static function primitiveDocs(): {description: String, behavior: String, code: String} return {
+	static function primitiveDocs():{description:String, behavior:String, code:String} return {
 		description: "A render primitive produced by a Haxe widget or layout composition.",
 		behavior: "Geometry and clipping are resolved natively; events and semantic identity remain connected to this Haxe node.",
 		code: 'new Text("Hello, Haxeon UI")'

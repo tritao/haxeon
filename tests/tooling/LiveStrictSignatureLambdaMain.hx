@@ -18,32 +18,32 @@ class LiveStrictSignatureLambdaMain {
 			output = root + "/live.hl",
 			host = root + "/live-host.hl";
 		function write(edited:Bool):Void
-			File.saveContent(main,
+			File.saveContent(
+				main,
 				"class Item {\n"
-				+ "  public var v:Int;\n"
-				+ (edited ? "  public function new(v:Int, w:Int) this.v = v + w;\n"
-				: "  public function new(v:Int) this.v = v;\n")
-				+ "}\n"
-				+ "class Main {\n"
-				+ "  static var ticks = 0;\n"
-				+ "  static var handlers:Array<Int->Int> = [];\n"
-				+ "  static function register():Void {\n"
-				+ (edited ? "    handlers.push(x -> x - 4);\n" : "")
-				+ "    handlers.push(x -> x + 1);\n"
-				+ "    handlers.push(x -> x * 10);\n"
-				+ "  }\n"
-			// The edited value is 3 only when the stored handlers still return 2 and 10 and the new constructor ran.
-			+ (edited
-				? "  static function value():Int return handlers[0](1) * 100 + handlers[1](1) == 210 && new Item(1, 2).v == 3 ? 3 : 2;\n"
-				: "  static function value():Int return new Item(1).v;\n")
-				+ "  @:keep public static function start(arguments:String):Void register();\n"
-			// A host that never applies the edit stops after about 30 s, so the test fails instead of hanging.
-			+ "  @:keep public static function tick():Int { Sys.sleep(0.01); return value() == 3 || ++ticks > 3000 ? 0 : 1; }\n"
-				+ "  @:keep public static function close():Int return 0;\n"
-				+ "  @:keep public static function saveState():String return \"\";\n"
-				+ "  @:keep public static function restoreState(state:String):Void {}\n"
-				+ "  public static function main():Void {}\n"
-				+ "}\n");
+					+ "  public var v:Int;\n"
+					+ (edited ? "  public function new(v:Int, w:Int) this.v = v + w;\n"
+					: "  public function new(v:Int) this.v = v;\n")
+					+ "}\n"
+					+ "class Main {\n"
+					+ "  static var ticks = 0;\n"
+					+ "  static var handlers:Array<Int->Int> = [];\n"
+					+ "  static function register():Void {\n"
+					+ (edited ? "    handlers.push(x -> x - 4);\n" : "")
+					+ "    handlers.push(x -> x + 1);\n"
+					+ "    handlers.push(x -> x * 10);\n"
+					+ "  }\n" // The edited value is 3 only when the stored handlers still return 2 and 10 and the new constructor ran.
+					+ (edited
+					? "  static function value():Int return handlers[0](1) * 100 + handlers[1](1) == 210 && new Item(1, 2).v == 3 ? 3 : 2;\n"
+					: "  static function value():Int return new Item(1).v;\n")
+					+ "  @:keep public static function start(arguments:String):Void register();\n" // A host that never applies the edit stops after about 30 s, so the test fails instead of hanging.
+					+ "  @:keep public static function tick():Int { Sys.sleep(0.01); return value() == 3 || ++ticks > 3000 ? 0 : 1; }\n"
+					+ "  @:keep public static function close():Int return 0;\n"
+					+ "  @:keep public static function saveState():String return \"\";\n"
+					+ "  @:keep public static function restoreState(state:String):Void {}\n"
+					+ "  public static function main():Void {}\n"
+					+ "}\n"
+			);
 		var session = new CompilerSession();
 		function build(path:String, entry:String, rootDirectory:String, sources:Array<String>, live:Bool):Void
 			CompilerDriver.compile(CompilerArguments.parse([

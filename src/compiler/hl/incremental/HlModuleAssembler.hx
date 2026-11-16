@@ -255,8 +255,8 @@ class HlModuleAssembler {
 		if (state.runtimeNatives != null)
 			result.runtimeNatives = state.runtimeNatives.copy();
 		else if (state.initialized)
-		// Import indices are part of the published layout; guessing can patch the wrong slots.
-		throw "Legacy assembler state lacks native-import ordering; rebuild the baseline";
+			// Import indices are part of the published layout; guessing can patch the wrong slots.
+			throw "Legacy assembler state lacks native-import ordering; rebuild the baseline";
 		result.dispatchNatives = state.dispatchNatives == null ? null : state.dispatchNatives.copy();
 		if (state.retiredFields != null)
 			for (name in state.retiredFields)

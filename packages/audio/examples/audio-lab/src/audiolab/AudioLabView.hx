@@ -70,7 +70,7 @@ class AudioLabView implements View {
 				new KeyedView("navigation", buildNavigation()),
 				new KeyedView("content", content)
 			],
-				rootStyle).build(context);
+			rootStyle).build(context);
 	}
 
 	function buildHeader():Row {
@@ -87,7 +87,7 @@ class AudioLabView implements View {
 				new KeyedView("subtitle", new Text("interactive DSP playground", null, muted, null, TextRole.Caption)),
 				new KeyedView("header-spacer", spacer())
 			],
-				style);
+			style);
 	}
 
 	function buildNavigation():Row {
@@ -134,7 +134,7 @@ class AudioLabView implements View {
 				new KeyedView("preset-title", label("PATCH BROWSER")),
 				new KeyedView("preset-buttons", new Row("preset-buttons-row", presetButtons, presetsStyle))
 			],
-				panelStyle());
+			panelStyle());
 
 		var cutoff = new Slider("filter-cutoff",
 			"Filter cutoff",
@@ -186,7 +186,7 @@ class AudioLabView implements View {
 					sliderStyle()))),
 				new KeyedView("voices", label('voices ${lab.activeVoices}  •  events ${lab.eventCount}'))
 			],
-				panelStyle(compact ? null : 400.0));
+			panelStyle(compact ? null : 400.0));
 
 		var monitorPanel = new Column("monitor-panel",
 			[
@@ -200,7 +200,7 @@ class AudioLabView implements View {
 				new KeyedView("routes-title", label("ACTIVE ROUTES")),
 				new KeyedView("routes", buildRouteSummary())
 			],
-				panelStyle());
+			panelStyle());
 
 		var keyboard = new Column("keyboard-panel",
 			[
@@ -208,7 +208,7 @@ class AudioLabView implements View {
 				new KeyedView("piano-hint", caption("Click a note to audition the active patch.")),
 				new KeyedView("piano", buildPiano())
 			],
-				panelStyle());
+			panelStyle());
 		if (compact) {
 			return new ScrollView("synth-scroll",
 				new Column("synth-stack",
@@ -217,9 +217,9 @@ class AudioLabView implements View {
 					new KeyedView("monitor", monitorPanel),
 					new KeyedView("keyboard", keyboard)
 				],
-					fitColumnStyle()),
-					scrollStyle(),
-					ScrollAxis.Vertical);
+				fitColumnStyle()),
+				scrollStyle(),
+				ScrollAxis.Vertical);
 		}
 		var bodyStyle = new LayoutStyle();
 		bodyStyle.width = LayoutAxis.grow();
@@ -240,10 +240,10 @@ class AudioLabView implements View {
 							new ScrollView("controls-scroll", controlPanel, controlsStyle, ScrollAxis.Vertical)),
 						new KeyedView("monitor", monitorPanel)
 					],
-						bodyStyle)),
-					new KeyedView("keyboard", keyboard)
-				],
-					screenStyle);
+					bodyStyle)),
+				new KeyedView("keyboard", keyboard)
+			],
+			screenStyle);
 	}
 
 	function scrollStyle():LayoutStyle {
@@ -260,7 +260,7 @@ class AudioLabView implements View {
 				new KeyedView("label", label(name + "  ·  " + value)),
 				new KeyedView("slider", control)
 			],
-				fitColumnStyle());
+			fitColumnStyle());
 	}
 
 	function buildPiano():Row {
@@ -367,7 +367,7 @@ class AudioLabView implements View {
 					"tracker-play")),
 				new KeyedView("tempo", label("120 BPM  •  16th-note clock  •  sample-accurate note events"))
 			],
-				toolbarStyle);
+			toolbarStyle);
 		return new Column("tracker-screen",
 			[
 				new KeyedView("title", title("TRACKER / SEQUENCER")),
@@ -379,7 +379,7 @@ class AudioLabView implements View {
 					scrollStyle,
 					ScrollAxis.Vertical))
 			],
-				growColumnStyle());
+			growColumnStyle());
 	}
 
 	function buildMatrix():View {
@@ -404,7 +404,7 @@ class AudioLabView implements View {
 				new KeyedView("hint",
 					caption("Switch presets in Synth Playground to inspect different oscillator, LFO, envelope, and FM/PM routes."))
 			],
-				growColumnStyle());
+			growColumnStyle());
 	}
 
 	function buildDiagnostics():View {
@@ -426,9 +426,9 @@ class AudioLabView implements View {
 							new Text("Renderer status: ACTIVE  •  event path: SAMPLE-ACCURATE", null, green, null,
 							TextRole.Label))
 					],
-						panelStyle()))
-				],
-					growColumnStyle());
+					panelStyle()))
+			],
+			growColumnStyle());
 	}
 
 	function diagnostic(name:String, value:String):Row {
@@ -439,7 +439,7 @@ class AudioLabView implements View {
 				new KeyedView("name", new Text(name, fixedStyle(190.0, 30.0), muted, null, TextRole.Caption)),
 				new KeyedView("value", new Text(value, null, white, null, TextRole.Label))
 			],
-				style);
+			style);
 	}
 
 	function title(value:String):Text return new Text(value, null, white, null, TextRole.Heading);

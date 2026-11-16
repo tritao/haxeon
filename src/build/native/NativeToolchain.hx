@@ -184,7 +184,7 @@ class NativeToolchain {
 						"-o",
 						output
 					].concat(objects)
-						.concat(inputs);
+					.concat(inputs);
 			case TargetOs.MacOS: ["-dynamiclib", "-o", output].concat(objects).concat(inputs);
 			case TargetOs.Linux: ["-shared", "-o",
 				output].concat(objects).concat(inputs).concat(instrumenting() ? [instrumentHooks()] : []);

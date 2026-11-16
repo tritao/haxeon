@@ -713,7 +713,7 @@ class HlLower {
 	}
 
 	/** Float and Int elements are read in place; every other element type is boxed and cast back. */
-	static function iteratorNextNative(element:IrType): {name: String, result: IrType} return switch element {
+	static function iteratorNextNative(element:IrType):{name:String, result:IrType} return switch element {
 		case F64: {name: "__iterator_next_f64", result: IrType.F64};
 		case I32: {name: "__iterator_next_i32", result: IrType.I32};
 		default: {name: "__iterator_next", result: IrType.Dyn};
@@ -753,9 +753,9 @@ class HlLower {
 					Dyn,
 					Dyn
 				] : native.arguments,
-					native.result),
-				functionIndex: requireFunction(native.name),
-			});
+				native.result),
+			functionIndex: requireFunction(native.name),
+		});
 	}
 
 	function lowerFunction(fn:IrFunction):HlFunction {
@@ -1500,7 +1500,7 @@ class HlLower {
 	static final generatedDebugLocation:HlDebugLocation = new HlDebugLocation("<generated>", 1, 1, 1, 1, 0, -1, -1, 1);
 
 	/** The latest provenance and its location, replaced as one value: neighbouring opcodes nearly always share it. */
-	static var lastDebugLocation: {provenance: SourceProvenance, location: HlDebugLocation} = null;
+	static var lastDebugLocation:{provenance:SourceProvenance, location:HlDebugLocation} = null;
 
 	/** Locations are immutable, so opcodes from one provenance share a single one. */
 	static function debugLocation(provenance:SourceProvenance):HlDebugLocation {
@@ -2343,10 +2343,12 @@ class HlLower {
 				inherited.set(name, true);
 			baseName = base.base == null ? "" : Std.string(base.base);
 		}
-		return [for (name in closeInterfaces(object.interfaces))
-		// These interfaces describe compiler-selected value operations. Their calls are statically lowered, so
-		// caching an HL virtual on each instance only bloats objects and inline structs without serving dispatch.
-		if (!inherited.exists(name) && !isValueCapability(name)) name];
+		return [
+			for (name in closeInterfaces(object.interfaces))
+				// These interfaces describe compiler-selected value operations. Their calls are statically lowered, so
+				// caching an HL virtual on each instance only bloats objects and inline structs without serving dispatch.
+				if (!inherited.exists(name) && !isValueCapability(name)) name
+		];
 	}
 
 	static function isValueCapability(name:String):Bool

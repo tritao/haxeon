@@ -180,8 +180,8 @@ class StructuredPropertyEditor implements PropertyEditorExtension {
 					"Z",
 					"W"
 				][Std.parseInt(path[0])] : Std.string(path[0]))
-					: "item " + path.join(".")) : descriptor.label + (path.length == 1 ? "" : " item " + path.slice(0,
-					path.length - 1).join(".")) + " " + component;
+				: "item " + path.join(".")) : descriptor.label + (path.length == 1 ? "" : " item " + path.slice(0,
+				path.length - 1).join(".")) + " " + component;
 			if (Std.isOfType(item, Bool)) {
 				var box = new Checkbox("item:" + address, label, cast item, next -> send(path, next));
 				box.enabled = enabled;
@@ -209,7 +209,7 @@ class StructuredPropertyEditor implements PropertyEditorExtension {
 					new KeyedView("label", new Text(displayLabel)),
 					new KeyedView("input", field)
 				],
-					style());
+				style());
 		}
 		function tree(path:Array<String>, item:Dynamic, structure:Null<PropertyStructure>):View {
 			if (path.length >= 8) return leaf(path, item);

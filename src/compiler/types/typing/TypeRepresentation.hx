@@ -711,9 +711,9 @@ class TypeRepresentation {
 	public function nominalSubstitutions(type:CompilerType):Map<String, CompilerType>
 		return session.declarations.inheritance.substitutions(type);
 
-	public function methodSubstitutions(receiver:CompilerType, owner:String): {
-		semantic: Map<String, CompilerType>,
-		physical: Map<String, CompilerType>
+	public function methodSubstitutions(receiver:CompilerType, owner:String):{
+		semantic:Map<String, CompilerType>,
+		physical:Map<String, CompilerType>
 	} {
 		var projected = projectNominal(receiver, owner),
 			semantic = nominalSubstitutions(projected),
@@ -750,9 +750,9 @@ class TypeRepresentation {
 		};
 
 	function resolve(type:AstType, span:SourceSpan,
-			substitutions: {
-				semantic: Map<String, CompilerType>,
-				physical: Map<String, CompilerType>
+			substitutions:{
+				semantic:Map<String, CompilerType>,
+				physical:Map<String, CompilerType>
 			}):TypeRepresentationResult
 		return {
 			semantic: semanticType(type, span, substitutions.semantic),
@@ -760,9 +760,9 @@ class TypeRepresentation {
 		};
 
 	function resolveArgument(argument:AstArgument,
-			substitutions: {
-				semantic: Map<String, CompilerType>,
-				physical: Map<String, CompilerType>
+			substitutions:{
+				semantic:Map<String, CompilerType>,
+				physical:Map<String, CompilerType>
 			}):TypeRepresentationResult {
 		var result = resolve(argument.type, argument.span, substitutions);
 		var alreadyNullable = switch result.semantic {

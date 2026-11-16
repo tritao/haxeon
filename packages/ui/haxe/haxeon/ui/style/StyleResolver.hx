@@ -72,7 +72,7 @@ class StyleResolver {
 		return cacheEntryCount;
 
 	/** Bounded-run diagnostics for retained styles and transition state. */
-	public function diagnosticCounts(): {styles: Int, localStyles: Int, targets: Int, animations: Int} {
+	public function diagnosticCounts():{styles:Int, localStyles:Int, targets:Int, animations:Int} {
 		var targetCount = 0;
 		var animationCount = 0;
 		for (_ in targets.keys()) targetCount++;

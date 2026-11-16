@@ -12,9 +12,9 @@ import project.ResolvedPackage;
 /** Lowers C sources to object files and only the native library artifacts in the plan. */
 class NativeSourcesProvider {
 	public static function lowerPackage(resolvedPackage:ResolvedPackage, artifacts:Array<Artifact>,
-			context:LoweringContext): {
-				actions: Array<ExecutionAction>,
-				artifactActions: Map<String, Array<ActionId>>
+			context:LoweringContext):{
+				actions:Array<ExecutionAction>,
+				artifactActions:Map<String, Array<ActionId>>
 			} {
 		var library = new NativeLibrary(resolvedPackage.name, resolvedPackage.nativeSources,
 			resolvedPackage.includeDirs),

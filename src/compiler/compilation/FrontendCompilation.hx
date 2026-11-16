@@ -212,9 +212,9 @@ class FrontendCompilation {
 			rollbackModules:Map<String, ModuleState>,
 			snapshotDoneAt:Float, ?lowerToIr = true, ?indexSemantics = true, ?pendingBody:Map<String, Bool>,
 			?pendingSignatures:Map<String, Bool>,
-			?pendingStructural:Map<String, Bool>, ?carried: {
-				regenerated: Array<String>,
-				retyped: Array<String>
+			?pendingStructural:Map<String, Bool>, ?carried:{
+				regenerated:Array<String>,
+				retyped:Array<String>
 			}):FrontendResult {
 		seedRepresentationModules(context);
 		var build = new FrontendBuild(context, entryModule, token, rollbackModules, lowerToIr, indexSemantics, carried);
@@ -707,12 +707,12 @@ class FrontendCompilation {
 		if (generatedByModule.exists(name)) {
 			var lambdaNames = generatedByModule.get(name);
 			for (lambdaName in lambdaNames.keys())
-			// Syntax names do not include capture hashes. If the owner was retyped, only the closures actually
-			// produced by that typing can survive; a formerly capture-free closure may now have another name.
-			if (!LambdaName.is(lambdaName)
-				|| !typedByName.exists(LambdaName.outermost(lambdaName))
-				|| typedByName.exists(lambdaName))
-				valid.set(lambdaName, true);
+				// Syntax names do not include capture hashes. If the owner was retyped, only the closures actually
+				// produced by that typing can survive; a formerly capture-free closure may now have another name.
+				if (!LambdaName.is(lambdaName)
+					|| !typedByName.exists(LambdaName.outermost(lambdaName))
+					|| typedByName.exists(lambdaName))
+					valid.set(lambdaName, true);
 		}
 		// An unchanged caller can retain a call to a generated specialization.
 		// Such bodies are absent from this request's typedNew, but must survive
@@ -871,10 +871,10 @@ class FrontendCompilation {
 					AllocationMeter.delta("ir-generation", build.allocationAfterProgramTyping,
 					AllocationMeter.sample()))
 			], context.parseMs
-				- build.parseMsAtStart,
-				context.parseBytes
-				- build.parseBytesAtStart, context.parseCount
-				- build.parseCountAtStart));
+			- build.parseMsAtStart,
+			context.parseBytes
+			- build.parseBytesAtStart, context.parseCount
+			- build.parseCountAtStart));
 	}
 
 	/** The end of typing and lowering, and the allocation phases of the whole pass. */
@@ -1207,7 +1207,8 @@ class FrontendCompilation {
 		tables.interfaces = interfaces;
 		tables.enums = enums;
 		tables.staticFields = staticFields;
-		var environment = ["defines:" + context.definesKey(),
+		var environment = [
+			"defines:" + context.definesKey(),
 			"target:" + Std.string(context.valueArrayTarget()),
 			"wasm:" + context.isWasmTarget(),
 			"live:" + context.livePatching,
@@ -1215,12 +1216,14 @@ class FrontendCompilation {
 			"inline:" + context.inlineEnabled(),
 			"instrument:" + (instrumentScope == null ? "-" : Std.string(instrumentScope)),
 			"exports:" + context.exportedFunctions().join(","),
-		// Reflection ignores a name that has no object (a typed program can list an empty anonymous type no function uses), and no
-		// pass gives such a name an object later.
-		"reflectable:"
-			+ (reflectable == null ? "-" : [for (name in reflectable) if (objectNames.exists(name)) name].join(",")),
+			// Reflection ignores a name that has no object (a typed program can list an empty anonymous type no function uses), and no
+			// pass gives such a name an object later.
+			"reflectable:"
+				+ (reflectable == null
+				? "-" : [for (name in reflectable) if (objectNames.exists(name)) name].join(",")),
 			"entry:" + entryPoint,
-			"generator:" + generator.facts.inputState(generator.profile)].join("\n");
+			"generator:" + generator.facts.inputState(generator.profile)
+		].join("\n");
 		return {
 			functions: functions,
 			initializers: initializers,
@@ -1779,10 +1782,10 @@ class FrontendCompilation {
 		return owners.get(className + ".new");
 	}
 
-	static function stage(name:String, ms:Float, allocation:PhaseAllocation): {
-		name: String,
-		ms: Float,
-		allocation: PhaseAllocation
+	static function stage(name:String, ms:Float, allocation:PhaseAllocation):{
+		name:String,
+		ms:Float,
+		allocation:PhaseAllocation
 	} return {
 		name: name,
 		ms: ms,
@@ -1835,8 +1838,8 @@ class FrontendCompilation {
 			else if (fn != null)
 				owner = resolveFunctionModule(fn, owners, typedByName, []);
 			else if (owners.exists(dependency.functionName))
-			// Typed in an earlier build and kept: it is not among this pass's typed functions, but its module is known.
-			owner = owners.get(dependency.functionName);
+				// Typed in an earlier build and kept: it is not among this pass's typed functions, but its module is known.
+				owner = owners.get(dependency.functionName);
 			else
 				owner = initializerModule(dependency.functionName, owners);
 			if (owner == null)

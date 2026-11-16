@@ -69,8 +69,8 @@ class SyntaxAnnotator {
 		var typeArgumentOpens:Map<Int, Bool> = [],
 			typeArgumentCloses:Map<Int, Bool> = [],
 			declarationCommas:Map<Int, Bool> = [],
-		// Type argument lists open around the current token: their commas separate types, never declarations.
-		typeArgumentDepth = 0;
+			// Type argument lists open around the current token: their commas separate types, never declarations.
+			typeArgumentDepth = 0;
 
 		for (index in 0...tokens.length)
 			if (FormatTokenTools.isSyntax(tokens[index]))
@@ -263,13 +263,15 @@ class SyntaxAnnotator {
 			return true;
 		// `case A: {` opens the arm's block and `x -> {` a lambda's body, unless the brace starts an object literal (`case A: {x: 1}`,
 		// `x -> {y: x}`), as Haxe decides it.
+		// After a conditional's `?` the brace is likewise an object literal (`c ? {a: 1} : b`) or a block expression.
 		if ((previous == TokenKind.Colon && endsCaseHeader(tokens, syntaxIndexes, position - 1)
-			|| previous == TokenKind.Arrow)
+			|| previous == TokenKind.Arrow
+			|| previous == TokenKind.Question)
 			&& !startsObjectLiteral(tokens, syntaxIndexes, position))
 			return true;
 		return switch previous {
 			case TokenKind.Assign, TokenKind.Colon, TokenKind.Comma, TokenKind.LeftParen, TokenKind.LeftBracket,
-				TokenKind.Arrow, TokenKind.Return,
+				TokenKind.Arrow, TokenKind.Return, TokenKind.Question,
 				TokenKind.Less: false;
 			default: true;
 		};

@@ -200,7 +200,7 @@ class SuiteRunner {
 		return true;
 	}
 
-	function startLane(members:Array<Suite>): {lock: Lock, results: Array<SuiteResult>} {
+	function startLane(members:Array<Suite>):{lock:Lock, results:Array<SuiteResult>} {
 		var lane = {lock: new Lock(), results: []};
 		console('${prefix()}lane ${members[0].lane}, in the background: ${members.map(suite -> suite.name).join(" ")}');
 		Thread.create(() -> {

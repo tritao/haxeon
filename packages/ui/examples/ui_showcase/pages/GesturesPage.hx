@@ -105,12 +105,12 @@ class GesturesPage {
 				new StackChild("spring-marker", motionMarker("Spring", UiExplorer.color(0.24, 0.58, 0.48)), springX,
 					66.0, 1)
 			],
-				motionStyle)), explorer.keyed("actions", new Row("motion-actions",
-				[explorer.keyed("tween", explorer.button("Replay tween", "gesture-replay-tween", function() {
-					explorer.tweenController.play(explorer.state.gestures.tweenValue,
-						explorer.state.gestures.tweenValue < 0.5 ? 1.0 : 0.0,
-						0.7);
-				})), explorer.keyed("spring", explorer.button("Retarget spring", "gesture-retarget-spring", function() {
+			motionStyle)), explorer.keyed("actions", new Row("motion-actions",
+			[explorer.keyed("tween", explorer.button("Replay tween", "gesture-replay-tween", function() {
+				explorer.tweenController.play(explorer.state.gestures.tweenValue,
+					explorer.state.gestures.tweenValue < 0.5 ? 1.0 : 0.0,
+					0.7);
+			})), explorer.keyed("spring", explorer.button("Retarget spring", "gesture-retarget-spring", function() {
 			explorer.springController.setTarget(explorer.state.gestures.springValue < 0.5 ? 1.0 : 0.18);
 		}))], explorer.rowStyle(10.0))), explorer.keyed("motion-values",
 			explorer.caption('Tween ${Std.int(explorer.state.gestures.tweenValue * 100)}%  ·  Spring ${Std.int(explorer.state.gestures.springValue * 100)}%'))])));

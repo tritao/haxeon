@@ -57,15 +57,15 @@ class CompilerMemoryCensus {
 					name: "last assembler (function cache, symbols)",
 					release: () -> compiler.assembler = new HlModuleAssembler()
 				},
-					{
-						name: "inline cache",
-						release: () -> compiler.inlineCache = new IrInlineCache()
-					},
-						{name: "object cache",
-						release: () -> {
-							compiler.objectCache = [];
-							compiler.canonicalObjectCache = [];
-						}
+				{
+					name: "inline cache",
+					release: () -> compiler.inlineCache = new IrInlineCache()
+				},
+				{name: "object cache",
+				release: () -> {
+					compiler.objectCache = [];
+					compiler.canonicalObjectCache = [];
+				}
 			},
 				{name: "last typed program and semantic program",
 				release: () -> {

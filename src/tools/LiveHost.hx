@@ -120,11 +120,11 @@ class LiveHost {
 							report('haxeon: patch timing ms: description=${Math.round((describedAt - seenAt) * 1000)} read=${Math.round((readAt - describedAt) * 1000)} apply=${Math.round((Sys.time() - readAt) * 1000)}');
 							report('haxeon: patched live module to revision $revision');
 						} else if (applied && strict)
-						// The revision runs and cannot be taken back; the objects that missed their initializers stay as they are.
-						banner('LIVE PATCH INCOMPLETE (--strict-live): revision $revision runs, but objects made before it lack field values', [
-							failure,
-							'those fields hold zero values (null, 0, false); restart the app to run revision $revision from a fresh state'
-						]);
+							// The revision runs and cannot be taken back; the objects that missed their initializers stay as they are.
+							banner('LIVE PATCH INCOMPLETE (--strict-live): revision $revision runs, but objects made before it lack field values', [
+								failure,
+								'those fields hold zero values (null, 0, false); restart the app to run revision $revision from a fresh state'
+							]);
 						else if (strict)
 							rejectedPublication = refuse(path, description, revision, candidate,
 								held ? failure : 'the runtime rejected its patch: $failure', true);
@@ -361,8 +361,8 @@ class LiveHost {
 					({
 						name: item.name, id: item.id
 					}: LiveFunction)
-				]
-			};
+			]
+		};
 	}
 
 	/** The small summary the compiler writes beside the full description, so a patch does not parse the whole function list. */

@@ -92,9 +92,9 @@ class Menu implements View {
 					"menu-item",
 					"navigation"
 				],
-					["button"],
-					haxeon.ui.style.StyleState.empty()),
-					null);
+				["button"],
+				haxeon.ui.style.StyleState.empty()),
+				null);
 			var itemStyle = computed.toLayoutStyle();
 			var typography = context.resolveTextRole(TextRole.Button,
 				TextStyleOverride.combine(TextStyleOverride.text(13), TextStyleOverride.paragraph(TextWrap.None)));

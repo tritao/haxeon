@@ -661,7 +661,7 @@ class HxiValidator {
 		}
 	}
 
-	static function validateOutputBuffer(buffer: {name: String, sizeParameter: String, span: SourceSpan},
+	static function validateOutputBuffer(buffer:{name:String, sizeParameter:String, span:SourceSpan},
 			parameters:Array<HxiParameter>, abi:HxiAbi):Void {
 		var size:HxiParameter = null;
 		for (parameter in parameters)
@@ -716,7 +716,7 @@ class HxiValidator {
 		number of elements written. Otherwise its capacity is a count passed by
 		value.
 	**/
-	static function validateOutputArray(array: {name: String, countParameter: String, span: SourceSpan},
+	static function validateOutputArray(array:{name:String, countParameter:String, span:SourceSpan},
 			parameters:Array<HxiParameter>, abi:HxiAbi):Bool {
 		var count = Lambda.find(parameters, parameter -> parameter.name == array.countParameter);
 		if (count == null)
@@ -1030,7 +1030,7 @@ class HxiValidator {
 				validateType(element, names, declarations, span, false);
 		}
 
-	static function declarationName(value:HxiDeclaration): {name: String, span: SourceSpan} return switch value {
+	static function declarationName(value:HxiDeclaration):{name:String, span:SourceSpan} return switch value {
 		case Opaque(name, span) | Alias(name, _, span) | Handle(name, _, _, span) | Constant(name, _,
 			span) | Structure(name, _, _, _, span) | Enumeration(name, _, _, _, span) | Callback(name, _, _, _,
 			span) | Function(name, _, _, _, _, _, _, span):

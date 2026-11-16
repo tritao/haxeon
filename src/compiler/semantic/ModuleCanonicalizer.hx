@@ -57,9 +57,9 @@ class ModuleCanonicalizer {
 	/** A block and its value expression, which sees the block's locals. */
 	static function canonicalScope(statements:Array<AstStatement>, value:Null<AstExpression>, module:String,
 			entry:String, locals:LocalScope,
-			aliases:Null<AliasTable>, bound:Null<Array<Null<String>>>): {
-				statements: Array<AstStatement>,
-				value: Null<AstExpression>
+			aliases:Null<AliasTable>, bound:Null<Array<Null<String>>>):{
+				statements:Array<AstStatement>,
+				value:Null<AstExpression>
 			} {
 		var scope = bound == null ? locals : bindNames(locals, bound),
 			owned = scope != locals,
@@ -212,7 +212,7 @@ class ModuleCanonicalizer {
 						for (argument in annotation.arguments)
 							canonicalExpression(argument, module, entry, locals, aliases)
 					],
-						span:annotation.span
+					span:annotation.span
 			}];
 
 	public static function canonicalAbstract(decl:compiler.syntax.Ast.AstAbstract, aliases:AliasTable,
@@ -598,8 +598,8 @@ class ModuleCanonicalizer {
 						name:argument.name,
 							type:canonicalType(argument.type, aliases),
 							span:argument.span,
-						// A local function's optional parameters and defaults let calls omit them.
-						optional:argument.optional,
+							// A local function's optional parameters and defaults let calls omit them.
+							optional:argument.optional,
 							defaultValue:canonicalOptionalExpression(argument.defaultValue, module, entry, locals,
 							aliases)
 					}],

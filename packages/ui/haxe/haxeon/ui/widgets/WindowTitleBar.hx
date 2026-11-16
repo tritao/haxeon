@@ -49,7 +49,7 @@ class WindowTitleBar implements View {
 					controls.toggleMaximize)),
 				new KeyedView("close", control("Close", IconName.Close, controls.close))
 			],
-				style).build(context);
+			style).build(context);
 		node.setWindowDecoration(WindowDecorationRegionKind.Drag);
 		node.walk(function(child) {
 			if (child.focusable

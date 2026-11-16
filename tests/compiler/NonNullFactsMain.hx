@@ -11,7 +11,7 @@ class NonNullFactsMain {
 		if (!value)
 			throw message;
 
-	static function check(b:IrBuilder, receiver:IrValue): {block: Int, index: Int} {
+	static function check(b:IrBuilder, receiver:IrValue):{block:Int, index:Int} {
 		b.call(IrReceiverCheck.NAME, [receiver], Void);
 		return {block: b.currentBlock().id, index: b.currentBlock().instructions.length - 1};
 	}

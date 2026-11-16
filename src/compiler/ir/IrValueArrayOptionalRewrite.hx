@@ -32,7 +32,7 @@ class IrValueArrayOptionalRewrite {
 				block:Int,
 				position:Int
 			}> = [], dynamicWrites:Map<Int, IrValue> = [], dynamicBoxes:Map<Int, Bool> = [], uses:Map<Int, Int> = [],
-				next = 0;
+			next = 0;
 		function use(value:IrValue):Void
 			uses.set(value.id, (uses.exists(value.id) ? uses.get(value.id) : 0) + 1);
 		function readAt(id:Int):OptionalArrayAccess {

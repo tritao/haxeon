@@ -26,9 +26,9 @@ class FlagsGenerator {
 			default: false;
 		};
 
-	public static function signature(owner:String, method:String): {
-		arguments: Array<CompilerType>,
-		result: CompilerType
+	public static function signature(owner:String, method:String):{
+		arguments:Array<CompilerType>,
+		result:CompilerType
 	} {
 		var value:CompilerType = TAbstract(owner, [], TInt);
 		return switch method {

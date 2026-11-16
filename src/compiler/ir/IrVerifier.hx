@@ -1600,11 +1600,11 @@ class IrVerifier {
 	}
 
 	/** Whether two methods of one slot agree on everything but their receivers, which are each declaration's own class. */
-	static function sameSlotSignature(a: {arguments: Array<IrType>, result: IrType, kind: IrFunctionKind},
-			b: {
-				arguments: Array<IrType>,
-				result: IrType,
-				kind: IrFunctionKind
+	static function sameSlotSignature(a:{arguments:Array<IrType>, result:IrType, kind:IrFunctionKind},
+			b:{
+				arguments:Array<IrType>,
+				result:IrType,
+				kind:IrFunctionKind
 			}):Bool {
 		if (a.arguments.length != b.arguments.length || !sameType(a.result, b.result))
 			return false;

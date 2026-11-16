@@ -119,8 +119,8 @@ class IrEnumEscapeReach {
 		var unsupported:Map<String, Bool> = [],
 			visited:Map<String, Bool> = [],
 			inspectedMaps:Map<String, Bool> = [], // What the reference walk has visited: named types by name; function and map types, the only other ones that can lead
-		// back to themselves, by identity text. Wrappers and primitives are not recorded: walking them again is cheap and finite.
-		referenceTypes:Map<String, Bool> = [],
+			// back to themselves, by identity text. Wrappers and primitives are not recorded: walking them again is cheap and finite.
+			referenceTypes:Map<String, Bool> = [],
 			referenceObjects:Map<String, Bool> = [],
 			referenceVirtuals:Map<String, Bool> = [],
 			valueTypes:Map<String, Bool> = [];

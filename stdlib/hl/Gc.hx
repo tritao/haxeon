@@ -8,7 +8,7 @@ extern function gcStats():Array<Float>;
  * HashLink's counters, as Haxe's hl.Gc.stats: bytes allocated in total, allocations made, and current heap bytes. A module
  * function of hl.Gc, so it is called as `hl.Gc.stats()`, beside the natives the extern class binds.
  */
-function stats(): {totalAllocated: Float, allocationCount: Float, currentMemory: Float} {
+function stats():{totalAllocated:Float, allocationCount:Float, currentMemory:Float} {
 	var values = gcStats();
 	return {totalAllocated: values[0], allocationCount: values[1], currentMemory: values[2]};
 }
@@ -105,7 +105,7 @@ class Gc {
 
 	public static function dumpMemory(fileName:String = "hlmemory.dump"):Void {}
 
-	public static function stats(): {totalAllocated: Float, allocationCount: Float, currentMemory: Float} return {
+	public static function stats():{totalAllocated:Float, allocationCount:Float, currentMemory:Float} return {
 		totalAllocated: 0.0,
 		allocationCount: 0.0,
 		currentMemory: 0.0

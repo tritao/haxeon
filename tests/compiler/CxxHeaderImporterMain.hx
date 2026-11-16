@@ -287,7 +287,7 @@ class CxxHeaderImporterMain {
 				"cxxown::Widget::value",
 				"cxxown::acquire"
 			],
-				["cxxown::acquire" => "cxxown::release"]),
+			["cxxown::acquire" => "cxxown::release"]),
 			ownedText = HxiWriter.write(owned.hxi, "// test"),
 			ownedSources = CxxProjection.sources(owned.model, owned.hxi, null, owned.plans),
 			ownedFunctions = Lambda.find(ownedSources, source -> source.file == "CxxOwnedFixtureFunctions.hx"),

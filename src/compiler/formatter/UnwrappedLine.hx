@@ -49,20 +49,28 @@ class UnwrappedLineBuilder {
 			pendingNewlines = 0,
 			conditionalBases:Array<{depth:Int, nesting:Int, bodyLevels:Array<Int>}> = [],
 			switchBases:Array<Int> = [],
-		// The token index of each open switch's closing brace, from the bracket matching: a `}` closes the switch only if it is
-		// that one, not whenever the depth looks like it (a case arm's own block closes at the same depth).
-		switchCloses:Array<Int> = [], opaqueBlockDepth = 0, lastClosedBlock = false,
+			// The token index of each open switch's closing brace, from the bracket matching: a `}` closes the switch only if it is
+			// that one, not whenever the depth looks like it (a case arm's own block closes at the same depth).
+			switchCloses:Array<Int> = [],
+			opaqueBlockDepth = 0,
+			lastClosedBlock = false,
 			trailingComments = new Map<Int, Bool>(),
-		// A control statement's single-statement body (`if (c)` then `x;` on the next line) is indented one level until the
-		// statement ends; each open body records the bracket nesting it started at.
-		nesting = 0, bodyLevels:Array<Int> = [], pendingDedent = 0, previousSyntax = -1,
-		// The `}` of an empty block (`{}`), which stays on the line of its `{`.
-		emptyBlockCloses = new Map<Int, Bool>(),
+			// A control statement's single-statement body (`if (c)` then `x;` on the next line) is indented one level until the
+			// statement ends; each open body records the bracket nesting it started at.
+			nesting = 0,
+			bodyLevels:Array<Int> = [],
+			pendingDedent = 0,
+			previousSyntax = -1,
+			// The `}` of an empty block (`{}`), which stays on the line of its `{`.
+			emptyBlockCloses = new Map<Int, Bool>(),
 			newlineBefore = new Map<Int, Bool>(),
-		// The indentation of the lines after an inline case arm (`case 0: x;`), taken when that arm's line ends.
-		pendingDepth:Null<Int> = null,
-		// After the `)` of a function declaration's parameters: whether its return type is being read, and how deep in it.
-		awaitingFunctionBody = false, inReturnType = false, returnTypeDepth = 0, returnTypeName = false;
+			// The indentation of the lines after an inline case arm (`case 0: x;`), taken when that arm's line ends.
+			pendingDepth:Null<Int> = null,
+			// After the `)` of a function declaration's parameters: whether its return type is being read, and how deep in it.
+			awaitingFunctionBody = false,
+			inReturnType = false,
+			returnTypeDepth = 0,
+			returnTypeName = false;
 
 		function begin(token:FormatToken):Void {
 			if (current.length > 0 && pendingNewlines > 0)
@@ -70,10 +78,9 @@ class UnwrappedLineBuilder {
 			if (current.length == 0) {
 				blankBefore = pendingNewlines > 1 ? pendingNewlines - 1 : 0;
 				pendingNewlines = 0;
-			} else
-			// Newlines inside an unwrapped construct are not blank lines
-			// once another token continues that construct.
-			pendingNewlines = 0;
+			} else // Newlines inside an unwrapped construct are not blank lines
+				// once another token continues that construct.
+				pendingNewlines = 0;
 			current.push(token);
 		}
 
@@ -146,10 +153,13 @@ class UnwrappedLineBuilder {
 					if (protectedDelta > 0)
 						opaqueBlockDepth += protectedDelta;
 				case FormatTokenKind.LineComment, FormatTokenKind.DocComment, FormatTokenKind.BlockComment:
-					var attachment = comments == null || !comments.exists(index) ? null : comments.get(index);
+					var attachment = comments == null || !comments.exists(index) ? null : comments.get(index),
+						// A comment on its own line inside a statement that goes on below it (between a declaration list's
+						// variables, or an argument list's arguments) stays in the statement, at its continuation indent.
+						withinStatement = current.length > 0 && statementContinues(current.concat([token]), syntax);
 					switch attachment {
 						case CommentAttachmentKind.Leading(_), CommentAttachmentKind.Standalone:
-							if (current.length > 0) flush();
+							if (current.length > 0 && !withinStatement) flush();
 						default:
 					}
 					if (pendingNewlines > 0
@@ -178,7 +188,7 @@ class UnwrappedLineBuilder {
 					// A line comment ends the logical line, unless it trails a statement that goes on below it (`var a = 1, // why`
 					// then `b = 2;`, or an argument list): the rest keeps the statement's continuation indent.
 					if (current.length == 1 || token.kind.match(FormatTokenKind.LineComment)
-						&& !(trailing && statementContinues(current, syntax)))
+						&& !((trailing || withinStatement) && statementContinues(current, syntax)))
 						flush();
 				case FormatTokenKind.Syntax(kind):
 					var isBlock = kind == TokenKind.LeftBrace
@@ -233,24 +243,26 @@ class UnwrappedLineBuilder {
 					}
 					// A block's closing brace ends the statement. The `}` of an object literal or a structure type continues it,
 					// unless a declaration follows: `typedef T = {...}` needs no semicolon.
-					if (current.length > 0
-						&& FormatTokenTools.syntaxKind(current[current.length - 1]) == TokenKind.RightBrace
-						&& (lastClosedBlock || startsDeclaration(kind))
-						&& kind != TokenKind.Else
-						&& kind != TokenKind.Catch
-						&& !(kind == TokenKind.While
-						&& syntax.roles.doBlockCloses.exists(current[current.length - 1].start))
-						&& kind != TokenKind.Semicolon
-					// A bracket that closes after a block (`call(function() {...})`) closes the expression around it, and an operator
-					// or a conditional's `?` or `:` after one (`f == null ? function() {} : f`) continues it.
-					&& kind != TokenKind.RightParen
-						&& kind != TokenKind.RightBracket
-						&& kind != TokenKind.Question
-						&& !(kind == TokenKind.Colon && syntax.roles.ternaryColons.exists(token.start))
-						&& !TokenRoles.isBinaryOperator(kind)
-						&& kind != TokenKind.Comma
-						&& kind != TokenKind.Dot
-						&& kind != TokenKind.Greater) flush();
+					if (
+						current.length > 0
+							&& FormatTokenTools.syntaxKind(current[current.length - 1]) == TokenKind.RightBrace
+							&& (lastClosedBlock || startsDeclaration(kind))
+							&& kind != TokenKind.Else
+							&& kind != TokenKind.Catch
+							&& !(kind == TokenKind.While
+							&& syntax.roles.doBlockCloses.exists(current[current.length - 1].start))
+							&& kind
+							!= TokenKind.Semicolon // A bracket that closes after a block (`call(function() {...})`) closes the expression around it, and an operator
+							// or a conditional's `?` or `:` after one (`f == null ? function() {} : f`) continues it.
+							&& kind != TokenKind.RightParen
+							&& kind != TokenKind.RightBracket
+							&& kind != TokenKind.Question
+							&& !(kind == TokenKind.Colon && syntax.roles.ternaryColons.exists(token.start))
+							&& !TokenRoles.isBinaryOperator(kind)
+							&& kind != TokenKind.Comma
+							&& kind != TokenKind.Dot
+							&& kind != TokenKind.Greater
+					) flush();
 					if (isCloseBlock) {
 						flush();
 						if (closesSwitch)

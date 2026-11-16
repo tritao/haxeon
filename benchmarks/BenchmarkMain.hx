@@ -389,7 +389,8 @@ class BenchmarkMain {
 
 	static function sample(started:Float, compileDone:Float, done:Float, bytes:Int, retyped:Int, regenerated:Int,
 			?metrics:CompileMetrics):Sample
-		return {totalMs: (done - started) * 1000.0,
+		return {
+			totalMs: (done - started) * 1000.0,
 			compileMs: (compileDone - started) * 1000.0,
 			runtimeMs: (done - compileDone) * 1000.0,
 			artifactBytes: bytes,
@@ -401,15 +402,16 @@ class BenchmarkMain {
 			typerSetupMs: metrics == null ? 0.0 : metrics.typerSetupMs,
 			typerNoReturnMs: metrics == null ? 0.0 : metrics.typerNoReturnMs,
 			typerMetadataMs: metrics == null ? 0.0 : metrics.typerMetadataMs,
-		// The compiler reports class bodies, function bodies and generated code apart; this report keeps their sum.
-		typerBodiesMs: metrics == null
-			? 0.0 : metrics.typerClassBodiesMs + metrics.typerFunctionBodiesMs + metrics.typerGeneratedMs,
+			// The compiler reports class bodies, function bodies and generated code apart; this report keeps their sum.
+			typerBodiesMs: metrics == null
+				? 0.0 : metrics.typerClassBodiesMs + metrics.typerFunctionBodiesMs + metrics.typerGeneratedMs,
 			typerAssemblyMs: metrics == null ? 0.0 : metrics.typerAssemblyMs,
 			irAssemblyMs: metrics == null ? 0.0 : metrics.irAssemblyMs,
 			abiPlanningMs: metrics == null ? 0.0 : metrics.abiPlanningMs,
 			backendAssemblyMs: metrics == null ? 0.0 : metrics.backendAssemblyMs,
 			patchEncodingMs: metrics == null ? 0.0 : metrics.patchEncodingMs,
-			finalizeMs: metrics == null ? 0.0 : metrics.finalizeMs};
+			finalizeMs: metrics == null ? 0.0 : metrics.finalizeMs
+		};
 
 	static function summarize(samples:Array<Sample>):Summary
 		return {

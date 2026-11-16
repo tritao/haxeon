@@ -80,7 +80,7 @@ class AndroidWatch {
 	}
 
 	/** The host's protocol: a big-endian length and the artifact; it answers with its status and its revision. */
-	static function send(payload:Bytes): {status: Int, revision: Int} {
+	static function send(payload:Bytes):{status:Int, revision:Int} {
 		var socket = new sys.net.Socket();
 		socket.setTimeout(30);
 		try {

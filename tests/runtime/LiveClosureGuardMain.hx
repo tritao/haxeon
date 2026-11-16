@@ -288,7 +288,7 @@ class LiveClosureGuardMain {
 			return total;
 		}
 		// A refused edit stays the compiler's last build, so each refusal gets a session of its own.
-		function stored(): {compiler: Compiler, build: Dynamic, live: runtime.LoadedModule, mainId: Int} {
+		function stored():{compiler:Compiler, build:Dynamic, live:runtime.LoadedModule, mainId:Int} {
 			var session = start(program(70, -1, true));
 			expect(Runtime.callInt(session.live, session.mainId), sum(70), "the 70 handlers the module stores");
 			patch(session, program(110, -1, true), "40 stored handlers added");
@@ -388,11 +388,11 @@ class LiveClosureGuardMain {
 	}
 
 	/** The program `source` compiled and loaded; `stdlib` lets it use the standard library (`Sys`, threads). */
-	static function start(source:String, stdlib:Bool = false): {
-		compiler: Compiler,
-		build: Dynamic,
-		live: runtime.LoadedModule,
-		mainId: Int
+	static function start(source:String, stdlib:Bool = false):{
+		compiler:Compiler,
+		build:Dynamic,
+		live:runtime.LoadedModule,
+		mainId:Int
 	} {
 		var compiler = new Compiler();
 		if (stdlib) {
@@ -409,7 +409,7 @@ class LiveClosureGuardMain {
 		};
 	}
 
-	static function compileEdit(session: {compiler: Compiler, build: Dynamic, live: runtime.LoadedModule, mainId: Int},
+	static function compileEdit(session:{compiler:Compiler, build:Dynamic, live:runtime.LoadedModule, mainId:Int},
 			source:String, label:String):Dynamic {
 		session.compiler.update("Main.hx", source);
 		var changed = session.compiler.compile("Main");
@@ -418,7 +418,7 @@ class LiveClosureGuardMain {
 		return changed;
 	}
 
-	static function patch(session: {compiler: Compiler, build: Dynamic, live: runtime.LoadedModule, mainId: Int},
+	static function patch(session:{compiler:Compiler, build:Dynamic, live:runtime.LoadedModule, mainId:Int},
 			source:String, label:String):Void {
 		var changed = compileEdit(session, source, label);
 		try
@@ -430,7 +430,7 @@ class LiveClosureGuardMain {
 	}
 
 	/** The edit compiles to a patch, which the runtime refuses because stored closures reach what it drops; its message. */
-	static function refused(session: {compiler: Compiler, build: Dynamic, live: runtime.LoadedModule, mainId: Int},
+	static function refused(session:{compiler:Compiler, build:Dynamic, live:runtime.LoadedModule, mainId:Int},
 			source:String, label:String):String {
 		var changed = compileEdit(session, source, label);
 		try {

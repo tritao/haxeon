@@ -339,7 +339,7 @@ class PropertyEditor implements View implements Observable {
 				new KeyedView("slider", slider),
 				new KeyedView("text", textField(context, descriptor, value, editorKey + ":text", writable))
 			],
-				NumericRowStyle);
+			NumericRowStyle);
 	}
 
 	function textField(context:BuildContext,

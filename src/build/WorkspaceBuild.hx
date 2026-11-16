@@ -137,9 +137,9 @@ class WorkspaceBuild {
 			if (compile == null)
 				throw 'Workspace project "${member.name}" has no compile action to test';
 			var directories = [Path.join([home, "out"]), build.HashLinkPath.directory(home)], // What a passing run depends on besides the compile action: the module, the HashLink runtime,
-			// the native libraries it loads, and the files beside its project. The project directory
-			// stands in for test data; list data kept elsewhere under `inputs` in the workspace file.
-			inputs = [member.output, member.project.root].concat(runtime).concat(member.testInputs);
+				// the native libraries it loads, and the files beside its project. The project directory
+				// stands in for test data; list data kept elsewhere under `inputs` in the workspace file.
+				inputs = [member.output, member.project.root].concat(runtime).concat(member.testInputs);
 			for (resolvedPackage in member.project.packages.packages) {
 				var packageRoot = context.layout.packageRoot(resolvedPackage.name);
 				directories.push(packageRoot);
@@ -160,11 +160,11 @@ class WorkspaceBuild {
 					safeName = StringTools.replace(runName, "/", "-"),
 					log = Path.join([testsDirectory, safeName + ".log"]),
 					stamp = Path.join([testsDirectory, safeName + ".passed"]), // The stamp exists only while the last run of this action passed; the executor skips the run
-				// when it exists and every input is unchanged since a passing run.
-				arguments = sharded ? " --shard " + shard + "/" + member.shards : "",
+					// when it exists and every input is unchanged since a passing run.
+					arguments = sharded ? " --shard " + shard + "/" + member.shards : "",
 					script =
-					'mkdir -p ${quote(testsDirectory)} && rm -f ${quote(stamp)} && ${quote(hashlink)} ${quote(member.output)}$arguments > ${quote(log)} 2>&1; status=$$?; '
-					+ 'if [ $$status -eq 0 ]; then tail -n 1 ${quote(log)}; touch ${quote(stamp)}; else tail -n 40 ${quote(log)}; fi; exit $$status';
+						'mkdir -p ${quote(testsDirectory)} && rm -f ${quote(stamp)} && ${quote(hashlink)} ${quote(member.output)}$arguments > ${quote(log)} 2>&1; status=$$?; '
+						+ 'if [ $$status -eq 0 ]; then tail -n 1 ${quote(log)}; touch ${quote(stamp)}; else tail -n 40 ${quote(log)}; fi; exit $$status';
 				actions.push(new ExecutionAction(new ActionId("test:" + runName), member.actions, inputs, [stamp],
 					'Test $runName (log: $log)',
 					Process("sh", [

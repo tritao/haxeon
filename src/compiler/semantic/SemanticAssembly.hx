@@ -561,8 +561,8 @@ class SemanticAssembly {
 
 		var invalid:Map<String, Bool> = [],
 			invalidationReasons:Map<String, Array<InvalidationReason>> = [], // A continuation picks up a pass whose typed functions are already published to the module states, though no module has
-		// a good revision until the whole compilation commits: it is incremental over that pass, not a first build.
-		initialBuild = !continuation;
+			// a good revision until the whole compilation commits: it is incremental over that pass, not a first build.
+			initialBuild = !continuation;
 		for (moduleName in names) {
 			if (!modules.exists(moduleName))
 				continue;

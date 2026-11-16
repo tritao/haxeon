@@ -278,9 +278,9 @@ class IrOptionalFieldStorage {
 
 	function materializeAlias(value:IrValue, aliases:Map<Int, Array<String>>, plan:OptionalFieldPlan, owner:IrValue,
 			target:IrBlock,
-			located:Located<IrInstruction>, next:Int): {
-				value: IrValue,
-				next: Int
+			located:Located<IrInstruction>, next:Int):{
+				value:IrValue,
+				next:Int
 			} {
 		var path = aliases.get(value.id);
 		if (path == null)

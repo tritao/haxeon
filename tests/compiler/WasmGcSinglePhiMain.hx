@@ -151,7 +151,7 @@ class GcPhiThrowProbe {
 						rawBool,
 						main.constBool(extraPath)
 					],
-						I32);
+					I32);
 			main.returnValue(result);
 			var callee = new IrBuilder();
 			callee.returnValue(callee.constInt(7));

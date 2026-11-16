@@ -29,10 +29,10 @@ class IrIntegerBuilderMain {
 				target: Wasm32,
 				debugNames: true
 			}).bytes.length == 0
-				|| new WasmBackend().compile(program, {
-					target: WasmGc,
-					debugNames: true
-				}).bytes.length == 0)
+			|| new WasmBackend().compile(program, {
+				target: WasmGc,
+				debugNames: true
+			}).bytes.length == 0)
 			throw "64-bit integer builder operations must lower on each backend";
 		checkWideArithmetic();
 		checkSourceConstructors();

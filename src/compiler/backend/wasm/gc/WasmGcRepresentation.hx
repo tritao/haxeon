@@ -807,19 +807,19 @@ class WasmGcRepresentation implements WasmValueRepresentation implements WasmAgg
 			default: null;
 		};
 		if (closureCast != null)
-		// A closure created with another signature is wrapped so calls at this type reach it (WasmGcClosureAdapters).
-		return [
-			LocalGet(valueLocal),
-			RefCast({nullable: true, heap: Type(plan.closureTypeIndex)}),
-			LocalTee(destination),
-			RefIsNull,
-			I32Eqz,
-			If(null),
-			LocalGet(destination),
-			Call(closureCast),
-			LocalSet(destination),
-			End
-		];
+			// A closure created with another signature is wrapped so calls at this type reach it (WasmGcClosureAdapters).
+			return [
+				LocalGet(valueLocal),
+				RefCast({nullable: true, heap: Type(plan.closureTypeIndex)}),
+				LocalTee(destination),
+				RefIsNull,
+				I32Eqz,
+				If(null),
+				LocalGet(destination),
+				Call(closureCast),
+				LocalSet(destination),
+				End
+			];
 		return switch output.type {
 			case Abstract("native_pointer") if ((switch (value.type) {
 				case Dyn: true;
@@ -6274,29 +6274,29 @@ class WasmGcRepresentation implements WasmValueRepresentation implements WasmAgg
 				ArrayNewDefault(plan.byteArrayTypeIndex),
 				LocalSet(storage)
 			],
-				(sourceOffset, targetOffset, size) -> [
-					LocalGet(storage),
-					LocalGet(targetOffset),
-					LocalGet(valueLocal),
-					StructGet(plan.bytesTypeIndex, 0),
-					LocalGet(valueLocal),
-					StructGet(plan.bytesTypeIndex, 1),
-					LocalGet(sourceOffset),
-					I32Add,
-					LocalGet(size),
-					ArrayCopy(plan.byteArrayTypeIndex, plan.byteArrayTypeIndex)
-				], (offset, byte) -> [
-					LocalGet(storage),
-					LocalGet(offset),
-					LocalGet(byte),
-					ArraySet(plan.byteArrayTypeIndex)
-				], size -> [
-					LocalGet(storage),
-					I32Const(0),
-					LocalGet(size),
-					StructNew(plan.bytesTypeIndex),
-					LocalSet(destination)
-				]);
+			(sourceOffset, targetOffset, size) -> [
+				LocalGet(storage),
+				LocalGet(targetOffset),
+				LocalGet(valueLocal),
+				StructGet(plan.bytesTypeIndex, 0),
+				LocalGet(valueLocal),
+				StructGet(plan.bytesTypeIndex, 1),
+				LocalGet(sourceOffset),
+				I32Add,
+				LocalGet(size),
+				ArrayCopy(plan.byteArrayTypeIndex, plan.byteArrayTypeIndex)
+			], (offset, byte) -> [
+				LocalGet(storage),
+				LocalGet(offset),
+				LocalGet(byte),
+				ArraySet(plan.byteArrayTypeIndex)
+			], size -> [
+				LocalGet(storage),
+				I32Const(0),
+				LocalGet(size),
+				StructNew(plan.bytesTypeIndex),
+				LocalSet(destination)
+			]);
 	}
 
 	function stringByteSubstring(valueLocal:Int, startArgument:Int, endArgument:Int,

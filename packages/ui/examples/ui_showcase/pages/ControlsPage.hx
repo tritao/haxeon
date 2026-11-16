@@ -112,14 +112,14 @@ class ControlsPage {
 				explorer.keyed("bars", spinnerSample(explorer, "bars", "Bars", SpinnerKind.Bars)),
 				explorer.keyed("pulse", spinnerSample(explorer, "pulse", "Pulse", SpinnerKind.Pulse))
 			],
-				explorer.rowStyle(10.0))),
-				explorer.keyed("spinner-controls", new Row("spinner-controls", [explorer.keyed("status",
-				explorer.caption(explorer.state.controls.spinnerRunning ? "Animating" : "Paused")),
-				explorer.keyed("toggle",
-				explorer.button(explorer.state.controls.spinnerRunning ? "Pause spinners" : "Resume spinners",
-				"toggle-spinners", function() {
-					explorer.state.controls.spinnerRunning = !explorer.state.controls.spinnerRunning;
-				}))], explorer.rowStyle(10.0)))])));
+			explorer.rowStyle(10.0))),
+			explorer.keyed("spinner-controls", new Row("spinner-controls", [explorer.keyed("status",
+			explorer.caption(explorer.state.controls.spinnerRunning ? "Animating" : "Paused")),
+			explorer.keyed("toggle",
+			explorer.button(explorer.state.controls.spinnerRunning ? "Pause spinners" : "Resume spinners",
+			"toggle-spinners", function() {
+				explorer.state.controls.spinnerRunning = !explorer.state.controls.spinnerRunning;
+			}))], explorer.rowStyle(10.0)))])));
 	}
 
 	static function indeterminateProgress():ProgressBar {
@@ -166,6 +166,6 @@ class ControlsPage {
 				explorer.keyed("indicator", new Align(key + "-align", spinner)),
 				explorer.keyed("label", explorer.caption(label))
 			],
-				style);
+			style);
 	}
 }

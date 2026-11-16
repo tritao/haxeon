@@ -171,12 +171,13 @@ class WasmUtf16Strings {
 			offset = allocateLocal(),
 			code = allocateLocal(),
 			byte = allocateLocal();
-		var body = length(byteLength, byteAt, allocateLocal, size).concat([LocalGet(startArgument),
+		var body = length(byteLength, byteAt, allocateLocal, size).concat([
+			LocalGet(startArgument),
 			LocalSet(start),
 			LocalGet(endArgument),
 			LocalSet(end),
-		// Clamp both indexes into the string, then swap a reversed pair, as Haxe's substring does.
-		LocalGet(start),
+			// Clamp both indexes into the string, then swap a reversed pair, as Haxe's substring does.
+			LocalGet(start),
 			I32Const(0),
 			I32LtS,
 			If(null),
@@ -214,7 +215,8 @@ class WasmUtf16Strings {
 			LocalSet(start),
 			LocalGet(total),
 			LocalSet(end),
-			End]);
+			End
+		]);
 		body = body.concat(byteOffset(byteLength, byteAt, allocateLocal, start, first, firstHalf));
 		body = body.concat(byteOffset(byteLength, byteAt, allocateLocal, end, last, lastHalf));
 		body = body.concat([

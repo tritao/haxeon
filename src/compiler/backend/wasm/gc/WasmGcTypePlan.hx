@@ -778,10 +778,10 @@ class WasmGcTypePlan {
 				type: Value(I32),
 				mutable: true
 			}, // Release import function index, or -1 for borrowed pointers.
-				{
-					type: Value(I32),
-					mutable: true
-				} // Closed state.
+			{
+				type: Value(I32),
+				mutable: true
+			} // Closed state.
 		]));
 		// Table slot (low bit set for a static target), receiver, and the signature it was created with.
 		setType(closureTypeIndex, true, [], Struct([

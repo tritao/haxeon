@@ -42,7 +42,7 @@ class ProfilerViewModel {
 		lastSamples = 0;
 	}
 
-	public function update(snapshot:Dynamic): {state: Dynamic, delta: Dynamic} {
+	public function update(snapshot:Dynamic):{state:Dynamic, delta:Dynamic} {
 		var samples:Int = fieldInt(snapshot, "samples");
 		if (samples < lastSamples)
 			reset();

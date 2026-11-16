@@ -75,7 +75,7 @@ class LspDocument {
 		return true;
 	}
 
-	static function positionField(value:Dynamic, name:String): {line: Int, character: Int} {
+	static function positionField(value:Dynamic, name:String):{line:Int, character:Int} {
 		var position:Dynamic = Reflect.field(value, name);
 		if (position == null)
 			throw 'Missing field "$name"';

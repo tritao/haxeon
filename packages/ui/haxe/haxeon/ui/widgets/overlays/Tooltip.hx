@@ -185,10 +185,10 @@ class Tooltip implements View {
 			railX:Float,
 			railWidth:Float,
 			preferredOffset:Float = 0,
-			?boxWidth:Float): {
-				x: Float,
-				y: Float,
-				width: Float
+			?boxWidth:Float):{
+				x:Float,
+				y:Float,
+				width:Float
 			} {
 		var width = Math.max(1, Math.min(300, railWidth - 2 * (EDGE + PADDING)));
 		var actualWidth = boxWidth == null ? width + 2 * PADDING : boxWidth;
@@ -197,10 +197,10 @@ class Tooltip implements View {
 		return {x: x, y: anchorHeight + 4, width: width};
 	}
 	/** Returns anchor-relative coordinates, preferring right and keeping the box in the viewport. */
-	public static function placeRight(anchor:Rect, width:Float, height:Float, viewport:Rect): {
-		x: Float,
-		y: Float,
-		width: Float
+	public static function placeRight(anchor:Rect, width:Float, height:Float, viewport:Rect):{
+		x:Float,
+		y:Float,
+		width:Float
 	} {
 		var limit = Math.max(1, Math.min(300, viewport.width - 2 * (EDGE + PADDING)));
 		var boxWidth = Math.min(width, limit + 2 * PADDING);

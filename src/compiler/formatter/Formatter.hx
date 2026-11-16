@@ -129,8 +129,8 @@ class Formatter {
 				if (close != null && beyond > 0)
 					blocks.push({close: tokens[close].start, extra: beyond});
 				else if (close != null && extra > 0)
-				// The block still sits inside an indented one: its lines keep that block's extra levels until it closes.
-				blocks.push({close: tokens[close].start, extra: extra});
+					// The block still sits inside an indented one: its lines keep that block's extra levels until it closes.
+					blocks.push({close: tokens[close].start, extra: extra});
 			}
 		}
 		return rendered;
@@ -291,9 +291,9 @@ class Formatter {
 
 	/** Expands a partial range to the smallest annotated syntax region containing it. */
 	static function expandRange(tokens:Array<FormatToken>, syntax:SyntaxInfo, start:Int, end:Int, safeStart:Int,
-			safeEnd:Int): {
-				start: Int,
-				end: Int
+			safeEnd:Int):{
+				start:Int,
+				end:Int
 			} {
 		var firstSyntax = -1, lastSyntax = -1;
 		for (index in 0...tokens.length)

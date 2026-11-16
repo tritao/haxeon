@@ -143,7 +143,7 @@ class Shards {
 	static function weightOf(group:TestGroup):Float
 		return group.weight == null ? 1.0 : group.weight;
 
-	static function parse(text:String): {shard: Int, count: Int} {
+	static function parse(text:String):{shard:Int, count:Int} {
 		var parts = text.split("/"),
 			shard = parts.length == 2 ? Std.parseInt(parts[0]) : null,
 			count = parts.length == 2 ? Std.parseInt(parts[1]) : null;

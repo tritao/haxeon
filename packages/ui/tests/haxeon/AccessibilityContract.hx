@@ -360,9 +360,9 @@ class AccessibilityContract {
 				new SelectOption("two", "Two", "two"),
 				new SelectOption("three", "Three", "three")
 			],
-				"one",
-				null,
-				style);
+			"one",
+			null,
+			style);
 		var stack = new Stack("positioned-select-stack",
 			[new StackChild("select", positioned, 220.0, 150.0, 1, LayoutAxis.fixed(96.0), LayoutAxis.fixed(36.0),
 			false)]);

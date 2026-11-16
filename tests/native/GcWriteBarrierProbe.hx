@@ -19,7 +19,7 @@ class GcWriteBarrierProbe {
 
 	static function exerciseNativePaths(cell:BarrierCell) {
 		var object:Dynamic = {next: cell};
-		var view: {next: BarrierCell} = object;
+		var view:{next:BarrierCell} = object;
 		Reflect.setField(object, "extra", cell);
 		Reflect.setField(object, "count", 1);
 		Reflect.setField(object, "count", cell); // scalar-to-pointer storage replacement

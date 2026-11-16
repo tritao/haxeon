@@ -598,7 +598,7 @@ class ConversionResolver {
 							adaptFunctionValue(new TypedExpression(TLocal(arguments[index].name), arguments[index].type,
 							span), sourceArguments[index], span)
 					], call = new TypedExpression(TClosureCall(callable, callArguments), sourceResult, span),
-						statements:Array<TypedStatement> = [];
+					statements:Array<TypedStatement> = [];
 		if ((switch (targetResult) {
 			case TVoid: true;
 			default: false;

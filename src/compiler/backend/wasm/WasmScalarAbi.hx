@@ -1265,9 +1265,9 @@ class WasmScalarAbi {
 
 	function readLeaf(instructions:Array<Located<IrInstruction>>, root:IrValue, path:Array<String>,
 			provenance:compiler.ir.SourceProvenance,
-			next:Int): {
-				value: IrValue,
-				next: Int
+			next:Int):{
+				value:IrValue,
+				next:Int
 			} {
 		var current = root;
 		for (field in path) {

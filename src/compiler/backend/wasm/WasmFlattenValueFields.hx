@@ -123,7 +123,7 @@ class WasmFlattenValueFields {
 							};
 							var parent = aliases.get(owner.id);
 							aliases.set(out.id, parent == null ? {
-								owner:owner, path:[field], typeName:name
+								owner: owner, path: [field], typeName: name
 							} : {
 								owner: parent.owner,
 								path: parent.path.concat([field]),
@@ -287,9 +287,9 @@ class WasmFlattenValueFields {
 	/** Fold a holder check into an immediately following scalar access, without moving it across evaluation. */
 	/** Materialize only at a reference-based boundary, after taking a snapshot of every field. */
 	function materialize(value:IrValue, aliases:Map<Int, FlattenedPlace>, block:IrBlock, origin:Located<IrInstruction>,
-			next:Int): {
-				value: IrValue,
-				next: Int
+			next:Int):{
+				value:IrValue,
+				next:Int
 			} {
 		var place = aliases.get(value.id);
 		if (place == null)

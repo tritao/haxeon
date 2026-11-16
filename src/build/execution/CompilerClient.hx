@@ -38,8 +38,8 @@ class CompilerClient {
 				home,
 				"stdlib"
 			])]), [], "",
-				ExecutionAction.ActionKind.Process(command, build.CompilerSources.roots(compilerSource), home,
-				new Map()));
+			ExecutionAction.ActionKind.Process(command, build.CompilerSources.roots(compilerSource), home,
+			new Map()));
 		if (session == null)
 			return ActionFingerprint.compute(identity, buildRoot, Sys.systemName(), []);
 		var memoKey = [identity.id.key(), command, compilerSource, home, buildRoot, Sys.systemName()].join("\n");
@@ -101,21 +101,23 @@ class CompilerClient {
 					// `&` makes of the command list (which outlives the build on macOS, where nothing detaches the
 					// worker) can keep the caller's pipes open after the build exits.
 					var detach = Sys.systemName() == "Linux" ? "setsid -f " : "",
-						status = Sys.command("sh", ["-c",
+						status = Sys.command("sh", [
+							"-c",
 							"exec < /dev/null > " + SysTools.quoteUnixArg(logPath) + " 2>&1; umask 077; cd "
-							+ SysTools.quoteUnixArg(home)
-							+ " && export "
-							+ libraryVariable
-							+ "="
-							+ SysTools.quoteUnixArg(libraryPath) // A resident compiler allocates about 90 GB while compiling an app and keeps ~1.5 GB live. Collecting
-					// once the heap has grown by 40% of itself, not HashLink's 20%, runs a third as many major collections
-					// (cold app compile: 12 s of GC to 5 s) for about 0.5 GB more resident memory. An explicit setting wins.
-					// The shell ignores SIGHUP for the worker instead of nohup: macOS strips DYLD_* from what a system
-					// binary such as nohup starts, and the worker would start without the runtime's library path.
-					+ " && export HL_GC_MARK_THRESHOLD=\"${HL_GC_MARK_THRESHOLD:-0.4}\" && trap '' HUP && "
-						+ detach
-						+ launch
-						+ " &"]);
+								+ SysTools.quoteUnixArg(home)
+								+ " && export "
+								+ libraryVariable
+								+ "="
+								+ SysTools.quoteUnixArg(libraryPath) // A resident compiler allocates about 90 GB while compiling an app and keeps ~1.5 GB live. Collecting
+								// once the heap has grown by 40% of itself, not HashLink's 20%, runs a third as many major collections
+								// (cold app compile: 12 s of GC to 5 s) for about 0.5 GB more resident memory. An explicit setting wins.
+								// The shell ignores SIGHUP for the worker instead of nohup: macOS strips DYLD_* from what a system
+								// binary such as nohup starts, and the worker would start without the runtime's library path.
+								+ " && export HL_GC_MARK_THRESHOLD=\"${HL_GC_MARK_THRESHOLD:-0.4}\" && trap '' HUP && "
+								+ detach
+								+ launch
+								+ " &"
+						]);
 					if (status != 0)
 						throw "Could not start compiler worker";
 				}
@@ -134,7 +136,7 @@ class CompilerClient {
 			var socket = connection.socket;
 			socket.setTimeout(600);
 			var bytes = haxe.io.Bytes.ofString(Json.stringify(background ? {
-				token:connection.token, arguments:arguments, background:true
+				token: connection.token, arguments: arguments, background: true
 			} : {
 				token: connection.token,
 				arguments: arguments
@@ -298,8 +300,8 @@ class CompilerClient {
 						home,
 						"stdlib"
 					])]), [], "",
-						ExecutionAction.ActionKind.Process(command, build.CompilerSources.roots(compilerSource), home,
-						new Map()));
+					ExecutionAction.ActionKind.Process(command, build.CompilerSources.roots(compilerSource), home,
+					new Map()));
 			artifact = Path.join([
 				directory,
 				ActionFingerprint.compute(identity, buildRoot, Sys.systemName(), []) + ".hl"

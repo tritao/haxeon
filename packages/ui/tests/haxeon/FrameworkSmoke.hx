@@ -1665,7 +1665,7 @@ class FrameworkSmoke {
 				new KeyedView("gap", new Spacer("gap", LayoutAxis.grow(), LayoutAxis.fit())),
 				new KeyedView("right", new Text("R"))
 			],
-				spacerRowStyle);
+			spacerRowStyle);
 		var spacerRoot = context.submit(spacerRow, new LayoutFrame(256.0, 192.0));
 		var spacerGeometry:ResolvedLayoutItem = cast spacerRoot.children[1].resolved;
 		var leftTextGeometry:ResolvedLayoutItem = cast spacerRoot.children[0].resolved;
@@ -1793,8 +1793,8 @@ class FrameworkSmoke {
 				new ImageLayer(image, 0.0, 0.0, 1.0, 1.0),
 				new ImageLayer(image, 0.25, 0.25, 0.5, 0.5, 0.5)
 			],
-				"Layered picture"),
-				new LayoutFrame(256.0, 192.0));
+			"Layered picture"),
+			new LayoutFrame(256.0, 192.0));
 		var layeredSemantics:Semantics = cast layeredRoot.semantics;
 		if (layeredSemantics == null || layeredSemantics.role != AccessibilityRole.Image
 			|| layeredSemantics.label != "Layered picture") throw "Layered image semantics (check 237)";
@@ -1935,7 +1935,7 @@ class FrameworkSmoke {
 					new KeyedView("next", new Button("Next")),
 					new KeyedView("status", new Text("Ready", null, Color.rgba(1.0, 1.0, 1.0, 1.0)))
 				],
-					style);
+				style);
 		}
 
 		var root = context.submit(makeView(true), frame);
@@ -2293,7 +2293,7 @@ class FrameworkSmoke {
 				new KeyedView("stop", new Button("Stop propagation")),
 				new KeyedView("immediate", new Button("Stop immediate"))
 			],
-				eventStyle);
+			eventStyle);
 		var eventRoot = context.submit(eventRootView, frame);
 		var stopNode = eventRoot.children[0];
 		var immediateNode = eventRoot.children[1];
@@ -2746,7 +2746,7 @@ class FrameworkSmoke {
 				new KeyedView("pressure-tail",
 					new SizedBox("tail", new Text("End of section"), LayoutAxis.grow(), LayoutAxis.fixed(500.0)))
 			],
-				outerContentStyle);
+			outerContentStyle);
 		var outerViewportStyle = new LayoutStyle();
 		outerViewportStyle.width = LayoutAxis.fixed(256.0);
 		outerViewportStyle.height = LayoutAxis.fixed(192.0);
@@ -2946,7 +2946,7 @@ class FrameworkSmoke {
 				new KeyedView("anchor",
 					new Tooltip("tooltip-in-card", new Button("Hover for tooltip"), new Text("Hint")))
 			],
-				tooltipCardStyle);
+			tooltipCardStyle);
 		var tooltipCardRoot = context.submit(tooltipCard, tooltipFrame);
 		var tooltipCardGeometry:ResolvedLayoutItem = cast tooltipCardRoot.resolved;
 		var tooltipCardAnchor:ResolvedLayoutItem = cast tooltipCardRoot.children[1].children[0].resolved;
@@ -2989,9 +2989,9 @@ class FrameworkSmoke {
 				new TabItem("first", "First", new Text("first page")),
 				new TabItem("second", "Second", new Text("second page"))
 			],
-				"first",
-				null,
-				retainedTabOptions);
+			"first",
+			null,
+			retainedTabOptions);
 		retainedTabs.headerRevision = function() return retainedHeaderRevision;
 		retainedTabs.onTabHeaderBuilt = function(_, _) {
 			retainedHeaderBuilds++;
@@ -3320,7 +3320,7 @@ class FrameworkSmoke {
 				EffectParameterType.Float,
 				EffectParameterType.Color
 			],
-				new InkOverflow(2.0, 3.0, 4.0, 5.0));
+			new InkOverflow(2.0, 3.0, 4.0, 5.0));
 		var custom = new CustomEffect(customDefinition,
 			[
 				EffectParameter.scalar(0.25),
@@ -3332,7 +3332,7 @@ class FrameworkSmoke {
 				EffectParameter.scalar(0.75),
 				EffectParameter.color(Color.rgba(0.5, 0.6, 0.7, 0.8))
 			]),
-				0.5);
+			0.5);
 		if (custom.components.length != 5 || custom.components[0] != 0.25 || custom.components[4] != 0.4
 			|| !custom.isEqual(customCopy) || custom.inkOverflow().right != 4.0
 			|| Math.abs(customMid.components[0] - 0.5)
@@ -3353,7 +3353,7 @@ class FrameworkSmoke {
 				BlurEffect.withSigma(12.0),
 				new BrightnessEffect(2.0)
 			]),
-				0.5);
+			0.5);
 		var interpolatedBlur:BlurEffect = cast interpolatedEffects.effects[0];
 		var interpolatedBrightness:BrightnessEffect = cast interpolatedEffects.effects[1];
 		if (interpolatedBlur == null || interpolatedBlur.sigma != 8.0
@@ -3623,7 +3623,7 @@ class FrameworkSmoke {
 				new KeyedView("caption", new Text("Caption", null, null, null, TextRole.Caption)),
 				new KeyedView("button", new Text("Button", null, null, null, TextRole.Button))
 			]),
-				new LayoutFrame(320.0, 320.0));
+			new LayoutFrame(320.0, 320.0));
 		if (roleRoot.children[0].layout.textStyle.fontSize != 17.0) return 218;
 		if (roleRoot.children[1].layout.textStyle.fontSize != 26.0) return 219;
 		if (roleRoot.children[2].layout.textStyle.fontSize != 13.0
@@ -3886,8 +3886,8 @@ class FrameworkSmoke {
 					new DefaultTextStyle(new Text("Nested"), TextStyleOverride.text(28.0, null, nestedColor))),
 				new KeyedView("after", new Text("After"))
 			]),
-				TextStyleOverride.combine(TextStyleOverride.text(22.0, 1.25, inheritedColor),
-				TextStyleOverride.paragraph(null, TextAlignment.Center, 30.0, TextDirection.Rtl)));
+			TextStyleOverride.combine(TextStyleOverride.text(22.0, 1.25, inheritedColor),
+			TextStyleOverride.paragraph(null, TextAlignment.Center, 30.0, TextDirection.Rtl)));
 		var typographyRoot = context.submit(typography, new LayoutFrame(320.0, 192.0));
 		var outerText = typographyRoot.children[0];
 		var nestedText = typographyRoot.children[1];
@@ -3918,8 +3918,8 @@ class FrameworkSmoke {
 				new KeyedView("field", paragraphField),
 				new KeyedView("sibling", new Text("Sibling"))
 			]),
-				TextStyleOverride.paragraph(TextWrap.Word, null, null, null, 3)),
-				new LayoutFrame(320.0, 192.0));
+			TextStyleOverride.paragraph(TextWrap.Word, null, null, null, 3)),
+			new LayoutFrame(320.0, 192.0));
 		var fieldParagraph = paragraphRoot.children[0].children[0].children[0].layout.paragraphStyle;
 		var siblingParagraph = paragraphRoot.children[1].layout.paragraphStyle;
 		if (fieldParagraph.wrap != TextWrap.None || fieldParagraph.tabWidth != 8
@@ -4649,7 +4649,7 @@ class FrameworkSmoke {
 				new TabItem("one", "One", new Text("First")),
 				new TabItem("two", "Two", new Text("Second"))
 			],
-				"one");
+			"one");
 		var root = context.submit(tabs, new LayoutFrame(300.0, 120.0));
 		var first = tabStrip(root).children[0];
 		var second = tabStrip(root).children[1];

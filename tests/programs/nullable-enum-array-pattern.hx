@@ -82,10 +82,10 @@ function main():Int {
 			Wrap(Leaf(4)),
 			null
 		]) != 4
-			|| tuplePayload([
-				Wrap(Leaf(0)),
-				null
-			]) != 32)
+		|| tuplePayload([
+			Wrap(Leaf(0)),
+			null
+		]) != 32)
 		return 5;
 	return 42;
 }

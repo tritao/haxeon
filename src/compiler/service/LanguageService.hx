@@ -1343,10 +1343,10 @@ class LanguageService {
 			symbol:compiler.semantic.SemanticIndex.IndexedSemanticSymbol):SymbolLocation {
 		var origin = compiler.ffiSourceOrigin(symbol.declaration.file.path, symbol.name);
 		return origin == null ? {
-			path:symbol.declaration.file.path,
-				span:symbol.declaration,
-				revision:snapshotRevision(state),
-				stale:snapshotRevision(state) != state.revision
+			path: symbol.declaration.file.path,
+			span: symbol.declaration,
+			revision: snapshotRevision(state),
+			stale: snapshotRevision(state) != state.revision
 		} : {
 			path: origin.file.path,
 			span: origin,

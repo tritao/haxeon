@@ -1120,9 +1120,9 @@ class ExpressionTyper {
 								objectField("type", StringLiteral(argument.type, span), span),
 								objectField("value", annotationConstantExpression(argument.value, span), span)
 							], span)
-						], span), span)
-					], span)
-				], span);
+					], span), span)
+				], span)
+		], span);
 
 	static function annotationConstantExpression(value:NativeTypeAnnotationValue, span:SourceSpan):AstExpression
 		return switch value {
@@ -2729,10 +2729,10 @@ class ExpressionTyper {
 		return numericRepresentation(type) != null;
 
 	function promoteNumericOperands(left:TypedExpression, right:TypedExpression, span:SourceSpan,
-			forceFloat:Bool = false): {
-				left: TypedExpression,
-				right: TypedExpression,
-				type: CompilerType
+			forceFloat:Bool = false):{
+				left:TypedExpression,
+				right:TypedExpression,
+				type:CompilerType
 			} {
 		var leftNumeric = numericRepresentation(left.type),
 			rightNumeric = numericRepresentation(right.type);

@@ -19,23 +19,24 @@ function main():Int {
 		half:Dynamic = 0.5;
 	var mixed:Array<Dynamic> = [Red, Green, Blue];
 	var checks = [
-	// Dynamic enum equality follows declared value equality.
-	green == otherGreen
-		&& green != red,
-		circle == otherCircle
-		&& circle == circle,
-		mixed.indexOf(Green) == 1
-		&& mixed.contains(Blue)
-		&& mixed.indexOf(Dot) == -1,
-		mixed.remove(Red)
-		&& mixed.length == 2
-		&& !mixed.contains(Red),
-	// A Dynamic Int equals a Dynamic Float of the same value.
-	two == twoFloat
-		&& twoFloat == two
-		&& two != threeFloat
-		&& threeFloat != two
-		&& half != two];
+		// Dynamic enum equality follows declared value equality.
+			green == otherGreen
+				&& green != red,
+			circle == otherCircle
+				&& circle == circle,
+			mixed.indexOf(Green) == 1
+				&& mixed.contains(Blue)
+				&& mixed.indexOf(Dot) == -1,
+			mixed.remove(Red)
+				&& mixed.length == 2
+				&& !mixed.contains(Red),
+			// A Dynamic Int equals a Dynamic Float of the same value.
+			two == twoFloat
+				&& twoFloat == two
+				&& two != threeFloat
+				&& threeFloat != two
+				&& half != two
+		];
 	for (index in 0...checks.length)
 		if (!checks[index])
 			return index + 1;

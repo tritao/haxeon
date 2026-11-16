@@ -1061,7 +1061,7 @@ class TextEditorLayout {
 	}
 
 	/** Paragraph groups shaped so far, and all of them: an unwrapped document shapes only what was needed. */
-	public function shapedGroups(): {shaped: Int, total: Int} {
+	public function shapedGroups():{shaped:Int, total:Int} {
 		var shaped = 0;
 		for (record in paragraphs) if (record.laidOut) shaped++;
 		return {shaped: shaped, total: paragraphs.length};

@@ -262,16 +262,12 @@ class LiveObjectLayoutMain {
 				+ "class Item {\n  public var value:Int;\n" + field
 				+ "  public function new(value:Int) this.value = value;\n"
 				+ "  public function check():Int " + check + "\n}\n"
-				+ "class Work {\n  public static var failure = \"\";\n  public static var stop = false;\n  public static var done = false;\n  public static var unset = 0;\n  public static var unsetMade = 0;\n"
-			// The Int array literal makes the module import what the added field's initializer needs.
-			+ "  public static var rounds = 0;\n  public static var kept:Array<Item> = [];\n  public static var lasting:Array<Item> = [];\n"
-			// The worker's loop never returns, so it reaches the patched check through a closure, whose slot the patch redirects.
-			+ "  public static var sample:Array<Int> = [7];\n  public static var check:Item->Int = item -> item.check();\n  public static var make:Int->Item = i -> new Item(i);\n}\n"
-			// `lasting` lives through every patch, so the worker checks objects made before it while the migration runs;
-			// `kept` is replaced every round, so collections free objects the migration found.
-			+ "function start():Int {\n  Work.lasting = [for (i in 0...3000) new Item(i)];\n"
-			// A worker that throws records why and stops, so the test reports it instead of waiting for rounds that never come.
-			+ "  Thread.create(function() {\n    try {\n    while (!Work.stop) {\n"
+				+ "class Work {\n  public static var failure = \"\";\n  public static var stop = false;\n  public static var done = false;\n  public static var unset = 0;\n  public static var unsetMade = 0;\n" // The Int array literal makes the module import what the added field's initializer needs.
+				+ "  public static var rounds = 0;\n  public static var kept:Array<Item> = [];\n  public static var lasting:Array<Item> = [];\n" // The worker's loop never returns, so it reaches the patched check through a closure, whose slot the patch redirects.
+				+ "  public static var sample:Array<Int> = [7];\n  public static var check:Item->Int = item -> item.check();\n  public static var make:Int->Item = i -> new Item(i);\n}\n" // `lasting` lives through every patch, so the worker checks objects made before it while the migration runs;
+				// `kept` is replaced every round, so collections free objects the migration found.
+				+ "function start():Int {\n  Work.lasting = [for (i in 0...3000) new Item(i)];\n" // A worker that throws records why and stops, so the test reports it instead of waiting for rounds that never come.
+				+ "  Thread.create(function() {\n    try {\n    while (!Work.stop) {\n"
 				+ "      var checkOf:Item->Int = Work.check;\n      var makeOf:Int->Item = Work.make;\n      var fresh = [for (i in 0...2000) makeOf(i)];\n"
 				+ "      for (item in Work.kept) Work.unsetMade += checkOf(item);\n"
 				+ "      for (item in Work.lasting) Work.unset += checkOf(item);\n"
@@ -284,10 +280,10 @@ class LiveObjectLayoutMain {
 				+ "function finish():Int {\n  Work.stop = true;\n  while (!Work.done) Sys.sleep(0.001);\n  return Work.unset;\n}\n"
 				+ "function main():Int return 0;\n";
 		var without = source("", "return 0;"),
-		// A slow initializer on many objects keeps the migration long enough for an unsynchronized worker to see it.
-		with = source("  var tags:Array<Int> = Item.tagsFor();\n  static function tagsFor():Array<Int> {\n"
-			+ "    var tags = [];\n    for (i in 0...300) tags.push(i);\n    return tags;\n  }\n",
-			"return tags == null || tags.length != 300 ? 1 : 0;");
+			// A slow initializer on many objects keeps the migration long enough for an unsynchronized worker to see it.
+			with = source("  var tags:Array<Int> = Item.tagsFor();\n  static function tagsFor():Array<Int> {\n"
+				+ "    var tags = [];\n    for (i in 0...300) tags.push(i);\n    return tags;\n  }\n",
+				"return tags == null || tags.length != 300 ? 1 : 0;");
 		var compiler = compiler();
 		compiler.update("Main.hx", without);
 		var build = compiler.compile("Main"),

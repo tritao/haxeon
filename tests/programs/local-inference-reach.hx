@@ -37,7 +37,7 @@ function collect(values:Array<Int>):Int {
 	return seen.length == values.length && seen[0] == "v7" ? seen.length : -1;
 }
 
-function lane(): {label: String, results: Array<Int>} {
+function lane():{label:String, results:Array<Int>} {
 	var made = {label: "lane", results: []};
 	made.results.push(3);
 	return made;

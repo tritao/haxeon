@@ -18,10 +18,10 @@ private typedef LinearEnumStringGroup = {
 /** Encode shared enum string descriptors in linear memory. */
 class WasmLinearEnumStringTable {
 	public static function place(module:WasmModule, model:EnumStringDescriptors, layout:WasmLayout,
-			strings:Map<String, Int>, start:Int): {
-				address: Int,
-				count: Int,
-				end: Int
+			strings:Map<String, Int>, start:Int):{
+				address:Int,
+				count:Int,
+				end:Int
 			} {
 		var groups:Array<LinearEnumStringGroup> = [];
 		for (group in model.groups) {

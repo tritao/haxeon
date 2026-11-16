@@ -357,14 +357,14 @@ private class Rig {
 						new RadioOption("alpha", "Alpha", "a"),
 						new RadioOption("beta", "Beta", "b")
 					],
-						"a",
-						function(value) rig.chosen = value)),
-					new KeyedView("disabled",
-						new Radio("disabled", "Disabled", "x", false, function(_) rig.clicks++, null, false)),
-				] : [
-					new KeyedView("one", new Button("One", null, function() rig.clicks++, "one")),
-					new KeyedView("two", new Button("Two", null, function() rig.clicks++, "two")),
-				];
+					"a",
+					function(value) rig.chosen = value)),
+				new KeyedView("disabled",
+					new Radio("disabled", "Disabled", "x", false, function(_) rig.clicks++, null, false)),
+			] : [
+				new KeyedView("one", new Button("One", null, function() rig.clicks++, "one")),
+				new KeyedView("two", new Button("Two", null, function() rig.clicks++, "two")),
+			];
 			for (control in rig.decorated) items.push(new KeyedView(control.key, control));
 			if (!controls) {
 				items.push(new KeyedView("three", new Button("Three", null, function() rig.clicks++, "three")));
@@ -822,7 +822,7 @@ private class UpdatingResources implements View {
 		return cast found;
 	}
 
-	static function center(root:RenderNode, key:String): {x: Float, y: Float} {
+	static function center(root:RenderNode, key:String):{x:Float, y:Float} {
 		var bounds = control(root, key).globalBounds();
 		return {x: bounds.x + bounds.width / 2, y: bounds.y + bounds.height / 2};
 	}

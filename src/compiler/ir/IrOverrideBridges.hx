@@ -22,9 +22,9 @@ class IrOverrideBridges {
 	public static inline final BRIDGE_PREFIX = "$override-bridge:";
 	public static inline final CALL_PREFIX = "$override-call:";
 
-	public static function apply(functions:Array<IrFunction>, objects:Array<IrObject>): {
-		functions: Array<IrFunction>,
-		objects: Array<IrObject>
+	public static function apply(functions:Array<IrFunction>, objects:Array<IrObject>):{
+		functions:Array<IrFunction>,
+		objects:Array<IrObject>
 	} {
 		var byName = [for (object in objects) object.name => object],
 			index = new IrFunctionIndex("override-bridges", functions),

@@ -155,7 +155,7 @@ class DspEngine {
 		AudioResult.check(NativeKitAudio.nk_audio_dsp_engine_stop_transport(value), "audio.dsp.transport.stop");
 	}
 	/** Coherent section-local playhead from the last native render block. */
-	public function transportPosition(): {section: Int, frame: Float} {
+	public function transportPosition():{section:Int, frame:Float} {
 		ensureLive();
 		var result = NativeKitAudio.nk_audio_dsp_engine_get_transport_position(value);
 		AudioResult.check(result.status, "audio.dsp.transport.position");
@@ -181,7 +181,7 @@ class DspEngine {
 		};
 	}
 	/** Last completed block's occupied note slots and stealing tails, including releases. */
-	public function voiceCounts(): {activeVoices: Int, activeTails: Int} {
+	public function voiceCounts():{activeVoices:Int, activeTails:Int} {
 		ensureLive();
 		var result = NativeKitAudio.nk_audio_dsp_engine_get_voice_counts(value);
 		AudioResult.check(result.status, "audio.dsp.voiceCounts");

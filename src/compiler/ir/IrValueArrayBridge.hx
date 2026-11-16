@@ -165,10 +165,10 @@ class IrValueArrayBridge {
 								{block: absentEnd, value: leaf.value},
 								{block: presentEnd, value: actual[0]}
 							]),
-								active:b.phi(Bool, [
-									{block: absentEnd, value: leaf.active},
-									{block: presentEnd, value: actualActive[0]}
-								])
+							active:b.phi(Bool, [
+								{block: absentEnd, value: leaf.active},
+								{block: presentEnd, value: actualActive[0]}
+							])
 					};
 				}];
 			case Obj(name) if (isValue(type)):

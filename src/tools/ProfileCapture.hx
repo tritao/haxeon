@@ -265,8 +265,8 @@ class ProfileCapture {
 				trace,
 				capture
 			]),
-				log),
-				EXPORT_SECONDS);
+			log),
+			EXPORT_SECONDS);
 		var errors = status == null ? 'stopped after ${EXPORT_SECONDS} s' : FileSystem.exists(log)
 			? File.getContent(log) : "";
 		var artifacts:Dynamic = {bytecode: '$name.hl', profile: Path.withoutDirectory(capture)};

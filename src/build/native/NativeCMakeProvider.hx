@@ -18,9 +18,9 @@ import project.ResolvedPackage;
 /** Delegates an existing CMake project as one coarse native provider. */
 class NativeCMakeProvider {
 	public static function lowerPackage(resolvedPackage:ResolvedPackage, artifacts:Array<Artifact>,
-			context:LoweringContext): {
-				actions: Array<ExecutionAction>,
-				artifactActions: Map<String, Array<ActionId>>
+			context:LoweringContext):{
+				actions:Array<ExecutionAction>,
+				artifactActions:Map<String, Array<ActionId>>
 			} {
 		var native = resolvedPackage.manifest.native;
 		if (native == null || native.cmake == null)
@@ -35,22 +35,22 @@ class NativeCMakeProvider {
 			ninja = ninjaAvailable(context.environment.target, context.compilerHome),
 			ninjaProgram = ninjaExecutable(home), // CMake rejects a cache created by another generator, so Ninja trees get their own directory.
 			buildTree = ninja ? "cmake-ninja" : "cmake", // Workspace builds identify a CMake tree by what it builds, so packages that request the same
-		// (source, target) pair share one configure, one build and one set of runtime libraries.
-		shared = context.sharedNative,
+			// (source, target) pair share one configure, one build and one set of runtime libraries.
+			shared = context.sharedNative,
 			identity = shared ? sharedName(source, native.cmake.target,
-			context.environment.projectRoot) : resolvedPackage.name,
-		// Project builds share one tree per package with every other project that uses it (NativeCache) and publish
-		// the libraries into this project's native directory.
-		cacheRoot = cached ? context.nativeCache : null,
+				context.environment.projectRoot) : resolvedPackage.name,
+			// Project builds share one tree per package with every other project that uses it (NativeCache) and publish
+			// the libraries into this project's native directory.
+			cacheRoot = cached ? context.nativeCache : null,
 			cacheTree = cached ? NativeCache.treeRoot(cacheRoot, layout, context.environment, resolvedPackage, source,
-			native.cmake.target) : null,
+				native.cmake.target) : null,
 			sharedRoot = shared ? layout.sharedCMakeRoot(identity) : cacheTree,
 			buildDirectory = shared || cached ? Path.join([sharedRoot, buildTree]) : Path.join([
 				layout.packageRoot(resolvedPackage.name),
 				buildTree
 			]),
-				libraryPrefix = context.environment.target.os == TargetOs.Windows ? "" : "lib",
-				legacyOutput = shared
+			libraryPrefix = context.environment.target.os == TargetOs.Windows ? "" : "lib",
+			legacyOutput = shared
 				? (native.cmake.library == null ? Path.join([sharedRoot, "out", native.cmake.target]) : Path.join([
 					sharedRoot,
 					"out",
@@ -64,50 +64,51 @@ class NativeCMakeProvider {
 					"out",
 					libraryPrefix + native.cmake.library + context.environment.toolchain.sharedLibrarySuffix
 				])) : (native.cmake.library == null ? layout.haxeonNativeLibraryPath(resolvedPackage.name)
-					: layout.cmakeSharedLibraryPath(resolvedPackage.name,
-					native.cmake.library)),
-					outputDirectory = Path.directory(legacyOutput),
-					outputs = native.cmake.libraries.length == 0 ? [legacyOutput] : [
-						for (name in native.cmake.libraries)
-							Path.join([
-								outputDirectory,
-								(context.environment.target.os == TargetOs.Windows ? "" : "lib") + name
-									+ context.environment.toolchain.sharedLibrarySuffix
-							])
-						],
-							runDirectory = shared ? source : resolvedPackage.root,
-							publishedDirectory = layout.packageRoot(resolvedPackage.name),
-							publishScript = Path.join([home, "cmake", "haxeon-publish.cmake"]),
-							publishId =
-							new ActionId('native-cmake-publish:${resolvedPackage.name}:${context.environment.target.toString()}'),
-							configuration = context.environment.profile == BuildProfile.Debug ? "Debug" : "Release",
-							configureArguments = ["-S",
-							source,
-							"-B",
-							buildDirectory,
-							"-DHAXEON_NATIVE_OUTPUT_DIR=" + outputDirectory,
-							"-DHAXEON_TARGET=" + context.environment.target.toString(),
-							"-DCMAKE_BUILD_TYPE=" + configuration
-		// Published copies must resolve sibling libraries beside themselves. An absolute build-tree RPATH would load
-		// another copy from the cache, splitting native handle registries between the two libraries.
-		].concat(cached && context.environment.target.os == TargetOs.Linux ? [
-			"-DCMAKE_BUILD_WITH_INSTALL_RPATH=ON", "-DCMAKE_INSTALL_RPATH=$ORIGIN",
-			"-DCMAKE_INSTALL_RPATH_USE_LINK_PATH=ON"
-		] : cached && context.environment.target.os == TargetOs.MacOS ? [
-			"-DCMAKE_BUILD_WITH_INSTALL_RPATH=ON", "-DCMAKE_INSTALL_RPATH=@loader_path",
-			"-DCMAKE_INSTALL_RPATH_USE_LINK_PATH=ON"
-		] : [])
-			.concat(ninja ? [
-				"-G",
-				"Ninja"
-			].concat(Path.isAbsolute(ninjaProgram) ? ["-DCMAKE_MAKE_PROGRAM=" + ninjaProgram] : []) : []),
-				windowsNinja = ninja && context.environment.target.os == TargetOs.Windows,
-				configureId = new ActionId('native-cmake-configure:$identity:${context.environment.target.toString()}'),
-				buildId = new ActionId('native-cmake-build:$identity:${context.environment.target.toString()}'),
-				toolchain = new NativeToolchain(context.environment),
-		// On a Windows host ccache is used for MSVC builds with Ninja only: the Visual Studio generator ignores compiler
-		// launchers, and other targets built there are not measured.
-		ccache = Sys.systemName() != "Windows" || windowsNinja ? NativeCompilerCache.executable(home) : null,
+				: layout.cmakeSharedLibraryPath(resolvedPackage.name,
+				native.cmake.library)),
+			outputDirectory = Path.directory(legacyOutput),
+			outputs = native.cmake.libraries.length == 0 ? [legacyOutput] : [
+				for (name in native.cmake.libraries)
+					Path.join([
+						outputDirectory,
+						(context.environment.target.os == TargetOs.Windows ? "" : "lib") + name
+							+ context.environment.toolchain.sharedLibrarySuffix
+					])
+			],
+			runDirectory = shared ? source : resolvedPackage.root,
+			publishedDirectory = layout.packageRoot(resolvedPackage.name),
+			publishScript = Path.join([home, "cmake", "haxeon-publish.cmake"]),
+			publishId =
+				new ActionId('native-cmake-publish:${resolvedPackage.name}:${context.environment.target.toString()}'),
+			configuration = context.environment.profile == BuildProfile.Debug ? "Debug" : "Release",
+			configureArguments = [
+				"-S",
+				source,
+				"-B",
+				buildDirectory,
+				"-DHAXEON_NATIVE_OUTPUT_DIR=" + outputDirectory,
+				"-DHAXEON_TARGET=" + context.environment.target.toString(),
+				"-DCMAKE_BUILD_TYPE="
+					+ configuration // Published copies must resolve sibling libraries beside themselves. An absolute build-tree RPATH would load
+					// another copy from the cache, splitting native handle registries between the two libraries.
+			].concat(cached && context.environment.target.os == TargetOs.Linux ? [
+				"-DCMAKE_BUILD_WITH_INSTALL_RPATH=ON", "-DCMAKE_INSTALL_RPATH=$ORIGIN",
+				"-DCMAKE_INSTALL_RPATH_USE_LINK_PATH=ON"
+			] : cached && context.environment.target.os == TargetOs.MacOS ? [
+				"-DCMAKE_BUILD_WITH_INSTALL_RPATH=ON", "-DCMAKE_INSTALL_RPATH=@loader_path",
+				"-DCMAKE_INSTALL_RPATH_USE_LINK_PATH=ON"
+			] : [])
+				.concat(ninja ? [
+					"-G",
+					"Ninja"
+				].concat(Path.isAbsolute(ninjaProgram) ? ["-DCMAKE_MAKE_PROGRAM=" + ninjaProgram] : []) : []),
+			windowsNinja = ninja && context.environment.target.os == TargetOs.Windows,
+			configureId = new ActionId('native-cmake-configure:$identity:${context.environment.target.toString()}'),
+			buildId = new ActionId('native-cmake-build:$identity:${context.environment.target.toString()}'),
+			toolchain = new NativeToolchain(context.environment),
+			// On a Windows host ccache is used for MSVC builds with Ninja only: the Visual Studio generator ignores compiler
+			// launchers, and other targets built there are not measured.
+			ccache = Sys.systemName() != "Windows" || windowsNinja ? NativeCompilerCache.executable(home) : null,
 			compilerCache = NativeCompilerCache.environment(ccache, context.environment.projectRoot, source);
 		// A shared tree is checked under its lock, in the configure step (haxeon-locked.cmake).
 		if (!cached)
@@ -164,17 +165,17 @@ class NativeCMakeProvider {
 					"-DCACHE_FILE=" + Path.join([buildDirectory, "CMakeCache.txt"]),
 					"-DSOURCE=" + source
 				])),
-				new ExecutionAction(buildId, [configureId], [source], outputs,
-					'Build CMake target ${native.cmake.target} -> ${outputs.join(", ")}',
-					locked("cmake", [
-						"--build",
-						buildDirectory,
-						"--target",
-						native.cmake.target,
-						"--config",
-						configuration
-					]), true, true, ninja)
-				],
+			new ExecutionAction(buildId, [configureId], [source], outputs,
+				'Build CMake target ${native.cmake.target} -> ${outputs.join(", ")}',
+				locked("cmake", [
+					"--build",
+					buildDirectory,
+					"--target",
+					native.cmake.target,
+					"--config",
+					configuration
+				]), true, true, ninja)
+		],
 			artifactActions:Map<String, Array<ActionId>> = [];
 		// The tree's runtime libraries, with the DLLs the package's targets leave beside them, reach the directory that programs
 		// and scripts load this project's libraries from. Files that are already identical are left alone, so a library a

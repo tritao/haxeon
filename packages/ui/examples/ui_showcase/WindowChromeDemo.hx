@@ -290,7 +290,7 @@ class WindowChromeDemo {
 				new KeyedView("title", new Text("Window Chrome Demo", null, theme.buttonText)),
 				new KeyedView("controls", controls)
 			],
-				titleStyle));
+			titleStyle));
 
 		var bodyStyle = new LayoutStyle();
 		bodyStyle.width = LayoutAxis.grow();
@@ -310,7 +310,7 @@ class WindowChromeDemo {
 					null,
 					theme.caption.color))
 			],
-				bodyStyle);
+			bodyStyle);
 		var base = new Column("demo-content",
 			[new KeyedView("titlebar", titlebar), new KeyedView("body", body)],
 			contentStyle);
@@ -319,7 +319,7 @@ class WindowChromeDemo {
 				new StackChild("content", base),
 				new StackChild("resize-zones", buildWindowResizeZones(), 0.0, 0.0, -1)
 			],
-				rootStyle);
+			rootStyle);
 	}
 
 	function buildWindowResizeZones():Column {
@@ -351,7 +351,7 @@ class WindowChromeDemo {
 					LayoutAxis.fixed(edge),
 					LayoutAxis.fixed(edge)))
 			],
-				rowStyle);
+			rowStyle);
 		var middle = new Row("resize-middle",
 			[
 				new KeyedView("west",
@@ -363,7 +363,7 @@ class WindowChromeDemo {
 					resizeZone("east", WindowDecorationRegionKind.ResizeEast, LayoutAxis.fixed(edge),
 					LayoutAxis.grow()))
 			],
-				middleStyle);
+			middleStyle);
 		var south = new Row("resize-south",
 			[
 				new KeyedView("southwest",
@@ -380,14 +380,14 @@ class WindowChromeDemo {
 					LayoutAxis.fixed(edge),
 					LayoutAxis.fixed(edge)))
 			],
-				rowStyle);
+			rowStyle);
 		return new Column("resize-zones",
 			[
 				new KeyedView("north", north),
 				new KeyedView("middle", middle),
 				new KeyedView("south", south)
 			],
-				columnStyle);
+			columnStyle);
 	}
 
 	function resizeZone(key:String,

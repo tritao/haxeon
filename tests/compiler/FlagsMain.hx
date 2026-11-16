@@ -50,11 +50,12 @@ class FlagsMain {
 		rejected(declaration
 			+ 'function accepts<T:Flags>(value:T):Int return 42; function main():Int return accepts(1);', "constraint");
 		for (name in [
-		// The UI's own Flags types; the accessibility flags are the generated native ones, covered with the other native flags.
-		"haxeon.ui.core.UiModifier",
-			"haxeon.ui.core.UiDirtyFlag",
-			"haxeon.ui.style.StyleState",
-			"haxeon.ui.style.StyleImpact"]) {
+			// The UI's own Flags types; the accessibility flags are the generated native ones, covered with the other native flags.
+				"haxeon.ui.core.UiModifier",
+				"haxeon.ui.core.UiDirtyFlag",
+				"haxeon.ui.style.StyleState",
+				"haxeon.ui.style.StyleImpact"
+			]) {
 			var local = name.substr(name.lastIndexOf(".") + 1),
 				header = 'import $name; ';
 			rejected(header + 'function main():Int { var value:$local=0; return 42; }', "Type mismatch", true);

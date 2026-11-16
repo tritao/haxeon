@@ -1565,7 +1565,7 @@ class IrGenerator {
 					case TField(owner, field) if (isNullableValueType(inner.type)):
 						var parent = optionalFieldPlace(owner);
 						parent == null ? {
-							owner:owner, field:field, path:[]
+							owner: owner, field: field, path: []
 						} : {
 							owner: parent.owner,
 							field: parent.field,
@@ -1594,11 +1594,11 @@ class IrGenerator {
 					default: null;
 				};
 				element != null && (isValueType(element) || isNullableValueType(element)) ? {
-					array:array,
-						index:index,
-						root:expression,
-						elementType:element,
-						path:[]
+					array: array,
+					index: index,
+					root: expression,
+					elementType: element,
+					path: []
 				} : null;
 			case TField(parent, field) if (isValueType(expression.type)):
 				var parentPlace = arrayValuePlace(parent);
@@ -1816,9 +1816,9 @@ class IrGenerator {
 	}
 
 	/** Evaluate and validate the receiver before evaluating a write's right-hand side. */
-	function prepareOptionalFieldPlace(place:OptionalFieldPlace, builder:CfgBuilder, localTypes:Map<String, IrType>): {
-		name: String,
-		type: IrType
+	function prepareOptionalFieldPlace(place:OptionalFieldPlace, builder:CfgBuilder, localTypes:Map<String, IrType>):{
+		name:String,
+		type:IrType
 	} {
 		var owner = lowerExpression(place.owner, builder, localTypes),
 			ownerName = '$' + 'optional-place-owner:${owner.id}';
@@ -1869,7 +1869,7 @@ class IrGenerator {
 		return {name: ownerName, type: owner.type};
 	}
 
-	function flatFieldAtPath(recordName:String, path:Array<String>): {offset: Int, field: IrObjectField} {
+	function flatFieldAtPath(recordName:String, path:Array<String>):{offset:Int, field:IrObjectField} {
 		if (path.length == 0)
 			throw 'Empty Flat field path for "$recordName"';
 		var currentName = recordName, offset = 0, selected:Null<IrObjectField> = null;
@@ -2298,7 +2298,7 @@ class IrGenerator {
 						left,
 						right
 					],
-						Bool);
+					Bool);
 				isNullExpression(a) || isNullExpression(b) ? builder.equal(left, right) : (switch (lowerType(a.type)) {
 					case Bytes: true;
 					default: false;
@@ -4132,7 +4132,7 @@ class IrGenerator {
 							before,
 							after
 						], Bool),
-							builder.constBool(false));
+						builder.constBool(false));
 				else builder.constBool(true);
 			case TString, TNullable(TString):
 				builder.equal(builder.call("__string_equal", [before, after], Bool), builder.constBool(false));

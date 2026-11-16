@@ -211,7 +211,7 @@ class IrNestedScalarReplacement {
 					block: copiedHome,
 					position: copiedPosition
 				},
-					descriptor, localSubstitutions, next, forcePhis);
+				descriptor, localSubstitutions, next, forcePhis);
 		// The scalar pass can decline an unprofitable phi. Do not publish the temporary flattened form then.
 		if (IrScalarReplacement.allocationPosition(copiedHome, root) >= 0) return nextValue;
 		for (index in 0...blocks.length) {

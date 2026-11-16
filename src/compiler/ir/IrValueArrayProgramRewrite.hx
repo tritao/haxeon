@@ -46,7 +46,7 @@ private class ValueArrayFunctionIndex {
 			default: null;
 		};
 
-	function summary(fn:IrFunction): {source: IrFunction, elements: Map<String, Bool>, dynamicViews: Bool} {
+	function summary(fn:IrFunction):{source:IrFunction, elements:Map<String, Bool>, dynamicViews:Bool} {
 		var known = types.get(fn.name);
 		if (known != null && known.source == fn)
 			return known;

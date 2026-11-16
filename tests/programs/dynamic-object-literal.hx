@@ -8,7 +8,7 @@ function main():Int {
 	var total = Std.int(Reflect.field(seeded, "answer")) + Std.int(Reflect.field(seeded, "extra"));
 	var choose = true;
 	var nested:Dynamic = {ui: choose ? {
-		answer:total
+		answer: total
 	} : null};
 	var nestedValue:Dynamic = Reflect.field(Reflect.field(nested, "ui"), "answer");
 	return total == 42 && Std.int(nestedValue) == 42 ? 42 : 2;

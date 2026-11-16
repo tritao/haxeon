@@ -21,22 +21,24 @@ class LiveStrictRefusalMain {
 			host = root + "/live-host.hl",
 			stop = root + "/stop";
 		function write(value:Int, extraGlobal:Bool):Void
-			File.saveContent(main,
+			File.saveContent(
+				main,
 				"class Main {\n"
-				+ "  static var ticks = 0;\n"
-				+ (extraGlobal ? "  static var counted:Int = 0;\n" : "")
-				+ "  static function value():Int return " + value + ";\n"
-				+ "  @:keep public static function start(arguments:String):Void {}\n"
-			// The app stops once it runs revision 3 and the test is done; a host that never applies the edit stops after about
-			// 30 s, so the test fails instead of hanging.
-			+ "  @:keep public static function tick():Int { Sys.sleep(0.01); " + (extraGlobal ? "counted++; " : "")
-				+ "return value() == 3 && sys.FileSystem.exists(\"" + StringTools.replace(stop, "\\",
-				"/") + "\") || ++ticks > 3000 ? 0 : 1; }\n"
-				+ "  @:keep public static function close():Int return 0;\n"
-				+ "  @:keep public static function saveState():String return \"\";\n"
-				+ "  @:keep public static function restoreState(state:String):Void {}\n"
-				+ "  public static function main():Void {}\n"
-				+ "}\n");
+					+ "  static var ticks = 0;\n"
+					+ (extraGlobal ? "  static var counted:Int = 0;\n" : "")
+					+ "  static function value():Int return " + value + ";\n"
+					+ "  @:keep public static function start(arguments:String):Void {}\n" // The app stops once it runs revision 3 and the test is done; a host that never applies the edit stops after about
+					// 30 s, so the test fails instead of hanging.
+					+ "  @:keep public static function tick():Int { Sys.sleep(0.01); "
+					+ (extraGlobal ? "counted++; " : "")
+					+ "return value() == 3 && sys.FileSystem.exists(\"" + StringTools.replace(stop, "\\",
+					"/") + "\") || ++ticks > 3000 ? 0 : 1; }\n"
+					+ "  @:keep public static function close():Int return 0;\n"
+					+ "  @:keep public static function saveState():String return \"\";\n"
+					+ "  @:keep public static function restoreState(state:String):Void {}\n"
+					+ "  public static function main():Void {}\n"
+					+ "}\n"
+			);
 		var session = new CompilerSession();
 		function build(path:String, entry:String, rootDirectory:String, sources:Array<String>, live:Bool):Void
 			CompilerDriver.compile(CompilerArguments.parse([

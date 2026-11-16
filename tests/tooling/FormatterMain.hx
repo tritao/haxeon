@@ -110,14 +110,59 @@ class FormatterMain {
 	/** A comment that trails code stays on its line, the statement it trails keeps its continuation indent, and a second pass is a no-op. */
 	static function assertTrailingComments():Void {
 		var cases =
-			["class A {\n\tfunction f() {\n\t\tvar first = 1, // a comment long enough to push this line well beyond the column limit of the formatter, surely\n\t\t\tsecond = 2;\n\t}\n}\n",
-		// A comment inside an argument list puts each argument on its own line, rather than leaving the list half-flat.
-		"class A {\n\tfunction f() {\n\t\tfoo(\n\t\t\ta, // x\n\t\t\tb\n\t\t);\n\t}\n}\n",
-			"class A {\n\tfunction f() {\n\t\tvar x = 1; // after a statement\n\t\ty();\n\t}\n}\n"];
+			[
+				"class A {\n\tfunction f() {\n\t\tvar first = 1, // a comment long enough to push this line well beyond the column limit of the formatter, surely\n\t\t\tsecond = 2;\n\t}\n}\n",
+				// A comment inside an argument list puts each argument on its own line, rather than leaving the list half-flat.
+				"class A {\n\tfunction f() {\n\t\tfoo(\n\t\t\ta, // x\n\t\t\tb\n\t\t);\n\t}\n}\n",
+				"class A {\n\tfunction f() {\n\t\tvar x = 1; // after a statement\n\t\ty();\n\t}\n}\n"
+			];
 		for (source in cases) {
 			var once = Formatter.format(source, FormatConfigTools.make(4, false));
 			if (once != source)
 				throw 'Trailing comment layout changed:\n$source\nbecame\n$once';
+		}
+	}
+
+	/**
+	 * Layouts the formatter once got wrong, each as written and as it must come out: a structure type is written tight like any
+	 * type; an object after a conditional's `?` stays an object; a comment inside a statement keeps its continuation indent with the
+	 * code after it lined up; an array argument the author began on a continuation line is measured from there; and the elements
+	 * after a group closed on a wrapped line stay at their own level.
+	 */
+	static function assertLayoutFixes():Void {
+		var cases = [
+			{
+				name: "structure types",
+				source: "class A {\n\tstatic function f(p: {a: Int}): {b: Int} {\n\t\treturn {b: p.a};\n\t}\n\tvar v: {x: Int};\n}\n",
+				expected: "class A {\n\tstatic function f(p:{a:Int}):{b:Int} {\n\t\treturn {b: p.a};\n\t}\n\tvar v:{x:Int};\n}\n"
+			},
+			{
+				name: "object after ?",
+				source: "class A {\n\tfunction f() {\n\t\tvar t = c ? {a: 1} : {a: 2};\n\t}\n}\n",
+				expected: "class A {\n\tfunction f() {\n\t\tvar t = c ? {a: 1} : {a: 2};\n\t}\n}\n"
+			},
+			{
+				name: "comment between declarators",
+				source: "class A {\n\tfunction f() {\n\t\tvar first = 1,\n\t\t\t// about second\n\t\t\tsecond = 2,\n\t\t\tthird = 3;\n\t}\n}\n",
+				expected: "class A {\n\tfunction f() {\n\t\tvar first = 1,\n\t\t\t// about second\n\t\t\tsecond = 2,\n\t\t\tthird = 3;\n\t}\n}\n"
+			},
+			{
+				name: "array argument on a continuation line",
+				source: "class A {\n\tfunction f() {\n\t\tvar status = new tools.dev.ToolArtifacts(home).run({main: \"tools.AndroidBuild\", classPaths: [], defines: []},\n\t\t\t[\"edit\", \"--project\", projectConfigPath, asset]);\n\t}\n}\n",
+				expected: "class A {\n\tfunction f() {\n\t\tvar status = new tools.dev.ToolArtifacts(home).run({main: \"tools.AndroidBuild\", classPaths: [], defines: []},\n\t\t\t[\"edit\", \"--project\", projectConfigPath, asset]);\n\t}\n}\n"
+			},
+			{
+				name: "elements after a group closed on a wrapped line",
+				source: "class A {\n\tfunction f() {\n\t\treturn [\n\t\t\tfirst(a, [\n\t\t\t\tb\n\t\t\t],\n\t\t\t\tc, [\n\t\t\t\t\td\n\t\t\t\t]),\n\t\t\t// about second\n\t\t\tsecond\n\t\t];\n\t}\n}\n",
+				expected: "class A {\n\tfunction f() {\n\t\treturn [\n\t\t\tfirst(a, [\n\t\t\t\tb\n\t\t\t],\n\t\t\t\tc, [\n\t\t\t\t\td\n\t\t\t\t]),\n\t\t\t// about second\n\t\t\tsecond\n\t\t];\n\t}\n}\n"
+			}
+		];
+		for (item in cases) {
+			var once = Formatter.format(item.source, FormatConfigTools.make(4, false));
+			if (once != item.expected)
+				throw 'Layout of ${item.name}:\n${item.source}\nbecame\n$once';
+			if (Formatter.format(once, FormatConfigTools.make(4, false)) != once)
+				throw 'Layout of ${item.name} is not stable:\n$once';
 		}
 	}
 
@@ -176,6 +221,7 @@ class FormatterMain {
 		assertOpenFormatterOff();
 		assertTrailingComments();
 		assertShebang();
+		assertLayoutFixes();
 		assertBeyondParser();
 		assertGenericAssignmentBoundaries();
 		assertUpdateOperatorBoundaries();
@@ -289,9 +335,9 @@ class FormatterMain {
 		var wrappedSource =
 			"function build(name:String,arguments:Array<String>,configuration:Configuration):BuildResult { return computeSomething(firstValue,transform(secondValue),thirdValue); }\n",
 			wrapped = Formatter.format(wrappedSource, config),
-		// An over-long list is filled, wrapping as late as it fits: calls continue one level deeper, parameters two.
-		expectedWrapped =
-			"function build(name:String, arguments:Array<String>,\n    configuration:Configuration):BuildResult {\n  return computeSomething(firstValue,\n    transform(secondValue), thirdValue);\n}\n";
+			// An over-long list is filled, wrapping as late as it fits: calls continue one level deeper, parameters two.
+			expectedWrapped =
+				"function build(name:String, arguments:Array<String>,\n    configuration:Configuration):BuildResult {\n  return computeSomething(firstValue,\n    transform(secondValue), thirdValue);\n}\n";
 		if (wrapped != expectedWrapped || Formatter.format(wrapped, config) != expectedWrapped)
 			throw "width-aware formatter did not choose a stable filled layout";
 		for (line in wrapped.split("\n"))
@@ -314,18 +360,18 @@ class FormatterMain {
 		var generic =
 			Formatter.format("function main():Int { var value:Map<FirstArgument,SecondArgument> = []; return 0; }\n",
 			genericConfig),
-		// A type is read whole: the line breaks outside `Map<...>`, even when the type alone is wider than the line.
-		expectedGeneric =
-			"function main():Int {\n  var value:Map<FirstArgument, SecondArgument>\n    = [];\n  return 0;\n}\n";
+			// A type is read whole: the line breaks outside `Map<...>`, even when the type alone is wider than the line.
+			expectedGeneric =
+				"function main():Int {\n  var value:Map<FirstArgument, SecondArgument>\n    = [];\n  return 0;\n}\n";
 		if (generic != expectedGeneric)
 			throw "a type argument list was broken";
 
 		var switchSource =
 			"function main():Int { switch value { case First: return firstValue; case Second: return secondValue; default: return 0; } return 0; }\n",
 			switchFormatted = Formatter.format(switchSource, config),
-		// Arms written on their case's line stay there.
-		expectedSwitch =
-			"function main():Int {\n  switch value {\n    case First: return firstValue;\n    case Second: return secondValue;\n    default: return 0;\n  }\n  return 0;\n}\n";
+			// Arms written on their case's line stay there.
+			expectedSwitch =
+				"function main():Int {\n  switch value {\n    case First: return firstValue;\n    case Second: return secondValue;\n    default: return 0;\n  }\n  return 0;\n}\n";
 		if (switchFormatted != expectedSwitch || Formatter.format(switchFormatted, config) != expectedSwitch)
 			throw "switch cases did not receive stable structural indentation";
 		var emptySwitch = Formatter.format("function main():Int { switch value {} return 0; }\n", config),

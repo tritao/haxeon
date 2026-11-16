@@ -46,7 +46,7 @@ class AnthropicProvider implements ModelProvider {
 						JsonWriter.stringField("description", tool.description),
 						JsonWriter.field("input_schema", tool.schemaJson)
 					])
-				])));
+			])));
 		return JsonWriter.object(fields);
 	}
 }

@@ -95,9 +95,13 @@ class BreakAnalyzer {
 		if (flatWidth(line, config, syntax) <= config.lineWidth && !writtenOnePerLine(line, declaratorCommas))
 			declaratorCommas = new Map<Int, Bool>();
 
-		var result:Array<Boundary> = [], levels = FormatConfigTools.continuationLevels(config), depth = 0,
-		// A structural break a trailing comment displaced (it stays after the comment instead of before it).
-		carried:Null<BreakLayout> = null;
+		var result:Array<Boundary> = [],
+			levels = FormatConfigTools.continuationLevels(config),
+			depth = 0,
+			// A structural break a trailing comment displaced (it stays after the comment instead of before it).
+			carried:Null<BreakLayout> = null,
+			// The break before a comment on its own line inside the statement: the code after the comment lines up with it.
+			beforeComment:Null<BreakLayout> = null;
 		var boundaryCount = tokens.length > 1 ? tokens.length - 1 : 0;
 		for (index in 0...boundaryCount) {
 			var left = tokens[index],
@@ -122,9 +126,14 @@ class BreakAnalyzer {
 				canBreak = true;
 				layout = carried;
 				carried = null;
-			} else if (left.kind.match(FormatTokenKind.LineComment) || left.kind.match(FormatTokenKind.DocComment))
+			} else if (left.kind.match(FormatTokenKind.LineComment) || left.kind.match(FormatTokenKind.DocComment)) {
 				mustBreak = true;
-			else if (left.kind.match(FormatTokenKind.BlockComment) && left.text.indexOf("\n") >= 0)
+				if (beforeComment != null) {
+					canBreak = true;
+					layout = beforeComment;
+				}
+			}
+				else if (left.kind.match(FormatTokenKind.BlockComment) && left.text.indexOf("\n") >= 0)
 				mustBreak = true;
 			else {
 				var opportunityPenalty = opportunity(tokens, index, leftKind, rightKind, syntax);
@@ -213,6 +222,9 @@ class BreakAnalyzer {
 				canBreak = false;
 				mustBreak = false;
 			}
+			beforeComment = mustBreak
+				&& (right.kind.match(FormatTokenKind.LineComment) || right.kind.match(FormatTokenKind.DocComment))
+				? layout : null;
 			result.push({
 				spaces: spaces,
 				canBreak: canBreak,
@@ -552,6 +564,10 @@ class BreakAnalyzer {
 			return 0;
 		if (left == TokenKind.LeftBrace)
 			return 0;
+		// A structure type after a type annotation's colon is written tight, as any type is (`f():{a:Int}`, `v:{a:Int}`); a
+		// case's, an object field's and a conditional's colons are spaced.
+		if (left == TokenKind.Colon && right == TokenKind.LeftBrace)
+			return syntax.roles.spacedColons.exists(tokens[index].start) ? 1 : 0;
 		if (right == TokenKind.LeftBrace)
 			return 1;
 		if (left == TokenKind.Comma)
@@ -635,6 +651,12 @@ class BreakAnalyzer {
 	static function flatWidth(line:UnwrappedLine, config:FormatConfig, syntax:SyntaxInfo):Int
 		return line.indent * config.indentWidth + rangeWidth(line, 0, line.tokens.length - 1, syntax);
 
+	static function isOpening(token:FormatToken):Bool
+		return switch FormatTokenTools.syntaxKind(token) {
+			case TokenKind.LeftParen | TokenKind.LeftBracket | TokenKind.LeftBrace: true;
+			default: false;
+		};
+
 	/** The width of the line before the group's opening token, given which enclosing groups are already split one element per line. */
 	static function groupPrefixWidth(line:UnwrappedLine, breakable:Array<Bool>, open:Int,
 			expanded:Array<DelimiterGroup>, indent:Int, config:FormatConfig,
@@ -651,9 +673,9 @@ class BreakAnalyzer {
 	 * the statement, moved on to the last line its author began before `open` at the same bracket level (that break is kept).
 	 */
 	static function lineStart(line:UnwrappedLine, breakable:Array<Bool>, open:Int, expanded:Array<DelimiterGroup>,
-			indent:Int, config:FormatConfig): {
-				token: Int,
-				indent: Int
+			indent:Int, config:FormatConfig):{
+				token:Int,
+				indent:Int
 			} {
 		var parent:Null<DelimiterGroup> = null;
 		for (group in expanded)
@@ -668,20 +690,29 @@ class BreakAnalyzer {
 			startIndent = lineStart(line, breakable, parent.open, expanded, indent,
 				config).indent + FormatConfigTools.continuationLevels(config);
 		}
-		var depth = 0, authored = -1;
-		for (index in token...open) {
-			switch FormatTokenTools.syntaxKind(line.tokens[index]) {
-				case TokenKind.LeftParen | TokenKind.LeftBracket | TokenKind.LeftBrace:
-					depth++;
-				case TokenKind.RightParen | TokenKind.RightBracket | TokenKind.RightBrace:
-					depth--;
-				default:
-			}
-			// Only where a break may go: a line its author began elsewhere is joined, so it does not start the group's line.
-			if (index > token && depth == 0 && breakable[index - 1]
-				&& UnwrappedLineTools.beganSourceLine(line, line.tokens[index]))
-				authored = index;
+		// The last line its author began before `open` (or at it) inside brackets still open at `open`: a break inside a bracket that
+		// closes first (`f(a,\n b) + [x]`) does not start the group's line, one inside the call holding it (`f(a,\n [x])`) does.
+		var depth = 0, starts:Array<{token:Int, depth:Int}> = [];
+		for (index in token...open + 1) {
+			if (index < open)
+				switch FormatTokenTools.syntaxKind(line.tokens[index]) {
+					case TokenKind.LeftParen | TokenKind.LeftBracket | TokenKind.LeftBrace:
+						depth++;
+					case TokenKind.RightParen | TokenKind.RightBracket | TokenKind.RightBrace:
+						depth--;
+						// The lines begun inside the bracket that closed do not hold `open`; those outside it still may.
+						starts = starts.filter(start -> start.depth <= depth);
+					default:
+				}
+			// Only where a break may go: a line its author began elsewhere is joined, so it does not start the group's line. The
+			// token after a line comment always starts one, whatever the boundary says, since the comment ends its line.
+			var afterComment = index > token && (line.tokens[index - 1].kind.match(FormatTokenKind.LineComment)
+				|| line.tokens[index - 1].kind.match(FormatTokenKind.DocComment));
+			if (index > token && depth >= 0 && (afterComment || breakable[index - 1]
+				&& UnwrappedLineTools.beganSourceLine(line, line.tokens[index])))
+				starts.push({token: index, depth: index < open && isOpening(line.tokens[index]) ? depth - 1 : depth});
 		}
+		var authored = starts.length == 0 ? -1 : starts[starts.length - 1].token;
 		if (authored > 0)
 			return {token: authored, indent: startIndent + FormatConfigTools.continuationLevels(config)};
 		return {token: token, indent: startIndent};

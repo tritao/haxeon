@@ -419,10 +419,10 @@ class DeclarationIndex {
 					validateTypeArguments(name, decl.typeConstraints, abstractSubstitutions, span);
 					TAbstract(name, resolvedArguments, resolveAbstract(decl, span, resolving, abstractSubstitutions));
 				} else if (classes.exists(name) || interfaces.exists(name) || enums.exists(name)) {
-					var declaration: {
-						typeParameters: Array<String>,
-						typeConstraints: Null<Array<compiler.syntax.Ast.AstTypeConstraint>>,
-						kind: NominalKind
+					var declaration:{
+						typeParameters:Array<String>,
+						typeConstraints:Null<Array<compiler.syntax.Ast.AstTypeConstraint>>,
+						kind:NominalKind
 					};
 					if (classes.exists(name)) {
 						var found = classes.get(name);

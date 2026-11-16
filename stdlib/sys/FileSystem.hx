@@ -181,10 +181,10 @@ class FileSystem {
 			current = parent;
 		}
 		for (part in parts)
-		// A drive ("C:") and a directory that exists, or that another process creates meanwhile, need nothing.
-		if (!StringTools.endsWith(part, ":") && !exists(part) && !fileSystemCreateDirectory(part, 493)
-			&& !isDirectory(part))
-			throw 'Failed to create directory $part';
+			// A drive ("C:") and a directory that exists, or that another process creates meanwhile, need nothing.
+			if (!StringTools.endsWith(part, ":") && !exists(part) && !fileSystemCreateDirectory(part, 493)
+				&& !isDirectory(part))
+				throw 'Failed to create directory $part';
 	}
 
 	public static inline function deleteFile(path:String):Void

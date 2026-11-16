@@ -58,8 +58,8 @@ class ImplicitConstructors {
 						added.push({owner: className, base: baseName, method: method});
 						result = {arguments: method.arguments, typeParameters: declaration.typeParameters};
 					} else if (hasInstanceInitializers(declaration))
-					// Typing supplies a constructor that runs the initializers.
-					result = {arguments: [], typeParameters: declaration.typeParameters};
+						// Typing supplies a constructor that runs the initializers.
+						result = {arguments: [], typeParameters: declaration.typeParameters};
 				}
 			}
 			visiting.remove(className);

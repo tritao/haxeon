@@ -10,9 +10,8 @@ class AddedStaticCallerMain {
 		var program = (extra:String, label:String) -> "class Panel {\n"
 			+ "  var keys:Array<String>;\n"
 			+ "  public function new() keys = [\"t:1\", \"t:2\", \"a:3\"];\n"
-			+ "  static function plural(count:Int, noun:String):String return count + \" \" + noun + (count == 1 ? \"\" : \"s\");\n"
-		// The library code the edit uses is already part of the program, as it is in an application.
-		+ "  public function terminals():String return '(${keys.filter(function(key) return StringTools.startsWith(key, \"t:\")).length} of ${keys.length})';\n"
+			+ "  static function plural(count:Int, noun:String):String return count + \" \" + noun + (count == 1 ? \"\" : \"s\");\n" // The library code the edit uses is already part of the program, as it is in an application.
+			+ "  public function terminals():String return '(${keys.filter(function(key) return StringTools.startsWith(key, \"t:\")).length} of ${keys.length})';\n"
 			+ extra
 			+ "  public function menu():String return " + label + ";\n"
 			+ "  public function header():String return " + label + ";\n"

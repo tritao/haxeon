@@ -451,13 +451,13 @@ class IrValueArrayPlaceMethods {
 									array,
 									index
 								]),
-									located.provenance));
+								located.provenance));
 							target.instructions.push(new Located(Call(snapshot.payload,
 								helpers.getter(helpers.slot(fieldPath, false, true)), [
 									array,
 									index
 								]),
-									located.provenance));
+								located.provenance));
 							omit = true;
 						} else {
 							instruction = Call(out, helpers.getter(helpers.slot(fieldPath)), [array, index]);

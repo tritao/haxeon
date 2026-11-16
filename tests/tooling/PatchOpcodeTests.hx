@@ -352,9 +352,9 @@ class PatchOpcodeTests {
 	 * A patch to the module after `existing` earlier patches each added one String constant: it adds `added` more, whose
 	 * lengths are 100, 101, ... in order, and returns the length of global `read`.
 	 */
-	static function stringsPatch(existing:Int, added:Int, read:Int, ?customize:HlCode->Void, ?revision:Int): {
-		code: HlCode,
-		bytes: HaxeBytes
+	static function stringsPatch(existing:Int, added:Int, read:Int, ?customize:HlCode->Void, ?revision:Int):{
+		code:HlCode,
+		bytes:HaxeBytes
 	} {
 		var code = stringModule();
 		for (i in 0...existing + added) {
@@ -382,7 +382,7 @@ class PatchOpcodeTests {
 		return Runtime.load(HlWriter.encode(stringModule()).flatten(),
 			HlRuntimeIdentity.encode(HaxeBytes.alloc(16), 1, ["main" => 0], ["main" => 70000]));
 
-	static function readIndexAt(bytes:HaxeBytes, position:Int): {value: Int, next: Int} {
+	static function readIndexAt(bytes:HaxeBytes, position:Int):{value:Int, next:Int} {
 		var first = bytes.get(position);
 		if (first & 0x80 == 0)
 			return {value: first, next: position + 1};
@@ -483,32 +483,32 @@ class PatchOpcodeTests {
 					name: "a global of a type the module lacks",
 					bytes: stringsPatch(0, 1, 1, code -> code.globals[1] = 99).bytes
 				},
-					{
-						name: "a global that is not an object",
-						bytes: stringsPatch(0, 1, 1, code -> code.globals[1] = 1).bytes
-					},
-						{
-							name: "a string index past the strings",
-							bytes: stringsPatch(0, 1, 1, code -> code.constants[1] = {global: 1, fields: [99, 2]}).bytes
-						},
-							{
-								name: "an int index past the ints",
-								bytes: stringsPatch(0, 1, 1,
-									code -> code.constants[1] = {global: 1, fields: [4, 99]}).bytes
-							},
-								{
-									name: "fewer fields than the object has",
-									bytes: stringsPatch(0, 1, 1,
-										code -> code.constants[1] = {global: 1, fields: [4]}).bytes
-								},
-									{
-										name: "a read past the added globals",
-										bytes: stringsPatch(0, 1, 2).bytes
-									},
-										{
-											name: "more globals than were reserved",
-											bytes: stringsPatch(0, 16385, 1).bytes
-										}];
+				{
+					name: "a global that is not an object",
+					bytes: stringsPatch(0, 1, 1, code -> code.globals[1] = 1).bytes
+				},
+				{
+					name: "a string index past the strings",
+					bytes: stringsPatch(0, 1, 1, code -> code.constants[1] = {global: 1, fields: [99, 2]}).bytes
+				},
+				{
+					name: "an int index past the ints",
+					bytes: stringsPatch(0, 1, 1,
+						code -> code.constants[1] = {global: 1, fields: [4, 99]}).bytes
+				},
+				{
+					name: "fewer fields than the object has",
+					bytes: stringsPatch(0, 1, 1,
+						code -> code.constants[1] = {global: 1, fields: [4]}).bytes
+				},
+				{
+					name: "a read past the added globals",
+					bytes: stringsPatch(0, 1, 2).bytes
+				},
+				{
+					name: "more globals than were reserved",
+					bytes: stringsPatch(0, 16385, 1).bytes
+				}];
 		for (defect in defects) {
 			var target = loadStrings();
 			if (!turnedAway(target, 1, defect.bytes))

@@ -74,14 +74,14 @@ class LanguageServiceProtocol {
 						artifactKind = build.patchBytes != null ? "patch" : build.requiresReload
 							|| initialLoad ? "module" : "none";
 					result = cast {
-						compatibility: {
-							schemaVersion: AbiChangeSchema.VERSION,
-							decision: build.requiresReload ? "reload_domain" : initialLoad ? "initial_load" : "patch",
-							baseRevision: artifactKind == "patch" ? build.baseRevision : 0,
-							targetRevision: build.revision,
-							domainIdentity: Base64.encode(build.runtimeIdentity.sub(4, 16)),
-							artifactKind: artifactKind,
-							reasons: [for (reason in build.reloadReasons) AbiChangeSchema.encode(reason)]
+						compatibility:{
+							schemaVersion:AbiChangeSchema.VERSION,
+							decision:build.requiresReload ? "reload_domain" : initialLoad ? "initial_load" : "patch",
+							baseRevision:artifactKind == "patch" ? build.baseRevision : 0,
+							targetRevision:build.revision,
+							domainIdentity:Base64.encode(build.runtimeIdentity.sub(4, 16)),
+							artifactKind:artifactKind,
+							reasons:[for (reason in build.reloadReasons) AbiChangeSchema.encode(reason)]
 						},
 							revision:build.revision,
 							retyped:build.retyped,

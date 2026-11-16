@@ -275,10 +275,10 @@ class Ryu {
 	}
 
 	static function multiplyShiftAll(significand:haxe.Int64, tableAddress:Int, tableIndex:Int, bitShift:Int,
-			mmShift:Int): {
-				low: haxe.Int64,
-				high: haxe.Int64,
-				top: haxe.Int64
+			mmShift:Int):{
+				low:haxe.Int64,
+				high:haxe.Int64,
+				top:haxe.Int64
 			} {
 		var fourTimesSignificand = significand << 2;
 		var center = multiplyShift(fourTimesSignificand, tableAddress, tableIndex, bitShift);

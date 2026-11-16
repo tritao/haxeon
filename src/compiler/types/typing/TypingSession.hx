@@ -411,11 +411,11 @@ class TypingSession {
 
 	function dependenciesArePure(dependencies:Array<String>):Bool {
 		for (key in dependencies)
-		// Typing a string conversion clears no facts either, so neither does depending on one.
-		if (key != compiler.types.analysis.PurityInference.TO_STRING
-			&& key != "Std.string"
-			&& !(isPureCall(key) || isNoReturnCall(key)))
-			return false;
+			// Typing a string conversion clears no facts either, so neither does depending on one.
+			if (key != compiler.types.analysis.PurityInference.TO_STRING
+				&& key != "Std.string"
+				&& !(isPureCall(key) || isNoReturnCall(key)))
+				return false;
 		return true;
 	}
 

@@ -209,7 +209,7 @@ class SemanticProgram {
 		lifecycle = preparedLifecycle == null ? new DeclarationLifecycle(declarations,
 			SignatureTyped) : preparedLifecycle;
 		lifecycleMetrics = preparedLifecycleMetrics == null ? {
-			declarationMs:0.0, shapeConnectionMs:0.0, signatureTypingMs:0.0
+			declarationMs: 0.0, shapeConnectionMs: 0.0, signatureTypingMs: 0.0
 		} : preparedLifecycleMetrics;
 		if (preparedSignatures != null && preparedMethodInfo != null) {
 			signatures = preparedSignatures;

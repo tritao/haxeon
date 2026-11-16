@@ -287,8 +287,8 @@ class TokenRoles {
 						else {
 							var start = tokens[code[step]].start;
 							if (!(syntax.blockOpens.exists(start) && !syntax.blockOpens.get(start)))
-							// A block: the code inside it does not see the braces around it.
-							break;
+								// A block: the code inside it does not see the braces around it.
+								break;
 							if (objectBrace < 0)
 								objectBrace = step;
 						}
@@ -300,8 +300,11 @@ class TokenRoles {
 				}
 			step--;
 		}
+		// A brace in a type position (`function f():{a:Int}`, `var v:{a:Int}`) is a structure type, not an object literal.
+		// A brace in a type position (`function f():{a:Int}`, `var v:{a:Int}`) is a structure type, not an object literal.
 		if (objectBrace >= 0)
-			return !insideTypedef(objectBrace) || ternaryColons.exists(tokens[code[colon]].start);
+			return !(insideTypedef(objectBrace) || inTypePosition(objectBrace))
+				|| ternaryColons.exists(tokens[code[colon]].start);
 		return ternaryColons.exists(tokens[code[colon]].start);
 	}
 

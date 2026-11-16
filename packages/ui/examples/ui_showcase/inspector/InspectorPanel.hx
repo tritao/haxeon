@@ -40,22 +40,22 @@ class InspectorPanel {
 					explorer.keyed("preview", tabButton(explorer, "Preview", "preview")),
 					explorer.keyed("state", tabButton(explorer, "State", "state"))
 				],
-					explorer.rowStyle(6.0))),
-				explorer.keyed("tab-row-two",
-					new Row("inspector-tab-row-two",
-					[
-						explorer.keyed("semantics", tabButton(explorer, "Semantics", "semantics")),
-						explorer.keyed("tree", tabButton(explorer, "Tree", "tree"))
-					],
-						explorer.rowStyle(6.0)))
-				];
+				explorer.rowStyle(6.0))),
+			explorer.keyed("tab-row-two",
+				new Row("inspector-tab-row-two",
+				[
+					explorer.keyed("semantics", tabButton(explorer, "Semantics", "semantics")),
+					explorer.keyed("tree", tabButton(explorer, "Tree", "tree"))
+				],
+				explorer.rowStyle(6.0)))
+		];
 		children.push(explorer.keyed("tab-row-three",
 			new Row("inspector-tab-row-three",
 			[
 				explorer.keyed("layout", tabButton(explorer, "Layout", "layout")),
 				explorer.keyed("style", tabButton(explorer, "Style", "style"))
 			],
-				explorer.rowStyle(6.0))));
+			explorer.rowStyle(6.0))));
 		var contentStyle = new LayoutStyle();
 		contentStyle.width = LayoutAxis.grow();
 		contentStyle.height = LayoutAxis.grow();

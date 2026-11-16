@@ -897,7 +897,7 @@ class ValueArrayAccessMain {
 				growthCallback,
 				growthArray
 			], false),
-				placeProvenance));
+			placeProvenance));
 		growthCaller.currentBlock().instructions.push(new Located(ArraySet(growthArray, growthIndex, growthRoot),
 			placeProvenance));
 		growthCaller.returnValue(growthCaller.constVoid());
@@ -2417,7 +2417,7 @@ class ValueArrayAccessMain {
 					debugNames: true,
 					wasmMemoryStats: true
 				})
-					.bytes;
+				.bytes;
 			try {
 				sys.io.File.saveBytes(wasmPath, linearOptionalBytes);
 				var script =
@@ -2454,7 +2454,7 @@ class ValueArrayAccessMain {
 					debugNames: true,
 					wasmGcAllocationCount: true
 				})
-					.bytes;
+				.bytes;
 			try {
 				sys.io.File.saveBytes(wasmPath, optionalCensusBytes);
 				var script =
@@ -2798,7 +2798,7 @@ class ValueArrayAccessMain {
 		Sys.println("PASS: array places preserve writes, snapshots, growth and exceptions without allocating value boxes");
 	}
 
-	static function run(program:IrProgram, path:String): {status: Int, error: String} {
+	static function run(program:IrProgram, path:String):{status:Int, error:String} {
 		HlWriter.writeFile(HlLower.lower(program), path);
 		var process = new sys.io.Process(Sys.getEnv("HAXEON_HASHLINK_DIR") + "/hl", [path]);
 		var error = process.stderr.readAll().toString();

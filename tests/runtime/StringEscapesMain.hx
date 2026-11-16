@@ -10,109 +10,111 @@ import runtime.Runtime;
 class StringEscapesMain {
 	static function main():Void {
 		// Each entry is a function body returning an Int, and the value it must produce.
-		var cases:Array<{body:String, expected:Int}> = [{body: '"\\x41".charCodeAt(0)', expected: 65},
+		var cases:Array<{body:String, expected:Int}> = [
+			{body: '"\\x41".charCodeAt(0)', expected: 65},
 			{
 				body: '"\\x7a\\x7A".charCodeAt(1)',
 				expected: 122
 			},
-				{
-					body: '"\\xe9".charCodeAt(0)',
-					expected: 0xE9
-				},
-					{
-						body: '"\\u0041".charCodeAt(0)',
-						expected: 65
-					},
-						{
-							body: '"\\u00e9".charCodeAt(0)',
-							expected: 0xE9
-						},
-							{
-								body: '"\\u20AC".charCodeAt(0)',
-								expected: 0x20AC
-							},
-								{
-									body: '"\\u{41}".charCodeAt(0)',
-									expected: 65
-								},
-									{
-										body: '"\\u{20AC}".charCodeAt(0)',
-										expected: 0x20AC
-									},
-										{
-											body: '"\\u{1F600}".length',
-											expected: 2
-										},
-											{
-												body: '"\\u{1F600}".charCodeAt(0)',
-												expected: 0xD83D
-											},
-												{
-													body: '"\\u{1F600}".charCodeAt(1)',
-													expected: 0xDE00
-												},
-													{
-														body: '"\\uD83D\\uDE00" == "\\u{1F600}" ? 1 : 0',
-														expected: 1
-													},
-														{
-															body: '"\\101".charCodeAt(0)',
-															expected: 65
-														},
-															{
-																body: '"\\377".charCodeAt(0)',
-																expected: 255
-															},
-																{
-																	body: '"\\001x".length',
-																	expected: 2
-																},
-																	{
-																		body: '"\\\'".charCodeAt(0)',
-																		expected: 39
-																	},
-																		{
-																			body: '"a\\"b".length',
-																			expected: 3
-																		},
-		// Single-quoted with interpolation takes the second path.
-		{body: "'\\x41${1}\\u{42}'.length", expected: 3},
+			{
+				body: '"\\xe9".charCodeAt(0)',
+				expected: 0xE9
+			},
+			{
+				body: '"\\u0041".charCodeAt(0)',
+				expected: 65
+			},
+			{
+				body: '"\\u00e9".charCodeAt(0)',
+				expected: 0xE9
+			},
+			{
+				body: '"\\u20AC".charCodeAt(0)',
+				expected: 0x20AC
+			},
+			{
+				body: '"\\u{41}".charCodeAt(0)',
+				expected: 65
+			},
+			{
+				body: '"\\u{20AC}".charCodeAt(0)',
+				expected: 0x20AC
+			},
+			{
+				body: '"\\u{1F600}".length',
+				expected: 2
+			},
+			{
+				body: '"\\u{1F600}".charCodeAt(0)',
+				expected: 0xD83D
+			},
+			{
+				body: '"\\u{1F600}".charCodeAt(1)',
+				expected: 0xDE00
+			},
+			{
+				body: '"\\uD83D\\uDE00" == "\\u{1F600}" ? 1 : 0',
+				expected: 1
+			},
+			{
+				body: '"\\101".charCodeAt(0)',
+				expected: 65
+			},
+			{
+				body: '"\\377".charCodeAt(0)',
+				expected: 255
+			},
+			{
+				body: '"\\001x".length',
+				expected: 2
+			},
+			{
+				body: '"\\\'".charCodeAt(0)',
+				expected: 39
+			},
+			{
+				body: '"a\\"b".length',
+				expected: 3
+			},
+			// Single-quoted with interpolation takes the second path.
+			{body: "'\\x41${1}\\u{42}'.length", expected: 3},
 			{body: "'\\x41${1}\\u{42}'.charCodeAt(2)", expected: 66},
 			{
 				body: "'\\101$$${2}'.charCodeAt(0)",
 				expected: 65
 			},
-				{
-					body: "'\\u00e9${3}\\'\\u{1F600}'.length",
-					expected: 5
-				},
-					{
-						body: "'\\377${1}'.charCodeAt(0)",
-						expected: 255
-					},
-						{
-							body: "'${4}\\uD83D\\uDE00' == '${4}\\u{1F600}' ? 1 : 0",
-							expected: 1
-						},
-		// Text between escapes is copied in runs: escapes at either end, back to back, and between interpolations.
-		{body: '"\\tab\\ncd\\x41".length', expected: 7},
+			{
+				body: "'\\u00e9${3}\\'\\u{1F600}'.length",
+				expected: 5
+			},
+			{
+				body: "'\\377${1}'.charCodeAt(0)",
+				expected: 255
+			},
+			{
+				body: "'${4}\\uD83D\\uDE00' == '${4}\\u{1F600}' ? 1 : 0",
+				expected: 1
+			},
+			// Text between escapes is copied in runs: escapes at either end, back to back, and between interpolations.
+			{body: '"\\tab\\ncd\\x41".length', expected: 7},
 			{body: '"ab\\ncd" == "ab" + "\\n" + "cd" ? 1 : 0', expected: 1},
 			{
 				body: '"x\\\\\\ty".charCodeAt(2)',
 				expected: 9
 			},
-				{
-					body: '"no escapes here".length',
-					expected: 15
-				},
-					{
-						body: "'ab${1}cd\\nef$$gh${2}'.length",
-						expected: 12
-					},
-						{
-							body: "'ab${1}cd\\nef$$gh${2}' == 'ab1cd\\nef$$gh2' ? 1 : 0",
-							expected: 1
-						}];
+			{
+				body: '"no escapes here".length',
+				expected: 15
+			},
+			{
+				body: "'ab${1}cd\\nef$$gh${2}'.length",
+				expected: 12
+			},
+			{
+				body: "'ab${1}cd\\nef$$gh${2}' == 'ab1cd\\nef$$gh2' ? 1 : 0",
+				expected: 1
+			}
+		];
 		var source = "";
 		for (index in 0...cases.length)
 			source += 'function case$index():Int return ${cases[index].body};\n';

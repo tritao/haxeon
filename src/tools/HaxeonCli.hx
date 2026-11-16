@@ -750,7 +750,7 @@ class HaxeonCli {
 						"native",
 						resolvedPackage.name
 					])
-				];
+			];
 			// On Windows the app finds its libraries through PATH, but builds choose their compiler worker by a fingerprint
 			// that includes PATH. Rebuilds keep the PATH the first build had, so they reach the same worker and its module
 			// identity, and a live app can be patched instead of reloaded.
@@ -781,11 +781,11 @@ class HaxeonCli {
 				if (options.profileOutput != null && Path.extension(options.profileOutput) == "hlpc")
 					throw 'With --watch, --profile-output names the directory that holds one capture per launch, not an .hlpc file';
 				var profiling:Null<WatchProfiling> = options.profile ? {
-					profiler:profilerTool(home),
-						root:options.profileOutput == null ? Path.join([Path.directory(output), "profile"])
+					profiler: profilerTool(home),
+					root: options.profileOutput == null ? Path.join([Path.directory(output), "profile"])
 						: resolvePath(options.profileOutput, project.root),
-						processName:project.manifest.entry,
-						sources:options.profileSources
+					processName: project.manifest.entry,
+					sources: options.profileSources
 				} : null;
 				// The resolved project is reused while edits only change Haxe file contents. The lockfile is not watched, so its stamp
 				// is checked here.

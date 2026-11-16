@@ -275,12 +275,12 @@ class IrFunctionStateCodec {
 						name = IrTypeCodec.readString(input, bytes.length),
 						value = IrValueTableCodec.readReference(input, values);
 					debugBindings.push(version >= 4 ? {
-						identity:identity,
-							name:name,
-							value:value,
-							path:IrTypeCodec.readString(input, bytes.length),
-							scopeStart:input.readInt32(),
-							scopeEnd:input.readInt32()
+						identity: identity,
+						name: name,
+						value: value,
+						path: IrTypeCodec.readString(input, bytes.length),
+						scopeStart: input.readInt32(),
+						scopeEnd: input.readInt32()
 					} : {
 						identity: name,
 						name: name,

@@ -418,7 +418,7 @@ class HxiParser {
 		return primitives.indexOf(name) >= 0 ? Primitive(name) : Named(name);
 	}
 
-	static function declarationName(value:HxiDeclaration): {name: String, span: SourceSpan} return switch value {
+	static function declarationName(value:HxiDeclaration):{name:String, span:SourceSpan} return switch value {
 		case Opaque(name, span) | Alias(name, _, span) | Handle(name, _, _, span) | Constant(name, _,
 			span) | Structure(name, _, _, _, span) | Enumeration(name, _, _, _, span) | Callback(name, _, _, _,
 			span) | Function(name, _, _, _, _, _, _, span):

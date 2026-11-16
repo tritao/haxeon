@@ -48,29 +48,31 @@ class NullReassignmentMain {
 		'var x:Null<Int>=42; var y=x; x=null; if(y==null) return 1; return y;'
 	];
 	static final invalid =
-		['var h=new Holder(); var x=h.slot; if(x==null) return 1; x.child=new Box(); if(x.child==null) return 1; Hooks.saved=()->{x.child=null;}; Hooks.fire(); return x.child.value;',
-		'var x:Null<Counter>=new Counter(); var reset=()->{x=null;}; if(x==null) return 1; invoke(reset); return x.value;',
-		'var x:Null<Box>=new Box(); if(x==null) return 1; var items=[2,1]; items.sort((a,b)->{x=null;return a-b;}); return x.value;',
-		'var x:Null<Box>=new Box(); Hooks.saved=()->{x=null;}; if(x==null) return 1; var forward=()->Hooks.fire(); forward(); return x.value;',
-		'var x:Null<Box>=new Box(); var reset=()->{x=null;}; if(x==null) return 1; for(i in 0...2) {var value=x.value;invoke(reset);} return 42;',
-		'var x:Null<Box>=new Box(); if(x==null) return 1; invoke(()->{x=null;}); return x.value;',
-		'var x:Null<Box>=new Box(); if(x==null) return 1; var ignored=invokeGeneric(()->{x=null;},1); return x.value;',
-		'var x:Null<Box>=new Box(); if(x==null) return 1; try {invoke(()->{x=null;});throw "stop";} catch(e:Dynamic) {} return x.value;',
-		'var m=new Map<String,Box>(); m.set("a",new Box()); var key="a"; var replace=()->{key="missing";}; if(m.exists(key)) { replace(); return m.get(key).value; } return 1;',
-		'var m=new Map<String,Box>(); m.set("a",new Box()); var key="a"; var replace=()->{key="missing";}; if(m.exists(key)) { try {replace();throw "stop";} catch(e:Dynamic) {} return m.get(key).value; } return 1;',
-		'var x:Null<Box>=new Box(); if(x!=null) {x=null;return x.value;} return 1;',
-		'var x:Null<Box>=new Box(); if(x!=null) {(x=null);return x.value;} return 1;',
-		'var x:Null<Box>=new Box(); if(x==null) return 1; if(flag()) x=null; return x.value;',
-		'var x:Null<Box>=new Box(); var reset=()->{x=null;}; if(x==null) return 1; reset(); return x.value;',
-		'var x:Null<Box>=new Box(); if(x==null) return 1; try {x=null;throw "stop";} catch(e:Dynamic) {} return x.value;',
-		'var x:Null<Box>=new Box(); if(x==null) return 1; try {x=null;throw "stop";} catch(e:Dynamic) {return x.value;} return 1;',
-		'var x:Null<Box>=new Box(); if(x==null) return 1; try {x=null;maybe(true);x=new Box();} catch(e:Dynamic) {} return x.value;',
-		'var x:Null<Box>=new Box(); var reset=()->{x=null;}; if(x==null) return 1; try {reset();maybe(true);x=new Box();} catch(e:Dynamic) {} return x.value;',
-		'var x:Null<Box>=new Box(); if(x==null) return 1; try {try {x=null;throw "stop";} catch(e:Dynamic) {throw e;}} catch(e:Dynamic) {} return x.value;',
-		'var h=new Holder(); if(h.slot==null) return 1; try {h.slot=null;throw "stop";} catch(e:Dynamic) {} return h.slot.value;',
-		'var h=new Holder(); if(h.slot==null) return 1; try {clear(h);} catch(e:Dynamic) {} return h.slot.value;',
-	// A nullable Int would read as 0 here, as in Haxe; a reference must still be checked again after the catch.
-	'var x:Null<Box>=new Box(); if(x==null) return 1; try {x=null;throw "stop";} catch(e:Dynamic) {} var y:Int=x.value; return y;'];
+		[
+			'var h=new Holder(); var x=h.slot; if(x==null) return 1; x.child=new Box(); if(x.child==null) return 1; Hooks.saved=()->{x.child=null;}; Hooks.fire(); return x.child.value;',
+			'var x:Null<Counter>=new Counter(); var reset=()->{x=null;}; if(x==null) return 1; invoke(reset); return x.value;',
+			'var x:Null<Box>=new Box(); if(x==null) return 1; var items=[2,1]; items.sort((a,b)->{x=null;return a-b;}); return x.value;',
+			'var x:Null<Box>=new Box(); Hooks.saved=()->{x=null;}; if(x==null) return 1; var forward=()->Hooks.fire(); forward(); return x.value;',
+			'var x:Null<Box>=new Box(); var reset=()->{x=null;}; if(x==null) return 1; for(i in 0...2) {var value=x.value;invoke(reset);} return 42;',
+			'var x:Null<Box>=new Box(); if(x==null) return 1; invoke(()->{x=null;}); return x.value;',
+			'var x:Null<Box>=new Box(); if(x==null) return 1; var ignored=invokeGeneric(()->{x=null;},1); return x.value;',
+			'var x:Null<Box>=new Box(); if(x==null) return 1; try {invoke(()->{x=null;});throw "stop";} catch(e:Dynamic) {} return x.value;',
+			'var m=new Map<String,Box>(); m.set("a",new Box()); var key="a"; var replace=()->{key="missing";}; if(m.exists(key)) { replace(); return m.get(key).value; } return 1;',
+			'var m=new Map<String,Box>(); m.set("a",new Box()); var key="a"; var replace=()->{key="missing";}; if(m.exists(key)) { try {replace();throw "stop";} catch(e:Dynamic) {} return m.get(key).value; } return 1;',
+			'var x:Null<Box>=new Box(); if(x!=null) {x=null;return x.value;} return 1;',
+			'var x:Null<Box>=new Box(); if(x!=null) {(x=null);return x.value;} return 1;',
+			'var x:Null<Box>=new Box(); if(x==null) return 1; if(flag()) x=null; return x.value;',
+			'var x:Null<Box>=new Box(); var reset=()->{x=null;}; if(x==null) return 1; reset(); return x.value;',
+			'var x:Null<Box>=new Box(); if(x==null) return 1; try {x=null;throw "stop";} catch(e:Dynamic) {} return x.value;',
+			'var x:Null<Box>=new Box(); if(x==null) return 1; try {x=null;throw "stop";} catch(e:Dynamic) {return x.value;} return 1;',
+			'var x:Null<Box>=new Box(); if(x==null) return 1; try {x=null;maybe(true);x=new Box();} catch(e:Dynamic) {} return x.value;',
+			'var x:Null<Box>=new Box(); var reset=()->{x=null;}; if(x==null) return 1; try {reset();maybe(true);x=new Box();} catch(e:Dynamic) {} return x.value;',
+			'var x:Null<Box>=new Box(); if(x==null) return 1; try {try {x=null;throw "stop";} catch(e:Dynamic) {throw e;}} catch(e:Dynamic) {} return x.value;',
+			'var h=new Holder(); if(h.slot==null) return 1; try {h.slot=null;throw "stop";} catch(e:Dynamic) {} return h.slot.value;',
+			'var h=new Holder(); if(h.slot==null) return 1; try {clear(h);} catch(e:Dynamic) {} return h.slot.value;',
+			// A nullable Int would read as 0 here, as in Haxe; a reference must still be checked again after the catch.
+			'var x:Null<Box>=new Box(); if(x==null) return 1; try {x=null;throw "stop";} catch(e:Dynamic) {} var y:Int=x.value; return y;'
+		];
 
 	static function compiler():Compiler {
 		var c = new Compiler();

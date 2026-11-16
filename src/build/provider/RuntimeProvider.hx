@@ -31,29 +31,31 @@ class RuntimeProvider {
 				"hashlink-runtime"
 			]),
 			programSuffix = environment.target.os == TargetOs.Windows ? ".exe" : "",
-		// One file: libhl and the runtime are compiled into the VM.
-		hashlink = Path.join([hashlinkRoot, "hl" + programSuffix]),
+			// One file: libhl and the runtime are compiled into the VM.
+			hashlink = Path.join([hashlinkRoot, "hl" + programSuffix]),
 			profiler = Path.join([hashlinkRoot, "hlprof-live" + programSuffix]);
 
-		return [new ExecutionAction(configureId, [], cmakeInputs, [
-			configuredGraph,
-			Path.join([buildDirectory, "CMakeCache.txt"])
-		],
-			'Configure HashLink and Haxeon runtime ($preset)', Process("cmake", [
-				"--preset",
-				preset,
-				"-S",
-				root
-			], root, new Map())),
-		// Let CMake/Ninja check its full dependency graph. Recursively hashing
-		// HashLink's source and include trees here costs far more than an
-		// incremental `cmake --build` and duplicates the native build check.
-		new ExecutionAction(buildId, [configureId], [], [hashlink, profiler],
-			'Build HashLink and Haxeon runtime ($preset)',
-			Process("cmake", [
-				"--build",
-				"--preset",
-				preset
-			], root, new Map()), true, true)];
+		return [
+			new ExecutionAction(configureId, [], cmakeInputs, [
+				configuredGraph,
+				Path.join([buildDirectory, "CMakeCache.txt"])
+			],
+				'Configure HashLink and Haxeon runtime ($preset)', Process("cmake", [
+					"--preset",
+					preset,
+					"-S",
+					root
+				], root, new Map())),
+			// Let CMake/Ninja check its full dependency graph. Recursively hashing
+			// HashLink's source and include trees here costs far more than an
+			// incremental `cmake --build` and duplicates the native build check.
+			new ExecutionAction(buildId, [configureId], [], [hashlink, profiler],
+				'Build HashLink and Haxeon runtime ($preset)',
+				Process("cmake", [
+					"--build",
+					"--preset",
+					preset
+				], root, new Map()), true, true)
+		];
 	}
 }

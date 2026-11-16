@@ -486,7 +486,7 @@ class IrScalarClosures {
 	}
 
 	/** Materialize a boxed closure only at a real Dynamic escape, keeping null and ordinary typed calls unchanged. */
-	function ensureErasure(type:IrType): {maker: String, environment: String} {
+	function ensureErasure(type:IrType):{maker:String, environment:String} {
 		var signature = key(type), existing = erasures.get(signature);
 		if (existing != null)
 			return existing;
@@ -582,8 +582,8 @@ class IrScalarClosures {
 					source,
 					probe
 				], Dyn),
-					allocate = make.createBlock(),
-					unwrap = make.createBlock();
+				allocate = make.createBlock(),
+				unwrap = make.createBlock();
 		make.branch(make.equal(found, make.constNull(Dyn)), allocate, unwrap);
 		make.select(unwrap);
 		make.returnValue(make.fieldGet(make.safeCast(found, Obj(restoredEnvironment)), "closure", erasedType(type)));
@@ -754,8 +754,8 @@ class IrScalarClosures {
 					boxed,
 					probe
 				], Dyn),
-					allocate = make.createBlock(),
-					unwrap = make.createBlock();
+				allocate = make.createBlock(),
+				unwrap = make.createBlock();
 		make.branch(make.equal(found, make.constNull(Dyn)), allocate, unwrap);
 		make.select(unwrap);
 		make.returnValue(make.fieldGet(make.safeCast(found, Obj(erasedEnvironment)), "closure", physical));

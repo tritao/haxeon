@@ -183,7 +183,7 @@ class ProgramTyper {
 									session.representation.enumStorageType(enumDecl.typeParameters, param,
 									TInstance(NominalKind.Enum, enumDecl.name, []))
 							],
-								span:caseDecl.span
+							span:caseDecl.span
 					}],
 						span:enumDecl.span
 			}] : [
@@ -197,19 +197,19 @@ class ProgramTyper {
 					for (base in interfaceDecl.bases)
 						if (!StructProperties.isConstraintSyntax(base)) BodyTyper.inheritanceName(base)
 				],
-					methods:[for (method in interfaceDecl.methods)
-					{
-						name:method.name,
-							arguments:[
-								for (argument in method.arguments)
-									session.representation.resolveMethodArgument(TInstance(NominalKind.Interface,
-									interfaceDecl.name,
-									[for (_ in interfaceDecl.typeParameters) TDynamic]),
-									interfaceDecl.name, argument)
-									.physical
-							],
-								result:erasureType(interfaceDecl, method.result, method.span)
-					}]
+				methods:[for (method in interfaceDecl.methods)
+				{
+					name:method.name,
+						arguments:[
+							for (argument in method.arguments)
+								session.representation.resolveMethodArgument(TInstance(NominalKind.Interface,
+								interfaceDecl.name,
+								[for (_ in interfaceDecl.typeParameters) TDynamic]),
+								interfaceDecl.name, argument)
+								.physical
+						],
+						result:erasureType(interfaceDecl, method.result, method.span)
+				}]
 		}] : cachedMetadata.interfaces, typedClasses:Array<TypedClass> = cachedMetadata == null ? [
 			for (classDecl in program.classes)
 				if (classDecl.isExtern != true

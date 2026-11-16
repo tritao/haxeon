@@ -13,17 +13,19 @@ import runtime.Runtime;
  * would strand that closure, so the runtime refuses that patch and says what holds the closure.
  */
 class LambdaRenumberPatchMain {
-	static final plain = ["plusOne" => "x + 1",
+	static final plain = [
+		"plusOne" => "x + 1",
 		"timesTen" => "x * 10",
 		"timesTwenty" => "x * 20",
 		"plusForty" => "x + 40",
-	// The same outer code; only the lambdas written in them differ.
-	"nestedOne" => "apply(y -> 1, x)",
+		// The same outer code; only the lambdas written in them differ.
+		"nestedOne" => "apply(y -> 1, x)",
 		"nestedTwo" => "apply(y -> 2, x)",
 		"plusTwo" => "x + 2",
 		"timesEleven" => "x * 11",
 		"plusFortyOne" => "x + 41",
-		"squareLessSeven" => "(x - 7) * (x - 7)"];
+		"squareLessSeven" => "(x - 7) * (x - 7)"
+	];
 
 	/** The same handlers, each capturing `scale` (3), so every one has an environment named after the lambda. */
 	static final capturing = [
@@ -148,11 +150,11 @@ class LambdaRenumberPatchMain {
 			+ "}\n";
 	}
 
-	static function start(source:String, expected:Int): {
-		compiler: Compiler,
-		build: Dynamic,
-		live: runtime.LoadedModule,
-		mainId: Int
+	static function start(source:String, expected:Int):{
+		compiler:Compiler,
+		build:Dynamic,
+		live:runtime.LoadedModule,
+		mainId:Int
 	} {
 		var compiler = new Compiler();
 		compiler.update("Main.hx", source);
@@ -170,11 +172,11 @@ class LambdaRenumberPatchMain {
 	}
 
 	/** The edit patches, the stored handlers return `stored`, and the full module, run afresh, returns `fresh`. */
-	static function patch(label:String, session: {
-		compiler: Compiler,
-		build: Dynamic,
-		live: runtime.LoadedModule,
-		mainId: Int
+	static function patch(label:String, session:{
+		compiler:Compiler,
+		build:Dynamic,
+		live:runtime.LoadedModule,
+		mainId:Int
 	}, after:String, stored:Int,
 			fresh:Int):Void {
 		session.compiler.update("Main.hx", after);
@@ -196,11 +198,11 @@ class LambdaRenumberPatchMain {
 	}
 
 	/** The edit compiles to a patch, which the runtime refuses: a stored closure still reaches a lambda the edit deleted. */
-	static function stranded(label:String, session: {
-		compiler: Compiler,
-		build: Dynamic,
-		live: runtime.LoadedModule,
-		mainId: Int
+	static function stranded(label:String, session:{
+		compiler:Compiler,
+		build:Dynamic,
+		live:runtime.LoadedModule,
+		mainId:Int
 	}, after:String):Void {
 		session.compiler.update("Main.hx", after);
 		var changed = session.compiler.compile("Main");
@@ -218,11 +220,11 @@ class LambdaRenumberPatchMain {
 		throw '$label: patched, stranding a stored closure to a deleted lambda';
 	}
 
-	static function refuse(label:String, session: {
-		compiler: Compiler,
-		build: Dynamic,
-		live: runtime.LoadedModule,
-		mainId: Int
+	static function refuse(label:String, session:{
+		compiler:Compiler,
+		build:Dynamic,
+		live:runtime.LoadedModule,
+		mainId:Int
 	}, after:String):Void {
 		session.compiler.update("Main.hx", after);
 		var changed = session.compiler.compile("Main");

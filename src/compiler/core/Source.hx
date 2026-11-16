@@ -94,7 +94,7 @@ class SourceFile {
 		return offset - lineStarts[line - 1] + 1;
 
 	/** One-based line and column containing an offset, using a single line lookup. */
-	public function lineColumnAt(offset:Int): {line: Int, column: Int} {
+	public function lineColumnAt(offset:Int):{line:Int, column:Int} {
 		var line = lineAt(offset);
 		return {line: line, column: offset - lineStarts[line - 1] + 1};
 	}
@@ -119,7 +119,7 @@ class SourceFile {
 	}
 
 	/** Convert a compiler UTF-8 byte offset to a zero-based LSP UTF-16 position. */
-	public function lspPosition(offset:Int): {line: Int, character: Int} {
+	public function lspPosition(offset:Int):{line:Int, character:Int} {
 		var line = lineAt(offset) - 1, cursor = lineStarts[line], units = 0;
 		while (cursor < offset) {
 			var width = utf8Width(bytes.get(cursor));

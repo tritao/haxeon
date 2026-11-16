@@ -671,7 +671,7 @@ class LspProtocol {
 		}
 		pullDiagnosticMutex.release();
 		return previous == resultId ? {
-			kind:"unchanged", resultId:resultId
+			kind: "unchanged", resultId: resultId
 		} : {
 			kind: "full",
 			resultId: resultId,
@@ -701,8 +701,8 @@ class LspProtocol {
 					kind:symbolKind(symbol.kind),
 					containerName:symbol.container,
 					tags:symbol.deprecated ? [1] : null,
-					location: {uri: documents.uri(project.diskPath(symbol.path))},
-					data: {identity: symbol.identity, revision: symbol.revision}
+					location:{uri:documents.uri(project.diskPath(symbol.path))},
+					data:{identity:symbol.identity, revision:symbol.revision}
 			}];
 	}
 
@@ -873,11 +873,11 @@ class LspProtocol {
 					kind:"quickfix",
 					diagnostics:[diagnosticJson(action.diagnostic)],
 					isPreferred:true,
-					edit: {documentChanges: [for (uri => edits in changes)
+					edit:{documentChanges:[for (uri => edits in changes)
 					{
-						textDocument: {
-							uri: uri,
-							version: versionOf(targets.get(uri))
+						textDocument:{
+							uri:uri,
+							version:versionOf(targets.get(uri))
 						},
 							edits:edits
 					}]}
@@ -1092,17 +1092,17 @@ class LspProtocol {
 				kind: "markdown",
 				value: value.documentation
 			},
-				parameters: [for (index in 0...value.parameters.length)
-				{
-					label:value.parameters[index],
-						documentation:value.parameterDocumentation == null
-						|| value.parameterDocumentation[index] == null ? null : {
-							kind: "markdown",
-							value: value.parameterDocumentation[index]
-						}
-				}]}],
-					activeSignature: 0,
-					activeParameter: value.activeParameter};
+			parameters: [for (index in 0...value.parameters.length)
+			{
+				label:value.parameters[index],
+					documentation:value.parameterDocumentation == null
+					|| value.parameterDocumentation[index] == null ? null : {
+						kind: "markdown",
+						value: value.parameterDocumentation[index]
+					}
+			}]}],
+				activeSignature: 0,
+				activeParameter: value.activeParameter};
 	}
 
 	function definition(request:Dynamic, token:CancellationToken):Dynamic {
@@ -1277,9 +1277,9 @@ class LspProtocol {
 		}
 		return {documentChanges: [for (uri => textEdits in grouped)
 			{
-				textDocument: {
-					uri: uri,
-					version: versionOf(targets.get(uri))
+				textDocument:{
+					uri:uri,
+					version:versionOf(targets.get(uri))
 				},
 					edits:textEdits
 			}]};

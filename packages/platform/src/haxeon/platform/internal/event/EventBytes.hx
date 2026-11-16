@@ -26,9 +26,9 @@ class EventBytes {
 	public static function decodeDropItems(data:haxe.io.Bytes, expectedCount:Int):Array<String>
 		return decodePackedStrings(data, expectedCount, 16);
 
-	public static function decodeResourceList(data:haxe.io.Bytes, listOffset:Int): {
-		accepted: Bool,
-		items: Array<Resource>
+	public static function decodeResourceList(data:haxe.io.Bytes, listOffset:Int):{
+		accepted:Bool,
+		items:Array<Resource>
 	} {
 		if (listOffset < 0 || listOffset > data.length - 16)
 			throw BindingError.invalidData("EventBytes.decodeResourceList",

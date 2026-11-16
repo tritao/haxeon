@@ -185,11 +185,11 @@ class WasmLinearRuntime {
 									parameters: [F64],
 									results: [I32]
 								}, [],
-									[
-										LocalGet(0),
-										I32TruncF64S,
-										Return
-									])));
+								[
+									LocalGet(0),
+									I32TruncF64S,
+									Return
+								])));
 						case "__std_int_dynamic":
 							functions.set(native.name, addDynamicInt(module, native.name));
 						case "__reflect_is_object":
@@ -2738,7 +2738,7 @@ class WasmLinearRuntime {
 				LocalGet(1),
 				I32Load(WasmLayout.STRING_LENGTH_OFFSET)
 			], i -> stringByteAt(1, i), () -> b.local("search-" + b.locals.length, I32),
-				fromStart ? 2 : null, reverse, result));
+			fromStart ? 2 : null, reverse, result));
 		b.emitAll([LocalGet(result), Return]);
 		return module.addFunction(b.finish());
 	}

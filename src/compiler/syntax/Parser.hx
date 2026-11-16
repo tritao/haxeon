@@ -2385,7 +2385,7 @@ class Parser {
 		};
 	}
 
-	static function blockResultExpression(block: {statements: Array<AstStatement>, result: AstExpression}):AstExpression
+	static function blockResultExpression(block:{statements:Array<AstStatement>, result:AstExpression}):AstExpression
 		return block.statements.length == 0 ? block.result : BlockExpression(block.statements, block.result,
 			statementSpan(block.statements[0]).merge(expressionSpan(block.result)));
 
@@ -3056,7 +3056,7 @@ class Parser {
 	 * (first digit 0-3) as Unicode code points, and joins a `\uD83D\uDE00` surrogate pair into one character.
 	 * Any other escaped character stands for itself.
 	 */
-	static function readEscape(text:String, index:Int, end:Int, span:SourceSpan): {value: String, next: Int} {
+	static function readEscape(text:String, index:Int, end:Int, span:SourceSpan):{value:String, next:Int} {
 		if (index >= end)
 			return {value: "\\", next: index};
 		var escaped = text.charAt(index);

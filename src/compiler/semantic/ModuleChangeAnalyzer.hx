@@ -81,7 +81,7 @@ class ModuleChangeAnalyzer {
 								for (param in caseDecl.params)
 									(param.optional ? "?" : "") + SemanticSignature.parsed(param.type, ast.aliases)
 							].join(",") + ")"
-						].join(";") + "}";
+					].join(";") + "}";
 			if (enumDecl.methods != null) for (method in enumDecl.methods)
 				signature += ";method:" + method.name + ":" + SemanticSignature.parsedFunction(method, ast.aliases)
 				+ ":" + sourceFingerprint(state, method.span);
@@ -107,7 +107,7 @@ class ModuleChangeAnalyzer {
 						for (type in abstractDecl.fromTypes)
 							SemanticSignature.parsed(type, ast.aliases)
 					].join(",") + " to "
-						+ [for (type in abstractDecl.toTypes) SemanticSignature.parsed(type, ast.aliases)].join(",");
+					+ [for (type in abstractDecl.toTypes) SemanticSignature.parsed(type, ast.aliases)].join(",");
 			abstracts.set(abstractName, signature);
 			if (state.abstractFingerprints.get(abstractName) != signature)
 				structuralChanged.set('abstract:$abstractName', true);
@@ -124,12 +124,12 @@ class ModuleChangeAnalyzer {
 						for (type in abstractDecl.fromTypes)
 							SemanticSignature.parsed(type, ast.aliases)
 					].join(",") + " to " + [for (type in abstractDecl.toTypes) SemanticSignature.parsed(type,
-						ast.aliases)].join(",") + " {" + [
-							for (value in abstractDecl.values)
-								value.name + "=" + state.source.slice(value.span.start, value.span.end)
-						].join(";") + "} implements " + (abstractDecl.conformances == null
-							? "" : [for (type in abstractDecl.conformances) SemanticSignature.parsed(type,
-							ast.aliases)].join(","));
+					ast.aliases)].join(",") + " {" + [
+						for (value in abstractDecl.values)
+							value.name + "=" + state.source.slice(value.span.start, value.span.end)
+					].join(";") + "} implements " + (abstractDecl.conformances == null
+					? "" : [for (type in abstractDecl.conformances) SemanticSignature.parsed(type,
+					ast.aliases)].join(","));
 			abstracts.set(abstractName, signature);
 			if (state.abstractFingerprints.get(abstractName) != signature)
 				structuralChanged.set('abstract:$abstractName', true);

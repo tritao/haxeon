@@ -19,9 +19,9 @@ class MemoryTransport implements MessageTransport {
 		this.maxMessages = maxMessages;
 	}
 
-	public static function pair(maxBytes:Int = 8 * 1024 * 1024, maxMessages:Int = 256): {
-		client: MemoryTransport,
-		server: MemoryTransport
+	public static function pair(maxBytes:Int = 8 * 1024 * 1024, maxMessages:Int = 256):{
+		client:MemoryTransport,
+		server:MemoryTransport
 	} {
 		var client = new MemoryTransport(maxBytes, maxMessages);
 		var server = new MemoryTransport(maxBytes, maxMessages);

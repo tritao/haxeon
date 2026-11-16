@@ -387,7 +387,7 @@ class BuildContext {
 	}
 
 	/** Bounded-run diagnostics for retained key path caches. */
-	public function diagnosticKeyCounts(): {ids: Int, paths: Int} return {
+	public function diagnosticKeyCounts():{ids:Int, paths:Int} return {
 		ids: idsByPath.count,
 		paths: rootScope.cachedEntries()
 	};

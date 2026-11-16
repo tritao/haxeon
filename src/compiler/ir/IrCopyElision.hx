@@ -356,12 +356,12 @@ class IrCopyElision {
 		switch instruction {
 			case Call(_, name, _):
 				return byName.exists(name) ? {
-					name:name, parameter:argument
+					name: name, parameter: argument
 				} : null;
 			case MethodCall(_, receiver, method, _, _):
 				var target = valueMethod(receiver, method);
 				return target != null && byName.exists(target) ? {
-					name:target, parameter:argument
+					name: target, parameter: argument
 				} : null;
 			default:
 				return null;

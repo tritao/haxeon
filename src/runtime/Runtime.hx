@@ -120,7 +120,7 @@ class Runtime {
 		return count;
 	}
 
-	public static function inspectPatch(bytes:Bytes): {baseRevision: Int, revision: Int, functionCount: Int} {
+	public static function inspectPatch(bytes:Bytes):{baseRevision:Int, revision:Int, functionCount:Int} {
 		var summary = RuntimeNative.inspect_patch(bytes.getData(), bytes.length);
 		if (summary < 0)
 			throw new RuntimeError(RuntimeStatus.BadFormat, "HashLink rejected the HLP bytes");

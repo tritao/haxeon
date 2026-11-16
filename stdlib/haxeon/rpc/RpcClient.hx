@@ -211,8 +211,8 @@ class RpcClient {
 					if (established == null) {
 						var failure = negotiating.failure;
 						failed(failure == null ? {
-							code:"handshake_failed", message:"handshake_failed",
-								ambiguous:false
+							code: "handshake_failed", message: "handshake_failed",
+							ambiguous: false
 						} : failure,
 							failure == null || failure.code == "disconnected" || failure.code == "handshake_timeout");
 					} else {

@@ -1027,9 +1027,9 @@ class IrInliner {
 	 */
 	public static function expand(blocks:Array<IrBlock>, index:Int, position:Int, callee:IrFunction, nextValue:Int,
 			nextBlock:Int,
-			?checkReceiver:Bool): {
-				nextValue: Int,
-				nextBlock: Int
+			?checkReceiver:Bool):{
+				nextValue:Int,
+				nextBlock:Int
 			} {
 		var head = blocks[index],
 			call = head.instructions[position],

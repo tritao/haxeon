@@ -438,10 +438,10 @@ class WasmGcModuleBuilder {
 	 * instructions that fill the global, which must run before any Haxe code, or null without data.
 	 */
 	static function addGcStaticData(module:WasmModule, globals:Map<String, Int>, plan:WasmGcTypePlan,
-			staticData: {
-				addresses: Map<String, Int>,
-				segments: Array<WasmDataSegment>,
-				end: Int
+			staticData:{
+				addresses:Map<String, Int>,
+				segments:Array<WasmDataSegment>,
+				end:Int
 			}):Null<Array<WasmInstruction>> {
 		if (staticData.segments.length == 0)
 			return null;
@@ -1169,10 +1169,10 @@ class WasmGcModuleBuilder {
 			// Release imports take the raw pointer only; every other import follows the Wasm32 C ABI.
 			var type:WasmFunctionType = isGcPointerRelease(program,
 				native) ? {
-					parameters:parameters, results:results
+					parameters: parameters, results: results
 				} : WasmCAbi.of(native).importType(parameters, results),
-					importModule = native.library == null || native.library == "" ? "env" : native.library,
-					importName = native.symbol == null || native.symbol == "" ? native.name : native.symbol;
+				importModule = native.library == null || native.library == "" ? "env" : native.library,
+				importName = native.symbol == null || native.symbol == "" ? native.name : native.symbol;
 			functions.set(native.name, module.addImport(importModule, importName, type));
 		}
 	}

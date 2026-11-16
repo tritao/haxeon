@@ -5,9 +5,9 @@ import compiler.backend.wasm.WasmTypes.WasmInstruction;
 
 /** Remove local round trips and unused local slots after GC function lowering. */
 class WasmGcLocalCompaction {
-	public static function run(body:Array<WasmInstruction>, locals:Array<WasmLocal>, parameters:Int): {
-		body: Array<WasmInstruction>,
-		locals: Array<WasmLocal>
+	public static function run(body:Array<WasmInstruction>, locals:Array<WasmLocal>, parameters:Int):{
+		body:Array<WasmInstruction>,
+		locals:Array<WasmLocal>
 	} {
 		var current = body, previousLength:Int;
 		do {

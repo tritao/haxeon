@@ -406,7 +406,7 @@ function main():Int return stay(1);
 						name:field.name,
 							type:field.type,
 							nativeLayout:field.nativeLayout,
-							scalarStorage: {size: 1, signed: true}
+							scalarStorage:{size:1, signed:true}
 					}]
 			}];
 		IrInliner.run(narrowProgram, narrowCache, compiler.ir.TargetProfile.wasm);

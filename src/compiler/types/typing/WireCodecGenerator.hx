@@ -659,9 +659,9 @@ class WireCodecGenerator {
 							writer,
 							new TypedExpression(TIndex(value, index), element, span)
 						]), TVoid, span),
-							span),
-						TAssign(indexName, new TypedExpression(TAdd(index, intLiteral(1, span)), TInt, span), span)
-					], span));
+						span),
+					TAssign(indexName, new TypedExpression(TAdd(index, intLiteral(1, span)), TInt, span), span)
+				], span));
 				result;
 			case TMap(keyType, valueType):
 				var keysType = TArray(keyType),
@@ -692,7 +692,7 @@ class WireCodecGenerator {
 						writer,
 						new TypedExpression(TMapGet(value, mapKey), valueType, span)
 					]), TVoid, span),
-						span));
+					span));
 				mapBody.push(TAssign(indexName, new TypedExpression(TAdd(index, intLiteral(1, span)), TInt, span),
 					span));
 				result.push(TWhile(new TypedExpression(TLess(index,
@@ -726,8 +726,8 @@ class WireCodecGenerator {
 							intLiteral(wireField.id, span),
 							stringLiteral(field.name, span)
 						], TVoid,
-							span) : method(writer, "writeInt", [intLiteral(wireField.id, span)], TVoid, span),
-							span));
+						span) : method(writer, "writeInt", [intLiteral(wireField.id, span)], TVoid, span),
+						span));
 					result = result.concat(encodeNestedValueStatements(writer, fieldValue, field.type, field.span));
 				}
 				result;
@@ -748,11 +748,11 @@ class WireCodecGenerator {
 									intLiteral(wireCase.id, span),
 									stringLiteral(wireCase.caseDecl.name, span)
 								], TVoid,
-									span) : method(writer, "writeInt", [intLiteral(wireCase.id, span)], TVoid, span),
-									span),
-								expressionStatement(method(writer, "writeArrayHeader",
-									[intLiteral(wireCase.caseDecl.params.length, span)], TVoid, span), span)
-							];
+								span) : method(writer, "writeInt", [intLiteral(wireCase.id, span)], TVoid, span),
+								span),
+							expressionStatement(method(writer, "writeArrayHeader",
+								[intLiteral(wireCase.caseDecl.params.length, span)], TVoid, span), span)
+						];
 					for (fieldIndex in 0...wireCase.caseDecl.params.length) {
 						var parameterType = wireEnumParameterType(session, name, wireCase.index, fieldIndex,
 							wireCase.caseDecl.params[fieldIndex]),
@@ -951,7 +951,7 @@ class WireCodecGenerator {
 							TThrow(stringLiteral('Invalid MessagePack payload for enum "$name.${wireCase.caseDecl.name}"',
 								span), span)
 						], [], span)
-					];
+				];
 			var arguments:Array<TypedExpression> = [];
 			for (fieldIndex in 0...wireCase.caseDecl.params.length) {
 				var parameterType = wireEnumParameterType(session, name, wireCase.index, fieldIndex,

@@ -82,11 +82,11 @@ class GeneratedFunctionRenumberingMain {
 			+ "}\n";
 	}
 
-	static function start(source:String): {
-		compiler: Compiler,
-		build: Dynamic,
-		live: runtime.LoadedModule,
-		mainId: Int
+	static function start(source:String):{
+		compiler:Compiler,
+		build:Dynamic,
+		live:runtime.LoadedModule,
+		mainId:Int
 	} {
 		var compiler = new Compiler();
 		compiler.update("Main.hx", source);

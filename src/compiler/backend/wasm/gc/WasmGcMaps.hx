@@ -221,25 +221,25 @@ class WasmGcMaps {
 				I32Const(1),
 				I32Sub
 			]))
-				.concat([LocalGet(1)])
-				.concat(stringEqual >= 0 ? [Call(stringEqual)] : [I32Eq])
-				.concat([
-					If(null),
-					LocalGet(4),
-					Return,
-					End,
-					LocalGet(4),
-					I32Const(1),
-					I32Add,
-					LocalGet(3),
-					I32And,
-					LocalSet(4),
-					Br(0),
-					End,
-					End,
-					I32Const(-1),
-					Return
-				]));
+			.concat([LocalGet(1)])
+			.concat(stringEqual >= 0 ? [Call(stringEqual)] : [I32Eq])
+			.concat([
+				If(null),
+				LocalGet(4),
+				Return,
+				End,
+				LocalGet(4),
+				I32Const(1),
+				I32Add,
+				LocalGet(3),
+				I32And,
+				LocalSet(4),
+				Br(0),
+				End,
+				End,
+				I32Const(-1),
+				Return
+			]));
 		// find(map, key): the entry position, or -1
 		var find = define(prefix + 'find_' + mapName, {parameters: [mapReference, keyValue], results: [I32]},
 			[{type: I32}], [
@@ -382,12 +382,13 @@ class WasmGcMaps {
 			LocalGet(6),
 			I32Const(1),
 			I32Sub
-		])).concat([Call(hash),
+		])).concat([
+			Call(hash),
 			LocalGet(3),
 			I32And,
 			LocalSet(7),
-		// the member stays when its home slot lies cyclically in (hole, here]
-		LocalGet(4),
+			// the member stays when its home slot lies cyclically in (hole, here]
+			LocalGet(4),
 			LocalGet(5),
 			I32LeS,
 			If(I32),
@@ -423,7 +424,8 @@ class WasmGcMaps {
 			LocalGet(4),
 			I32Const(0),
 			ArraySet(indexType),
-			Return]));
+			Return
+		]));
 		return {
 			hash: hash,
 			findSlot: findSlot,
@@ -438,7 +440,8 @@ class WasmGcMaps {
 		var name = "__haxeon_gc_bytes_equal", result = functions.get(name);
 		if (result != null)
 			return result;
-		var body:Array<WasmInstruction> = [LocalGet(0),
+		var body:Array<WasmInstruction> = [
+			LocalGet(0),
 			RefIsNull,
 			LocalGet(1),
 			RefIsNull,
@@ -462,8 +465,8 @@ class WasmGcMaps {
 			LocalSet(4),
 			Block(null),
 			Loop(null),
-		// Unequal lengths end the scan at once, before it can index past the shorter key.
-		LocalGet(4),
+			// Unequal lengths end the scan at once, before it can index past the shorter key.
+			LocalGet(4),
 			LocalGet(2),
 			I32LtS,
 			LocalGet(5),
@@ -500,7 +503,8 @@ class WasmGcMaps {
 			End,
 			LocalGet(5),
 			End,
-			Return];
+			Return
+		];
 		result = module.addFunction(new WasmFunction(name, {
 			parameters: [plan.valueType(Bytes), plan.valueType(Bytes)],
 			results: [I32]
@@ -591,7 +595,8 @@ class WasmGcMaps {
 			LocalGet(0),
 			StructGet(mapType, 0)
 		]);
-		body = body.concat([LocalGet(0),
+		body = body.concat([
+			LocalGet(0),
 			LocalGet(5),
 			StructSet(mapType, 1),
 			LocalGet(0),
@@ -600,8 +605,8 @@ class WasmGcMaps {
 			LocalGet(0),
 			LocalGet(7),
 			StructSet(mapType, 3),
-		// the larger arrays need a larger index, holding the entries already there
-		LocalGet(0),
+			// the larger arrays need a larger index, holding the entries already there
+			LocalGet(0),
 			Call(helpers.rebuild),
 			End,
 			LocalGet(0),
@@ -637,10 +642,11 @@ class WasmGcMaps {
 				nullable: false,
 				heap: Type(valueStorage)
 			}),
-				LocalGet(4),
-				LocalGet(2),
-				ArraySet(valueStorage),
-				Return]);
+			LocalGet(4),
+			LocalGet(2),
+			ArraySet(valueStorage),
+			Return
+		]);
 		return module.addFunction(new WasmFunction(name,
 			{
 				parameters: [mapReference, plan.valueType(map.keyType), plan.valueType(map.valueType)],
@@ -809,7 +815,8 @@ class WasmGcMaps {
 		];
 		appendMapArrayDefault(body, plan, mapType, 2, map.keyType, [LocalGet(1)]);
 		appendMapArrayDefault(body, plan, mapType, 3, map.valueType, [LocalGet(1)]);
-		body = body.concat([LocalGet(1),
+		body = body.concat([
+			LocalGet(1),
 			I32Const(1),
 			I32Add,
 			LocalSet(1),
@@ -819,14 +826,15 @@ class WasmGcMaps {
 			LocalGet(0),
 			I32Const(0),
 			StructSet(mapType, 0),
-		// an index of the same length with every slot empty
-		LocalGet(0),
+			// an index of the same length with every slot empty
+			LocalGet(0),
 			LocalGet(0),
 			StructGet(mapType, 4),
 			ArrayLen,
 			ArrayNewDefault(plan.mapIndexTypeIndex),
 			StructSet(mapType, 4),
-			Return]);
+			Return
+		]);
 		return module.addFunction(new WasmFunction(name, {parameters: [mapReference], results: []}, [{type: I32}],
 			body));
 	}

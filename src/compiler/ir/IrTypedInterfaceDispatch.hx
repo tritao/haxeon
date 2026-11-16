@@ -81,7 +81,7 @@ class IrTypedInterfaceDispatch {
 	public static function generate(functions:Array<IrFunction>, objects:Array<IrObject>,
 			interfaces:Array<IrInterface>):Void {
 		var requests:Map<String, {arguments:Array<IrType>, result:IrType}> = [];
-		function request(name:String, signature: {arguments: Array<IrType>, result: IrType}):Void {
+		function request(name:String, signature:{arguments:Array<IrType>, result:IrType}):Void {
 			var previous = requests.get(name);
 			if (previous != null && (!IrVerifier.sameType(previous.result, signature.result)
 				|| previous.arguments.length != signature.arguments.length))

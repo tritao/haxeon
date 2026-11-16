@@ -334,7 +334,7 @@ class WasmLayout {
 		return {size: align(offset, maximum), alignment: maximum, slots: slots};
 	}
 
-	public function enumField(typeName:String, constructor:Int, field:Int): {type: IrType, offset: Int} {
+	public function enumField(typeName:String, constructor:Int, field:Int):{type:IrType, offset:Int} {
 		var layout = enumType(typeName);
 		if (constructor < 0 || constructor >= layout.cases.length)
 			throw 'Unknown constructor $constructor in Wasm enum layout "$typeName"';

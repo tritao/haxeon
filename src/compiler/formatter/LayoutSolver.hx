@@ -55,8 +55,9 @@ class LayoutSolver {
 		}
 
 		// `indent` is the current physical line's, `base` the indent of the element it belongs to (see BreakLayout).
-		function solveFrom(start:Int, indent:Int, base:Int):LayoutPath {
-			var key = start + ":" + indent + ":" + base;
+		// `bases` holds the base at each open bracket still open, which its close restores.
+		function solveFrom(start:Int, indent:Int, base:Int, bases:Array<Int>):LayoutPath {
+			var key = start + ":" + indent + ":" + base + ":" + bases.join(",");
 			if (memo.exists(key))
 				return memo.get(key);
 			var best:Null<LayoutPath> = null;
@@ -72,8 +73,8 @@ class LayoutSolver {
 				}
 				var boundary = boundaries[end];
 				if (boundary.mustBreak || boundary.canBreak) {
-					var placed = place(boundary.layout, indent, base, line, config),
-						next = solveFrom(end + 1, placed.indent, placed.base),
+					var placed = place(boundary.layout, indent, base, bases, line, config),
+						next = solveFrom(end + 1, placed.indent, placed.base, placed.bases),
 						combined:Array<LayoutLine> = [{start: start, end: end, indent: indent}];
 					combined = combined.concat(next.lines);
 					var candidate:LayoutPath = {
@@ -91,7 +92,7 @@ class LayoutSolver {
 			return best;
 		}
 
-		var result = solveFrom(0, line.indent, line.indent);
+		var result = solveFrom(0, line.indent, line.indent, []);
 		return {lines: result.lines, cost: result.cost};
 	}
 
@@ -102,22 +103,29 @@ class LayoutSolver {
 		return current;
 	}
 
-	/** The indent of the line after a break, and of the element it starts. */
-	static function place(layout:BreakLayout, indent:Int, base:Int, line:UnwrappedLine, config:FormatConfig): {
-		indent: Int,
-		base: Int
-	} {
+	/**
+	 * The indent of the line after a break, the base of the element it starts, and the bases of the brackets still open. A close
+	 * restores the base its open saw, so a group opened on a wrapped line (`f(a,` then `b, [` ... `]`) leaves the elements after it
+	 * at their own level, not at the wrap's.
+	 */
+	static function place(layout:BreakLayout, indent:Int, base:Int, bases:Array<Int>, line:UnwrappedLine,
+			config:FormatConfig):{
+				indent:Int,
+				base:Int,
+				bases:Array<Int>
+			} {
 		var levels = FormatConfigTools.continuationLevels(config);
 		return switch layout {
-			case Wrap(count): {indent: base + count * levels, base: base};
-			case Open: {indent: indent + levels, base: indent + levels};
-			case Separator: {indent: base, base: base};
+			case Wrap(count): {indent: base + count * levels, base: base, bases: bases};
+			case Open: {indent: indent + levels, base: indent + levels, bases: bases.concat([base])};
+			case Separator: {indent: base, base: base, bases: bases};
 			case Close:
 				var closing = Std.int(Math.max(line.indent, base - levels));
 				{
-					indent:closing, base:closing
+					indent:closing, base:bases.length > 0 ? bases[bases.length - 1] : closing,
+						bases:bases.slice(0, bases.length - 1)
 				};
-			case At(fixed): {indent: fixed, base: fixed};
+			case At(fixed): {indent: fixed, base: fixed, bases: bases};
 		};
 	}
 }

@@ -33,7 +33,7 @@ class TopBar {
 				explorer.keyed("brand-mark", explorer.text("HX", explorer.context.buildContext.theme.accent)),
 				explorer.keyed("brand", explorer.heading("Haxeon UI Explorer"))
 			],
-				clusterStyle(12.0));
+			clusterStyle(12.0));
 		var themeButton = ShowcaseKit.button(explorer,
 			explorer.state.lightTheme ? "Dark mode" : "Light mode", "theme-toggle", function() {
 				explorer.toggleTheme();
@@ -49,7 +49,7 @@ class TopBar {
 				explorer.keyed("brand-cluster", brand),
 				explorer.keyed("action-cluster", new Row("top-actions", actions, clusterStyle(8.0)))
 			],
-				style));
+			style));
 	}
 
 	static function inspectButton(explorer:UiExplorer):Button return ShowcaseKit.button(explorer,

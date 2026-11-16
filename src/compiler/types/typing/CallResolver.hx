@@ -410,7 +410,7 @@ class CallResolver {
 		return null;
 	}
 
-	function nativeMemoryLayout(type:CompilerType, span:SourceSpan): {size: Int, signed: Bool} {
+	function nativeMemoryLayout(type:CompilerType, span:SourceSpan):{size:Int, signed:Bool} {
 		if (NativeLayout.isNativeValue(type)) {
 			var name = switch type {
 				case TInstance(NominalKind.NativeValue, name, _): name;
@@ -521,9 +521,9 @@ class CallResolver {
 	**/
 	public function typeGenericCallArguments(fn:AstFunction, arguments:Array<AstExpression>, scope:Scope,
 			span:SourceSpan, ?leading:Array<TypedExpression>,
-			?presetSubstitutions:Map<String, CompilerType>): {
-				arguments: Array<TypedExpression>,
-				substitutions: Map<String, CompilerType>
+			?presetSubstitutions:Map<String, CompilerType>):{
+				arguments:Array<TypedExpression>,
+				substitutions:Map<String, CompilerType>
 			} {
 		var parameters = functionTypeParameters(fn),
 			substitutions:Map<String, CompilerType> = presetSubstitutions == null ? [] : copyMap(presetSubstitutions),
@@ -1657,7 +1657,7 @@ class CallResolver {
 						leftValue,
 						coerce(rightValue, leftValue.type, "Type.enumEq value", "E1002")
 					]),
-						TBool, span);
+					TBool, span);
 			}
 			var left = coerce(leftValue, TDynamic, "Type.enumEq value", "E1002"),
 				right = coerce(rightValue, TDynamic, "Type.enumEq value", "E1002");
@@ -2141,7 +2141,7 @@ class CallResolver {
 						], [], span),
 						TIncrement(indexName, 1, span)
 					], span)
-				];
+			];
 			return new TypedExpression(TBlockExpression(statements,
 				new TypedExpression(TLocal(resultName), TBool, span)), TBool, span);
 		}

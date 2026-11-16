@@ -572,7 +572,7 @@ class ObjectReflection {
 				name:String,
 				type:IrType
 			}>, body:(IrBuilder, ReflectedLayout, IrValue, Array<IrValue>) -> Void,
-					dynamicReceiver:Bool = false):String {
+			dynamicReceiver:Bool = false):String {
 		var layoutBuilder = new IrBuilder(),
 			dynamicObject = layoutBuilder.argument("object", dynamicReceiver ? Dyn : Obj(layout.name)),
 			layoutObject = dynamicReceiver ? layoutBuilder.safeCast(dynamicObject, Obj(layout.name)) : dynamicObject;
@@ -594,7 +594,7 @@ class ObjectReflection {
 				name:String,
 				type:IrType
 			}>, body:(IrBuilder, ReflectedLayout, IrValue, Array<IrValue>) -> Void,
-					fallback:IrBuilder->IrValue):IrFunction {
+			fallback:IrBuilder->IrValue):IrFunction {
 		var builder = new IrBuilder(),
 			object = builder.argument("object", Dyn),
 			arguments = [for (parameter in parameters) builder.argument(parameter.name, parameter.type)];

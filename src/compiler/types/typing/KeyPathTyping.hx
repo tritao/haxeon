@@ -57,13 +57,13 @@ class KeyPathTyping {
 
 	/** Resolve a field identity for Diff.bit without creating a property-bypassing key path value. */
 	public static function diffField(session:TypingSession, parsedRoot:AstType, suffix:Array<String>,
-			span:SourceSpan): {final root: CompilerType;
+			span:SourceSpan):{final root:CompilerType;
 	final value:CompilerType;
 	final fields:Array<KeyPathField>;
 	} return resolveLiteral(session, parsedRoot, suffix, span, true);
 
 	static function resolveLiteral(session:TypingSession, parsedRoot:AstType, suffix:Array<String>, span:SourceSpan,
-			allowStoredProperty:Bool): {final root: CompilerType;
+			allowStoredProperty:Bool):{final root:CompilerType;
 	final value:CompilerType;
 	final fields:Array<KeyPathField>;
 	} {
@@ -142,19 +142,21 @@ class KeyPathTyping {
 			case TInstance(NominalKind.Class, owner, _) if (session.signatures.exists(owner + ".new")): owner + ".new";
 			default: session.currentContext.functionName;
 		};
-		session.keyPathDefinitions.set(name, {name: name,
+		session.keyPathDefinitions.set(name, {
+			name: name,
 			root: root,
 			value: value,
 			fields: fields,
 			writable: writable,
 			rootWriteback: rootWriteback,
 			writeError: writeError,
-		// One definition serves every use of the path and its accessors are kept from build to build, so their place cannot be a use
-		// (the last one typed would win) or a declaration (it moves when text above it changes, while a build that does not type
-		// the path again keeps the old place). It is compiler-owned code: a generated span in the first field's file, at a fixed offset.
-		span: fields.length > 0 ? new compiler.core.Source.SourceSpan(fields[0].field.span.file, 0, 0, false, null,
-			"key-path") : span,
-			origin: origin});
+			// One definition serves every use of the path and its accessors are kept from build to build, so their place cannot be a use
+			// (the last one typed would win) or a declaration (it moves when text above it changes, while a build that does not type
+			// the path again keeps the old place). It is compiler-owned code: a generated span in the first field's file, at a fixed offset.
+			span: fields.length > 0 ? new compiler.core.Source.SourceSpan(fields[0].field.span.file, 0, 0, false, null,
+				"key-path") : span,
+			origin: origin
+		});
 		session.recordKeyPathUse(session.currentContext.name, name);
 		return new TypedExpression(TCall(name, []), TKeyPath(root, value, writable), span);
 	}

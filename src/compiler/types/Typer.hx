@@ -43,8 +43,8 @@ class Typer {
 				arguments:Array<CompilerType>,
 				result:CompilerType
 			}>, ?entryPoint:String, ?specializations:GenericSpecializationRegistry,
-					?nativeAbiTarget:String, ?cachedMetadata:TypedProgram, ?facts:ProgramFacts, requireMain:Bool = true,
-					?retained:RetainedFromPrevious):MeasuredTypedProgram
+			?nativeAbiTarget:String, ?cachedMetadata:TypedProgram, ?facts:ProgramFacts, requireMain:Bool = true,
+			?retained:RetainedFromPrevious):MeasuredTypedProgram
 		return new ProgramTyper(new BodyTyper(externals, specializations,
 			nativeAbiTarget)).typeProgramMeasured(semantic, selected, requireMain, entryPoint, cachedMetadata, facts,
 			retained);

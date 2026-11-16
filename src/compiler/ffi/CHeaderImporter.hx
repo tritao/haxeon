@@ -470,9 +470,9 @@ class CHeaderImporter {
 		};
 	}
 
-	static function parameterDirection(parameter:Dynamic): {
-		direction: HxiParameterDirection,
-		metadata: Map<String, Array<String>>
+	static function parameterDirection(parameter:Dynamic):{
+		direction:HxiParameterDirection,
+		metadata:Map<String, Array<String>>
 	} {
 		var file:String = field(parameter, "_hxiFile"),
 			metadata:Map<String, Array<String>> = [];

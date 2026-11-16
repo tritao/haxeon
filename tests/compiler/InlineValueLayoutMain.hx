@@ -926,7 +926,7 @@ class InlineValueLayoutMain {
 				debugNames: true,
 				wasmGcAllocationCount: true
 			})
-				.bytes;
+			.bytes;
 		var forwardBuilder = new IrBuilder();
 		var originalArray = forwardBuilder.call("__array_alloc_ref", [forwardBuilder.constInt(1)], Array(Dyn));
 		var forwarded = forwardBuilder.call("$value-array:test-forward", [

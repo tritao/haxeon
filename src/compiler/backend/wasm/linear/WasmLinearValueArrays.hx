@@ -273,8 +273,8 @@ class WasmLinearValueArrays {
 				parameters: [for (arg in native.arguments) WasmModuleSupport.requireValueType(arg)],
 				results: results
 			}),
-				width = builder.local("width", I32), address = builder.local("address", I32),
-				bits = builder.local("bits", I64);
+			width = builder.local("width", I32), address = builder.local("address", I32),
+			bits = builder.local("bits", I64);
 		// Validate the array and logical element index before dereferencing the header.
 		builder.emitAll([LocalGet(0), I32Eqz, If(null)]);
 		WasmLinearRuntime.runtimeFailure(builder);

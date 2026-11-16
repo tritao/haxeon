@@ -22,16 +22,16 @@ class ArtifactBuildMain {
 		File.saveContent(main, finalSource);
 		var args = ["--target=hl", "--entry=Main", "--root=" + root];
 
-		function compile(session:CompilerSession, extra:Array<String>, name:String): {
-			bytes: haxe.io.Bytes,
-			functions: String
+		function compile(session:CompilerSession, extra:Array<String>, name:String):{
+			bytes:haxe.io.Bytes,
+			functions:String
 		} {
 			var output = root + "/" + name + ".hl";
 			CompilerDriver.compile(CompilerArguments.parse(args.concat(extra).concat(["--output=" + output, main])),
 				_ -> {}, session);
 			return {bytes: File.getBytes(output), functions: File.getContent(output + ".functions")};
 		}
-		function history(extra:Array<String>, name:String): {bytes: haxe.io.Bytes, functions: String} {
+		function history(extra:Array<String>, name:String):{bytes:haxe.io.Bytes, functions:String} {
 			var session = new CompilerSession();
 			compile(session, extra, name + "-first");
 			File.saveContent(main, intermediateSource);

@@ -232,8 +232,8 @@ class SemanticIndex {
 				type: TInstance(compiler.types.Type.NominalKind.Class, fn.owner, [])});
 		var functionId = resolve(fn.name);
 		if (functionId == null && fn.isConstructor && fn.owner != null)
-		// A constructor the class inherits is not written anywhere in the module, so the class stands for it.
-		indexInheritedConstructor(fn, resolve(fn.owner));
+			// A constructor the class inherits is not written anywhere in the module, so the class stands for it.
+			indexInheritedConstructor(fn, resolve(fn.owner));
 		if (functionId != null) {
 			declarationTypes.set(functionId, fn.result);
 			var parameters = [

@@ -213,7 +213,7 @@ class ProcessRunner {
 		#end
 	}
 
-	public static function capture(command:String, arguments:Array<String>): {status: Int, output: String} {
+	public static function capture(command:String, arguments:Array<String>):{status:Int, output:String} {
 		try {
 			var process = new Process(command, arguments),
 				stdout = process.stdout.readAll().toString(),

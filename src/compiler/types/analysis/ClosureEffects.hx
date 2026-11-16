@@ -68,8 +68,8 @@ class ClosureEffects extends BindingWalker {
 		if (declaration == null)
 			writes.set(BindingWalker.rootOf(name), true);
 		else if (lambdaDeclarations.exists(declaration))
-		// A local function assigned a different function value is no longer the lambda it was declared with.
-		unknown = true;
+			// A local function assigned a different function value is no longer the lambda it was declared with.
+			unknown = true;
 	}
 
 	/** A call of a plain name: a local function value, or a top-level function that may invoke an escaped closure. */

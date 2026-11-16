@@ -57,7 +57,10 @@ class SelectionGesture {
 		this.first = first;
 		this.last = last;
 	}
-	public function extend(first:Int, last:Int): {anchor: Int, focus: Int} return first < this.first ? {
-		anchor:this.last, focus:first
-	} : {anchor: this.first, focus: last};
+	public function extend(first:Int, last:Int):{anchor:Int, focus:Int} return first < this.first ? {
+		anchor: this.last, focus: first
+	} : {
+		anchor: this.first,
+		focus: last
+	};
 }

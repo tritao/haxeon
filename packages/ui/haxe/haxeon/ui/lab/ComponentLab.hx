@@ -103,7 +103,7 @@ class ComponentLab implements Observable {
 				new KeyedView("preview",
 					new Column("story-preview", [new KeyedView("story", selected.build())], previewStyle))
 			],
-				canvasStyle);
+			canvasStyle);
 
 		var rootStyle = new LayoutStyle();
 		rootStyle.width = LayoutAxis.grow();
@@ -115,7 +115,7 @@ class ComponentLab implements Observable {
 				new KeyedView("content", content),
 				new KeyedView("inspector", inspector(ui))
 			],
-				rootStyle);
+			rootStyle);
 	}
 
 	public function diagnosticState():Dynamic return {
@@ -233,7 +233,7 @@ class ComponentLab implements Observable {
 				new KeyedView("selected", selected),
 				new KeyedView("disabled", disabled)
 			],
-				rowStyle());
+			rowStyle());
 	}
 
 	function textFieldStory():View {
@@ -258,11 +258,11 @@ class ComponentLab implements Observable {
 						new SelectOption<String>("balanced", "Balanced", "balanced"),
 						new SelectOption<String>("quality", "High quality", "quality")
 					],
-						selectValue,
-						function(next) selectValue = next,
-						selectStyle))
-				],
-					rowStyle());
+					selectValue,
+					function(next) selectValue = next,
+					selectStyle))
+			],
+			rowStyle());
 	}
 
 	function tabsStory():View {
@@ -275,9 +275,9 @@ class ComponentLab implements Observable {
 				new TabItem("details", "Details", new Text("Detailed component information")),
 				new TabItem("disabled", "Disabled", new Text("Unavailable"), false)
 			],
-				"overview",
-				null,
-				style);
+			"overview",
+			null,
+			style);
 	}
 
 	function valueControlsStory():View {
@@ -300,10 +300,10 @@ class ComponentLab implements Observable {
 						new RadioOption("middle", "Balanced", "middle"),
 						new RadioOption("high", "High", "high")
 					],
-						radioValue,
-						function(next) radioValue = next))
-				],
-					columnStyle);
+					radioValue,
+					function(next) radioValue = next))
+			],
+			columnStyle);
 	}
 
 	function multilineStory():View {
@@ -338,9 +338,9 @@ class ComponentLab implements Observable {
 						new KeyedView("navigation", nav),
 						new KeyedView("disabled", disabled)
 					],
-						rowStyle()))
-				],
-					columnStyle);
+					rowStyle()))
+			],
+			columnStyle);
 	}
 
 	function splitStory():View {

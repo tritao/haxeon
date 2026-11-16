@@ -46,7 +46,7 @@ class IrEnumTagStorage {
 	}
 
 	/** Request the checked boundary when a later helper introduces a tag escape. */
-	public static function request(program:IrProgram, name:String): {box: String, unbox: String} {
+	public static function request(program:IrProgram, name:String):{box:String, unbox:String} {
 		var symbols = adapterNames(program).get(name);
 		if (symbols == null)
 			throw 'Unknown enum tag adapter type "$name"';

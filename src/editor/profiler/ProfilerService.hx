@@ -167,7 +167,7 @@ class ProfilerService {
 
 	function currentSnapshot():Dynamic
 		return session == null ? {
-			state:"disconnected"
+			state: "disconnected"
 		} : snapshot(session.snapshot());
 
 	function run():Void {
@@ -327,11 +327,11 @@ class ProfilerService {
 				for (aggregate in value.functions.slice(0, maxEntries))
 					aggregateValue(aggregate)
 			],
-				lines: [for (aggregate in value.lines.slice(0, maxEntries)) aggregateValue(aggregate)],
-				stacks: [for (stack in value.stacks.slice(0, maxEntries)) stackValue(stack)],
-				leaves: [for (leaf in value.leaves) leafValue(leaf)],
-				events: [for (event in value.events)
-				{
+			lines: [for (aggregate in value.lines.slice(0, maxEntries)) aggregateValue(aggregate)],
+			stacks: [for (stack in value.stacks.slice(0, maxEntries)) stackValue(stack)],
+			leaves: [for (leaf in value.leaves) leafValue(leaf)],
+			events: [for (event in value.events)
+			{
 			timestamp:event.timestamp,
 				threadId:event.threadId,
 				eventId:event.eventId,

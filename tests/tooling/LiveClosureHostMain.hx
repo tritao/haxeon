@@ -60,27 +60,30 @@ class LiveClosureHostMain {
 			host = root + "/live-host.hl",
 			stop = StringTools.replace(root + "/stop", "\\", "/");
 		function write(handlers:Array<String>):Void
-			File.saveContent(main,
+			File.saveContent(
+				main,
 				"class Main {\n"
-				+ "  static var ticks = 0;\n"
-				+ "  static var handlers:Array<Int->Int> = [];\n"
-				+ "  static function register():Void {\n"
-				+ [for (handler in handlers) '    handlers.push($handler);\n'].join("")
-				+ "  }\n"
-				+ "  @:keep public static function start(arguments:String):Void register();\n"
-				+ (hooks == "" ? "" : "  @:keep public static function liveRelease():Void {\n    handlers = [];\n"
-				+ (hooks == "throwingRelease" ? "    throw \"release failed\";\n" : "") + "  }\n"
-				+ "  @:keep public static function liveRebuild():Void {\n    register();\n"
-				+ "    Sys.println(\"app: rebuilt \" + handlers.length + \" handler\");\n"
-				+ (hooks == "throwingRebuild" ? "    throw \"rebuild failed\";\n" : "") + "  }\n")
-			// About 30 s at most, so a host that never applies the edit fails the test instead of hanging it.
-			+ "  @:keep public static function tick():Int { Sys.sleep(0.01); return sys.FileSystem.exists(\"" + stop
-				+ "\") || ++ticks > 3000 ? 0 : 1; }\n"
-				+ "  @:keep public static function close():Int return 0;\n"
-				+ "  @:keep public static function saveState():String return \"\";\n"
-				+ "  @:keep public static function restoreState(state:String):Void {}\n"
-				+ "  public static function main():Void {}\n"
-				+ "}\n");
+					+ "  static var ticks = 0;\n"
+					+ "  static var handlers:Array<Int->Int> = [];\n"
+					+ "  static function register():Void {\n"
+					+ [for (handler in handlers) '    handlers.push($handler);\n'].join("")
+					+ "  }\n"
+					+ "  @:keep public static function start(arguments:String):Void register();\n"
+					+ (hooks == "" ? "" : "  @:keep public static function liveRelease():Void {\n    handlers = [];\n"
+					+ (hooks == "throwingRelease" ? "    throw \"release failed\";\n" : "") + "  }\n"
+					+ "  @:keep public static function liveRebuild():Void {\n    register();\n"
+					+ "    Sys.println(\"app: rebuilt \" + handlers.length + \" handler\");\n"
+					+ (hooks == "throwingRebuild" ? "    throw \"rebuild failed\";\n" : "")
+					+ "  }\n") // About 30 s at most, so a host that never applies the edit fails the test instead of hanging it.
+					+ "  @:keep public static function tick():Int { Sys.sleep(0.01); return sys.FileSystem.exists(\""
+					+ stop
+					+ "\") || ++ticks > 3000 ? 0 : 1; }\n"
+					+ "  @:keep public static function close():Int return 0;\n"
+					+ "  @:keep public static function saveState():String return \"\";\n"
+					+ "  @:keep public static function restoreState(state:String):Void {}\n"
+					+ "  public static function main():Void {}\n"
+					+ "}\n"
+			);
 		var session = new CompilerSession();
 		function build(path:String, entry:String, rootDirectory:String, sources:Array<String>, live:Bool):Void
 			CompilerDriver.compile(CompilerArguments.parse([

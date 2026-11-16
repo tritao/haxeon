@@ -132,16 +132,18 @@ class ProtocolMain {
 		assertOk(protocol.handle('{"id":81,"method":"update","path":"Main.hx","source":'
 			+ Json.stringify(structuralSource) + '}'));
 		var reload:Dynamic = Json.parse(protocol.handle('{"id":82,"method":"compile","entry":"Main"}'));
-		if (!reload.ok
-			|| reload.result.compatibility.decision != "reload_domain"
-			|| reload.result.compatibility.baseRevision != 0
-		// A fresh layout keeps numbering the module's revisions after the acknowledged revision 2.
-		|| reload.result.compatibility.targetRevision != 3
-			|| reload.result.compatibility.artifactKind != "module"
-			|| reload.result.compatibility.reasons.length == 0
-			|| reload.result.compatibility.reasons[0].code != "object_field_type_changed"
-			|| reload.result.compatibility.reasons[0].entityKind != "object_field"
-			|| reload.result.compatibility.reasons[0].entityId != "Editor.active")
+		if (
+			!reload.ok
+				|| reload.result.compatibility.decision != "reload_domain"
+				|| reload.result.compatibility.baseRevision
+				!= 0 // A fresh layout keeps numbering the module's revisions after the acknowledged revision 2.
+				|| reload.result.compatibility.targetRevision != 3
+				|| reload.result.compatibility.artifactKind != "module"
+				|| reload.result.compatibility.reasons.length == 0
+				|| reload.result.compatibility.reasons[0].code != "object_field_type_changed"
+				|| reload.result.compatibility.reasons[0].entityKind != "object_field"
+				|| reload.result.compatibility.reasons[0].entityId != "Editor.active"
+		)
 			throw "protocol compile did not return a structured reload decision";
 		assertOk(protocol.handle('{"id":84,"method":"acknowledge","revision":3}'));
 		var invalid:Dynamic =

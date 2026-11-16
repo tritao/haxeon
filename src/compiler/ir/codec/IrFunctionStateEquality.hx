@@ -309,13 +309,13 @@ class IrFunctionStateEquality {
 									EnumTagUnbox(aType),
 									EnumTagUnbox(bType)
 								],
-									[
-										InlineEnumBox(aType),
-										InlineEnumBox(bType)
-									], [
-										InlineEnumUnbox(aType),
-										InlineEnumUnbox(bType)
-									]:
+								[
+									InlineEnumBox(aType),
+									InlineEnumBox(bType)
+								], [
+									InlineEnumUnbox(aType),
+									InlineEnumUnbox(bType)
+								]:
 								IrVerifier.sameType(aType, bType);
 							default: false;
 						};

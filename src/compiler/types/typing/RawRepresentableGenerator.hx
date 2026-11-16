@@ -167,22 +167,24 @@ class RawRepresentableGenerator {
 				}
 			}
 
-			var fn:TypedFunction = {name: helper,
+			var fn:TypedFunction = {
+				name: helper,
 				role: ProviderFunction(nominal, compiler.core.Provides.ProviderOperations
-				.detailed(compiler.core.Provides.ProviderOperation.RawRepresentable, request.method)),
+					.detailed(compiler.core.Provides.ProviderOperation.RawRepresentable, request.method)),
 				origin: request.origin,
 				originKind: Helper,
 				owner: null,
 				isStatic: true,
 				isConstructor: false,
-			// A name lookup has a branch per value: keep it one call, not a copy at every string conversion.
-			isInline: request.method != "toString",
+				// A name lookup has a branch per value: keep it one call, not a copy at every string conversion.
+				isInline: request.method != "toString",
 				arguments: [{name: "value", type: inputType}],
 				result: outputType,
 				statements: statements,
 				cells: [],
 				cellCaptures: [],
-				span: span};
+				span: span
+			};
 			generated.set(helper, fn);
 			result.push(fn);
 		}

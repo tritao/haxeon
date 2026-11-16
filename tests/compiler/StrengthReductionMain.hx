@@ -20,7 +20,7 @@ class StrengthReductionMain {
 		return new IrFunction("test", builder.arguments, F64, builder.blocks, Ordinary);
 	}
 
-	static function operations(fn:IrFunction): {divides: Int, multiplies: Int, reciprocal: Null<Float>} {
+	static function operations(fn:IrFunction):{divides:Int, multiplies:Int, reciprocal:Null<Float>} {
 		var divides = 0, multiplies = 0, reciprocal:Null<Float> = null;
 		for (block in fn.blocks)
 			for (located in block.instructions)

@@ -195,9 +195,9 @@ class WasmModuleSupport {
 
 	/** Place static data in linear memory as active data segments starting at `start`. */
 	public static function placeStaticData(program:IrProgram, module:WasmModule, start:Int,
-			reachable:Map<String, Bool>): {
-				addresses: Map<String, Int>,
-				end: Int
+			reachable:Map<String, Bool>):{
+				addresses:Map<String, Int>,
+				end:Int
 			} {
 		var layout = layoutStaticData(program, start, reachable);
 		for (segment in layout.segments)
@@ -207,10 +207,10 @@ class WasmModuleSupport {
 
 	/** Assign each distinct static data blob an 8-byte-aligned address from `start`. */
 	public static function layoutStaticData(program:IrProgram, start:Int,
-			reachable:Map<String, Bool>): {
-				addresses: Map<String, Int>,
-				segments: Array<WasmDataSegment>,
-				end: Int
+			reachable:Map<String, Bool>):{
+				addresses:Map<String, Int>,
+				segments:Array<WasmDataSegment>,
+				end:Int
 			} {
 		var addresses:Map<String, Int> = [], segments:Array<WasmDataSegment> = [], next = start;
 		for (fn in program.functions)

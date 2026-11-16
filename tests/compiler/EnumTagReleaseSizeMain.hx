@@ -77,7 +77,7 @@ class EnumTagReleaseSizeMain {
 				developmentMetadata: false,
 				debugNames: true
 			})
-				.bytes;
+			.bytes;
 
 	static function run(target:String, bytes:haxe.io.Bytes):Void {
 		var temp = Sys.getEnv("TMPDIR");

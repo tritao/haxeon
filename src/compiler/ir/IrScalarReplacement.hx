@@ -262,10 +262,10 @@ class IrScalarReplacement {
 		return false;
 	}
 
-	static function placeInSlot(block:IrBlock, allocation:Int, object:IrValue, descriptor:IrObject, store: {
-		position: Int,
-		destination: IrValue,
-		field: String
+	static function placeInSlot(block:IrBlock, allocation:Int, object:IrValue, descriptor:IrObject, store:{
+		position:Int,
+		destination:IrValue,
+		field:String
 	},
 			nextValue:Int):Int {
 		// The latest write to each field before the store is the value the copy would have carried.
@@ -456,13 +456,13 @@ class IrScalarReplacement {
 	}
 
 	static function replace(blocks:Array<IrBlock>, graph:IrGraph, frontier:Map<Int, Array<Int>>,
-			children:Map<Int, Array<Int>>, candidate: {
-				object: IrValue,
-				typeName: String,
-				block: IrBlock,
-				position: Int
+			children:Map<Int, Array<Int>>, candidate:{
+				object:IrValue,
+				typeName:String,
+				block:IrBlock,
+				position:Int
 			}, descriptor:IrObject, substitutions:Map<Int, IrValue>,
-					nextValue:Int, forcePhis = false):Int {
+			nextValue:Int, forcePhis = false):Int {
 		var object = candidate.object, home = candidate.block;
 		var fieldTypes:Map<String, IrType> = [],
 			fields:Map<String, IrObjectField> = [];
@@ -551,7 +551,7 @@ class IrScalarReplacement {
 		// Rename along the dominator tree from the allocation's block.
 		var work:Array<{blockId:Int, incoming:Map<String, IrValue>}> = [{blockId: home.id, incoming: []}];
 		while (work.length > 0) {
-			var pending: {blockId: Int, incoming: Map<String, IrValue>} = cast work.pop(),
+			var pending:{blockId:Int, incoming:Map<String, IrValue>} = cast work.pop(),
 				blockId = pending.blockId,
 				incoming = pending.incoming;
 			var block = graph.blocks.get(blockId);
@@ -640,9 +640,9 @@ class IrScalarReplacement {
 
 	/** A scalar replacement must preserve the narrowing of a stored native-width field. */
 	static function normalizeStore(block:IrBlock, value:IrValue, field:IrObjectField, origin:Located<IrInstruction>,
-			next:Int): {
-				value: IrValue,
-				next: Int
+			next:Int):{
+				value:IrValue,
+				next:Int
 			} {
 		var native = IrFieldStorage.scalar(field),
 			width = native == null ? 0 : native.size,

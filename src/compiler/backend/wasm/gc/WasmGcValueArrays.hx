@@ -138,10 +138,10 @@ class WasmGcValueArrays {
 				nullable: false,
 				heap: Type(base)
 			})])
-				.concat(field(w, WasmGcTypePlan.arrayLengthFieldIndex())).concat([
-					StructSet(base, WasmGcTypePlan.arrayLengthFieldIndex()),
-					End
-				]);
+			.concat(field(w, WasmGcTypePlan.arrayLengthFieldIndex())).concat([
+				StructSet(base, WasmGcTypePlan.arrayLengthFieldIndex()),
+				End
+			]);
 	}
 
 	/** A checked view of an already-inline array retains the original wrapper and checks its complete layout. */
@@ -464,10 +464,10 @@ class WasmGcValueArrays {
 				If(null),
 				LocalGet(2)
 			])
-				.concat(field(w, WasmGcTypePlan.VALUE_ARRAY_REFERENCE_FIELD)).concat([RefIsNull, I32And])
-				.concat(field(w, WasmGcTypePlan.VALUE_ARRAY_REFERENCE_STRIDE_FIELD)).concat([I32Eqz, I32Eqz, I32And])
-		// Reference-only wrappers already use their inherited data lane.
-		.concat(field(w, WasmGcTypePlan.VALUE_ARRAY_SCALAR_STRIDE_FIELD))
+			.concat(field(w, WasmGcTypePlan.VALUE_ARRAY_REFERENCE_FIELD)).concat([RefIsNull, I32And])
+			.concat(field(w, WasmGcTypePlan.VALUE_ARRAY_REFERENCE_STRIDE_FIELD)).concat([I32Eqz, I32Eqz,
+			I32And]) // Reference-only wrappers already use their inherited data lane.
+			.concat(field(w, WasmGcTypePlan.VALUE_ARRAY_SCALAR_STRIDE_FIELD))
 			.concat(field(w, WasmGcTypePlan.VALUE_ARRAY_VALIDITY_FIELD)).concat([
 				I32Or,
 				I32Eqz,
@@ -477,19 +477,19 @@ class WasmGcValueArrays {
 				LocalGet(newCap),
 				I64ExtendI32U
 			]).concat(field(w, WasmGcTypePlan.VALUE_ARRAY_REFERENCE_STRIDE_FIELD))
-				.concat([I64ExtendI32U, I64Mul, LocalTee(total), I64Const(0x7fffffff), I64LeS, I32Eqz, If(null)])
-				.concat(failure(throws)).concat([
-					End,
-					LocalGet(0),
-					RefCast({nullable: false, heap: Type(w)}),
-					LocalGet(total),
-					I32WrapI64,
-					ArrayNewDefault(refs),
-					StructSet(w, WasmGcTypePlan.VALUE_ARRAY_REFERENCE_FIELD),
-					End,
-					Return,
-					End
-				]);
+			.concat([I64ExtendI32U, I64Mul, LocalTee(total), I64Const(0x7fffffff), I64LeS, I32Eqz, If(null)])
+			.concat(failure(throws)).concat([
+				End,
+				LocalGet(0),
+				RefCast({nullable: false, heap: Type(w)}),
+				LocalGet(total),
+				I32WrapI64,
+				ArrayNewDefault(refs),
+				StructSet(w, WasmGcTypePlan.VALUE_ARRAY_REFERENCE_FIELD),
+				End,
+				Return,
+				End
+			]);
 		// Compute rounded payload words and validate both new lane sizes before allocating.
 		for (pair in [{cap: oldCap, out: oldPayload}, {cap: newCap, out: newPayload}]) {
 			body = body.concat([LocalGet(pair.cap), I64ExtendI32U]).concat(field(w,
@@ -511,30 +511,30 @@ class WasmGcValueArrays {
 				I64Sub,
 				I64Add
 			])
-				.concat(field(w, WasmGcTypePlan.VALUE_ARRAY_WORD_BITS_FIELD)).concat([
-					I64ExtendI32U,
-					I64DivS,
-					LocalGet(newPayload),
-					I64ExtendI32U,
-					I64Add,
-					LocalSet(total),
-					Else,
-					LocalGet(newPayload),
-					I64ExtendI32U,
-					LocalSet(total),
-					End,
-					LocalGet(total),
-					I64Const(0x7fffffff),
-					I64LeS,
-					I32Eqz,
-					If(null)
-				]).concat(failure(throws)).concat([
-					End,
-					LocalGet(newCap),
-					I64ExtendI32U
-				]).concat(field(w, WasmGcTypePlan.VALUE_ARRAY_REFERENCE_STRIDE_FIELD))
-					.concat([I64ExtendI32U, I64Mul, LocalTee(total), I64Const(0x7fffffff), I64LeS, I32Eqz, If(null)])
-					.concat(failure(throws)).concat([End, LocalGet(total), I32WrapI64, LocalSet(refCount)]);
+			.concat(field(w, WasmGcTypePlan.VALUE_ARRAY_WORD_BITS_FIELD)).concat([
+				I64ExtendI32U,
+				I64DivS,
+				LocalGet(newPayload),
+				I64ExtendI32U,
+				I64Add,
+				LocalSet(total),
+				Else,
+				LocalGet(newPayload),
+				I64ExtendI32U,
+				LocalSet(total),
+				End,
+				LocalGet(total),
+				I64Const(0x7fffffff),
+				I64LeS,
+				I32Eqz,
+				If(null)
+			]).concat(failure(throws)).concat([
+				End,
+				LocalGet(newCap),
+				I64ExtendI32U
+			]).concat(field(w, WasmGcTypePlan.VALUE_ARRAY_REFERENCE_STRIDE_FIELD))
+			.concat([I64ExtendI32U, I64Mul, LocalTee(total), I64Const(0x7fffffff), I64LeS, I32Eqz, If(null)])
+			.concat(failure(throws)).concat([End, LocalGet(total), I32WrapI64, LocalSet(refCount)]);
 		body = body.concat(field(w, WasmGcTypePlan.arrayDataFieldIndex())).concat([LocalSet(oldData)])
 			.concat(field(w, WasmGcTypePlan.VALUE_ARRAY_REFERENCE_FIELD)).concat([LocalSet(oldRef)]);
 		// Reference-only arrays use the inherited data lane. Mixed arrays keep the reference lane lazy.
@@ -556,11 +556,11 @@ class WasmGcValueArrays {
 				I32Const(0),
 				LocalGet(oldCap)
 			])
-				.concat(field(w, WasmGcTypePlan.VALUE_ARRAY_REFERENCE_STRIDE_FIELD)).concat([
-					I32Mul,
-					ArrayCopy(refs, refs),
-					Else
-				]);
+			.concat(field(w, WasmGcTypePlan.VALUE_ARRAY_REFERENCE_STRIDE_FIELD)).concat([
+				I32Mul,
+				ArrayCopy(refs, refs),
+				Else
+			]);
 		// Scalar arrays: allocate payload plus bitmap and relocate the bitmap to its new offset.
 		body = body.concat(field(w, WasmGcTypePlan.VALUE_ARRAY_VALIDITY_FIELD)).concat([
 			If(I32),
@@ -573,21 +573,21 @@ class WasmGcValueArrays {
 				I64Sub,
 				I64Add
 			])
-				.concat(field(w, WasmGcTypePlan.VALUE_ARRAY_WORD_BITS_FIELD)).concat([
-					I64ExtendI32U,
-					I64DivS,
-					I32WrapI64,
-					Else,
-					I32Const(0),
-					End,
-					LocalSet(bitmap),
-					LocalGet(newPayload),
-					LocalGet(bitmap),
-					I32Add,
-					LocalSet(bitmap)
-				])
-					.concat(field(w, WasmGcTypePlan.VALUE_ARRAY_WORD_BITS_FIELD)).concat([I32Const(32), I32Eq,
-					If(null)]);
+			.concat(field(w, WasmGcTypePlan.VALUE_ARRAY_WORD_BITS_FIELD)).concat([
+				I64ExtendI32U,
+				I64DivS,
+				I32WrapI64,
+				Else,
+				I32Const(0),
+				End,
+				LocalSet(bitmap),
+				LocalGet(newPayload),
+				LocalGet(bitmap),
+				I32Add,
+				LocalSet(bitmap)
+			])
+			.concat(field(w, WasmGcTypePlan.VALUE_ARRAY_WORD_BITS_FIELD)).concat([I32Const(32), I32Eq,
+			If(null)]);
 		for (lane in [l32, l64]) {
 			body = body.concat([
 				LocalGet(bitmap),
@@ -613,19 +613,19 @@ class WasmGcValueArrays {
 					LocalGet(oldCap),
 					I64ExtendI32U
 				])
-					.concat(field(w, WasmGcTypePlan.VALUE_ARRAY_WORD_BITS_FIELD)).concat([
-						I64ExtendI32U,
-						I64Const(1),
-						I64Sub,
-						I64Add
-					])
-						.concat(field(w, WasmGcTypePlan.VALUE_ARRAY_WORD_BITS_FIELD)).concat([
-							I64ExtendI32U,
-							I64DivS,
-							I32WrapI64,
-							ArrayCopy(lane, lane),
-							End
-						]);
+				.concat(field(w, WasmGcTypePlan.VALUE_ARRAY_WORD_BITS_FIELD)).concat([
+					I64ExtendI32U,
+					I64Const(1),
+					I64Sub,
+					I64Add
+				])
+				.concat(field(w, WasmGcTypePlan.VALUE_ARRAY_WORD_BITS_FIELD)).concat([
+					I64ExtendI32U,
+					I64DivS,
+					I32WrapI64,
+					ArrayCopy(lane, lane),
+					End
+				]);
 			if (lane == l32) body.push(Else);
 		}
 		body = body.concat([
@@ -698,12 +698,12 @@ class WasmGcValueArrays {
 				nullable: false,
 				heap: Type(lane32)
 			})])
-				.concat(bitmapWordIndex(wrapper)).concat([ArrayGet(lane32), I64ExtendI32U, Else])
-				.concat(field(wrapper, WasmGcTypePlan.arrayDataFieldIndex())).concat([RefCast({
-					nullable: false,
-					heap: Type(lane64)
-				})])
-					.concat(bitmapWordIndex(wrapper)).concat([ArrayGet(lane64), End]);
+			.concat(bitmapWordIndex(wrapper)).concat([ArrayGet(lane32), I64ExtendI32U, Else])
+			.concat(field(wrapper, WasmGcTypePlan.arrayDataFieldIndex())).concat([RefCast({
+				nullable: false,
+				heap: Type(lane64)
+			})])
+			.concat(bitmapWordIndex(wrapper)).concat([ArrayGet(lane64), End]);
 		return body.concat(bitmapBit(wrapper)).concat([
 			I64ShrU,
 			I64Const(1),
@@ -747,7 +747,7 @@ class WasmGcValueArrays {
 						nullable: false,
 						heap: Type(lane)
 					})])
-						.concat(bitmapWordIndex(wrapper)).concat([ArrayGet(lane)]);
+					.concat(bitmapWordIndex(wrapper)).concat([ArrayGet(lane)]);
 				if (lane == lane32) body.push(I64ExtendI32U);
 				body = body.concat([I64Const(1)]).concat(bitmapBit(wrapper)).concat([I64Shl, I64Or]);
 				if (lane == lane32) body.push(I32WrapI64);

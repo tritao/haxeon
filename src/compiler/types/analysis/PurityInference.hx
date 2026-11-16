@@ -109,7 +109,7 @@ class PurityInference {
 				indexed:Bool
 			}> {
 		var walker = new PurityWalker(inference, functionName);
-		var stores: {fields: Map<String, Bool>, indexed: Bool} = {fields: [], indexed: false};
+		var stores:{fields:Map<String, Bool>, indexed:Bool} = {fields: [], indexed: false};
 		walker.stores = stores;
 		walker.declare("this");
 		for (name in outerLocals)

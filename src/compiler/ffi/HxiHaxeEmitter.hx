@@ -308,11 +308,11 @@ class HxiHaxeEmitter {
 					};
 					case _: null;
 				};
-			var resultContract: {
-				managedBytes: Bool,
-				length: Null<String>,
-				ownership: String,
-				release: Null<String>
+			var resultContract:{
+				managedBytes:Bool,
+				length:Null<String>,
+				ownership:String,
+				release:Null<String>
 			} = switch fn.semantics.result {
 				case ManagedBytes(length, _, pointerOwnership, _): {
 					managedBytes: true,
@@ -1534,20 +1534,20 @@ class HxiHaxeEmitter {
 	}
 
 	static function outputInfo(parameter:compiler.ffi.HxiModel.HxiParameter, abi:HxiAbi,
-			profile:HxiProjectionProfile): {
-				haxeType: String,
-				rawHaxeType: String,
-				code: Int,
-				size: Int,
-				alignment: Int,
-				structure: Bool,
-				handle: Bool,
-				flagsMask: Null<String>,
-				enumDecoder: Null<String>,
-				ownedValueHandle: Bool,
-				opaquePointer: Bool,
-				nullable: Bool,
-				owned: Bool
+			profile:HxiProjectionProfile):{
+				haxeType:String,
+				rawHaxeType:String,
+				code:Int,
+				size:Int,
+				alignment:Int,
+				structure:Bool,
+				handle:Bool,
+				flagsMask:Null<String>,
+				enumDecoder:Null<String>,
+				ownedValueHandle:Bool,
+				opaquePointer:Bool,
+				nullable:Bool,
+				owned:Bool
 			} {
 		var element = switch parameter.type {
 			case Pointer(value): value;
@@ -2656,11 +2656,11 @@ class HxiHaxeEmitter {
 	}>
 		return switch value {
 			case VoidValue: allowVoid ? {
-					haxeType:"Void",
-						code:0,
-						nativePointer:false,
-						nullable:false
-				} : null;
+				haxeType: "Void",
+				code: 0,
+				nativePointer: false,
+				nullable: false
+			} : null;
 			case IntegerValue(64, sign): {
 				haxeType: "haxe.Int64",
 				code: sign == Unsigned ? 8 : 7,
@@ -3066,9 +3066,9 @@ class HxiHaxeEmitter {
 	}
 
 	static function abiLayout(type:compiler.ffi.HxiModel.HxiType, declarations:Map<String, HxiDeclaration>,
-			abi:HxiAbi): {
-				size: Int,
-				align: Int
+			abi:HxiAbi):{
+				size:Int,
+				align:Int
 			} {
 		var layout = abi.layout(type);
 		if (layout == null)
