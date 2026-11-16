@@ -99,7 +99,7 @@ class WasmLinearClosureAdapters {
 						case InstanceClosure(_, name, _) if (name == WasmDynamicCalls.VARARGS_TARGET):
 						case StaticClosure(output, _) | InstanceClosure(output, _, _):
 							noteType(output.type);
-							if (reachable.exists(fn.name) && !scalarClosures.exists(Std.string(output.type)))
+							if (reachable.exists(fn.name) && !scalarClosures.exists(IrTypeIdentity.text(output.type)))
 								sourceTypes.set(closureKey(output.type), output.type);
 						case SafeCast(output, _):
 							switch output.type {

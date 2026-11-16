@@ -76,7 +76,7 @@ class WasmLinearRepresentation implements WasmValueRepresentation implements Was
 							if (scalarAbi.isValue(virtual.signature.result))
 								reserveScalarResults(out, scalarAbi.valueTypes(virtual.signature.result));
 						case CallClosure(out, closure,
-							_) if (scalarAbi.scalarClosures.exists(Std.string(closure.type))):
+							_) if (scalarAbi.scalarClosures.exists(IrTypeIdentity.text(closure.type))):
 							if (scalarAbi.isValue(out.type))
 								reserveScalarResults(out, scalarAbi.valueTypes(out.type));
 						default:

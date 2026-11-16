@@ -129,6 +129,7 @@ class TestCatalog {
 		"SourceInlineEnumMain",
 		"InlineEnumInvariantMain",
 		"MethodClosureValueMain",
+		"WasmScalarClosureKeyMain",
 		"InlineEnumWordMain",
 		"InlineEnumCarrierBoundaryMain",
 		"InlineEnumScalarWordBoundaryMain",

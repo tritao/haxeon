@@ -86,23 +86,23 @@ class WasmScalarClosureEscapes {
 	}
 
 	function exportAdapter(fn:IrFunction, mappings:Map<String, String>):Bool {
-		var needs = scalar.exists(Std.string(fn.result));
+		var needs = scalar.exists(IrTypeIdentity.text(fn.result));
 		for (arg in fn.arguments)
-			if (scalar.exists(Std.string(arg.type)))
+			if (scalar.exists(IrTypeIdentity.text(arg.type)))
 				needs = true;
 		if (!needs)
 			return false;
 		var name = "$wasm:export-closure:" + fn.name, b = new IrBuilder();
 		var args:Array<IrValue> = [];
 		for (arg in fn.arguments) {
-			if (scalar.exists(Std.string(arg.type))) {
+			if (scalar.exists(IrTypeIdentity.text(arg.type))) {
 				var value = b.argument(arg.name, Dyn);
 				args.push(b.call(restoration(arg.type), [value], arg.type));
 			} else
 				args.push(b.argument(arg.name, arg.type));
 		}
 		var result = b.call(fn.name, args, fn.result), resultType = fn.result;
-		if (scalar.exists(Std.string(fn.result))) {
+		if (scalar.exists(IrTypeIdentity.text(fn.result))) {
 			result = b.call(adapter(fn.result), [result], Dyn);
 			resultType = Dyn;
 		}

@@ -327,9 +327,9 @@ class WasmScalarAbi {
 			if (fn.name == entry || (!planningBoundaries && (roots.indexOf(fn.name) >= 0 || fn.retention == Expose))) {
 				for (argument in fn.arguments)
 					if (closureArity(argument.type) >= 0)
-						excluded.set(Std.string(argument.type), true);
+						excluded.set(IrTypeIdentity.text(argument.type), true);
 				if (closureArity(fn.result) >= 0)
-					excluded.set(Std.string(fn.result), true);
+					excluded.set(IrTypeIdentity.text(fn.result), true);
 			}
 		for (native in program.natives) {
 			// The receiver query only inspects the closure target and cannot call or retain its argument.
@@ -337,9 +337,9 @@ class WasmScalarAbi {
 				continue;
 			for (argument in native.arguments)
 				if (closureArity(argument) >= 0)
-					excluded.set(Std.string(argument), true);
+					excluded.set(IrTypeIdentity.text(argument), true);
 			if (closureArity(native.result) >= 0)
-				excluded.set(Std.string(native.result), true);
+				excluded.set(IrTypeIdentity.text(native.result), true);
 		}
 		for (fn in program.functions)
 			if (reachable.exists(fn.name))
@@ -348,11 +348,11 @@ class WasmScalarAbi {
 						switch located.value {
 							case StaticClosure(out, name):
 								if (noteClosure(out.type, candidates) && !directClones.exists(name))
-									excluded.set(Std.string(out.type), true);
+									excluded.set(IrTypeIdentity.text(out.type), true);
 							case InstanceClosure(out, name, receiver):
 								if (noteClosure(out.type, candidates)
 									&& (values.isValue(receiver.type) || !directClones.exists(name)))
-									excluded.set(Std.string(out.type), true);
+									excluded.set(IrTypeIdentity.text(out.type), true);
 							case CallClosure(_, closure, arguments):
 								if ((switch (closure.type) {
 									case Dyn: true;
@@ -373,10 +373,10 @@ class WasmScalarAbi {
 										}))
 											noteClosure(out.type, candidates);
 										else
-											excluded.set(Std.string(out.type), true);
+											excluded.set(IrTypeIdentity.text(out.type), true);
 									}
 									if (sourceArity >= 0)
-										excluded.set(Std.string(input.type), true);
+										excluded.set(IrTypeIdentity.text(input.type), true);
 								} else {
 									if (targetArity >= 0)
 										castArities.set(targetArity, true);
@@ -385,7 +385,7 @@ class WasmScalarAbi {
 								}
 							case ToDyn(_, input):
 								if (!planningBoundaries && closureArity(input.type) >= 0)
-									excluded.set(Std.string(input.type), true);
+									excluded.set(IrTypeIdentity.text(input.type), true);
 							default:
 						}
 		for (fn in program.functions)
@@ -394,13 +394,13 @@ class WasmScalarAbi {
 					for (located in block.instructions) {
 						for (input in IrOperands.inputs(located.value))
 							if (closureArity(input.type) >= 0 && !safeClosureUse(located.value, input))
-								excluded.set(Std.string(input.type), true);
+								excluded.set(IrTypeIdentity.text(input.type), true);
 						switch located.value {
 							case Phi(out, inputs):
 								for (input in inputs)
 									if (closureArity(input.value.type) >= 0
 										&& !IrVerifier.sameType(input.value.type, out.type))
-										excluded.set(Std.string(input.value.type), true);
+										excluded.set(IrTypeIdentity.text(input.value.type), true);
 							default:
 						}
 					}
@@ -408,9 +408,9 @@ class WasmScalarAbi {
 						switch block.terminator.value {
 							case Return(value) if (closureArity(value.type) >= 0
 								&& !IrVerifier.sameType(value.type, fn.result)):
-								excluded.set(Std.string(value.type), true);
+								excluded.set(IrTypeIdentity.text(value.type), true);
 							case Throw(value), Rethrow(value) if (closureArity(value.type) >= 0):
-								excluded.set(Std.string(value.type), true);
+								excluded.set(IrTypeIdentity.text(value.type), true);
 							default:
 						}
 				}
@@ -427,10 +427,10 @@ class WasmScalarAbi {
 							switch located.value {
 								case StaticClosure(out, _), InstanceClosure(out, _, _):
 									if (castArities.exists(closureArity(out.type)))
-										remove.push(Std.string(out.type));
+										remove.push(IrTypeIdentity.text(out.type));
 								case CallClosure(_, closure, _):
 									if (castArities.exists(closureArity(closure.type)))
-										remove.push(Std.string(closure.type));
+										remove.push(IrTypeIdentity.text(closure.type));
 								default:
 							}
 			for (key in remove)
@@ -904,7 +904,8 @@ class WasmScalarAbi {
 									throw 'Wrong scalar virtual argument $index in ${fn.name}';
 							if (values.isValue(virtual.signature.result))
 								handles.set(out.id, resultTypes(virtual.signature));
-						case CallClosure(out, closure, arguments) if (scalarClosures.exists(Std.string(closure.type))):
+						case CallClosure(out, closure,
+							arguments) if (scalarClosures.exists(IrTypeIdentity.text(closure.type))):
 							var signature:WasmScalarSignature = switch closure.type {
 								case Function(args, result): {
 									arguments: args,
@@ -1039,13 +1040,14 @@ class WasmScalarAbi {
 					replacement.instructions.push(instruction);
 			for (located in block.instructions)
 				switch located.value {
-					case StaticClosure(out, name) if (scalarClosures.exists(Std.string(out.type))):
+					case StaticClosure(out, name) if (scalarClosures.exists(IrTypeIdentity.text(out.type))):
 						replacement.instructions.push(new Located(StaticClosure(out, directClones.get(name)),
 							located.provenance));
-					case InstanceClosure(out, name, receiver) if (scalarClosures.exists(Std.string(out.type))):
+					case InstanceClosure(out, name, receiver) if (scalarClosures.exists(IrTypeIdentity.text(out.type))):
 						replacement.instructions.push(new Located(InstanceClosure(out, directClones.get(name),
 							receiver), located.provenance));
-					case CallClosure(out, closure, originalArgs) if (scalarClosures.exists(Std.string(closure.type))):
+					case CallClosure(out, closure,
+						originalArgs) if (scalarClosures.exists(IrTypeIdentity.text(closure.type))):
 						next = expandClosureCall(replacement, located, out, closure, originalArgs, next);
 					case Call(out, name, originalArgs) if (directClones.exists(name)):
 						next = expandCall(replacement, located, out, directClones.get(name), originalArgs, next);
