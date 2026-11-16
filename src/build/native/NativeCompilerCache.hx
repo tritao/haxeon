@@ -27,7 +27,9 @@ class NativeCompilerCache {
 		if (Sys.getEnv("HAXEON_CCACHE") == "0")
 			return null;
 		if (Sys.systemName() == "Windows") {
-			if (home == null || msvcToolset() == null)
+			// MSVC's CL and _CL_ variables add options ccache cannot see, so it does not support them: it falls back to the
+			// compiler, and with ccache 4.14 that fallback left no object behind. With either set, compiles run directly.
+			if (home == null || msvcToolset() == null || hasValue("CL") || hasValue("_CL_"))
 				return null;
 			var pinned = Path.join([home, ".tools", "ccache", "ccache.exe"]);
 			return FileSystem.exists(pinned) ? pinned : null;
@@ -57,6 +59,11 @@ class NativeCompilerCache {
 			parts.push(value == null ? "" : StringTools.trim(value));
 		}
 		return parts[0] == "" || parts[1] == "" || parts[3] == "" ? null : parts.join("|");
+	}
+
+	static function hasValue(variable:String):Bool {
+		var value = Sys.getEnv(variable);
+		return value != null && StringTools.trim(value) != "";
 	}
 
 	/** CMake arguments that route C and C++ compiles through `ccache`. */

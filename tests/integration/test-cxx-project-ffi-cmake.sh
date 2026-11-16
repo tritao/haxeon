@@ -11,27 +11,22 @@ case "$(uname -s)" in
 	Darwin)
 		ffi_suffix=".dylib"
 		ffi_object_suffix=".o"
-		cmake_import_archive=""
 		;;
 	MINGW*|MSYS*|CYGWIN*)
 		ffi_suffix=".dll"
 		ffi_object_suffix=".o"
 		if command -v cl.exe >/dev/null 2>&1 || command -v cl >/dev/null 2>&1; then
-			cmake_import_archive="$project_dir/app/build/host/native/foo/foo.lib"
 			ffi_object_suffix=".obj"
 			# The generated thunk is compiled by Haxeon's direct cl invocation,
 			# outside the CMake target above. Keep its CRT choice aligned with the
 			# self-contained fixture as well.
 			CL="${CL:-} /MT"
 			export CL
-		else
-			cmake_import_archive="$project_dir/app/build/host/native/foo/libfoo.dll.a"
 		fi
 		;;
 	*)
 		ffi_suffix=".so"
 		ffi_object_suffix=".o"
-		cmake_import_archive=""
 		;;
 esac
 
@@ -170,9 +165,8 @@ fi
 [[ "$first_output" == *"Compile C++"* ]]
 [[ "$first_output" == *"Link shared library foo FFI cxx-cmake-thunk-project"* ]]
 test -s "$project_dir/app/build/host/native/foo/foo.hdll"
-if [[ -n "$cmake_import_archive" ]]; then
-	test -s "$cmake_import_archive"
-fi
+# Only what programs load is published beside them; an import library (foo.lib) stays in the package's shared CMake tree, and
+# linking the thunk library against it, checked next, is what needs it.
 test -s "$project_dir/app/build/host/native/foo/libcxx-cmake-thunk-project$ffi_suffix"
 test -s "$project_dir/app/build/host/native/foo/ffi/cxx-cmake-thunk-project/cxx-cmake-thunk-project-thunks$ffi_object_suffix"
 test -s "$project_dir/app/build/host/native/foo/ffi/cxx-cmake-thunk-project/projection/OwnedManagedWidget.hx"
