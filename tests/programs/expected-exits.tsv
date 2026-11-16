@@ -622,3 +622,4 @@ nullable-generic-abstract	42
 readonly-array-context	42
 wire-nested-value	42
 scalar-closure-boundaries	42
+map-comprehension-value-storage	42

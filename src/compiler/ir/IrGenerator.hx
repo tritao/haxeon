@@ -1265,6 +1265,10 @@ class IrGenerator {
 		return map;
 	}
 
+	function lowerMapAllocation(builder:CfgBuilder, key:CompilerType, value:CompilerType, result:IrType):CfgValue
+		return isSpecializedMap(key, value) ? lowerSpecializedMapAllocation(builder, key, value)
+			: builder.call(RuntimeType.mapNative(key, value, "alloc"), [], result);
+
 	function lowerSpecializedMapCall(builder:CfgBuilder, map:CfgValue, operation:String, arguments:Array<CfgValue>,
 			key:CompilerType, value:CompilerType,
 			result:IrType):CfgValue {
@@ -2850,9 +2854,7 @@ class IrGenerator {
 				var types = switch expression.type {
 					case TMap(key, value): {key: key, value: value};
 					default: throw "Map literal requires a map type";
-				}, resultType = lowerType(expression.type), map = isSpecializedMap(types.key,
-					types.value) ? lowerSpecializedMapAllocation(builder, types.key,
-					types.value) : builder.call(RuntimeType.mapNative(types.key, types.value, "alloc"), [],
+				}, resultType = lowerType(expression.type), map = lowerMapAllocation(builder, types.key, types.value,
 					resultType), mapName = '$' + 'map-literal:${expression.span.start}:${map.id}';
 				localTypes.set(mapName, resultType);
 				builder.store(mapName, map);
@@ -3038,8 +3040,7 @@ class IrGenerator {
 						lowerMapKeys(builder, localTypes, builder.load(sourceMapName, sourceMapType),
 						sourceMapTypes.key, sourceMapTypes.value));
 				}
-				builder.store(resultName,
-					builder.call(RuntimeType.mapNative(resultTypes.key, resultTypes.value, "alloc"), [], resultType));
+				builder.store(resultName, lowerMapAllocation(builder, resultTypes.key, resultTypes.value, resultType));
 				builder.store(indexName, builder.constInt(0));
 				var conditionBlock = builder.createBlock(),
 					bodyBlock = builder.createBlock(),
@@ -3127,10 +3128,7 @@ class IrGenerator {
 			case TNewArray(element, length):
 				lowerArrayAllocation(builder, element, lowerExpression(length, builder, localTypes));
 			case TNewMap(key, value):
-				if (isSpecializedMap(key,
-					value)) lowerSpecializedMapAllocation(builder, key,
-					value);
-				else builder.call(RuntimeType.mapNative(key, value, "alloc"), [], lowerType(expression.type));
+				lowerMapAllocation(builder, key, value, lowerType(expression.type));
 			case TField(object, name):
 				var observableBit = observableFieldBit(object.type, name);
 				if (observableBit != null) lowerObservableFieldRead(object, name, observableBit,
