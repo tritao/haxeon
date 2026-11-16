@@ -16,8 +16,8 @@ if [[ ! -x "$haxe" ]]; then
 	echo "missing local toolchain; run ./scripts/bootstrap-tools.sh first" >&2
 	exit 1
 fi
-if [[ ! -x "$hl" || ! -e "$root_dir/out/haxeon_runtime.hdll" ]]; then
-	echo "missing checkout-built HashLink or runtime; run scripts/build-native.sh first" >&2
+if [[ ! -x "$hl" ]]; then
+	echo "missing checkout-built HashLink; run scripts/build-native.sh first" >&2
 	exit 1
 fi
 

@@ -39,7 +39,7 @@ no-nul-literals                  quick,ci    -- bash tests/integration/test-no-n
 # Every test script, hxml entry file and test main under tests/ is run by a suite, the driver or a workflow, or is listed with its
 # reason in tests/unregistered.txt (src/tools/dev/TestRegistration.hx).
 test-registration                quick,ci    -- scripts/haxeon dev check-tests
-runtime-build-isolation          ci          -- bash tests/integration/test-driver-runtime-isolation.sh
+hashlink-replace                 ci          -- bash tests/integration/test-hashlink-replace.sh
 hxi-value-records                ci          -- bash tests/integration/test-hxi-value-records.sh
 messagepack-interop              ci          -- bash tests/integration/test-messagepack-interop.sh
 run-output                       ci          -- bash tests/integration/test-run-output.sh

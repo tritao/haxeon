@@ -18,24 +18,26 @@ needle=b'static void gc_dispatch_mark('
 assert source.count(needle)==1
 source=source.replace(needle,b'HL_API bool hl_gc_mark_claim_test(unsigned char *addr,unsigned char mask) { return atomic_bit_set(addr,mask); }\n\n'+needle)
 (work/'gc.c').write_bytes(source)
-commands=subprocess.check_output(['ninja','-C',str(build),'-t','commands','libhl'],text=True).splitlines()
+commands=subprocess.check_output(['ninja','-C',str(build),'-t','commands','hl'],text=True).splitlines()
 args=shlex.split(next(x for x in commands if ' -c ' in x and x.endswith('/src/gc.c')))
 for opt in ['-MD','-MT','-MF']:
  if opt in args:
   i=args.index(opt);del args[i:i+(1 if opt=='-MD' else 2)]
 args[args.index('-c')+1]=str(work/'gc.c');args[args.index('-o')+1]=str(work/'gc.o')
 subprocess.run(args,cwd=build,check=True)
-args=shlex.split(next(x for x in commands if ' -shared ' in x).split(' && ')[1])
-args[args.index('-o')+1]=str(work/'libhl.so.1.16.0')
+# The collector is compiled into hl: relink hl with the patched object, from the build's own link command.
+link=next(x for x in subprocess.check_output(['ninja','-C',str(build),'-t','commands','hl'],text=True).splitlines()
+ if ' -o hashlink-staging/hl ' in x)
+args=shlex.split(link.split(' && ')[1])
+args[args.index('-o')+1]=str(work/'hl')
 args=[str(work/'gc.o') if x.endswith('/src/gc.c.o') else x for x in args]
 subprocess.run(args,cwd=build,check=True)
-for name in ['libhl.so.1','libhl.so']:
- (work/name).symlink_to('libhl.so.1.16.0')
 PYCODE
-"${CC:-cc}" -shared -fPIC -I"$root/vendor/hashlink/src" "$root/tests/native/gc_mark_claim_probe.c" -L"$work" -lhl -lpthread -o "$work/gcclaim.hdll"
+# The probe takes the helper from the patched VM that loads it.
+"${CC:-cc}" -shared -fPIC -I"$root/vendor/hashlink/src" "$root/tests/native/gc_mark_claim_probe.c" -o "$work/gcclaim.hdll"
 "$root/.tools/haxe/haxe" -cp "$root/tests/native" -hl "$work/probe.hl" -main GcMarkClaimProbe
 for threads in 1 4; do
  for mode in 0 1; do
-  HL_GC_THREADS=$threads HL_GC_MARK_SERIAL=$mode LD_LIBRARY_PATH="$work:$root/out:$("$root/scripts/hashlink-path.sh")${LD_LIBRARY_PATH:+:$LD_LIBRARY_PATH}" "${HL_JIT_TEST_VM:-$("$root/scripts/hashlink-path.sh")/hl}" "$work/probe.hl"
+  HL_GC_THREADS=$threads HL_GC_MARK_SERIAL=$mode LD_LIBRARY_PATH="$work${LD_LIBRARY_PATH:+:$LD_LIBRARY_PATH}" "$work/hl" "$work/probe.hl"
  done
 done

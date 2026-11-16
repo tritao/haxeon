@@ -12,13 +12,12 @@ trap 'rm -rf "$work"' EXIT
 library=${HL_GC_TEST_LIBRARY_DIR:-$("$root/scripts/hashlink-path.sh")}
 "${CC:-cc}" -std=gnu11 -Wall -Wextra -Werror "$root/tests/native/gc_apple_tracking_probe.c" -lpthread -o "$work/apple-backend"
 "$work/apple-backend"
-"${CC:-cc}" -D_DEFAULT_SOURCE -I"$root/vendor/hashlink/src" "$root/tests/native/gc_incremental.c" -L"$library" -lhl -lpthread -o "$work/guards"
+"${CC:-cc}" -D_DEFAULT_SOURCE -I"$root/vendor/hashlink/src" "$root/tests/native/gc_incremental.c" "$root/tests/native/gc_drop_barriers.c" -Wl,--wrap=hl_gc_write_barrier -rdynamic -L"$library" -lhl -lm -ldl -lpthread -o "$work/guards"
 "${CC:-cc}" -shared -fPIC "$root/tests/native/gc_mask_soft_dirty.c" -ldl -o "$work/mask.so"
-"${CC:-cc}" -shared -fPIC -DGC_TEST_DROP_BARRIERS "$root/tests/native/gc_mask_soft_dirty.c" -ldl -o "$work/drop.so"
-"${CC:-cc}" -D_DEFAULT_SOURCE -I"$root/vendor/hashlink/src" "$root/tests/native/gc_dirty_slices.c" -L"$library" -lhl -lpthread -ldl -o "$work/dirty-slices"
+"${CC:-cc}" -D_DEFAULT_SOURCE -I"$root/vendor/hashlink/src" "$root/tests/native/gc_dirty_slices.c" -L"$library" -lhl -lm -ldl -lpthread -ldl -o "$work/dirty-slices"
 "${CC:-cc}" -shared -fPIC "$root/tests/native/gc_watch_dirty.c" -ldl -o "$work/watch-dirty.so"
-"${CC:-cc}" -D_DEFAULT_SOURCE -Wall -Wextra -Werror -I"$root/vendor/hashlink/src" "$root/tests/native/gc_dirty_batch.c" -L"$library" -lhl -lpthread -ldl -o "$work/dirty-batch"
-"${CC:-cc}" -D_DEFAULT_SOURCE -Wall -Wextra -Werror -I"$root/vendor/hashlink/src" "$root/tests/native/gc_block_sizes.c" -L"$library" -lhl -lpthread -o "$work/block-sizes"
+"${CC:-cc}" -D_DEFAULT_SOURCE -Wall -Wextra -Werror -I"$root/vendor/hashlink/src" "$root/tests/native/gc_dirty_batch.c" -L"$library" -lhl -lm -ldl -lpthread -ldl -o "$work/dirty-batch"
+"${CC:-cc}" -D_DEFAULT_SOURCE -Wall -Wextra -Werror -I"$root/vendor/hashlink/src" "$root/tests/native/gc_block_sizes.c" -L"$library" -lhl -lm -ldl -lpthread -o "$work/block-sizes"
 kernel_available=1
 for threads in 1 4; do
  for failure in none pagemap clear_refs pressure; do
@@ -44,7 +43,7 @@ for threads in 1 4; do
  HL_GC_INCREMENTAL_VALIDATE=1 HL_GC_MIN_TRIGGER=65536 HL_GC_THREADS=$threads LD_PRELOAD="$work/mask.so" LD_LIBRARY_PATH="$library${LD_LIBRARY_PATH:+:$LD_LIBRARY_PATH}" "$work/guards"
 done
 status=0
-HL_GC_RETENTION_PROFILE=0 HL_GC_INCREMENTAL_VALIDATE=0 HL_GC_MIN_TRIGGER=65536 HL_GC_THREADS=1 LD_PRELOAD="$work/drop.so" LD_LIBRARY_PATH="$library${LD_LIBRARY_PATH:+:$LD_LIBRARY_PATH}" "$work/guards" || status=$?
+HL_GC_TEST_DROP_BARRIERS=1 HL_GC_RETENTION_PROFILE=0 HL_GC_INCREMENTAL_VALIDATE=0 HL_GC_MIN_TRIGGER=65536 HL_GC_THREADS=1 LD_PRELOAD="$work/mask.so" LD_LIBRARY_PATH="$library${LD_LIBRARY_PATH:+:$LD_LIBRARY_PATH}" "$work/guards" || status=$?
 if [[ $status != 7 ]]; then
  echo "FAIL: missing-barrier negative control returned $status, expected 7"
  exit 1
@@ -69,7 +68,7 @@ echo 'PASS: hiding the kernel revisit loses the write behind the suspended array
 
 
 status=0
-HL_GC_INCREMENTAL_VALIDATE=1 HL_GC_MIN_TRIGGER=65536 HL_GC_THREADS=1 LD_PRELOAD="$work/drop.so" LD_LIBRARY_PATH="$library${LD_LIBRARY_PATH:+:$LD_LIBRARY_PATH}" "$work/guards" >"$work/validation.log" 2>&1 || status=$?
+HL_GC_TEST_DROP_BARRIERS=1 HL_GC_INCREMENTAL_VALIDATE=1 HL_GC_MIN_TRIGGER=65536 HL_GC_THREADS=1 LD_PRELOAD="$work/mask.so" LD_LIBRARY_PATH="$library${LD_LIBRARY_PATH:+:$LD_LIBRARY_PATH}" "$work/guards" >"$work/validation.log" 2>&1 || status=$?
 if [[ $status != 1 ]] || ! rg -q 'GC incremental validation failed: [1-9][0-9]* reachable objects missing' "$work/validation.log"; then
  cat "$work/validation.log"
  echo "FAIL: final-remark validator did not detect missing barriers (status $status)"
@@ -112,7 +111,7 @@ if [[ $status != 1 ]] || ! rg -q 'Test-only software GC requires HL_GC_INCREMENT
  exit 1
 fi
 status=0
-HL_GC_TEST_UNSET_VALIDATION=1 HL_GC_INCREMENTAL_TEST_SOFTWARE=1 HL_GC_INCREMENTAL_VALIDATE=1 HL_GC_MIN_TRIGGER=65536 HL_GC_THREADS=1 LD_PRELOAD="$work/no-proc.so:$work/drop.so" LD_LIBRARY_PATH="$library${LD_LIBRARY_PATH:+:$LD_LIBRARY_PATH}" "$work/guards" >"$work/software-missing.log" 2>&1 || status=$?
+HL_GC_TEST_DROP_BARRIERS=1 HL_GC_TEST_UNSET_VALIDATION=1 HL_GC_INCREMENTAL_TEST_SOFTWARE=1 HL_GC_INCREMENTAL_VALIDATE=1 HL_GC_MIN_TRIGGER=65536 HL_GC_THREADS=1 LD_PRELOAD="$work/no-proc.so:$work/mask.so" LD_LIBRARY_PATH="$library${LD_LIBRARY_PATH:+:$LD_LIBRARY_PATH}" "$work/guards" >"$work/software-missing.log" 2>&1 || status=$?
 if [[ $status != 1 ]] || ! rg -q 'GC incremental validation failed: [1-9][0-9]* reachable objects missing' "$work/software-missing.log"; then
  cat "$work/software-missing.log"
  echo 'FAIL: software tracking did not reject missing barriers'
@@ -120,20 +119,19 @@ if [[ $status != 1 ]] || ! rg -q 'GC incremental validation failed: [1-9][0-9]* 
 fi
 echo 'PASS: software-only test backend avoids proc tracking and requires validation'
 
-# HDLL module APIs are resolved by the VM in normal use; this native probe only
-# invokes runtime helpers whose dependencies are provided by libhl.
-"${CC:-cc}" -D_DEFAULT_SOURCE -I"$root/vendor/hashlink/src" "$root/tests/native/gc_runtime_writes.c" -L"$library" -L"$root/out" -Wl,--allow-shlib-undefined -l:haxeon_runtime.hdll -lhl -lpthread -o "$work/runtime-writes"
+# The probe links the static VM core (libhl.a), which has the runtime compiled in, and the runtime's libffi.
+"${CC:-cc}" -D_DEFAULT_SOURCE -I"$root/vendor/hashlink/src" "$root/tests/native/gc_runtime_writes.c" "$root/tests/native/gc_drop_barriers.c" -Wl,--wrap=hl_gc_write_barrier -rdynamic -L"$library" -lhl -lm -ldl "$root/.tools/libffi-static/lib/libffi.a" -lm -lpthread -ldl -o "$work/runtime-writes"
 for threads in 1 4; do
  HL_GC_INCREMENTAL_TEST_SOFTWARE=1 HL_GC_INCREMENTAL_VALIDATE=1 HL_GC_MIN_TRIGGER=65536 HL_GC_THREADS=$threads LD_PRELOAD="$work/no-proc.so" LD_LIBRARY_PATH="$library:$root/out${LD_LIBRARY_PATH:+:$LD_LIBRARY_PATH}" "$work/runtime-writes"
 done
 
 # Struct-array reference slots and replacement lane blocks need the same barrier and root guarantees.
-"${CC:-cc}" -D_DEFAULT_SOURCE -Wall -Wextra -Werror -I"$root/vendor/hashlink/src" "$root/tests/native/value_array_lanes.c" -L"$library" -L"$root/out" -Wl,--allow-shlib-undefined -l:haxeon_runtime.hdll -lhl -lpthread -o "$work/value-array-lanes"
+"${CC:-cc}" -D_DEFAULT_SOURCE -Wall -Wextra -Werror -I"$root/vendor/hashlink/src" "$root/tests/native/value_array_lanes.c" "$root/tests/native/gc_drop_barriers.c" -Wl,--wrap=hl_gc_write_barrier -rdynamic -L"$library" -lhl -lm -ldl "$root/.tools/libffi-static/lib/libffi.a" -lm -lpthread -ldl -o "$work/value-array-lanes"
 for threads in 1 4; do
  HL_GC_INCREMENTAL_TEST_SOFTWARE=1 HL_GC_INCREMENTAL_VALIDATE=1 HL_GC_MIN_TRIGGER=65536 HL_GC_THREADS=$threads LD_PRELOAD="$work/no-proc.so" LD_LIBRARY_PATH="$library:$root/out${LD_LIBRARY_PATH:+:$LD_LIBRARY_PATH}" "$work/value-array-lanes"
 done
 status=0
-HL_GC_INCREMENTAL_TEST_SOFTWARE=1 HL_GC_INCREMENTAL_VALIDATE=1 HL_GC_MIN_TRIGGER=65536 HL_GC_THREADS=1 LD_PRELOAD="$work/no-proc.so:$work/drop.so" LD_LIBRARY_PATH="$library:$root/out${LD_LIBRARY_PATH:+:$LD_LIBRARY_PATH}" "$work/value-array-lanes" >"$work/value-array-missing.log" 2>&1 || status=$?
+HL_GC_TEST_DROP_BARRIERS=1 HL_GC_INCREMENTAL_TEST_SOFTWARE=1 HL_GC_INCREMENTAL_VALIDATE=1 HL_GC_MIN_TRIGGER=65536 HL_GC_THREADS=1 LD_PRELOAD="$work/no-proc.so:$work/mask.so" LD_LIBRARY_PATH="$library:$root/out${LD_LIBRARY_PATH:+:$LD_LIBRARY_PATH}" "$work/value-array-lanes" >"$work/value-array-missing.log" 2>&1 || status=$?
 if [[ $status != 1 ]] || ! rg -q 'GC incremental validation failed: [1-9][0-9]* reachable objects missing' "$work/value-array-missing.log"; then
  cat "$work/value-array-missing.log"
  echo 'FAIL: inline value array probe did not detect its missing barrier'
@@ -141,7 +139,7 @@ if [[ $status != 1 ]] || ! rg -q 'GC incremental validation failed: [1-9][0-9]* 
 fi
 echo 'PASS: inline value array mutation negative control'
 status=0
-HL_GC_INCREMENTAL_TEST_SOFTWARE=1 HL_GC_INCREMENTAL_VALIDATE=1 HL_GC_MIN_TRIGGER=65536 HL_GC_THREADS=1 LD_PRELOAD="$work/no-proc.so:$work/drop.so" LD_LIBRARY_PATH="$library:$root/out${LD_LIBRARY_PATH:+:$LD_LIBRARY_PATH}" "$work/runtime-writes" >"$work/runtime-missing.log" 2>&1 || status=$?
+HL_GC_TEST_DROP_BARRIERS=1 HL_GC_INCREMENTAL_TEST_SOFTWARE=1 HL_GC_INCREMENTAL_VALIDATE=1 HL_GC_MIN_TRIGGER=65536 HL_GC_THREADS=1 LD_PRELOAD="$work/no-proc.so:$work/mask.so" LD_LIBRARY_PATH="$library:$root/out${LD_LIBRARY_PATH:+:$LD_LIBRARY_PATH}" "$work/runtime-writes" >"$work/runtime-missing.log" 2>&1 || status=$?
 if [[ $status != 1 ]] || ! rg -q 'GC incremental validation failed: [1-9][0-9]* reachable objects missing' "$work/runtime-missing.log"; then
  cat "$work/runtime-missing.log"
  echo 'FAIL: native iterator probe did not detect its missing barrier'
@@ -163,7 +161,7 @@ for threads in 1 4; do
  HL_GC_TEST_CANCEL_DIRTY=1 HL_GC_INCREMENTAL_TEST_SOFTWARE=1 HL_GC_INCREMENTAL_VALIDATE=1 HL_GC_THREADS=$threads LD_LIBRARY_PATH="$library${LD_LIBRARY_PATH:+:$LD_LIBRARY_PATH}" "$work/dirty-slices" software
 done
 # Pacing controls must start earlier without moving full-collection pressure limits.
-"${CC:-cc}" -O2 -Wall -Wextra -Werror -I"$root/vendor/hashlink/src" "$root/tests/native/gc_pacing.c" -L"$library" -lhl -lpthread -o "$work/pacing"
+"${CC:-cc}" -O2 -Wall -Wextra -Werror -I"$root/vendor/hashlink/src" "$root/tests/native/gc_pacing.c" -L"$library" -lhl -lm -ldl -lpthread -o "$work/pacing"
 for backend in 0 1; do
  [[ $backend != 0 || $kernel_available == 1 ]] || continue
  for percent in 100 50 0 NaN 99garbage 99999999999999999999; do
@@ -173,7 +171,7 @@ for backend in 0 1; do
 done
 # A denied tracker must keep the ordinary full-collection start threshold.
 HL_GC_TEST_DENY_PROC=1 HL_GC_INCREMENTAL_START_PERCENT=50 HL_GC_INCREMENTAL_STEP_BYTES=131072 HL_GC_INCREMENTAL_TEST_SOFTWARE=0 HL_GC_INCREMENTAL_VALIDATE=1 HL_GC_MIN_TRIGGER=67108864 HL_GC_INCREMENTAL=1 LD_PRELOAD="$work/no-proc.so" LD_LIBRARY_PATH="$library${LD_LIBRARY_PATH:+:$LD_LIBRARY_PATH}" "$work/pacing" 0 unsupported
-"${CC:-cc}" -O2 -Wall -Wextra -Werror -I"$root/vendor/hashlink/src" "$root/tests/native/gc_frame_budget.c" -L"$library" -lhl -lpthread -o "$work/frame-budget"
+"${CC:-cc}" -O2 -Wall -Wextra -Werror -I"$root/vendor/hashlink/src" "$root/tests/native/gc_frame_budget.c" -L"$library" -lhl -lm -ldl -lpthread -o "$work/frame-budget"
 for backend in 0 1; do
  [[ $backend != 0 || $kernel_available == 1 ]] || continue
  for threads in 1 4; do
@@ -182,7 +180,7 @@ for backend in 0 1; do
  done
 done
 HL_GC_TEST_DENY_PROC=1 HL_GC_INCREMENTAL=1 HL_GC_INCREMENTAL_TEST_SOFTWARE=0 LD_PRELOAD="$work/no-proc.so" LD_LIBRARY_PATH="$library${LD_LIBRARY_PATH:+:$LD_LIBRARY_PATH}" "$work/frame-budget" unsupported
-"${CC:-cc}" -O2 -Wall -Wextra -Werror -I"$root/vendor/hashlink/src" "$root/tests/native/gc_reclaim.c" -L"$library" -lhl -lpthread -o "$work/reclaim"
+"${CC:-cc}" -O2 -Wall -Wextra -Werror -I"$root/vendor/hashlink/src" "$root/tests/native/gc_reclaim.c" -L"$library" -lhl -lm -ldl -lpthread -o "$work/reclaim"
 for backend in 0 1; do
  [[ $backend != 0 || $kernel_available == 1 ]] || continue
  for threads in 1 4; do

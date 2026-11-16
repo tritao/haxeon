@@ -338,9 +338,10 @@ registers (rax, rcx, rdx, r8 to r11, xmm0 to xmm5) in an aligned frame and
 calls into C with its return address. The library uses no C runtime, so it
 links into modules built with either CRT. It does not import libhl: tools a
 build runs link it but never load libhl, so until libhl is loaded the flag
-pointer points at a nonzero placeholder, and the hooks look for `libhl.dll`
-(`GetModuleHandle`, `GetProcAddress` of `hl_prof_on`, `hl_prof_enter_native`
-and `hl_prof_exit`) at most once a millisecond until they find it.
+pointer points at a nonzero placeholder, and the hooks look for `libhl.dll`, or
+the executable when libhl is compiled into it (`GetModuleHandle`,
+`GetProcAddress` of `hl_prof_on`, `hl_prof_enter_native` and `hl_prof_exit`) at
+most once a millisecond until they find it.
 
 An enter's key is the hook's return address, a pc inside the function.
 `hl_prof_enter_native` puts each key into a lock-free set the first time a

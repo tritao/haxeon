@@ -10,7 +10,8 @@ class BytesAsciiMain {
 	static function main():Void {
 		var nativePath = "out/bytes_decode_guards.hdll";
 		var hashlink = Sys.getEnv("HAXEON_HASHLINK_DIR");
-		// libhl is built with MSVC on Windows, so its guard library is too (from the Visual Studio environment CI sets up).
+		// The VM loads the guard library, which takes the VM's API from it: hl.lib, the executable's import library, with MSVC
+		// (the VM is built with MSVC on Windows, from the Visual Studio environment CI sets up), and nothing elsewhere.
 		var built = Sys.systemName() == "Windows" ? Sys.command("cl", [
 			"-nologo",
 			"-LD",
@@ -20,17 +21,16 @@ class BytesAsciiMain {
 			"-Foout/",
 			"-link",
 			"-LIBPATH:" + hashlink,
-			"libhl.lib"
+			"hl.lib"
 		]) : Sys.command("cc", [
 			"-shared",
 			"-fPIC",
 			"-Ivendor/hashlink/src",
-			"tests/native/bytes_decode_guards.c",
-			"-L" + hashlink,
-			"-lhl",
+			"tests/native/bytes_decode_guards.c"
+		].concat(Sys.systemName() == "Mac" ? ["-Wl,-undefined,dynamic_lookup"] : []).concat([
 			"-o",
 			nativePath
-		]);
+		]));
 		if (built != 0)
 			throw "Could not build byte snapshot guard";
 		var compiler = new Compiler();

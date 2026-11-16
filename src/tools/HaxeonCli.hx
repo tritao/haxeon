@@ -402,14 +402,12 @@ class HaxeonCli {
 		var home = haxeonHome(), suffix = executableSuffix();
 		var haxePath = Path.join([home, ".tools", "haxe", "haxe" + suffix]);
 		var hashlinkPath = Path.join([HashLinkPath.directory(home), "hl" + suffix]);
-		var nativeRuntimePath = Path.join([home, "out", "haxeon_runtime.hdll"]);
 		var compilerPath = Path.join([home, "bootstrap", "compiler.hl"]);
 		var androidSdk = Path.join([home, ".tools", "android-sdk"]);
 		var missingRequired = false;
 
 		missingRequired = reportPath("pinned Haxe compiler", haxePath, true) || missingRequired;
-		missingRequired = reportPath("HashLink runtime", hashlinkPath, true) || missingRequired;
-		missingRequired = reportPath("Haxeon runtime library", nativeRuntimePath, true) || missingRequired;
+		missingRequired = reportPath("HashLink VM, with the Haxeon runtime", hashlinkPath, true) || missingRequired;
 		if (!missingRequired && !RuntimeLibrary.skipped()) {
 			var lacking = RuntimeLibrary.missing(home);
 			if (lacking.length > 0) {

@@ -9,7 +9,7 @@ cmake -S "$nativekit_dir" -B "$build_dir" -GNinja -DCMAKE_BUILD_TYPE=Debug \
 cmake --build "$build_dir"
 ctest --test-dir "$build_dir" --output-on-failure -R '^(audio|audio_dsp|audio_dsp_voice|audio_daisy_sources|audio_daisy_boundaries|audio_multi_dsp|audio_effects|audio_routing|audio_sends|miniaudio_splitter|resource_cache)$'
 HAXEON_DIR="$haxeon_dir" "$package_dir/tools/update-haxeon-hxi.sh" --check
-if [[ ! -f "$haxeon_dir/out/haxeon_runtime.hdll" ]]; then
+if [[ ! -x "$("$haxeon_dir/scripts/hashlink-path.sh")/hl" ]]; then
     (cd "$haxeon_dir" && ./scripts/build-native.sh)
 fi
 sources=()  # read line by line: macOS's bash 3.2 has no mapfile

@@ -4,7 +4,7 @@ root=$(cd "$(dirname "$0")/../../.." && pwd)
 output=${1:-$root/out/bench/gc-frame-budget}
 mkdir -p "$output"; output=$(cd "$output" && pwd)
 library=${HL_GC_TEST_LIBRARY_DIR:-$("$root/scripts/hashlink-path.sh")}
-"${CC:-cc}" -O2 -Wall -Wextra -Werror -D_DEFAULT_SOURCE -I"$root/vendor/hashlink/src" "$root/tests/bench/incremental-gc/convergence.c" -L"$library" -lhl -lpthread -o "$output/convergence"
+"${CC:-cc}" -O2 -Wall -Wextra -Werror -D_DEFAULT_SOURCE -I"$root/vendor/hashlink/src" "$root/tests/bench/incremental-gc/convergence.c" -L"$library" -lhl -lm -ldl -lpthread -o "$output/convergence"
 export LD_LIBRARY_PATH="$library${LD_LIBRARY_PATH:+:$LD_LIBRARY_PATH}"
 export HL_GC_INCREMENTAL=1 HL_GC_THREADS=1 HL_GC_MIN_TRIGGER=67108864 HL_GC_LATENCY_TRACE=0
 export HL_GC_INCREMENTAL_START_PERCENT=100 HL_GC_INCREMENTAL_STEP_BYTES=262144
@@ -12,7 +12,7 @@ export HL_GC_INCREMENTAL_VALIDATE=${GC_FRAME_VALIDATE:-0} HL_GC_INCREMENTAL_TEST
 export HL_GC_RETENTION_PROFILE=${GC_FRAME_RETENTION:-0} HL_GC_SCAN_PROFILE=0
 frames=${GC_FRAME_FRAMES:-600}; nodes=${GC_FRAME_NODES:-100000}; repeats=${GC_FRAME_REPEATS:-3}
 launcher=(); if [[ -n ${GC_FRAME_CPU:-} ]]; then launcher=(taskset -c "$GC_FRAME_CPU"); fi
-hash=$(sha256sum "$library/libhl.so")
+hash=$(sha256sum "$library/libhl.a")
 {
  uname -a
  printf 'frames=%s nodes=%s repeats=%s cpu=%s validate=%s retention=%s software=%s auto=2\n' "$frames" "$nodes" "$repeats" "${GC_FRAME_CPU:-unrestricted}" "$HL_GC_INCREMENTAL_VALIDATE" "$HL_GC_RETENTION_PROFILE" "$HL_GC_INCREMENTAL_TEST_SOFTWARE"
@@ -32,7 +32,7 @@ for ((repeat=1;repeat<=repeats;repeat++)); do
   done
  done
 done
-[[ $(sha256sum "$library/libhl.so") == "$hash" ]] || { echo 'FAIL: runtime changed'; exit 1; }
+[[ $(sha256sum "$library/libhl.a") == "$hash" ]] || { echo 'FAIL: runtime changed'; exit 1; }
 python3 - "$output" "$frames" "$repeats" <<'PY'
 import csv, pathlib, sys
 root=pathlib.Path(sys.argv[1]); frames=int(sys.argv[2]); repeats=int(sys.argv[3]); results=[]

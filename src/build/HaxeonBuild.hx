@@ -37,9 +37,16 @@ class HaxeonBuild {
 		Sys.exit(status);
 	}
 
-	static function native(arguments:Array<String>):Int {
-		var preset = arguments.length == 0
-			? (Sys.systemName() == "Windows" ? "windows-msvc" : "release") : arguments[0];
+	static function native(arguments:Array<String>):Int
+		return buildNative(environment, arguments.length == 0 ? null : arguments[0]);
+
+	/**
+	 * The CMake build of the VM, `preset` or the host's default. The VM is published by rename, never written in place,
+	 * so a process running it, this one included, can rebuild it.
+	 */
+	public static function buildNative(environment:BuildEnvironment, ?preset:String):Int {
+		if (preset == null)
+			preset = Sys.systemName() == "Windows" ? "windows-msvc" : "release";
 		var plan = BuildPlanner.nativeRuntime(environment, preset),
 			execution = PlanLowerer.lower(plan, new LoweringContext(environment, preset)),
 			result = new Executor(environment, 1).execute(execution);
@@ -95,23 +102,6 @@ class HaxeonBuild {
 	}
 
 	static function test(arguments:Array<String>):Int {
-		#if hl
-		for (outputDirectory in [path(["out"]), HashLinkPath.directory(root())]) {
-			var loaded:Null<String>;
-			try
-				loaded = RuntimeBuildSafety.conflictingLibrary(outputDirectory)
-			catch (failure:Dynamic) {
-				Sys.stderr()
-					.writeString('Cannot verify loaded libraries before building in $outputDirectory: $failure\n');
-				return 1;
-			}
-			if (loaded != null) {
-				Sys.stderr()
-					.writeString('Cannot build native libraries in $outputDirectory: loaded library or search path $loaded conflicts with it. Run scripts/test-driver.sh to use isolated libraries.\n');
-				return 1;
-			}
-		}
-		#end
 		var jobs = arguments.length == 0 ? "4" : arguments[0];
 		var nativeStatus = native([]);
 		if (nativeStatus != 0)
@@ -191,8 +181,9 @@ class HaxeonBuild {
 		return FileSystem.exists(left) && FileSystem.exists(right)
 			&& File.getBytes(left).compare(File.getBytes(right)) == 0;
 
+	/** The test libraries the driver's programs load into the VM by name are in out/. */
 	static function configureRuntimeLibraryPath():Void {
-		var directories = [path(["out"]), HashLinkPath.directory(root())];
+		var directories = [path(["out"])];
 		Sys.putEnv("HAXEON_HASHLINK_DIR", HashLinkPath.directory(root()));
 		var variable = Sys.systemName() == "Windows"
 			? "PATH" : (Sys.systemName() == "Mac" ? "DYLD_LIBRARY_PATH" : "LD_LIBRARY_PATH");

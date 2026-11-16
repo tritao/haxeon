@@ -89,10 +89,11 @@ haxeon_shared_library() {
 	esac
 }
 
-# Builds C sources against this checkout's libhl into OUTPUT, a program or, with --hdll, a HashLink library: with cc on
-# Linux and macOS, and on Windows with MSVC's cl, which libhl is built with there (the shell's MinGW cannot link it; the
-# Windows job sets up MSVC's environment). CFLAGS adds compiler flags for cc; the library directory is HL_GC_TEST_LIBRARY_DIR
-# or the checkout's HashLink.
+# Builds C sources against this checkout's VM into OUTPUT: a program that hosts the VM itself, linked with the static VM core
+# (libhl.a, libhl.lib with MSVC: everything in hl but main.c), or with --hdll a HashLink library for hl to load, which takes
+# the VM's API from the executable that loads it. cc on Linux and macOS; on Windows MSVC's cl, which the VM is built with (the
+# shell's MinGW cannot link it; the Windows job sets up MSVC's environment). CFLAGS adds compiler flags for cc; the library
+# directory is HL_GC_TEST_LIBRARY_DIR or the checkout's HashLink directory.
 haxeon_cc_libhl() {
 	local hdll= output library source sources=()
 	if [[ $1 == --hdll ]]; then
@@ -107,18 +108,44 @@ haxeon_cc_libhl() {
 		for source in "$@"; do
 			sources+=("$(cygpath -w "$source")")
 		done
+		# A library links hl.lib, the executable's import library; a program links the static core and what it needs.
+		local libraries flags
+		if [[ -n $hdll ]]; then
+			flags=(-LD)
+			libraries=(hl.lib)
+		else
+			# LIBHL_STATIC: the program defines the VM's functions itself rather than importing them from a DLL.
+			flags=(-DLIBHL_STATIC)
+			libraries=(libhl.lib ws2_32.lib user32.lib winmm.lib dbghelp.lib advapi32.lib bcrypt.lib)
+		fi
 		# cl writes its diagnostics to standard output, with a line per file: show them only when the build fails.
 		local log status=0
-		log=$(MSYS2_ARG_CONV_EXCL='*' cl -nologo -O2 ${hdll:+-LD} -I"$(cygpath -w "$haxeon_root/vendor/hashlink/src")" "${sources[@]}" \
-			-Fo"$(cygpath -w "$(dirname "$output")")\\" -Fe"$(cygpath -w "$output")" -link -LIBPATH:"$(cygpath -w "$library")" libhl.lib) || status=$?
+		log=$(MSYS2_ARG_CONV_EXCL='*' cl -nologo -O2 "${flags[@]}" -I"$(cygpath -w "$haxeon_root/vendor/hashlink/src")" \
+			"${sources[@]}" -Fo"$(cygpath -w "$(dirname "$output")")\\" -Fe"$(cygpath -w "$output")" -link \
+			-LIBPATH:"$(cygpath -w "$library")" "${libraries[@]}") || status=$?
 		if [[ $status != 0 ]]; then
 			printf '%s\n' "$log" >&2
 			return "$status"
 		fi
 		;;
+	Darwin)
+		if [[ -n $hdll ]]; then
+			# shellcheck disable=SC2086 # CFLAGS holds several flags
+			"${CC:-cc}" ${CFLAGS:-} -shared -fPIC -Wl,-undefined,dynamic_lookup -I"$haxeon_root/vendor/hashlink/src" "$@" -o "$output"
+		else
+			# shellcheck disable=SC2086
+			"${CC:-cc}" ${CFLAGS:-} -I"$haxeon_root/vendor/hashlink/src" "$@" -L"$library" -lhl -lm -ldl -lpthread -o "$output"
+		fi
+		;;
 	*)
-		# shellcheck disable=SC2086 # CFLAGS holds several flags
-		"${CC:-cc}" ${CFLAGS:-} ${hdll:+-shared -fPIC} -I"$haxeon_root/vendor/hashlink/src" "$@" -L"$library" -lhl -lpthread -o "$output"
+		if [[ -n $hdll ]]; then
+			# shellcheck disable=SC2086 # CFLAGS holds several flags
+			"${CC:-cc}" ${CFLAGS:-} -shared -fPIC -I"$haxeon_root/vendor/hashlink/src" "$@" -o "$output"
+		else
+			# The program exports the VM's API, as hl does, to the libraries it loads.
+			# shellcheck disable=SC2086
+			"${CC:-cc}" ${CFLAGS:-} -rdynamic -I"$haxeon_root/vendor/hashlink/src" "$@" -L"$library" -lhl -lm -ldl -lpthread -o "$output"
+		fi
 		;;
 	esac
 }

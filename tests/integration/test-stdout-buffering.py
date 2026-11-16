@@ -51,7 +51,7 @@ def main():
             'fputs("before-fatal", stdout); hl_fatal("stdout-test"); return 0; }\n')
         subprocess.run([os.environ.get("CC", "cc"), str(native),
             "-I", str(ROOT / "vendor/hashlink/src"), "-L", str(HASHLINK_DIR),
-            "-Wl,-rpath," + str(HASHLINK_DIR), "-lhl", "-o", str(project / "fatal")],
+            "-Wl,-rpath," + str(HASHLINK_DIR), "-lhl", "-lm", "-ldl", "-lpthread", "-o", str(project / "fatal")],
             check=True, capture_output=True)
         result = subprocess.run([str(project / "fatal")], env=environment,
             capture_output=True, timeout=5)

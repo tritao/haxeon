@@ -5,12 +5,12 @@ before=$(cd "${1:?usage: run-boundary-paired.sh BEFORE_LIBRARY OUTPUT}" && pwd)
 output=${2:-$root/out/bench/gc-boundary-paired}
 mkdir -p "$output"; output=$(cd "$output" && pwd)
 after=${HL_GC_TEST_LIBRARY_DIR:-$("$root/scripts/hashlink-path.sh")}
-"${CC:-cc}" -O2 -Wall -Wextra -Werror -D_DEFAULT_SOURCE -I"$root/vendor/hashlink/src" "$root/tests/bench/incremental-gc/convergence.c" -L"$after" -lhl -lpthread -o "$output/boundary"
+"${CC:-cc}" -O2 -Wall -Wextra -Werror -D_DEFAULT_SOURCE -I"$root/vendor/hashlink/src" "$root/tests/bench/incremental-gc/convergence.c" -L"$after" -lhl -lm -ldl -lpthread -o "$output/boundary"
 export HL_GC_THREADS=1 HL_GC_SCAN_PROFILE=0 HL_GC_LATENCY_TRACE=0 HL_GC_INCREMENTAL_TEST_SOFTWARE=0 HL_GC_INCREMENTAL_VALIDATE=0 HL_GC_MIN_TRIGGER=67108864 HL_GC_INCREMENTAL=1
 frames=${GC_BOUNDARY_FRAMES:-600}; nodes=${GC_BOUNDARY_NODES:-500000}; repeats=${GC_BOUNDARY_REPEATS:-2}
 read -ra sizes <<< "${GC_BOUNDARY_SIZES:-1048568 1048576 1048584}"
 launcher=(); if [[ -n ${GC_BOUNDARY_CPU:-} ]]; then launcher=(taskset -c "$GC_BOUNDARY_CPU"); fi
-before_hash=$(sha256sum "$before/libhl.so"); after_hash=$(sha256sum "$after/libhl.so")
+before_hash=$(sha256sum "$before/libhl.a"); after_hash=$(sha256sum "$after/libhl.a")
 {
  uname -a
  printf 'frames=%s nodes=%s repeats=%s cpu=%s sizes=%s\n' "$frames" "$nodes" "$repeats" "${GC_BOUNDARY_CPU:-unrestricted}" "${sizes[*]}"
@@ -29,7 +29,7 @@ for ((repeat=1;repeat<=repeats;repeat++)); do
   done
  done
 done
-[[ $(sha256sum "$before/libhl.so") == "$before_hash" && $(sha256sum "$after/libhl.so") == "$after_hash" ]] || { echo 'FAIL: runtime changed'; exit 1; }
+[[ $(sha256sum "$before/libhl.a") == "$before_hash" && $(sha256sum "$after/libhl.a") == "$after_hash" ]] || { echo 'FAIL: runtime changed'; exit 1; }
 python3 - "$output" "$repeats" "$frames" "${sizes[@]}" <<'PY'
 import csv, pathlib, sys
 root=pathlib.Path(sys.argv[1]); repeats=int(sys.argv[2]); frames=int(sys.argv[3]); results=[]

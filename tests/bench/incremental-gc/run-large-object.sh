@@ -5,8 +5,8 @@ output=${1:-$root/out/bench/gc-large-object}
 mkdir -p "$output"
 output=$(cd "$output" && pwd)
 library=${HL_GC_TEST_LIBRARY_DIR:-$("$root/scripts/hashlink-path.sh")}
-"${CC:-cc}" -O2 -Wall -Wextra -Werror -D_DEFAULT_SOURCE -I"$root/vendor/hashlink/src" "$root/tests/bench/incremental-gc/convergence.c" -L"$library" -lhl -lpthread -o "$output/boundary"
-runtime_hash=$(sha256sum "$library/libhl.so")
+"${CC:-cc}" -O2 -Wall -Wextra -Werror -D_DEFAULT_SOURCE -I"$root/vendor/hashlink/src" "$root/tests/bench/incremental-gc/convergence.c" -L"$library" -lhl -lm -ldl -lpthread -o "$output/boundary"
+runtime_hash=$(sha256sum "$library/libhl.a")
 frames=${GC_BOUNDARY_FRAMES:-600}
 nodes=${GC_BOUNDARY_NODES:-500000}
 repeats=${GC_BOUNDARY_REPEATS:-2}
@@ -21,7 +21,7 @@ export LD_LIBRARY_PATH="$library${LD_LIBRARY_PATH:+:$LD_LIBRARY_PATH}"
  printf 'scan_profile=%s\n' "${HL_GC_SCAN_PROFILE:-0}"
  printf 'frames=%s nodes=%s repeats=%s budget_us=%s volume=%s validate=%s software=%s auto=0\n' "$frames" "$nodes" "$repeats" "$budget" "$volume" "$HL_GC_INCREMENTAL_VALIDATE" "$HL_GC_INCREMENTAL_TEST_SOFTWARE"
  "${CC:-cc}" --version | head -1
- sha256sum "$root/tests/bench/incremental-gc/convergence.c" "$root/vendor/hashlink/src/allocator.c" "$root/vendor/hashlink/src/gc_incremental.c" "$root/vendor/hashlink/src/gc_write_tracking.c" "$root/vendor/hashlink/src/gc.c" "$library/libhl.so"
+ sha256sum "$root/tests/bench/incremental-gc/convergence.c" "$root/vendor/hashlink/src/allocator.c" "$root/vendor/hashlink/src/gc_incremental.c" "$root/vendor/hashlink/src/gc_write_tracking.c" "$root/vendor/hashlink/src/gc.c" "$library/libhl.a"
 } > "$output/environment.txt"
 for threads in 1 4; do
  for ((repeat=1;repeat<=repeats;repeat++)); do
@@ -36,7 +36,7 @@ for threads in 1 4; do
   done
  done
 done
-if [[ $(sha256sum "$library/libhl.so") != "$runtime_hash" ]]; then
+if [[ $(sha256sum "$library/libhl.a") != "$runtime_hash" ]]; then
  echo "FAIL: runtime changed during boundary experiment"
  exit 1
 fi

@@ -18,7 +18,7 @@ fi
 "${CC:-cc}" -O1 -fPIC -shared "$root/tests/native/profiler_boundary_late.c" -L"$work" -lboundarylib -o "$work/libboundarylate.so"
 "${CC:-cc}" -O1 -I"$root/vendor/hashlink/src" "$root/tests/native/profiler_boundary_args.c" \
 	"$root/vendor/hashlink/src/prof_boundary_linux.c" "$root/vendor/hashlink/src/prof_boundary_x64_sysv.c" \
-	-L"$work" -lboundarylib -L"$library" -lhl -ldl -lpthread -o "$work/profiler_boundary_args"
+	-L"$work" -lboundarylib -L"$library" -lhl -lm -ldl -ldl -lpthread -o "$work/profiler_boundary_args"
 LD_LIBRARY_PATH="$work:$library${LD_LIBRARY_PATH:+:$LD_LIBRARY_PATH}" haxeon_timeout 60 "$work/profiler_boundary_args"
 
 if command -v "${CXX:-c++}" >/dev/null 2>&1; then
@@ -26,6 +26,6 @@ if command -v "${CXX:-c++}" >/dev/null 2>&1; then
 	"${CC:-cc}" -O1 -I"$root/vendor/hashlink/src" -c "$root/vendor/hashlink/src/prof_boundary_linux.c" -o "$work/prof_boundary_linux.o"
 	"${CC:-cc}" -O1 -I"$root/vendor/hashlink/src" -c "$root/vendor/hashlink/src/prof_boundary_x64_sysv.c" -o "$work/prof_boundary_x64_sysv.o"
 	"${CXX:-c++}" -O1 "$root/tests/native/profiler_boundary_unwind.cpp" "$work/prof_boundary_linux.o" "$work/prof_boundary_x64_sysv.o" \
-		-L"$work" -lboundarythrow -L"$library" -lhl -ldl -lpthread -o "$work/profiler_boundary_unwind"
+		-L"$work" -lboundarythrow -L"$library" -lhl -lm -ldl -ldl -lpthread -o "$work/profiler_boundary_unwind"
 	LD_LIBRARY_PATH="$work:$library${LD_LIBRARY_PATH:+:$LD_LIBRARY_PATH}" haxeon_timeout 60 "$work/profiler_boundary_unwind"
 fi

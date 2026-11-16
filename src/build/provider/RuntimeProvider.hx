@@ -26,28 +26,14 @@ class RuntimeProvider {
 				Path.join([root, "cmake"]),
 				Path.join([root, "vendor", "hashlink", "CMakeLists.txt"])
 			],
-			runtime = Path.join([
-				root,
-				"out",
-				"haxeon_runtime.hdll"
-			]),
 			hashlinkRoot = Path.join([
 				buildDirectory,
 				"hashlink-runtime"
 			]),
 			programSuffix = environment.target.os == TargetOs.Windows ? ".exe" : "",
-			sharedSuffix = switch environment.target.os {
-				case Windows: ".dll";
-				case MacOS: ".dylib";
-				case _: ".so";
-			}, hashlink = Path.join([hashlinkRoot, "hl" + programSuffix]), profiler = Path.join([
-				hashlinkRoot,
-				"hlprof-live" + programSuffix
-			]),
-				libhl = Path.join([
-					hashlinkRoot,
-					"libhl" + sharedSuffix
-				]);
+		// One file: libhl and the runtime are compiled into the VM.
+		hashlink = Path.join([hashlinkRoot, "hl" + programSuffix]),
+			profiler = Path.join([hashlinkRoot, "hlprof-live" + programSuffix]);
 
 		return [new ExecutionAction(configureId, [], cmakeInputs, [
 			configuredGraph,
@@ -62,7 +48,7 @@ class RuntimeProvider {
 		// Let CMake/Ninja check its full dependency graph. Recursively hashing
 		// HashLink's source and include trees here costs far more than an
 		// incremental `cmake --build` and duplicates the native build check.
-		new ExecutionAction(buildId, [configureId], [], [runtime, hashlink, profiler, libhl],
+		new ExecutionAction(buildId, [configureId], [], [hashlink, profiler],
 			'Build HashLink and Haxeon runtime ($preset)',
 			Process("cmake", [
 				"--build",

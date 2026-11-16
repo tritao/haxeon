@@ -16,11 +16,10 @@ trap 'rm -f "$gdb_commands" "$gdb_output" "$symbol_commands" "$symbol_output" "$
 
 "$repo_dir/tests/integration/test-hot-reload.sh" >/dev/null
 "$repo_dir/.tools/haxe/haxe" "$repo_dir/tests/hxml/static-field-test.hxml" -hl "$repo_dir/out/static-field-test.hl"
+# Loaded into hl, it takes the VM's API from the executable.
 cc -shared -fPIC \
   -I "$repo_dir/vendor/hashlink/src" \
   "$repo_dir/tests/native/patch_core.c" \
-  -L "$hashlink_dir" -lhl \
-  -Wl,-rpath,"$hashlink_dir" \
   -o "$repo_dir/out/patch_core.hdll"
 "$repo_dir/.tools/haxe/haxe" "$repo_dir/tests/hxml/gdb-patch-core-test.hxml" -hl "$repo_dir/out/gdb-patch-core-test.hl"
 

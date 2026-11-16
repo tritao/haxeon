@@ -6,11 +6,11 @@ import sys.FileSystem;
 import sys.io.File;
 
 /**
- * Whether the built native runtime library (`out/haxeon_runtime.hdll`) has every native function the runtime sources define.
+ * Whether the built VM (`hl`, which has the runtime compiled in) has every native function the runtime sources define.
  *
- * A checkout that moves to newer sources keeps the library it built earlier, and a program that calls a native the old library
+ * A checkout that moves to newer sources keeps the VM it built earlier, and a program that calls a native the old VM
  * lacks fails only when it starts, with a bare "Failed to load function" from the VM. This compares the natives the sources define
- * (`DEFINE_PRIM(<type>, <name>, ...)` in native/runtime.c and native/runtime/*.c) with the `hlp_<name>` symbols the library exports. It reads
+ * (`DEFINE_PRIM(<type>, <name>, ...)` in native/runtime.c and native/runtime/*.c) with the `hlp_<name>` symbols the VM exports. It reads
  * contents, not file times, so a checkout that scrambles times cannot fool it. It finds missing functions, not changed ones: a library
  * built from older sources that differs only in what a function does passes.
  */
@@ -22,7 +22,7 @@ class RuntimeLibrary {
 	}
 
 	public static function libraryPath(home:String):String
-		return Path.join([home, "out", "haxeon_runtime.hdll"]);
+		return build.HashLinkPath.executable(home);
 
 	/** Natives the sources define, in source order; empty when this checkout has no runtime sources. */
 	public static function definedNatives(home:String):Array<String> {
@@ -98,7 +98,7 @@ class RuntimeLibrary {
 	/** One line: which library, what it lacks, and how to rebuild it. */
 	public static function describe(home:String, missing:Array<String>):String {
 		var shown = missing.slice(0, 4).join(", ") + (missing.length > 4 ? ", ..." : "");
-		return 'the native runtime library ${libraryPath(home)} is out of date: it lacks ${missing.length} function${missing.length == 1 ? "" : "s"} the runtime sources define ($shown). Rebuild it with: ${rebuildCommand(home)}';
+		return 'the HashLink VM ${libraryPath(home)} is out of date: it lacks ${missing.length} function${missing.length == 1 ? "" : "s"} the runtime sources define ($shown). Rebuild it with: ${rebuildCommand(home)}';
 	}
 
 	/** The script that rebuilds the native runtime here: PowerShell's on Windows, bash's elsewhere. */

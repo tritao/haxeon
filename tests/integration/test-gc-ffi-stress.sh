@@ -10,9 +10,8 @@ trap 'rm -rf "$work"' EXIT
 library=${HL_GC_TEST_LIBRARY_DIR:-$("$root/scripts/hashlink-path.sh")}
 vm=${HL_JIT_TEST_VM:-$("$root/scripts/hashlink-path.sh")/hl}
 "${CC:-cc}" -shared -fPIC "$root/tests/native/gc_no_proc_tracking.c" -ldl -o "$work/no-proc.so"
-"${CC:-cc}" -shared -fPIC "$root/tests/native/gc_drop_range.c" -ldl -o "$work/drop-range.so"
 "${CC:-cc}" -shared -fPIC "$root/tests/native/native_call_fixture.c" -lpthread -o "$work/fixture.so"
-"${CC:-cc}" -D_DEFAULT_SOURCE -I"$root/vendor/hashlink/src" "$root/tests/native/gc_ffi_roots.c" -L"$library" -L"$root/out" -Wl,--allow-shlib-undefined -l:haxeon_runtime.hdll -lhl -lpthread -ldl -o "$work/roots"
+"${CC:-cc}" -D_DEFAULT_SOURCE -I"$root/vendor/hashlink/src" "$root/tests/native/gc_ffi_roots.c" "$root/tests/native/gc_drop_barriers.c" -Wl,--wrap=hl_gc_write_barrier -rdynamic -L"$library" -lhl "$root/.tools/libffi-static/lib/libffi.a" -lm -lpthread -ldl -o "$work/roots"
 # The generators use the pinned compiler's complete standard library. The
 # generated HXI program resolves Haxeon's GC extern from its source root.
 (cd "$root"; HAXEON_GC_BOUNDARY_STRESS=1 "$root/.tools/haxe/haxe" common.hxml -cp tests/runtime --run HxiCallMain "$work/hxi.hl" "$work/fixture.so")
@@ -39,7 +38,7 @@ done
 for mode in value closure; do
  args=(); [[ $mode == value ]] || args+=(closure)
  status=0
- HL_GC_TEST_AFTER_PREPARATION=1 HL_GC_THREADS=1 LD_PRELOAD="$work/no-proc.so:$work/drop-range.so" "$work/roots" "${args[@]}" >"$work/missing-$mode.log" 2>&1 || status=$?
+ HL_GC_TEST_DROP_BARRIERS=range HL_GC_TEST_AFTER_PREPARATION=1 HL_GC_THREADS=1 LD_PRELOAD="$work/no-proc.so" "$work/roots" "${args[@]}" >"$work/missing-$mode.log" 2>&1 || status=$?
  expected=1; [[ $mode == value ]] || expected=2
  if [[ $status != 1 ]] || ! rg -q "GC incremental validation failed: $expected reachable objects missing" "$work/missing-$mode.log"; then
   cat "$work/missing-$mode.log"

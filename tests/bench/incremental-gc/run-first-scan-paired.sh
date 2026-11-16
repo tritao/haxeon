@@ -6,12 +6,12 @@ output=${2:-$root/out/bench/gc-first-scan-paired}
 mkdir -p "$output"
 output=$(cd "$output" && pwd)
 after=${HL_GC_TEST_LIBRARY_DIR:-$("$root/scripts/hashlink-path.sh")}
-"${CC:-cc}" -O2 -Wall -Wextra -Werror -D_DEFAULT_SOURCE -I"$root/vendor/hashlink/src" "$root/tests/bench/incremental-gc/first-scan.c" -L"$after" -lhl -lpthread -o "$output/first-scan"
+"${CC:-cc}" -O2 -Wall -Wextra -Werror -D_DEFAULT_SOURCE -I"$root/vendor/hashlink/src" "$root/tests/bench/incremental-gc/first-scan.c" -L"$after" -lhl -lm -ldl -lpthread -o "$output/first-scan"
 export HL_GC_THREADS=1 HL_GC_SCAN_PROFILE=0 HL_GC_LATENCY_TRACE=0 HL_GC_INCREMENTAL_TEST_SOFTWARE=0 HL_GC_INCREMENTAL_VALIDATE=0
 mib=${GC_FIRST_SCAN_MIB:-64}; cycles=${GC_FIRST_SCAN_CYCLES:-16}; repeats=${GC_FIRST_SCAN_REPEATS:-3}
 launcher=()
 if [[ -n ${GC_FIRST_SCAN_CPU:-} ]]; then launcher=(taskset -c "$GC_FIRST_SCAN_CPU"); fi
-before_hash=$(sha256sum "$before/libhl.so"); after_hash=$(sha256sum "$after/libhl.so")
+before_hash=$(sha256sum "$before/libhl.a"); after_hash=$(sha256sum "$after/libhl.a")
 {
  uname -a
  printf 'mib=%s cycles=%s repeats=%s cpu=%s perf=%s\n' "$mib" "$cycles" "$repeats" "${GC_FIRST_SCAN_CPU:-unrestricted}" "${GC_FIRST_SCAN_PERF:-0}"
@@ -33,7 +33,7 @@ for ((repeat=1;repeat<=repeats;repeat++)); do
   done
  done
 done
-[[ $(sha256sum "$before/libhl.so") == "$before_hash" && $(sha256sum "$after/libhl.so") == "$after_hash" ]] || { echo 'FAIL: runtime changed'; exit 1; }
+[[ $(sha256sum "$before/libhl.a") == "$before_hash" && $(sha256sum "$after/libhl.a") == "$after_hash" ]] || { echo 'FAIL: runtime changed'; exit 1; }
 python3 - "$output" "$repeats" "$cycles" <<'PY'
 import csv, pathlib, statistics, sys
 root=pathlib.Path(sys.argv[1]); repeats=int(sys.argv[2]); cycles=int(sys.argv[3]); results=[]

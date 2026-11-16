@@ -143,7 +143,7 @@ The rest of the repository:
 |---|---|
 | `stdlib/` | The standard library the compiler builds programs against: Haxe's own files and the `haxeon.*` packages. |
 | `lib/haxeon-io/` | The `haxeon.io` classes, a class path of the compiler (`common.hxml`). |
-| `native/` | C sources: the runtime HDLL (`runtime/`), the runtime linked into every `wasm32` module (`wasm/`), and code both share. |
+| `native/` | C sources: the runtime compiled into the HashLink VM (`runtime/`), the runtime linked into every `wasm32` module (`wasm/`), and code both share. |
 | `vendor/` | Pinned dependencies: the HashLink fork with the patchable runtime and JIT, the HashLink debugger, libffi, NativeKit, utest, and the vendored `format` library. |
 | `bootstrap/` | The checked-in compiler, `compiler.hl`. |
 | `packages/` | Optional native integration libraries (UI, GPU, audio, platform and others); see [`packages/README.md`](../packages/README.md). |

@@ -5,7 +5,7 @@ import sys.io.File;
 import tools.RuntimeLibrary;
 
 /**
- * `tools.RuntimeLibrary`: finding that the built `haxeon_runtime.hdll` lacks natives the runtime sources define, before a program
+ * `tools.RuntimeLibrary`: finding that the built VM (`hl`, with the runtime compiled in) lacks natives the runtime sources define, before a program
  * dies on starting with "Failed to load function". Covers the source and symbol parsing, the whole check on a temporary checkout
  * (older library, current library, no library, no sources, the skip switch, the message) and the real sources against the real
  * library with one symbol removed.
@@ -85,8 +85,10 @@ class RuntimeLibraryMain {
 		// Normalized: the messages name paths with forward slashes, and Windows gives the working directory with back ones.
 		var root = haxe.io.Path.normalize(FileSystem.fullPath(".")) + "/out/runtime-library-test-"
 			+ Std.random(0x3fffffff);
-		directories(root);
-		var hdll = root + "/out/haxeon_runtime.hdll";
+		directories(root + "/cmake");
+		// The checkout's path table, so the temporary checkout's VM is where the real one would be.
+		File.copy("cmake/hashlink-output-paths.txt", root + "/cmake/hashlink-output-paths.txt");
+		var hdll = RuntimeLibrary.libraryPath(root);
 		check(RuntimeLibrary.missing(root).length == 0, "no sources and no library: nothing to compare");
 		write(root + "/native/runtime.c", "DEFINE_PRIM(_I32,__a,_NO_ARG)\n");
 		write(root + "/native/runtime/more.c", "DEFINE_PRIM(_I32,__b,_NO_ARG)\nDEFINE_PRIM(_I32,__c,_NO_ARG)\n");
@@ -94,7 +96,7 @@ class RuntimeLibraryMain {
 		same(RuntimeLibrary.definedNatives(root).join(","), "__a,__b,__c",
 			"runtime.c, then runtime/*.c in name order, .c files only");
 		check(RuntimeLibrary.missing(root).length == 0, "sources but no library built yet: nothing to compare");
-		directories(root + "/out");
+		directories(Path.directory(hdll));
 		File.saveBytes(hdll, library(["hlp___a", "hlp___b"]));
 		var lacking = RuntimeLibrary.missing(root);
 		same(lacking.join(","), "__c", "an older library lacks the newer native");

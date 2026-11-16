@@ -21,7 +21,3 @@ ssize_t pread(int fd, void *buffer, size_t count, off_t offset) {
  }
  return result;
 }
-#ifdef GC_TEST_DROP_BARRIERS
-/* Negative control: the same survival test must fail without either tracker. */
-void hl_gc_write_barrier(void *address, size_t bytes) { (void)address; (void)bytes; }
-#endif

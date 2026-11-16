@@ -11,7 +11,7 @@ library=${HL_GC_TEST_LIBRARY_DIR:-$("$root/scripts/hashlink-path.sh")}
 vm=${HL_JIT_TEST_VM:-$("$root/scripts/hashlink-path.sh")/hl}
 export DYLD_LIBRARY_PATH="$library:$root/out${DYLD_LIBRARY_PATH:+:$DYLD_LIBRARY_PATH}"
 export HL_GC_INCREMENTAL_TEST_SOFTWARE=1 HL_GC_INCREMENTAL_VALIDATE=1 HL_GC_MIN_TRIGGER=65536
-"${CC:-cc}" -I"$root/vendor/hashlink/src" "$root/tests/native/gc_incremental.c" -L"$library" -lhl -lpthread -o "$work/guards"
+"${CC:-cc}" -I"$root/vendor/hashlink/src" "$root/tests/native/gc_incremental.c" -L"$library" -lhl -lm -ldl -lpthread -o "$work/guards"
 # A capability skip on this runner is a failure: the experimental build must
 # explicitly support the selected validated test mode.
 for threads in 1 4; do

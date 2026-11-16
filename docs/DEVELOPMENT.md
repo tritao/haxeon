@@ -4,7 +4,7 @@
 
 ```sh
 ./scripts/bootstrap-tools.sh             # pinned Haxe and submodules
-./scripts/build-native.sh                # HashLink and the runtime HDLL
+./scripts/build-native.sh                # the VM: HashLink with the Haxeon runtime compiled in
 ./scripts/test.sh --only driver-default  # the test driver: compiler and program cases
 ```
 
@@ -40,10 +40,10 @@ scripts/test-driver.sh 4 --suite compiler --test ParserRecovery
 scripts/test-driver.sh 1 --list
 ```
 
-It is `haxeon dev test-driver` after a native build. The driver runs with private copies of the VM and runtime, so a native
-rebuild cannot overwrite a library the driver has loaded, and compiles program cases with the prebuilt compiler. `HAXEON_TEST_INTERPRETED=1` makes it compile them
-with `haxe --run Main` instead, for debugging the compiler's sources under the Haxe interpreter. Running
-`haxe --run driver.TestDriver` by hand skips that setup: it needs the checkout's `hl` on `PATH` and the runtime on the library path.
+It is `haxeon dev test-driver` after a native build. The driver compiles program cases with the prebuilt compiler;
+`HAXEON_TEST_INTERPRETED=1` makes it compile them with `haxe --run Main` instead, for debugging the compiler's sources under the
+Haxe interpreter. Running `haxe --run driver.TestDriver` by hand skips that setup: it needs the checkout's `hl` on `PATH` and
+`out` (the test libraries the driver's programs load) on the library path.
 
 ### The same commands on every platform
 
@@ -54,7 +54,8 @@ CLI to HashLink bytecode when its sources change and run it on the checkout-buil
 | Step | Command | Unix wrapper | Windows wrapper |
 |---|---|---|---|
 | Pinned tools and submodules | `cmake -P cmake/Bootstrap.cmake` | `scripts/bootstrap-tools.sh` | `scripts/setup.ps1` |
-| HashLink and the runtime | `cmake --preset P`, `cmake --build --preset P` | `scripts/build-native.sh` | `scripts/build-native.ps1` |
+| The VM, first build | `cmake --preset P`, `cmake --build --preset P` | `scripts/build-native.sh` | `scripts/build-native.ps1` |
+| The VM, rebuilt | `haxeon dev native [preset]` | | |
 | Test suites | `haxeon dev test MODE` | `scripts/test.sh`, `scripts/gate.sh` | |
 | Test driver | `haxeon dev test-driver [jobs] [options]` | `scripts/test-driver.sh` | |
 | Refresh or check the checked-in compiler | `haxeon dev bootstrap [--self]` | `scripts/bootstrap-compiler.sh` | |
@@ -112,14 +113,13 @@ HashLink build:
 ```sh
 compiler=$(scripts/haxeon dev tool-path compiler.tools.HaxeonCompiler)   # the compiler CLI
 main=$(scripts/haxeon dev tool-path Main)                                # the compiler entry the driver uses
-probe=$(scripts/haxeon dev tool-path --cp tests/runtime RuntimeBuildSafetyProbe)
+probe=$(scripts/haxeon dev tool-path --cp tests/runtime GcModuleLifetimeMain)
 ```
 
 Builds live in `out/tools/<main>-<key>.hl`. The key hashes `common.hxml`, every file under its class paths and any `--cp` directories,
 the pinned Haxe binary and its standard library, and the `--define` values, so an unchanged tree reuses the last build and any edit
 gets a new one. stdout is only the path; build diagnostics go to stderr. The newest three builds of each main are kept, and older ones
-are removed once they are an hour old. A build in `out/tools` does not sit next to `haxeon_runtime.hdll`, so run it with
-`out` and the HashLink directory on the library path, as every launcher here does.
+are removed once they are an hour old. Run a build with the checkout's VM; the runtime is part of it.
 
 `HAXEON_MAIN_HL`, `HAXEON_COMPILER_HL` and `HAXEON_BUILD_HL` remain as pins: when set, a script uses that exact build instead
 (a frozen control compiler, for example). `haxeon dev test` resolves the tools once and exports them, so every suite of one run uses
@@ -145,13 +145,23 @@ builds and runs a small external tool this way and is part of the wave gate.
 ## Native build
 
 Haxeon uses CMake for its cross-platform native build and Ninja as the default
-backend. HashLink is built from the pinned `vendor/hashlink` submodule; the
-resulting VM and library are placed in `out/cmake/<preset>/hashlink-runtime`
-(`scripts/hashlink-path.sh` prints the directory), while Haxeon's runtime HDLL is
-placed in `out`.
+backend. The VM is one file, `hl`: HashLink from the pinned `vendor/hashlink`
+submodule with libhl and the Haxeon runtime (`native/runtime.c`) compiled in. It
+needs no library path, and it exports the VM's API to the libraries it loads, so
+those link nothing of HashLink's. It is placed in
+`out/cmake/<preset>/hashlink-runtime` (`scripts/hashlink-path.sh` prints the
+directory), with `hlprof-live` and `libhl.a` (`libhl.lib` with MSVC): the same
+VM without `main.c`, for C test programs that host the VM themselves.
+
+The build links the programs in `hashlink-staging` and publishes them by rename
+(`cmake/haxeon-replace.cmake`), never writing over the file in place. A process
+running the VM, the CLI or the test driver among them, keeps the file it started
+from, so `haxeon dev native` can rebuild the VM it runs on. On Windows, which does
+not let a running program be replaced, the old file is renamed aside first and
+deleted by a later build.
 
 The `release` preset owns those shared tool paths. The Debug preset, `dev`, writes its VM
-and runtime HDLL under `out/cmake/dev` so a development build cannot replace
+under `out/cmake/dev` so a development build cannot replace
 the optimized VM used by profiler captures and normal project commands.
 
 ```sh

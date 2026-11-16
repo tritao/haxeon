@@ -15,6 +15,9 @@ import haxe.io.Path;
  *   haxeon dev test quick|wave|ci|full [--jobs N] [--gate] [--only NAME,...] [--list]
  *       Run a mode of tests/suites.txt (SuiteRunner). scripts/test.sh runs `ci`; scripts/gate.sh runs the others with --gate.
  *
+ *   haxeon dev native [preset]
+ *       Build the VM: HashLink with the Haxeon runtime compiled in (build.HaxeonBuild.buildNative).
+ *
  *   haxeon dev test-driver [jobs] [--suite NAMES] [--test REGEX] [--list]
  *       Run the test driver on private copies of the VM and runtime (TestDriverCommand). scripts/test-driver.sh runs it.
  *
@@ -33,6 +36,7 @@ class DevCommand {
 			case "format": FormatCommand.run(arguments, home);
 			case "check-tests": TestRegistration.run(arguments, home);
 			case "test-driver": TestDriverCommand.run(arguments, home);
+			case "native": native(arguments, home);
 			case "bootstrap": bootstrap(arguments, home);
 			case "help", "--help", "-h", "": usage(command == "" ? 2 : 0);
 			case _:
@@ -108,6 +112,14 @@ class DevCommand {
 		});
 	}
 
+	/** The CMake build of the VM. It publishes the VM by rename, so the process running this command can rebuild it. */
+	static function native(arguments:Array<String>, home:String):Int {
+		if (arguments.length > 1)
+			throw "native takes at most a preset";
+		var environment = new build.BuildEnvironment(home, Path.join([home, "out"]));
+		return build.HaxeonBuild.buildNative(environment, arguments.length == 1 ? arguments[0] : null);
+	}
+
 	/** The bootstrap needs the pinned Haxe for its seed, so it runs under it: `build.HaxeonBuild bootstrap` or `bootstrap-self`. */
 	static function bootstrap(arguments:Array<String>, home:String):Int {
 		if (arguments.length > 1 || (arguments.length == 1 && arguments[0] != "--self"))
@@ -132,6 +144,8 @@ class DevCommand {
 		out.writeString("      Format the checkout's Haxe sources, or check them; --changed: only files that differ from origin/main\n");
 		out.writeString("  test quick|wave|ci|full [--jobs N] [--gate] [--only NAME,...] [--list]\n");
 		out.writeString("      Run a mode of tests/suites.txt; --gate writes a report to out/gate (default jobs: TEST_JOBS, else 16)\n");
+		out.writeString("  native [preset]\n");
+		out.writeString("      Build the VM (HashLink with the Haxeon runtime compiled in); release, or windows-msvc on Windows\n");
 		out.writeString("  test-driver [jobs] [--suite NAMES] [--test REGEX] [--list]\n");
 		out.writeString("      Run the test driver, or the cases selected (suites: compiler, programs, runtime, tooling; default jobs: 4)\n");
 		out.writeString("  bootstrap [--self]\n");

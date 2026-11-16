@@ -39,6 +39,8 @@ set(WITH_UI OFF CACHE BOOL "Do not build optional HashLink libraries" FORCE)
 set(WITH_UV OFF CACHE BOOL "Do not build optional HashLink libraries" FORCE)
 set(WITH_VIDEO OFF CACHE BOOL "Do not build optional HashLink libraries" FORCE)
 set(WITH_HEAPS OFF CACHE BOOL "Do not build optional HashLink libraries" FORCE)
+# hl is one self-contained file: libhl (here) and the Haxeon runtime (below) are compiled into it.
+set(HL_LIBHL_IN_VM ON CACHE BOOL "Compile libhl into the hl executable" FORCE)
 
 option(HAXEON_GC_APPLE_SOFTWARE_TEST "Build unvalidated Apple AArch64 software GC test backend" OFF)
 if(HAXEON_GC_APPLE_SOFTWARE_TEST)
@@ -53,51 +55,45 @@ if(HAXEON_GC_APPLE_SOFTWARE_TEST)
 endif()
 # Keep all built VM binaries in this checkout, away from the shared toolchain.
 set(HAXEON_HASHLINK_OUTPUT_DIR "${CMAKE_BINARY_DIR}/hashlink-runtime")
+# Files earlier layouts built that nothing uses now. A stale libhl shared library beside libhl.a would be what `-lhl`
+# links, and a stale haxeon_runtime.hdll reads as if the VM loaded it.
+file(GLOB _haxeon_stale_files
+  "${HAXEON_HASHLINK_OUTPUT_DIR}/libhl.so*" "${HAXEON_HASHLINK_OUTPUT_DIR}/libhl*.dylib" "${HAXEON_HASHLINK_OUTPUT_DIR}/libhl.dll"
+  "${CMAKE_BINARY_DIR}/runtime/haxeon_runtime.hdll" "${CMAKE_SOURCE_DIR}/out/haxeon_runtime.hdll")
+if(_haxeon_stale_files)
+  file(REMOVE ${_haxeon_stale_files})
+endif()
+
+# Test libraries the driver loads into hl (by name, from the library path).
 if(CMAKE_BUILD_TYPE STREQUAL "Debug")
   set(HAXEON_RUNTIME_OUTPUT_DIR "${CMAKE_BINARY_DIR}/runtime")
 else()
   set(HAXEON_RUNTIME_OUTPUT_DIR "${CMAKE_SOURCE_DIR}/out")
 endif()
-set_target_properties(hlprof-live PROPERTIES
-  RUNTIME_OUTPUT_DIRECTORY "${HAXEON_HASHLINK_OUTPUT_DIR}"
-)
 
-# Haxeon's HDLL calls the patching API compiled into the VM executable. This is
-# the portable CMake equivalent of HashLink's Makefile --export-dynamic flag and
-# also produces the import information required by Windows executable exports.
+# Libraries the VM loads (test HDLLs, native packages) resolve the libhl and patching API from the executable. This is
+# the portable CMake equivalent of HashLink's Makefile --export-dynamic flag and also produces the import library that
+# Windows libraries link against.
 set_target_properties(hl PROPERTIES ENABLE_EXPORTS ON)
 
 # Native builds consume the checked-in lane policy; ValueLaneRuntimeMain verifies it against the SSA generator.
 
-# The runtime is either a library the VM loads (haxeon_runtime.hdll, the default) or, with HAXEON_EMBED_RUNTIME, part of
-# the VM executable: the VM then resolves `haxeon_runtime` natives from itself and no runtime file exists. Embedded, the
-# VM and the runtime cannot be out of step and no library search path has to name the runtime.
-option(HAXEON_EMBED_RUNTIME "Compile the Haxeon runtime into the hl executable instead of haxeon_runtime.hdll" OFF)
-if(HAXEON_EMBED_RUNTIME)
-  set(HAXEON_RUNTIME_TARGET hl)
-  # HashLink links hl with the plain signature, which a target cannot mix with the keyword one.
-  set(HAXEON_RUNTIME_LINK_SCOPE "")
-  target_sources(hl PRIVATE "${CMAKE_CURRENT_SOURCE_DIR}/native/runtime.c")
-  target_compile_definitions(hl PRIVATE HAXEON_EMBEDDED_RUNTIME)
-else()
-  set(HAXEON_RUNTIME_TARGET haxeon_runtime)
-  set(HAXEON_RUNTIME_LINK_SCOPE PRIVATE)
-  add_library(haxeon_runtime SHARED native/runtime.c)
-  target_link_libraries(haxeon_runtime PRIVATE libhl hl)
-endif()
-target_include_directories(${HAXEON_RUNTIME_TARGET} PRIVATE vendor/hashlink/src)
+# The Haxeon runtime, compiled once. Its objects are part of hl, which resolves `haxeon_runtime` natives from itself
+# (HAXEON_EMBEDDED_RUNTIME), so the VM and the runtime cannot be out of step and no runtime file is loaded.
+add_library(haxeon_runtime_objects OBJECT native/runtime.c)
+set_target_properties(haxeon_runtime_objects PROPERTIES POSITION_INDEPENDENT_CODE ON)
+target_include_directories(haxeon_runtime_objects PRIVATE vendor/hashlink/src)
 # NativeKit is an optional submodule that bootstrap does not fetch. Only the trace sink in native_trace.c uses it.
 if(EXISTS "${CMAKE_SOURCE_DIR}/vendor/nativekit/include/nativekit_trace.h")
-  target_include_directories(${HAXEON_RUNTIME_TARGET} PRIVATE vendor/nativekit/include)
-  target_compile_definitions(${HAXEON_RUNTIME_TARGET} PRIVATE HAXEON_WITH_NATIVEKIT)
+  target_include_directories(haxeon_runtime_objects PRIVATE vendor/nativekit/include)
+  target_compile_definitions(haxeon_runtime_objects PRIVATE HAXEON_WITH_NATIVEKIT)
 endif()
 if(CMAKE_C_COMPILER_ID STREQUAL "MSVC")
   # MSVC gates its C11 <stdatomic.h> implementation behind this opt-in.
-  target_compile_options(${HAXEON_RUNTIME_TARGET} PRIVATE /experimental:c11atomics)
+  target_compile_options(haxeon_runtime_objects PRIVATE /experimental:c11atomics)
 endif()
 set(HAXEON_STATIC_LIBFFI_ROOT "${CMAKE_SOURCE_DIR}/.tools/libffi-static")
 if(WIN32)
-  target_link_libraries(${HAXEON_RUNTIME_TARGET} ${HAXEON_RUNTIME_LINK_SCOPE} advapi32 bcrypt ws2_32)
   # The runtime has both /MD and /MDd configurations, so its static libffi
   # archive must use the matching MSVC CRT for each configuration.
   set(HAXEON_LIBFFI_RELEASE_ROOT "${HAXEON_STATIC_LIBFFI_ROOT}/msvc-release")
@@ -144,40 +140,64 @@ endif()
 set_target_properties(haxeon_pinned_libffi PROPERTIES
   INTERFACE_INCLUDE_DIRECTORIES "${HAXEON_VENDORED_LIBFFI_INCLUDE_DIR}"
 )
-target_link_libraries(${HAXEON_RUNTIME_TARGET} ${HAXEON_RUNTIME_LINK_SCOPE} haxeon_pinned_libffi)
+set(HAXEON_RUNTIME_SYSTEM_LIBRARIES ${CMAKE_DL_LIBS})
+if(WIN32)
+  list(APPEND HAXEON_RUNTIME_SYSTEM_LIBRARIES advapi32 bcrypt ws2_32)
+endif()
+target_link_libraries(haxeon_runtime_objects PRIVATE haxeon_pinned_libffi)
 if(MSVC)
-  target_compile_definitions(${HAXEON_RUNTIME_TARGET} PRIVATE FFI_STATIC_BUILD)
+  target_compile_definitions(haxeon_runtime_objects PRIVATE FFI_STATIC_BUILD)
 endif()
-target_link_libraries(${HAXEON_RUNTIME_TARGET} ${HAXEON_RUNTIME_LINK_SCOPE} ${CMAKE_DL_LIBS})
-if(APPLE AND NOT HAXEON_EMBED_RUNTIME)
-  # The runtime bridge resolves HashLink's host-owned runtime API from the
-  # executable that loads it. Apple ld requires this to be explicit for a
-  # shared library; ELF linkers allow the same unresolved host symbols by
-  # default.
-  target_link_options(haxeon_runtime PRIVATE "-Wl,-undefined,dynamic_lookup")
+
+# HashLink links hl with the plain target_link_libraries signature, which a target cannot mix with the keyword one.
+target_sources(hl PRIVATE $<TARGET_OBJECTS:haxeon_runtime_objects>)
+target_compile_definitions(hl PRIVATE HAXEON_EMBEDDED_RUNTIME)
+target_link_libraries(hl haxeon_pinned_libffi ${HAXEON_RUNTIME_SYSTEM_LIBRARIES})
+
+# The VM as a static library: everything in hl but main.c. C programs that host the VM themselves link it, the tests of
+# the GC, the profiler and the runtime among them, and each then contains the whole VM. It is named libhl (`-lhl`;
+# libhl.lib with MSVC, where hl.lib is the executable's import library).
+add_library(hlvm STATIC
+  "$<FILTER:$<TARGET_OBJECTS:hl>,EXCLUDE,/src/main\\.c\\.(o|obj)$>"
+  $<TARGET_OBJECTS:libhl>
+  $<TARGET_OBJECTS:haxeon_runtime_objects>
+)
+target_include_directories(hlvm INTERFACE vendor/hashlink/src)
+target_link_libraries(hlvm INTERFACE haxeon_pinned_libffi ${HAXEON_RUNTIME_SYSTEM_LIBRARIES})
+if(WIN32)
+  target_link_libraries(hlvm INTERFACE ws2_32 user32 winmm dbghelp)
+else()
+  target_link_libraries(hlvm INTERFACE m dl pthread)
 endif()
-if(NOT HAXEON_EMBED_RUNTIME)
-  set_target_properties(haxeon_runtime PROPERTIES
-    PREFIX ""
-    SUFFIX ".hdll"
-    RUNTIME_OUTPUT_DIRECTORY "${HAXEON_RUNTIME_OUTPUT_DIR}"
-    LIBRARY_OUTPUT_DIRECTORY "${HAXEON_RUNTIME_OUTPUT_DIR}"
-  )
+set_target_properties(hlvm PROPERTIES ARCHIVE_OUTPUT_DIRECTORY "${HAXEON_HASHLINK_OUTPUT_DIR}")
+if(MSVC)
+  set_target_properties(hlvm PROPERTIES OUTPUT_NAME libhl)
+else()
+  set_target_properties(hlvm PROPERTIES OUTPUT_NAME hl)
 endif()
 
 add_subdirectory(tests/native)
 
-set_target_properties(hl libhl PROPERTIES
-  RUNTIME_OUTPUT_DIRECTORY "${HAXEON_HASHLINK_OUTPUT_DIR}"
-  LIBRARY_OUTPUT_DIRECTORY "${HAXEON_HASHLINK_OUTPUT_DIR}"
-  ARCHIVE_OUTPUT_DIRECTORY "${HAXEON_HASHLINK_OUTPUT_DIR}"
-)
-
-if(UNIX AND NOT HAXEON_EMBED_RUNTIME)
-  set_target_properties(haxeon_runtime PROPERTIES
-    BUILD_RPATH "${HAXEON_HASHLINK_OUTPUT_DIR}"
+# The programs link in a staging directory and are published to the HashLink directory by rename, never overwritten
+# in place: a running VM (the CLI, the test driver, a compiler worker) keeps the file it started from while the native
+# build replaces it. The import library Windows libraries link against stays in the HashLink directory.
+set(HAXEON_PROGRAM_STAGING_DIR "${CMAKE_BINARY_DIR}/hashlink-staging")
+set(HAXEON_PUBLISHED_PROGRAMS)
+foreach(_program IN ITEMS hl hlprof-live)
+  set_target_properties(${_program} PROPERTIES
+    RUNTIME_OUTPUT_DIRECTORY "${HAXEON_PROGRAM_STAGING_DIR}"
+    ARCHIVE_OUTPUT_DIRECTORY "${HAXEON_HASHLINK_OUTPUT_DIR}"
   )
-endif()
+  set(_published "${HAXEON_HASHLINK_OUTPUT_DIR}/${_program}${CMAKE_EXECUTABLE_SUFFIX}")
+  add_custom_command(OUTPUT "${_published}"
+    COMMAND "${CMAKE_COMMAND}" "-DFROM=$<TARGET_FILE:${_program}>" "-DTO=${_published}"
+      -P "${CMAKE_SOURCE_DIR}/cmake/haxeon-replace.cmake"
+    DEPENDS ${_program} "$<TARGET_FILE:${_program}>" "${CMAKE_SOURCE_DIR}/cmake/haxeon-replace.cmake"
+    COMMENT "Publishing ${_program}"
+    VERBATIM
+  )
+  list(APPEND HAXEON_PUBLISHED_PROGRAMS "${_published}")
+endforeach()
 
 # Instrumented native builds link the function hooks from the HashLink tools directory: hlprof_penter.lib for /Gh /GH
 # on Windows, libhlprof_hooks.a for the compiler's -finstrument-functions on Linux.
@@ -187,7 +207,7 @@ foreach(_hooks IN ITEMS hlprof_penter hlprof_hooks)
   endif()
 endforeach()
 
-add_custom_target(haxeon-native DEPENDS hl hldump hlprof-live ${HAXEON_RUNTIME_TARGET} jit_native_properties)
+add_custom_target(haxeon-native DEPENDS ${HAXEON_PUBLISHED_PROGRAMS} hldump hlvm jit_native_properties)
 foreach(_hooks IN ITEMS hlprof_penter hlprof_hooks)
   if(TARGET ${_hooks})
     add_dependencies(haxeon-native ${_hooks})

@@ -471,7 +471,7 @@ It takes an optional iteration count (default 20000000):
 out/cmake/windows-msvc/hashlink/bin/hlprof-bench.exe [ITERATIONS]
 ```
 
-The program loads `libhl.dll`, so put `.tools/hashlink` on `PATH` first. Results
+The program has libhl compiled in. Results
 are nanoseconds per operation; `../design/PROFILER_DESIGN.md` lists the reference figures. The
 last line reports the consumer's drain rate and any stalls.
 

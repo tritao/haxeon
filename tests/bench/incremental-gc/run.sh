@@ -5,7 +5,7 @@ output=${1:-$root/out/bench/gc-latency}
 mkdir -p "$output"
 output=$(cd "$output" && pwd)
 library=${HL_GC_TEST_LIBRARY_DIR:-$("$root/scripts/hashlink-path.sh")}
-"${CC:-cc}" -O2 -D_DEFAULT_SOURCE -I"$root/vendor/hashlink/src" "$root/tests/bench/incremental-gc/latency.c" -L"$library" -lhl -lpthread -o "$output/latency"
+"${CC:-cc}" -O2 -D_DEFAULT_SOURCE -I"$root/vendor/hashlink/src" "$root/tests/bench/incremental-gc/latency.c" -L"$library" -lhl -lm -ldl -lpthread -o "$output/latency"
 # Timed runs exclude validation and phase logging. Run correctness guards first.
 export HL_GC_INCREMENTAL_VALIDATE=0 HL_GC_INCREMENTAL_TEST_SOFTWARE=0 HL_GC_LATENCY_TRACE=0 HL_GC_INCREMENTAL=0 HL_GC_SCAN_PROFILE=0
 export LD_LIBRARY_PATH="$library${LD_LIBRARY_PATH:+:$LD_LIBRARY_PATH}"
@@ -15,7 +15,7 @@ nodes=${GC_BENCH_NODES:-500000}
  uname -a
  "${CC:-cc}" --version | head -1
  printf 'frames=%s nodes=%s budget_us=1000 churn_bytes_per_frame=34816\n' "$frames" "$nodes"
- sha256sum "$root/vendor/hashlink/src/gc_incremental.c" "$root/vendor/hashlink/src/gc_write_tracking.c" "$library/libhl.so"
+ sha256sum "$root/vendor/hashlink/src/gc_incremental.c" "$root/vendor/hashlink/src/gc_write_tracking.c" "$library/libhl.a"
  git -C "$root/vendor/hashlink" rev-parse HEAD
 } > "$output/environment.txt"
 for threads in 1 4; do
