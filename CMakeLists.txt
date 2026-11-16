@@ -182,6 +182,9 @@ endif()
 
 add_subdirectory(tests/native)
 
+# The wasm32 runtimes committed in stdlib/haxeon/wasm: haxeon-wasm-runtime and haxeon-wasm-runtime-check.
+include(cmake/haxeon-wasm-runtime.cmake)
+
 # The haxeon command: the VM with an entry point that runs the Haxeon CLI's bytecode (native/haxeon_main.c), which is
 # compiled here with the pinned Haxe from the CLI's sources. It needs the pinned Haxe; without it only hl is built.
 set(HAXEON_PINNED_HAXE "${CMAKE_SOURCE_DIR}/.tools/haxe/haxe${CMAKE_EXECUTABLE_SUFFIX}")

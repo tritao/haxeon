@@ -28,13 +28,15 @@ objects. It shares the object-independent cryptographic kernels described below.
 Haxeon links it; the output stays one module and embedders change nothing.
 
 - `native/wasm/*.c` builds with clang (`--target=wasm32 -O2 -nostdlib
-  -mbulk-memory`, `--import-memory`, `--no-entry`) through
-  `scripts/build-wasm-runtime.sh` into `stdlib/haxeon/wasm/linear-runtime.wasm`,
-  which is committed. The script checks that the module has no data segments,
-  globals, table or stack, so it needs nothing from the linker but memory:
-  runtime state lives in a struct at an address Haxeon reserves and passes in.
-  `--check` fails when the committed module differs from a fresh build; the
-  backend test runs it when clang is available.
+  -mbulk-memory`, `--import-memory`, `--no-entry`) into
+  `stdlib/haxeon/wasm/linear-runtime.wasm`, which is committed: the native build's
+  `haxeon-wasm-runtime` target rebuilds it when a wasm32 clang is configured
+  (`HAXEON_WASM_CLANG`; `cmake/haxeon-wasm-runtime.cmake`). The build checks that
+  the module has no data segments, globals, table or stack
+  (`scripts/wasm/check-runtime-modules.js`), so it needs nothing from the linker
+  but memory: runtime state lives in a struct at an address Haxeon reserves and
+  passes in. `haxeon-wasm-runtime-check` fails when the committed module differs
+  from a fresh build; the backend test runs it, and it is skipped without clang.
 - The runtime imports `env.memory` and the guest functions it calls back
   (module `haxeon_guest`, for example `collect`), and exports its entry points.
 - `WasmRuntimeLinker` decodes the runtime module and appends its functions to
@@ -114,7 +116,7 @@ on HashLink, `wasm32`, and `wasm-gc`. The implementation lives in
 `native/shared/sha256.h`; thin wrappers adapt HashLink byte buffers and the Wasm
 C ABI. It owns no persistent state and leaves the input unchanged.
 
-`scripts/build-wasm-runtime.sh` also builds the committed
+The same target also builds the committed
 `stdlib/haxeon/wasm/crypto-runtime.wasm`. `WasmCryptoRuntime` links it only when a
 crypto function is used, through `HaxeonCrypto.hxi` and the existing C ABI bridge.
 The resulting application needs no JavaScript crypto imports or asynchronous API.

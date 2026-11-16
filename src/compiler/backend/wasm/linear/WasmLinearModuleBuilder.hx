@@ -508,7 +508,7 @@ class WasmLinearModuleBuilder {
 	static function defaultRuntime():haxe.io.Bytes {
 		if (cachedRuntime == null) {
 			if (!sys.FileSystem.exists(DEFAULT_RUNTIME))
-				throw 'The wasm32 backend links $DEFAULT_RUNTIME, which is missing; run scripts/build-wasm-runtime.sh';
+				throw 'The wasm32 backend links $DEFAULT_RUNTIME, which is missing; build it with the haxeon-wasm-runtime target of the native build';
 			cachedRuntime = sys.io.File.getBytes(DEFAULT_RUNTIME);
 		}
 		return cachedRuntime;
@@ -518,7 +518,7 @@ class WasmLinearModuleBuilder {
 		if (cachedRuntimeNeutral == null) {
 			var path = "stdlib/haxeon/wasm/linear-runtime-neutral.wasm";
 			if (!sys.FileSystem.exists(path))
-				throw 'The runtime-neutral wasm32 runtime $path is missing; run scripts/build-wasm-runtime.sh';
+				throw 'The runtime-neutral wasm32 runtime $path is missing; build it with the haxeon-wasm-runtime target of the native build';
 			cachedRuntimeNeutral = sys.io.File.getBytes(path);
 		}
 		return cachedRuntimeNeutral;
