@@ -543,6 +543,9 @@ class IrInterpreter {
 			case "haxe.Int64.ofInt": haxe.Int64.ofInt(arguments[0]);
 			case "haxe.Int64.ushr": haxe.Int64.ushr(cast arguments[0], Std.int(arguments[1]));
 			case "haxe.Int64.xor": haxe.Int64.xor(cast arguments[0], cast arguments[1]);
+			case "haxe.Int64.mul": haxe.Int64.mul(cast arguments[0], cast arguments[1]);
+			case "haxe.Int64.div": haxe.Int64.div(cast arguments[0], cast arguments[1]);
+			case "haxe.Int64.mod": haxe.Int64.mod(cast arguments[0], cast arguments[1]);
 			case "haxe.Int64.and": haxe.Int64.and(cast arguments[0], cast arguments[1]);
 			case "haxe.Int64.compare": haxe.Int64.compare(cast arguments[0], cast arguments[1]);
 			case "haxe.Int64.toInt":

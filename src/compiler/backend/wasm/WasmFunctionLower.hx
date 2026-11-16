@@ -2344,6 +2344,8 @@ class WasmFunctionLower {
 				I64Add;
 			case "haxe.Int64.sub":
 				I64Sub;
+			case "haxe.Int64.mul":
+				I64Mul;
 			case "haxe.Int64.and":
 				I64And;
 			case "haxe.Int64.or":
@@ -2353,6 +2355,38 @@ class WasmFunctionLower {
 			case _:
 				null;
 		};
+		// Haxe's truncating division and its remainder. A zero divisor traps, Wasm's division by zero; the minimum divided by -1,
+		// which i64.div_s also traps on, is negated instead (wrapping to the minimum), and its remainder is 0.
+		if (name == "haxe.Int64.div" || name == "haxe.Int64.mod") {
+			if (arguments.length != 2 || (switch (output.type) {
+				case I64:
+					false;
+				default:
+					true;
+			})) throw 'Invalid $name Wasm native signature';
+			var dividend = requiredLocal(values, arguments[0].id),
+				divisor = requiredLocal(values, arguments[1].id),
+				result = requiredLocal(values, output.id),
+				division = name == "haxe.Int64.div";
+			body.push(LocalGet(divisor));
+			body.push(I64Const(-1));
+			body.push(I64Eq);
+			body.push(If(null));
+			if (division) {
+				body.push(I64Const(0));
+				body.push(LocalGet(dividend));
+				body.push(I64Sub);
+			} else
+				body.push(I64Const(0));
+			body.push(LocalSet(result));
+			body.push(Else);
+			body.push(LocalGet(dividend));
+			body.push(LocalGet(divisor));
+			body.push(division ? I64DivS : I64RemS);
+			body.push(LocalSet(result));
+			body.push(End);
+			return true;
+		}
 		if (name == "haxe.Int64.neg") {
 			if (arguments.length != 1 || (switch (output.type) {
 				case I64:

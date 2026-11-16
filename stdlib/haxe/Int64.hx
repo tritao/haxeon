@@ -41,6 +41,17 @@ extern class Int64 {
 	@:hlNative("haxeon_runtime", "__int64_neg")
 	public static function neg(value:haxe.Int64):haxe.Int64;
 
+	@:hlNative("haxeon_runtime", "__int64_mul")
+	public static function mul(left:haxe.Int64, right:haxe.Int64):haxe.Int64;
+
+	/** Truncating division, as Haxe's: dividing by zero throws; the minimum divided by -1 wraps to the minimum. */
+	@:hlNative("haxeon_runtime", "__int64_div")
+	public static function div(dividend:haxe.Int64, divisor:haxe.Int64):haxe.Int64;
+
+	/** The remainder of `div`, with the dividend's sign. */
+	@:hlNative("haxeon_runtime", "__int64_mod")
+	public static function mod(dividend:haxe.Int64, divisor:haxe.Int64):haxe.Int64;
+
 	@:hlNative("haxeon_runtime", "__int64_and")
 	public static function and(left:haxe.Int64, right:haxe.Int64):haxe.Int64;
 

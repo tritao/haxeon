@@ -602,3 +602,4 @@ bytes-to-hex	42
 statement-metadata	42
 int32-ucompare	42
 int64-low-high	42
+int64-mul-div	42

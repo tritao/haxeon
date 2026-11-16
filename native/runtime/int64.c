@@ -65,6 +65,17 @@ HL_PRIM int HL_NAME(__int64_to_int)(int64_t value) { return (int)value; }
 HL_PRIM int64_t HL_NAME(__int64_add)(int64_t left, int64_t right) { return left + right; }
 HL_PRIM int64_t HL_NAME(__int64_sub)(int64_t left, int64_t right) { return left - right; }
 HL_PRIM int64_t HL_NAME(__int64_neg)(int64_t value) { return (int64_t)(0 - (uint64_t)value); }
+HL_PRIM int64_t HL_NAME(__int64_mul)(int64_t left, int64_t right) { return (int64_t)((uint64_t)left * (uint64_t)right); }
+/* Truncating division, as Haxe's Int64.div: the minimum divided by -1 wraps to the minimum; dividing by zero is an error. */
+HL_PRIM int64_t HL_NAME(__int64_div)(int64_t left, int64_t right) {
+	if( right == 0 ) hl_error("Division by zero");
+	return right == -1 ? (int64_t)(0 - (uint64_t)left) : left / right;
+}
+/* The remainder of that division, with the dividend's sign. */
+HL_PRIM int64_t HL_NAME(__int64_mod)(int64_t left, int64_t right) {
+	if( right == 0 ) hl_error("Division by zero");
+	return right == -1 ? 0 : left % right;
+}
 HL_PRIM int64_t HL_NAME(__int64_and)(int64_t left, int64_t right) { return left & right; }
 HL_PRIM int64_t HL_NAME(__int64_or)(int64_t left, int64_t right) { return left | right; }
 HL_PRIM int64_t HL_NAME(__int64_xor)(int64_t left, int64_t right) { return left ^ right; }
