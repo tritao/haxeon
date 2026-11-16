@@ -2,6 +2,7 @@
 set -euo pipefail
 
 repo_dir=$(cd "$(dirname "${BASH_SOURCE[0]}")/../.." && pwd)
+source "$repo_dir/scripts/lib/env.sh"
 fixture=$(mktemp -d "${TMPDIR:-/tmp}/haxeon-cmake-libraries.XXXXXX")
 trap 'rm -rf -- "$fixture"' EXIT
 mkdir -p "$fixture/tiny/native" "$fixture/tiny/ffi" "$fixture/tiny/src" "$fixture/app/src"
@@ -70,8 +71,8 @@ run_expected() {
 
 run_expected 43
 output="$fixture/app/build/host/native/tiny"
-test -s "$output/libtiny_alpha.so"
-test -s "$output/libtiny_beta.so"
+test -s "$output/$(haxeon_shared_library tiny_alpha)"
+test -s "$output/$(haxeon_shared_library tiny_beta)"
 test ! -e "$output/tiny.hdll"
 "$repo_dir/scripts/haxeon" build --project="$fixture/app/haxeon.json" >"$fixture/rebuild.log" 2>&1
 if ! grep -q 'native-cmake-configure:tiny.*clean (fingerprint match)' "$fixture/rebuild.log" ||
@@ -81,9 +82,9 @@ if ! grep -q 'native-cmake-configure:tiny.*clean (fingerprint match)' "$fixture/
 fi
 
 # CMake must recreate a missing secondary output; bytecode does not need recompilation.
-rm -- "$output/libtiny_beta.so"
+rm -- "$output/$(haxeon_shared_library tiny_beta)"
 run_expected 43
-test -s "$output/libtiny_beta.so"
+test -s "$output/$(haxeon_shared_library tiny_beta)"
 grep -q 'compile-project:tiny-app.*clean (fingerprint match)' "$fixture/run.log"
 
 # Delegation must still notice changes in CMake's own dependency graph.
@@ -97,5 +98,5 @@ if "$repo_dir/scripts/haxeon" build --project="$fixture/app/haxeon.json" >"$fixt
   echo "expected a missing declared library to fail the build" >&2
   exit 1
 fi
-grep -q 'did not produce required output .*libnever_built.so' "$fixture/missing.log"
+grep -q "did not produce required output .*$(haxeon_shared_library never_built)" "$fixture/missing.log"
 echo "PASS: aggregate CMake targets share linked library state, repair outputs, and reject incomplete builds"

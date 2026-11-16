@@ -2,7 +2,8 @@
 set -euo pipefail
 
 repo_dir=$(cd "$(dirname "${BASH_SOURCE[0]}")/../.." && pwd)
-project_dir=$(mktemp -d "${TMPDIR:-/tmp}/haxeon-embedding.XXXXXX")
+# The physical path: the build records the sources it read by theirs (macOS's temporary directory is behind a symlink).
+project_dir=$(cd "$(mktemp -d "${TMPDIR:-/tmp}/haxeon-embedding.XXXXXX")" && pwd -P)
 trap 'rm -rf -- "$project_dir"' EXIT
 mkdir -p "$project_dir/src"
 python3 - "$repo_dir" "$project_dir" <<'PY'

@@ -5,6 +5,7 @@
 #   haxeon_require_hashlink             # exit 1 unless the checkout-built HashLink is
 #   haxeon_export_library_path [DIR...] # put out/, the HashLink directory and DIRs on the library path
 #   haxeon_timeout SECONDS COMMAND...   # run COMMAND, stopped after SECONDS, like GNU timeout (macOS has none)
+#   haxeon_shared_library NAME          # the file a CMake shared library NAME builds to here: libNAME.so, libNAME.dylib, NAME.dll
 #
 # haxeon_root is the repository root and haxeon_haxe the pinned Haxe, wherever the sourcing script lives. haxeon_suite_out is where a
 # test writes the files it reads back: HAXEON_SUITE_OUT, the directory of its own the suite runner gives each suite, else out/ (a run by
@@ -76,4 +77,13 @@ haxeon_timeout() {
 		while (waitpid($pid, 0) != $pid) {}
 		exit(($? & 127) ? 128 + ($? & 127) : $? >> 8);
 	' "$limit" "$@"
+}
+
+# The file name a CMake shared library target builds to on this platform.
+haxeon_shared_library() {
+	case "$(uname -s)" in
+	Darwin) printf 'lib%s.dylib' "$1" ;;
+	MINGW* | MSYS* | CYGWIN*) printf '%s.dll' "$1" ;;
+	*) printf 'lib%s.so' "$1" ;;
+	esac
 }

@@ -2,6 +2,7 @@
 set -euo pipefail
 
 repo_dir=$(cd "$(dirname "${BASH_SOURCE[0]}")/../.." && pwd)
+source "$repo_dir/scripts/lib/env.sh"
 fixture=$(mktemp -d "${TMPDIR:-/tmp}/haxeon-cmake-library.XXXXXX")
 trap 'rm -rf -- "$fixture"' EXIT
 mkdir -p "$fixture/tiny/native" "$fixture/tiny/ffi" "$fixture/tiny/src" "$fixture/app/src"
@@ -57,7 +58,7 @@ if [[ $status -ne 42 ]]; then
   echo "expected native CMake library call to return 42, got $status" >&2
   exit 1
 fi
-test -s "$fixture/app/build/host/native/tiny/libtiny_core.so"
+test -s "$fixture/app/build/host/native/tiny/$(haxeon_shared_library tiny_core)"
 "$repo_dir/scripts/haxeon" build --project="$fixture/app/haxeon.json" >"$fixture/rebuild.log" 2>&1
 if ! grep -q 'native-cmake-configure:tiny.*clean (fingerprint match)' "$fixture/rebuild.log" ||
     ! grep -q 'compile-project:tiny-app.*clean (fingerprint match)' "$fixture/rebuild.log"; then
