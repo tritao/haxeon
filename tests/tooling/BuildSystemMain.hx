@@ -1228,10 +1228,10 @@ class BuildSystemMain {
 		expectThrows(() -> FfiImportManifest.parse("/tmp/direct.ffi.json",
 			'{"version":1,"name":"direct","language":"c++","profile":"direct","header":"fixture.hpp","library":"fixture","cxxThunks":true}'),
 			"direct C++ FFI profiles should reject generated thunks");
+		// The compiler home is the checkout: the FFI import runs its own `haxeon`, found through its HashLink path table.
 		var environment = new BuildEnvironment(project.root, Path.join([project.root, "build"])),
 			plan = BuildPlanner.project(project, BuildIntent.Build, environment.target, NativeArtifactDemand.Shared),
 			execution = PlanLowerer.lower(plan,
-				// The FFI import runs the compiler checkout's own `haxeon`, found through its HashLink path table.
 				new LoweringContext(environment, null, project,
 				new TargetLayout(environment).hashLinkModulePath("main"), Sys.getCwd())),
 			planText = plan.toDebugString(),
