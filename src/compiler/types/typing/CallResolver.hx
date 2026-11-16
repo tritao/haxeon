@@ -2202,10 +2202,9 @@ class CallResolver {
 		if (name == "concat") {
 			if (arguments.length != 1)
 				fail("E1008", "Array.concat expects one argument", span);
-			var other = typeExpressionValue(arguments[0], scope, TArray(element)),
-				otherElement = arrayElementType(other.type, span);
-			if (!sameType(otherElement, element))
-				fail("E1002", "Array.concat expects matching element types", span);
+			// Coerced as any argument is: a nullable array is read as the array, as in Haxe (null throws at run time).
+			var other = coerce(typeExpressionValue(arguments[0], scope, TArray(element)), TArray(element),
+				"Array.concat argument", "E1002");
 			return new TypedExpression(TCollectionCall(receiver, "concat", [other]), TArray(element), span);
 		}
 		if (name == "slice") {

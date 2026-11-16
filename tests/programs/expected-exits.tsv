@@ -611,3 +611,4 @@ switch-assignment-refinement	42
 flow-join-expressions	42
 do-while-join	42
 local-inference-type-variables	42
+array-concat-nullable	42
