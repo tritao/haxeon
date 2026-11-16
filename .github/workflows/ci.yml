@@ -92,7 +92,7 @@ jobs:
       - name: Run cross-platform core tests
         if: matrix.platform == 'windows'
         shell: pwsh
-        run: ./.tools/haxe/haxe.exe --cwd . common.hxml --run build.HaxeonBuild test 8
+        run: ./scripts/haxeon.ps1 dev test-driver 8
 
       - name: Build with the MSVC Debug CRT
         if: matrix.platform == 'windows'

@@ -1,5 +1,7 @@
 package tools.dev;
 
+import haxe.io.Path;
+
 /**
  * `haxeon dev`: commands for working on this checkout itself, not on a project.
  *
@@ -13,6 +15,12 @@ package tools.dev;
  *   haxeon dev test quick|wave|ci|full [--jobs N] [--gate] [--only NAME,...] [--list]
  *       Run a mode of tests/suites.txt (SuiteRunner). scripts/test.sh runs `ci`; scripts/gate.sh runs the others with --gate.
  *
+ *   haxeon dev test-driver [jobs] [--suite NAMES] [--test REGEX] [--list]
+ *       Run the test driver on private copies of the VM and runtime (TestDriverCommand). scripts/test-driver.sh runs it.
+ *
+ *   haxeon dev bootstrap [--self]
+ *       Refresh the checked-in compiler, or check it against the sources (build.HaxeonBuild). scripts/bootstrap-compiler.sh runs it.
+ *
  *   haxeon dev check-tests
  *       Fail on a test file under tests/ that no suite, test driver case or workflow runs (TestRegistration).
  */
@@ -24,6 +32,8 @@ class DevCommand {
 			case "test": test(arguments, home);
 			case "format": FormatCommand.run(arguments, home);
 			case "check-tests": TestRegistration.run(arguments, home);
+			case "test-driver": TestDriverCommand.run(arguments, home);
+			case "bootstrap": bootstrap(arguments, home);
 			case "help", "--help", "-h", "": usage(command == "" ? 2 : 0);
 			case _:
 				Sys.stderr().writeString('Unknown dev command: $command\n');
@@ -98,6 +108,21 @@ class DevCommand {
 		});
 	}
 
+	/** The bootstrap needs the pinned Haxe for its seed, so it runs under it: `build.HaxeonBuild bootstrap` or `bootstrap-self`. */
+	static function bootstrap(arguments:Array<String>, home:String):Int {
+		if (arguments.length > 1 || (arguments.length == 1 && arguments[0] != "--self"))
+			throw "bootstrap takes only --self";
+		var pinnedHaxe = Path.join([home, ".tools", "haxe", Sys.systemName() == "Windows" ? "haxe.exe" : "haxe"]);
+		return Sys.command(pinnedHaxe, [
+			"--cwd",
+			home,
+			"common.hxml",
+			"--run",
+			"build.HaxeonBuild",
+			arguments.length == 1 ? "bootstrap-self" : "bootstrap"
+		]);
+	}
+
 	static function usage(status:Int):Int {
 		var out = status == 0 ? Sys.stdout() : Sys.stderr();
 		out.writeString("Usage: haxeon dev <command>   (commands for working on a Haxeon checkout)\n");
@@ -107,6 +132,10 @@ class DevCommand {
 		out.writeString("      Format the checkout's Haxe sources, or check them; --changed: only files that differ from origin/main\n");
 		out.writeString("  test quick|wave|ci|full [--jobs N] [--gate] [--only NAME,...] [--list]\n");
 		out.writeString("      Run a mode of tests/suites.txt; --gate writes a report to out/gate (default jobs: TEST_JOBS, else 16)\n");
+		out.writeString("  test-driver [jobs] [--suite NAMES] [--test REGEX] [--list]\n");
+		out.writeString("      Run the test driver, or the cases selected (suites: compiler, programs, runtime, tooling; default jobs: 4)\n");
+		out.writeString("  bootstrap [--self]\n");
+		out.writeString("      Refresh bootstrap/compiler.hl from the sources; --self: check that it rebuilds itself identically\n");
 		out.writeString("  check-tests\n");
 		out.writeString("      Fail on a test file under tests/ that no suite, test driver case or workflow runs\n");
 		return status;

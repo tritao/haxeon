@@ -40,30 +40,34 @@ scripts/test-driver.sh 4 --suite compiler --test ParserRecovery
 scripts/test-driver.sh 1 --list
 ```
 
-The script runs the driver with private copies of the VM and runtime, so a native rebuild cannot overwrite a library the
-driver has loaded, and compiles program cases with the prebuilt compiler. `HAXEON_TEST_INTERPRETED=1` makes it compile them
+It is `haxeon dev test-driver` after a native build. The driver runs with private copies of the VM and runtime, so a native
+rebuild cannot overwrite a library the driver has loaded, and compiles program cases with the prebuilt compiler. `HAXEON_TEST_INTERPRETED=1` makes it compile them
 with `haxe --run Main` instead, for debugging the compiler's sources under the Haxe interpreter. Running
 `haxe --run driver.TestDriver` by hand skips that setup: it needs the checkout's `hl` on `PATH` and the runtime on the library path.
 
-### The build entry point
+### The same commands on every platform
 
-`build.HaxeonBuild` is the cross-platform entry point behind the scripts. Run it with the pinned Haxe in two cases. Before
-HashLink is built, nothing else can run it:
+Setup is two CMake invocations, wrapped by a script per shell. Everything after that is `haxeon dev`, spelled the same
+everywhere: `scripts/haxeon` in a Unix shell, `scripts\haxeon` (`haxeon.cmd`, `haxeon.ps1`) on Windows. Both launchers build the
+CLI to HashLink bytecode when its sources change and run it on the checkout-built VM.
 
-```sh
-.tools/haxe/haxe common.hxml --run build.HaxeonBuild doctor    # are git, cmake, ninja and the pinned Haxe there?
-.tools/haxe/haxe common.hxml --run build.HaxeonBuild native    # the CMake build: the release preset, or windows-msvc on Windows
-```
+| Step | Command | Unix wrapper | Windows wrapper |
+|---|---|---|---|
+| Pinned tools and submodules | `cmake -P cmake/Bootstrap.cmake` | `scripts/bootstrap-tools.sh` | `scripts/setup.ps1` |
+| HashLink and the runtime | `cmake --preset P`, `cmake --build --preset P` | `scripts/build-native.sh` | `scripts/build-native.ps1` |
+| Test suites | `haxeon dev test MODE` | `scripts/test.sh`, `scripts/gate.sh` | |
+| Test driver | `haxeon dev test-driver [jobs] [options]` | `scripts/test-driver.sh` | |
+| Refresh or check the checked-in compiler | `haxeon dev bootstrap [--self]` | `scripts/bootstrap-compiler.sh` | |
+| Format | `haxeon dev format [--check]` | `scripts/format.sh` | |
+| Toolchain report | `haxeon doctor` | | |
 
-On Windows, where the Bash scripts do not run, it is also how the bootstrap and the test driver start, and what CI runs:
+The Unix wrappers pass their arguments on; `test.sh`, `gate.sh` and `test-driver.sh` build the native runtime first.
+`bootstrap-compiler.sh` runs the bootstrap without the CLI, so it works before HashLink is built. `haxeon dev test` runs its
+suites through Bash, so it needs a Unix shell.
 
-```powershell
-.tools\haxe\haxe.exe --cwd . common.hxml --run build.HaxeonBuild bootstrap
-.tools\haxe\haxe.exe --cwd . common.hxml --run build.HaxeonBuild test 8    # 4 jobs by default; takes the driver options above
-```
-
-Everywhere else use `scripts/build-native.sh`, `scripts/bootstrap-compiler.sh` and `scripts/test-driver.sh`. After the native
-build, `scripts/haxeon doctor` reports the whole toolchain: the pinned Haxe, HashLink, the runtime library and the Android tools.
+`build.HaxeonBuild` is the entry point underneath `dev test-driver` and `dev bootstrap`. Running it by hand with the pinned Haxe
+(`.tools/haxe/haxe common.hxml --run build.HaxeonBuild native|bootstrap|test|doctor`) is only needed when there is no HashLink
+to run the CLI on; its `doctor` checks for git, cmake, ninja and the pinned Haxe.
 
 ## Formatting
 
