@@ -57,6 +57,10 @@ class MonomorphFrames {
 		return TMonomorph(cell);
 	}
 
+	/** Whether a body is being typed, which can settle the type variables made in it. */
+	public function canCreate():Bool
+		return frames.length > 0;
+
 	/** Whether the innermost body has made a type variable: only then can a type it meets mention one. */
 	public function active():Bool
 		return frames.length > 0 && frames[frames.length - 1].cells.length > 0;

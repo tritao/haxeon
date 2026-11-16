@@ -102,10 +102,10 @@ class ExpressionTyper {
 	/** Dispatches each source expression to its focused typing rule or semantic resolver. */
 	public function typeExpression(expression:AstExpression, scope:Scope, ?expectedType:CompilerType,
 			inferDynamicLambdaResult:Bool = false):TypedExpression {
-		// An expected type that is an empty type variable expects nothing yet; a filled one is the type it holds.
+		// An expected type that is an empty type variable expects its hint, if a later use gave it one; a filled one is the type
+		// it holds.
 		if (expectedType != null && session.monomorphs.active())
-			expectedType = compiler.types.Monomorphs.isUnbound(expectedType)
-				? null : compiler.types.Monomorphs.resolve(expectedType);
+			expectedType = compiler.types.Monomorphs.expectation(expectedType);
 		var result = switch expression {
 			case IntegerLiteral(_, _), FloatLiteral(_, _), StringLiteral(_, _), BoolLiteral(_, _), NullLiteral(_),
 				Unreachable(_), EmptyExpression(_),

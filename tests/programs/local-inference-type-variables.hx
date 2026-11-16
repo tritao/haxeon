@@ -1,6 +1,7 @@
 // A local declared without what fixes its type takes it from the first use that does, as in Haxe: an empty array from
 // what is pushed into it (even another empty array, or from inside a lambda) or the typed parameter it is passed to,
 // `var x;` and `var x = null` from the value first assigned, wherever that is, and `new Map()` from its first `set`.
+// What a later use expects (a return, a typed argument) is the context values flowing in are typed in, not the type.
 class Box {
 	public final label:String;
 
@@ -73,10 +74,65 @@ function grouped():Int {
 	return total;
 }
 
+typedef Argument = {name:String, ?optional:Bool};
+
+function count(arguments:Array<Argument>):Int
+	return arguments.length;
+
+// The object pushed is typed as the structure `count` expects, optional field and all, so the array is one of those.
+function hintedStructure():Int {
+	var arguments = [];
+	arguments.push({name: "a"});
+	return count(arguments);
+}
+
+// The literal pushed is typed as the Float the return expects, so the array is one of Floats.
+function hintedNumbers():Array<Float> {
+	var values = [];
+	values.push(1);
+	return values;
+}
+
+// `indexOf` and `contains` before any push fix the element from the value compared, as Haxe unifies the two.
+function comparedFirst(list:String):Int {
+	var sources = [];
+	for (source in list.split(","))
+		if (sources.indexOf(source) < 0)
+			sources.push(source);
+	var seen = [];
+	var had = seen.contains(3);
+	seen.push(3);
+	return had ? 0 : sources.length;
+}
+
+typedef ToolRequest = {main:String, classPaths:Array<String>, defines:Array<String>};
+
+// The arrays are fixed by the nullable values `shift` returns, read as the Strings the returned structure expects: an
+// object literal returned as a `Null<ToolRequest>` is a present one, whose fields are the structure's.
+function toolRequest(arguments:Array<String>):Null<ToolRequest> {
+	var classPaths = [], defines = [];
+	while (arguments.length > 0) {
+		var argument = arguments.shift();
+		switch argument {
+			case "--cp" | "--define":
+				(argument == "--cp" ? classPaths : defines).push(arguments.shift());
+			case _:
+				return {main: argument, classPaths: classPaths, defines: defines};
+		}
+	}
+	return null;
+}
+
+function nullableIntoHinted():Int {
+	var request = toolRequest(["--cp", "src", "--define", "x", "Main"]);
+	return request == null ? 0 : request.classPaths.length + request.defines.length;
+}
+
 function main():Int
 	return passedToTypedParameter() + assignedLater(true) + nestedEmptyArrays() + filledInLambda() + counts([
 		"a",
 		"b",
 		"a"
 	])
-		+ grouped() == 24 ? 42 : 1;
+		+ grouped() + hintedStructure() + Std.int(hintedNumbers()[0]) + comparedFirst("a,b,a") + nullableIntoHinted()
+		== 30 ? 42 : 1;

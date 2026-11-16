@@ -429,8 +429,13 @@ class BodyTyper {
 		if (frame.cells.length == 0)
 			return statements;
 		for (cell in frame.cells)
-			if (compiler.types.Monomorphs.isUnbound(TMonomorph(cell)))
-				fail("E1003", 'Cannot infer ${cell.origin}: nothing after it fixes it; give it a type', cell.span);
+			if (compiler.types.Monomorphs.isUnbound(TMonomorph(cell))) {
+				// Nothing filled it, but a later use expects a type of it: that is its type.
+				if (cell.hint != null)
+					compiler.types.Monomorphs.unify(TMonomorph(cell), cell.hint);
+				else
+					fail("E1003", 'Cannot infer ${cell.origin}: nothing after it fixes it; give it a type', cell.span);
+			}
 		for (check in frame.deferred)
 			check();
 		var map = new compiler.types.TypedTypeMap(compiler.types.Monomorphs.resolve);
@@ -644,6 +649,15 @@ class BodyTyper {
 		};
 	}
 
+	/** Whether typing `initializer` with nothing expected makes a type variable for its type (`Monomorphs`). */
+	static function makesTypeVariable(initializer:AstExpression):Bool
+		return switch initializer {
+			case NullLiteral(_): true;
+			case ArrayLiteral(values, _): values.length == 0;
+			case MapLiteral(entries, _): entries.length == 0;
+			default: false;
+		};
+
 	/** The type a later use expects of a local whose initializer has none of its own (`[]`, `null`, `{items: []}`). */
 	function expectedInitializerType(name:String, initializer:AstExpression):Null<CompilerType> {
 		if (StringTools.startsWith(name, '$' + 'null-coalesce:'))
@@ -651,6 +665,9 @@ class BodyTyper {
 		// Without a type a later use expects, an empty array or map and `null` take type variables, which the first use that
 		// fixes them fills (`Monomorphs`).
 		if (!usesLocalExpectedType(initializer))
+			return null;
+		// An empty array or map and `null` get a type variable, and what a later use expects is only its hint.
+		if (session.monomorphs.canCreate() && makesTypeVariable(initializer))
 			return null;
 		var expected = context.localExpectedTypes.get(name);
 		return expected != null && containsNullLiteral(initializer)
@@ -872,8 +889,9 @@ class BodyTyper {
 				}
 				changed;
 			case ObjectLiteral(fields, _):
+				// An object literal is a present value, so where a `Null<Struct>` is expected its fields are the structure's.
 				var expectedFields = switch expected {
-					case TAnonymous(_, values): values;
+					case TAnonymous(_, values), TNullable(TAnonymous(_, values)): values;
 					default: null;
 				}, changed = false;
 				if (expectedFields != null)
@@ -1801,8 +1819,8 @@ class BodyTyper {
 		if (expectedType != null && !expectedType.match(TVoid))
 			switch result {
 				case Variable(resultName,
-					_) if (declaresUntyped(statements, resultName) && !context.localExpectedTypes.exists(resultName)):
-					context.localExpectedTypes.set(resultName, expectedType);
+					_) if (declaresUntyped(statements, resultName) && !context.resultLocalTypes.exists(resultName)):
+					context.resultLocalTypes.set(resultName, expectedType);
 				default:
 			}
 		var blockScope = new Scope(scope),

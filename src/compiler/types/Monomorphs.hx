@@ -36,6 +36,32 @@ class Monomorphs {
 			default: false;
 		};
 
+	/**
+	 * What typing a value expected to be `type` should expect: the hint of an empty type variable (or nothing, without one),
+	 * and otherwise `type` with its filled variables resolved.
+	 */
+	public static function expectation(type:CompilerType):Null<CompilerType>
+		return switch follow(type) {
+			case TMonomorph(cell): cell.hint == null ? null : resolve(cell.hint);
+			default: resolve(type);
+		};
+
+	/** Records `expected` as the hint of each empty type variable in `type`, part by part (`MonomorphCell.hint`). */
+	public static function hint(type:CompilerType, expected:CompilerType):Void
+		switch [follow(type), follow(expected)] {
+			case [TMonomorph(cell), _]:
+				if (cell.hint == null)
+					cell.hint = expected;
+			case [TNullable(a), TNullable(b)], [TArray(a), TArray(b)], [TIterator(a), TIterator(b)]:
+				hint(a, b);
+			case [TNullable(a), _]:
+				hint(a, expected);
+			case [TMap(k1, v1), TMap(k2, v2)]:
+				hint(k1, k2);
+				hint(v1, v2);
+			default:
+		}
+
 	/** Whether `type` mentions a type variable, filled or not. */
 	public static function contains(type:CompilerType):Bool
 		return containsWithin(type, null);

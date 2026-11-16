@@ -73,6 +73,13 @@ class MonomorphCell {
 
 	public var bound:Null<CompilerType> = null;
 
+	/**
+	 * The type a later use expects of it (a return, a typed argument): the context values flowing into it are typed in, so
+	 * `list.push({name: n})` types the object as that use's structure. It is not the variable's type: the first use that
+	 * fixes it fills it, as in Haxe, and only one nothing fills takes its hint.
+	 */
+	public var hint:Null<CompilerType> = null;
+
 	public function new(origin:String, span:compiler.core.Source.SourceSpan) {
 		this.origin = origin;
 		this.span = span;
