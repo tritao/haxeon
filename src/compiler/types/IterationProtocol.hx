@@ -4,8 +4,8 @@ import compiler.types.Type.CompilerType;
 import compiler.types.Type.AnonymousField;
 import compiler.types.Type.NominalKind;
 import compiler.semantic.SemanticSignature;
-import compiler.Diagnostic;
-import compiler.Diagnostic.CompileError;
+import compiler.core.Diagnostic;
+import compiler.core.Diagnostic.CompileError;
 import compiler.types.TypedAst.TypedExpression;
 import compiler.types.typing.TypingSession;
 

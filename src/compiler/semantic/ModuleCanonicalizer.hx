@@ -123,7 +123,7 @@ class ModuleCanonicalizer {
 		return packageName == null || packageName.length == 0 ? name : packageName + "." + name;
 
 	public static function sourceDeclarationPath(moduleName:String, declarationName:String):String {
-		var primaryName = compiler.QualifiedName.last(moduleName);
+		var primaryName = compiler.core.QualifiedName.last(moduleName);
 		return primaryName == declarationName ? moduleName : moduleName + "." + declarationName;
 	}
 
@@ -344,7 +344,8 @@ class ModuleCanonicalizer {
 	 * assignment targets all qualify a dotted path this way, so they must agree.
 	 */
 	static function importedReference(path:String, locals:LocalScope, aliases:Null<AliasTable>):Null<String>
-		return locals.exists(compiler.QualifiedName.first(path)) ? null : resolveOptionalExpressionAlias(path, aliases);
+		return locals.exists(compiler.core.QualifiedName.first(path)) ? null : resolveOptionalExpressionAlias(path,
+			aliases);
 
 	/**
 	 * An assignment target is a name, not an expression, so `Cache.entries = x` reaches here as the dotted string
@@ -433,7 +434,7 @@ class ModuleCanonicalizer {
 						: name.indexOf(".") < 0 && locals.get(name) == true
 						? (module == entry && name == "main" ? "main" : module + "." + name) : name;
 				resolved == name ? e : Variable(resolved,
-					new compiler.Source.SourceSpan(span.file, span.start, span.end, span.isBareReference,
+					new compiler.core.Source.SourceSpan(span.file, span.start, span.end, span.isBareReference,
 					span.referenceName == null ? name : span.referenceName));
 			case Member(object, name, s):
 				var qualifiedName = expressionPath(e),
@@ -539,7 +540,7 @@ class ModuleCanonicalizer {
 			case Call(name, args, s):
 				var resolved = name;
 				var dot = name.indexOf("."),
-					prefix = compiler.QualifiedName.first(name),
+					prefix = compiler.core.QualifiedName.first(name),
 					imported = locals.get(prefix) == false ? null : resolveOptionalExpressionAlias(name, aliases);
 				if (imported != null)
 					resolved = imported;
@@ -549,7 +550,7 @@ class ModuleCanonicalizer {
 					for (index in 0...args.length)
 						index == 1 && isTypeTestCall(name) ? canonicalTypeArgument(args[index], module, entry, locals,
 						aliases) : canonicalExpression(args[index], module, entry, locals, aliases)
-				], resolved == name ? s : new compiler.Source.SourceSpan(s.file, s.start, s.end, s.isBareReference,
+				], resolved == name ? s : new compiler.core.Source.SourceSpan(s.file, s.start, s.end, s.isBareReference,
 					s.referenceName == null ? name : s.referenceName));
 			case NativeLayoutQuery(kind, type, field, s): NativeLayoutQuery(kind, canonicalType(type, aliases), field,
 				s);
@@ -566,7 +567,7 @@ class ModuleCanonicalizer {
 								pathFields = (suffix.length == 0 ? [] : suffix.substr(1).split(".")).concat(fields);
 								break;
 							}
-							candidate = compiler.QualifiedName.parentOrEmpty(candidate);
+							candidate = compiler.core.QualifiedName.parentOrEmpty(candidate);
 						}
 					default: pathRoot = canonicalType(root, aliases);
 				}
@@ -658,7 +659,7 @@ class ModuleCanonicalizer {
 					suffix = name.substring(candidate.length, name.length);
 				return resolved + suffix;
 			}
-			var parent = compiler.QualifiedName.parentOrEmpty(candidate);
+			var parent = compiler.core.QualifiedName.parentOrEmpty(candidate);
 			if (parent.length == 0)
 				return null;
 			candidate = parent;

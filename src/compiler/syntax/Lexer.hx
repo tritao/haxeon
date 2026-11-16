@@ -1,8 +1,9 @@
 package compiler.syntax;
 
-import compiler.Diagnostic.CompileError;
-import compiler.Diagnostic.DiagnosticSeverity;
-import compiler.Source.SourceFile;
+import compiler.core.Diagnostic;
+import compiler.core.Diagnostic.CompileError;
+import compiler.core.Diagnostic.DiagnosticSeverity;
+import compiler.core.Source.SourceFile;
 import compiler.syntax.Token.TokenKind;
 
 /** Converts one source file into a positioned token stream or a lexical diagnostic. */

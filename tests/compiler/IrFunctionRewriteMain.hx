@@ -1,4 +1,4 @@
-import compiler.compilation.AllocationMeter;
+import compiler.core.AllocationMeter;
 import compiler.ir.Ir;
 import compiler.ir.IrBuilder;
 import compiler.ir.IrFunction;

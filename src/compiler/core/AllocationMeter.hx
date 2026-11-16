@@ -1,4 +1,4 @@
-package compiler.compilation;
+package compiler.core;
 
 typedef AllocationSnapshot = {
 	final bytes:Float;

@@ -1,6 +1,6 @@
 import compiler.Compiler;
-import compiler.Diagnostic.CompileError;
 import compiler.Frontend;
+import compiler.core.Diagnostic.CompileError;
 import compiler.ir.IrInterpreter;
 import compiler.semantic.ImplicitConstructors;
 import compiler.semantic.Invalidation.InvalidatedArtifact;
@@ -118,7 +118,7 @@ class ImplicitConstructorMain {
 			+ (arguments.length > 0 ? " public function new("
 			+ [for (index in 0...arguments.length) "a" + index + ":" + arguments[index]].join(", ") + ") {}" : "")
 			+ " }";
-		return new compiler.syntax.Parser(new compiler.syntax.Lexer(new compiler.Source.SourceFile(name + ".hx",
+		return new compiler.syntax.Parser(new compiler.syntax.Lexer(new compiler.core.Source.SourceFile(name + ".hx",
 			source)).tokenize()).parseProgram()
 			.classes[0];
 	}

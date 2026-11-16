@@ -112,7 +112,7 @@ class CompilerSessionMain {
 		var invalidSnapshot = false;
 		try
 			compile()
-		catch (error:compiler.Diagnostic.CompileError) {
+		catch (error:compiler.core.Diagnostic.CompileError) {
 			invalidSnapshot = true;
 			expect(error.diagnostic.span.file.path == value,
 				"shape-lexer diagnostics must name the real source, not <session-shapes>");

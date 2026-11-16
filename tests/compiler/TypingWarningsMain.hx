@@ -1,5 +1,5 @@
 import compiler.Compiler;
-import compiler.Diagnostic;
+import compiler.core.Diagnostic;
 import compiler.runtime.CompilerIntrinsics;
 import compiler.service.LanguageService;
 

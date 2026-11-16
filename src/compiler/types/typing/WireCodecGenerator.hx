@@ -1,8 +1,8 @@
 package compiler.types.typing;
 
 import compiler.types.TypedAst.TypedFunctionRole;
-import compiler.Source.SourceFile;
-import compiler.Source.SourceSpan;
+import compiler.core.Source.SourceFile;
+import compiler.core.Source.SourceSpan;
 import compiler.types.Type.CompilerType;
 import compiler.types.Type.NominalKind;
 import compiler.types.TypedAst.TypedClass;
@@ -11,9 +11,9 @@ import compiler.types.TypedAst.TypedEnumCase;
 import compiler.types.TypedAst.TypedExpression;
 import compiler.types.TypedAst.TypedExpressionKind;
 import compiler.types.TypedAst.TypedField;
-import compiler.Provides.ProviderOperation;
-import compiler.Provides.ProviderOperations;
-import compiler.Provides;
+import compiler.core.Provides.ProviderOperation;
+import compiler.core.Provides.ProviderOperations;
+import compiler.core.Provides;
 import compiler.types.TypedAst.TypedFunction;
 import compiler.types.TypedAst.TypedStatement;
 import compiler.types.TypeRelations;

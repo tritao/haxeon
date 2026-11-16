@@ -1,6 +1,6 @@
 package compiler.ir;
 
-import compiler.Source.SourceSpan;
+import compiler.core.Source.SourceSpan;
 
 /** Stable source coordinates retained independently of a compiler source snapshot. */
 class SourceLocation {

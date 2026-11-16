@@ -1,6 +1,6 @@
 package compiler.compilation;
 
-import compiler.Diagnostic;
+import compiler.core.Diagnostic;
 import compiler.modules.ModuleState;
 import compiler.semantic.ModuleCanonicalizer;
 import compiler.types.TypedAst.TypedFunction;

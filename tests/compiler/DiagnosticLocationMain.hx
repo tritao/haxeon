@@ -1,5 +1,5 @@
-import compiler.Diagnostic.CompileError;
 import compiler.Frontend;
+import compiler.core.Diagnostic.CompileError;
 
 /** An error nobody catches is printed through `toString`, so that has to say where the problem is. */
 class DiagnosticLocationMain {

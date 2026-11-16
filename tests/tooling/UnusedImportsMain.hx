@@ -1,4 +1,4 @@
-import compiler.Source.SourceFile;
+import compiler.core.Source.SourceFile;
 import compiler.service.UnusedImports;
 import compiler.service.UnusedImports.ImportTarget;
 import compiler.syntax.Ast.AstProgram;

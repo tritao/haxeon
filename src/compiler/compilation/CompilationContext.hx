@@ -3,6 +3,7 @@ package compiler.compilation;
 import compiler.Compiler;
 import compiler.Compiler.ReachabilityCache;
 import compiler.abi.RuntimeAbi.RuntimeAbiDescriptor;
+import compiler.core.AllocationMeter;
 import compiler.hl.incremental.HlModuleAssembler;
 import compiler.ir.Ir.IrCNative;
 import compiler.ir.Ir.IrNative;

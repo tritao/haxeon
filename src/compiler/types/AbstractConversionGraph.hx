@@ -1,7 +1,7 @@
 package compiler.types;
 
-import compiler.Diagnostic;
-import compiler.Diagnostic.CompileError;
+import compiler.core.Diagnostic;
+import compiler.core.Diagnostic.CompileError;
 import compiler.semantic.SemanticSignature;
 import compiler.types.Type.CompilerType;
 
@@ -15,7 +15,7 @@ class AbstractConversionGraph {
 	final declarations:DeclarationIndex;
 	final fromEdges:Array<ConversionEdge> = [];
 	final toEdges:Array<ConversionEdge> = [];
-	final spans:Map<String, compiler.Source.SourceSpan> = [];
+	final spans:Map<String, compiler.core.Source.SourceSpan> = [];
 
 	public function new(declarations:DeclarationIndex, shouldValidate:Bool) {
 		this.declarations = declarations;

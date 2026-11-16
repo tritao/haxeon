@@ -60,7 +60,7 @@ class PurityInference {
 					setters.set(field.name, true);
 		// Abstracts and interfaces declare setters as methods only; a name match over-approximates safely.
 		for (name in signatures.keys()) {
-			var simple = compiler.QualifiedName.last(name);
+			var simple = compiler.core.QualifiedName.last(name);
 			if (StringTools.startsWith(simple, "set_"))
 				setters.set(simple.substr(4), true);
 		}
@@ -154,7 +154,8 @@ class PurityInference {
 			stringMethods:Array<String> = [];
 		// Receiver writes are a separate property from global purity and its abstract-operator restrictions.
 		for (name => fn in signatures) {
-			var owner = compiler.QualifiedName.parent(name), declaration = owner == null ? null : classes.get(owner);
+			var owner = compiler.core.QualifiedName.parent(name),
+				declaration = owner == null ? null : classes.get(owner);
 			if (declaration != null && !fn.isStatic && isValueClass(declaration)
 				&& ReceiverMutationInference.isReadOnly(declaration, fn))
 				receiverFacts.set(ReceiverMutationInference.PREFIX + name, true);
@@ -171,7 +172,7 @@ class PurityInference {
 		for (name => fn in signatures) {
 			if (fn.isExtern == true || isAnnotatedPure(name))
 				continue;
-			var owner = compiler.QualifiedName.parent(name),
+			var owner = compiler.core.QualifiedName.parent(name),
 				operatorMethod = isOperatorMethod(fn, owner, abstracts),
 				stringConversion = !fn.isStatic && fn.name == "toString" && owner != null && classes.exists(owner);
 			if (operatorMethod)
@@ -336,8 +337,8 @@ class PurityInference {
 	}
 
 	public function resolveStatic(typeName:String, method:String, functionName:String):Null<String> {
-		var owner = compiler.QualifiedName.parent(functionName),
-			packageName = owner == null ? null : compiler.QualifiedName.parent(owner);
+		var owner = compiler.core.QualifiedName.parent(functionName),
+			packageName = owner == null ? null : compiler.core.QualifiedName.parent(owner);
 		for (candidate in [
 			typeName + "." + method,
 			packageName == null ? null : packageName + "." + typeName + "." + method
@@ -362,7 +363,7 @@ class PurityInference {
 		var fn = signatures.get(key);
 		if (fn == null || fn.isExtern == true)
 			return isAnnotatedPure(key);
-		var owner = compiler.QualifiedName.parent(key);
+		var owner = compiler.core.QualifiedName.parent(key);
 		if (fn.isStatic || owner == null || !isTypeName(owner))
 			return true;
 		return classes.exists(owner) && fn.name != "new";
@@ -389,7 +390,7 @@ class PurityInference {
 		return constructors.exists(name);
 
 	static function sibling(functionName:String, name:String):String {
-		var owner = compiler.QualifiedName.parent(functionName);
+		var owner = compiler.core.QualifiedName.parent(functionName);
 		return owner == null ? name : owner + "." + name;
 	}
 }
@@ -784,10 +785,10 @@ private class PurityWalker {
 		return switch value {
 			case Variable(name, _):
 				var fact = localFact(name);
-				fact == null ? isMapType(inference.ownFieldType(compiler.QualifiedName.parent(functionName), name))
+				fact == null ? isMapType(inference.ownFieldType(compiler.core.QualifiedName.parent(functionName), name))
 					&& readsProperty(name) : fact.map;
 			case Member(Variable("this", _), name,
-				_): isMapType(inference.ownFieldType(compiler.QualifiedName.parent(functionName),
+				_): isMapType(inference.ownFieldType(compiler.core.QualifiedName.parent(functionName),
 				name)) && readsProperty(name);
 			default: false;
 		};
@@ -795,12 +796,13 @@ private class PurityWalker {
 	function isMapReadCall(name:String):Bool {
 		var parts = name.split(".");
 		if (parts.length == 3 && parts[0] == "this" && isMapReadOperation(parts[2]))
-			return isMapType(inference.ownFieldType(compiler.QualifiedName.parent(functionName), parts[1]))
+			return isMapType(inference.ownFieldType(compiler.core.QualifiedName.parent(functionName), parts[1]))
 				&& readsProperty(parts[1]);
 		if (parts.length != 2 || !isMapReadOperation(parts[1]))
 			return false;
 		var fact = localFact(parts[0]);
-		return fact == null ? isMapType(inference.ownFieldType(compiler.QualifiedName.parent(functionName), parts[0]))
+		return fact == null
+			? isMapType(inference.ownFieldType(compiler.core.QualifiedName.parent(functionName), parts[0]))
 			&& readsProperty(parts[0]) : fact.map;
 	}
 
@@ -836,12 +838,13 @@ private class PurityWalker {
 			case StringLiteral(_, _): true;
 			case Variable(name, _):
 				var fact = localFact(name);
-				fact == null ? (switch (inference.ownFieldType(compiler.QualifiedName.parent(functionName), name)) {
-					case StringType: true;
-					default: false;
-				}) : fact.string;
+				fact == null
+					? (switch (inference.ownFieldType(compiler.core.QualifiedName.parent(functionName), name)) {
+						case StringType: true;
+						default: false;
+					}) : fact.string;
 			case Member(Variable("this", _), name,
-				_): (switch (inference.ownFieldType(compiler.QualifiedName.parent(functionName), name)) {
+				_): (switch (inference.ownFieldType(compiler.core.QualifiedName.parent(functionName), name)) {
 						case StringType: true;
 						default: false;
 					});
@@ -855,7 +858,7 @@ private class PurityWalker {
 
 	function isStringName(name:String):Bool {
 		var fact = localFact(name);
-		return fact == null ? (switch (inference.ownFieldType(compiler.QualifiedName.parent(functionName), name)) {
+		return fact == null ? (switch (inference.ownFieldType(compiler.core.QualifiedName.parent(functionName), name)) {
 			case StringType: true;
 			default: false;
 		})
@@ -871,10 +874,11 @@ private class PurityWalker {
 		return switch value {
 			case Variable(name, _):
 				var fact = localFact(name);
-				fact == null ? isStringArrayType(inference.ownFieldType(compiler.QualifiedName.parent(functionName),
+				fact == null
+					? isStringArrayType(inference.ownFieldType(compiler.core.QualifiedName.parent(functionName),
 					name)) : fact.stringArray;
 			case Member(Variable("this", _), name,
-				_): isStringArrayType(inference.ownFieldType(compiler.QualifiedName.parent(functionName), name));
+				_): isStringArrayType(inference.ownFieldType(compiler.core.QualifiedName.parent(functionName), name));
 			default: false;
 		};
 
@@ -884,7 +888,7 @@ private class PurityWalker {
 			return false;
 		var fact = localFact(parts[0]);
 		return fact == null
-			? isStringArrayType(inference.ownFieldType(compiler.QualifiedName.parent(functionName), parts[0]))
+			? isStringArrayType(inference.ownFieldType(compiler.core.QualifiedName.parent(functionName), parts[0]))
 			&& readsProperty(parts[0]) : fact.stringArray;
 	}
 
@@ -910,10 +914,11 @@ private class PurityWalker {
 		return switch value {
 			case Variable(name, _):
 				var fact = localFact(name);
-				fact == null ? isArrayType(inference.ownFieldType(compiler.QualifiedName.parent(functionName), name))
+				fact == null
+					? isArrayType(inference.ownFieldType(compiler.core.QualifiedName.parent(functionName), name))
 					&& readsProperty(name) : fact.array;
 			case Member(Variable("this", _), field,
-				_): isArrayType(inference.ownFieldType(compiler.QualifiedName.parent(functionName),
+				_): isArrayType(inference.ownFieldType(compiler.core.QualifiedName.parent(functionName),
 				field)) && readsProperty(field);
 			default: false;
 		};
@@ -921,12 +926,13 @@ private class PurityWalker {
 	function isArrayStorageCall(name:String):Bool {
 		var parts = name.split(".");
 		if (parts.length == 3 && parts[0] == "this" && isArrayStorageOperation(parts[2]))
-			return isArrayType(inference.ownFieldType(compiler.QualifiedName.parent(functionName), parts[1]))
+			return isArrayType(inference.ownFieldType(compiler.core.QualifiedName.parent(functionName), parts[1]))
 				&& readsProperty(parts[1]);
 		if (parts.length != 2 || !isArrayStorageOperation(parts[1]))
 			return false;
 		var fact = localFact(parts[0]);
-		return fact == null ? isArrayType(inference.ownFieldType(compiler.QualifiedName.parent(functionName), parts[0]))
+		return fact == null
+			? isArrayType(inference.ownFieldType(compiler.core.QualifiedName.parent(functionName), parts[0]))
 			&& readsProperty(parts[0]) : fact.array;
 	}
 
@@ -1064,8 +1070,9 @@ private class PurityWalker {
 
 	/** The known concrete class of `this`'s own field, when its declared type names one. */
 	function fieldClassName(field:String):Null<String>
-		return classNameOfType(inference.ownFieldType(compiler.QualifiedName.parent(functionName), field));
+		return classNameOfType(inference.ownFieldType(compiler.core.QualifiedName.parent(functionName), field));
 
 	function fieldIsIterable(field:String):Bool
-		return PurityWalker.isIterableType(inference.ownFieldType(compiler.QualifiedName.parent(functionName), field));
+		return PurityWalker.isIterableType(inference.ownFieldType(compiler.core.QualifiedName.parent(functionName),
+			field));
 }

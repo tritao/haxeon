@@ -1,5 +1,5 @@
 import compiler.Compiler;
-import compiler.Diagnostic.CompileError;
+import compiler.core.Diagnostic.CompileError;
 import compiler.ir.IrInterpreter;
 
 /** Folding a checked abstract constant must retain its semantic type without opening the abstract to raw values. */

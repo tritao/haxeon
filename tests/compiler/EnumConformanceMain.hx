@@ -1,5 +1,5 @@
-import compiler.Diagnostic.CompileError;
 import compiler.Frontend;
+import compiler.core.Diagnostic.CompileError;
 import compiler.ir.IrInterpreter;
 
 class EnumConformanceMain {

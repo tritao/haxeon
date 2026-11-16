@@ -1,7 +1,7 @@
 import compiler.Compiler;
-import compiler.Diagnostic.CompileError;
-import compiler.Source.SourceFile;
-import compiler.Source.SourceSpan;
+import compiler.core.Diagnostic.CompileError;
+import compiler.core.Source.SourceFile;
+import compiler.core.Source.SourceSpan;
 
 class EnumVisibilityMain {
 	static function main():Void {

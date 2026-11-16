@@ -1,6 +1,6 @@
 package compiler.types.typing;
 
-import compiler.Diagnostic;
+import compiler.core.Diagnostic;
 import compiler.types.Type.CompilerType;
 import compiler.types.analysis.BindingStoragePlan;
 import compiler.types.analysis.Scope;

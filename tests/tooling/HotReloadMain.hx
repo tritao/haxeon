@@ -1,8 +1,8 @@
 import compiler.Compiler;
 import compiler.Compiler.CompileResult;
-import compiler.Diagnostic.CompileError;
 import compiler.abi.PatchPlanner.PatchDecision;
 import compiler.compilation.CompilerPublication.ReconnectDecision;
+import compiler.core.Diagnostic.CompileError;
 import compiler.hl.HlCode;
 import compiler.hl.HlCode.HlTypeDef;
 import compiler.hl.HlFunction;

@@ -1,6 +1,6 @@
 import compiler.Compiler;
-import compiler.Diagnostic.CompileError;
 import compiler.compilation.CompilerPublication.ReconnectDecision;
+import compiler.core.Diagnostic.CompileError;
 import compiler.hl.HlWriter;
 import runtime.LoadedPlugin;
 import runtime.PatchSet;

@@ -1,4 +1,4 @@
-package compiler;
+package compiler.core;
 
 /** Immutable source text and its diagnostic path for one compiler input. */
 class SourceFile {

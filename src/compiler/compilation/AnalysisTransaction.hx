@@ -2,9 +2,9 @@ package compiler.compilation;
 
 import compiler.Compiler;
 import compiler.Compiler.AnalysisResult;
-import compiler.Diagnostic;
+import compiler.core.CancellationToken;
+import compiler.core.Diagnostic;
 import compiler.modules.ModuleState;
-import compiler.service.CancellationToken;
 
 /** Runs compiler analysis transactionally without assembling or publishing a runtime artifact. */
 class AnalysisTransaction {

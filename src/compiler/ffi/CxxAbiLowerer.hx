@@ -23,7 +23,7 @@ import sys.FileSystem;
 private typedef CxxCallbackType = {
 	final name:String;
 	final type:CxxType;
-	final span:compiler.Source.SourceSpan;
+	final span:compiler.core.Source.SourceSpan;
 }
 
 /** Lowers supported C++ declarations into ordinary HXI ABI declarations. */
@@ -284,7 +284,7 @@ class CxxAbiLowerer {
 			callback.span);
 	}
 
-	static function collectCallbackTypes(type:CxxType, span:compiler.Source.SourceSpan,
+	static function collectCallbackTypes(type:CxxType, span:compiler.core.Source.SourceSpan,
 			callbackNames:Map<String, String>,
 			callbackTypes:Map<String, CxxCallbackType>):Void {
 		switch type {

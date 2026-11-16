@@ -10,8 +10,8 @@ typedef StabilizedAssignmentTarget = {
 
 /** Normalizes writable expressions while preserving source evaluation order. */
 class AssignmentTarget {
-	public static function stabilize(target:AstExpression, span:compiler.Source.SourceSpan,
-			spanOf:AstExpression->compiler.Source.SourceSpan):StabilizedAssignmentTarget {
+	public static function stabilize(target:AstExpression, span:compiler.core.Source.SourceSpan,
+			spanOf:AstExpression->compiler.core.Source.SourceSpan):StabilizedAssignmentTarget {
 		var bindings:Array<AstStatement> = [];
 		var stable = switch target {
 			case Index(array, offset, targetSpan):
@@ -32,6 +32,6 @@ class AssignmentTarget {
 		return {target: stable, bindings: bindings};
 	}
 
-	static function temporary(kind:String, span:compiler.Source.SourceSpan):String
+	static function temporary(kind:String, span:compiler.core.Source.SourceSpan):String
 		return '$' + 'compound:$kind:${span.start}';
 }

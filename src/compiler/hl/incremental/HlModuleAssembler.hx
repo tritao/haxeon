@@ -24,7 +24,7 @@ import compiler.hl.persistence.HlSymbolStateCodec;
 import compiler.hl.patch.HlPatchWriter;
 import compiler.ir.Ir.IrNative;
 import compiler.ir.hl.HlDebugMetadataCache;
-import compiler.compilation.AllocationMeter.PhaseAllocation;
+import compiler.core.AllocationMeter.PhaseAllocation;
 
 /** Persisted append-only symbol and function baseline for incremental assembly. */
 typedef HlAssemblerState = {

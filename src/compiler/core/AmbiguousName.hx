@@ -1,4 +1,4 @@
-package compiler;
+package compiler.core;
 
 /**
  * The marker a name resolves to when imports make it ambiguous (see `compiler.semantic.ImportShadowing`), and the E1029

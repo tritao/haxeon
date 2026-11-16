@@ -1,5 +1,5 @@
 import compiler.Compiler;
-import compiler.Diagnostic.CompileError;
+import compiler.core.Diagnostic.CompileError;
 
 /** Explicit value equality must never silently compare an unsupported type by identity. */
 class EqualityConformanceMain {

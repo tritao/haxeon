@@ -27,8 +27,8 @@ import compiler.ir.hl.HlScalarValueLocals.HlScalarValueLocal;
 import compiler.hl.incremental.HlSymbolRequest;
 import compiler.hl.incremental.HlSymbolRequest.HlRemap;
 import compiler.ir.SourceProvenance;
-import compiler.compilation.AllocationMeter;
-import compiler.compilation.AllocationMeter.PhaseAllocation;
+import compiler.core.AllocationMeter;
+import compiler.core.AllocationMeter.PhaseAllocation;
 
 typedef HlLowerMetrics = {
 	final allocationPhases:Array<PhaseAllocation>;

@@ -2,9 +2,9 @@ package compiler;
 
 import compiler.syntax.Ast;
 import compiler.syntax.Ast.AstFunction;
-import compiler.Diagnostic;
-import compiler.Diagnostic.CompileError;
-import compiler.Source.SourceFile;
+import compiler.core.Diagnostic;
+import compiler.core.Diagnostic.CompileError;
+import compiler.core.Source.SourceFile;
 import compiler.ir.Ir.IrProgram;
 import compiler.ir.Ir.IrType;
 import compiler.ir.IrGenerator;
@@ -26,7 +26,7 @@ import compiler.ir.Ir.IrCNative;
 import compiler.ir.Ir.IrObject;
 import compiler.types.TypeRegistry;
 import compiler.types.TypeRegistry.TypeCompatibility;
-import compiler.service.CancellationToken;
+import compiler.core.CancellationToken;
 import compiler.abi.RuntimeAbi;
 import compiler.abi.RuntimeAbi.RuntimeAbiDescriptor;
 import compiler.abi.PatchPlanner;
@@ -140,7 +140,7 @@ typedef CompileResult = {
 
 /** Work and output-size counters measured for one compilation. */
 typedef CompileMetrics = {
-	final allocationPhases:Array<compiler.compilation.AllocationMeter.PhaseAllocation>;
+	final allocationPhases:Array<compiler.core.AllocationMeter.PhaseAllocation>;
 	final elapsedMs:Float;
 	final transactionSnapshotMs:Float;
 	final candidateSetupMs:Float;
@@ -297,7 +297,7 @@ class Compiler {
 	final ffiProjectionProfiles:Map<String, HxiProjectionProfile> = [];
 	final ffiProjectionPaths:Map<String, String> = [];
 	final ffiProjectionCache:Map<String, Array<HxiProjectedModule>> = [];
-	final ffiSourceOrigins:Map<String, Map<String, compiler.Source.SourceSpan>> = [];
+	final ffiSourceOrigins:Map<String, Map<String, compiler.core.Source.SourceSpan>> = [];
 	final ffiCompositionCache:Map<String, FfiComposition> = [];
 	final ffiAbiCache:Map<String, HxiAbi> = [];
 	var objectCache:Map<String, IrObject> = [];
@@ -548,7 +548,7 @@ class Compiler {
 	}
 
 	/** Resolve generated declarations and their helper members to the owning ABI source. */
-	public function ffiSourceOrigin(path:String, name:String):Null<compiler.Source.SourceSpan> {
+	public function ffiSourceOrigin(path:String, name:String):Null<compiler.core.Source.SourceSpan> {
 		var origins = ffiSourceOrigins.get(path);
 		if (origins == null)
 			return null;

@@ -1,6 +1,6 @@
-package compiler;
+package compiler.core;
 
-import compiler.Source.SourceSpan;
+import compiler.core.Source.SourceSpan;
 
 typedef DiagnosticEdit = {
 	final span:SourceSpan;

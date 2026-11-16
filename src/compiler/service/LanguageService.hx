@@ -1,12 +1,13 @@
 package compiler.service;
 
+import compiler.core.CancellationToken;
 import compiler.formatter.FormatConfig;
 import compiler.formatter.Formatter;
 import compiler.semantic.ModuleCanonicalizer;
 import compiler.syntax.Ast.AstType;
-import compiler.Diagnostic;
-import compiler.Source.SourceFile;
-import compiler.Source.SourceSpan;
+import compiler.core.Diagnostic;
+import compiler.core.Source.SourceFile;
+import compiler.core.Source.SourceSpan;
 import compiler.syntax.Token.TokenKind;
 import compiler.Compiler;
 import compiler.modules.ModulePath;
@@ -22,7 +23,7 @@ import compiler.runtime.CompilerIntrinsics;
 import compiler.syntax.Lexer;
 import compiler.syntax.Parser;
 import compiler.syntax.ConditionalCompilation;
-import compiler.Diagnostic.CompileError;
+import compiler.core.Diagnostic.CompileError;
 import compiler.documentation.Documentation;
 import compiler.documentation.Documentation.DocumentationTools;
 import compiler.documentation.Documentation.DocumentationComment;
@@ -1703,7 +1704,7 @@ class LanguageService {
 		return locations.length > 0 && sameSpan(locations[0], span);
 	}
 
-	static function addCommentTokens(file:compiler.Source.SourceFile, result:Array<SemanticToken>):Void {
+	static function addCommentTokens(file:compiler.core.Source.SourceFile, result:Array<SemanticToken>):Void {
 		var source = file.text, position = 0;
 		while (position + 1 < source.length) {
 			var quote = source.charAt(position);
@@ -1741,7 +1742,7 @@ class LanguageService {
 		}
 	}
 
-	static function addSemanticSpan(file:compiler.Source.SourceFile, start:Int, end:Int, type:String,
+	static function addSemanticSpan(file:compiler.core.Source.SourceFile, start:Int, end:Int, type:String,
 			modifiers:Array<String>,
 			result:Array<SemanticToken>):Void {
 		var partStart = start, position = start;
@@ -1926,7 +1927,7 @@ class LanguageService {
 		return cached;
 	}
 
-	static function commentSpans(text:String, file:compiler.Source.SourceFile):Array<SourceSpan> {
+	static function commentSpans(text:String, file:compiler.core.Source.SourceFile):Array<SourceSpan> {
 		var result:Array<SourceSpan> = [], position = 0;
 		while (position + 1 < text.length) {
 			var quote = text.charAt(position);
@@ -1954,7 +1955,7 @@ class LanguageService {
 		return result;
 	}
 
-	static function addConditionalFolds(file:compiler.Source.SourceFile, folds:Array<FoldingRegion>,
+	static function addConditionalFolds(file:compiler.core.Source.SourceFile, folds:Array<FoldingRegion>,
 			containers:Array<SourceSpan>):Void {
 		var source = file.text, offset = 0, stack:Array<Int> = [];
 		while (offset < source.length) {

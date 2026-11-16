@@ -1,6 +1,6 @@
 package compiler;
 
-import compiler.Source.SourceFile;
+import compiler.core.Source.SourceFile;
 import compiler.ir.Ir.IrProgram;
 import compiler.ir.IrProgramAssembler;
 import compiler.ir.TargetProfile;

@@ -1,8 +1,8 @@
 package compiler.modules;
 
-import compiler.Diagnostic;
-import compiler.Diagnostic.CompileError;
-import compiler.service.CancellationToken;
+import compiler.core.Diagnostic;
+import compiler.core.Diagnostic.CompileError;
+import compiler.core.CancellationToken;
 
 /** Incrementally discovers and validates the source-module closure rooted at an entry module. */
 class ModuleReachability {

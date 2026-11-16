@@ -1,5 +1,5 @@
 import compiler.Frontend;
-import compiler.Source.SourceFile;
+import compiler.core.Source.SourceFile;
 import compiler.hl.HlWriter;
 import compiler.ir.hl.HlLower;
 import haxe.io.Bytes;

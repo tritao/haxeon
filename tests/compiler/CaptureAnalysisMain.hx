@@ -1,4 +1,4 @@
-import compiler.Source.SourceFile;
+import compiler.core.Source.SourceFile;
 import compiler.syntax.Lexer;
 import compiler.syntax.Parser;
 import compiler.types.Type.CompilerType;

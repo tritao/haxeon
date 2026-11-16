@@ -4,8 +4,8 @@ import compiler.semantic.AliasTable;
 import compiler.syntax.Ast.AstExpression;
 import compiler.syntax.Ast.AstField;
 import compiler.syntax.Ast.AstType;
-import compiler.Diagnostic;
-import compiler.Diagnostic.CompileError;
+import compiler.core.Diagnostic;
+import compiler.core.Diagnostic.CompileError;
 
 /** Resolves field annotations before class signatures and bodies are typed. */
 class FieldInference {

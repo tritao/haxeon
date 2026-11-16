@@ -1,8 +1,8 @@
 package compiler.ir;
 
-import compiler.Provides;
-import compiler.Provides.ProviderOperation;
-import compiler.Provides.ProviderOperations;
+import compiler.core.Provides;
+import compiler.core.Provides.ProviderOperation;
+import compiler.core.Provides.ProviderOperations;
 import compiler.ir.Ir;
 
 /** Source binding identity, lexical range, and SSA value after mutable stores vanish. */

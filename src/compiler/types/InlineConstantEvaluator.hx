@@ -78,7 +78,7 @@ class InlineConstantEvaluator {
 		};
 	}
 
-	static function literal(value:InlineConstantValue, span:compiler.Source.SourceSpan,
+	static function literal(value:InlineConstantValue, span:compiler.core.Source.SourceSpan,
 			type:CompilerType):TypedExpression {
 		// Folding changes the expression, not its checked type. Rebuild representation boundaries rather than
 		// asking assignability to convert a raw literal back into a closed abstract.

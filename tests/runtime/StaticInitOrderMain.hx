@@ -135,7 +135,7 @@ class StaticInitOrderMain {
 			var rejected = false;
 			try
 				compiler.compile("Main")
-			catch (error:compiler.Diagnostic.CompileError) {
+			catch (error:compiler.core.Diagnostic.CompileError) {
 				if (error.diagnostic.code != "E_STATIC_INIT_CYCLE" || error.diagnostic.message.indexOf("A.X ->") < 0)
 					throw error;
 				rejected = true;

@@ -1,4 +1,4 @@
-import compiler.service.CancellationToken;
+import compiler.core.CancellationToken;
 import editor.LanguageServiceProtocol;
 import haxe.Json;
 

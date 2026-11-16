@@ -40,9 +40,9 @@ import compiler.types.TypedAst.TypedSwitchCoverageCase;
 import compiler.types.TypedAst.TypedSwitchArrayPattern;
 import compiler.types.TypedAst.TypedSwitchArrayElement;
 import compiler.types.TypedAst.TypedSwitchObjectFieldAccess;
-import compiler.Diagnostic;
-import compiler.Diagnostic.CompileError;
-import compiler.Source.SourceSpan;
+import compiler.core.Diagnostic;
+import compiler.core.Diagnostic.CompileError;
+import compiler.core.Source.SourceSpan;
 
 /** Types function and expression bodies using the current compilation session. */
 @:allow(compiler.types.typing.ProgramTyper)
@@ -230,7 +230,7 @@ class BodyTyper {
 	}
 
 	static function parentPath(path:String):Null<String> {
-		return compiler.QualifiedName.parent(path);
+		return compiler.core.QualifiedName.parent(path);
 	}
 
 	static function pathBeforeLast(path:String):String {
@@ -239,11 +239,11 @@ class BodyTyper {
 	}
 
 	static function lastPathSegment(path:String):String {
-		return compiler.QualifiedName.last(path);
+		return compiler.core.QualifiedName.last(path);
 	}
 
 	static function splitPath(path:String):Array<String> {
-		return compiler.QualifiedName.split(path);
+		return compiler.core.QualifiedName.split(path);
 	}
 
 	static function enumName(type:Null<CompilerType>):Null<String> {

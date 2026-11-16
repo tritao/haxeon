@@ -1,4 +1,4 @@
-import compiler.service.CancellationToken;
+import compiler.core.CancellationToken;
 import compiler.service.LanguageService;
 import compiler.service.LanguageService.CompletionItem;
 import editor.lsp.DocumentStore;

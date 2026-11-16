@@ -1,5 +1,5 @@
 import compiler.Compiler;
-import compiler.Diagnostic.CompileError;
+import compiler.core.Diagnostic.CompileError;
 
 /** Array storage operations cannot replace unrelated fields; user calls and callbacks can. */
 class LoopArrayEffectsMain {

@@ -1,6 +1,6 @@
 package tools;
 
-import compiler.Source.SourceFile;
+import compiler.core.Source.SourceFile;
 import compiler.formatter.ProjectFormat;
 import compiler.formatter.Formatter;
 import compiler.service.ImportOrder;

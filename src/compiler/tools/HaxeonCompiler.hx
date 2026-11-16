@@ -1,6 +1,6 @@
 package compiler.tools;
 
-import compiler.Diagnostic.CompileError;
+import compiler.core.Diagnostic.CompileError;
 
 /** Normal command-line entry point for Haxeon compilation. */
 class HaxeonCompiler {

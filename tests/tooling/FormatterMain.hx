@@ -1,4 +1,4 @@
-import compiler.Source.SourceFile;
+import compiler.core.Source.SourceFile;
 import compiler.formatter.FormatConfig.FormatConfigTools;
 import compiler.formatter.FormatScanner;
 import compiler.formatter.FormatToken.FormatTokenKind;

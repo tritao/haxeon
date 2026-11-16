@@ -1,6 +1,6 @@
 package compiler.types.typing;
 
-import compiler.Source.SourceSpan;
+import compiler.core.Source.SourceSpan;
 import compiler.semantic.SemanticSignature;
 import compiler.types.KeyPathType;
 import compiler.types.Type.CompilerType;
@@ -177,7 +177,8 @@ class KeyPathRuntime {
 		return {
 			name: name,
 			role: ProviderFunction(definition.root,
-				compiler.Provides.ProviderOperations.detailed(compiler.Provides.ProviderOperation.KeyPath, name)),
+				compiler.core.Provides.ProviderOperations.detailed(compiler.core.Provides.ProviderOperation.KeyPath,
+				name)),
 			origin: definition.origin,
 			originKind: Helper,
 			owner: null,

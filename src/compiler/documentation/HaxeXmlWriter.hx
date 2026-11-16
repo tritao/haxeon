@@ -149,7 +149,7 @@ class HaxeXmlWriter {
 	}
 
 	static function openType(output:StringBuf, tag:String, path:String, parameters:Array<String>, state:ModuleState,
-			span:compiler.Source.SourceSpan,
+			span:compiler.core.Source.SourceSpan,
 			isPrivate:Bool, extra:String = ""):Void {
 		output.add('<');
 		output.add(tag);
@@ -187,7 +187,7 @@ class HaxeXmlWriter {
 	}
 
 	static function emitDocumentation(output:StringBuf, state:ModuleState, comments:Array<DocumentationComment>,
-			span:compiler.Source.SourceSpan):Void {
+			span:compiler.core.Source.SourceSpan):Void {
 		var documentation = DocumentationTools.forSpan(state.source, comments, span);
 		if (documentation.raw.length > 0) {
 			output.add('<haxe_doc>');

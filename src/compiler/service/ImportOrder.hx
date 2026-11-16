@@ -1,6 +1,6 @@
 package compiler.service;
 
-import compiler.Source.SourceFile;
+import compiler.core.Source.SourceFile;
 import compiler.service.UnusedImports.ImportTarget;
 import compiler.syntax.ConditionalCompilation;
 import compiler.syntax.Lexer;
@@ -21,7 +21,7 @@ typedef ImportBlock = {
 }
 
 /**
- * Keeps import statements in order: within each run of consecutive import lines, sorted by path (ASCII, so `compiler.Diagnostic` comes
+ * Keeps import statements in order: within each run of consecutive import lines, sorted by path (ASCII, so `compiler.core.Diagnostic` comes
  * before `compiler.ffi.HxiAbi`). A run ends at anything that is not an import line: a blank line, a comment, a conditional-compilation
  * line, a `using`, or an import that shares its line with other code. Those boundaries stay where they are, so grouping and `#if`
  * blocks are preserved.

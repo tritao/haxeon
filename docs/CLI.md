@@ -75,7 +75,7 @@ never reported, since removing them could change what the file means. Enum impor
 are used through their constructors.
 
 It also reports runs of imports that are not in order, and `--fix` sorts them by path
-(ASCII, so `compiler.Diagnostic` sorts before `compiler.ffi.HxiAbi`). A run is
+(ASCII, so `compiler.Compiler` sorts before `compiler.ffi.HxiAbi`). A run is
 consecutive import lines; a blank line, a comment, a `#if` line, a `using` or an
 import sharing its line with other code ends it, so groups stay where they are. A
 later import of a name wins, so a run where two imports make the same short name

@@ -1,5 +1,5 @@
 import compiler.Compiler;
-import compiler.Diagnostic.CompileError;
+import compiler.core.Diagnostic.CompileError;
 
 /**
  * A type that an import of a whole module brings in only as a side effect cannot silently replace a type of the same name

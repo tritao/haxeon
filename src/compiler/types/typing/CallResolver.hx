@@ -1,8 +1,8 @@
 package compiler.types.typing;
 
-import compiler.Diagnostic;
-import compiler.Diagnostic.CompileError;
-import compiler.Source.SourceSpan;
+import compiler.core.Diagnostic;
+import compiler.core.Diagnostic.CompileError;
+import compiler.core.Source.SourceSpan;
 import compiler.ffi.HxiAbi;
 import compiler.ffi.HxiAbi.HxiAbiValue;
 import compiler.ffi.HxiAbi.HxiIntegerSign;
@@ -1187,7 +1187,7 @@ class CallResolver {
 		if (receiver != null)
 			receiver = unwrapNullable(receiver);
 		var expectedEnumName = enumName(expectedType);
-		var constructorName = name.indexOf(".") < 0 ? name : compiler.QualifiedName.last(name);
+		var constructorName = name.indexOf(".") < 0 ? name : compiler.core.QualifiedName.last(name);
 		var enumCase = expectedEnumName != null
 			&& sourceIsBareReference(span) ? enumCaseInfo(expectedEnumName + "." + constructorName) : null;
 		if (enumCase == null) {

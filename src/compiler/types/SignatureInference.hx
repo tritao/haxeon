@@ -384,7 +384,7 @@ class SignatureInference {
 	}
 
 	function splitPath(path:String):Array<String> {
-		return compiler.QualifiedName.split(path);
+		return compiler.core.QualifiedName.split(path);
 	}
 
 	function inferFunction(fn:AstFunction, enums:Map<String, AstEnum>, ?methods:Map<String, AstFunction>,
@@ -544,7 +544,7 @@ class SignatureInference {
 		var known = lastSegments.get(path);
 		if (known != null)
 			return known;
-		var segment = compiler.QualifiedName.last(path);
+		var segment = compiler.core.QualifiedName.last(path);
 		lastSegments.set(path, segment);
 		return segment;
 	}

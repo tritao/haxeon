@@ -1,5 +1,4 @@
 import compiler.Compiler;
-import compiler.Diagnostic.CompileError;
 import compiler.abi.AbiChangeSchema;
 import compiler.abi.PatchPlanner;
 import compiler.abi.PatchPlanner.AbiChange;
@@ -7,6 +6,7 @@ import compiler.abi.PatchPlanner.PatchDecision;
 import compiler.abi.RuntimeAbi;
 import compiler.abi.RuntimeAbi.RuntimeAbiDescriptor;
 import compiler.abi.RuntimeAbiCodec;
+import compiler.core.Diagnostic.CompileError;
 
 typedef AbiFixture = {
 	final name:String;

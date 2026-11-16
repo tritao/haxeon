@@ -1,10 +1,10 @@
 package compiler.types.analysis;
 
-import compiler.Source.SourceSpan;
+import compiler.core.Source.SourceSpan;
 import compiler.syntax.Ast.AstArgument;
 import compiler.syntax.Ast.AstStatement;
-import compiler.Diagnostic;
-import compiler.Diagnostic.CompileError;
+import compiler.core.Diagnostic;
+import compiler.core.Diagnostic.CompileError;
 
 /** Check source binding identities before canonicalization erases declaration syntax. */
 class FinalLocalChecker extends BindingWalker {

@@ -4,5 +4,5 @@ package compiler.ffi;
 typedef HxiProjectedModule = {
 	final path:String;
 	final source:String;
-	final origins:Map<String, compiler.Source.SourceSpan>;
+	final origins:Map<String, compiler.core.Source.SourceSpan>;
 }

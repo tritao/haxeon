@@ -1,6 +1,6 @@
 package compiler.types.typing;
 
-import compiler.compilation.AllocationMeter.PhaseAllocation;
+import compiler.core.AllocationMeter.PhaseAllocation;
 import compiler.types.TypedAst.TypedProgram;
 
 typedef TyperPhaseMetrics = {
@@ -47,5 +47,5 @@ typedef MeasuredTypedProgram = {
 	final keyPathUses:Map<String, Map<String, Bool>>;
 
 	final inlineConstantDependencies:Map<String, Map<String, Bool>>;
-	final defaultArgumentSources:Map<String, Map<String, compiler.Source.SourceFile>>;
+	final defaultArgumentSources:Map<String, Map<String, compiler.core.Source.SourceFile>>;
 }

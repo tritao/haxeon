@@ -211,7 +211,7 @@ class ModuleChangeAnalyzer {
 		for (old in state.instanceInitializerFingerprints.keys())
 			if (!instanceInitializers.exists(old)) {
 				var fieldName:String = old,
-					className = compiler.QualifiedName.parentOrEmpty(fieldName),
+					className = compiler.core.QualifiedName.parentOrEmpty(fieldName),
 					hasConstructor = false;
 				for (classDecl in ast.classes)
 					if (ModuleCanonicalizer.qualifiedTypeName(ast.packageName, classDecl.name) == className)
@@ -349,7 +349,7 @@ class ModuleChangeAnalyzer {
 	 * its specializations are kept from one build to the next while the function is unchanged, and they carry offsets in
 	 * their debug mappings and in the names of their lambdas, so a function that only moved along its line must not keep them.
 	 */
-	static function sourceFingerprint(state:compiler.modules.ModuleState, span:compiler.Source.SourceSpan,
+	static function sourceFingerprint(state:compiler.modules.ModuleState, span:compiler.core.Source.SourceSpan,
 			generic:Bool = false):String
 		return state.source.path + ":" + Std.string(state.source.lineAt(span.start))
 			+ (generic ? "@" + Std.string(span.start) : "") + ":"

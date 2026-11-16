@@ -1,5 +1,5 @@
 import compiler.Compiler;
-import compiler.Diagnostic.CompileError;
+import compiler.core.Diagnostic.CompileError;
 
 class NullableArrayFlowMain {
 	static final prelude = 'struct Point { public var x:Int; public function new(x:Int) this.x=x; } '

@@ -1,7 +1,7 @@
 package compiler.semantic;
 
-import compiler.Diagnostic.CompileError;
-import compiler.QualifiedName;
+import compiler.core.Diagnostic.CompileError;
+import compiler.core.QualifiedName;
 import compiler.modules.ModulePath;
 import compiler.modules.ModuleSourceLoader;
 import compiler.modules.ModuleState;
@@ -604,7 +604,7 @@ class ModuleAnalyzer {
 
 /** A module's source parsed ahead of its own parse, for an import lookup. */
 private class LookupParse {
-	public final source:compiler.Source.SourceFile;
+	public final source:compiler.core.Source.SourceFile;
 	public final defines:Array<String>;
 	public final tokens:Array<compiler.syntax.Token>;
 	public final ast:compiler.syntax.Ast.AstProgram;

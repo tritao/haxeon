@@ -1,7 +1,7 @@
 package compiler.modules;
 
-import compiler.Source.SourceFile;
 import compiler.compilation.CompilationContext;
+import compiler.core.Source.SourceFile;
 import haxe.crypto.Sha256;
 import sys.FileSystem;
 import sys.io.File;

@@ -140,7 +140,8 @@ class InlineEnumPayloadMain {
 			Obj(mixed.valueObject.name),
 			relay.blocks,
 			Provider(compiler.ir.TypeKey.of(Obj(mixed.valueObject.name)),
-			compiler.Provides.ProviderOperations.detailed(compiler.Provides.ProviderOperation.InlineEnumHelper,
+			compiler.core.Provides.ProviderOperations
+			.detailed(compiler.core.Provides.ProviderOperation.InlineEnumHelper,
 			"relay"))));
 		var forward = new IrBuilder(),
 			input = forward.argument("value", Obj(mixed.valueObject.name));
@@ -150,7 +151,8 @@ class InlineEnumPayloadMain {
 			Obj(mixed.valueObject.name),
 			forward.blocks,
 			Provider(compiler.ir.TypeKey.of(Obj(mixed.valueObject.name)),
-			compiler.Provides.ProviderOperations.detailed(compiler.Provides.ProviderOperation.InlineEnumHelper,
+			compiler.core.Provides.ProviderOperations
+			.detailed(compiler.core.Provides.ProviderOperation.InlineEnumHelper,
 			"forward"))));
 		compiler.ir.IrVerifier.verify(p);
 		// Raw host pointers are intentionally not interpreted in target-independent IR.

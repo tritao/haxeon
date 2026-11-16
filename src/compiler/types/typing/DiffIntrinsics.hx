@@ -1,6 +1,6 @@
 package compiler.types.typing;
 
-import compiler.Source.SourceSpan;
+import compiler.core.Source.SourceSpan;
 import compiler.syntax.Ast.AstClass;
 import compiler.syntax.Ast.AstExpression;
 import compiler.syntax.Ast.AstField;

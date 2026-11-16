@@ -1,4 +1,4 @@
-package compiler;
+package compiler.core;
 
 /** What a generated function does for a type, as its generator states it when it creates the function. */
 enum abstract ProviderOperation(String) to String {

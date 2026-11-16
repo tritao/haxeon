@@ -1,5 +1,6 @@
 package compiler.semantic;
 
+import compiler.core.QualifiedName;
 import compiler.syntax.Ast;
 import compiler.syntax.Ast.AstClass;
 import compiler.syntax.Ast.AstExpression;
@@ -7,11 +8,11 @@ import compiler.syntax.Ast.AstFunction;
 import compiler.syntax.Ast.AstStatement;
 import compiler.syntax.Ast.AstType;
 import compiler.syntax.AstFunctions;
-import compiler.Diagnostic;
-import compiler.Diagnostic.CompileError;
+import compiler.core.Diagnostic;
+import compiler.core.Diagnostic.CompileError;
 import compiler.compilation.CompilationContext;
 import compiler.modules.ModuleState;
-import compiler.service.CancellationToken;
+import compiler.core.CancellationToken;
 import compiler.types.FieldInference;
 import compiler.types.SignatureInference;
 import compiler.semantic.Invalidation.InvalidatedArtifact;
@@ -869,7 +870,7 @@ class SemanticAssembly {
 		moduleAliases.push({sourceName: sourceName, declarationName: canonicalName});
 		// Haxe also permits spelling a module's primary declaration as Module.Module.
 		// Keep the source spelling distinct from its canonical package-level type name.
-		if (compiler.QualifiedName.last(moduleName) == declarationName) {
+		if (compiler.core.QualifiedName.last(moduleName) == declarationName) {
 			var explicitPrimary = moduleName + "." + declarationName;
 			target.set(explicitPrimary, canonicalName);
 			moduleAliases.push({sourceName: explicitPrimary, declarationName: canonicalName});

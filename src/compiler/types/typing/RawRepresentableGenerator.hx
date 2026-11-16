@@ -1,6 +1,6 @@
 package compiler.types.typing;
 
-import compiler.Source.SourceSpan;
+import compiler.core.Source.SourceSpan;
 import compiler.syntax.Ast.AstEnumAbstract;
 import compiler.types.InlineConstantEvaluator;
 import compiler.types.Type.CompilerType;
@@ -84,7 +84,7 @@ class RawRepresentableGenerator {
 			default: new TypedExpression(TCall("__std_string",
 				[new TypedExpression(TToDynamic(rawValue), TDynamic, span)]), TString, span);
 		};
-		var owner = compiler.QualifiedName.last(declaration.name);
+		var owner = compiler.core.QualifiedName.last(declaration.name);
 		statements.push(TReturn(new TypedExpression(TAdd(text(owner + "("),
 			new TypedExpression(TAdd(shown, text(")")), TString, span)), TString,
 			span), span));
@@ -167,8 +167,9 @@ class RawRepresentableGenerator {
 				}
 			}
 
-			var fn:TypedFunction = {name: helper, role: ProviderFunction(nominal, compiler.Provides.ProviderOperations
-				.detailed(compiler.Provides.ProviderOperation.RawRepresentable, request.method)),
+			var fn:TypedFunction = {name: helper,
+				role: ProviderFunction(nominal, compiler.core.Provides.ProviderOperations
+				.detailed(compiler.core.Provides.ProviderOperation.RawRepresentable, request.method)),
 				origin: request.origin,
 				originKind: Helper,
 				owner: null,

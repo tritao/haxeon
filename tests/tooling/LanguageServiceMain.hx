@@ -1,7 +1,7 @@
-import compiler.Diagnostic.CompileError;
+import compiler.core.CancellationToken;
+import compiler.core.Diagnostic.CompileError;
 import compiler.formatter.FormatConfig.FormatConfigTools;
 import compiler.formatter.Formatter;
-import compiler.service.CancellationToken;
 import compiler.service.LanguageService;
 
 class LanguageServiceMain {
@@ -29,7 +29,7 @@ class LanguageServiceMain {
 		var rejectedBody = false;
 		try
 			library.analyze("Helper")
-		catch (_:compiler.Diagnostic.CompileError)
+		catch (_:compiler.core.Diagnostic.CompileError)
 			rejectedBody = true;
 		if (!rejectedBody || library.isCurrent("Helper.hx")
 			|| library.compiler.modules.get("Helper").diagnostics.length == 0)
@@ -386,7 +386,7 @@ class LanguageServiceMain {
 		try
 			implementationService.implementations("api/Plugin.hx", contractSource.indexOf("Plugin") + 2,
 				implementationCancellation)
-		catch (_:compiler.service.CancellationError)
+		catch (_:compiler.core.CancellationError)
 			implementationCancelled = true;
 		if (interfaceImplementations.length != 3
 			|| methodImplementations.length != 3
@@ -581,11 +581,11 @@ class LanguageServiceMain {
 		var completionCancelled = false, referencesCancelled = false;
 		try
 			largeService.complete("Large.hx", largeText.length, cancelled)
-		catch (_:compiler.service.CancellationError)
+		catch (_:compiler.core.CancellationError)
 			completionCancelled = true;
 		try
 			service.references("Main.hx", methodPosition, cancelled)
-		catch (_:compiler.service.CancellationError)
+		catch (_:compiler.core.CancellationError)
 			referencesCancelled = true;
 		if (!completionCancelled || !referencesCancelled)
 			throw "language-service queries ignored cancellation";

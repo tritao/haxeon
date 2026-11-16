@@ -1,7 +1,7 @@
 package compiler.compilation;
 
-import compiler.Diagnostic;
 import compiler.abi.RuntimeAbi.RuntimeAbiDescriptor;
+import compiler.core.Diagnostic;
 import compiler.hl.incremental.HlModuleAssembler;
 import compiler.ir.Ir.IrObject;
 import compiler.modules.ModuleState;

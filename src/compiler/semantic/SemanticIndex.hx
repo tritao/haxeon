@@ -1,7 +1,7 @@
 package compiler.semantic;
 
 import compiler.types.TypedAst.TypedFunctionRole;
-import compiler.Source.SourceSpan;
+import compiler.core.Source.SourceSpan;
 import compiler.modules.ModulePath;
 import compiler.syntax.Token;
 import compiler.syntax.Token.TokenKind;
@@ -16,7 +16,7 @@ import compiler.syntax.Ast.AstProgram;
 import compiler.syntax.Ast.AstFunction;
 import compiler.syntax.Ast.AstStatement;
 import compiler.syntax.Ast.AstExpression;
-import compiler.service.CancellationToken;
+import compiler.core.CancellationToken;
 import compiler.modules.ModuleState.SemanticDependencyKind;
 
 abstract SemanticSymbolId(String) from String to String {

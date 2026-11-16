@@ -1,5 +1,5 @@
 import compiler.Compiler;
-import compiler.Diagnostic.CompileError;
+import compiler.core.Diagnostic.CompileError;
 
 class NullArrayContextMain {
 	static final prefix = 'class Box { public var value:Int = 7; public function new() {} } '

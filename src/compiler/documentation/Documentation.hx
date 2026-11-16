@@ -1,7 +1,7 @@
 package compiler.documentation;
 
-import compiler.Source.SourceFile;
-import compiler.Source.SourceSpan;
+import compiler.core.Source.SourceFile;
+import compiler.core.Source.SourceSpan;
 
 /** Normalized Haxe documentation shared by editor and export tooling. */
 typedef Documentation = {

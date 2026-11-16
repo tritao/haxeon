@@ -1,9 +1,9 @@
 package compiler.ffi;
 
 import haxe.Int64;
-import compiler.Diagnostic;
-import compiler.Diagnostic.CompileError;
-import compiler.Source.SourceSpan;
+import compiler.core.Diagnostic;
+import compiler.core.Diagnostic.CompileError;
+import compiler.core.Source.SourceSpan;
 import compiler.ffi.HxiModel.HxiDeclaration;
 import compiler.ffi.HxiModel.HxiField;
 import compiler.ffi.HxiModel.HxiEnumValue;

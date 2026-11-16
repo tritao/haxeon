@@ -1,5 +1,5 @@
-import compiler.Diagnostic.CompileError;
-import compiler.Source.SourceSpan;
+import compiler.core.Diagnostic.CompileError;
+import compiler.core.Source.SourceSpan;
 import compiler.service.LanguageService;
 
 class ParserRecoveryFuzzMain {

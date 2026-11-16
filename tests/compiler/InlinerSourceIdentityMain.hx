@@ -1,4 +1,4 @@
-import compiler.compilation.AllocationMeter;
+import compiler.core.AllocationMeter;
 import compiler.ir.Ir;
 import compiler.ir.IrBuilder;
 import compiler.ir.IrFunction;
@@ -75,7 +75,8 @@ class InlinerSourceIdentityMain {
 		b.returnValue(b.constInt(42));
 		var block = b.blocks[0], term = block.terminator;
 		block.terminator = new compiler.ir.SourceProvenance.Located(term.value,
-			compiler.ir.SourceProvenance.user(new compiler.Source.SourceFile("same.hx", text).span(start, start + 1)));
+			compiler.ir.SourceProvenance.user(new compiler.core.Source.SourceFile("same.hx", text).span(start,
+			start + 1)));
 		return new IrFunction("located", b.arguments, I32, b.blocks, Ordinary);
 	}
 }

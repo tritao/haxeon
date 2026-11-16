@@ -1,4 +1,4 @@
-package compiler.service;
+package compiler.core;
 
 /** Cooperative cancellation shared by compiler and editor-service requests. */
 class CancellationToken {

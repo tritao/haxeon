@@ -173,7 +173,7 @@ class DependencyScanner {
 					scanExpression(a, dependencies, typeParameters);
 			case Call(name, args, _):
 				if (name.indexOf(".") >= 0)
-					scanArrayLibraryMethod(compiler.QualifiedName.last(name), dependencies);
+					scanArrayLibraryMethod(compiler.core.QualifiedName.last(name), dependencies);
 				addQualifiedOwner(name, dependencies);
 				for (a in args)
 					scanExpression(a, dependencies, typeParameters);
@@ -197,7 +197,7 @@ class DependencyScanner {
 						var candidate = name;
 						while (candidate.length > 0) {
 							dependencies.set(OPTIONAL_PREFIX + candidate, true);
-							candidate = compiler.QualifiedName.parentOrEmpty(candidate);
+							candidate = compiler.core.QualifiedName.parentOrEmpty(candidate);
 						}
 					default: scanType(root, dependencies, typeParameters);
 				}

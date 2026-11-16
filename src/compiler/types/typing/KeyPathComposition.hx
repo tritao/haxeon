@@ -1,7 +1,7 @@
 package compiler.types.typing;
 
 import compiler.types.TypedAst.TypedFunctionRole;
-import compiler.Source.SourceSpan;
+import compiler.core.Source.SourceSpan;
 import compiler.types.Type.CompilerType;
 import compiler.types.TypedAst;
 import compiler.types.KeyPathType;
@@ -52,8 +52,8 @@ class KeyPathComposition {
 			session.keyPathCompositions.set(name + suffix, true);
 			session.closureConversion.addFunction({
 				name: name + suffix,
-				role: ProviderFunction(root, compiler.Provides.ProviderOperations
-					.detailed(compiler.Provides.ProviderOperation.KeyPath, name + suffix)),
+				role: ProviderFunction(root, compiler.core.Provides.ProviderOperations
+					.detailed(compiler.core.Provides.ProviderOperation.KeyPath, name + suffix)),
 				origin: session.currentContext.functionName,
 				originKind: Helper,
 				owner: environment,

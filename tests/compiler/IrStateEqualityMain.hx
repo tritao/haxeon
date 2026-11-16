@@ -12,7 +12,7 @@ class IrStateEqualityMain {
 			w = new IrValue(1, "w", I32),
 			b = new IrBlock(0);
 		if (where == null)
-			where = SourceProvenance.user(new compiler.Source.SourceFile("test.hx", "x").span(0, 1));
+			where = SourceProvenance.user(new compiler.core.Source.SourceFile("test.hx", "x").span(0, 1));
 		b.instructions.push(new Located(instruction, where));
 		b.terminator = new Located(Return(v), where);
 		return new IrFunction("probe", [v, w], I32, [b], Ordinary, [
@@ -56,21 +56,21 @@ class IrStateEqualityMain {
 		for (kind in [
 			GenericSpecialization,
 			SourceLambda,
-			Provider(compiler.ir.TypeKey.of(I32), compiler.Provides.ProviderOperation.Equals),
-			Provider(compiler.ir.TypeKey.of(I32), compiler.Provides.ProviderOperation.Hash),
-			Provider(compiler.ir.TypeKey.of(I32), compiler.Provides.ProviderOperation.KeyPath),
+			Provider(compiler.ir.TypeKey.of(I32), compiler.core.Provides.ProviderOperation.Equals),
+			Provider(compiler.ir.TypeKey.of(I32), compiler.core.Provides.ProviderOperation.Hash),
+			Provider(compiler.ir.TypeKey.of(I32), compiler.core.Provides.ProviderOperation.KeyPath),
 			IterationAdapter,
 			GeneratedHelper,
 			ScalarArguments,
-			Provider(compiler.ir.TypeKey.of(I32), compiler.Provides.ProviderOperation.InlineEnumHelper),
-			Provider(compiler.ir.TypeKey.of(I32), compiler.Provides.ProviderOperation.TypedInterfaceEntry),
-			Provider(compiler.ir.TypeKey.of(I32), compiler.Provides.ProviderOperation.InterfaceUnbox),
-			Provider(compiler.ir.TypeKey.of(I32), compiler.Provides.ProviderOperation.GenericMethodReference),
+			Provider(compiler.ir.TypeKey.of(I32), compiler.core.Provides.ProviderOperation.InlineEnumHelper),
+			Provider(compiler.ir.TypeKey.of(I32), compiler.core.Provides.ProviderOperation.TypedInterfaceEntry),
+			Provider(compiler.ir.TypeKey.of(I32), compiler.core.Provides.ProviderOperation.InterfaceUnbox),
+			Provider(compiler.ir.TypeKey.of(I32), compiler.core.Provides.ProviderOperation.GenericMethodReference),
 			OptionalScalar(null),
 			OptionalScalar("owner.method"),
-			Provider(compiler.ir.TypeKey.of(I32), compiler.Provides.ProviderOperation.OptionalBox),
+			Provider(compiler.ir.TypeKey.of(I32), compiler.core.Provides.ProviderOperation.OptionalBox),
 			NullableScalarArguments,
-			Provider(compiler.ir.TypeKey.of(I32), compiler.Provides.ProviderOperation.ValueArrayElement),
+			Provider(compiler.ir.TypeKey.of(I32), compiler.core.Provides.ProviderOperation.ValueArrayElement),
 			WasmClosureRestore,
 			EnumEquality(true),
 			EnumEquality(false),
@@ -530,7 +530,8 @@ class IrStateEqualityMain {
 				checks++;
 			}
 		for (text in ["x", " x", "x // comment"]) {
-			var span = new compiler.Source.SourceFile("test.hx", text).span(text == " x" ? 1 : 0, text == " x" ? 2 : 1);
+			var span = new compiler.core.Source.SourceFile("test.hx", text).span(text == " x" ? 1 : 0,
+				text == " x" ? 2 : 1);
 			compare(fn(ConstInt(v, 42)), fn(ConstInt(v, 42), SourceProvenance.user(span)));
 			checks++;
 		}

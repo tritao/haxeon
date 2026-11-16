@@ -1,14 +1,15 @@
 package compiler.compilation;
 
+import compiler.core.AllocationMeter;
 import compiler.syntax.Ast;
 import compiler.syntax.Ast.AstExpression;
 import compiler.syntax.Ast.AstFunction;
 import compiler.syntax.Ast.AstStatement;
-import compiler.Diagnostic;
-import compiler.Diagnostic.CompileError;
+import compiler.core.Diagnostic;
+import compiler.core.Diagnostic.CompileError;
 import compiler.syntax.Lexer;
 import compiler.syntax.Parser;
-import compiler.Source.SourceFile;
+import compiler.core.Source.SourceFile;
 import compiler.ir.Ir.IrProgram;
 import compiler.ir.Ir.IrType;
 import compiler.ir.IrGenerator;
@@ -31,7 +32,7 @@ import compiler.ir.Ir.IrNative;
 import compiler.ir.Ir.IrObject;
 import compiler.types.TypeRegistry;
 import compiler.types.TypeRegistry.TypeCompatibility;
-import compiler.service.CancellationToken;
+import compiler.core.CancellationToken;
 import compiler.abi.RuntimeAbi;
 import compiler.abi.RuntimeAbi.RuntimeAbiDescriptor;
 import compiler.abi.PatchPlanner;

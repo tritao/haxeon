@@ -2,9 +2,9 @@ package compiler.compilation;
 
 import compiler.Compiler;
 import compiler.Compiler.CompileResult;
-import compiler.Diagnostic;
+import compiler.core.CancellationToken;
+import compiler.core.Diagnostic;
 import compiler.hl.incremental.HlModuleAssembler;
-import compiler.service.CancellationToken;
 
 /** Owns snapshot, rollback, and publication boundaries for one compilation. */
 class CompilationTransaction {

@@ -1,4 +1,4 @@
-import compiler.Source.SourceFile;
+import compiler.core.Source.SourceFile;
 import compiler.modules.ModuleState;
 import compiler.modules.ModuleState.SemanticDependencyKind;
 import compiler.semantic.AliasTable;

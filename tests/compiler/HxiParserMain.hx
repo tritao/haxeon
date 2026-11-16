@@ -1,6 +1,6 @@
 import compiler.Compiler;
-import compiler.Diagnostic.CompileError;
-import compiler.Source.SourceFile;
+import compiler.core.Diagnostic.CompileError;
+import compiler.core.Source.SourceFile;
 import compiler.ffi.HxiModel.HxiDeclaration;
 import compiler.ffi.HxiModel.HxiInterface;
 import compiler.ffi.HxiModel.HxiParameterDirection;

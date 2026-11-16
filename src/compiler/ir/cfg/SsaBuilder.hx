@@ -1,6 +1,6 @@
 package compiler.ir.cfg;
 
-import compiler.Arrays;
+import compiler.core.Arrays;
 import haxe.ds.ReadOnlyArray;
 import compiler.ir.cfg.Cfg;
 import compiler.ir.cfg.CfgVerifier;

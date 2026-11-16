@@ -1,10 +1,10 @@
 import Type as HaxeType;
 import compiler.Compiler;
-import compiler.Diagnostic.CompileError;
 import compiler.Frontend;
-import compiler.Source.SourceFile;
 import compiler.abi.PatchPlanner.PatchDecision;
 import compiler.backend.wasm.WasmCfgAnalysis;
+import compiler.core.Diagnostic.CompileError;
+import compiler.core.Source.SourceFile;
 import compiler.documentation.Documentation.DocumentationTools;
 import compiler.documentation.HaxeXmlWriter;
 import compiler.ffi.CHeaderEmitter;
@@ -112,7 +112,7 @@ class TestMain {
 			diagnosticLines.push(line32);
 		diagnosticLines.push(line20);
 		var diagnosticSource = new SourceFile("line-813.hx", diagnosticLines.join("\n") + "\n#\n"),
-			lineDiagnostic:Null<compiler.Diagnostic.Diagnostic> = null;
+			lineDiagnostic:Null<compiler.core.Diagnostic.Diagnostic> = null;
 		try
 			new Lexer(diagnosticSource).tokenize()
 		catch (error:CompileError)
@@ -1857,7 +1857,7 @@ class TestMain {
 		var invalidTypeTestRejected = false;
 		try
 			invalidTypeTestCompiler.compile("Main")
-		catch (error:compiler.Diagnostic.CompileError)
+		catch (error:compiler.core.Diagnostic.CompileError)
 			invalidTypeTestRejected = error.diagnostic.code == "E1009";
 		if (!invalidTypeTestRejected)
 			throw "Std.isOfType accepted a runtime value as its type operand";

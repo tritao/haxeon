@@ -1,6 +1,6 @@
 package compiler.semantic;
 
-import compiler.Source.SourceSpan;
+import compiler.core.Source.SourceSpan;
 import compiler.modules.ModuleState;
 import compiler.types.DeclarationIndex.DeclarationKind;
 import compiler.types.Type.CompilerType;
@@ -9,7 +9,7 @@ import compiler.semantic.SemanticIndex.IndexedSemanticSymbol;
 import compiler.semantic.SemanticIndex.SemanticSymbolId;
 import compiler.semantic.SemanticIndex.SemanticSignatureInfo;
 import compiler.semantic.SemanticIndex.SemanticCallEdge;
-import compiler.service.CancellationToken;
+import compiler.core.CancellationToken;
 
 /** A declaration resolved against the effective snapshots of a module workspace. */
 typedef WorkspaceDeclaration = {

@@ -1,8 +1,8 @@
 package compiler.tools;
 
-import compiler.compilation.IrPassMeter;
+import compiler.core.IrPassMeter;
 import compiler.Compiler.CompileResult;
-import compiler.service.CancellationToken;
+import compiler.core.CancellationToken;
 import compiler.ffi.CHeaderEmitter;
 import compiler.backend.Backend;
 import compiler.backend.Backend.BackendTarget;
@@ -17,8 +17,8 @@ import sys.FileSystem;
 import sys.io.File;
 import compiler.documentation.HaxeXmlWriter;
 import compiler.ir.codec.CanonicalIrCodec;
-import compiler.compilation.AllocationMeter;
-import compiler.compilation.AllocationMeter.PhaseAllocation;
+import compiler.core.AllocationMeter;
+import compiler.core.AllocationMeter.PhaseAllocation;
 import compiler.abi.AbiChangeSchema;
 import compiler.types.NativeTypeDescriptorCodec;
 

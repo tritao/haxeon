@@ -75,7 +75,7 @@ class SourceRevisionDeterminismMain {
 			}
 		}
 
-		var source = new compiler.Source.SourceFile("Defaults.hx", "original");
+		var source = new compiler.core.Source.SourceFile("Defaults.hx", "original");
 		var state = new compiler.modules.ModuleState("Caller", source);
 		state.defaultArgumentSources.set("call", ["Defaults.hx" => source]);
 		state.copy().defaultArgumentSources.get("call").remove("Defaults.hx");

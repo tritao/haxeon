@@ -81,17 +81,18 @@ class ValueArrayAccessMain {
 			+ '&& sliced != null && sliced.x == 5 && sliced.owner == owner && concatenated != null && concatenated.x == 5 '
 			+ '&& concatenated.owner == owner ? 42 : 0; }';
 		var nullableElementFrontend = compiler.Frontend.compile(nullableElementSource);
-		var nullableElementFile = new compiler.Source.SourceFile("<nullable-element-array>", nullableElementSource),
+		var nullableElementFile = new compiler.core.Source.SourceFile("<nullable-element-array>",
+			nullableElementSource),
 			nullableElementAst =
 				new compiler.syntax.Parser(new compiler.syntax.Lexer(nullableElementFile).tokenize()).parseProgram();
 		var nullableElementChecked =
 			compiler.ir.IrProgramAssembler.generate(compiler.types.Typer.type(nullableElementAst),
 			compiler.ir.TargetProfile.portable.withNativeArrayChecks(true));
-		var nullableFile = new compiler.Source.SourceFile("<nullable-array>", nullableSource),
+		var nullableFile = new compiler.core.Source.SourceFile("<nullable-array>", nullableSource),
 			nullableAst = new compiler.syntax.Parser(new compiler.syntax.Lexer(nullableFile).tokenize()).parseProgram();
 		var nullableCheckedFrontend = compiler.ir.IrProgramAssembler.generate(compiler.types.Typer.type(nullableAst),
 			compiler.ir.TargetProfile.portable.withNativeArrayChecks(true));
-		var typedFile = new compiler.Source.SourceFile("<typed-array>", frontendSource),
+		var typedFile = new compiler.core.Source.SourceFile("<typed-array>", frontendSource),
 			typedAst = new compiler.syntax.Parser(new compiler.syntax.Lexer(typedFile).tokenize()).parseProgram();
 		var typedFrontend = compiler.ir.IrProgramAssembler.generate(compiler.types.Typer.type(typedAst),
 			compiler.ir.TargetProfile.portable.withNativeArrayChecks(true));
@@ -2164,7 +2165,7 @@ class ValueArrayAccessMain {
 			]) {
 				var linearDynamic:IrProgram;
 				if (test.checked) {
-					var file = new compiler.Source.SourceFile("<linear-dynamic-array>", test.source),
+					var file = new compiler.core.Source.SourceFile("<linear-dynamic-array>", test.source),
 						ast = new compiler.syntax.Parser(new compiler.syntax.Lexer(file).tokenize()).parseProgram();
 					linearDynamic = compiler.ir.IrProgramAssembler.generate(compiler.types.Typer.type(ast),
 						compiler.ir.TargetProfile.portable.withNativeArrayChecks(true));
@@ -2216,7 +2217,7 @@ class ValueArrayAccessMain {
 			]) {
 				var nullableWasm:IrProgram;
 				if (test.checked) {
-					var file = new compiler.Source.SourceFile("<escape-array>", test.source),
+					var file = new compiler.core.Source.SourceFile("<escape-array>", test.source),
 						ast = new compiler.syntax.Parser(new compiler.syntax.Lexer(file).tokenize()).parseProgram();
 					nullableWasm = compiler.ir.IrProgramAssembler.generate(compiler.types.Typer.type(ast),
 						compiler.ir.TargetProfile.portable.withNativeArrayChecks(true));

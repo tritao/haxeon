@@ -1,6 +1,6 @@
 package compiler.ffi;
 
-import compiler.Source.SourceSpan;
+import compiler.core.Source.SourceSpan;
 import compiler.ffi.HxiModel.HxiDeclaration;
 
 /** Declaration provenance travels with each generated module, independent of naming policy. */

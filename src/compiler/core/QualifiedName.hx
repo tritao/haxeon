@@ -1,4 +1,4 @@
-package compiler;
+package compiler.core;
 
 /** Operations on canonical dot-separated compiler names. */
 class QualifiedName {

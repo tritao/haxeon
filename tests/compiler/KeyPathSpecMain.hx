@@ -1,5 +1,5 @@
-import compiler.Diagnostic.CompileError;
-import compiler.Source.SourceFile;
+import compiler.core.Diagnostic.CompileError;
+import compiler.core.Source.SourceFile;
 import compiler.syntax.Lexer;
 import compiler.syntax.Parser;
 import compiler.types.Typer;

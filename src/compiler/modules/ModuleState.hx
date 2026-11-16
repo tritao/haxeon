@@ -1,7 +1,7 @@
 package compiler.modules;
 
-import compiler.Diagnostic;
-import compiler.Source.SourceFile;
+import compiler.core.Diagnostic;
+import compiler.core.Source.SourceFile;
 import compiler.ir.IrFunction;
 import compiler.semantic.SemanticModel;
 import compiler.syntax.Ast.AstFunction;
@@ -89,7 +89,7 @@ class ModuleState {
 	public var noReturnQueries:Map<String, Map<String, Bool>> = [];
 
 	/** Foreign default-argument syntax embedded in each cached function, by source snapshot. */
-	public var defaultArgumentSources:Map<String, Map<String, compiler.Source.SourceFile>> = [];
+	public var defaultArgumentSources:Map<String, Map<String, compiler.core.Source.SourceFile>> = [];
 
 	/** Typed functions changed by analysis and awaiting build-time IR lowering. */
 	public var pendingIrFunctions:Map<String, Bool> = [];

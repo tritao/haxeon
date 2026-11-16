@@ -1,5 +1,5 @@
-import compiler.Diagnostic.CompileError;
 import compiler.Frontend;
+import compiler.core.Diagnostic.CompileError;
 
 /**
  * A call through a function value can run anything, so it clears what flow analysis knows about mutable state. A call

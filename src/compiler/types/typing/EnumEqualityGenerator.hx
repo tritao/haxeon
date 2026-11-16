@@ -1,8 +1,8 @@
 package compiler.types.typing;
 
-import compiler.Provides;
-import compiler.Provides.ProviderOperation;
-import compiler.Source.SourceSpan;
+import compiler.core.Provides;
+import compiler.core.Provides.ProviderOperation;
+import compiler.core.Source.SourceSpan;
 import compiler.types.Type.CompilerType;
 import compiler.types.Type.NominalKind;
 import compiler.types.TypedAst.TypedExpression;
@@ -51,7 +51,7 @@ class EnumEqualityGenerator {
 				var request = session.enumEqualityRequests.get(name);
 				if (request == null)
 					throw 'Missing enum equality request "$name"';
-				var owner = compiler.QualifiedName.parent(request.origin),
+				var owner = compiler.core.QualifiedName.parent(request.origin),
 					context = session.enterBody(request.origin, null, owner == null ? "$enum-equality" : owner);
 				try {
 					var reflective = name == reflectiveName(request.type),

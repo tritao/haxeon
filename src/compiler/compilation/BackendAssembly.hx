@@ -1,5 +1,6 @@
 package compiler.compilation;
 
+import compiler.core.AllocationMeter;
 import compiler.abi.LambdaAlignment;
 import compiler.abi.RetiredName;
 import compiler.abi.PatchPlanner;
@@ -11,11 +12,11 @@ import compiler.hl.incremental.HlModuleAssembler;
 import compiler.hl.incremental.HlModuleAssembler.HlAssemblyResult;
 import compiler.hl.patch.HlPatchWriter;
 import compiler.ir.Ir.IrProgram;
-import compiler.service.CancellationToken;
+import compiler.core.CancellationToken;
 import haxe.io.Bytes;
 import compiler.hl.HlCode;
 import compiler.hl.HlWriter;
-import compiler.compilation.AllocationMeter.PhaseAllocation;
+import compiler.core.AllocationMeter.PhaseAllocation;
 
 typedef BackendAssemblyResult = {
 	final assembly:HlAssemblyResult;

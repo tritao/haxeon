@@ -1,5 +1,5 @@
 import compiler.Compiler;
-import compiler.Diagnostic.CompileError;
+import compiler.core.Diagnostic.CompileError;
 import compiler.ir.IrInterpreter;
 
 /** Compiler-generated Observable field reads and writes use one shared source per object. */

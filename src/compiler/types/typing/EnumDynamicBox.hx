@@ -1,6 +1,6 @@
 package compiler.types.typing;
 
-import compiler.Source.SourceSpan;
+import compiler.core.Source.SourceSpan;
 import compiler.types.Type.CompilerType;
 import compiler.types.Type.NominalKind;
 import compiler.types.TypedAst.TypedExpression;

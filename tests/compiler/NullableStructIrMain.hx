@@ -1,5 +1,5 @@
 import compiler.Frontend;
-import compiler.Source.SourceFile;
+import compiler.core.Source.SourceFile;
 import compiler.ir.Ir.IrType;
 import compiler.ir.IrInlineValueLayout;
 import compiler.ir.IrProgramAssembler;

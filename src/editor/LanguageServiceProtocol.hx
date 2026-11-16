@@ -1,12 +1,12 @@
 package editor;
 
-import compiler.Diagnostic.CompileError;
 import compiler.abi.AbiChangeSchema;
 import compiler.compilation.CompilerPublication.ReconnectDecision;
 import compiler.compilation.CompilerPublication.ReconnectReason;
+import compiler.core.CancellationError;
+import compiler.core.CancellationToken;
+import compiler.core.Diagnostic.CompileError;
 import compiler.hl.HlWriter;
-import compiler.service.CancellationError;
-import compiler.service.CancellationToken;
 import compiler.service.LanguageService;
 import compiler.service.LanguageService.DocumentSymbol;
 import compiler.service.LanguageService.SymbolLocation;
@@ -204,7 +204,7 @@ class LanguageServiceProtocol {
 		return cast value;
 	}
 
-	static function diagnosticJson(diagnostic:compiler.Diagnostic):Dynamic
+	static function diagnosticJson(diagnostic:compiler.core.Diagnostic):Dynamic
 		return {
 			code: diagnostic.code,
 			message: diagnostic.message,
@@ -255,7 +255,7 @@ class LanguageServiceProtocol {
 			case ModuleIdentityMismatch: {code: "module_identity_mismatch"};
 		};
 
-	static function failureDiagnostic(id:Dynamic, diagnostic:compiler.Diagnostic):String
+	static function failureDiagnostic(id:Dynamic, diagnostic:compiler.core.Diagnostic):String
 		return Json.stringify({id: id, ok: false, error: diagnosticJson(diagnostic)});
 
 	static function failure(id:Dynamic, code:String, message:String):String

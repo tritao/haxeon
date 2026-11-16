@@ -1,5 +1,5 @@
 import compiler.Compiler;
-import compiler.Diagnostic.CompileError;
+import compiler.core.Diagnostic.CompileError;
 
 /** A structural capability requires every anonymous field to have it. */
 class AnonymousConformanceMain {

@@ -3163,7 +3163,7 @@ class HxiHaxeEmitter {
 					owner = separator < 0 ? "" : projected.haxeType.substr(0, separator),
 					name = projected.haxeType.substr(separator + 1),
 					module = separator < 0 ? (profile.typeModule != null ? profile.typeModule : profile.functionModule)
-						: compiler.QualifiedName.last(owner);
+						: compiler.core.QualifiedName.last(owner);
 				if (module == null) module = abi.interfaceName;
 				if (module == null) throw "Missing native enum owning module";
 				(owner.length == 0 ? "" : owner + ".") + upperFirst(module) + "EnumDecoders.decode" + name;

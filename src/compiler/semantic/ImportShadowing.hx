@@ -1,6 +1,7 @@
 package compiler.semantic;
 
-import compiler.AmbiguousName;
+import compiler.core.AmbiguousName;
+import compiler.core.QualifiedName;
 import compiler.syntax.Ast.AstProgram;
 
 /**

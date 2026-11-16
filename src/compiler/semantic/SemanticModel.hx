@@ -1,6 +1,6 @@
 package compiler.semantic;
 
-import compiler.Source.SourceFile;
+import compiler.core.Source.SourceFile;
 import compiler.syntax.Ast.AstProgram;
 import compiler.syntax.Lexer;
 import compiler.syntax.Token;

@@ -1,9 +1,9 @@
 package compiler.ffi;
 
-import compiler.Diagnostic;
-import compiler.Diagnostic.CompileError;
-import compiler.Source.SourceFile;
-import compiler.Source.SourceSpan;
+import compiler.core.Diagnostic;
+import compiler.core.Diagnostic.CompileError;
+import compiler.core.Source.SourceFile;
+import compiler.core.Source.SourceSpan;
 import compiler.documentation.Documentation.DocumentationComment;
 import compiler.documentation.Documentation.DocumentationTools;
 

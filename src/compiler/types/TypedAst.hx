@@ -1,6 +1,6 @@
 package compiler.types;
 
-import compiler.Source.SourceSpan;
+import compiler.core.Source.SourceSpan;
 import compiler.syntax.Ast.AstType;
 import compiler.types.Type.CompilerType;
 
@@ -343,7 +343,7 @@ enum TypedFunctionRole {
 	OtherFunction;
 
 	/** A helper that serves `operation` for `subject`; IR generation lowers the subject to a `TypeKey` (see `IrFunctionKind.Provider`). */
-	ProviderFunction(subject:CompilerType, operation:compiler.Provides.ProviderOperation);
+	ProviderFunction(subject:CompilerType, operation:compiler.core.Provides.ProviderOperation);
 }
 
 /**
@@ -391,7 +391,7 @@ typedef TypedFunction = {
 	final span:SourceSpan;
 
 	/** Warnings from typing the body, kept with it so a body an incremental compile reuses keeps them. */
-	final ?warnings:Array<compiler.Diagnostic>;
+	final ?warnings:Array<compiler.core.Diagnostic>;
 }
 
 /** Class field after annotation inference and initializer type checking. */
@@ -412,7 +412,7 @@ typedef TypedField = {
 	final span:SourceSpan;
 
 	/** Warnings from typing the initializer, kept as a function body's are. */
-	final ?warnings:Array<compiler.Diagnostic>;
+	final ?warnings:Array<compiler.core.Diagnostic>;
 }
 
 /** Class declaration with resolved field, method, and inheritance contracts. */

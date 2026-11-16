@@ -1,7 +1,7 @@
 package compiler.ir;
 
-import compiler.Provides.ProviderOperation;
-import compiler.Provides.ProviderOperations;
+import compiler.core.Provides.ProviderOperation;
+import compiler.core.Provides.ProviderOperations;
 import compiler.ir.Ir;
 import compiler.ir.IrInlineValueLayout.IrInlineValueSlot;
 import compiler.ir.SourceProvenance.Located;

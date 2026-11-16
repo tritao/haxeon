@@ -1,5 +1,5 @@
 import compiler.Compiler;
-import compiler.Diagnostic.CompileError;
+import compiler.core.Diagnostic.CompileError;
 import compiler.runtime.CompilerIntrinsics;
 import compiler.semantic.Invalidation.InvalidatedArtifact;
 import compiler.semantic.Invalidation.InvalidationKind;

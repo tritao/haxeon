@@ -1,6 +1,6 @@
 package compiler.types.typing;
 
-import compiler.Diagnostic;
+import compiler.core.Diagnostic;
 import compiler.semantic.GenericSpecializationRegistry;
 import compiler.semantic.SemanticProgram;
 import compiler.semantic.SemanticProgram.SemanticMethodInfo;
@@ -11,7 +11,7 @@ import compiler.types.Type.CompilerType;
 import compiler.types.Type.NominalKind;
 import compiler.types.TypedAst.TypedExpression;
 import compiler.types.TypedAst.TypedNativeLayout;
-import compiler.Source.SourceSpan;
+import compiler.core.Source.SourceSpan;
 import compiler.types.analysis.Scope;
 
 typedef ResolvedInlineConstant = {
@@ -277,7 +277,7 @@ class TypingSession {
 			var resolved:Null<CompilerType> = null;
 			try {
 				resolved = declarations.resolve(type, null, currentContext.typeSubstitutions);
-			} catch (_:compiler.Diagnostic.CompileError) {
+			} catch (_:compiler.core.Diagnostic.CompileError) {
 				// The normal typing pass reports invalid or inferred annotations with the right source context.
 				return true;
 			}
@@ -313,7 +313,7 @@ class TypingSession {
 					case TKeyPath(_, _, _), TDynamic, TTypeParameter(_, _): true;
 					default: false;
 				};
-			} catch (_:compiler.Diagnostic.CompileError)
+			} catch (_:compiler.core.Diagnostic.CompileError)
 				return true;
 		}
 		return switch initializer {
@@ -467,7 +467,7 @@ class TypingSession {
 	public final inlineConstantDependencies:Map<String, Map<String, Bool>> = [];
 
 	/** Source snapshots copied into callers when omitted arguments use declaration syntax. */
-	public final defaultArgumentSources:Map<String, Map<String, compiler.Source.SourceFile>> = [];
+	public final defaultArgumentSources:Map<String, Map<String, compiler.core.Source.SourceFile>> = [];
 
 	function recordQuery(target:Map<String, Map<String, Bool>>, name:String, answer:Bool):Void {
 		var caller = currentContext.name;
@@ -560,5 +560,5 @@ class TypingSession {
 	}
 
 	static inline function parentPath(path:String):Null<String>
-		return compiler.QualifiedName.parent(path);
+		return compiler.core.QualifiedName.parent(path);
 }

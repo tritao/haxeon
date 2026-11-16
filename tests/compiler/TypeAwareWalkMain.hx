@@ -1,4 +1,4 @@
-import compiler.Provides.ProviderOperation;
+import compiler.core.Provides.ProviderOperation;
 import compiler.ir.Ir;
 import compiler.ir.IrBuilder;
 import compiler.ir.IrFunction;
@@ -273,7 +273,7 @@ class TypeAwareWalkMain {
 			var fn = empty(name, Ordinary, [I32], Dyn);
 			return new IrFunction(name, fn.arguments, Dyn, fn.blocks,
 				Provider(TypeKey.of(Enum("Opt")),
-				compiler.Provides.ProviderOperations.detailed(ProviderOperation.InlineEnumHelper, detail)));
+				compiler.core.Provides.ProviderOperations.detailed(ProviderOperation.InlineEnumHelper, detail)));
 		};
 		var missing = IrTypeAwareWalk.run(program, {functions: ["main"], types: []}, null, true);
 		expect(missing.missingProviders.length == 1, "an inline enum box with no helper is reported");

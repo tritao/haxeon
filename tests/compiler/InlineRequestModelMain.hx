@@ -1,5 +1,5 @@
-import compiler.Provides.ProviderOperation;
-import compiler.Provides.ProviderOperations;
+import compiler.core.Provides.ProviderOperation;
+import compiler.core.Provides.ProviderOperations;
 import compiler.ir.Ir;
 import compiler.ir.IrBuilder;
 import compiler.ir.IrEnumTagLowering;
@@ -217,7 +217,8 @@ class InlineRequestModelMain {
 			unboxProvider
 		];
 		var originalLocated = program.functions[0].blocks[0].instructions[0];
-		var provenance = compiler.ir.SourceProvenance.user(new compiler.Source.SourceFile("fixture.hx", "x").span(0,
+		var provenance = compiler.ir.SourceProvenance.user(new compiler.core.Source.SourceFile("fixture.hx",
+			"x").span(0,
 			1));
 		program.functions[0].blocks[0].instructions[0] = new compiler.ir.SourceProvenance.Located(originalLocated.value,
 			provenance);

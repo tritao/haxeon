@@ -1,10 +1,10 @@
 package editor.lsp;
 
-import compiler.Diagnostic;
-import compiler.Diagnostic.CompileError;
+import compiler.core.Diagnostic;
+import compiler.core.Diagnostic.CompileError;
 import compiler.modules.ModulePath;
-import compiler.service.CancellationError;
-import compiler.service.CancellationToken;
+import compiler.core.CancellationError;
+import compiler.core.CancellationToken;
 import compiler.service.LanguageService;
 import editor.profiler.ProfilerService;
 import editor.lsp.DocumentStore;
@@ -1045,7 +1045,7 @@ class LspProtocol {
 		];
 	}
 
-	static function selectionRange(document:LspDocument, spans:Array<compiler.Source.SourceSpan>):Dynamic {
+	static function selectionRange(document:LspDocument, spans:Array<compiler.core.Source.SourceSpan>):Dynamic {
 		var parent:Dynamic = null, index = spans.length - 1;
 		while (index >= 0) {
 			var item:Dynamic = {range: document.range(spans[index].start, spans[index].end)};
@@ -1282,7 +1282,7 @@ class LspProtocol {
 			}]};
 	}
 
-	function locationJson(path:String, start:Int, end:Int, ?source:compiler.Source.SourceFile):Dynamic {
+	function locationJson(path:String, start:Int, end:Int, ?source:compiler.core.Source.SourceFile):Dynamic {
 		var target = source == null ? documentForPath(path) : new LspDocument(documents.uri(project.diskPath(path)),
 			path, 0, source.text);
 		return {uri: documents.uri(project.diskPath(path)), range: target.range(start, end)};

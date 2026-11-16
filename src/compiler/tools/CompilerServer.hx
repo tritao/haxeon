@@ -1,7 +1,7 @@
 package compiler.tools;
 
-import compiler.Diagnostic.CompileError;
-import compiler.service.CancellationToken;
+import compiler.core.CancellationToken;
+import compiler.core.Diagnostic.CompileError;
 import haxe.Json;
 import sys.FileSystem;
 import sys.io.File;

@@ -1,5 +1,5 @@
-import compiler.Source.SourceFile;
-import compiler.Source.SourceSpan;
+import compiler.core.Source.SourceFile;
+import compiler.core.Source.SourceSpan;
 import compiler.syntax.Ast.AstFunction;
 import compiler.syntax.Ast.AstStatement;
 import compiler.syntax.Lexer;

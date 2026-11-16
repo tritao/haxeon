@@ -1,8 +1,8 @@
 package compiler.types.typing;
 
-import compiler.Diagnostic;
-import compiler.Diagnostic.CompileError;
-import compiler.Source.SourceSpan;
+import compiler.core.Diagnostic;
+import compiler.core.Diagnostic.CompileError;
+import compiler.core.Source.SourceSpan;
 import compiler.ffi.NativeLayout;
 import compiler.runtime.PlatformAbi;
 import compiler.runtime.RuntimeType;

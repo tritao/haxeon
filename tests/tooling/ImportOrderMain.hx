@@ -1,4 +1,4 @@
-import compiler.Source.SourceFile;
+import compiler.core.Source.SourceFile;
 import compiler.service.ImportOrder;
 import compiler.service.UnusedImports.ImportTarget;
 import compiler.syntax.Ast.AstProgram;
@@ -47,8 +47,8 @@ class ImportOrderMain {
 		expect(sorted("package p;\n\nimport b.Z;\nimport a.Y;\nimport a.X;" + tail),
 			"package p;\n\nimport a.X;\nimport a.Y;\nimport b.Z;" + tail,
 			"a run is sorted by path");
-		expect(sorted("import compiler.ffi.HxiAbi;\nimport compiler.Diagnostic;" + tail),
-			"import compiler.Diagnostic;\nimport compiler.ffi.HxiAbi;" + tail,
+		expect(sorted("import compiler.ffi.HxiAbi;\nimport compiler.Compiler;" + tail),
+			"import compiler.Compiler;\nimport compiler.ffi.HxiAbi;" + tail,
 			"paths compare as ASCII, so a type sorts before a subpackage");
 		expect(sorted("import b.B;\nimport a.A;\n\nimport d.D;\nimport c.C;" + tail),
 			"import a.A;\nimport b.B;\n\nimport c.C;\nimport d.D;" + tail,

@@ -1,5 +1,5 @@
 import compiler.Compiler;
-import compiler.Diagnostic.CompileError;
+import compiler.core.Diagnostic.CompileError;
 
 class FieldAssignmentContextMain {
 	static final declarations = 'class FaceRange { public function new() {} } '

@@ -1,5 +1,5 @@
 import compiler.Compiler;
-import compiler.Diagnostic.CompileError;
+import compiler.core.Diagnostic.CompileError;
 
 /** An inherited method name is a virtual slot, even when the subclass declaration is private. */
 class InheritedMethodContractMain {

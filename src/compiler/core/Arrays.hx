@@ -1,4 +1,4 @@
-package compiler;
+package compiler.core;
 
 /**
  * Arrays allocated at their final size. A comprehension like `[for (_ in blocks) false]` pushes its elements one by one and so

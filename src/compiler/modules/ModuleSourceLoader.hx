@@ -1,6 +1,6 @@
 package compiler.modules;
 
-import compiler.Source.SourceFile;
+import compiler.core.Source.SourceFile;
 import sys.FileSystem;
 import sys.io.File;
 

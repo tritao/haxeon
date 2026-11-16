@@ -64,7 +64,7 @@ class StructuralIterationMain {
 			invalidCompiler.update("Main.hx", invalid);
 			try
 				invalidCompiler.compile("Main")
-			catch (error:compiler.Diagnostic.CompileError) {
+			catch (error:compiler.core.Diagnostic.CompileError) {
 				if (error.diagnostic.code != "E1014" && error.diagnostic.code != "E1009"
 					&& error.diagnostic.code != "E1002")
 					throw error;

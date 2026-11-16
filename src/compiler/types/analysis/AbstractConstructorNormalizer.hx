@@ -1,7 +1,7 @@
 package compiler.types.analysis;
 
-import compiler.Diagnostic;
-import compiler.Diagnostic.CompileError;
+import compiler.core.Diagnostic;
+import compiler.core.Diagnostic.CompileError;
 import compiler.syntax.Ast.AstCatch;
 import compiler.syntax.Ast.AstFunction;
 import compiler.syntax.Ast.AstStatement;

@@ -1,6 +1,6 @@
 package compiler.formatter;
 
-import compiler.Source.SourceFile;
+import compiler.core.Source.SourceFile;
 import compiler.formatter.FormatToken.FormatTokenKind;
 import compiler.syntax.ConditionalCompilation;
 import compiler.syntax.Token.TokenKind;

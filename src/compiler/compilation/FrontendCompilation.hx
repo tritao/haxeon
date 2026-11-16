@@ -1,6 +1,7 @@
 package compiler.compilation;
 
-import compiler.Diagnostic.CompileError;
+import compiler.core.AllocationMeter;
+import compiler.core.Diagnostic.CompileError;
 import compiler.runtime.PlatformAbi;
 import compiler.ir.Ir.IrObject;
 import compiler.ir.Ir.IrProgram;
@@ -17,7 +18,7 @@ import compiler.modules.ModuleState;
 import compiler.semantic.LambdaName;
 import compiler.semantic.ModuleCanonicalizer;
 import compiler.semantic.SemanticAssembly;
-import compiler.service.CancellationToken;
+import compiler.core.CancellationToken;
 import compiler.semantic.SemanticProgram;
 import compiler.types.Typer;
 import compiler.types.Typer.TyperPhaseMetrics;
@@ -30,7 +31,7 @@ import compiler.modules.ModuleState.SemanticDependencyKind;
 import compiler.semantic.SemanticDependencyCollector;
 import compiler.syntax.Ast.AstProgram;
 import compiler.syntax.Ast.AstType;
-import compiler.compilation.AllocationMeter.PhaseAllocation;
+import compiler.core.AllocationMeter.PhaseAllocation;
 import compiler.compilation.PipelineSnapshot.PipelineInputs;
 
 typedef FrontendResult = {
@@ -192,7 +193,7 @@ class FrontendCompilation {
 			noReturnQueries:Map<String, Map<String, Bool>>,
 			keyPathUses:Map<String, Map<String, Bool>>,
 			inlineConstantDependencies:Map<String, Map<String, Bool>>,
-			defaultArgumentSources:Map<String, Map<String, compiler.Source.SourceFile>>;
+			defaultArgumentSources:Map<String, Map<String, compiler.core.Source.SourceFile>>;
 		try {
 			if (token != null)
 				token.check();
@@ -799,7 +800,7 @@ class FrontendCompilation {
 			ir = reusedPipeline.ir;
 			inlinerChanged = [];
 		} else {
-			compiler.compilation.IrPassMeter.reset();
+			compiler.core.IrPassMeter.reset();
 			ir = IrProgramAssembler.assemble(generator, cached, irNatives, generated.objects, generated.interfaces,
 				generated.enums, generated.staticFields,
 				generated.initializers, entryPoint, irCNatives, generated.reflectable,
@@ -838,7 +839,7 @@ class FrontendCompilation {
 			var valueArrayTarget = context.valueArrayTarget();
 			if (!context.developmentMetadata && !context.livePatching)
 				ir = compiler.ir.IrClosedEnumTagAbi.run(ir, generated.reflectable);
-			compiler.compilation.IrPassMeter.measureVoid("value-array-rewrite",
+			compiler.core.IrPassMeter.measureVoid("value-array-rewrite",
 				() -> compiler.ir.IrValueArrayProgramRewrite.rewriteAll(ir, valueArrayTarget == HashLink ? 64 : 32,
 				valueArrayTarget));
 			// Scalarize value joins before choosing the scalar call ABI. The HashLink call rewrite can introduce
@@ -852,32 +853,32 @@ class FrontendCompilation {
 				}
 			}
 			if (!context.isWasmTarget()) {
-				compiler.compilation.IrPassMeter.measureVoid("value-constructors",
+				compiler.core.IrPassMeter.measureVoid("value-constructors",
 					() -> compiler.ir.IrValueConstructors.rewrite(ir));
-				compiler.compilation.IrPassMeter.measureVoid("value-phi-scalarization",
+				compiler.core.IrPassMeter.measureVoid("value-phi-scalarization",
 					() -> compiler.ir.IrValuePhiScalarization.rewrite(ir));
-				compiler.compilation.IrPassMeter.measureVoid("scalar-arguments",
+				compiler.core.IrPassMeter.measureVoid("scalar-arguments",
 					() -> compiler.ir.IrScalarArguments.rewrite(ir));
-				compiler.compilation.IrPassMeter.measureVoid("scalar-closures",
+				compiler.core.IrPassMeter.measureVoid("scalar-closures",
 					() -> compiler.ir.IrScalarClosures.rewrite(ir));
-				compiler.compilation.IrPassMeter.measureVoid("value-phi-scalarization",
+				compiler.core.IrPassMeter.measureVoid("value-phi-scalarization",
 					() -> compiler.ir.IrValuePhiScalarization.rewrite(ir));
 			}
 			var scalarObjects = compiler.ir.IrObjectTable.of([for (object in ir.objects) object.name => object]);
-			ir.functions = compiler.compilation.IrPassMeter.measure("scalar-replacement", () -> [
+			ir.functions = compiler.core.IrPassMeter.measure("scalar-replacement", () -> [
 				for (fn in ir.functions)
 					compiler.ir.IrScalarReplacement.rewrite(fn, scalarObjects, false, !context.isWasmTarget())
 			]);
-			compiler.compilation.IrPassMeter.measureVoid("nullable-scalar-flow",
+			compiler.core.IrPassMeter.measureVoid("nullable-scalar-flow",
 				() -> compiler.ir.IrNullableScalarFlow.rewrite(ir));
 			compiler.ir.IrEnumTagLowering.escapes(ir);
 			// Compare and publish the final IR even when only load/store forwarding is enabled.
-			inlinerChanged = compiler.compilation.IrPassMeter.measure("inliner",
+			inlinerChanged = compiler.core.IrPassMeter.measure("inliner",
 				() -> IrInliner.run(ir, context.inlineCache(), context.targetProfile(), context.inlineEnabled(),
 				instrumentScope));
 			// HashLink has its scalar closure ABI here. Wasm verifies after its target-specific closure escape adapters exist.
 			if (!context.livePatching && !context.isWasmTarget()) {
-				compiler.compilation.IrPassMeter.measureVoid("verifier",
+				compiler.core.IrPassMeter.measureVoid("verifier",
 					() -> IrVerifier.verifyReusing(ir, context.verifyMemo));
 				if (checkingReuse) {
 					try
@@ -1285,7 +1286,7 @@ class FrontendCompilation {
 			for (cached => fn in state.typedFunctions) {
 				var shared = switch fn.role {
 					case ProviderFunction(_,
-						operation): compiler.Provides.ProviderOperations.sharedAcrossModules(operation);
+						operation): compiler.core.Provides.ProviderOperations.sharedAcrossModules(operation);
 					default: false;
 				};
 				if (!shared)

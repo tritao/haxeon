@@ -1,9 +1,9 @@
 package compiler.types.typing;
 
-import compiler.Provides;
-import compiler.Provides.ProviderOperation;
-import compiler.Provides.ProviderOperations;
-import compiler.Source.SourceSpan;
+import compiler.core.Provides;
+import compiler.core.Provides.ProviderOperation;
+import compiler.core.Provides.ProviderOperations;
+import compiler.core.Source.SourceSpan;
 import compiler.syntax.Ast.AstFunction;
 import compiler.types.Type.CompilerType;
 import compiler.types.Type.NominalKind;

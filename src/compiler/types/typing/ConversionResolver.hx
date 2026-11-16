@@ -1,9 +1,9 @@
 package compiler.types.typing;
 
 import compiler.types.TypedAst.TypedFunctionRole;
-import compiler.Diagnostic;
-import compiler.Diagnostic.CompileError;
-import compiler.Source.SourceSpan;
+import compiler.core.Diagnostic;
+import compiler.core.Diagnostic.CompileError;
+import compiler.core.Source.SourceSpan;
 import compiler.semantic.SemanticSignature;
 import compiler.types.Type.CompilerType;
 import compiler.types.Type.NominalKind;
@@ -344,7 +344,7 @@ class ConversionResolver {
 			}
 			statements.push(TReturn(result, span));
 			session.closureConversion.addFunction({
-				name: helper, role: ProviderFunction(target, compiler.Provides.ProviderOperation.DynamicStructure),
+				name: helper, role: ProviderFunction(target, compiler.core.Provides.ProviderOperation.DynamicStructure),
 				origin: origin,
 				originKind: compiler.types.TypedAst.FunctionOriginKind.Helper,
 				owner: null,

@@ -1,7 +1,7 @@
 package compiler.ir;
 
-import compiler.Provides.ProviderOperation;
-import compiler.Provides.ProviderOperations;
+import compiler.core.Provides.ProviderOperation;
+import compiler.core.Provides.ProviderOperations;
 import compiler.ir.IrStaticNullChecks.IrStaticCheckCache;
 import compiler.types.Type.CompilerType;
 import compiler.types.Type.NominalKind;
@@ -69,7 +69,7 @@ private typedef ArrayValuePlace = {
 }
 private typedef CleanupRegion = {
 	final body:Array<TypedStatement>;
-	final span:compiler.Source.SourceSpan;
+	final span:compiler.core.Source.SourceSpan;
 	final trapDepth:Int;
 	final loopDepth:Int;
 	final scopedDisposal:Bool;
@@ -389,7 +389,7 @@ class IrGenerator {
 	}
 
 	/** Protect the remaining statements from the registration point through block exit. */
-	function lowerCleanupBody(body:Array<TypedStatement>, span:compiler.Source.SourceSpan, scopedDisposal:Bool,
+	function lowerCleanupBody(body:Array<TypedStatement>, span:compiler.core.Source.SourceSpan, scopedDisposal:Bool,
 			builder:CfgBuilder,
 			localTypes:Map<String, IrType>):Void {
 		var previous = scratch.loweringScopedDisposal;
@@ -404,7 +404,7 @@ class IrGenerator {
 	}
 
 	function lowerCleanupRegion(body:Array<TypedStatement>, remainder:Array<TypedStatement>,
-			span:compiler.Source.SourceSpan, scopedDisposal:Bool,
+			span:compiler.core.Source.SourceSpan, scopedDisposal:Bool,
 			builder:CfgBuilder, localTypes:Map<String, IrType>, scopeEnd:Int):Void {
 		var handler = builder.createBlock(), after = builder.createBlock();
 		builder.beginTry(handler, after);
@@ -1171,7 +1171,7 @@ class IrGenerator {
 			default: false;
 		};
 
-	function typedStatementSpan(statement:TypedStatement):compiler.Source.SourceSpan
+	function typedStatementSpan(statement:TypedStatement):compiler.core.Source.SourceSpan
 		return switch statement {
 			case TDeclare(_, _, span), TVar(_, _, span), TAssign(_, _, span), TCellAssign(_, _, _, span),
 				TCellCapturedAssign(_, _, _, span),
@@ -1684,7 +1684,7 @@ class IrGenerator {
 	}
 
 	function optionalCellPlace(name:String, cellClass:String, captured:Bool,
-			span:compiler.Source.SourceSpan):OptionalFieldPlace {
+			span:compiler.core.Source.SourceSpan):OptionalFieldPlace {
 		var marker = new TypedExpression(TLocal(name), TDynamic, span),
 			owner = new TypedExpression(TCall(captured ? "$optional-cell-captured" : "$optional-cell-local", [marker]),
 				TInstance(NominalKind.Class, cellClass, []), span);
@@ -3371,7 +3371,7 @@ class IrGenerator {
 	 * take the left element, so equal elements keep their order. Elements stay typed: the comparator receives them through
 	 * the ABI boundary casts it declares, and the scratch array has the element's own storage, so nothing is boxed.
 	 */
-	function lowerArraySort(array:TypedExpression, comparator:TypedExpression, span:compiler.Source.SourceSpan,
+	function lowerArraySort(array:TypedExpression, comparator:TypedExpression, span:compiler.core.Source.SourceSpan,
 			builder:CfgBuilder,
 			localTypes:Map<String, IrType>):CfgValue {
 		var element = switch array.type {
@@ -3682,7 +3682,7 @@ class IrGenerator {
 	}
 
 	function lowerSwitchArrayPatternBindings(pattern:TypedSwitchArrayPattern, subjectName:String, subjectType:IrType,
-			caseSpan:compiler.Source.SourceSpan,
+			caseSpan:compiler.core.Source.SourceSpan,
 			builder:CfgBuilder, localTypes:Map<String, IrType>):Void {
 		for (index in 0...pattern.elements.length) {
 			var elementPattern = pattern.elements[index],

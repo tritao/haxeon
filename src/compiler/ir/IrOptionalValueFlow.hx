@@ -1,6 +1,6 @@
 package compiler.ir;
 
-import compiler.Provides.ProviderOperation;
+import compiler.core.Provides.ProviderOperation;
 import compiler.ir.Ir;
 import compiler.ir.IrInlineValueLayout.IrInlineValueSlot;
 

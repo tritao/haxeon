@@ -1,6 +1,6 @@
 package compiler.syntax;
 
-import compiler.Source.SourceSpan;
+import compiler.core.Source.SourceSpan;
 
 /** Source-level type syntax before name resolution and semantic checking. */
 enum AstType {

@@ -1,4 +1,4 @@
-package compiler.compilation;
+package compiler.core;
 
 /**
  * Allocation of each IR pass in one compile, in the order the passes first ran, for the driver's timings line. A pass that runs more

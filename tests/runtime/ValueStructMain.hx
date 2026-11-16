@@ -1,5 +1,5 @@
 import compiler.Compiler;
-import compiler.Diagnostic.CompileError;
+import compiler.core.Diagnostic.CompileError;
 import compiler.hl.HlCode.HlTypeDef;
 import compiler.hl.HlType;
 import compiler.hl.HlWriter;

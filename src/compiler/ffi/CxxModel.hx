@@ -1,6 +1,6 @@
 package compiler.ffi;
 
-import compiler.Source.SourceSpan;
+import compiler.core.Source.SourceSpan;
 
 /** Source-language type retained until the C++ ABI lowering boundary. */
 enum CxxType {

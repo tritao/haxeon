@@ -1,6 +1,6 @@
 package compiler.types.analysis;
 
-import compiler.Source.SourceSpan;
+import compiler.core.Source.SourceSpan;
 
 /**
  * Which local maps of a function nothing else can reach, and where the analysis saw each of them used as a map operand.

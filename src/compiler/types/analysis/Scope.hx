@@ -1,9 +1,9 @@
 package compiler.types.analysis;
 
 import compiler.types.Type.CompilerType;
-import compiler.Source.SourceSpan;
-import compiler.Diagnostic;
-import compiler.Diagnostic.CompileError;
+import compiler.core.Source.SourceSpan;
+import compiler.core.Diagnostic;
+import compiler.core.Diagnostic.CompileError;
 import compiler.types.TypeRelations;
 import compiler.types.TypedAst.TypedExpression;
 import compiler.syntax.Ast.AstArgument;

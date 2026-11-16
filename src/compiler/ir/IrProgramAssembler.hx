@@ -98,7 +98,7 @@ class IrProgramAssembler {
 	public static function staticInitializersFrom(generator:IrGenerator, typed:TypedProgram, ?classOrder:Array<String>,
 			?program:Array<IrFunction>):Array<IrFunction> {
 		var statements:Array<TypedStatement> = [],
-			spans:Array<compiler.Source.SourceSpan> = [],
+			spans:Array<compiler.core.Source.SourceSpan> = [],
 			globals:Array<String> = [];
 		var classes = orderedClasses(typed.classes, classOrder);
 		for (classDecl in classes)
@@ -187,7 +187,7 @@ class IrProgramAssembler {
 	}
 
 	static function initializerFunction(generator:IrGenerator, name:String, statements:Array<TypedStatement>,
-			span:compiler.Source.SourceSpan):IrFunction
+			span:compiler.core.Source.SourceSpan):IrFunction
 		return generator.generateFunction({
 			name: name,
 			role: UserFunction,
@@ -208,7 +208,7 @@ class IrProgramAssembler {
 	 * order. Cycles are diagnosed rather than executing an invalid order.
 	 */
 	static function initializationOrder(generator:IrGenerator, statements:Array<TypedStatement>,
-			spans:Array<compiler.Source.SourceSpan>,
+			spans:Array<compiler.core.Source.SourceSpan>,
 			globals:Array<String>, program:Array<IrFunction>, objects:Array<IrObject>):Array<Int> {
 		var initializerIndex:Map<String, Int> = [for (index in 0...globals.length) globals[index] => index],
 			byName:Map<String, IrFunction> = [for (fn in program) fn.name => fn],
@@ -261,7 +261,7 @@ class IrProgramAssembler {
 			if (state[index] == 1) {
 				var cycle = path.slice(path.indexOf(index));
 				cycle.push(index);
-				throw new compiler.Diagnostic.CompileError(new compiler.Diagnostic("E_STATIC_INIT_CYCLE",
+				throw new compiler.core.Diagnostic.CompileError(new compiler.core.Diagnostic("E_STATIC_INIT_CYCLE",
 					"Static initializer dependency cycle: " + [for (member in cycle) globals[member]].join(" -> "),
 					spans[index]));
 			}
@@ -667,7 +667,7 @@ class IrProgramAssembler {
 				reflectionInput.cNatives = [for (native in reflectionInput.cNatives)
 					if (dispatchWalk.calledNatives.exists(native.name)) native];
 			}
-			allFunctions = compiler.compilation.IrPassMeter.measure("enum-dynamic-dispatch",
+			allFunctions = compiler.core.IrPassMeter.measure("enum-dynamic-dispatch",
 				() -> IrEnumDynamicDispatch.rewrite(allFunctions, reflectionInput, reflectableObjects, unreached));
 			if (IrReachabilityReport.enabled()) {
 				reflectionInput.functions = allFunctions;
@@ -675,16 +675,16 @@ class IrProgramAssembler {
 			}
 		}
 		if (objects != null)
-			allFunctions = compiler.compilation.IrPassMeter.measure("value-dynamic-dispatch",
+			allFunctions = compiler.core.IrPassMeter.measure("value-dynamic-dispatch",
 				() -> IrValueDynamicDispatch.rewrite(allFunctions, objects, unreached,
 				dispatchWalk == null ? null : dispatchWalk.createdClasses));
 		if (objects != null)
-			compiler.compilation.IrPassMeter.measureVoid("generic-owner-erasure",
+			compiler.core.IrPassMeter.measureVoid("generic-owner-erasure",
 				() -> GenericOwnerErasure.generate(generator.facts, allFunctions, objects));
 		// Every method slot keeps its topmost declaration's signature; overrides that lower to another get a bridge in the slot.
 		if (objects != null) {
 			var slotObjects:Array<IrObject> = objects;
-			var bridged = compiler.compilation.IrPassMeter.measure("override-bridges",
+			var bridged = compiler.core.IrPassMeter.measure("override-bridges",
 				() -> IrOverrideBridges.apply(allFunctions, slotObjects));
 			allFunctions = bridged.functions;
 			objects = bridged.objects;
@@ -707,14 +707,14 @@ class IrProgramAssembler {
 			if (checkPrune)
 				IrEntryPrune.checkRemoved(pass, allFunctions, removedByPrune);
 		if (objects != null && interfaces != null)
-			allFunctions = compiler.compilation.IrPassMeter.measure("value-interface-boxes",
+			allFunctions = compiler.core.IrPassMeter.measure("value-interface-boxes",
 				() -> IrValueInterfaceBoxes.rewrite(allFunctions, objects, interfaces));
 		verify("value-interface-boxes");
 		if (objects != null && interfaces != null) {
-			allFunctions = compiler.compilation.IrPassMeter.measure("typed-interface-calls",
+			allFunctions = compiler.core.IrPassMeter.measure("typed-interface-calls",
 				() -> IrTypedInterfaceDispatch.rewriteValueCalls(allFunctions, objects, interfaces));
 			var beforeTypedInterfaces = allFunctions.length;
-			compiler.compilation.IrPassMeter.measureVoid("typed-interface-generate",
+			compiler.core.IrPassMeter.measureVoid("typed-interface-generate",
 				() -> IrTypedInterfaceDispatch.generate(allFunctions, objects, interfaces));
 			if (allFunctions.length > beforeTypedInterfaces) {
 				var existing = allFunctions.slice(0, beforeTypedInterfaces);
@@ -724,7 +724,7 @@ class IrProgramAssembler {
 		}
 		// HashLink checks object casts itself, but interface casts need checks on every target.
 		if (objects != null)
-			allFunctions = compiler.compilation.IrPassMeter.measure("checked-dynamic-casts",
+			allFunctions = compiler.core.IrPassMeter.measure("checked-dynamic-casts",
 				() -> IrCheckedDynamicCasts.rewrite(allFunctions, objects, generator.profile.nativeReflectionDispatch));
 		verify("checked-dynamic-casts");
 		if (exportedFunctions != null && exportedFunctions.length > 0) {
@@ -752,7 +752,7 @@ class IrProgramAssembler {
 				enumInput.objects, enumInput.staticFields,
 				enumInput.natives, enumInput.interfaces, enumInput.cNatives);
 			IrEnumTagLowering.run(enumInput);
-			var enumOutput = compiler.compilation.IrPassMeter.measure("inline-enum-lowering",
+			var enumOutput = compiler.core.IrPassMeter.measure("inline-enum-lowering",
 				() -> IrInlineEnumLowering.run(enumInput, valueTarget, canonicalObjects, reflectableObjects));
 			allFunctions = enumOutput.functions;
 			objects = enumOutput.objects;
@@ -763,12 +763,12 @@ class IrProgramAssembler {
 		}
 		verify("inline-enum-lowering");
 		if (objects != null) {
-			allFunctions = compiler.compilation.IrPassMeter.measure("optional-scalar-flow",
+			allFunctions = compiler.core.IrPassMeter.measure("optional-scalar-flow",
 				() -> new IrOptionalScalarFlow(objects).rewrite(objects, allFunctions));
 			allFunctions = IrOptionalValueFlow.addHelpers(allFunctions, objects);
 		}
 		verify("optional-scalar-flow");
-		allFunctions = compiler.compilation.IrPassMeter.measure("static-null-checks",
+		allFunctions = compiler.core.IrPassMeter.measure("static-null-checks",
 			() -> IrStaticNullChecks.run(allFunctions, objects, staticChecks));
 		verify("static-null-checks");
 		if (objects != null && reflectableObjects != null) {
@@ -801,7 +801,7 @@ class IrProgramAssembler {
 				allFunctions = optionalStorage.rewrite(allFunctions);
 				objects = optionalStorage.physicalObjects(objects);
 			}
-			allFunctions = compiler.compilation.IrPassMeter.measure("nullable-scalar-fields",
+			allFunctions = compiler.core.IrPassMeter.measure("nullable-scalar-fields",
 				() -> new IrNullableScalarFields(objects).rewrite(allFunctions));
 		}
 		verify("object-reflection and nullable-scalar-fields");

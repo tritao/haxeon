@@ -1,5 +1,5 @@
-import compiler.Diagnostic.CompileError;
-import compiler.Source.SourceFile;
+import compiler.core.Diagnostic.CompileError;
+import compiler.core.Source.SourceFile;
 import compiler.semantic.SemanticSignature;
 import compiler.syntax.Ast.AstType;
 import compiler.syntax.Lexer;

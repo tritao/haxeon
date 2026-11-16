@@ -1,6 +1,6 @@
 package compiler.types.typing;
 
-import compiler.Source.SourceSpan;
+import compiler.core.Source.SourceSpan;
 import compiler.syntax.Ast.AstEnumAbstract;
 import compiler.syntax.Ast.AstEnumAbstractValue;
 import compiler.types.Type.CompilerType;

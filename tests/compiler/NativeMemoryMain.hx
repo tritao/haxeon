@@ -1,5 +1,5 @@
 import compiler.Compiler;
-import compiler.Diagnostic.CompileError;
+import compiler.core.Diagnostic.CompileError;
 import compiler.ir.Ir.IrInstruction;
 import compiler.ir.Ir.IrType;
 import compiler.ir.codec.IrFunctionStateCodec;

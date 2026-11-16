@@ -1,8 +1,8 @@
 package compiler.types.typing;
 
-import compiler.Provides;
-import compiler.Provides.ProviderOperation;
-import compiler.Source.SourceSpan;
+import compiler.core.Provides;
+import compiler.core.Provides.ProviderOperation;
+import compiler.core.Source.SourceSpan;
 import compiler.types.Type.CompilerType;
 import compiler.types.Type.NominalKind;
 import compiler.types.TypedAst.TypedExpression;
@@ -50,7 +50,7 @@ class ValueEqualityGenerator {
 				if (requested == null)
 					throw 'Missing value equality request "$name"';
 				// Helpers can originate in a lambda after its typing context has already been popped.
-				var owner = compiler.QualifiedName.parent(requested.origin),
+				var owner = compiler.core.QualifiedName.parent(requested.origin),
 					context = session.enterBody(requested.origin, null, owner == null ? "$value-equality" : owner);
 				try {
 					generated.set(name, compareFunction(session, requested, compare));

@@ -66,6 +66,11 @@ The same canonical IR can also be emitted as experimental `wasm32` or `wasm-gc`;
 see [`WASM_BACKEND.md`](WASM_BACKEND.md) for the representation
 boundary, linear-memory and collector contracts, GC target, and test commands.
 
+`compiler.core` (`src/compiler/core`) is the bottom of the compiler: source files and spans (`Source`), diagnostics
+(`Diagnostic`, `AmbiguousName`), qualified names, provider operations (`Provides`), preallocated arrays, request cancellation
+(`CancellationToken`, `CancellationError`) and the allocation and IR pass meters. Every other compiler package may import it, and it
+imports nothing else from the compiler.
+
 ## Warm builds: what landed (M0 and M1 of ADR 0003)
 
 The current plan and the measurements are in [`WARM_REBUILD_REUSE.md`](WARM_REBUILD_REUSE.md) and

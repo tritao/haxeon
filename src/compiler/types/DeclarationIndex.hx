@@ -2,10 +2,10 @@ package compiler.types;
 
 import compiler.runtime.PlatformAbi;
 import compiler.syntax.Ast;
-import compiler.Diagnostic;
-import compiler.Diagnostic.CompileError;
-import compiler.Source.SourceSpan;
-import compiler.Source.SourceFile;
+import compiler.core.Diagnostic;
+import compiler.core.Diagnostic.CompileError;
+import compiler.core.Source.SourceSpan;
+import compiler.core.Source.SourceFile;
 import compiler.semantic.ModuleCanonicalizer;
 import compiler.types.Type.AnonymousField;
 import compiler.types.Type.CompilerType;

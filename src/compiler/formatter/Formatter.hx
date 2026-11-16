@@ -1,7 +1,7 @@
 package compiler.formatter;
 
-import compiler.Diagnostic.CompileError;
-import compiler.Source.SourceFile;
+import compiler.core.Diagnostic.CompileError;
+import compiler.core.Source.SourceFile;
 import compiler.formatter.CommentAttachment.CommentAttachmentTools;
 import compiler.formatter.FormatToken.FormatTokenTools;
 import compiler.formatter.SyntaxAnnotator.SyntaxInfo;

@@ -105,10 +105,10 @@ class IrVerifier {
 				case Provider(subject, operation):
 					var declaration = selectedTypes.get(subject.toString());
 					if (declaration != null) {
-						var box = operation == compiler.Provides.ProviderOperations
-							.detailed(compiler.Provides.ProviderOperation.InlineEnumHelper, "box"),
-							unbox = operation == compiler.Provides.ProviderOperations
-								.detailed(compiler.Provides.ProviderOperation.InlineEnumHelper, "unbox"),
+						var box = operation == compiler.core.Provides.ProviderOperations
+							.detailed(compiler.core.Provides.ProviderOperation.InlineEnumHelper, "box"),
+							unbox = operation == compiler.core.Provides.ProviderOperations
+								.detailed(compiler.core.Provides.ProviderOperation.InlineEnumHelper, "unbox"),
 							storage:IrType = Obj(declaration.inlineStorage);
 						if ((box || unbox)
 							&& fn.arguments.length == 1

@@ -1,6 +1,6 @@
 package compiler.types.typing;
 
-import compiler.Source.SourceSpan;
+import compiler.core.Source.SourceSpan;
 import compiler.syntax.Ast.AstExpression;
 import compiler.types.Type.CompilerType;
 import compiler.types.TypeRelations;
@@ -49,7 +49,7 @@ class KeyPathOperations {
 				new TypedExpression(TField(receiver, "$display"), TString, span);
 			case TKeyPath(root, value, _) if (name == "get"):
 				if (arguments.length != 1)
-					throw new compiler.Diagnostic.CompileError(new compiler.Diagnostic("E1008",
+					throw new compiler.core.Diagnostic.CompileError(new compiler.core.Diagnostic("E1008",
 						'KeyPath.get expects 1 argument, got ${arguments.length}', span));
 				var target = coerce(typeExpression(arguments[0], scope, root, false), root, "key path root", "E1009"),
 					definition = KeyPathTyping.known(session, receiver);
@@ -185,5 +185,5 @@ class KeyPathOperations {
 
 	@:noReturn
 	static function fail(code:String, message:String, span:SourceSpan):Void
-		throw new compiler.Diagnostic.CompileError(new compiler.Diagnostic(code, message, span));
+		throw new compiler.core.Diagnostic.CompileError(new compiler.core.Diagnostic(code, message, span));
 }

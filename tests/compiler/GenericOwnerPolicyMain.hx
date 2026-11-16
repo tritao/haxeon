@@ -1,4 +1,4 @@
-import compiler.Source.SourceFile;
+import compiler.core.Source.SourceFile;
 import compiler.semantic.GenericSpecializationRegistry;
 import compiler.semantic.SemanticProgram;
 import compiler.syntax.Lexer;

@@ -60,8 +60,8 @@ class IrEnumTagLowering {
 		for (fn in program.functions)
 			if ((switch fn.provides {
 				case Serves(_,
-					operation): (IrProviders.base(operation) == compiler.Provides.ProviderOperation.Equals
-					|| IrProviders.base(operation) == compiler.Provides.ProviderOperation.ReflectEquals);
+					operation): (IrProviders.base(operation) == compiler.core.Provides.ProviderOperation.Equals
+					|| IrProviders.base(operation) == compiler.core.Provides.ProviderOperation.ReflectEquals);
 				case None: false;
 			}) && fn.arguments.length == 2)
 				switch mapped(fn.arguments[0].type) {

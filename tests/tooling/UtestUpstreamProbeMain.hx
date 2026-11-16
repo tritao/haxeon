@@ -1,5 +1,5 @@
 import compiler.Compiler;
-import compiler.Diagnostic.CompileError;
+import compiler.core.Diagnostic.CompileError;
 import compiler.modules.ModulePath;
 import compiler.runtime.CompilerIntrinsics;
 import sys.FileSystem;

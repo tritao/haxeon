@@ -3,7 +3,7 @@ package compiler.ir.cfg;
 import compiler.ir.cfg.Cfg;
 import compiler.ir.Ir.IrType;
 import compiler.ir.Ir.IrIntrinsic;
-import compiler.Source.SourceSpan;
+import compiler.core.Source.SourceSpan;
 import compiler.ir.SourceProvenance;
 import compiler.ir.SourceProvenance.Located;
 import compiler.ir.SourceProvenance.SourceOrigin;

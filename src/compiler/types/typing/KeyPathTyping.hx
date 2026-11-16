@@ -1,8 +1,8 @@
 package compiler.types.typing;
 
-import compiler.Diagnostic;
-import compiler.Diagnostic.CompileError;
-import compiler.Source.SourceSpan;
+import compiler.core.Diagnostic;
+import compiler.core.Diagnostic.CompileError;
+import compiler.core.Source.SourceSpan;
 import compiler.semantic.SemanticSignature;
 import compiler.syntax.Ast.AstClass;
 import compiler.syntax.Ast.AstField;
@@ -80,7 +80,7 @@ class KeyPathTyping {
 						found = true;
 						break;
 					}
-					candidate = compiler.QualifiedName.parentOrEmpty(candidate);
+					candidate = compiler.core.QualifiedName.parentOrEmpty(candidate);
 				}
 				if (!found) fail('Cannot resolve key path root in "$name"', span);
 			default:
@@ -152,7 +152,7 @@ class KeyPathTyping {
 		// One definition serves every use of the path and its accessors are kept from build to build, so their place cannot be a use
 		// (the last one typed would win) or a declaration (it moves when text above it changes, while a build that does not type
 		// the path again keeps the old place). It is compiler-owned code: a generated span in the first field's file, at a fixed offset.
-		span: fields.length > 0 ? new compiler.Source.SourceSpan(fields[0].field.span.file, 0, 0, false, null,
+		span: fields.length > 0 ? new compiler.core.Source.SourceSpan(fields[0].field.span.file, 0, 0, false, null,
 			"key-path") : span,
 			origin: origin});
 		session.recordKeyPathUse(session.currentContext.name, name);

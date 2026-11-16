@@ -1,6 +1,6 @@
 package compiler.ir;
 
-import compiler.Provides.ProviderOperation;
+import compiler.core.Provides.ProviderOperation;
 import compiler.ir.Ir;
 
 /** What a walk starts from: function names that are reached whatever calls them, and types that exist from the start. */

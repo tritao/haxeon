@@ -1,6 +1,6 @@
 package compiler.ffi;
 
-import compiler.Source.SourceSpan;
+import compiler.core.Source.SourceSpan;
 
 /** Normalized documentation attached to one HXI declaration or member. */
 typedef HxiDocumentation = {

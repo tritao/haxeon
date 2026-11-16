@@ -1,6 +1,6 @@
 package compiler.ffi;
 
-import compiler.Source.SourceSpan;
+import compiler.core.Source.SourceSpan;
 import compiler.ffi.CxxModel.CxxAlias;
 import compiler.ffi.CxxModel.CxxEnum;
 import compiler.ffi.CxxModel.CxxFunction;

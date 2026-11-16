@@ -15,8 +15,9 @@ class GeneratedEqualityProvenanceMain {
 	}
 
 	static function main():Void {
-		var user = compiler.ir.SourceProvenance.user(new compiler.Source.SourceFile("empty-user.hx", "").span(0, 0));
-		var generatedSpan = compiler.Source.SourceSpan.generated("test-helper");
+		var user = compiler.ir.SourceProvenance.user(new compiler.core.Source.SourceFile("empty-user.hx", "").span(0,
+			0));
+		var generatedSpan = compiler.core.Source.SourceSpan.generated("test-helper");
 		var generated = compiler.ir.SourceProvenance.user(generatedSpan.merge(generatedSpan));
 		if (user.location.sourceHash == 0
 			|| generated.location.sourceHash != 0

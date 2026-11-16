@@ -207,9 +207,9 @@ class NonNullFactsMain {
 			}
 			b.returnValue(b.constInt(42));
 			var fn = new IrFunction("wide", b.arguments, I32, b.blocks, Ordinary),
-				before = compiler.compilation.AllocationMeter.sample();
+				before = compiler.core.AllocationMeter.sample();
 			var facts = new IrNonNullFacts(fn, checked),
-				bytes = compiler.compilation.AllocationMeter.sample().bytes - before.bytes;
+				bytes = compiler.core.AllocationMeter.sample().bytes - before.bytes;
 			expect(bytes > 0 && bytes < 8 * 1024 * 1024,
 				'Non-null fact propagation allocated $bytes bytes for 128 blocks');
 			for (i in 0...freshReads.length) {

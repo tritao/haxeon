@@ -1,4 +1,4 @@
-import compiler.Source.SourceFile;
+import compiler.core.Source.SourceFile;
 import compiler.semantic.DeclarationLifecycle;
 import compiler.semantic.DeclarationLifecycle.DeclarationStage;
 import compiler.semantic.SemanticProgram;

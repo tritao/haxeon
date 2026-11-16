@@ -1,8 +1,8 @@
 import compiler.Compiler;
 import compiler.Compiler.CompileResult;
-import compiler.Diagnostic.CompileError;
 import compiler.backend.Backend.BackendTarget;
 import compiler.backend.wasm.WasmBackend;
+import compiler.core.Diagnostic.CompileError;
 import compiler.hl.HlWriter;
 import compiler.runtime.CompilerIntrinsics;
 import compiler.tools.CompilerDriver;

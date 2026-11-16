@@ -1,6 +1,6 @@
 package editor.lsp;
 
-import compiler.Source.SourceFile;
+import compiler.core.Source.SourceFile;
 
 /** One open LSP document with monotonically versioned text and position conversion. */
 class LspDocument {

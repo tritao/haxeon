@@ -1,6 +1,6 @@
 package compiler.types.analysis;
 
-import compiler.Source.SourceSpan;
+import compiler.core.Source.SourceSpan;
 import compiler.syntax.Ast.AstArgument;
 import compiler.syntax.Ast.AstStatement;
 

@@ -1,6 +1,6 @@
 package compiler.syntax;
 
-import compiler.Source.SourceSpan;
+import compiler.core.Source.SourceSpan;
 
 /** Closed vocabulary emitted by the lexer and consumed by the parser. */
 enum TokenKind {

@@ -1,5 +1,5 @@
-import compiler.Diagnostic.CompileError;
 import compiler.Frontend;
+import compiler.core.Diagnostic.CompileError;
 
 class FinalLocalMain {
 	static function main():Void {

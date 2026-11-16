@@ -1,7 +1,7 @@
 package compiler.types.typing;
 
 import compiler.types.TypedAst.TypedFunctionRole;
-import compiler.Source.SourceSpan;
+import compiler.core.Source.SourceSpan;
 import compiler.syntax.Ast.AstEnumAbstract;
 import compiler.types.Type.CompilerType;
 import compiler.types.TypedAst.TypedExpression;
@@ -52,7 +52,7 @@ class FlagsGenerator {
 					return code;
 				default:
 			}
-		throw new compiler.Diagnostic.CompileError(new compiler.Diagnostic("E1002",
+		throw new compiler.core.Diagnostic.CompileError(new compiler.core.Diagnostic("E1002",
 			"Flags requires compile-time Int constants", value.span));
 	}
 
@@ -194,7 +194,8 @@ class FlagsGenerator {
 			statements.push(TReturn(result, span));
 			var fn:TypedFunction = {
 				name: name, role: ProviderFunction(TAbstract(request.owner, [], TInt),
-					compiler.Provides.ProviderOperations.detailed(compiler.Provides.ProviderOperation.Flags, method)),
+					compiler.core.Provides.ProviderOperations.detailed(compiler.core.Provides.ProviderOperation.Flags,
+					method)),
 				origin: request.origin,
 				originKind: Helper,
 				owner: null,

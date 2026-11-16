@@ -10,7 +10,7 @@ import compiler.runtime.CompilerIntrinsics;
 import compiler.hl.HlCode;
 import compiler.hl.HlWriter;
 import compiler.hl.HlWriterCache;
-import compiler.Source.SourceFile;
+import compiler.core.Source.SourceFile;
 import compiler.syntax.Lexer;
 import compiler.syntax.ConditionalCompilation;
 import compiler.syntax.Token.TokenKind;

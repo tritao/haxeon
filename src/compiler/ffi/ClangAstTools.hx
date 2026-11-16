@@ -1,7 +1,7 @@
 package compiler.ffi;
 
-import compiler.Source.SourceFile;
-import compiler.Source.SourceSpan;
+import compiler.core.Source.SourceFile;
+import compiler.core.Source.SourceSpan;
 import sys.FileSystem;
 import sys.io.File;
 

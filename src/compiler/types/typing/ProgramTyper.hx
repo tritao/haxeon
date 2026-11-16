@@ -1,7 +1,7 @@
 package compiler.types.typing;
 
-import compiler.Source.SourceSpan;
-import compiler.compilation.AllocationMeter;
+import compiler.core.AllocationMeter;
+import compiler.core.Source.SourceSpan;
 import compiler.ffi.HxiModel.HxiDeclaration;
 import compiler.ffi.NativeLayout;
 import compiler.semantic.DeclarationLifecycle.DeclarationStage;
@@ -682,7 +682,7 @@ class ProgramTyper {
 				BodyTyper.fail("E1022",
 					'Native layout types can only appear in value structs or native value record fields', field.span);
 			var initializer:Null<TypedExpression> = null,
-				initializerContextWarnings:Null<Array<compiler.Diagnostic>> = null,
+				initializerContextWarnings:Null<Array<compiler.core.Diagnostic>> = null,
 				inlineValue:Null<TypedExpression> = null,
 				parsedInitializer = field.initializer;
 			if (parsedInitializer != null) {

@@ -1,4 +1,4 @@
-import compiler.Source.SourceFile;
+import compiler.core.Source.SourceFile;
 import compiler.modules.ModuleState;
 import compiler.semantic.AliasTable;
 import compiler.semantic.ModuleCanonicalizer;

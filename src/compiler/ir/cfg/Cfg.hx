@@ -1,6 +1,6 @@
 package compiler.ir.cfg;
 
-import compiler.Source.SourceSpan;
+import compiler.core.Source.SourceSpan;
 import compiler.ir.Ir.IrIntrinsic;
 import compiler.ir.Ir.IrType;
 import compiler.ir.SourceProvenance.Located;

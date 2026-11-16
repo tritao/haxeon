@@ -1,5 +1,5 @@
 import compiler.Frontend;
-import compiler.Source.SourceFile;
+import compiler.core.Source.SourceFile;
 import compiler.ir.IrProgramAssembler;
 import compiler.ir.codec.CanonicalIrCodec;
 import compiler.syntax.Lexer;

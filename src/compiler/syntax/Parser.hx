@@ -1,5 +1,6 @@
 package compiler.syntax;
 
+import compiler.core.Diagnostic;
 import compiler.syntax.Ast.AstExpression;
 import compiler.syntax.Ast.AstArgument;
 import compiler.syntax.Ast.AstFieldAccess;
@@ -14,14 +15,14 @@ import compiler.syntax.Ast.AstProgram;
 import compiler.syntax.Ast.AstStatement;
 import compiler.syntax.Ast.AstType;
 import compiler.syntax.Ast.NativeLayoutQueryKind;
-import compiler.Source.SourceSpan;
+import compiler.core.Source.SourceSpan;
 import compiler.syntax.Token.TokenKind;
-import compiler.Diagnostic.CompileError;
+import compiler.core.Diagnostic.CompileError;
 import haxe.Int64;
 
 typedef RecoveredParse = {
 	final program:AstProgram;
-	final diagnostics:Array<compiler.Diagnostic>;
+	final diagnostics:Array<compiler.core.Diagnostic>;
 }
 
 /** The lambda numbering of a declaration, restored when the parser leaves it. */
@@ -111,7 +112,7 @@ class Parser {
 	/** `lambdaPath` of each body that encloses the lambda being parsed. */
 	var lambdaPaths:Array<Array<String>> = [];
 
-	var recoveryDiagnostics:Array<compiler.Diagnostic> = [];
+	var recoveryDiagnostics:Array<compiler.core.Diagnostic> = [];
 
 	public function new(tokens:Array<Token>) {
 		this.tokens = typeDelimiterTokens(tokens);
@@ -528,14 +529,14 @@ class Parser {
 	function parseQualifiedName():String {
 		if (recovering && isExpressionTerminator(current().kind)) {
 			var span = new SourceSpan(current().span.file, current().span.start, current().span.start);
-			recordRecoveryDiagnostic(new compiler.Diagnostic("E0002", "Expected name", span));
+			recordRecoveryDiagnostic(new compiler.core.Diagnostic("E0002", "Expected name", span));
 			return "";
 		}
 		var name = consumeName().text;
 		while (match(TokenKind.Dot)) {
 			if (recovering && isExpressionTerminator(current().kind)) {
 				var span = new SourceSpan(current().span.file, current().span.start, current().span.start);
-				recordRecoveryDiagnostic(new compiler.Diagnostic("E0002", "Expected name", span));
+				recordRecoveryDiagnostic(new compiler.core.Diagnostic("E0002", "Expected name", span));
 				break;
 			}
 			name += "." + consumeName().text;
@@ -1739,7 +1740,7 @@ class Parser {
 			return parseKeyPathLiteral(previous().span);
 		if (recovering && isExpressionTerminator(current().kind)) {
 			var span = new SourceSpan(current().span.file, current().span.start, current().span.start);
-			recordRecoveryDiagnostic(new compiler.Diagnostic("E0002", "Expected expression", span));
+			recordRecoveryDiagnostic(new compiler.core.Diagnostic("E0002", "Expected expression", span));
 			return ErrorExpression(span);
 		}
 		if (check(TokenKind.At)) {
@@ -2345,7 +2346,8 @@ class Parser {
 		}
 		if (recoveringAtEnd()) {
 			var span = current().span;
-			recordRecoveryDiagnostic(new compiler.Diagnostic("E0002", "Expression block requires a result expression",
+			recordRecoveryDiagnostic(new compiler.core.Diagnostic("E0002",
+				"Expression block requires a result expression",
 				span));
 			return ErrorExpression(span);
 		}
@@ -2629,7 +2631,7 @@ class Parser {
 			if (match(TokenKind.Dot)) {
 				if (recovering && isExpressionTerminator(current().kind)) {
 					var span = new SourceSpan(current().span.file, current().span.start, current().span.start);
-					recordRecoveryDiagnostic(new compiler.Diagnostic("E0002", "Expected member name", span));
+					recordRecoveryDiagnostic(new compiler.core.Diagnostic("E0002", "Expected member name", span));
 					break;
 				}
 				var nameToken = consumeName(), name = nameToken.text;
@@ -2688,7 +2690,7 @@ class Parser {
 	function parseAtomicType():AstType {
 		if (recovering && isExpressionTerminator(current().kind)) {
 			var span = new SourceSpan(current().span.file, current().span.start, current().span.start);
-			recordRecoveryDiagnostic(new compiler.Diagnostic("E0002", "Expected type", span));
+			recordRecoveryDiagnostic(new compiler.core.Diagnostic("E0002", "Expected type", span));
 			return ErrorType(span);
 		}
 		if (match(TokenKind.LeftBrace)) {
@@ -2845,8 +2847,8 @@ class Parser {
 	function insertMissing(kind:TokenKind):Token {
 		var replacement = tokenText(kind),
 			span = new SourceSpan(current().span.file, current().span.start, current().span.start);
-		recordRecoveryDiagnostic(new compiler.Diagnostic("E0002", 'Expected $kind, got ${current().kind}', span,
-			compiler.Diagnostic.DiagnosticSeverity.Error,
+		recordRecoveryDiagnostic(new compiler.core.Diagnostic("E0002", 'Expected $kind, got ${current().kind}', span,
+			compiler.core.Diagnostic.DiagnosticSeverity.Error,
 			[
 				{
 					id: "insert-" + replacement,
@@ -2859,13 +2861,13 @@ class Parser {
 
 	function missingFunctionBody():Void {
 		var span = new SourceSpan(current().span.file, current().span.start, current().span.start);
-		recordRecoveryDiagnostic(new compiler.Diagnostic("E0002", "Expected function body", span,
-			compiler.Diagnostic.DiagnosticSeverity.Error, [
+		recordRecoveryDiagnostic(new compiler.core.Diagnostic("E0002", "Expected function body", span,
+			compiler.core.Diagnostic.DiagnosticSeverity.Error, [
 				{id: "insert-function-body", title: "Insert function body", edits: [{span: span, replacement: " {}"}]}
 			]));
 	}
 
-	function recordRecoveryDiagnostic(diagnostic:compiler.Diagnostic):Void {
+	function recordRecoveryDiagnostic(diagnostic:compiler.core.Diagnostic):Void {
 		if (recoveryDiagnostics.length < MAX_RECOVERY_DIAGNOSTICS)
 			recoveryDiagnostics.push(diagnostic);
 	}
@@ -3235,7 +3237,7 @@ class Parser {
 	}
 
 	function parseInterpolatedExpression(source:String, outer:SourceSpan, offset:Int):AstExpression {
-		var interpolationFile = new compiler.Source.SourceFile(outer.file.path, source),
+		var interpolationFile = new compiler.core.Source.SourceFile(outer.file.path, source),
 			shifted:Array<Token> = [];
 		for (token in new Lexer(interpolationFile).tokenize())
 			shifted.push(new Token(token.kind, token.text,

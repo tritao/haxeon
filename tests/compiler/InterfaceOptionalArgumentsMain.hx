@@ -1,5 +1,5 @@
 import compiler.Compiler;
-import compiler.Diagnostic.CompileError;
+import compiler.core.Diagnostic.CompileError;
 
 class InterfaceOptionalArgumentsMain {
 	static final declaration = "interface Service { public function value(required:Int, ?suffix:String):Int; }";

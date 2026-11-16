@@ -71,7 +71,8 @@ class InlineEnumEqualityAbiMain {
 			program.functions.push(new IrFunction(field == "tag" ? tagName : field == "number" ? numberName : ownerName,
 				b.arguments, result.type, b.blocks,
 				compiler.ir.IrFunction.IrFunctionKind.Provider(compiler.ir.TypeKey.of(Obj(shape.valueObject.name)),
-				compiler.Provides.ProviderOperations.detailed(compiler.Provides.ProviderOperation.InlineEnumHelper,
+				compiler.core.Provides.ProviderOperations
+				.detailed(compiler.core.Provides.ProviderOperation.InlineEnumHelper,
 				field))));
 		}
 		for (name in [equality, reflective]) {
@@ -99,7 +100,8 @@ class InlineEnumEqualityAbiMain {
 			program.functions.push(new IrFunction(name, b.arguments, Bool, b.blocks,
 				Provider(compiler.ir.TypeKey.of(Enum(declaration.name)),
 				name == equality
-				? compiler.Provides.ProviderOperation.Equals : compiler.Provides.ProviderOperation.ReflectEquals)));
+				? compiler.core.Provides.ProviderOperation.Equals
+				: compiler.core.Provides.ProviderOperation.ReflectEquals)));
 		}
 		var prepare = new IrBuilder(), reference = prepare.newObject(owner.name);
 		prepare.fieldSet(reference, "id", prepare.constInt(2));
