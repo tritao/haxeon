@@ -68,14 +68,17 @@ class DevCommand {
 
 	/** Reads the options and the main class from the front of `arguments`, leaving what follows the main class in it. */
 	static function toolRequest(arguments:Array<String>, command:String):Null<ToolRequest> {
-		var classPaths = [], defines = [];
+		var classPaths:Array<String> = [], defines:Array<String> = [];
 		while (arguments.length > 0) {
 			var argument = arguments.shift();
 			switch argument {
 				case "--cp" | "--define":
 					if (arguments.length == 0)
 						throw 'Option "$argument" takes a value';
-					(argument == "--cp" ? classPaths : defines).push(arguments.shift());
+					var value = arguments.shift();
+					if (value == null)
+						throw 'Option "$argument" takes a value';
+					(argument == "--cp" ? classPaths : defines).push(value);
 				case _ if (StringTools.startsWith(argument, "-")):
 					throw 'Unknown $command option: $argument';
 				case _:
