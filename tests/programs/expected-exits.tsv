@@ -625,3 +625,4 @@ scalar-closure-boundaries	42
 map-comprehension-value-storage	42
 duplicate-import-occurrences	42
 inline-enum-callback-container	42
+observable-switch-cfg	42
