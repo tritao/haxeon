@@ -94,6 +94,8 @@ private class RuntimeNative {
 	public static function retry_failed_retirements():Int
 		return 0;
 
+	public static function clear_unused_stack():Void {}
+
 	public static function failed_retirement_count():Int
 		return 0;
 
@@ -233,6 +235,7 @@ class Runtime {
 		});
 
 	public static function dispose(module:LoadedModule):Void {
+		RuntimeNative.clear_unused_stack();
 		retirementMutex.acquire();
 		try {
 			if (!tryDispose(module) && retirementBacklog.indexOf(module) < 0)
@@ -246,6 +249,8 @@ class Runtime {
 
 	/** Retry modules whose reclamation was delayed by retained or conservative borrowers. */
 	public static function retryRetirements():Int {
+		// The collection that decides scans the stack conservatively: clear what earlier calls left below this frame first.
+		RuntimeNative.clear_unused_stack();
 		retirementMutex.acquire();
 		try {
 			var write = 0;
@@ -293,6 +298,7 @@ class Runtime {
 
 	static function tryDispose(module:LoadedModule):Bool
 		return module.close(function(handle) {
+			RuntimeNative.clear_unused_stack();
 			var status:RuntimeStatus = RuntimeNative.dispose(handle);
 			if (status != RuntimeStatus.Ok)
 				throw new RuntimeError(status,

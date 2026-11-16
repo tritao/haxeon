@@ -191,6 +191,26 @@ HL_PRIM void HL_NAME(set_patch_failure_stage)( hl_runtime_module *runtime, int s
 	hl_runtime_module_set_patch_failure_stage(runtime,stage);
 }
 
+#ifdef _MSC_VER
+#	define RUNTIME_NOINLINE __declspec(noinline)
+#else
+#	define RUNTIME_NOINLINE __attribute__((noinline))
+#endif
+
+/*
+ * Zeroes the unused stack below the caller. Whether a module can retire is decided by a collection, which scans the
+ * stack conservatively: the frames of the call that decides start in memory earlier calls left, and an uninitialized
+ * word there that still points into the module (a closure's environment, say) kept it from retiring.
+ */
+static RUNTIME_NOINLINE void clear_stack_below( void ) {
+	volatile unsigned char words[65536];
+	for(int i=0;i<(int)sizeof(words);i++) words[i] = 0;
+}
+
+HL_PRIM void HL_NAME(clear_unused_stack)() {
+	clear_stack_below();
+}
+
 HL_PRIM int HL_NAME(dispose)( hl_runtime_module *runtime ) {
 	return hl_runtime_module_release(runtime);
 }

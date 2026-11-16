@@ -191,6 +191,7 @@ DEFINE_PRIM(_I32,revision,_ABSTRACT(realtime_module));
 DEFINE_PRIM(_VOID,set_patch_failure_stage,_ABSTRACT(realtime_module) _I32);
 DEFINE_PRIM(_I32,dispose,_ABSTRACT(realtime_module));
 DEFINE_PRIM(_I32,retry_failed_retirements,_NO_ARG);
+DEFINE_PRIM(_VOID,clear_unused_stack,_NO_ARG);
 DEFINE_PRIM(_I32,failed_retirement_count,_NO_ARG);
 DEFINE_PRIM(_I32,inspect_patch,_BYTES _I32);
 DEFINE_PRIM(_VOID,array_int_init,_OBJ(_BYTES _I32));
