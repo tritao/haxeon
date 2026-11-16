@@ -10,7 +10,7 @@ on:
       platform:
         description: Platform, as ci.yml names it
         type: choice
-        options: [macos-arm64, macos, linux-arm64, test]
+        options: [macos-arm64, macos, linux-arm64, test, windows]
         default: macos-arm64
       suites:
         description: Suite names, comma-separated (scripts/test.sh --only); empty runs none
@@ -24,8 +24,12 @@ on:
 jobs:
   suites:
     name: ${{ inputs.platform }}
-    runs-on: ${{ fromJSON('{"macos-arm64":"macos-15","macos":"macos-15-intel","linux-arm64":"ubuntu-24.04-arm","test":"ubuntu-24.04"}')[inputs.platform] }}
+    runs-on: ${{ fromJSON('{"macos-arm64":"macos-15","macos":"macos-15-intel","linux-arm64":"ubuntu-24.04-arm","test":"ubuntu-24.04","windows":"windows-2022"}')[inputs.platform] }}
     timeout-minutes: 60
+    defaults:
+      run:
+        # Git Bash on Windows, so a command runs the same way everywhere.
+        shell: bash
     env:
       TEST_JOBS: 4
       SKIP_FORMAT_CHECK: 1
@@ -47,5 +51,6 @@ jobs:
         env:
           COMMAND: ${{ inputs.command }}
         run: |
-          scripts/build-native.sh >/dev/null
+          # setup.ps1 builds the native runtime on Windows.
+          if [[ $RUNNER_OS != Windows ]]; then scripts/build-native.sh >/dev/null; fi
           bash -c "$COMMAND"
