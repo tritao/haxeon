@@ -355,6 +355,10 @@ class TestCatalog {
 
 	public static function executableCases():Array<ExecutableCase> {
 		return [
+			hxmlCase("runtime", "driver-stdout-drain", "tests/hxml/driver-pipe-flood.hxml", "driver-stdout-drain.hl", 0,
+				"the driver drains a full stdout pipe while stderr remains open", ["stdout"]),
+			hxmlCase("runtime", "driver-stderr-drain", "tests/hxml/driver-pipe-flood.hxml", "driver-stderr-drain.hl", 0,
+				"the driver drains a full stderr pipe while stdout remains open", ["stderr"]),
 			hxmlCase("runtime", "patch-opcodes", "tests/hxml/patch-opcodes-test.hxml", "patch-opcodes-test.hl", 0,
 				"compiler opcode coverage and malformed patch rejection"),
 			mainCase("runtime", "exceptions", "ExceptionMain", "exception.hl", 42,

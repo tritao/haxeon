@@ -116,18 +116,29 @@ class HaxeonBuild {
 				classPaths: [],
 				defines: []
 			}));
-		return run(haxe(), [
-			"--cwd",
-			root(),
-			"-cp",
-			"tests",
-			"--run",
-			"driver.TestDriver",
-			"--root",
-			root(),
-			"--jobs",
-			jobs
-		].concat(arguments.slice(1)));
+		var temp = Sys.getEnv("TMPDIR");
+		if (temp == null || temp == "")
+			temp = Sys.systemName() == "Windows" ? Sys.getEnv("TEMP") : "/tmp";
+		if (temp == null || temp == "")
+			throw "No system temporary directory for the test driver";
+		var work:String;
+		do {
+			work = Path.join([temp, 'haxeon-test-driver-${Std.random(0x3fffffff)}-${Std.random(0x3fffffff)}']);
+		} while (FileSystem.exists(work));
+		FileSystem.createDirectory(work);
+		var driver = Path.join([work, "test-driver.hl"]), status:Int;
+		try {
+			status = run(haxe(), ["--cwd", root(), "-cp", "tests", "-hl", driver, "-main", "driver.TestDriver"]);
+			if (status == 0)
+				status = run(hashlink(), [driver, "--root", root(), "--jobs", jobs].concat(arguments.slice(1)));
+		} catch (error:Dynamic) {
+			if (FileSystem.exists(driver)) FileSystem.deleteFile(driver);
+			FileSystem.deleteDirectory(work);
+			throw error;
+		}
+		if (FileSystem.exists(driver)) FileSystem.deleteFile(driver);
+		FileSystem.deleteDirectory(work);
+		return status;
 	}
 
 	static function doctor():Int {

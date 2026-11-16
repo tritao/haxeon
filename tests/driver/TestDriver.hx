@@ -133,9 +133,10 @@ class TestDriver {
 				case "--jobs":
 					if (index == args.length)
 						throw "--jobs requires a positive integer";
-					jobs = Std.parseInt(args[index++]);
-					if (jobs == null || jobs < 1)
+					var parsed:Null<Int> = Std.parseInt(args[index++]);
+					if (parsed == null || parsed < 1)
 						throw "--jobs requires a positive integer";
+					jobs = parsed;
 				case argument:
 					throw 'Unknown test driver argument: $argument';
 			}
