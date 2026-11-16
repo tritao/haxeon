@@ -120,7 +120,6 @@ class SemanticProgram {
 		var nextProgram:AstProgram = {
 			packageName: program.packageName,
 			imports: program.imports,
-			importAliases: program.importAliases,
 			aliases: program.aliases,
 			enums: current.enums,
 			enumAbstracts: program.enumAbstracts,

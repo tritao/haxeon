@@ -51,7 +51,6 @@ class ModuleFields {
 		return {
 			packageName: program.packageName,
 			imports: program.imports,
-			importAliases: program.importAliases,
 			aliases: program.aliases,
 			enums: program.enums,
 			enumAbstracts: program.enumAbstracts,

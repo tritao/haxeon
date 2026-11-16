@@ -1156,8 +1156,10 @@ class TestMain {
 			.tokenize()).parseProgram();
 		if (packaged.packageName != "editor.core"
 			|| packaged.imports.length != 2
-			|| packaged.imports[0] != "editor.util"
-			|| packaged.importAliases.get("HaxeBytes") != "haxe.io.Bytes")
+			|| packaged.imports[0].path != "editor.util"
+			|| packaged.imports[0].alias != null
+			|| packaged.imports[1].path != "haxe.io.Bytes"
+			|| packaged.imports[1].alias != "HaxeBytes")
 			throw "Package and import declarations were not preserved in the AST";
 		Sys.println("PASS: package and import declarations are represented in the frontend");
 		var nestedTypeCompiler = new Compiler();

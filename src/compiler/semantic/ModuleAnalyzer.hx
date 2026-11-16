@@ -72,7 +72,8 @@ class ModuleAnalyzer {
 			throw error;
 		}
 		var ast = state.parsedAst(), dependencies:Map<String, Bool> = [];
-		for (importPath in ast.imports) {
+		for (imported in ast.imports) {
+			var importPath = imported.path;
 			var importedModules = importedSourceModules(importPath);
 			if (importedModules.length == 0)
 				dependencies.set(importModulePath(importPath), true);
@@ -137,16 +138,15 @@ class ModuleAnalyzer {
 		// A typedef this module declares is local too: `Code.High` through `typedef Code = ...` names no module.
 		for (alias in ast.aliases)
 			dependencies.remove(alias.name);
-		for (importPath in ast.imports) {
+		for (imported in ast.imports) {
+			var importPath = imported.path;
 			var modulePath = importModulePath(importPath),
-				alias = QualifiedName.last(modulePath);
+				alias = imported.alias == null ? QualifiedName.last(modulePath) : imported.alias;
 			if (alias != modulePath)
 				dependencies.remove(alias);
 			if (isWildcardImport(importPath) && !modules.exists(modulePath))
 				dependencies.remove(modulePath);
 		}
-		for (alias in ast.importAliases.keys())
-			dependencies.remove(alias);
 		for (dependency in [for (dependency in dependencies.keys()) dependency])
 			if (natives.hasChild(dependency) && sourceModuleForDependency(dependency) == null)
 				dependencies.remove(dependency);
@@ -175,7 +175,7 @@ class ModuleAnalyzer {
 			var sourceModule = sourceModuleForDependency(dependency);
 			if (sourceModule == null
 				&& (PlatformAbi.isType(dependency) || isPlatformDependency(dependency)
-				&& ast.imports.indexOf(dependency) < 0)) {
+				&& [for (entry in ast.imports) entry.path].indexOf(dependency) < 0)) {
 				dependencies.remove(dependency);
 				continue;
 			}
@@ -213,7 +213,7 @@ class ModuleAnalyzer {
 		}
 		state.dependencies = [for (name in dependencies.keys()) name];
 		state.dependencies.sort(Reflect.compare);
-		var typeAliases = AliasTable.of(importAliases(ast.imports, ast.importAliases));
+		var typeAliases = AliasTable.of(importAliases(ast.imports));
 		ModuleCanonicalizer.addDeclaredTypeAliases(typeAliases, ast, ast.packageName);
 		state.semanticDependencies = SemanticDependencyCollector.collectSemanticDependencies(state, entry, typeAliases);
 		var changes = ModuleChangeAnalyzer.analyze(state, entry, typeAliases, types, compiledOnce);
@@ -288,22 +288,18 @@ class ModuleAnalyzer {
 		state.dependencies.sort(Reflect.compare);
 	}
 
-	public function importAliases(imports:Array<String>, explicit:Map<String, String>):Map<String, String> {
+	public function importAliases(imports:Array<compiler.syntax.Ast.AstImport>):Map<String, String> {
 		var aliases:Map<String, String> = [];
-		for (path in imports) {
+		for (entry in imports) {
+			var path = entry.path;
 			var modulePath = importModulePath(path);
 			if (isWildcardImport(path)) {
 				for (sourceModule in importedSourceModules(path))
 					addModuleAliases(sourceModule, aliases, true, QualifiedName.last(sourceModule), true);
 				continue;
 			}
-			var alias = QualifiedName.last(path),
+			var alias = entry.alias == null ? QualifiedName.last(path) : entry.alias,
 				importedName = importedDeclarationName(path);
-			for (explicitAlias => explicitPath in explicit)
-				if (explicitPath == path) {
-					alias = explicitAlias;
-					break;
-				}
 			aliases.set(alias, importedName);
 			aliases.set(path, importedName);
 			// `import pack.Module;` brings in each type of the module by name, as in Haxe. `import pack.Module as M;` is a
@@ -311,10 +307,10 @@ class ModuleAnalyzer {
 			if (modules.exists(modulePath))
 				addModuleAliases(modulePath, aliases, false, alias, alias == QualifiedName.last(path));
 		}
-		for (alias => path in explicit) {
-			aliases.set(alias, importedDeclarationName(path));
-			aliases.set(path, importedDeclarationName(path));
-		}
+		// Explicit aliases keep their existing precedence over imported bare names.
+		for (entry in imports)
+			if (entry.alias != null)
+				aliases.set(entry.alias, importedDeclarationName(entry.path));
 		return aliases;
 	}
 
@@ -383,7 +379,6 @@ class ModuleAnalyzer {
 				program = {
 					packageName: packageName,
 					imports: program.imports,
-					importAliases: program.importAliases,
 					aliases: program.aliases,
 					enums: program.enums,
 					enumAbstracts: program.enumAbstracts,
@@ -480,9 +475,9 @@ class ModuleAnalyzer {
 		declarationOwners.claim(name, moduleName);
 	}
 
-	function hasSourceModuleImport(imports:Array<String>):Bool {
-		for (importPath in imports)
-			if (importedSourceModules(importPath).length > 0)
+	function hasSourceModuleImport(imports:Array<compiler.syntax.Ast.AstImport>):Bool {
+		for (entry in imports)
+			if (importedSourceModules(entry.path).length > 0)
 				return true;
 		return false;
 	}

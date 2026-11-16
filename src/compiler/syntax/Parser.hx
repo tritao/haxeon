@@ -13,6 +13,7 @@ import compiler.syntax.Ast.AstEnum;
 import compiler.syntax.Ast.AstEnumAbstract;
 import compiler.syntax.Ast.AstAbstract;
 import compiler.syntax.Ast.AstProgram;
+import compiler.syntax.Ast.AstImport;
 import compiler.syntax.Ast.AstStatement;
 import compiler.syntax.Ast.AstType;
 import compiler.syntax.Ast.NativeLayoutQueryKind;
@@ -149,21 +150,22 @@ class Parser {
 	}
 
 	public function parseProgram():AstProgram {
-		var packageName:Null<String> = null, imports = [], importAliases:Map<String, String> = [];
+		var packageName:Null<String> = null, imports:Array<AstImport> = [], importNames:Map<String, Bool> = [];
 		if (match(TokenKind.Package)) {
 			packageName = parseQualifiedName();
 			consume(TokenKind.Semicolon);
 		}
 		while (match(TokenKind.Import)) {
 			var path = parseImportPath();
-			imports.push(path);
+			var alias:Null<String> = null;
 			if (check(TokenKind.Identifier) && current().text == "as") {
 				advance();
-				var alias = consume(TokenKind.Identifier).text;
-				if (importAliases.exists(alias))
+				alias = consume(TokenKind.Identifier).text;
+				if (importNames.exists(alias))
 					fail(previous(), 'Duplicate import alias "$alias"');
-				importAliases.set(alias, path);
+				importNames.set(alias, true);
 			}
+			imports.push({path: path, alias: alias});
 			consume(TokenKind.Semicolon);
 		}
 		var functions = [],
@@ -233,7 +235,6 @@ class Parser {
 		return {
 			packageName: packageName,
 			imports: imports,
-			importAliases: importAliases,
 			aliases: aliases,
 			enums: enums,
 			enumAbstracts: enumAbstracts,

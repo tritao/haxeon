@@ -1296,10 +1296,11 @@ class LanguageService {
 		for (symbol in model.index.symbols)
 			if (symbol.name == name && isTypeDeclaration(symbol.kind))
 				return symbol.id;
-		var imports = [
-			for (path in model.program.imports)
-				if (StringTools.endsWith(path, "." + name)) path
-		];
+		var imports:Array<String> = [];
+		for (entry in model.program.imports)
+			if ((entry.alias == name || entry.alias == null && StringTools.endsWith(entry.path, "." + name))
+				&& imports.indexOf(entry.path) < 0)
+				imports.push(entry.path);
 		if (imports.length > 0)
 			return imports.length == 1 ? compiler.semanticWorkspace.resolveTypeSymbolId(imports[0]) : null;
 		var prefix = model.program.packageName == null ? "" : Std.string(model.program.packageName) + ".";
@@ -1576,7 +1577,7 @@ class LanguageService {
 
 	function importEdit(state:ModuleState, importPath:String):Null<TextEdit> {
 		var ast = effectiveAst(state), tokens = effectiveTokens(state);
-		if (ast == null || tokens == null || ast.imports.indexOf(importPath) >= 0)
+		if (ast == null || tokens == null || [for (entry in ast.imports) entry.path].indexOf(importPath) >= 0)
 			return null;
 		var separator = importPath.lastIndexOf("."),
 			targetPackage = separator < 0 ? "" : importPath.substring(0, separator),

@@ -271,6 +271,7 @@ class TestCatalog {
 		"EnumConformanceMain",
 		"EqualityConformanceMain",
 		"ImportShadowingMain",
+		"ImportOccurrencesMain",
 		"AnonymousConformanceMain",
 		"EnumEqualityIncrementalMain",
 		"StructPropertiesMain",

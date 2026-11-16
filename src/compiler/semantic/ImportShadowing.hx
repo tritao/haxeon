@@ -19,11 +19,9 @@ class ImportShadowing {
 	public static function ambiguousNames(ast:AstProgram, importedTypes:Map<String, String>,
 			packageTypes:Map<String, String>):Map<String, String> {
 		var named:Map<String, Bool> = [], result:Map<String, String> = [];
-		for (path in ast.imports)
-			if (!ModuleAnalyzer.isWildcardImport(path))
-				named.set(QualifiedName.last(path), true);
-		for (alias in ast.importAliases.keys())
-			named.set(alias, true);
+		for (entry in ast.imports)
+			if (!ModuleAnalyzer.isWildcardImport(entry.path))
+				named.set(entry.alias == null ? QualifiedName.last(entry.path) : entry.alias, true);
 		for (name in declaredNames(ast))
 			named.set(name, true);
 		for (name => imported in importedTypes) {

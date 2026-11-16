@@ -362,11 +362,16 @@ typedef AstTypeConstraint = {
 	final span:SourceSpan;
 }
 
+/** One source import and the optional local name declared by that occurrence. */
+typedef AstImport = {
+	final path:String;
+	final alias:Null<String>;
+}
+
 /** Complete parsed module, grouped by declaration kind for semantic indexing. */
 typedef AstProgram = {
 	final packageName:Null<String>;
-	final imports:Array<String>;
-	final importAliases:Map<String, String>;
+	final imports:Array<AstImport>;
 	final aliases:Array<AstTypeAlias>;
 	final enums:Array<AstEnum>;
 	final enumAbstracts:Array<AstEnumAbstract>;
