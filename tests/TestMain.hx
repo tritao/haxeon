@@ -1508,6 +1508,14 @@ class TestMain {
 		]);
 		if (!gcAllocationCountRequest.wasmGcAllocationCount)
 			throw "Compiler CLI did not enable Wasm GC allocation counting";
+		var wasm64Error:Null<String> = null;
+		try {
+			CompilerArguments.parse(["--target=wasm64", "source/Main.hx"]);
+		} catch (error:Dynamic) {
+			wasm64Error = Std.string(error);
+		}
+		if (wasm64Error == null || wasm64Error.indexOf("not implemented") < 0)
+			throw "Compiler CLI did not reject wasm64 as not implemented: " + wasm64Error;
 		var gcAllocationCountRejectedForWasm32 = false;
 		try {
 			CompilerArguments.parse(["--target=wasm32", "--wasm-gc-allocation-count", "source/Main.hx"]);

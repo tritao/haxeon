@@ -87,6 +87,8 @@ class Target {
 			return detectHost();
 		if (normalized == "wasm32" || normalized == "wasm32-wasi")
 			return new Target(TargetOs.Wasm, TargetArch.Wasm32, TargetAbi.Wasm);
+		if (normalized == "wasm64" || normalized == "wasm64-wasi")
+			throw 'Target "$value" is not implemented yet; use "wasm32"';
 		var parts = normalized.split("-");
 		if (parts.length == 0 || parts[0] == "")
 			throw 'Target "$value" is empty';

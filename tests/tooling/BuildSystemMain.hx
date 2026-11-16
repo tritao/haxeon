@@ -233,6 +233,14 @@ class BuildSystemMain {
 		expect(android.isAndroid() && android.toString() == "android-arm64",
 			"Android targets should have a stable short identity");
 		expect(wasm.isWasm() && wasm.toString() == "wasm32", "Wasm should be a first-class target");
+		var wasm64Error:Null<String> = null;
+		try {
+			Target.parse("wasm64");
+		} catch (error:Dynamic) {
+			wasm64Error = Std.string(error);
+		}
+		expect(wasm64Error != null && wasm64Error.indexOf("not implemented") >= 0,
+			"wasm64 should be rejected as not implemented");
 		var androidToolchain = ToolchainInfo.detect(android),
 			wasmToolchain = ToolchainInfo.detect(wasm);
 		expect(androidToolchain.targetTriple == "aarch64-linux-android21"

@@ -96,9 +96,9 @@ offsetof<Vec2>("y");
 ```
 
 The CLI uses a registered HXI target when present. Otherwise `wasm32` and
-`wasmgc` select the 32-bit profile, while `wasm64` and `hl` select the 64-bit
-profile. `native-abi-target` selects an explicit target triple, such as
-`x86_64-pc-windows-msvc`. Direct library typing defaults to the portable 64-bit
+`wasmgc` select the 32-bit profile, while `hl` selects the 64-bit profile
+(`wasm64` is rejected until it is implemented). `native-abi-target` selects an
+explicit target triple, such as `x86_64-pc-windows-msvc`. Direct library typing defaults to the portable 64-bit
 profile unless the caller supplies a target.
 
 ## Arena

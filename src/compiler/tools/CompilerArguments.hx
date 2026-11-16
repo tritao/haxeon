@@ -113,7 +113,9 @@ class CompilerArguments {
 			roots.push("src");
 		if (paths.length == 0)
 			throw "Haxeon compiler requires an explicit source manifest";
-		if (target != "hl" && target != "wasm32" && target != "wasm64" && target != "wasmgc" && target != "wasm-gc")
+		if (target == "wasm64")
+			throw 'Compiler target "wasm64" is not implemented yet; use --target=wasm32 or --target=wasm-gc';
+		if (target != "hl" && target != "wasm32" && target != "wasmgc" && target != "wasm-gc")
 			throw 'Unsupported compiler target "$target"';
 		if ((importMemory || memoryBase != 0) && target != "wasm32" && target != "wasmgc" && target != "wasm-gc")
 			throw "Wasm memory options require --target=wasm32 or --target=wasm-gc";

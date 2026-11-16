@@ -261,7 +261,8 @@ be decoded independently before Wasm or HashLink lowering.
 
 ## Deliberate boundaries
 
-`wasm64` is accepted by the CLI but is not implemented by the backend yet.
+`wasm64` is not implemented: the compiler and the CLI reject it as an argument
+error until the backend supports it.
 Wasm-GC support is a real executable target, but the GC-compatible IR and FFI
 subsets are still narrower than the complete Wasm32 backend. Unsupported
 operations fail at the Wasm backend boundary instead of receiving guessed

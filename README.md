@@ -138,8 +138,8 @@ Wasm support is experimental and narrower than the desktop target:
   compile the library with Emscripten yourself.
 - `wasm-gc` supports a smaller subset of the FFI than `wasm32`, and HXI
   interfaces with 64-bit pointers are rejected for Wasm.
-- `wasm64`, threads, and `sys.io.Process` are not available, and file access
-  uses an in-memory store.
+- `wasm64` is rejected as a target until it is implemented. Threads and
+  `sys.io.Process` are not available, and file access uses an in-memory store.
 - Wasm builds are build-only; `haxeon run` does not launch them.
 
 See [`docs/WASM_BACKEND.md`](docs/WASM_BACKEND.md) for the host ABI and test
