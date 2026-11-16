@@ -8,7 +8,7 @@ order of [ENUM_PASS_PHASE_ORDER.md](ENUM_PASS_PHASE_ORDER.md). It is not a secon
 ## What exists
 
 - `IrReachability` is a walk over name edges: calls, closures, and method calls over every class or implementor that could receive them.
-  Wasm builders and the plain HashLink backend run it **after assembly** (`BackendAssembly`), so the passes still see every function typing
+  Wasm builders and the plain HashLink backend run it **after assembly** (`HashLinkBackendSession`, `HlPlainBuild`), so the passes still see every function typing
   produced, including unused helpers.
 - **Live builds today.** A live HashLink module (`livePatching`) is not pruned: its host can call any function by id, and a reachability
   change must not move its layout. A plain HashLink build prunes from the entry (`withGeneratedRuntimeRoots(..., keepLiveClasses = true)`),

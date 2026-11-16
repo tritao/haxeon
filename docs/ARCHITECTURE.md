@@ -131,8 +131,8 @@ Packages of `src/compiler/`, bottom layer first:
 | `ir` | The SSA IR, `IrGenerator`, the whole-program passes and `IrPipeline`, the inliner, the verifier, the IR codec. |
 | `abi` | Descriptions of every runtime-visible declaration (`RuntimeAbi`) and `PatchPlanner`, which decides whether an edit can patch or needs a reload. |
 | `hl` | HashLink: lowering (`lower/`), the bytecode model and writer, incremental assembly (`incremental/`), patches (`patch/`). |
-| `backend` | The `Backend` interface, the linear-memory contract, and `wasm/`: the Wasm backend, with `linear/` for `wasm32` and `gc/` for `wasm-gc`. |
-| `compilation` | One build: `CompilationPipeline`, `FrontendCompilation`, `BackendAssembly`, and the candidate and publication transactions. |
+| `backend` | The `Backend` interface, `BackendTargets` (the one parse of a target name), the linear-memory contract, and `wasm/`: the Wasm backend, with `linear/` for `wasm32` and `gc/` for `wasm-gc`. |
+| `compilation` | One build: `CompilationPipeline`, `FrontendCompilation`, the backend sessions (`HashLinkBackendSession`, `WasmBackendSession`), and the candidate and publication transactions. |
 | root | `Compiler`, the session that holds the last successful build, and `Frontend`, a stateless path from source text to IR. |
 | `service` | The language service, the REPL, and the import lints. |
 | `tools` | The compiler CLI and driver, the compiler worker (`CompilerServer`, `CompilerSession`), the memory and allocation censuses, `BootstrapStatus`. |
