@@ -31,7 +31,9 @@ scripts/haxeon dev test full --list                # the suites a mode runs, wit
 ```
 
 A new suite is a line in `tests/suites.txt`, not a stage in a script. Give it the groups it belongs to; put it in a `lane` or `pool`
-only when it shares no files with what runs beside it. Invoke the driver directly to select a driver suite or test:
+only when it shares no files with what runs beside it. A test script, `tests/hxml` file or test main that no suite, driver case
+or workflow runs fails the `test-registration` suite (`scripts/haxeon dev check-tests`) unless `tests/unregistered.txt` lists it
+with its reason. Invoke the driver directly to select a driver suite or test:
 
 ```sh
 .tools/haxe/haxe -cp tests --run driver.TestDriver --suite programs --jobs 16
