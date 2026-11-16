@@ -135,7 +135,7 @@ class NativeLayoutMain {
 		var compiled = targetCompiler.compile("NativeLayoutMain"),
 			compiledPair = requireClass(targetCompiler.lastTypedProgram.classes, "Pair");
 		expect(requireLayout(compiledPair.nativeLayouts, "portable-abi32").size == 24
-			&& compiled.artifact.hashLink().module.ints.indexOf(24) >= 0,
+			&& hasIntConstant(compiled.ir, "main", 24),
 			"CLI target selection must reach typing and lower layout intrinsics as constants");
 		var hxiTargetCompiler = new Compiler();
 		hxiTargetCompiler.addFfiInterface("native-layout-target.hxi",
@@ -445,6 +445,20 @@ class NativeLayoutMain {
 			if (layout.name == name)
 				return layout;
 		throw 'Missing native field "$name"';
+	}
+
+	/** Whether the final IR of `name` loads `value` as a constant: a Wasm build lowers the IR, with no HashLink constant table. */
+	static function hasIntConstant(program:compiler.ir.Ir.IrProgram, name:String, value:Int):Bool {
+		for (fn in program.functions)
+			if (fn.name == name)
+				for (block in fn.blocks)
+					for (instruction in block.instructions)
+						switch instruction.value {
+							case compiler.ir.Ir.IrInstruction.ConstInt(_, constant) if (constant == value):
+								return true;
+							case _:
+						}
+		return false;
 	}
 
 	static function constantReturn(functions:Array<compiler.types.TypedAst.TypedFunction>, name:String):Int {
