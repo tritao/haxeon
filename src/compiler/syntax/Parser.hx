@@ -2493,10 +2493,16 @@ class Parser {
 		return [for (arguments in combinations) Call(name, arguments, span)];
 	}
 
+	/**
+	 * `try value catch (e:T) caught` is the block `{ var result; try result = value catch (e:T) result = caught; result }`,
+	 * so a `return`, `break` or `continue` in a catch leaves the enclosing function or loop, as in Haxe, and nothing is
+	 * allocated for it. The block's expected type is its result local's (`typeBlockExpression`).
+	 */
 	function parseTryExpression(start:SourceSpan):AstExpression {
 		var value = parseExpressionBranch(),
 			catches:Array<compiler.syntax.Ast.AstCatch> = [],
-			end = expressionSpan(value);
+			end = expressionSpan(value),
+			result = '$' + 'try:${start.start}';
 		do {
 			var catchStart = consume(TokenKind.Catch).span;
 			consume(TokenKind.LeftParen);
@@ -2509,16 +2515,15 @@ class Parser {
 			catches.push({
 				name: name,
 				type: type,
-				statements: [Return(caught, end)],
+				statements: [Assignment(result, caught, catchStart.merge(end))],
 				span: catchStart.merge(end)
 			});
 		} while (check(TokenKind.Catch));
-		var body = [
-			compiler.syntax.Ast.AstStatement.Try([Return(value, expressionSpan(value))], catches, start.merge(end))
-		],
-			lambda = compiler.syntax.Ast.AstExpression.Lambda([], body, openLambda(), start.merge(end));
-		closeLambda();
-		return parsePostfix(ClosureCall(lambda, [], start.merge(end)));
+		var span = start.merge(end);
+		return parsePostfix(BlockExpression([
+			UninitializedDeclaration(result, InferredType, start),
+			Try([Assignment(result, value, expressionSpan(value))], catches, span)
+		], Variable(result, span), span));
 	}
 
 	function parseSwitchGuard():Null<AstExpression> {

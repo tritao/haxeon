@@ -188,7 +188,7 @@ class BodyTyper {
 				abiBoundaryCast: function(value, target) return session.representation.boundaryCast(value, target),
 				arrayElementType: function(type, span) return this.arrayElementType(type, span),
 				boundCell: function(name, scope) return this.boundCell(name, scope)
-			});
+			}, function(name, statements, start, scope) return this.assignedType(name, statements, start, scope));
 	}
 
 	static function declarationTypeSubstitutions(owner:String, parameters:Array<String>):Map<String, CompilerType> {
@@ -717,10 +717,7 @@ class BodyTyper {
 		return switch expression {
 			case MethodCall(receiverExpression, methodName, arguments,
 				_) if (methodName == "push" && arguments.length == 1):
-				switch receiverExpression {
-					case Variable(receiver, _) if (receiver == name): knownExpressionType(arguments[0], bindings);
-					default: null;
-				}
+				namesReceiver(receiverExpression, name) ? knownExpressionType(arguments[0], bindings) : null;
 			case Call(callName, arguments, _) if (callName == name + ".push"
 				&& arguments.length == 1): knownExpressionType(arguments[0], bindings);
 			default: null;
@@ -819,11 +816,61 @@ class BodyTyper {
 	 * Walks the statements after a declaration in source order, as typing will, keeping a scratch scope of the locals
 	 * they declare, and returns the first thing `probe` makes of a statement. A redeclaration of `name` ends the search.
 	 */
+	/** The type of the first assignment to `name` after `start`, typed with the locals declared on the way to it. */
+	function assignedType(name:String, statements:Array<AstStatement>, start:Int, scope:Scope):Null<CompilerType> {
+		var speculative = new Scope(scope);
+		speculative.assumeAllAssigned();
+		var type = storedIn(name, statements, start, speculative, (statement, at) -> switch statement {
+			case Assignment(assigned, value, _) if (assigned == name): speculativeValueType(value, at);
+			default: null;
+		});
+		return type == null ? null : switch type {
+			case TNull, TVoid, TNever: null;
+			default: type;
+		};
+	}
+
+	/** `storedIn` over the bodies of the lambdas in a statement's own expressions, with their typed arguments in scope. */
+	function storedInLambdas(name:String, statement:AstStatement, scope:Scope,
+			probe:(AstStatement, Scope) -> Null<CompilerType>):Null<CompilerType> {
+		switch statement {
+			// A local function declaration is handled where it is declared.
+			case VarDeclaration(_, _, Lambda(_, _, _, _), _):
+				return null;
+			default:
+		}
+		var found:Null<CompilerType> = null;
+		function visit(expression:AstExpression):Void {
+			if (found != null)
+				return;
+			switch expression {
+				case Lambda(arguments, body, _, _):
+					var inside = new Scope(scope);
+					for (argument in arguments)
+						if (!argument.type.match(InferredType))
+							declareSpeculative(inside, argument.name, lowerType(argument.type, argument.span),
+								argument.span);
+					found = storedIn(name, body, 0, inside, probe);
+					return;
+				default:
+			}
+			for (child in compiler.syntax.AstChildren.expressions(expression))
+				visit(child);
+		}
+		for (expression in compiler.syntax.AstChildren.statementExpressions(statement))
+			visit(expression);
+		return found;
+	}
+
 	function storedIn(name:String, statements:Array<AstStatement>, start:Int, outer:Scope,
 			probe:(AstStatement, Scope) -> Null<CompilerType>):Null<CompilerType> {
 		var scope = new Scope(outer);
 		for (index in start...statements.length) {
 			var statement = statements[index], found = probe(statement, scope);
+			if (found != null)
+				return found;
+			// A lambda the statement passes or calls (`Thread.create(() -> list.push(x))`) may fill the local too.
+			found = storedInLambdas(name, statement, scope, probe);
 			if (found != null)
 				return found;
 			switch statement {
@@ -912,11 +959,20 @@ class BodyTyper {
 	/** The value a statement stores into the array named `name` with `push`, `unshift` or `insert`, if it does. */
 	static function storedValue(name:String, expression:AstExpression):Null<AstExpression>
 		return switch expression {
-			case MethodCall(Variable(receiver, _), method, arguments, _) if (receiver == name): storedArgument(method,
+			case MethodCall(receiver, method, arguments, _) if (namesReceiver(receiver, name)): storedArgument(method,
 				arguments);
 			case Call(callName, arguments, _) if (StringTools.startsWith(callName, name + "."))
 				: storedArgument(callName.substring(name.length + 1), arguments);
 			default: null;
+		};
+
+	/** Whether `receiver` is the local `name`, or a conditional either branch of which is (`(flag ? a : b).push(x)`). */
+	static function namesReceiver(receiver:AstExpression, name:String):Bool
+		return switch receiver {
+			case Variable(variable, _): variable == name;
+			case Conditional(_, whenTrue, whenFalse, _): namesReceiver(whenTrue, name)
+				|| namesReceiver(whenFalse, name);
+			default: false;
 		};
 
 	static function storedArgument(method:String, arguments:Array<AstExpression>):Null<AstExpression>
@@ -1067,12 +1123,21 @@ class BodyTyper {
 		return findMethod(context.lexicalOwner, name);
 	}
 
+	static function fieldUsesLocalExpectedType(fields:Array<compiler.syntax.Ast.AstObjectField>):Bool {
+		for (field in fields)
+			if (usesLocalExpectedType(field.value))
+				return true;
+		return false;
+	}
+
 	static function usesLocalExpectedType(initializer:AstExpression):Bool
 		return switch initializer {
 			case NullLiteral(_): true;
 			case ArrayLiteral(values, _): values.length == 0 || valuesAreNull(values);
 			case ArrayComprehension(_, _, _, _, value, _, _): usesLocalExpectedType(value);
 			case MapLiteral(entries, _): entries.length == 0;
+			// An object with such a field (`{lock: new Lock(), results: []}`) takes its type from where the local is used.
+			case ObjectLiteral(fields, _): fieldUsesLocalExpectedType(fields);
 			// Preserve a concrete branch type rather than erasing it to one later interface use.
 			case Conditional(_, whenTrue, whenFalse, _): usesLocalExpectedType(whenTrue)
 				&& usesLocalExpectedType(whenFalse);
@@ -2059,6 +2124,38 @@ class BodyTyper {
 		};
 	}
 
+	/** `statements` without the local `name`: its declaration goes, and each assignment to it only evaluates the value. */
+	static function discardResult(statements:Array<AstStatement>, name:String):Array<AstStatement> {
+		var result:Array<AstStatement> = [];
+		for (statement in statements)
+			switch statement {
+				case UninitializedDeclaration(declared, _, _) if (declared == name):
+				case Assignment(assigned, value, span) if (assigned == name):
+					result.push(Expression(value, span));
+				case Try(tryBranch, catches, span):
+					result.push(Try(discardResult(tryBranch, name), [for (caught in catches)
+						{
+							name:caught.name, type:caught.type, statements:discardResult(caught.statements, name),
+								span:caught.span
+						}], span));
+				case If(test, yes, no, span):
+					result.push(If(test, discardResult(yes, name), discardResult(no, name), span));
+				default:
+					result.push(statement);
+			}
+		return result;
+	}
+
+	static function declaresUntyped(statements:Array<AstStatement>, name:String):Bool {
+		for (statement in statements)
+			switch statement {
+				case UninitializedDeclaration(declared, InferredType, _) if (declared == name):
+					return true;
+				default:
+			}
+		return false;
+	}
+
 	function typeBlockExpression(statements:Array<AstStatement>, result:AstExpression, span:SourceSpan, scope:Scope,
 			expectedType:Null<CompilerType>):TypedExpression {
 		// Result annotations are represented by a parser-generated local binding.
@@ -2094,6 +2191,25 @@ class BodyTyper {
 							}) ? value : coerce(value, expectedType, "annotated lambda", "E1003");
 						default:
 					}
+				default:
+			}
+		// A block whose value is a local it declares without a type (a try expression's result) gives that local its expected
+		// type; when the value is discarded, the local is not needed and what it would be assigned is only evaluated, so the
+		// branches may differ in type, as Haxe allows for a try expression used as a statement.
+		if (expectedType != null && expectedType.match(TVoid))
+			switch result {
+				case Variable(resultName, _) if (declaresUntyped(statements, resultName)):
+					var evaluated = typeStatements(discardResult(statements, resultName), new Scope(scope),
+						context.expectedReturnType);
+					return new TypedExpression(TBlockExpression(evaluated,
+						new TypedExpression(TVoidLiteral, TVoid, span)), TVoid, span);
+				default:
+			}
+		if (expectedType != null && !expectedType.match(TVoid))
+			switch result {
+				case Variable(resultName,
+					_) if (declaresUntyped(statements, resultName) && !context.localExpectedTypes.exists(resultName)):
+					context.localExpectedTypes.set(resultName, expectedType);
 				default:
 			}
 		var blockScope = new Scope(scope),

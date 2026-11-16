@@ -30,6 +30,9 @@ import compiler.types.TypedAst.TypedSwitchCoverageCase;
 typedef StatementExpressionCallback = (AstExpression, Scope, Null<CompilerType>, Bool) -> TypedExpression;
 typedef StatementCoerceCallback = (TypedExpression, CompilerType, String, String) -> TypedExpression;
 typedef ExpectedInitializerCallback = (String, AstExpression, Array<AstStatement>, Int, Scope) -> Null<CompilerType>;
+
+/** The type of the first assignment to a local, typed with the locals declared on the way to it. */
+typedef AssignedTypeCallback = (String, Array<AstStatement>, Int, Scope) -> Null<CompilerType>;
 typedef BindCellCallback = (String, SourceSpan, Scope, CompilerType) -> Void;
 typedef TypeStatementsCallback = (Array<AstStatement>, Scope, Null<CompilerType>) -> Array<TypedStatement>;
 typedef ExhaustiveEnumCallback = (CompilerType, Array<TypedSwitchCase>) -> Bool;
@@ -59,6 +62,7 @@ class StatementTyper {
 	final typeExpression:StatementExpressionCallback;
 	final coerce:StatementCoerceCallback;
 	final expectedInitializerType:ExpectedInitializerCallback;
+	final assignedType:AssignedTypeCallback;
 	final bindCell:BindCellCallback;
 	final typeStatements:TypeStatementsCallback;
 	final exhaustiveEnum:ExhaustiveEnumCallback;
@@ -74,8 +78,9 @@ class StatementTyper {
 			typeStatements:TypeStatementsCallback,
 			exhaustiveEnum:ExhaustiveEnumCallback, lowerType:LowerTypeCallback, unwrapNullable:NullableUnwrapper,
 			mapKeyIteratorSource:MapKeyIteratorSource,
-			switchRules:SwitchTypingRules, assignmentRules:AssignmentTypingRules) {
+			switchRules:SwitchTypingRules, assignmentRules:AssignmentTypingRules, assignedType:AssignedTypeCallback) {
 		this.session = session;
+		this.assignedType = assignedType;
 		this.typeExpression = typeExpression;
 		this.coerce = coerce;
 		this.expectedInitializerType = expectedInitializerType;
@@ -145,6 +150,10 @@ class StatementTyper {
 			}))
 				return type;
 		}
+		// The first assignment may read locals declared between the declaration and it (`var data = ...; records = f(data);`).
+		var reached = assignedType(name, statements, start, scope);
+		if (reached != null)
+			return reached;
 		throw new CompileError(new Diagnostic("E1002",
 			'Cannot infer type of local "$name"; add a type annotation or make its first assignment typeable at the declaration',
 			span));
@@ -192,11 +201,13 @@ class StatementTyper {
 		return switch statement {
 			case ErrorStatement(_): [];
 			case UninitializedDeclaration(name, declared, span):
+				// Without an annotation, the type a later use expects (the result local of a block expression) comes first.
+				var expected = context.localExpectedTypes.get(name);
 				var declaredType = (switch (declared) {
 					case InferredType: true;
 					default: false;
-				}) ? inferUninitializedType(name, statements, statementIndex + 1, scope,
-					span) : session.declarations.resolve(declared, null, context.typeSubstitutions);
+				}) ? (expected != null ? expected : inferUninitializedType(name, statements, statementIndex + 1, scope,
+					span)) : session.declarations.resolve(declared, null, context.typeSubstitutions);
 				scope.define(name, declaredType, span, false);
 				bindCell(name, span, scope, declaredType);
 				[TDeclare(scope.requireId(name), declaredType, span)];
