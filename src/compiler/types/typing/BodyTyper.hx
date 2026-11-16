@@ -1,5 +1,7 @@
 package compiler.types.typing;
 
+import compiler.types.typing.MonomorphFrames.MonomorphFrame;
+
 import compiler.types.TypedAst.TypedFunctionRole;
 import compiler.syntax.Ast;
 import compiler.syntax.Ast.AstExpression;
@@ -363,7 +365,8 @@ class BodyTyper {
 		}
 		context.expectedReturnType = result;
 		inferBodyLocalTypes(fn.statements, result);
-		var statements = typeStatements(fn.statements, scope, result);
+		var monomorphs = session.monomorphs.begin(session.closureConversion.mark());
+		var statements = settleMonomorphs(monomorphs, typeStatements(fn.statements, scope, result));
 		if (compiler.types.analysis.NoReturnDeclarations.has(fn)) {
 			if (compiler.types.analysis.AstScan.returns(fn.statements))
 				fail("E1006", 'Function ${fn.name} is declared @:noReturn but returns', fn.span);
@@ -411,11 +414,34 @@ class BodyTyper {
 		for (name in context.storage.cells.keys()) {
 			if (context.storage.types.exists(name) && context.storage.kinds.exists(name))
 				session.closureConversion.addCell(requiredMapValue(context.storage.cells, name),
-					requiredMapValue(context.storage.types, name),
+					compiler.types.Monomorphs.resolve(requiredMapValue(context.storage.types, name)),
 					requiredMapValue(context.storage.kinds, name));
 		}
 		leaveBody(functionContext);
 		return resultFunction;
+	}
+
+	/**
+	 * Ends a body's type variables (`Monomorphs`): one nothing filled is an error, and every filled one is replaced by its
+	 * type in the body's statements, its lambdas and their cache entries, and its closure cells, so none leaves the typer.
+	 */
+	function settleMonomorphs(frame:MonomorphFrame, statements:Array<TypedStatement>):Array<TypedStatement> {
+		session.monomorphs.end(frame);
+		if (frame.cells.length == 0)
+			return statements;
+		for (cell in frame.cells)
+			if (compiler.types.Monomorphs.isUnbound(TMonomorph(cell)))
+				fail("E1003", 'Cannot infer ${cell.origin}: nothing after it fixes it; give it a type', cell.span);
+		for (check in frame.deferred)
+			check();
+		var map = new compiler.types.TypedTypeMap(compiler.types.Monomorphs.resolve);
+		session.closureConversion.mapTypesSince(frame.conversionMark, map);
+		for (key in frame.lambdaKeys) {
+			var cached = session.lambdaCache.get(key);
+			if (cached != null)
+				session.lambdaCache.set(key, map.expression(cached));
+		}
+		return map.statements(statements);
 	}
 
 	function boundCell(name:String, scope:Scope):Null<String> {
@@ -776,8 +802,11 @@ class BodyTyper {
 		// A lambda is typed once and cached by position, so it must not be typed here against a scratch scope.
 		if (containsLambda(expression))
 			return null;
+		// The typing is thrown away, so it makes no type variable: one would never be filled.
+		session.monomorphs.suspend();
 		try {
 			var type = typeExpression(expression, scope).type;
+			session.monomorphs.resume();
 			return (switch (type) {
 				case TNull: true;
 				default: false;
@@ -789,6 +818,7 @@ class BodyTyper {
 				default: false;
 			}) ? null : type;
 		} catch (_:Dynamic) {
+			session.monomorphs.resume();
 			return null;
 		}
 	}
@@ -1894,6 +1924,9 @@ class BodyTyper {
 			name = sourceName;
 		span = referencePrefixSpan(name, span);
 		var type = scope.resolve(name);
+		// A local whose type a use has since fixed reads as that type.
+		if (type != null && session.monomorphs.active())
+			type = compiler.types.Monomorphs.resolve(type);
 		return if (type != null) {
 			if (!scope.privateMapUseIsKnown(name, span))
 				fail("E9001",

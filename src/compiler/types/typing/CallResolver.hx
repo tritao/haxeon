@@ -2085,8 +2085,11 @@ class CallResolver {
 			case TArray(value): value;
 			default: throw "Not an array";
 		};
-		if (RuntimeType.arrayName(element) == null)
-			fail("E1016", "This array element type has no compiler-owned runtime ABI", span);
+		// An element still to be fixed (`var list = []`) is checked once the push that fixes it has been typed.
+		session.monomorphs.whenKnown(element, function() {
+			if (RuntimeType.arrayName(compiler.types.Monomorphs.resolve(element)) == null)
+				fail("E1016", "This array element type has no compiler-owned runtime ABI", span);
+		});
 		if (name == "push" || name == "add") {
 			if (arguments.length != 1)
 				fail("E1008", 'Array.$name expects one argument', span);

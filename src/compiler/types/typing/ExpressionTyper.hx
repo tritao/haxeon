@@ -102,6 +102,10 @@ class ExpressionTyper {
 	/** Dispatches each source expression to its focused typing rule or semantic resolver. */
 	public function typeExpression(expression:AstExpression, scope:Scope, ?expectedType:CompilerType,
 			inferDynamicLambdaResult:Bool = false):TypedExpression {
+		// An expected type that is an empty type variable expects nothing yet; a filled one is the type it holds.
+		if (expectedType != null && session.monomorphs.active())
+			expectedType = compiler.types.Monomorphs.isUnbound(expectedType)
+				? null : compiler.types.Monomorphs.resolve(expectedType);
 		var result = switch expression {
 			case IntegerLiteral(_, _), FloatLiteral(_, _), StringLiteral(_, _), BoolLiteral(_, _), NullLiteral(_),
 				Unreachable(_), EmptyExpression(_),
@@ -1210,9 +1214,13 @@ class ExpressionTyper {
 		var dynamicContext = isDynamicExpectation(expectedType);
 		var expectedElement = dynamicContext ? null : arrayElementExpectation(expectedType);
 		if (values.length == 0 && expectedElement == null) {
+			// Its element type is a type variable, which the first use that fixes it fills (`Monomorphs`).
 			if (!dynamicContext)
+				expectedElement = session.monomorphs.create("the element type of this empty array", span);
+			if (!dynamicContext && expectedElement == null)
 				fail("E1003", "Empty array literal requires an expected element type", span);
-			expectedElement = TDynamic;
+			if (expectedElement == null)
+				expectedElement = TDynamic;
 		}
 		var typedValues:Array<TypedExpression> = [],
 			elementType = dynamicContext && values.length == 0 ? TDynamic : expectedElement;

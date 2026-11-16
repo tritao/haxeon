@@ -295,6 +295,7 @@ class ClosureTyper {
 		var lambdaResult = new TypedExpression(TLambda(lambdaName, environment, captures),
 			TFunction([for (argument in lambdaArguments) argument.type], inferredResult), span);
 		session.lambdaCache.set(variantKey, lambdaResult);
+		session.monomorphs.recordLambda(variantKey);
 		return lambdaResult;
 	}
 

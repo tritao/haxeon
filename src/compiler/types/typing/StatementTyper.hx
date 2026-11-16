@@ -135,9 +135,11 @@ class StatementTyper {
 			var type:Null<CompilerType> = null;
 			var speculative = new Scope(scope);
 			speculative.assumeAllAssigned();
+			session.monomorphs.suspend();
 			try {
 				type = typeExpression(assigned, speculative, null, false).type;
 			} catch (_:CompileError) {}
+			session.monomorphs.resume();
 			if (type != null && (switch (type) {
 				case TNull: false;
 				default: true;
@@ -154,6 +156,10 @@ class StatementTyper {
 		var reached = assignedType(name, statements, start, scope);
 		if (reached != null)
 			return reached;
+		// Otherwise its type is a type variable, which the first assignment fills (`Monomorphs`).
+		var variable = session.monomorphs.create('the type of local "$name"', span);
+		if (variable != null)
+			return variable;
 		throw new CompileError(new Diagnostic("E1002",
 			'Cannot infer type of local "$name"; add a type annotation or make its first assignment typeable at the declaration',
 			span));
@@ -250,6 +256,12 @@ class StatementTyper {
 						default:
 					}
 				var value = typeExpression(initializer, scope, declaredType, false);
+				// `var x = null` is a `Null<?>` whose `?` the first assignment of a value fills (`Monomorphs`).
+				if (declaredType == null && TypeRelations.equals(value.type, TNull)) {
+					var variable = session.monomorphs.create('the type of local "$name"', span);
+					if (variable != null)
+						declaredType = TNullable(variable);
+				}
 				if (declaredType != null)
 					value = coerce(value, declaredType, 'local "$name"', "E1002");
 				else

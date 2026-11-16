@@ -440,7 +440,7 @@ class TestMain {
 			.tokenize()).parseProgram();
 		Frontend.compile('function main():Int { switch 0 { case 0: return 42; default: return 0; }; }');
 		expectCompileError('function main():Int { var values = []; return 0; }',
-			'Empty array literal requires an expected element type');
+			'Cannot infer the element type of this empty array: nothing after it fixes it; give it a type');
 		Frontend.compile('function main():Int { var value:Int; do { value = 42; } while (false); return value; }');
 		expectCompileError('function main():Int { do { return 1; } while (1); }', 'Do-while condition must be Bool');
 		Frontend.compile('function main():Int { do { break; } while (true); return 0; }');
@@ -642,7 +642,7 @@ class TestMain {
 		expectCompileError('function main():Int { var text = "x"; return text++; }',
 			'Postfix increment requires a numeric target');
 		expectCompileError('function main():Int { var value; return 0; }',
-			'Cannot infer type of local "value"; add a type annotation or make its first assignment typeable at the declaration');
+			'Cannot infer the type of local "value": nothing after it fixes it; give it a type');
 		expectCompileError('function main():Int { var value; value = 1; value = "text"; return 0; }',
 			'Type mismatch for local "value": expected Int, got String');
 		expectCompileError('class S { public static var cur:Null<P>; } class P { public var v = 1; public function new() {} } function f():Int { if (S.cur != null) { S.cur = null; return S.cur.v; } return 0; } function main():Int return f();',

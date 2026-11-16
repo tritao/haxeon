@@ -610,3 +610,4 @@ std-parse-int	42
 switch-assignment-refinement	42
 flow-join-expressions	42
 do-while-join	42
+local-inference-type-variables	42

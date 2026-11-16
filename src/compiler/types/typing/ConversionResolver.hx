@@ -1,5 +1,7 @@
 package compiler.types.typing;
 
+import compiler.types.Monomorphs;
+
 import compiler.types.TypedAst.TypedFunctionRole;
 import compiler.core.Diagnostic;
 import compiler.core.Diagnostic.CompileError;
@@ -96,6 +98,15 @@ class ConversionResolver {
 
 	public function coerce(value:TypedExpression, expected:CompilerType, context:String,
 			code:String = "E1009"):TypedExpression {
+		// Where a value meets the type it must have, an empty type variable on either side takes the other's type.
+		if (session.monomorphs.active()) {
+			Monomorphs.unify(value.type, expected);
+			expected = Monomorphs.resolve(expected);
+			if (Monomorphs.contains(value.type))
+				value = new TypedExpression(value.expression, Monomorphs.resolve(value.type), value.span,
+					value.stableFlowValue,
+					value.mapKeySource, value.storageType, value.semanticReference);
+		}
 		if ((switch (value.type) {
 			case TNever: true;
 			default: false;

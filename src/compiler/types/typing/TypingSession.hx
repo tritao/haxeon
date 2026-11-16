@@ -74,6 +74,9 @@ class TypingSession {
 	public var relations:TypeRelations;
 	public final closureConversion = new ClosureConversion();
 
+	/** The type variables of the bodies being typed; see `Monomorphs`. */
+	public final monomorphs = new MonomorphFrames();
+
 	/** Typed lambdas by position and captured bindings: the copies of a switch arm with several patterns capture different locals. */
 	public final lambdaCache:Map<String, TypedExpression> = [];
 
