@@ -88,6 +88,19 @@ for gap in ${entry_gaps[@]+"${entry_gaps[@]}"}; do
 done
 echo "PASS: the self-hosted compiler builds ${#building_entries[@]} entry points; ${#entry_gaps[@]} have known gaps"
 
+# A fixed point says the stages agree, not that they are right: a miscompilation the self-hosted compiler repeats when it
+# builds itself passes every check above. The program cases state their expected results, so compiling them all with the
+# self-hosted Main catches one wherever a case exercises it.
+echo "programs: compiling the program cases with the self-hosted Main"
+jobs=$(getconf _NPROCESSORS_ONLN 2>/dev/null || sysctl -n hw.ncpu 2>/dev/null || echo 4)
+HAXEON_MAIN_HL="$work/entry-Main.hl" "$root_dir/scripts/test-driver.sh" "$jobs" --suite programs >"$work/programs.log" 2>&1 || {
+	grep '^FAIL' "$work/programs.log" | head -n 20 >&2 || true
+	tail -n 3 "$work/programs.log" >&2
+	echo "FAIL: the program cases do not all pass when the self-hosted Main compiles them" >&2
+	exit 1
+}
+echo "PASS: the self-hosted Main passes the program cases ($(tail -n 1 "$work/programs.log" | sed 's/^Test driver: //'))"
+
 # Run the same equality semantics through a stock-Haxe-built compiler and the self-hosted compiler.
 echo "equality guard: building the compiler with stock Haxe"
 haxe_built_compiler=$("$root_dir/scripts/haxeon" dev tool-path compiler.tools.HaxeonCompiler)
