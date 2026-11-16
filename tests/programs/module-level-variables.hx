@@ -1,6 +1,6 @@
+import modulevars.Merged;
 import modulevars.Settings;
 import modulevars.Settings.base;
-import modulevars.Merged;
 
 final greeting = "hello";
 var total = 0;

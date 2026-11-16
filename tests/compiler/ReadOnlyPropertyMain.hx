@@ -1,5 +1,5 @@
-import compiler.core.Diagnostic.CompileError;
 import compiler.Frontend;
+import compiler.core.Diagnostic.CompileError;
 
 class ReadOnlyPropertyMain {
 	static function main():Void {

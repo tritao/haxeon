@@ -1,7 +1,7 @@
 import compiler.core.Source.SourceFile;
 import compiler.core.Source.SourceSpan;
-import compiler.syntax.Ast.AstFunction;
 import compiler.syntax.Ast.AstExpression;
+import compiler.syntax.Ast.AstFunction;
 import compiler.syntax.Ast.AstStatement;
 import compiler.syntax.AstChildren;
 import compiler.syntax.AstChildren.AstChildVisitor;
