@@ -208,11 +208,11 @@ class ModuleCanonicalizer {
 		return [for (annotation in metadata)
 			{
 				name:resolveTypeName(annotation.name, aliases),
-				// Access grants name a source path, not an imported expression alias.
-				arguments:annotation.name == "access" || annotation.name == "allow" ? annotation.arguments : [
-					for (argument in annotation.arguments)
-						canonicalExpression(argument, module, entry, locals, aliases)
-				],
+					// Access grants name a source path, not an imported expression alias.
+					arguments:annotation.name == "access" || annotation.name == "allow" ? annotation.arguments : [
+						for (argument in annotation.arguments)
+							canonicalExpression(argument, module, entry, locals, aliases)
+					],
 					span:annotation.span
 			}];
 
