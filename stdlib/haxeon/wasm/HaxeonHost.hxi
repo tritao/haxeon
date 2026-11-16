@@ -16,6 +16,11 @@ interface HaxeonHost @target("portable-abi32") @library("haxeon_host") {
 	 */
 	extern fn date_now() -> f64;
 	/**
+	 * How many minutes the host's local time is ahead of UTC at `time` (milliseconds since the Unix epoch), daylight
+	 * saving included: 60 for Central European Time in winter, -300 for New York in winter, 0 for a host kept in UTC.
+	 */
+	extern fn date_timezone_offset(time: f64) -> i32;
+	/**
 	 * Adds a function-table entry that native code can call as a C function of Wasm type `signature` (for
 	 * example "vii"). Calling it calls the guest export `entry` with `id` followed by the C arguments.
 	 * Returns the table index.

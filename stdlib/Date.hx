@@ -22,17 +22,24 @@
 
 #if wasm
 /**
- * A point in time, in milliseconds since the Unix epoch, read from the Wasm host. A Wasm module has no time zone, so its
- * local time is UTC.
+ * A point in time, in milliseconds since the Unix epoch, read from the Wasm host. Local time is the host's: the host gives
+ * the time zone's offset from UTC at each instant (HaxeonHost.date_timezone_offset), so daylight saving applies as it did
+ * then.
  */
 class Date {
 	static inline final DAY = 86400000.0;
+	static inline final MINUTE = 60000.0;
 
 	var time:Float;
 
-	/** The time `year`-`month`-`day` `hour`:`min`:`sec` (months from 0), as Haxe's Date. */
-	public function new(year:Int, month:Int, day:Int, hour:Int, min:Int, sec:Int)
-		time = (daysFromCivil(year, month + 1, day) * 24.0 * 3600.0 + hour * 3600.0 + min * 60.0 + sec) * 1000.0;
+	/** The local time `year`-`month`-`day` `hour`:`min`:`sec` (months from 0), as Haxe's Date. */
+	public function new(year:Int, month:Int, day:Int, hour:Int, min:Int, sec:Int) {
+		var wall = (daysFromCivil(year, month + 1, day) * 24.0 * 3600.0 + hour * 3600.0 + min * 60.0 + sec) * 1000.0;
+		// The offset that applies is the one at the instant itself, which the wall time only approximates; one more
+		// step settles it, as mktime does, except in the hour a clock change skips or repeats.
+		var guess = wall - offsetAt(wall);
+		time = wall - offsetAt(guess);
+	}
 
 	public static function now():Date
 		return fromTime(haxeon.wasm.HaxeonHost.date_now());
@@ -48,63 +55,83 @@ class Date {
 		return time;
 
 	public function getFullYear():Int
-		return civil()[0];
+		return civil(local())[0];
 
 	public function getMonth():Int
-		return civil()[1] - 1;
+		return civil(local())[1] - 1;
 
 	public function getDate():Int
-		return civil()[2];
+		return civil(local())[2];
 
 	/** The day of the week, 0 for Sunday. */
-	public function getDay():Int {
-		var weekday = (days() + 4.0) % 7.0;
-		return Std.int(weekday < 0 ? weekday + 7.0 : weekday);
-	}
+	public function getDay():Int
+		return weekday(local());
 
 	public function getHours():Int
-		return Std.int(Math.floor(milliseconds() / 3600000.0));
+		return hours(local());
 
 	public function getMinutes():Int
-		return Std.int(Math.floor(milliseconds() / 60000.0)) % 60;
+		return minutes(local());
 
 	public function getSeconds():Int
-		return Std.int(Math.floor(milliseconds() / 1000.0)) % 60;
+		return seconds(local());
 
 	public function getUTCFullYear():Int
-		return getFullYear();
+		return civil(time)[0];
 
 	public function getUTCMonth():Int
-		return getMonth();
+		return civil(time)[1] - 1;
 
 	public function getUTCDate():Int
-		return getDate();
+		return civil(time)[2];
 
 	public function getUTCDay():Int
-		return getDay();
+		return weekday(time);
 
 	public function getUTCHours():Int
-		return getHours();
+		return hours(time);
 
 	public function getUTCMinutes():Int
-		return getMinutes();
+		return minutes(time);
 
 	public function getUTCSeconds():Int
-		return getSeconds();
+		return seconds(time);
 
 	/** "YYYY-MM-DD HH:MM:SS", as Haxe's. */
 	public function toString():String
 		return DateTools.format(this, "%Y-%m-%d %H:%M:%S");
 
-	function days():Float
-		return Math.floor(time / DAY);
+	/** The time as the host's clock on the wall shows it, counted as if it were UTC. */
+	function local():Float
+		return time + offsetAt(time);
 
-	function milliseconds():Float
-		return time - days() * DAY;
+	/** How far the host's local time is ahead of UTC at `t`, in milliseconds. */
+	static function offsetAt(t:Float):Float
+		return haxeon.wasm.HaxeonHost.date_timezone_offset(t) * MINUTE;
 
-	/** Year, month (1 to 12) and day of the time's date (Howard Hinnant's civil-from-days). */
-	function civil():Array<Int> {
-		var z = days() + 719468.0,
+	static function days(t:Float):Float
+		return Math.floor(t / DAY);
+
+	static function millisecondsOfDay(t:Float):Float
+		return t - days(t) * DAY;
+
+	static function weekday(t:Float):Int {
+		var weekday = (days(t) + 4.0) % 7.0;
+		return Std.int(weekday < 0 ? weekday + 7.0 : weekday);
+	}
+
+	static function hours(t:Float):Int
+		return Std.int(Math.floor(millisecondsOfDay(t) / 3600000.0));
+
+	static function minutes(t:Float):Int
+		return Std.int(Math.floor(millisecondsOfDay(t) / MINUTE)) % 60;
+
+	static function seconds(t:Float):Int
+		return Std.int(Math.floor(millisecondsOfDay(t) / 1000.0)) % 60;
+
+	/** Year, month (1 to 12) and day of the date at `t` (Howard Hinnant's civil-from-days). */
+	static function civil(t:Float):Array<Int> {
+		var z = days(t) + 719468.0,
 			era = Math.floor(z / 146097.0),
 			doe = z - era * 146097.0,
 			yoe = Math.floor((doe - Math.floor(doe / 1460.0) + Math.floor(doe / 36524.0) - Math.floor(doe / 146096.0))

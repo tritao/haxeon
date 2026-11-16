@@ -540,7 +540,9 @@ const std = {sys_exit: code => { throw new ExitSignal(code); }};
 // never write output; keep the imports explicit and fail if either path becomes active.
 const haxeonHost = {
   write_output: () => { throw new Error("Unexpected Wasm parity output"); },
-  flush_output: () => { throw new Error("Unexpected Wasm parity flush"); }
+  flush_output: () => { throw new Error("Unexpected Wasm parity flush"); },
+  // The host's own time zone, as HashLink's localtime uses the process's.
+  date_timezone_offset: time => -new Date(time).getTimezoneOffset()
 };
 
 async function run(name, target) {

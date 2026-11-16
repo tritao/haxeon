@@ -1,4 +1,4 @@
-// Date's calendar fields, Haxe's constructor and DateTools.format behave as Haxe's; local time is the host's (UTC on Wasm).
+// Date's calendar fields, Haxe's constructor and DateTools.format behave as Haxe's; local time is the host's on every target.
 function main():Int {
 	var date = new Date(2024, 1, 29, 13, 5, 9);
 	if (date.getFullYear() != 2024 || date.getMonth() != 1 || date.getDate() != 29 || date.getHours() != 13
@@ -18,5 +18,14 @@ function main():Int {
 	var epoch = Date.fromTime(0);
 	if (epoch.getUTCFullYear() != 1970 || epoch.getUTCMonth() != 0 || epoch.getUTCDate() != 1 || epoch.getUTCDay() != 4)
 		return 6;
+	// Local fields are the UTC ones moved by the host's offset at that instant, and rebuild the same instant.
+	var instant = Date.fromTime(1700000000000.0),
+		local = instant.getDate() * 1440 + instant.getHours() * 60 + instant.getMinutes(),
+		utc = instant.getUTCDate() * 1440 + instant.getUTCHours() * 60 + instant.getUTCMinutes(),
+		rebuilt = new Date(instant.getFullYear(), instant.getMonth(), instant.getDate(), instant.getHours(),
+			instant.getMinutes(), instant.getSeconds());
+	if (instant.getUTCHours() != 22 || instant.getUTCMinutes() != 13 || instant.getSeconds() != 20
+		|| rebuilt.getTime() != 1700000000000.0 || local - utc > 14 * 60 || utc - local > 12 * 60)
+		return 7;
 	return 42;
 }

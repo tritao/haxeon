@@ -91,6 +91,8 @@ var HaxeonWasmHost = (() => {
         write_output: writeOutput,
         flush_output: flushOutput,
         date_now: () => Date.now(),
+        // JavaScript's offset is UTC minus local time; the guest's is local time minus UTC.
+        date_timezone_offset: time => -new Date(time).getTimezoneOffset(),
         // Native code calls the table entry as a C function; it forwards to the guest's exported entry.
         callback_create: (entry, signature, id) => {
           const target = exports[cString(entry)];
