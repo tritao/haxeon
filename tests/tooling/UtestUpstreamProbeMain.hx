@@ -5,11 +5,24 @@ import compiler.runtime.CompilerIntrinsics;
 import sys.FileSystem;
 import sys.io.File;
 
-/** Reports the first Haxeon analysis blocker for every pinned upstream utest module. */
+/**
+ * Reports the first Haxeon analysis blocker for every pinned upstream utest module, from the checkout's root:
+ * `haxeon dev run --cp tests/tooling UtestUpstreamProbeMain` (docs/reference/UTEST_UPSTREAM_COMPATIBILITY.md).
+ */
 class UtestUpstreamProbeMain {
 	static final upstreamRoot = "vendor/utest/src";
 
+	/** The revision the report describes; another one would be reported as if it were this one. */
+	static final expectedRevision = "a055e05e2e872ae12a32b53d0200612345059c38";
+
 	static function main():Void {
+		if (!FileSystem.exists("vendor/utest/haxelib.json"))
+			fail("missing vendor/utest; run git submodule update --init vendor/utest");
+		var git = new sys.io.Process("git", ["-C", "vendor/utest", "rev-parse", "HEAD"]),
+			revision = StringTools.trim(git.stdout.readAll().toString());
+		git.close();
+		if (revision != expectedRevision)
+			fail('vendor/utest revision mismatch: expected $expectedRevision, got $revision');
 		var paths:Array<String> = [];
 		collect(upstreamRoot + "/utest", paths);
 		paths.sort(Reflect.compare);
@@ -61,5 +74,10 @@ class UtestUpstreamProbeMain {
 		blocker = StringTools.replace(blocker, "|", "\\|");
 		blocker = StringTools.replace(blocker, "\n", " ");
 		Sys.println('| `$module` | $status | `$diagnostic` | $blocker |');
+	}
+
+	static function fail(message:String):Void {
+		Sys.stderr().writeString(message + "\n");
+		Sys.exit(1);
 	}
 }

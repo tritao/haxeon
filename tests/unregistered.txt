@@ -17,7 +17,7 @@ tests/runtime/HxiNativeKitSceneMain.hx               generator that test-hxi-nat
 tests/runtime/NativeKitCxxMain.hx                    generator that test-nativekit-cxx-profile.sh runs
 
 # Manual tools.
-tests/tooling/UtestUpstreamProbeMain.hx              prints the upstream utest blocker table; scripts/probe-utest-upstream.sh runs it
+tests/tooling/UtestUpstreamProbeMain.hx              prints the upstream utest blocker table: haxeon dev run --cp tests/tooling UtestUpstreamProbeMain
 
 # Not run: needs network (npm ci, npx @roblourens/dap-cli) and a built vendor/hashlink-debugger adapter; most write .tools/dap-cli-home.
 tests/integration/test-dap-cli.sh                    not run: DAP CLI and adapter (see group)

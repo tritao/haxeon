@@ -8,7 +8,7 @@ pipeline. The source is pinned as the `vendor/utest` submodule at commit
 Run the probe with:
 
 ```sh
-./scripts/probe-utest-upstream.sh
+scripts/haxeon dev run --cp tests/tooling UtestUpstreamProbeMain
 ```
 
 The probe loads every upstream source module, imports each module from a small

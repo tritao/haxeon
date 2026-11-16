@@ -65,6 +65,7 @@ check costs about a tenth of a second; `HAXEON_NATIVE_READY=1` skips it, as the 
 | Test driver | `haxeon dev test-driver [jobs] [options]` | `scripts/test-driver.sh` | |
 | Refresh or check the checked-in compiler | `haxeon dev bootstrap [--self]` | `scripts/bootstrap-compiler.sh` | |
 | Format | `haxeon dev format [--check]` | `scripts/format.sh` | |
+| Run an entry point of this checkout (benchmarks, probes) | `haxeon dev run [--cp DIR]... MAIN [arguments]` | | |
 | Toolchain report | `haxeon doctor` | | |
 
 The Unix wrappers pass their arguments on; `test.sh`, `gate.sh` and `test-driver.sh` build the native runtime first.

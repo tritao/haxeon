@@ -621,11 +621,8 @@ class HaxeonCli {
 	 * The language server and the FFI tools carry the compiler with them, which would make every command's start several
 	 * times slower if this CLI contained them: each is its own HashLink build, from the tool cache (`haxeon dev tool-path`).
 	 */
-	static function runTool(main:String, arguments:Array<String>):Int {
-		var home = haxeonHome(),
-			tool = new tools.dev.ToolArtifacts(home).resolve({main: main, classPaths: [], defines: []});
-		return Sys.command(HashLinkPath.executable(home), [tool].concat(arguments));
-	}
+	static function runTool(main:String, arguments:Array<String>):Int
+		return new tools.dev.ToolArtifacts(haxeonHome()).run({main: main, classPaths: [], defines: []}, arguments);
 
 	/** `haxeon script.hx [arguments]`: build quietly, then run in the invoking directory (ScriptRun). */
 	static function runScript(script:String, arguments:Array<String>):Int {

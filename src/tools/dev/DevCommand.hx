@@ -1,6 +1,7 @@
 package tools.dev;
 
 import haxe.io.Path;
+import tools.dev.ToolArtifacts.ToolRequest;
 
 /**
  * `haxeon dev`: commands for working on this checkout itself, not on a project.
@@ -8,6 +9,9 @@ import haxe.io.Path;
  *   haxeon dev tool-path [--cp DIR]... [--define NAME[=VALUE]]... MAIN
  *       Print the path of a HashLink build of the entry point MAIN, built with the pinned Haxe and cached by content (ToolArtifacts).
  *       Build diagnostics go to stderr; stdout is only the path.
+ *
+ *   haxeon dev run [--cp DIR]... [--define NAME[=VALUE]]... MAIN [arguments]
+ *       Run that build of MAIN on this checkout's VM with the arguments and the caller's streams and directory.
  *
  *   haxeon dev format [--check] [--changed]
  *       Format the Haxe sources of the checkout, or check them (FormatCommand). scripts/format.sh runs it.
@@ -32,6 +36,7 @@ class DevCommand {
 		var command = arguments.length == 0 ? "" : arguments.shift();
 		return switch command {
 			case "tool-path": toolPath(arguments, home);
+			case "run": runEntry(arguments, home);
 			case "test": test(arguments, home);
 			case "format": FormatCommand.run(arguments, home);
 			case "check-tests": TestRegistration.run(arguments, home);
@@ -46,26 +51,38 @@ class DevCommand {
 	}
 
 	static function toolPath(arguments:Array<String>, home:String):Int {
-		var main:Null<String> = null, classPaths = [], defines = [], index = 0;
-		while (index < arguments.length) {
-			var argument = arguments[index++];
+		var request = toolRequest(arguments, "tool-path");
+		if (request == null)
+			return usage(2);
+		if (arguments.length != 0)
+			throw "tool-path takes one main class";
+		Sys.println(new ToolArtifacts(home).resolve(request));
+		return 0;
+	}
+
+	/** `haxeon dev run [--cp DIR]... [--define NAME[=VALUE]]... MAIN [arguments]`: run an entry point of this checkout. */
+	static function runEntry(arguments:Array<String>, home:String):Int {
+		var request = toolRequest(arguments, "run");
+		return request == null ? usage(2) : new ToolArtifacts(home).run(request, arguments);
+	}
+
+	/** Reads the options and the main class from the front of `arguments`, leaving what follows the main class in it. */
+	static function toolRequest(arguments:Array<String>, command:String):Null<ToolRequest> {
+		var classPaths = [], defines = [];
+		while (arguments.length > 0) {
+			var argument = arguments.shift();
 			switch argument {
 				case "--cp" | "--define":
-					if (index >= arguments.length)
+					if (arguments.length == 0)
 						throw 'Option "$argument" takes a value';
-					(argument == "--cp" ? classPaths : defines).push(arguments[index++]);
+					(argument == "--cp" ? classPaths : defines).push(arguments.shift());
 				case _ if (StringTools.startsWith(argument, "-")):
-					throw 'Unknown tool-path option: $argument';
+					throw 'Unknown $command option: $argument';
 				case _:
-					if (main != null)
-						throw "tool-path takes one main class";
-					main = argument;
+					return {main: argument, classPaths: classPaths, defines: defines};
 			}
 		}
-		if (main == null)
-			return usage(2);
-		Sys.println(new ToolArtifacts(home).resolve({main: main, classPaths: classPaths, defines: defines}));
-		return 0;
+		return null;
 	}
 
 	static function test(arguments:Array<String>, home:String):Int {
@@ -140,6 +157,8 @@ class DevCommand {
 		out.writeString("Usage: haxeon dev <command>   (commands for working on a Haxeon checkout)\n");
 		out.writeString("  tool-path [--cp DIR]... [--define NAME[=VALUE]]... MAIN\n");
 		out.writeString("      Print the path of a cached HashLink build of the entry point MAIN (built with the pinned Haxe)\n");
+		out.writeString("  run [--cp DIR]... [--define NAME[=VALUE]]... MAIN [arguments]\n");
+		out.writeString("      Run that build of MAIN with the arguments (the benchmarks: run --cp benchmarks BenchmarkMain)\n");
 		out.writeString("  format [--check] [--changed]\n");
 		out.writeString("      Format the checkout's Haxe sources, or check them; --changed: only files that differ from origin/main\n");
 		out.writeString("  test quick|wave|ci|full [--jobs N] [--gate] [--only NAME,...] [--list]\n");

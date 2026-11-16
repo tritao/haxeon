@@ -77,7 +77,7 @@ allocation for collector tests.
 `--wasm-memory-stats` adds exports for heap, root-stack, allocation, and
 collection counters. The legacy `metadata_base` and `metadata_top` exports
 remain temporarily available and report an empty region. Run
-`scripts/benchmark-wasm32-gc.sh [samples]` for a non-gating comparison of stress
+`haxeon scripts/benchmark-wasm32-gc.hx [samples]` for a non-gating comparison of stress
 and budgeted collection, including deep and wide graph tracing.
 
 ## Wasm GC references and linear memory

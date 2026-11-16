@@ -1330,7 +1330,7 @@ samples gave these median times on an Intel i5-13600K. The machine was shared wi
 | Value argument and return | 18.412 | 0.671 |
 | Static, captured and bound typed closure calls | 27.865 | 9.956 |
 
-The five-sample `scripts/benchmark-wasm32-gc.sh` control exercises the Wasm32 linear-memory collector, not the Wasm GC
+The five-sample `scripts/benchmark-wasm32-gc.hx` control exercises the Wasm32 linear-memory collector, not the Wasm GC
 backend. Its median times before and after were 0.080/0.096 ms for stress allocation bursts, 0.031/0.035 ms for budgeted
 bursts, 0.789/0.822 ms for deep chains and 1.593/1.673 ms for wide arrays. Allocation counts and bytes were unchanged
 (2,048/32,768 for bursts, 20,000/320,000 for chains and 30,002/600,056 for arrays).

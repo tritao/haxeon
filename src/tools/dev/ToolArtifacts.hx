@@ -1,5 +1,6 @@
 package tools.dev;
 
+import build.HashLinkPath;
 import build.execution.ContentDigest;
 import haxe.io.Bytes;
 import haxe.io.Path;
@@ -45,6 +46,13 @@ class ToolArtifacts {
 	}
 
 	/** The path of an up-to-date build of `request`, building it first when there is none. Throws when the build fails. */
+	/**
+	 * Runs the build of `request` on this checkout's VM with `arguments`, the caller's standard streams and directory, and
+	 * returns its exit status: `haxeon dev run`, `haxeon lsp` and `haxeon ffi`.
+	 */
+	public function run(request:ToolRequest, arguments:Array<String>):Int
+		return Sys.command(HashLinkPath.executable(home), [resolve(request)].concat(arguments));
+
 	public function resolve(request:ToolRequest):String {
 		validateMain(request.main);
 		var key = key(request).substr(0, 16),

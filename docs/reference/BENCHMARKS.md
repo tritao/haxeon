@@ -1,9 +1,10 @@
 # Benchmarks
 
-Run the repeatable edit-to-runtime benchmark:
+Run the repeatable edit-to-runtime benchmark from the checkout's root (`haxeon dev run` builds `benchmarks/BenchmarkMain.hx`
+with the compiler's sources through the tool cache and runs it on the checkout's VM):
 
 ```sh
-./scripts/benchmark.sh
+scripts/haxeon dev run --cp benchmarks BenchmarkMain
 ```
 
 It reports median, p95, and p99 latency for cold compilation, no-op rebuilds,
@@ -13,16 +14,16 @@ soak test and writes machine-readable results to `out/benchmark.json`.
 Attribute soak-test memory growth with isolated compiler and runtime passes:
 
 ```sh
-./scripts/benchmark.sh --only-soak --soak-mode compiler \
+scripts/haxeon dev run --cp benchmarks BenchmarkMain --only-soak --soak-mode compiler \
   --json out/benchmark-compiler.json
-./scripts/benchmark.sh --only-soak --soak-mode runtime \
+scripts/haxeon dev run --cp benchmarks BenchmarkMain --only-soak --soak-mode runtime \
   --json out/benchmark-runtime.json
 ```
 
 Generate scaling results and compare two runs:
 
 ```sh
-./scripts/benchmark.sh --only-scale --json out/benchmark-scale.json
+scripts/haxeon dev run --cp benchmarks BenchmarkMain --only-scale --json out/benchmark-scale.json
 ./scripts/benchmark-compare.py baseline.json out/benchmark-scale.json
 ```
 

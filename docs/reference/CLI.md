@@ -373,7 +373,8 @@ up, as `dotnet run app.cs` does:
 - The build is quiet: its output appears, on standard error, only if it fails. The program runs in the directory the
   command was invoked from, with the given arguments, and its exit status is the command's.
 - The project is written to `~/.haxeon/cache/scripts/<digest of the script's path>` (`HAXEON_SCRIPT_CACHE` names
-  another directory), and the incremental build makes an unchanged script's next run cost a launch.
+  another directory), and the incremental build makes an unchanged script's next run cost a launch. A script's cache
+  is removed after 30 days without a run.
 - A first line `#!/usr/bin/env haxeon` makes the file executable where the shell reads such lines; Haxe accepts that
   line at the start of a file, and so do Haxeon's compiler and formatter.
 - The file's name is its module's, dashes included (`check-self-hosting.hx`); a script is never imported by name, so it

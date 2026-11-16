@@ -133,7 +133,7 @@ class BenchmarkMain {
 			compiler = fixtureCompiler(),
 			build = compiler.compile("Main"),
 			compileDone = stamp(),
-			bytes = HlWriter.encode(build.module),
+			bytes = HlWriter.encode(build.module).flatten(),
 			module = Runtime.load(bytes, build.runtimeIdentity);
 		Runtime.dispose(module);
 		return sample(started, compileDone, stamp(), bytes.length, build.metrics.retypedFunctions,
@@ -151,7 +151,7 @@ class BenchmarkMain {
 	static function bodyEditPatch():Sample {
 		var compiler = fixtureCompiler(),
 			initial = compiler.compile("Main"),
-			module = Runtime.load(HlWriter.encode(initial.module), initial.runtimeIdentity),
+			module = Runtime.load(HlWriter.encode(initial.module).flatten(), initial.runtimeIdentity),
 			source = fixture("pragtical/plugins/SearchPlugin.hx");
 		compiler.update("pragtical/plugins/SearchPlugin.hx",
 			StringTools.replace(source, "state.cursor + 1", "state.cursor + 2"));
@@ -169,7 +169,7 @@ class BenchmarkMain {
 	static function signatureEditReload():Sample {
 		var compiler = fixtureCompiler(),
 			initial = compiler.compile("Main"),
-			module = Runtime.load(HlWriter.encode(initial.module), initial.runtimeIdentity),
+			module = Runtime.load(HlWriter.encode(initial.module).flatten(), initial.runtimeIdentity),
 			plugin = fixture("pragtical/plugins/SearchPlugin.hx");
 		plugin = StringTools.replace(plugin, "public function find():Int", "public function find(step:Int):Int");
 		plugin = StringTools.replace(plugin, "state.cursor + 1", "state.cursor + step");
@@ -181,7 +181,7 @@ class BenchmarkMain {
 	static function structuralEditReload():Sample {
 		var compiler = fixtureCompiler(),
 			initial = compiler.compile("Main"),
-			module = Runtime.load(HlWriter.encode(initial.module), initial.runtimeIdentity),
+			module = Runtime.load(HlWriter.encode(initial.module).flatten(), initial.runtimeIdentity),
 			editor = fixture("pragtical/api/Editor.hx");
 		compiler.update("pragtical/api/Editor.hx",
 			StringTools.replace(editor, "public var documents:Array<Document>;",
@@ -193,7 +193,7 @@ class BenchmarkMain {
 		var started = stamp(),
 			build = compiler.compile("Main"),
 			compileDone = stamp(),
-			bytes = HlWriter.encode(build.module),
+			bytes = HlWriter.encode(build.module).flatten(),
 			module = Runtime.load(bytes, build.runtimeIdentity),
 			done = stamp();
 		Runtime.dispose(oldModule);
@@ -205,7 +205,7 @@ class BenchmarkMain {
 	static function patchSoak(iterations:Int, mode:String):Dynamic {
 		var compiler = fixtureCompiler(),
 			initial = compiler.compile("Main"),
-			module = Runtime.load(HlWriter.encode(initial.module), initial.runtimeIdentity),
+			module = Runtime.load(HlWriter.encode(initial.module).flatten(), initial.runtimeIdentity),
 			source = fixture("pragtical/plugins/SearchPlugin.hx"),
 			revision = initial.revision,
 			samples:Array<Sample> = [];
@@ -337,9 +337,9 @@ class BenchmarkMain {
 		}
 		var build = compiler.compile("Main"),
 			compileDone = stamp(),
-			artifactBytes = scenario == "cold_compile" ? HlWriter.encode(build.module)
+			artifactBytes = scenario == "cold_compile" ? HlWriter.encode(build.module).flatten()
 				.length : build.patchBytes != null ? build.patchBytes.length : build.changedFunctions.length == 0
-				&& !build.requiresReload ? 0 : HlWriter.encode(build.module).length;
+				&& !build.requiresReload ? 0 : HlWriter.encode(build.module).flatten().length;
 		return sample(started, compileDone, compileDone, artifactBytes, build.metrics.retypedFunctions,
 			build.metrics.regeneratedFunctions, build.metrics);
 	}
@@ -389,8 +389,7 @@ class BenchmarkMain {
 
 	static function sample(started:Float, compileDone:Float, done:Float, bytes:Int, retyped:Int, regenerated:Int,
 			?metrics:CompileMetrics):Sample
-		return {
-			totalMs: (done - started) * 1000.0,
+		return {totalMs: (done - started) * 1000.0,
 			compileMs: (compileDone - started) * 1000.0,
 			runtimeMs: (done - compileDone) * 1000.0,
 			artifactBytes: bytes,
@@ -402,14 +401,15 @@ class BenchmarkMain {
 			typerSetupMs: metrics == null ? 0.0 : metrics.typerSetupMs,
 			typerNoReturnMs: metrics == null ? 0.0 : metrics.typerNoReturnMs,
 			typerMetadataMs: metrics == null ? 0.0 : metrics.typerMetadataMs,
-			typerBodiesMs: metrics == null ? 0.0 : metrics.typerBodiesMs,
+		// The compiler reports class bodies, function bodies and generated code apart; this report keeps their sum.
+		typerBodiesMs: metrics == null
+			? 0.0 : metrics.typerClassBodiesMs + metrics.typerFunctionBodiesMs + metrics.typerGeneratedMs,
 			typerAssemblyMs: metrics == null ? 0.0 : metrics.typerAssemblyMs,
 			irAssemblyMs: metrics == null ? 0.0 : metrics.irAssemblyMs,
 			abiPlanningMs: metrics == null ? 0.0 : metrics.abiPlanningMs,
 			backendAssemblyMs: metrics == null ? 0.0 : metrics.backendAssemblyMs,
 			patchEncodingMs: metrics == null ? 0.0 : metrics.patchEncodingMs,
-			finalizeMs: metrics == null ? 0.0 : metrics.finalizeMs
-		};
+			finalizeMs: metrics == null ? 0.0 : metrics.finalizeMs};
 
 	static function summarize(samples:Array<Sample>):Summary
 		return {

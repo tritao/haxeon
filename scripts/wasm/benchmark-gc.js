@@ -1,31 +1,5 @@
-#!/usr/bin/env bash
-set -euo pipefail
-
-root_dir=$(cd "$(dirname "$0")/.." && pwd)
-haxe_bin="$root_dir/.tools/haxe/haxe"
-stress_artifact="$root_dir/out/wasm-gc-benchmark-stress.wasm"
-budget_artifact="$root_dir/out/wasm-gc-benchmark-budget.wasm"
-sample_count=${1:-5}
-
-source "$root_dir/scripts/lib/env.sh"
-haxeon_require_haxe
-
-# The prebuilt compiler (scripts/haxeon-compiler.sh), not `haxe --run`, which interprets the whole compiler for each build.
-source "$root_dir/scripts/haxeon-compiler.sh"
-mkdir -p "$root_dir/out"
-haxeon_compile \
-	--target=wasm32 --wasm-memory-stats --wasm-gc-stress \
-	--export=wasm-gc-invariants.allocationBurst --output="$stress_artifact" \
-	--entry=wasm-gc-invariants --root="$root_dir/tests/programs" "$root_dir/tests/programs/wasm-gc-invariants.hx"
-
-haxeon_compile \
-	--target=wasm32 --wasm-memory-stats \
-	--export=wasm-gc-invariants.allocationBurst \
-	--export=wasm-gc-invariants.deepGraphExercise --export=wasm-gc-invariants.wideGraphExercise \
-	--output="$budget_artifact" --entry=wasm-gc-invariants --root="$root_dir/tests/programs" \
-	"$root_dir/tests/programs/wasm-gc-invariants.hx"
-
-node - "$stress_artifact" "$budget_artifact" "$sample_count" <<'JS'
+// Times the wasm32 collector: `node benchmark-gc.js STRESS.wasm BUDGET.wasm SAMPLES`, built by scripts/benchmark-wasm32-gc.hx.
+// Each workload runs once to warm the JS-to-Wasm call path, then SAMPLES times on a fresh heap; prints the medians as JSON.
 const fs = require("fs");
 const {performance} = require("perf_hooks");
 
@@ -98,4 +72,3 @@ function run(exports, workload) {
 	console.error(error);
 	process.exitCode = 1;
 });
-JS
