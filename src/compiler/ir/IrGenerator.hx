@@ -3943,6 +3943,8 @@ class IrGenerator {
 
 	public function lowerType(type:CompilerType):IrType
 		return switch type {
+			// The typer replaces every type variable before a body leaves it (Monomorphs).
+			case TMonomorph(cell): throw 'Internal error: the type of ${cell.origin} reached IR generation unresolved';
 			case TAbstract(declaration, _, _) if (isRawPointer(declaration)): RawPtr;
 			case TAbstract(_, _, representation): lowerType(representation);
 			case TInt: I32;

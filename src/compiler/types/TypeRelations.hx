@@ -44,6 +44,10 @@ class TypeRelations {
 		this.declarations = declarations;
 
 	public function conversion(actual:CompilerType, expected:CompilerType):ConversionPlan {
+		actual = Monomorphs.follow(actual);
+		expected = Monomorphs.follow(expected);
+		if (Monomorphs.isUnbound(actual) || Monomorphs.isUnbound(expected))
+			return Identity;
 		if (equals(actual, expected))
 			return Identity;
 		if (isNativeValue(actual) || isNativeValue(expected))
@@ -120,6 +124,11 @@ class TypeRelations {
 	}
 
 	public function isAssignable(actual:CompilerType, expected:CompilerType):Bool {
+		actual = Monomorphs.follow(actual);
+		expected = Monomorphs.follow(expected);
+		// An empty type variable takes the other side's type where the value is converted (ConversionResolver.coerce).
+		if (Monomorphs.isUnbound(actual) || Monomorphs.isUnbound(expected))
+			return true;
 		if ((switch (actual) {
 			case TNever: true;
 			default: false;
@@ -440,6 +449,8 @@ class TypeRelations {
 
 	/** Struct conformance in a generic constraint selects the specialized implementation. */
 	public function satisfiesConstraint(actual:CompilerType, expected:CompilerType):Bool {
+		actual = Monomorphs.follow(actual);
+		expected = Monomorphs.follow(expected);
 		switch actual {
 			case TTypeParameter(_, _):
 				return declarations.typeParameterSatisfies(actual, expected);
@@ -608,7 +619,10 @@ class TypeRelations {
 	 * a pair again on the way down means the comparison has come full circle without finding a difference: it holds.
 	 * The list is allocated only when the first anonymous structure is reached.
 	 */
-	static function equalsWithin(left:CompilerType, right:CompilerType, visiting:Null<Array<FieldPair>>):Bool
+	static function equalsWithin(left:CompilerType, right:CompilerType, visiting:Null<Array<FieldPair>>):Bool {
+		// A filled type variable is the type it holds; an empty one equals only itself.
+		left = Monomorphs.follow(left);
+		right = Monomorphs.follow(right);
 		return switch left {
 			case TAbstract(name, arguments, _):
 				switch right {
@@ -654,6 +668,7 @@ class TypeRelations {
 				}
 			default: Type.enumEq(left, right);
 		};
+	}
 
 	static function sameNominal(type:CompilerType, kind:compiler.types.Type.NominalKind, name:String,
 			arguments:Array<CompilerType>,

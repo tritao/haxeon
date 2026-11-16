@@ -78,6 +78,8 @@ class SemanticSignature {
 			case TFunction(arguments,
 				result): '(${[for (argument in arguments) type(argument)].join(",")})->${type(result)}';
 			case TAnonymous(name, _): name;
+			// A filled type variable is spelled as its type, so keys made while it is in a type match the ones made after.
+			case TMonomorph(cell): cell.bound == null ? 'unknown:${cell.origin}' : type(cell.bound);
 		};
 
 	/** A source-level spelling for diagnostics; unlike `type`, this omits compiler-only nominal prefixes. */
@@ -109,6 +111,7 @@ class SemanticSignature {
 			case TFunction(arguments,
 				result): '(${[for (argument in arguments) display(argument)].join(",")})->${display(result)}';
 			case TAnonymous(name, _): name;
+			case TMonomorph(cell): cell.bound == null ? "Unknown" : display(cell.bound);
 		};
 
 	static function displayApplied(name:String, arguments:Array<CompilerType>):String

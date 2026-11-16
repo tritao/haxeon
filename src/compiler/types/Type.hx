@@ -56,6 +56,27 @@ enum CompilerType {
 	 * `SemanticSignature.type`, which stops at the name.
 	 */
 	TAnonymous(name:String, fields:Array<AnonymousField>);
+
+	/**
+	 * A type the code fixes later than it declares it, as Haxe's monomorphs: `var list = []` is an `Array<TMonomorph>` until
+	 * a `push` fills the variable. Only the typer makes and sees these; see `Monomorphs`.
+	 */
+	TMonomorph(cell:MonomorphCell);
+}
+
+/** A type variable: empty until the first use that fixes it fills it, then that type for good. */
+class MonomorphCell {
+	/** What this is the type of, as an error names it when nothing fixes it: `the type of local "x"`. */
+	public final origin:String;
+
+	public final span:compiler.core.Source.SourceSpan;
+
+	public var bound:Null<CompilerType> = null;
+
+	public function new(origin:String, span:compiler.core.Source.SourceSpan) {
+		this.origin = origin;
+		this.span = span;
+	}
 }
 
 /** Resolved field contract used to compare structural anonymous types. */

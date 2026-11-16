@@ -111,6 +111,7 @@ class NativeRegistry {
 
 	static function irType(type:CompilerType):IrType
 		return switch type {
+			case TMonomorph(cell): throw 'Internal error: the type of ${cell.origin} reached a native signature unresolved';
 			case TAbstract(declaration, _, _) if (StringTools.endsWith(Std.string(declaration), "RawPtr")): RawPtr;
 			case TAbstract(_, _, representation): irType(representation);
 			case TInt: I32;

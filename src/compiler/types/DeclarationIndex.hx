@@ -857,6 +857,7 @@ class DeclarationIndex {
 			case TFunction(arguments,
 				result): '(${[for (argument in arguments) typeKey(argument)].join(",")})->${typeKey(result)}';
 			case TAnonymous(name, _): name;
+			case TMonomorph(cell): cell.bound == null ? 'unknown:${cell.origin}' : typeKey(cell.bound);
 		};
 
 	function validateCycles():Void {
