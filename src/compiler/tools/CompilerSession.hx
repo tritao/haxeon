@@ -5,6 +5,8 @@ import compiler.Compiler.FfiConfiguration;
 import compiler.Compiler.FfiInterfaceSource;
 import compiler.Compiler.FfiProjectionSource;
 import compiler.ffi.HxiInterfaceOrder;
+import compiler.backend.Backend.BackendTarget;
+import compiler.backend.BackendTargets;
 import compiler.modules.ModulePath;
 import compiler.runtime.CompilerIntrinsics;
 import compiler.hl.HlCode;
@@ -73,9 +75,9 @@ class CompilerSession {
 	}
 
 	/** Wasm guests import their host services through this stdlib interface. */
-	static function hostInterfaces(target:String):{interfaces:Array<String>,
+	static function hostInterfaces(target:Null<BackendTarget>):{interfaces:Array<String>,
 		projections:Array<String>} return switch target {
-			case "wasm32" | "wasm-gc" | "wasmgc": {
+			case Wasm32 | WasmGc: {
 				interfaces: ["stdlib/haxeon/wasm/HaxeonHost.hxi", "stdlib/haxeon/wasm/HaxeonCrypto.hxi"],
 				projections: ["stdlib/haxeon/wasm/HaxeonHost.hxmap", "stdlib/haxeon/wasm/HaxeonCrypto.hxmap"]
 			};
@@ -87,16 +89,16 @@ class CompilerSession {
 	 * (haxeon.wasm.HostError reads its message from that memory): wasm32 always, wasm-gc when it imports memory.
 	 */
 	static function hostSources(request:CompilerRequest):Array<String>
-		return switch request.target {
-			case "wasm32": ["stdlib/haxeon/wasm/HostError.hx"];
-			case "wasm-gc" | "wasmgc" if (request.importMemory == true): ["stdlib/haxeon/wasm/HostError.hx"];
+		return switch BackendTargets.parse(request.target) {
+			case Wasm32: ["stdlib/haxeon/wasm/HostError.hx"];
+			case WasmGc if (request.importMemory == true): ["stdlib/haxeon/wasm/HostError.hx"];
 			case _: [];
 		};
 
 	public function prepare(request:CompilerRequest, report:String->Void):Compiler {
 		// Every consumer of a source in this request sees the same bytes, including shape checks.
 		requestSources = [];
-		var host = hostInterfaces(request.target),
+		var host = hostInterfaces(BackendTargets.parse(request.target)),
 			interfacePaths = request.ffiInterfaces.concat(host.interfaces),
 			projectionPaths = request.ffiProjections.concat(host.projections);
 		var interfaces:Array<FfiInterfaceSource> = [for (path in interfacePaths) {

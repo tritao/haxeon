@@ -1,5 +1,7 @@
 package compiler.tools;
 
+import compiler.backend.Backend.BackendTarget;
+import compiler.backend.BackendTargets;
 import compiler.tools.CompilerRequest.PackageSourceRoot;
 import sys.io.File;
 
@@ -113,28 +115,30 @@ class CompilerArguments {
 			roots.push("src");
 		if (paths.length == 0)
 			throw "Haxeon compiler requires an explicit source manifest";
-		if (target == "wasm64")
+		var backend = BackendTargets.parse(target);
+		if (backend == Wasm64)
 			throw 'Compiler target "wasm64" is not implemented yet; use --target=wasm32 or --target=wasm-gc';
-		if (target != "hl" && target != "wasm32" && target != "wasmgc" && target != "wasm-gc")
+		if (backend == null)
 			throw 'Unsupported compiler target "$target"';
-		if ((importMemory || memoryBase != 0) && target != "wasm32" && target != "wasmgc" && target != "wasm-gc")
+		var wasm = BackendTargets.isWasm(backend);
+		if ((importMemory || memoryBase != 0) && !wasm)
 			throw "Wasm memory options require --target=wasm32 or --target=wasm-gc";
-		if (live && target != "hl")
+		if (live && backend != HashLink)
 			throw "--live requires --target=hl";
 		if (buildMode != "release" && buildMode != "development")
 			throw 'Unsupported compiler build mode "$buildMode"';
 		if (live && buildModeExplicit && buildMode != "development")
 			throw "--live requires development build mode";
 		if (live) buildMode = "development";
-		if ((wasmMemoryStats || wasmGcStress) && target != "wasm32")
+		if ((wasmMemoryStats || wasmGcStress) && backend != Wasm32)
 			throw "Wasm allocator options require --target=wasm32";
-		if (wasmGcAllocationCount && target != "wasmgc" && target != "wasm-gc")
+		if (wasmGcAllocationCount && backend != WasmGc)
 			throw "--wasm-gc-allocation-count requires --target=wasm-gc";
-		if (wasmRuntimeNeutral && target != "wasm32")
+		if (wasmRuntimeNeutral && backend != Wasm32)
 			throw "--wasm-runtime-neutral requires --target=wasm32";
-		if (exports.length != 0 && target != "wasm32" && target != "wasmgc" && target != "wasm-gc")
+		if (exports.length != 0 && !wasm)
 			throw "Function exports require a Wasm32 or Wasm GC target";
-		if (memoryContract != null && target != "wasm32" && target != "wasmgc" && target != "wasm-gc")
+		if (memoryContract != null && !wasm)
 			throw "--wasm-memory-contract requires --target=wasm32 or --target=wasm-gc";
 		if (sharedMemory && (!importMemory || memoryContract == null))
 			throw "--wasm-shared-memory requires imported memory and a bounded memory contract";

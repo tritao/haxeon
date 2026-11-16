@@ -117,10 +117,10 @@ class CompilationContext {
 		return owner.isWasmTarget() ? compiler.ir.TargetProfile.wasm : compiler.ir.TargetProfile.hashLink;
 
 	public function valueArrayTarget():compiler.ir.IrValueLaneLayout.IrValueLaneTarget
-		return switch owner.defines.get("target") {
-			case "wasmgc" | "wasm-gc": WasmGc;
-			case "wasm32": Wasm32;
-			default: HashLink;
+		return switch owner.backendTarget {
+			case WasmGc: compiler.ir.IrValueLaneLayout.IrValueLaneTarget.WasmGc;
+			case Wasm32: compiler.ir.IrValueLaneLayout.IrValueLaneTarget.Wasm32;
+			case HashLink | Wasm64: compiler.ir.IrValueLaneLayout.IrValueLaneTarget.HashLink;
 		};
 
 	public function exportedFunctions():Array<String>

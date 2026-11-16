@@ -6,6 +6,7 @@ import compiler.core.CancellationToken;
 import compiler.ffi.CHeaderEmitter;
 import compiler.backend.Backend;
 import compiler.backend.Backend.BackendTarget;
+import compiler.backend.BackendTargets;
 import compiler.backend.MemoryContract.MemoryContractCodec;
 import compiler.backend.wasm.WasmBackend;
 import compiler.hl.HlWriter;
@@ -52,15 +53,10 @@ class CompilerDriver {
 			var backendStartedAt = Sys.time() * 1000.0;
 			if (request.dumpFunction >= 0)
 				dumpFunction(result, request.dumpFunction, report);
-			var isWasm = StringTools.startsWith(request.target, "wasm"),
-				wasmTarget = switch request.target {
-					case "wasm32": Wasm32;
-					case "wasm64": Wasm64;
-					case "wasmgc", "wasm-gc": WasmGc;
-					default: HashLink;
-				},
-					outputBytes:Null<Bytes> = null,
-					outputIndices:Null<Map<String, Int>> = null;
+			var wasmTarget = compiler.backendTarget,
+				isWasm = BackendTargets.isWasm(wasmTarget),
+				outputBytes:Null<Bytes> = null,
+				outputIndices:Null<Map<String, Int>> = null;
 			// A live edit that patches publishes the patch and its stamp before the 40 MB module and the side files are written:
 			// the host applies the patch from its own memory, and a reload waits for the `.live.full` marker that vouches for them.
 			var deferFullModule = !isWasm && request.live && result.patchBytes != null && !result.requiresReload;
@@ -358,17 +354,17 @@ class CompilerDriver {
 
 	public static function targetDefines(target:String):Array<String> {
 		var result = ["haxeon", "target=" + target];
-		switch target {
-			case "wasm32":
+		switch BackendTargets.parse(target) {
+			case Wasm32:
 				result.push("wasm");
 				result.push("wasm32");
-			case "wasm64":
+			case Wasm64:
 				result.push("wasm");
 				result.push("wasm64");
-			case "wasmgc", "wasm-gc":
+			case WasmGc:
 				result.push("wasm");
 				result.push("wasmgc");
-			case "hl":
+			case HashLink:
 				// Standard Haxe's names for a system target with threads, which HashLink's
 				// sys.thread provides: code guarding shared state with `#if target.threaded`
 				// must not compile its locks away here.

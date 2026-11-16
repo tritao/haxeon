@@ -6,6 +6,8 @@ import compiler.core.Diagnostic;
 import compiler.core.Diagnostic.CompileError;
 import compiler.core.Source.SourceFile;
 import compiler.ir.Ir.IrProgram;
+import compiler.backend.Backend.BackendTarget;
+import compiler.backend.BackendTargets;
 import compiler.ir.Ir.IrType;
 import compiler.ir.IrGenerator;
 import compiler.types.SignatureInference;
@@ -250,6 +252,10 @@ class Compiler {
 
 	var configurationScopeIdentity:String = "default";
 	var defines:Map<String, String> = [];
+
+	/** The backend the `target` define selects, parsed once by `configure`; HashLink when there is none. */
+	public var backendTarget(default, null):BackendTarget = HashLink;
+
 	var exportedFunctions:Array<String> = [];
 
 	/** Last successfully assembled typed program; failed edits never replace it. */
@@ -771,6 +777,8 @@ class Compiler {
 		configurationIdentity = identity;
 		configurationScopeIdentity = scopeIdentity;
 		defines = nextDefines;
+		var target = BackendTargets.parse(nextDefines.get("target"));
+		backendTarget = target == null ? HashLink : target;
 		for (state in modules) {
 			var affected = scopeChanged;
 			if (!affected)
@@ -826,6 +834,7 @@ class Compiler {
 		candidate.configurationIdentity = configurationIdentity;
 		candidate.configurationScopeIdentity = configurationScopeIdentity;
 		candidate.defines = [for (name => value in defines) name => value];
+		candidate.backendTarget = backendTarget;
 		var moduleNames = [for (name in modules.keys()) name];
 		moduleNames.sort(Reflect.compare);
 		for (name in moduleNames) {
@@ -1013,6 +1022,7 @@ class Compiler {
 		candidate.configurationIdentity = configurationIdentity;
 		candidate.configurationScopeIdentity = configurationScopeIdentity;
 		candidate.defines = [for (name => value in defines) name => value];
+		candidate.backendTarget = backendTarget;
 		for (name in [for (name in candidate.modules.keys()) name])
 			candidate.modules.remove(name);
 		for (name => state in snapshot.modules)
@@ -1147,20 +1157,19 @@ class Compiler {
 		}
 		if (interfaceTarget != null)
 			return interfaceTarget;
-		return switch (defines.get("target")) {
-			case "wasm32" | "wasmgc" | "wasm-gc": "portable-abi32";
-			case "wasm64": "portable-abi64";
-			case "hl" | null: "portable-abi64";
-			case target: target;
+		return switch backendTarget {
+			case Wasm32 | WasmGc: "portable-abi32";
+			case Wasm64: "portable-abi64";
+			case HashLink:
+				// A `target` define that names no backend names the C ABI itself.
+				var named = defines.get("target");
+				named == null || named == "hl" ? "portable-abi64" : named;
 		}
 	}
 
 	/** True when the active target uses one of the experimental WebAssembly backends. */
 	public function isWasmTarget():Bool
-		return switch defines.get("target") {
-			case "wasm32" | "wasm64" | "wasmgc" | "wasm-gc": true;
-			default: false;
-		};
+		return BackendTargets.isWasm(backendTarget);
 
 	function irNatives():Array<IrNative>
 		return natives.irNatives();
