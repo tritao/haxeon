@@ -18,11 +18,11 @@ Module metadata mode is independent of native optimization. Host project builds
 keep optimized `Release` native libraries in both modes, including the default
 development mode and live rebuilds.
 
-On Unix-like systems, `scripts/haxeon` compiles the CLI to cached HashLink
-bytecode when its input content changes, then runs that bytecode. The cache
-tracks the source tree, launcher, pinned Haxe binary and host standard library,
-including added and removed files. Checkout timestamps alone do not rebuild it.
-Build the matching checkout's HashLink runtime before invoking the launcher.
+`haxeon` is a native executable built by the checkout's native build
+(`scripts/build-native.sh`, `scripts\build-native.ps1`), beside the `hl` VM in
+the directory `scripts/hashlink-path.sh` prints. Put that directory on `PATH` to
+run it as `haxeon`. `scripts/haxeon` (and `scripts\haxeon` on Windows) runs it
+after rebuilding it and the CLI's bytecode if their sources changed.
 
 ```sh
 ./scripts/haxeon init

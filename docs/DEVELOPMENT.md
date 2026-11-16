@@ -47,9 +47,14 @@ Haxe interpreter. Running `haxe --run driver.TestDriver` by hand skips that setu
 
 ### The same commands on every platform
 
-Setup is two CMake invocations, wrapped by a script per shell. Everything after that is `haxeon dev`, spelled the same
-everywhere: `scripts/haxeon` in a Unix shell, `scripts\haxeon` (`haxeon.cmd`, `haxeon.ps1`) on Windows. Both launchers build the
-CLI to HashLink bytecode when its sources change and run it on the checkout-built VM.
+Setup is two CMake invocations, wrapped by a script per shell. Everything after that is the `haxeon` command, spelled the
+same everywhere. It is a native executable the build puts beside `hl`: the same VM, running the CLI's bytecode, which the
+build compiles with the pinned Haxe and publishes next to it (`native/haxeon_main.c`). It belongs to the checkout it was built
+in, which it names in `HAXEON_HOME`, and needs no library path, so its directory can go on `PATH`.
+
+`scripts/haxeon` (Unix) and `scripts\haxeon` (`haxeon.cmd`, `haxeon.ps1`; Windows) run it after bringing it and the CLI's
+bytecode up to date with `cmake --build <build> --target haxeon-command`, so an edit to the CLI is in the next command. That
+check costs about a tenth of a second; `HAXEON_NATIVE_READY=1` skips it, as the suite runner does after its own native build.
 
 | Step | Command | Unix wrapper | Windows wrapper |
 |---|---|---|---|
@@ -150,8 +155,9 @@ submodule with libhl and the Haxeon runtime (`native/runtime.c`) compiled in. It
 needs no library path, and it exports the VM's API to the libraries it loads, so
 those link nothing of HashLink's. It is placed in
 `out/cmake/<preset>/hashlink-runtime` (`scripts/hashlink-path.sh` prints the
-directory), with `hlprof-live` and `libhl.a` (`libhl.lib` with MSVC): the same
-VM without `main.c`, for C test programs that host the VM themselves.
+directory), with `haxeon` and the CLI's bytecode `haxeon-cli.hl`, `hlprof-live`,
+and `libhl.a` (`libhl.lib` with MSVC): the same VM without `main.c`, which
+`haxeon` and C test programs that host the VM themselves link.
 
 The build links the programs in `hashlink-staging` and publishes them by rename
 (`cmake/haxeon-replace.cmake`), never writing over the file in place. A process

@@ -1,51 +1,27 @@
 #!/usr/bin/env bash
+# This checkout's haxeon command: the VM running the Haxeon CLI (native/haxeon_main.c), built by the native build with the
+# CLI's bytecode beside it. The two are brought up to date first, so an edit to the CLI's sources is in the next command;
+# HAXEON_NATIVE_READY=1 says a caller already did that (the suite runner, once: concurrent builds of one tree race).
 set -euo pipefail
 
 root_dir=$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)
-haxe="$root_dir/.tools/haxe/haxe"
-
-if [[ ! -x "$haxe" ]]; then
-	echo "missing pinned Haxe compiler; run scripts/bootstrap-tools.sh first" >&2
-	exit 1
-fi
-
-export HAXEON_HOME="$root_dir"
 hashlink_dir=$("$root_dir/scripts/hashlink-path.sh")
-hashlink="$hashlink_dir/hl"
-export HAXEON_HASHLINK_DIR="$hashlink_dir"
-if [[ ! -x "$hashlink" ]]; then
-	echo "Missing checkout-built HashLink: $hashlink; run scripts/build-native.sh first" >&2
-	exit 1
+build_dir=$(dirname "$hashlink_dir")
+
+if [[ ${HAXEON_NATIVE_READY:-0} != 1 ]]; then
+	if [[ ! -f $build_dir/CMakeCache.txt ]]; then
+		echo "No native build in $build_dir; run scripts/bootstrap-tools.sh and scripts/build-native.sh first" >&2
+		exit 1
+	fi
+	# Diagnostics go to stderr only on failure: callers capture stdout (`$(scripts/haxeon dev tool-path ...)`).
+	if ! log=$(cmake --build "$build_dir" --target haxeon-command 2>&1); then
+		printf '%s\n' "$log" >&2
+		exit 1
+	fi
 fi
-cli="$root_dir/out/haxeon-cli.hl"
-mkdir -p "$root_dir/out"
-# A checkout can give unchanged sources new mtimes. Hash the inputs instead so a
-# pin bump only rebuilds the CLI when its content changes. Include the pinned
-# host compiler and its standard library; additions and removals also invalidate.
-if command -v sha256sum >/dev/null 2>&1; then
-	checksum=(sha256sum)
-else
-	checksum=(shasum -a 256)
-fi
-fingerprint=$(
-	cd "$root_dir"
-	{
-		find src lib .tools/haxe/std -type f -exec "${checksum[@]}" {} +
-		"${checksum[@]}" scripts/haxeon common.hxml .tools/haxe/haxe
-	} | LC_ALL=C sort | "${checksum[@]}"
-)
-stamp="$cli.inputs"
-if [[ ! -f "$cli" || ! -f "$stamp" || "$(cat "$stamp")" != "$fingerprint" ]]; then
-	temporary="$cli.tmp.$$"
-	trap 'rm -f "$temporary" "$temporary.inputs"' EXIT
-	# The class paths of the compiler come from common.hxml, the one list every stock-Haxe build of these sources uses.
-	# Diagnostics go to stderr: callers capture stdout (`$(scripts/haxeon dev tool-path ...)`).
-	"$haxe" --cwd "$root_dir" common.hxml -main tools.HaxeonCli -hl "$temporary" >&2
-	printf '%s\n' "$fingerprint" > "$temporary.inputs"
-	mv "$temporary" "$cli"
-	mv "$temporary.inputs" "$stamp"
-	trap - EXIT
-fi
-export LD_LIBRARY_PATH="$hashlink_dir:$root_dir/out${LD_LIBRARY_PATH:+:$LD_LIBRARY_PATH}"
-export DYLD_LIBRARY_PATH="$hashlink_dir:$root_dir/out${DYLD_LIBRARY_PATH:+:$DYLD_LIBRARY_PATH}"
-exec "$hashlink" "$cli" "$@"
+haxeon="$hashlink_dir/haxeon"
+[[ -e $haxeon || ! -e $haxeon.exe ]] || haxeon=$haxeon.exe
+# Test libraries that the programs the CLI runs load by name.
+export LD_LIBRARY_PATH="$root_dir/out${LD_LIBRARY_PATH:+:$LD_LIBRARY_PATH}"
+export DYLD_LIBRARY_PATH="$root_dir/out${DYLD_LIBRARY_PATH:+:$DYLD_LIBRARY_PATH}"
+exec "$haxeon" "$@"

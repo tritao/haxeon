@@ -59,7 +59,8 @@ set(HAXEON_HASHLINK_OUTPUT_DIR "${CMAKE_BINARY_DIR}/hashlink-runtime")
 # links, and a stale haxeon_runtime.hdll reads as if the VM loaded it.
 file(GLOB _haxeon_stale_files
   "${HAXEON_HASHLINK_OUTPUT_DIR}/libhl.so*" "${HAXEON_HASHLINK_OUTPUT_DIR}/libhl*.dylib" "${HAXEON_HASHLINK_OUTPUT_DIR}/libhl.dll"
-  "${CMAKE_BINARY_DIR}/runtime/haxeon_runtime.hdll" "${CMAKE_SOURCE_DIR}/out/haxeon_runtime.hdll")
+  "${CMAKE_BINARY_DIR}/runtime/haxeon_runtime.hdll" "${CMAKE_SOURCE_DIR}/out/haxeon_runtime.hdll"
+  "${CMAKE_SOURCE_DIR}/out/haxeon-cli.hl" "${CMAKE_SOURCE_DIR}/out/haxeon-cli.hl.inputs")
 if(_haxeon_stale_files)
   file(REMOVE ${_haxeon_stale_files})
 endif()
@@ -83,6 +84,8 @@ set_target_properties(hl PROPERTIES ENABLE_EXPORTS ON)
 add_library(haxeon_runtime_objects OBJECT native/runtime.c)
 set_target_properties(haxeon_runtime_objects PROPERTIES POSITION_INDEPENDENT_CODE ON)
 target_include_directories(haxeon_runtime_objects PRIVATE vendor/hashlink/src)
+# C11, as HashLink compiles its sources (MSVC's <stdatomic.h> requires it); nothing linked here carries libhl's setting.
+set_target_properties(haxeon_runtime_objects PROPERTIES C_STANDARD 11 C_STANDARD_REQUIRED ON)
 # NativeKit is an optional submodule that bootstrap does not fetch. Only the trace sink in native_trace.c uses it.
 if(EXISTS "${CMAKE_SOURCE_DIR}/vendor/nativekit/include/nativekit_trace.h")
   target_include_directories(haxeon_runtime_objects PRIVATE vendor/nativekit/include)
@@ -163,9 +166,10 @@ add_library(hlvm STATIC
   $<TARGET_OBJECTS:haxeon_runtime_objects>
 )
 target_include_directories(hlvm INTERFACE vendor/hashlink/src)
+target_compile_features(hlvm INTERFACE c_std_11)
 target_link_libraries(hlvm INTERFACE haxeon_pinned_libffi ${HAXEON_RUNTIME_SYSTEM_LIBRARIES})
 if(WIN32)
-  target_link_libraries(hlvm INTERFACE ws2_32 user32 winmm dbghelp)
+  target_link_libraries(hlvm INTERFACE ws2_32 user32 winmm dbghelp dxguid)
 else()
   target_link_libraries(hlvm INTERFACE m dl pthread)
 endif()
@@ -178,12 +182,66 @@ endif()
 
 add_subdirectory(tests/native)
 
+# The haxeon command: the VM with an entry point that runs the Haxeon CLI's bytecode (native/haxeon_main.c), which is
+# compiled here with the pinned Haxe from the CLI's sources. It needs the pinned Haxe; without it only hl is built.
+set(HAXEON_PINNED_HAXE "${CMAKE_SOURCE_DIR}/.tools/haxe/haxe${CMAKE_EXECUTABLE_SUFFIX}")
+set(HAXEON_PROGRAM_STAGING_DIR "${CMAKE_BINARY_DIR}/hashlink-staging")
+set(HAXEON_PROGRAMS hl hlprof-live)
+if(EXISTS "${HAXEON_PINNED_HAXE}")
+  set(HAXEON_CLI_BYTECODE "${HAXEON_HASHLINK_OUTPUT_DIR}/haxeon-cli.hl")
+  add_executable(haxeon native/haxeon_main.c native/haxeon_vm_main.c)
+  target_include_directories(haxeon PRIVATE vendor/hashlink/src)
+  target_link_libraries(haxeon PRIVATE "$<LINK_LIBRARY:WHOLE_ARCHIVE,hlvm>")
+  target_compile_definitions(haxeon PRIVATE
+    "HAXEON_SOURCE_DIR=\"${CMAKE_SOURCE_DIR}\""
+    "HAXEON_HASHLINK_DIR=\"${HAXEON_HASHLINK_OUTPUT_DIR}\""
+    "HAXEON_CLI_BYTECODE=\"${HAXEON_CLI_BYTECODE}\""
+  )
+  set_target_properties(haxeon PROPERTIES ENABLE_EXPORTS ON C_STANDARD 11 C_STANDARD_REQUIRED ON)
+  # HashLink's main.c is compiled as hl compiles it.
+  foreach(_property IN ITEMS COMPILE_DEFINITIONS COMPILE_OPTIONS)
+    get_target_property(_value hl ${_property})
+    if(_value)
+      set_property(TARGET haxeon APPEND PROPERTY ${_property} "${_value}")
+    endif()
+  endforeach()
+  # On Apple Silicon a JIT needs the allow-jit entitlement, as the HashLink build signs hl (the same condition as its
+  # HL_JIT_AARCH64, which is not visible here).
+  if(APPLE AND ((CMAKE_OSX_ARCHITECTURES MATCHES "arm64" AND NOT CMAKE_OSX_ARCHITECTURES MATCHES "x86_64")
+      OR (NOT CMAKE_OSX_ARCHITECTURES AND CMAKE_SYSTEM_PROCESSOR MATCHES "aarch64|arm64")))
+    add_custom_command(TARGET haxeon POST_BUILD
+      COMMAND codesign --force --sign - --entitlements
+        "${CMAKE_SOURCE_DIR}/vendor/hashlink/other/osx/hl_jit.entitlements" "$<TARGET_FILE:haxeon>"
+      COMMENT "Signing haxeon with allow-jit entitlement"
+    )
+  endif()
+  list(APPEND HAXEON_PROGRAMS haxeon)
+
+  # The CLI's bytecode, rebuilt when a source of the compiler's class paths or the pinned Haxe changes.
+  file(GLOB_RECURSE _haxeon_cli_sources CONFIGURE_DEPENDS "${CMAKE_SOURCE_DIR}/src/*.hx" "${CMAKE_SOURCE_DIR}/lib/*.hx")
+  set(_haxeon_cli_staged "${HAXEON_PROGRAM_STAGING_DIR}/haxeon-cli.hl")
+  add_custom_command(OUTPUT "${_haxeon_cli_staged}"
+    COMMAND "${HAXEON_PINNED_HAXE}" --cwd "${CMAKE_SOURCE_DIR}" common.hxml -main tools.HaxeonCli -hl "${_haxeon_cli_staged}"
+    DEPENDS ${_haxeon_cli_sources} "${CMAKE_SOURCE_DIR}/common.hxml" "${HAXEON_PINNED_HAXE}"
+    COMMENT "Compiling the Haxeon CLI"
+    VERBATIM
+  )
+  add_custom_command(OUTPUT "${HAXEON_CLI_BYTECODE}"
+    COMMAND "${CMAKE_COMMAND}" "-DFROM=${_haxeon_cli_staged}" "-DTO=${HAXEON_CLI_BYTECODE}"
+      -P "${CMAKE_SOURCE_DIR}/cmake/haxeon-replace.cmake"
+    DEPENDS "${_haxeon_cli_staged}" "${CMAKE_SOURCE_DIR}/cmake/haxeon-replace.cmake"
+    COMMENT "Publishing the Haxeon CLI"
+    VERBATIM
+  )
+else()
+  message(STATUS "No pinned Haxe at ${HAXEON_PINNED_HAXE}: building hl without the haxeon command (scripts/bootstrap-tools.sh installs it)")
+endif()
+
 # The programs link in a staging directory and are published to the HashLink directory by rename, never overwritten
 # in place: a running VM (the CLI, the test driver, a compiler worker) keeps the file it started from while the native
 # build replaces it. The import library Windows libraries link against stays in the HashLink directory.
-set(HAXEON_PROGRAM_STAGING_DIR "${CMAKE_BINARY_DIR}/hashlink-staging")
 set(HAXEON_PUBLISHED_PROGRAMS)
-foreach(_program IN ITEMS hl hlprof-live)
+foreach(_program IN LISTS HAXEON_PROGRAMS)
   set_target_properties(${_program} PROPERTIES
     RUNTIME_OUTPUT_DIRECTORY "${HAXEON_PROGRAM_STAGING_DIR}"
     ARCHIVE_OUTPUT_DIRECTORY "${HAXEON_HASHLINK_OUTPUT_DIR}"
@@ -207,7 +265,11 @@ foreach(_hooks IN ITEMS hlprof_penter hlprof_hooks)
   endif()
 endforeach()
 
-add_custom_target(haxeon-native DEPENDS ${HAXEON_PUBLISHED_PROGRAMS} hldump hlvm jit_native_properties)
+add_custom_target(haxeon-native DEPENDS ${HAXEON_PUBLISHED_PROGRAMS} ${HAXEON_CLI_BYTECODE} hldump hlvm jit_native_properties)
+# What the haxeon launchers bring up to date before running it: the command and the CLI's bytecode.
+if(TARGET haxeon)
+  add_custom_target(haxeon-command DEPENDS "${HAXEON_HASHLINK_OUTPUT_DIR}/haxeon${CMAKE_EXECUTABLE_SUFFIX}" "${HAXEON_CLI_BYTECODE}")
+endif()
 foreach(_hooks IN ITEMS hlprof_penter hlprof_hooks)
   if(TARGET ${_hooks})
     add_dependencies(haxeon-native ${_hooks})
