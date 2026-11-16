@@ -1,3 +1,4 @@
+using compiler.compilation.BackendArtifact.BackendArtifacts;
 import compiler.Compiler;
 import compiler.core.Diagnostic.CompileError;
 import compiler.core.Source.SourceFile;
@@ -27,7 +28,7 @@ class GenericDelimiterMain {
 					revision == 1 ? StringTools.replace(source, ">=", "> =") : revision == 2
 					? StringTools.replace(source, "42", "43") : source);
 				var result = compiler.compile("Main"),
-					value = execute(HlWriter.encode(result.module).flatten());
+					value = execute(HlWriter.encode(result.artifact.hashLink().module).flatten());
 				if (value != (revision == 2 ? 43 : 42))
 					throw 'Generic delimiter returned $value (revision=$revision): $source';
 			}
@@ -36,7 +37,7 @@ class GenericDelimiterMain {
 			"function main():Int { var x=64; x>>=2; if (x!=16) return 1; x<<=1; if(x!=32) return 2; var u=-1; u>>>=28; if(u!=15) return 3; if (!(x>=32) || !(x >= 31) || x>32 || !(x>>2==8) || !(u>>>1==7)) return 4; return 42; }";
 		var compiler = new Compiler();
 		compiler.update("Main.hx", operators);
-		if (execute(HlWriter.encode(compiler.compile("Main").module).flatten()) != 42)
+		if (execute(HlWriter.encode(compiler.compile("Main").artifact.hashLink().module).flatten()) != 42)
 			throw "Comparison or shift operators changed";
 		var file = new SourceFile("Tokens.hx",
 			"// é\ntypedef Parts<T>=Array<T>; function main():Int { var parts:Array<Int>=[]; return 1>=0 ? 42 : 0; }");

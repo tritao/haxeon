@@ -1,3 +1,4 @@
+using compiler.compilation.BackendArtifact.BackendArtifacts;
 import compiler.Compiler;
 import compiler.hl.HlWriter;
 import compiler.runtime.CompilerIntrinsics;
@@ -35,6 +36,6 @@ class ReflectMethodsMain {
 			+ "  if (!remove(callbacks, first.apply) || callbacks.length != 1 || !Reflect.compareMethods(callbacks[0], second.apply)) return 6;\n"
 			+ "  return 42;\n"
 			+ "}");
-		File.saveBytes(Sys.args()[0], HlWriter.encode(compiler.compile("Main").module).flatten());
+		File.saveBytes(Sys.args()[0], HlWriter.encode(compiler.compile("Main").artifact.hashLink().module).flatten());
 	}
 }

@@ -1,3 +1,4 @@
+using compiler.compilation.BackendArtifact.BackendArtifacts;
 import compiler.Compiler;
 import compiler.hl.HlWriter;
 import compiler.runtime.CompilerIntrinsics;
@@ -21,6 +22,6 @@ class UtestMain {
 		compiler.update("utest/Runner.hx", File.getContent("stdlib/utest/Runner.hx"));
 		compiler.update("utest/ui/Report.hx", File.getContent("stdlib/utest/ui/Report.hx"));
 		compiler.update("Main.hx", File.getContent(source));
-		File.saveBytes(output, HlWriter.encode(compiler.compile("Main").module).flatten());
+		File.saveBytes(output, HlWriter.encode(compiler.compile("Main").artifact.hashLink().module).flatten());
 	}
 }

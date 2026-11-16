@@ -1,3 +1,4 @@
+using compiler.compilation.BackendArtifact.BackendArtifacts;
 import compiler.Compiler;
 import compiler.backend.wasm.WasmBackend;
 import compiler.hl.HlWriter;
@@ -82,7 +83,8 @@ class SourceInlineEnumMain {
 					temp = "out";
 				var path = temp + "/first-" + target + inlining + (target == "hl" ? ".hl" : ".wasm");
 				var bytes = target == "hl"
-					? HlWriter.encode(result.module).flatten() : new WasmBackend().compile(result.ir, {
+					? HlWriter.encode(result.artifact.hashLink().module).flatten()
+					: new WasmBackend().compile(result.ir, {
 						target: target == "wasm32" ? Wasm32 : WasmGc,
 						debugNames: true,
 						wasmMemoryStats: target == "wasm32",
@@ -121,7 +123,7 @@ class SourceInlineEnumMain {
 		var path = root + "/native-map-enum-" + target + "-" + inlining + "-" + Std.random(0x7fffffff)
 			+ (target == "hl" ? ".hl" : ".wasm");
 		if (target == "hl") {
-			sys.io.File.saveBytes(path, HlWriter.encode(compiled.module).flatten());
+			sys.io.File.saveBytes(path, HlWriter.encode(compiled.artifact.hashLink().module).flatten());
 			var vm = Sys.getEnv("HAXEON_HASHLINK_DIR"),
 				process = new sys.io.Process(vm == null ? TestHashLink.vm() : vm + "/hl", [path]),
 				error = process.stderr.readAll().toString(),

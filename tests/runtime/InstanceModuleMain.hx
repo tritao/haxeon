@@ -1,3 +1,4 @@
+using compiler.compilation.BackendArtifact.BackendArtifacts;
 import compiler.Compiler;
 import compiler.hl.HlWriter;
 import sys.io.File;
@@ -8,9 +9,10 @@ class InstanceModuleMain {
 		compiler.update("Main.hx",
 			"class Box { public var value:Int = 40; public function new(value:Int) { this.value = this.value + value; } public function get():Int { return this.value; } } function main():Int { var box = new Box(2); return box.get(); }");
 		var result = compiler.compile("Main");
-		if (!result.functionIndices.exists("Box.new") || !result.functionIndices.exists("Box.get"))
+		if (!result.artifact.hashLink().functionIndices.exists("Box.new")
+			|| !result.artifact.hashLink().functionIndices.exists("Box.get"))
 			throw "Incremental compiler did not retain instance methods";
-		File.saveBytes(Sys.args()[0], HlWriter.encode(result.module).flatten());
+		File.saveBytes(Sys.args()[0], HlWriter.encode(result.artifact.hashLink().module).flatten());
 		Sys.println("PASS: incremental instance class compiled");
 	}
 }

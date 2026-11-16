@@ -1,3 +1,4 @@
+using compiler.compilation.BackendArtifact.BackendArtifacts;
 import compiler.Frontend;
 import compiler.core.Source.SourceFile;
 import compiler.hl.HlFunction.HlInstruction;
@@ -161,24 +162,27 @@ class DebugMetadataMain {
 		compiler.update(source.path, source.text);
 		compiler.update("unused.hx", "function unused():Int return 0;");
 		var result = compiler.compile("snapshot"),
-			snapshots = result.module.sourceSnapshots;
+			snapshots = result.artifact.hashLink().module.sourceSnapshots;
 		if (snapshots.length != 1 || snapshots[0].sourceHash != source.contentHash()
 			|| snapshots[0].content.toString() != text)
 			throw "Compiler did not retain the reachable source snapshot";
 		var sections = [
-			for (section in result.module.debugSections)
+			for (section in result.artifact.hashLink().module.debugSections)
 				if (section.kind == HlWriter.SOURCE_SNAPSHOTS) section
 		];
 		if (sections.length != 1 || sections[0].version != 1
 			|| !sections[0].payload.equals(HlWriter.encodeSourceSnapshots(snapshots)))
 			throw "Compiler did not emit the canonical source snapshot section";
-		if (HlWriter.encode(result.module).flatten().compare(HlWriter.encode(result.module).flatten()) != 0)
+		if (HlWriter.encode(result.artifact.hashLink().module).flatten()
+			.compare(HlWriter.encode(result.artifact.hashLink().module).flatten()) != 0)
 			throw "HLB source snapshot encoding is not deterministic";
-		var stableBySlot:Map<Int, Int> = [for (fn in result.module.functions) fn.functionIndex => fn.functionIndex],
-			patch = HlPatchReader.decode(HlPatchWriter.encode(result.module, Bytes.alloc(16),
-				[for (fn in result.module.functions) fn.functionIndex],
-				stableBySlot, 0, 1, result.module.ints.length, result.module.floats.length,
-				result.module.strings.length, result.module.types.length));
+		var stableBySlot:Map<Int, Int> =
+			[for (fn in result.artifact.hashLink().module.functions) fn.functionIndex => fn.functionIndex],
+			patch = HlPatchReader.decode(HlPatchWriter.encode(result.artifact.hashLink().module, Bytes.alloc(16),
+				[for (fn in result.artifact.hashLink().module.functions) fn.functionIndex],
+				stableBySlot, 0, 1, result.artifact.hashLink().module.ints.length,
+				result.artifact.hashLink().module.floats.length,
+				result.artifact.hashLink().module.strings.length, result.artifact.hashLink().module.types.length));
 		if (patch.sourceSnapshots.length != 1
 			|| patch.sourceSnapshots[0].sourceHash != source.contentHash()
 			|| patch.sourceSnapshots[0].content.toString() != text)

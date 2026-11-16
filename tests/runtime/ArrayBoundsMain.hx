@@ -1,3 +1,4 @@
+using compiler.compilation.BackendArtifact.BackendArtifacts;
 import compiler.Compiler;
 import compiler.hl.HlWriter;
 import compiler.types.Type.CompilerType;
@@ -11,6 +12,6 @@ class ArrayBoundsMain {
 		compiler.update("Main.hx",
 			"function main():Int { var values:Array<Int> = array_int_alloc(1); return values[1]; }");
 		var result = compiler.compile("Main");
-		File.saveBytes(Sys.args()[0], HlWriter.encode(result.module).flatten());
+		File.saveBytes(Sys.args()[0], HlWriter.encode(result.artifact.hashLink().module).flatten());
 	}
 }

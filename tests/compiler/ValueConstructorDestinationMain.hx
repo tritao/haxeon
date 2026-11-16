@@ -1,3 +1,4 @@
+using compiler.compilation.BackendArtifact.BackendArtifacts;
 import compiler.Compiler;
 import compiler.backend.wasm.WasmBackend;
 import compiler.hl.HlWriter;
@@ -52,8 +53,9 @@ class ValueConstructorDestinationMain {
 		if (target == 'hl') {
 			var census = dir + '/census-' + inlining + '.json';
 			Sys.putEnv('VALUE_CONSTRUCTOR_CENSUS', census);
-			var live = Runtime.load(HlWriter.encode(result.module).flatten(), result.runtimeIdentity);
-			var id = result.functionIds.get('ValueConstructorDestination.main');
+			var live = Runtime.load(HlWriter.encode(result.artifact.hashLink().module).flatten(),
+				result.artifact.hashLink().runtimeIdentity);
+			var id = result.artifact.hashLink().functionIds.get('ValueConstructorDestination.main');
 			var status = Runtime.callInt(live, id);
 			Runtime.dispose(live);
 			if (status != 42)

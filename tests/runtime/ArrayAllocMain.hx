@@ -1,3 +1,4 @@
+using compiler.compilation.BackendArtifact.BackendArtifacts;
 import compiler.Compiler;
 import compiler.hl.HlWriter;
 import sys.io.File;
@@ -8,6 +9,6 @@ class ArrayAllocMain {
 		compiler.update("Main.hx",
 			"function main():Int { var values = new Array<Int>(2); values[0] = 40; values[1] = 2; var floats = new Array<Float>(2); floats[0] = 1.5; floats[1] = 2.5; var strings = new Array<String>(1); strings[0] = \"ok\"; var flags = new Array<Bool>(2); flags[0] = true; flags[1] = false; return values[0] + values.length + floats.length + strings.length + flags.length; }");
 		var result = compiler.compile("Main");
-		File.saveBytes(Sys.args()[0], HlWriter.encode(result.module).flatten());
+		File.saveBytes(Sys.args()[0], HlWriter.encode(result.artifact.hashLink().module).flatten());
 	}
 }

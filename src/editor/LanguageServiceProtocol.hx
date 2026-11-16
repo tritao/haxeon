@@ -1,6 +1,7 @@
 package editor;
 
 import compiler.abi.AbiChangeSchema;
+import compiler.compilation.BackendArtifact.BackendArtifacts;
 import compiler.compilation.CompilerPublication.ReconnectDecision;
 import compiler.compilation.CompilerPublication.ReconnectReason;
 import compiler.core.CancellationError;
@@ -69,9 +70,11 @@ class LanguageServiceProtocol {
 						updated:true
 					};
 				case "compile":
-					var build = service.compile(requiredString(request, "entry"), token);
-					var initialLoad = build.revision == 1 && !build.requiresReload && build.patchBytes == null,
-						artifactKind = build.patchBytes != null ? "patch" : build.requiresReload
+					var build = service.compile(requiredString(request, "entry"), token),
+						hashLink = BackendArtifacts.hashLink(build.artifact),
+						patch = hashLink.patchBytes;
+					var initialLoad = build.revision == 1 && !build.requiresReload && patch == null,
+						artifactKind = patch != null ? "patch" : build.requiresReload
 							|| initialLoad ? "module" : "none";
 					result = cast {
 						compatibility:{
@@ -79,7 +82,7 @@ class LanguageServiceProtocol {
 							decision:build.requiresReload ? "reload_domain" : initialLoad ? "initial_load" : "patch",
 							baseRevision:artifactKind == "patch" ? build.baseRevision : 0,
 							targetRevision:build.revision,
-							domainIdentity:Base64.encode(build.runtimeIdentity.sub(4, 16)),
+							domainIdentity:Base64.encode(hashLink.runtimeIdentity.sub(4, 16)),
 							artifactKind:artifactKind,
 							reasons:[for (reason in build.reloadReasons) AbiChangeSchema.encode(reason)]
 						},
@@ -88,10 +91,10 @@ class LanguageServiceProtocol {
 							regenerated:build.regenerated,
 							changedFunctions:build.changedFunctions,
 							requiresReload:build.requiresReload,
-							patchAvailable:build.patchBytes != null,
-							moduleBase64:Base64.encode(HlWriter.encode(build.module).flatten()),
-							patchBase64:build.patchBytes == null ? null : Base64.encode(build.patchBytes),
-							runtimeIdentityBase64:Base64.encode(build.runtimeIdentity),
+							patchAvailable:patch != null,
+							moduleBase64:Base64.encode(HlWriter.encode(hashLink.module).flatten()),
+							patchBase64:patch == null ? null : Base64.encode(patch),
+							runtimeIdentityBase64:Base64.encode(hashLink.runtimeIdentity),
 							metrics:build.metrics
 					};
 				case "acknowledge":

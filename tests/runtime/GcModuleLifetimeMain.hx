@@ -1,3 +1,4 @@
+using compiler.compilation.BackendArtifact.BackendArtifacts;
 import compiler.Compiler;
 import compiler.hl.HlWriter;
 import hl.Gc;
@@ -45,11 +46,12 @@ class GcModuleLifetimeMain {
 		compiler.update("Main.hx",
 			"function make():() -> Int { var values = [40, 2]; return function() return values[0] + values[1]; } function main():Int { return 42; }");
 		var compiled = compiler.compile("Main");
-		var bytes = HlWriter.encode(compiled.module).flatten();
+		var bytes = HlWriter.encode(compiled.artifact.hashLink().module).flatten();
 		Gc.enable(false);
 		ballast = new hl.NativeArray<Dynamic>(2000000);
 		for (i in 0...12) {
-			generation(bytes, compiled.runtimeIdentity, compiled.functionIds.get("Main.make"));
+			generation(bytes, compiled.artifact.hashLink().runtimeIdentity,
+				compiled.artifact.hashLink().functionIds.get("Main.make"));
 			Gc.major();
 			if (Runtime.retryRetirements() != 0)
 				throw 'module retirement blocked after generation $i';

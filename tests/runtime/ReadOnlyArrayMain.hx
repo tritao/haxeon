@@ -1,3 +1,4 @@
+using compiler.compilation.BackendArtifact.BackendArtifacts;
 import compiler.Compiler;
 import compiler.core.Diagnostic.CompileError;
 import compiler.hl.HlWriter;
@@ -24,7 +25,7 @@ function main():Int {
   if (total != 60 || values.join(",") != "10,20,30") return 2;
   return 42;
 }');
-		File.saveBytes(Sys.args()[0], HlWriter.encode(compiler.compile("Main").module).flatten());
+		File.saveBytes(Sys.args()[0], HlWriter.encode(compiler.compile("Main").artifact.hashLink().module).flatten());
 	}
 
 	static function reject(statement:String):Void {

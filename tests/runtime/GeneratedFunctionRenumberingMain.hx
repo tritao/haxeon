@@ -1,3 +1,4 @@
+using compiler.compilation.BackendArtifact.BackendArtifacts;
 import compiler.Compiler;
 import compiler.hl.HlWriter;
 import runtime.PatchSet;
@@ -94,8 +95,9 @@ class GeneratedFunctionRenumberingMain {
 		return {
 			compiler: compiler,
 			build: build,
-			live: Runtime.load(HlWriter.encode(build.module).flatten(), build.runtimeIdentity),
-			mainId: build.functionIds.get("main")
+			live: Runtime.load(HlWriter.encode(build.artifact.hashLink().module).flatten(),
+				build.artifact.hashLink().runtimeIdentity),
+			mainId: build.artifact.hashLink().functionIds.get("main")
 		};
 	}
 
@@ -109,11 +111,11 @@ class GeneratedFunctionRenumberingMain {
 			throw '$label: the program did not run correctly before the edit';
 		session.compiler.update("Main.hx", after);
 		var changed = session.compiler.compile("Main");
-		if (!changed.requiresReload && changed.patchBytes != null) {
+		if (!changed.requiresReload && changed.artifact.hashLink().patchBytes != null) {
 			var refusal:Null<String> = null;
 			try
 				Runtime.patchSet(session.live, new PatchSet(session.build.revision, changed.revision,
-					changed.patchBytes, changed.changedFunctions))
+					changed.artifact.hashLink().patchBytes, changed.changedFunctions))
 			catch (error:runtime.RuntimeError) {
 				if (error.status != runtime.RuntimeStatus.ClosuresHeld)
 					throw error;
@@ -138,10 +140,11 @@ class GeneratedFunctionRenumberingMain {
 		Runtime.callInt(session.live, session.mainId);
 		session.compiler.update("Main.hx", after);
 		var changed = session.compiler.compile("Main");
-		if (changed.requiresReload || changed.patchBytes == null)
+		if (changed.requiresReload || changed.artifact.hashLink().patchBytes == null)
 			throw '$label: required a reload: ${[for (reason in changed.reloadReasons) Std.string(reason)].join(", ")}';
 		Runtime.patchSet(session.live,
-			new PatchSet(session.build.revision, changed.revision, changed.patchBytes, changed.changedFunctions));
+			new PatchSet(session.build.revision, changed.revision, changed.artifact.hashLink().patchBytes,
+			changed.changedFunctions));
 		if (Runtime.callInt(session.live, session.mainId) != expected)
 			throw '$label: stored handlers did not run the edited code';
 		Runtime.dispose(session.live);

@@ -1,3 +1,4 @@
+using compiler.compilation.BackendArtifact.BackendArtifacts;
 import compiler.Compiler;
 import compiler.Compiler.CompileResult;
 import compiler.backend.Backend.BackendTarget;
@@ -122,7 +123,7 @@ class EnumTypedefConstructorMain {
 
 	static function execute(result:CompileResult, expected:Int):Void {
 		var path = "out/enum-typedef-constructor.hl";
-		File.saveBytes(path, HlWriter.encode(result.module).flatten());
+		File.saveBytes(path, HlWriter.encode(result.artifact.hashLink().module).flatten());
 		var child = new sys.io.Process(Sys.getEnv("HAXEON_HASHLINK_DIR") + "/hl", [path]);
 		var output = child.stdout.readAll().toString() + child.stderr.readAll().toString();
 		var status = child.exitCode();

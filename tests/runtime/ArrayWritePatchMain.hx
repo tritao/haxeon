@@ -1,3 +1,4 @@
+using compiler.compilation.BackendArtifact.BackendArtifacts;
 import compiler.Compiler;
 import compiler.hl.HlWriter;
 import compiler.runtime.CompilerIntrinsics;
@@ -15,16 +16,18 @@ class ArrayWritePatchMain {
 			+ "; return slots[1] + slots.length; } } function main():Int { return Slots.run(); }";
 		compiler.update("Main.hx", program(9));
 		var first = compiler.compile("Main"),
-			live = Runtime.load(HlWriter.encode(first.module).flatten(), first.runtimeIdentity),
-			mainId = first.functionIds.get("main");
+			live = Runtime.load(HlWriter.encode(first.artifact.hashLink().module).flatten(),
+				first.artifact.hashLink().runtimeIdentity),
+			mainId = first.artifact.hashLink().functionIds.get("main");
 		if (Runtime.callInt(live, mainId) != 12)
 			throw "The array-write program did not run correctly before the edit";
 		compiler.update("Main.hx", program(20));
 		var changed = compiler.compile("Main");
-		if (changed.requiresReload || changed.patchBytes == null)
+		if (changed.requiresReload || changed.artifact.hashLink().patchBytes == null)
 			throw "A body edit did not produce a compatible patch";
 		Runtime.patchSet(live,
-			new PatchSet(first.revision, changed.revision, changed.patchBytes, changed.changedFunctions));
+			new PatchSet(first.revision, changed.revision, changed.artifact.hashLink().patchBytes,
+			changed.changedFunctions));
 		if (Runtime.callInt(live, mainId) != 23)
 			throw "The patched function kept its old body";
 		Runtime.dispose(live);
@@ -36,15 +39,17 @@ class ArrayWritePatchMain {
 			(value:Int) -> 'import haxe.io.Bytes; function main():Int {var a=[0,0,0];a.resize(0);var b=Bytes.alloc(1);a.push($value);b.set(0,a[0]);return b.get(0);}';
 		fastCompiler.update("Main.hx", fastProgram(9));
 		var initialFast = fastCompiler.compile("Main");
-		var fastLive = Runtime.load(HlWriter.encode(initialFast.module).flatten(), initialFast.runtimeIdentity);
-		var fastMain = initialFast.functionIds.get("main");
+		var fastLive = Runtime.load(HlWriter.encode(initialFast.artifact.hashLink().module).flatten(),
+			initialFast.artifact.hashLink().runtimeIdentity);
+		var fastMain = initialFast.artifact.hashLink().functionIds.get("main");
 		if (Runtime.callInt(fastLive, fastMain) != 9)
 			throw "Initial inline runtime operations failed";
 		fastCompiler.update("Main.hx", fastProgram(42));
 		var editedFast = fastCompiler.compile("Main");
-		if (editedFast.requiresReload || editedFast.patchBytes == null)
+		if (editedFast.requiresReload || editedFast.artifact.hashLink().patchBytes == null)
 			throw "Inline runtime operations did not produce a patch";
-		Runtime.patchSet(fastLive, new PatchSet(initialFast.revision, editedFast.revision, editedFast.patchBytes,
+		Runtime.patchSet(fastLive,
+			new PatchSet(initialFast.revision, editedFast.revision, editedFast.artifact.hashLink().patchBytes,
 			editedFast.changedFunctions));
 		if (Runtime.callInt(fastLive, fastMain) != 42)
 			throw "Patched inline runtime operations failed";

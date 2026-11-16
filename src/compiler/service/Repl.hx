@@ -1,6 +1,7 @@
 package compiler.service;
 
 import compiler.Compiler;
+import compiler.compilation.BackendArtifact.BackendArtifacts;
 import compiler.hl.HlWriter;
 import haxe.io.Bytes;
 
@@ -19,7 +20,7 @@ class Repl {
 		this.compiler = compiler;
 
 	public function compileInt(expression:String):ReplProgram {
-		var result = compiler.compileExpressionInt(expression),
+		var result = BackendArtifacts.hashLink(compiler.compileExpressionInt(expression).artifact),
 			stableId = result.functionIds.get("main");
 		if (stableId == null)
 			throw "REPL compilation did not produce a stable entry function";

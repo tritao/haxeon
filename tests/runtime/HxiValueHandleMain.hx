@@ -1,3 +1,4 @@
+using compiler.compilation.BackendArtifact.BackendArtifacts;
 import compiler.Compiler;
 import compiler.hl.HlWriter;
 import compiler.runtime.CompilerIntrinsics;
@@ -22,6 +23,6 @@ class HxiValueHandleMain {
 		compiler.update("Main.hx",
 			'import ValueHandles; function main():Int { var first = ValueHandles.createOwned(); var borrowed:value_handle = ValueHandles.borrowed(); if (borrowed.rawValue() != first.rawValue() || first.isClosed()) return 1; if (!first.close() || first.close() || !first.isClosed() || ValueHandles.releaseCount() != 1) return 2; var second = ValueHandles.createOut(); if (second.rawValue() != 2 || !second.close() || ValueHandles.releaseCount() != 2) return 3; return 42; }');
 		compiler.compile("Main");
-		File.saveBytes(output, HlWriter.encode(compiler.compile("Main").module).flatten());
+		File.saveBytes(output, HlWriter.encode(compiler.compile("Main").artifact.hashLink().module).flatten());
 	}
 }

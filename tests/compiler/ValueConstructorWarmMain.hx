@@ -1,3 +1,4 @@
+using compiler.compilation.BackendArtifact.BackendArtifacts;
 import compiler.Compiler;
 import compiler.hl.HlWriter;
 import compiler.runtime.CompilerIntrinsics;
@@ -31,7 +32,8 @@ class ValueConstructorWarmMain {
 		c.addSourceRoot('stdlib');
 		var result = c.compile('Main');
 		var fresh = compiler(after, false).compile('Main');
-		if (HlWriter.encode(result.module).flatten().compare(HlWriter.encode(fresh.module).flatten()) != 0)
+		if (HlWriter.encode(result.artifact.hashLink().module).flatten()
+			.compare(HlWriter.encode(fresh.artifact.hashLink().module).flatten()) != 0)
 			throw 'warm module differs';
 		if (StringTools.startsWith(result.metrics.reuse, 'ir'))
 			throw 'reused IR after constructor edit';
@@ -53,10 +55,11 @@ class ValueConstructorWarmMain {
 		Sys.putEnv('HAXEON_CHECK_REUSE', '1');
 		var live = compiler(six, true);
 		var initial = live.compile('Main');
-		var module = runtime.Runtime.load(HlWriter.encode(initial.module).flatten(), initial.runtimeIdentity);
-		var id = initial.functionIds.get('Main.main');
+		var module = runtime.Runtime.load(HlWriter.encode(initial.artifact.hashLink().module).flatten(),
+			initial.artifact.hashLink().runtimeIdentity);
+		var id = initial.artifact.hashLink().functionIds.get('Main.main');
 		if (id == null)
-			id = initial.functionIds.get('main');
+			id = initial.artifact.hashLink().functionIds.get('main');
 		if (id == null)
 			throw 'missing live entry';
 		var initialResult = runtime.Runtime.callInt(module, id);
@@ -65,16 +68,17 @@ class ValueConstructorWarmMain {
 		live.update('Point.hx', five);
 		live.addSourceRoot('stdlib');
 		var patch = live.compile('Main');
-		if (patch.requiresReload || patch.patchBytes == null)
+		if (patch.requiresReload || patch.artifact.hashLink().patchBytes == null)
 			throw 'constructor body edit did not yield a patch';
 		runtime.Runtime.patchSet(module,
-			new runtime.PatchSet(initial.revision, patch.revision, patch.patchBytes, patch.changedFunctions));
+			new runtime.PatchSet(initial.revision, patch.revision, patch.artifact.hashLink().patchBytes,
+			patch.changedFunctions));
 		if (runtime.Runtime.callInt(module, id) != 42)
 			throw 'patched live result differs';
 		live.update('Point.hx', changed);
 		live.addSourceRoot('stdlib');
 		var result = live.compile('Main');
-		if (!result.requiresReload || result.patchBytes != null)
+		if (!result.requiresReload || result.artifact.hashLink().patchBytes != null)
 			throw 'value layout change did not refuse a live patch';
 		var reasons = [for (reason in result.reloadReasons) Std.string(reason)].join(',');
 		if (reasons.indexOf('Point') < 0)

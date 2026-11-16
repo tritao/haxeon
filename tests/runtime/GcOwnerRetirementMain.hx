@@ -1,3 +1,4 @@
+using compiler.compilation.BackendArtifact.BackendArtifacts;
 import compiler.Compiler;
 import compiler.hl.HlWriter;
 import hl.Gc;
@@ -33,13 +34,13 @@ class GcOwnerRetirementMain {
 function makeBox():Box { return new Box(42); }
 function make():() -> Int { var values = [40, 2]; return function() return values[0] + values[1]; } function main():Int { return 42; }");
 		var compiled = compiler.compile("Main");
-		var bytes = HlWriter.encode(compiled.module).flatten();
-		var make = compiled.functionIds.get("Main.make");
+		var bytes = HlWriter.encode(compiled.artifact.hashLink().module).flatten();
+		var make = compiled.artifact.hashLink().functionIds.get("Main.make");
 
 		// A plain object of the module is a block of the module like any other, however the JIT allocated it.
 		for (generation in 0...3) {
-			var module = Runtime.load(bytes, compiled.runtimeIdentity);
-			var box = Runtime.retainObject(module, compiled.functionIds.get("Main.makeBox"));
+			var module = Runtime.load(bytes, compiled.artifact.hashLink().runtimeIdentity);
+			var box = Runtime.retainObject(module, compiled.artifact.hashLink().functionIds.get("Main.makeBox"));
 			Runtime.dispose(module);
 			collect();
 			if (Runtime.retryRetirements() == 0)
@@ -53,7 +54,7 @@ function make():() -> Int { var values = [40, 2]; return function() return value
 		// One after the other: the module is blocked while its closure is held, and retires once it is dropped.
 		for (generation in 0...40) {
 			var loaded = [], retained = [];
-			load(bytes, compiled.runtimeIdentity, make, loaded, retained);
+			load(bytes, compiled.artifact.hashLink().runtimeIdentity, make, loaded, retained);
 			Runtime.dispose(loaded[0]);
 			collect();
 			if (Runtime.retryRetirements() == 0)
@@ -69,7 +70,7 @@ function make():() -> Int { var values = [40, 2]; return function() return value
 		// More at once than there are slots: no module retires while anything of its own is held.
 		var loaded = [], retained = [];
 		for (i in 0...20)
-			load(bytes, compiled.runtimeIdentity, make, loaded, retained);
+			load(bytes, compiled.artifact.hashLink().runtimeIdentity, make, loaded, retained);
 		for (module in loaded)
 			Runtime.dispose(module);
 		collect();
@@ -95,7 +96,7 @@ function make():() -> Int { var values = [40, 2]; return function() return value
 		// The slots are free again.
 		for (generation in 0...20) {
 			var loaded = [], retained = [];
-			load(bytes, compiled.runtimeIdentity, make, loaded, retained);
+			load(bytes, compiled.artifact.hashLink().runtimeIdentity, make, loaded, retained);
 			Runtime.dispose(loaded[0]);
 			retained[0].release();
 			collect();

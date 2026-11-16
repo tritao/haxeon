@@ -1,3 +1,4 @@
+using compiler.compilation.BackendArtifact.BackendArtifacts;
 import compiler.Compiler;
 import compiler.hl.HlWriter;
 import runtime.PatchSet;
@@ -28,8 +29,9 @@ class StableLambdaPatchMain {
 			+ "function main():Int { return Ui.first() * 100 + Ui.second(); }\n";
 		compiler.update("Main.hx", program("", "", 2));
 		var build = compiler.compile("Main"),
-			live = Runtime.load(HlWriter.encode(build.module).flatten(), build.runtimeIdentity),
-			mainId = build.functionIds.get("main");
+			live = Runtime.load(HlWriter.encode(build.artifact.hashLink().module).flatten(),
+				build.artifact.hashLink().runtimeIdentity),
+			mainId = build.artifact.hashLink().functionIds.get("main");
 		if (Runtime.callInt(live, mainId) != 209)
 			throw "The program did not run correctly before the edits";
 		var edits = [
@@ -47,10 +49,11 @@ class StableLambdaPatchMain {
 		for (edit in edits) {
 			compiler.update("Main.hx", edit.source);
 			var changed = compiler.compile("Main");
-			if (changed.requiresReload || changed.patchBytes == null)
+			if (changed.requiresReload || changed.artifact.hashLink().patchBytes == null)
 				throw 'Adding ${edit.label} required a reload: ${[for (reason in changed.reloadReasons) Std.string(reason)].join(", ")}';
 			Runtime.patchSet(live,
-				new PatchSet(build.revision, changed.revision, changed.patchBytes, changed.changedFunctions));
+				new PatchSet(build.revision, changed.revision, changed.artifact.hashLink().patchBytes,
+				changed.changedFunctions));
 			if (Runtime.callInt(live, mainId) != edit.expected)
 				throw 'After ${edit.label} the patched module did not run the edited code';
 			build = changed;

@@ -1,3 +1,4 @@
+using compiler.compilation.BackendArtifact.BackendArtifacts;
 import compiler.Compiler;
 import compiler.core.Diagnostic.CompileError;
 import compiler.core.Source.SourceFile;
@@ -76,13 +77,14 @@ class NativeAnnotationsMain {
 		var firstCompile = incremental.compile("game.Main", null, false),
 			firstPosition = requireDescriptor(incremental.lastTypedProgram.nativeTypeDescriptors, "game.Position"),
 			firstHash = firstPosition.hash;
-		expect(containsString(firstCompile.module.strings, firstHash),
+		expect(containsString(firstCompile.artifact.hashLink().module.strings, firstHash),
 			"typeInfo for an imported annotation must publish a descriptor hash");
 		incremental.update("game/Position.hx",
 			"package game; import schema.Range; import schema.Replicate; struct Position { @:Range(0.5, 1.0) public var x:Int; @:Replicate(owner) public var flags:Int; }");
 		var changedCompile = incremental.compile("game.Main", null, false),
 			changedPosition = requireDescriptor(incremental.lastTypedProgram.nativeTypeDescriptors, "game.Position");
-		expect(changedPosition.hash != firstHash && containsString(changedCompile.module.strings, changedPosition.hash),
+		expect(changedPosition.hash != firstHash
+			&& containsString(changedCompile.artifact.hashLink().module.strings, changedPosition.hash),
 			'editing an annotation value must update the emitted typeInfo hash (first=$firstHash, changed=${changedPosition.hash})');
 		expect(changedCompile.retyped.indexOf("game.Main.main") >= 0,
 			'annotation metadata edits must invalidate typeInfo callers across modules (retyped=${changedCompile.retyped})');
@@ -95,7 +97,7 @@ class NativeAnnotationsMain {
 		expect(schemaPosition.fields[0].annotationValues[0].arguments[0].name == "floor",
 			"annotation schema edits must refresh dependent descriptor argument names");
 		expect(schemaPosition.hash != changedPosition.hash
-			&& containsString(schemaCompile.module.strings, schemaPosition.hash),
+			&& containsString(schemaCompile.artifact.hashLink().module.strings, schemaPosition.hash),
 			"annotation schema edits must refresh the emitted typeInfo descriptor hash");
 		expect(schemaCompile.retyped.indexOf("game.Main.main") >= 0,
 			"annotation schema edits must invalidate imported typeInfo callers");
@@ -107,7 +109,7 @@ class NativeAnnotationsMain {
 		expect(Type.enumEq(abstractPosition.fields[1].annotationValues[0].arguments[0].value, IntValue(7)),
 			"enum abstract value edits must refresh imported typed annotations");
 		expect(abstractPosition.hash != schemaHash
-			&& containsString(abstractCompile.module.strings, abstractPosition.hash),
+			&& containsString(abstractCompile.artifact.hashLink().module.strings, abstractPosition.hash),
 			"enum abstract value edits must refresh the emitted descriptor hash");
 		expect(abstractCompile.retyped.indexOf("game.Main.main") >= 0,
 			"enum abstract value edits must invalidate imported typeInfo callers");

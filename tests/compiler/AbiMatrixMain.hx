@@ -1,3 +1,4 @@
+using compiler.compilation.BackendArtifact.BackendArtifacts;
 import compiler.Compiler;
 import compiler.abi.AbiChangeSchema;
 import compiler.abi.PatchPlanner;
@@ -444,11 +445,11 @@ class AbiMatrixMain {
 			var result = compiler.compile("Main");
 			switch fixture.expected {
 				case NoOp if (!result.requiresReload && result.changedFunctions.length == 0
-					&& result.patchBytes == null):
+					&& result.artifact.hashLink().patchBytes == null):
 				case BodyPatch if (!result.requiresReload && result.changedFunctions.length > 0
-					&& result.patchBytes != null):
+					&& result.artifact.hashLink().patchBytes != null):
 				case ReloadFor(reason) if (result.requiresReload
-					&& result.patchBytes == null
+					&& result.artifact.hashLink().patchBytes == null
 					&& containsReason(result.reloadReasons, reason)):
 				case _:
 					throw '${fixture.name}: unexpected compiler artifact decision (${result.reloadReasons})';
@@ -561,8 +562,8 @@ class AbiMatrixMain {
 		var cleanAbi = RuntimeAbiCodec.encode(RuntimeAbi.describe(cleanResult.ir));
 		if (incrementalAbi.compare(cleanAbi) != 0)
 			throw "Incremental and clean compilation produced different runtime ABI";
-		for (name => cleanId in cleanResult.functionIds)
-			if (incrementalResult.functionIds.get(name) != cleanId)
+		for (name => cleanId in cleanResult.artifact.hashLink().functionIds)
+			if (incrementalResult.artifact.hashLink().functionIds.get(name) != cleanId)
 				throw 'Incremental and clean compilation assigned different stable ID to $name';
 		Sys.println("PASS: incremental edit agrees with clean ABI and stable identities");
 	}

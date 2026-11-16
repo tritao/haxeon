@@ -1,3 +1,4 @@
+using compiler.compilation.BackendArtifact.BackendArtifacts;
 import compiler.Compiler;
 import compiler.hl.HlWriter;
 import runtime.PatchSet;
@@ -162,8 +163,9 @@ class LambdaRenumberPatchMain {
 		var session = {
 			compiler: compiler,
 			build: build,
-			live: Runtime.load(HlWriter.encode(build.module).flatten(), build.runtimeIdentity),
-			mainId: build.functionIds.get("main")
+			live: Runtime.load(HlWriter.encode(build.artifact.hashLink().module).flatten(),
+				build.artifact.hashLink().runtimeIdentity),
+			mainId: build.artifact.hashLink().functionIds.get("main")
 		};
 		var value = Runtime.callInt(session.live, session.mainId);
 		if (value != expected)
@@ -181,15 +183,17 @@ class LambdaRenumberPatchMain {
 			fresh:Int):Void {
 		session.compiler.update("Main.hx", after);
 		var changed = session.compiler.compile("Main");
-		if (changed.requiresReload || changed.patchBytes == null)
+		if (changed.requiresReload || changed.artifact.hashLink().patchBytes == null)
 			throw '$label: required a reload: ${[for (reason in changed.reloadReasons) Std.string(reason)].join(", ")}';
 		Runtime.patchSet(session.live,
-			new PatchSet(session.build.revision, changed.revision, changed.patchBytes, changed.changedFunctions));
+			new PatchSet(session.build.revision, changed.revision, changed.artifact.hashLink().patchBytes,
+			changed.changedFunctions));
 		var now = Runtime.callInt(session.live, session.mainId);
 		if (now != stored)
 			throw '$label: stored handlers return $now instead of $stored';
-		var clean = Runtime.load(HlWriter.encode(changed.module).flatten(), changed.runtimeIdentity);
-		var value = Runtime.callInt(clean, changed.functionIds.get("main"));
+		var clean = Runtime.load(HlWriter.encode(changed.artifact.hashLink().module).flatten(),
+			changed.artifact.hashLink().runtimeIdentity);
+		var value = Runtime.callInt(clean, changed.artifact.hashLink().functionIds.get("main"));
 		Runtime.dispose(clean);
 		if (value != fresh)
 			throw '$label: the full module returned $value instead of $fresh';
@@ -206,11 +210,12 @@ class LambdaRenumberPatchMain {
 	}, after:String):Void {
 		session.compiler.update("Main.hx", after);
 		var changed = session.compiler.compile("Main");
-		if (changed.requiresReload || changed.patchBytes == null)
+		if (changed.requiresReload || changed.artifact.hashLink().patchBytes == null)
 			throw '$label: required a reload: ${[for (reason in changed.reloadReasons) Std.string(reason)].join(", ")}';
 		try {
 			Runtime.patchSet(session.live,
-				new PatchSet(session.build.revision, changed.revision, changed.patchBytes, changed.changedFunctions));
+				new PatchSet(session.build.revision, changed.revision, changed.artifact.hashLink().patchBytes,
+				changed.changedFunctions));
 		} catch (error:runtime.RuntimeError) {
 			if (error.status != runtime.RuntimeStatus.ClosuresHeld || error.message.indexOf("Ui.stored[") < 0)
 				throw '$label: refused, but not for the stored closure: ${error.message}';
@@ -229,7 +234,7 @@ class LambdaRenumberPatchMain {
 		session.compiler.update("Main.hx", after);
 		var changed = session.compiler.compile("Main");
 		var reasons = [for (reason in changed.reloadReasons) Std.string(reason)];
-		if (!changed.requiresReload && changed.patchBytes != null)
+		if (!changed.requiresReload && changed.artifact.hashLink().patchBytes != null)
 			throw '$label: patched, but nothing tells which function each name stands for';
 		if (reasons.filter(reason -> StringTools.startsWith(reason, "GeneratedFunctionsRenumbered(")).length == 0)
 			throw '$label: reloaded, but not because generated functions were renumbered: ${reasons.join(", ")}';

@@ -1,3 +1,4 @@
+using compiler.compilation.BackendArtifact.BackendArtifacts;
 import compiler.Compiler;
 import compiler.hl.HlWriter;
 import runtime.PatchSet;
@@ -36,25 +37,28 @@ class AddedLambdaPatchMain {
 		var compiler = new Compiler();
 		compiler.update("Main.hx", program("", "x * scale"));
 		var build = compiler.compile("Main"),
-			live = Runtime.load(HlWriter.encode(build.module).flatten(), build.runtimeIdentity),
-			mainId = build.functionIds.get("main");
+			live = Runtime.load(HlWriter.encode(build.artifact.hashLink().module).flatten(),
+				build.artifact.hashLink().runtimeIdentity),
+			mainId = build.artifact.hashLink().functionIds.get("main");
 		var before = Runtime.callInt(live, mainId);
 		if (before != 4141)
 			throw 'The program returned $before instead of 4141 before the edit';
 		compiler.update("Main.hx",
 			program("    var minus = (x:Int) -> x - 4;\n    handlers.push(minus);\n", "x * scale + 1"));
 		var changed = compiler.compile("Main");
-		if (changed.requiresReload || changed.patchBytes == null)
-			throw 'Adding a lambda required a reload (requiresReload ${changed.requiresReload}, patch ${changed.patchBytes != null}): '
+		if (changed.requiresReload || changed.artifact.hashLink().patchBytes == null)
+			throw 'Adding a lambda required a reload (requiresReload ${changed.requiresReload}, patch ${changed.artifact.hashLink().patchBytes != null}): '
 				+ [for (reason in changed.reloadReasons) Std.string(reason)].join(", ");
 		Runtime.patchSet(live,
-			new PatchSet(build.revision, changed.revision, changed.patchBytes, changed.changedFunctions));
+			new PatchSet(build.revision, changed.revision, changed.artifact.hashLink().patchBytes,
+			changed.changedFunctions));
 		// The kept panel's two closures: 11, and the edited 31. A new panel: 11 + 6 + 31.
 		var after = Runtime.callInt(live, mainId);
 		if (after != 4248)
 			throw 'The patched module returned $after instead of 4248';
-		var fresh = Runtime.load(HlWriter.encode(changed.module).flatten(), changed.runtimeIdentity);
-		var clean = Runtime.callInt(fresh, changed.functionIds.get("main"));
+		var fresh = Runtime.load(HlWriter.encode(changed.artifact.hashLink().module).flatten(),
+			changed.artifact.hashLink().runtimeIdentity);
+		var clean = Runtime.callInt(fresh, changed.artifact.hashLink().functionIds.get("main"));
 		Runtime.dispose(fresh);
 		if (clean != 4848)
 			throw 'The full module returned $clean instead of 4848';

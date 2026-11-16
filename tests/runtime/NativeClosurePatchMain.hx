@@ -1,3 +1,4 @@
+using compiler.compilation.BackendArtifact.BackendArtifacts;
 import compiler.Compiler;
 import compiler.hl.HlWriter;
 import runtime.PatchSet;
@@ -18,16 +19,18 @@ class NativeClosurePatchMain {
 			+ "; } } function main():Int { return Calc.run(); }";
 		compiler.update("Main.hx", program(1));
 		var first = compiler.compile("Main"),
-			live = Runtime.load(HlWriter.encode(first.module).flatten(), first.runtimeIdentity),
-			mainId = first.functionIds.get("main");
+			live = Runtime.load(HlWriter.encode(first.artifact.hashLink().module).flatten(),
+				first.artifact.hashLink().runtimeIdentity),
+			mainId = first.artifact.hashLink().functionIds.get("main");
 		if (Runtime.callInt(live, mainId) != 5)
 			throw "The native-closure program did not run correctly before the edit";
 		compiler.update("Main.hx", program(2));
 		var changed = compiler.compile("Main");
-		if (changed.requiresReload || changed.patchBytes == null)
+		if (changed.requiresReload || changed.artifact.hashLink().patchBytes == null)
 			throw "A body edit did not produce a compatible patch";
 		Runtime.patchSet(live,
-			new PatchSet(first.revision, changed.revision, changed.patchBytes, changed.changedFunctions));
+			new PatchSet(first.revision, changed.revision, changed.artifact.hashLink().patchBytes,
+			changed.changedFunctions));
 		if (Runtime.callInt(live, mainId) != 6)
 			throw "The patched function kept its old body";
 		Runtime.dispose(live);

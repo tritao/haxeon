@@ -1,3 +1,4 @@
+using compiler.compilation.BackendArtifact.BackendArtifacts;
 import compiler.Compiler;
 import compiler.Frontend;
 import compiler.backend.wasm.WasmBackend;
@@ -30,7 +31,7 @@ class EnumDynamicOrderMain {
 		var result = compiler.compile("Main"),
 			path = temp + "/enum-order-" + target + inlining + (target == "hl" ? ".hl" : ".wasm");
 		if (target == "hl")
-			sys.io.File.saveBytes(path, HlWriter.encode(result.module).flatten());
+			sys.io.File.saveBytes(path, HlWriter.encode(result.artifact.hashLink().module).flatten());
 		else
 			sys.io.File.saveBytes(path, new WasmBackend().compile(result.ir, {
 				target: target == "wasm32" ? Wasm32 : WasmGc,

@@ -1,3 +1,4 @@
+using compiler.compilation.BackendArtifact.BackendArtifacts;
 import compiler.Compiler;
 import compiler.Frontend;
 import compiler.backend.Backend.BackendTarget;
@@ -14,8 +15,9 @@ class StaticInitOrderMain {
 		compiler.update("Consumer.hx",
 			"import Provider; class Consumer { public static var value:Int = Provider.value + 2; } function main():Int { return Consumer.value; }");
 		var result = compiler.compile("Consumer"),
-			live = Runtime.load(HlWriter.encode(result.module).flatten(), result.runtimeIdentity);
-		var value = Runtime.callInt(live, result.functionIds.get("main"));
+			live = Runtime.load(HlWriter.encode(result.artifact.hashLink().module).flatten(),
+				result.artifact.hashLink().runtimeIdentity);
+		var value = Runtime.callInt(live, result.artifact.hashLink().functionIds.get("main"));
 		if (value != 42)
 			throw "Static initializers did not respect module dependency order";
 		Runtime.dispose(live);
@@ -36,8 +38,9 @@ class StaticInitOrderMain {
 		];
 		if (helpers.length < 10)
 			throw "Static initialization was not split into bounded functions";
-		live = Runtime.load(HlWriter.encode(chunked.module).flatten(), chunked.runtimeIdentity);
-		if (Runtime.callInt(live, chunked.functionIds.get("main")) != 82)
+		live = Runtime.load(HlWriter.encode(chunked.artifact.hashLink().module).flatten(),
+			chunked.artifact.hashLink().runtimeIdentity);
+		if (Runtime.callInt(live, chunked.artifact.hashLink().functionIds.get("main")) != 82)
 			throw "Static initializer order changed across chunks";
 		Runtime.dispose(live);
 		// A dependency declared later in the same module, in the same class, or behind a call still runs first.
@@ -75,8 +78,9 @@ class StaticInitOrderMain {
 			compiler = new Compiler();
 			compiler.update("Main.hx", source);
 			var ordered = compiler.compile("Main");
-			live = Runtime.load(HlWriter.encode(ordered.module).flatten(), ordered.runtimeIdentity);
-			if (Runtime.callInt(live, ordered.functionIds.get("main")) != 7)
+			live = Runtime.load(HlWriter.encode(ordered.artifact.hashLink().module).flatten(),
+				ordered.artifact.hashLink().runtimeIdentity);
+			if (Runtime.callInt(live, ordered.artifact.hashLink().functionIds.get("main")) != 7)
 				throw 'Static initializers ran before their dependency: $description';
 			Runtime.dispose(live);
 		}
@@ -115,8 +119,9 @@ class StaticInitOrderMain {
 				|| writes.indexOf("browser.Browser.categories") < 0
 				|| writes.indexOf("catalog.Catalog.categories") > writes.indexOf("browser.Browser.categories"))
 				throw 'Cross-module comprehension initialized before its provider (incremental=$incremental): $writes';
-			live = Runtime.load(HlWriter.encode(result.module).flatten(), result.runtimeIdentity);
-			if (Runtime.callInt(live, result.functionIds.get("main")) != (incremental ? 3 : 2))
+			live = Runtime.load(HlWriter.encode(result.artifact.hashLink().module).flatten(),
+				result.artifact.hashLink().runtimeIdentity);
+			if (Runtime.callInt(live, result.artifact.hashLink().functionIds.get("main")) != (incremental ? 3 : 2))
 				throw "Cross-module comprehension produced the wrong categories";
 			Runtime.dispose(live);
 			for (target in [Wasm32, WasmGc]) {
@@ -147,7 +152,8 @@ class StaticInitOrderMain {
 		compiler.update("Main.hx",
 			'class Missing { public static final values:Array<Int> = null; } class Consumer { public static final count:Int = Missing.values.length; } function main():Int return Consumer.count;');
 		var nullResult = compiler.compile("Main");
-		var failed = runBytecode(SuiteOutput.path("static-init-null.hl"), HlWriter.encode(nullResult.module).flatten());
+		var failed = runBytecode(SuiteOutput.path("static-init-null.hl"),
+			HlWriter.encode(nullResult.artifact.hashLink().module).flatten());
 		if (failed.status == 0 || failed.output.indexOf('Cannot dereference null static "Missing.values"') < 0)
 			throw "Null static dereference at startup did not report an error: " + failed.output;
 		Sys.println("PASS: static initializers respect dependency order");

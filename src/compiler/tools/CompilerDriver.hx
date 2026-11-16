@@ -2,6 +2,7 @@ package compiler.tools;
 
 import compiler.core.IrPassMeter;
 import compiler.Compiler.CompileResult;
+import compiler.compilation.BackendArtifact.BackendArtifacts;
 import compiler.core.CancellationToken;
 import compiler.ffi.CHeaderEmitter;
 import compiler.backend.Backend;
@@ -59,7 +60,8 @@ class CompilerDriver {
 				outputIndices:Null<Map<String, Int>> = null;
 			// A live edit that patches publishes the patch and its stamp before the 40 MB module and the side files are written:
 			// the host applies the patch from its own memory, and a reload waits for the `.live.full` marker that vouches for them.
-			var deferFullModule = !isWasm && request.live && result.patchBytes != null && !result.requiresReload;
+			var patchBytes = isWasm ? null : BackendArtifacts.hashLink(result.artifact).patchBytes;
+			var deferFullModule = !isWasm && request.live && patchBytes != null && !result.requiresReload;
 			// An unchanged build leaves a publication the host may not have polled yet exactly as it is.
 			var publishes = !isWasm && (!result.unchanged || !hasPublication(request.output, result));
 			if (!isWasm)
@@ -85,7 +87,7 @@ class CompilerDriver {
 				outputBytes = session == null ? encode() : session.wasmModule(result.ir, Json.stringify(options),
 					encode);
 			} else {
-				outputIndices = result.functionIndices;
+				outputIndices = BackendArtifacts.hashLink(result.artifact).functionIndices;
 				if (!deferFullModule)
 					writeModule(result, request.output, session);
 			}
@@ -95,12 +97,14 @@ class CompilerDriver {
 			var allocationAfterEncode = AllocationMeter.sample();
 			var stampedAt = -1.0;
 			var publishPatch = function() {
-				var identities = [for (name => id in result.functionIds) {
+				var build = BackendArtifacts.hashLink(result.artifact);
+				var identities = [for (name => id in build.functionIds) {
 					name:name, id:id
 				}];
 				identities.sort(function(a, b) return Reflect.compare(a.name, b.name));
-				if (result.patchBytes != null)
-					File.saveBytes(request.output + ".hlp", result.patchBytes);
+				var patch = build.patchBytes;
+				if (patch != null)
+					File.saveBytes(request.output + ".hlp", patch);
 				else
 					deleteIfExists(request.output + ".hlp");
 				// The host applies a patch from this summary alone; the full description (every function id) is for reloads.
@@ -108,10 +112,10 @@ class CompilerDriver {
 				File.saveContent(summary + ".tmp", Json.stringify({
 					revision: result.revision,
 					baseRevision: result.baseRevision,
-					moduleIdentity: Base64.encode(result.runtimeIdentity.sub(4, 16)),
+					moduleIdentity: Base64.encode(build.runtimeIdentity.sub(4, 16)),
 					requiresReload: result.requiresReload,
 					reloadReasons: [for (reason in result.reloadReasons) AbiChangeSchema.encode(reason)],
-					patchAvailable: result.patchBytes != null,
+					patchAvailable: patch != null,
 					changedFunctions: result.changedFunctions,
 					identities: ([]: Array<Dynamic>)
 				}));
@@ -122,10 +126,10 @@ class CompilerDriver {
 					revision: result.revision,
 					baseRevision: result.baseRevision,
 					unchanged: result.unchanged,
-					moduleIdentity: Base64.encode(result.runtimeIdentity.sub(4, 16)),
+					moduleIdentity: Base64.encode(build.runtimeIdentity.sub(4, 16)),
 					requiresReload: result.requiresReload,
 					reloadReasons: [for (reason in result.reloadReasons) AbiChangeSchema.encode(reason)],
-					patchAvailable: result.patchBytes != null,
+					patchAvailable: patch != null,
 					changedFunctions: result.changedFunctions,
 					identities: identities
 				}));
@@ -133,7 +137,7 @@ class CompilerDriver {
 				// The live host reads this small stamp every tick, and the description only when the stamp changes.
 				var stamp = request.output + ".live.stamp";
 				File.saveContent(stamp + ".tmp",
-					Base64.encode(result.runtimeIdentity.sub(4, 16)) + ":" + result.revision);
+					Base64.encode(build.runtimeIdentity.sub(4, 16)) + ":" + result.revision);
 				replaceFile(stamp + ".tmp", stamp);
 				stampedAt = Sys.time() * 1000.0;
 				if (published != null)
@@ -153,7 +157,7 @@ class CompilerDriver {
 			if (!isWasm)
 				File.saveBytes(request.output + ".functions", Bytes.ofString(functionMap(outputIndices)));
 			if (publishes) {
-				File.saveBytes(request.output + ".hli", result.runtimeIdentity);
+				File.saveBytes(request.output + ".hli", BackendArtifacts.hashLink(result.artifact).runtimeIdentity);
 				if (!deferFullModule)
 					publishPatch();
 			}
@@ -177,7 +181,8 @@ class CompilerDriver {
 			// Every file a reload reads now belongs to the published revision; the marker is the host's licence to load them.
 			if (!isWasm)
 				File.saveContent(request.output + ".live.full",
-					Base64.encode(result.runtimeIdentity.sub(4, 16)) + ":" + result.revision);
+					Base64.encode(BackendArtifacts.hashLink(result.artifact).runtimeIdentity.sub(4, 16)) + ":"
+					+ result.revision);
 			// The history this revision was assembled from is recorded beside it once the session is idle, so a session that
 			// starts after this one patches the module it published.
 			if (!isWasm && request.live && session != null)
@@ -254,14 +259,17 @@ class CompilerDriver {
 		return FileSystem.exists(stamp)
 			&& FileSystem.exists(output + ".live.json")
 			&& FileSystem.exists(output + ".hli")
-			&& File.getContent(stamp) == Base64.encode(result.runtimeIdentity.sub(4, 16)) + ":" + result.revision;
+			&& File.getContent(stamp)
+			== Base64.encode(BackendArtifacts.hashLink(result.artifact).runtimeIdentity.sub(4, 16))
+			+ ":" + result.revision;
 	}
 
 	static function writeModule(result:CompileResult, output:String, session:Null<CompilerSession>):Void {
+		var module = BackendArtifacts.hashLink(result.artifact).module;
 		if (session == null)
-			HlWriter.writeFile(result.module, output);
+			HlWriter.writeFile(module, output);
 		else
-			session.writeHashLink(result.module, output);
+			session.writeHashLink(module, output);
 	}
 
 	static function deleteIfExists(path:String):Void
@@ -378,7 +386,7 @@ class CompilerDriver {
 	}
 
 	static function dumpFunction(result:CompileResult, index:Int, report:String->Void):Void
-		for (fn in result.module.functions)
+		for (fn in BackendArtifacts.hashLink(result.artifact).module.functions)
 			if (fn.functionIndex == index) {
 				report('function ${fn.functionIndex} type=${fn.type} registers=${[for (register in fn.registers) Std.string(register)].join(",")}');
 				for (instructionIndex in 0...fn.opcodes.length)

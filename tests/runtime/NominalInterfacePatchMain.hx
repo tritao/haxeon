@@ -1,3 +1,4 @@
+using compiler.compilation.BackendArtifact.BackendArtifacts;
 import compiler.Compiler;
 import compiler.hl.HlWriter;
 import runtime.PatchSet;
@@ -29,36 +30,41 @@ class NominalInterfacePatchMain {
 		compiler.update("Contract.hx", contract(1));
 		compiler.update("Main.hx", source(false, 1));
 		var first = compiler.compile("Main"),
-			live = Runtime.load(HlWriter.encode(first.module).flatten(), first.runtimeIdentity);
-		var retained = Runtime.retainObject(live, first.functionIds.get("Main.make"));
-		if (Runtime.callIntObject(live, first.functionIds.get("Main.probe"), retained) != 42)
+			live = Runtime.load(HlWriter.encode(first.artifact.hashLink().module).flatten(),
+				first.artifact.hashLink().runtimeIdentity);
+		var retained = Runtime.retainObject(live, first.artifact.hashLink().functionIds.get("Main.make"));
+		if (Runtime.callIntObject(live, first.artifact.hashLink().functionIds.get("Main.probe"), retained) != 42)
 			throw "Initial conformance failed";
 		compiler.update("Contract.hx", contract(2));
 		compiler.update("Main.hx", source(false, 2));
 		var changed = compiler.compile("Main");
 		if (changed.requiresReload
-			|| changed.patchBytes == null) throw "Re-emitting the interface module required reload";
+			|| changed.artifact.hashLink().patchBytes == null) throw "Re-emitting the interface module required reload";
 		Runtime.patchSet(live,
-			new PatchSet(first.revision, changed.revision, changed.patchBytes, changed.changedFunctions));
-		if (Runtime.callIntObject(live, changed.functionIds.get("Main.probe"), retained) != 42)
+			new PatchSet(first.revision, changed.revision, changed.artifact.hashLink().patchBytes,
+			changed.changedFunctions));
+		if (Runtime.callIntObject(live, changed.artifact.hashLink().functionIds.get("Main.probe"), retained) != 42)
 			throw "Pre-patch object lost conformance";
 		compiler.update("Main.hx", source(true, 2));
 		var appended = compiler.compile("Main");
-		if (appended.requiresReload || appended.patchBytes == null) throw "Added implementation required reload";
+		if (appended.requiresReload
+			|| appended.artifact.hashLink().patchBytes == null) throw "Added implementation required reload";
 		Runtime.patchSet(live,
-			new PatchSet(changed.revision, appended.revision, appended.patchBytes, appended.changedFunctions));
-		if (Runtime.callIntObject(live, appended.functionIds.get("Main.probe"), retained) != 42
-			|| Runtime.callInt(live, appended.functionIds.get("main")) != 42)
+			new PatchSet(changed.revision, appended.revision, appended.artifact.hashLink().patchBytes,
+			appended.changedFunctions));
+		if (Runtime.callIntObject(live, appended.artifact.hashLink().functionIds.get("Main.probe"), retained) != 42
+			|| Runtime.callInt(live, appended.artifact.hashLink().functionIds.get("main")) != 42)
 			throw "Appending an implementation changed interface identity";
 		Runtime.dispose(live);
 		var freshCompiler = configuredCompiler();
 		freshCompiler.update("Contract.hx", contract(3));
 		freshCompiler.update("Main.hx", source(true, 3));
 		var fresh = freshCompiler.compile("Main"),
-			reloaded = Runtime.load(HlWriter.encode(fresh.module).flatten(), fresh.runtimeIdentity);
+			reloaded = Runtime.load(HlWriter.encode(fresh.artifact.hashLink().module).flatten(),
+				fresh.artifact.hashLink().runtimeIdentity);
 		hl.Gc.major();
 		Runtime.retryRetirements();
-		var result = Runtime.callIntObject(reloaded, fresh.functionIds.get("Main.probe"), retained);
+		var result = Runtime.callIntObject(reloaded, fresh.artifact.hashLink().functionIds.get("Main.probe"), retained);
 		if (result != 42) throw "Old object lost conformance after reload: " + result;
 		var changedCompiler = configuredCompiler();
 		changedCompiler.update("Contract.hx", contract(4).split("score():Int").join("score(extra:Int):Int"));
@@ -66,8 +72,10 @@ class NominalInterfacePatchMain {
 			source(true, 4).split("score():Int").join("score(extra:Int):Int").split(".score()").join(".score(0)")
 			+ "function reject(value:Dynamic):Int return Std.isOfType(value,Reader)?1:42;\n");
 		var incompatible = changedCompiler.compile("Main"),
-			replacement = Runtime.load(HlWriter.encode(incompatible.module).flatten(), incompatible.runtimeIdentity);
-		if (Runtime.callIntObject(replacement, incompatible.functionIds.get("Main.reject"), retained) != 42)
+			replacement = Runtime.load(HlWriter.encode(incompatible.artifact.hashLink().module).flatten(),
+				incompatible.artifact.hashLink().runtimeIdentity);
+		if (Runtime.callIntObject(replacement, incompatible.artifact.hashLink().functionIds.get("Main.reject"),
+			retained) != 42)
 			throw "An incompatible reloaded interface accepted the old object";
 		retained.release();
 		Runtime.dispose(reloaded);

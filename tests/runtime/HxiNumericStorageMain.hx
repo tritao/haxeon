@@ -1,3 +1,4 @@
+using compiler.compilation.BackendArtifact.BackendArtifacts;
 import compiler.Compiler;
 import compiler.hl.HlWriter;
 import compiler.runtime.CompilerIntrinsics;
@@ -132,7 +133,7 @@ function main():Int {
 		for (fn in result.ir.functions)
 			if (fn.name.indexOf("BatchBuffer.") >= 0)
 				throw "Unused buffer helpers must not reach the final program";
-		File.saveBytes(Sys.args()[0], HlWriter.encode(result.module).flatten());
+		File.saveBytes(Sys.args()[0], HlWriter.encode(result.artifact.hashLink().module).flatten());
 		// A later compile can demand a previously unused buffer and its methods.
 		var replacement = Sys.args().indexOf("--replace-program") >= 0;
 		// The replacement adds a static variable, which a running module cannot take, so it reloads: added methods alone
@@ -154,15 +155,16 @@ function main():Int {
 '));
 		var incremental = compiler.compile("Main");
 		if (replacement
-			&& (!incremental.requiresReload || incremental.module.natives.length >= result.module.natives.length))
+			&& (!incremental.requiresReload || incremental.artifact.hashLink().module.natives.length
+			>= result.artifact.hashLink().module.natives.length))
 			throw "Program replacement must exercise a reload with fewer runtime imports (reasons: "
 				+ incremental.reloadReasons.join(", ") + ")";
 		if (!Lambda.exists(incremental.ir.functions, fn -> fn.name.indexOf("BatchBuffer.") >= 0))
 			throw "A previously unused buffer must become available on demand";
 		// Reloads can remove runtime imports, moving every user-function slot.
 		// Check the method tables as well as executing the replacement artifact.
-		var functionSlots = [for (fn in incremental.module.functions) fn.functionIndex => true];
-		for (type in incremental.module.types)
+		var functionSlots = [for (fn in incremental.artifact.hashLink().module.functions) fn.functionIndex => true];
+		for (type in incremental.artifact.hashLink().module.types)
 			switch type {
 				case Object(_, _, _, _, methods, _), Structure(_, _, _, methods, _):
 					for (method in methods)
@@ -170,8 +172,9 @@ function main():Int {
 							throw "Reload retained a stale object method slot";
 				default:
 			}
-		File.saveBytes(Sys.args()[0] + ".incremental.hl", HlWriter.encode(incremental.module).flatten());
+		File.saveBytes(Sys.args()[0] + ".incremental.hl",
+			HlWriter.encode(incremental.artifact.hashLink().module).flatten());
 		if (replacement)
-			File.saveBytes(Sys.args()[0], HlWriter.encode(incremental.module).flatten());
+			File.saveBytes(Sys.args()[0], HlWriter.encode(incremental.artifact.hashLink().module).flatten());
 	}
 }

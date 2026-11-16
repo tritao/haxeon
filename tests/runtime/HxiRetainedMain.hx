@@ -1,3 +1,4 @@
+using compiler.compilation.BackendArtifact.BackendArtifacts;
 import compiler.Compiler;
 import compiler.hl.HlWriter;
 import compiler.runtime.CompilerIntrinsics;
@@ -36,6 +37,6 @@ class HxiRetainedMain {
 			compiler.update("Main.hx", source);
 		}
 		var result = compiler.compile("Main");
-		File.saveBytes(output, HlWriter.encode(result.module).flatten());
+		File.saveBytes(output, HlWriter.encode(result.artifact.hashLink().module).flatten());
 	}
 }

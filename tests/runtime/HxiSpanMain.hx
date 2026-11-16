@@ -1,3 +1,4 @@
+using compiler.compilation.BackendArtifact.BackendArtifacts;
 import compiler.Compiler;
 import compiler.hl.HlWriter;
 import compiler.runtime.CompilerIntrinsics;
@@ -30,7 +31,7 @@ class HxiSpanMain {
 			+ '\textern fn pick(bias: ptr<const<fixture_bias>>, values: ptr<const<f64>> @in_array("count"), count: u32, picks: ptr<const<fixture_pick>> @in_array("pickCount"), pickCount: u32) -> f64 @symbol("native_fixture_span_pick");\n'
 			+ '}');
 		compiler.update("Main.hx", MAIN);
-		File.saveBytes(output, HlWriter.encode(compiler.compile("Main").module).flatten());
+		File.saveBytes(output, HlWriter.encode(compiler.compile("Main").artifact.hashLink().module).flatten());
 	}
 
 	static final MAIN =

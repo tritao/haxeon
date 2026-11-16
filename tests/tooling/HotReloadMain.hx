@@ -1,3 +1,4 @@
+using compiler.compilation.BackendArtifact.BackendArtifacts;
 import compiler.Compiler;
 import compiler.Compiler.CompileResult;
 import compiler.abi.PatchPlanner.PatchDecision;
@@ -29,7 +30,7 @@ import sys.io.File;
 
 class HotReloadMain {
 	static function requireFunctionId(result:CompileResult, name:String):Int {
-		var id = result.functionIds.get(name);
+		var id = result.artifact.hashLink().functionIds.get(name);
 		if (id == null)
 			throw 'compiled module is missing function $name';
 		return id;
@@ -70,7 +71,8 @@ class HotReloadMain {
 			readIndex = requireFunctionId(initial, "Probe.read"),
 			exceptionIndex = requireFunctionId(initial, "ExceptionProbe.probe"),
 			workIndex = requireFunctionId(initial, "Worker.run");
-		var loaded = Runtime.load(HlWriter.encode(initial.module).flatten(), initial.runtimeIdentity);
+		var loaded = Runtime.load(HlWriter.encode(initial.artifact.hashLink().module).flatten(),
+			initial.artifact.hashLink().runtimeIdentity);
 		if (Runtime.callInt(loaded, valueIndex) != 42)
 			throw "initial generation did not return 42";
 		var initialLocation = Runtime.jitLocation(loaded, valueIndex);
@@ -87,15 +89,16 @@ class HotReloadMain {
 		compiler.update("Value.hx",
 			"function value():Int { var ratio:Float = 2.75; var label:String = \"patched source\"; var result = 0; while (result < 43) { result = result + 1; } return (result * 2) >> 1; }");
 		var changed = compiler.compile("Main");
-		var decoded = HlPatchReader.decode(changed.patchBytes);
-		if (decoded.moduleId.compare(initial.runtimeIdentity.sub(4, 16)) != 0)
+		var decoded = HlPatchReader.decode(changed.artifact.hashLink().patchBytes);
+		if (decoded.moduleId.compare(initial.artifact.hashLink().runtimeIdentity.sub(4, 16)) != 0)
 			throw "HLP module identity does not match its load manifest";
-		if (decoded.baseInts != initial.module.ints.length || decoded.ints.indexOf(43) < 0)
+		if (decoded.baseInts != initial.artifact.hashLink().module.ints.length || decoded.ints.indexOf(43) < 0)
 			throw "HLP did not encode the integer symbol delta";
-		if (decoded.baseFloats != initial.module.floats.length || decoded.floats.length != 1
+		if (decoded.baseFloats != initial.artifact.hashLink().module.floats.length || decoded.floats.length != 1
 			|| decoded.floats[0] != 2.75)
 			throw "HLP did not encode the source float symbol delta";
-		if (decoded.baseStrings != initial.module.strings.length || decoded.strings.indexOf("patched source") < 0)
+		if (decoded.baseStrings != initial.artifact.hashLink().module.strings.length
+			|| decoded.strings.indexOf("patched source") < 0)
 			throw "HLP did not encode the source string symbol delta";
 		if (decoded.debugFiles.indexOf("Value.hx") < 0 || decoded.functions.length != changed.changedFunctions.length)
 			throw "HLP did not preserve opcode-indexed source debug metadata";
@@ -106,26 +109,27 @@ class HotReloadMain {
 				if (location.file < 0 || location.file >= decoded.debugFiles.length || location.line < 1)
 					throw "HLP contains an invalid source debug location";
 		}
-		var nativeDecoded = Runtime.inspectPatch(changed.patchBytes);
+		var nativeDecoded = Runtime.inspectPatch(changed.artifact.hashLink().patchBytes);
 		if (nativeDecoded.baseRevision != decoded.baseRevision
 			|| nativeDecoded.revision != decoded.revision
 			|| nativeDecoded.functionCount != decoded.functions.length)
 			throw 'native and Haxe HLP decoders disagree: ${nativeDecoded.baseRevision}/${nativeDecoded.revision}/${nativeDecoded.functionCount} vs ${decoded.baseRevision}/${decoded.revision}/${decoded.functions.length}';
 		try {
-			Runtime.inspectPatch(changed.patchBytes.sub(0, changed.patchBytes.length - 1));
+			Runtime.inspectPatch(changed.artifact.hashLink().patchBytes.sub(0,
+				changed.artifact.hashLink().patchBytes.length - 1));
 			throw "native decoder accepted truncated HLP";
 		} catch (error:RuntimeError) {
 			if (error.status != RuntimeStatus.BadFormat)
 				throw error;
 		}
-		var compilerIndex = changed.functionIds.get("Value.value");
+		var compilerIndex = changed.artifact.hashLink().functionIds.get("Value.value");
 		// Inlined callers also need regeneration when Value.value changes.
 		if (changed.changedFunctions.length != 3
 			|| changed.changedFunctions.indexOf(compilerIndex) < 0
 			|| changed.changedFunctions.indexOf(readIndex) < 0
 			|| changed.changedFunctions.indexOf(requireFunctionId(initial, "main")) < 0)
 			throw 'compiler reported unexpected changed functions: ${changed.changedFunctions}';
-		var corruptHash = changed.patchBytes.sub(0, changed.patchBytes.length),
+		var corruptHash = changed.artifact.hashLink().patchBytes.sub(0, changed.artifact.hashLink().patchBytes.length),
 			hashPosition = skipIndex(corruptHash, 24);
 		corruptHash.set(hashPosition, corruptHash.get(hashPosition) ^ 1);
 		try {
@@ -137,7 +141,8 @@ class HotReloadMain {
 				throw error;
 		}
 		Runtime.patchSet(loaded,
-			new PatchSet(liveRevision, changed.revision, changed.patchBytes, changed.changedFunctions));
+			new PatchSet(liveRevision, changed.revision, changed.artifact.hashLink().patchBytes,
+			changed.changedFunctions));
 		liveRevision = changed.revision;
 		if (Runtime.patchJitCount(loaded) != changed.changedFunctions.length)
 			throw "one-function patch did not JIT exactly one function";
@@ -159,7 +164,7 @@ class HotReloadMain {
 		compiler.update("ExceptionProbe.hx",
 			"function probe():Int { try { throw \"probe\"; } catch (error:Int) { return 0; } catch (error:String) { return 42; } }");
 		var exceptionPatch = compiler.compile("Main"),
-			exceptionDecoded = HlPatchReader.decode(exceptionPatch.patchBytes),
+			exceptionDecoded = HlPatchReader.decode(exceptionPatch.artifact.hashLink().patchBytes),
 			hasTrap = false,
 			hasThrow = false,
 			hasSafeCast = false,
@@ -180,7 +185,8 @@ class HotReloadMain {
 			}
 		if (!hasTrap || !hasThrow || !hasSafeCast || !hasRethrow || !hasType)
 			throw "typed exception HLP omitted trap, throw, type, cast, or rethrow opcodes";
-		Runtime.patchSet(loaded, new PatchSet(liveRevision, exceptionPatch.revision, exceptionPatch.patchBytes,
+		Runtime.patchSet(loaded,
+			new PatchSet(liveRevision, exceptionPatch.revision, exceptionPatch.artifact.hashLink().patchBytes,
 			exceptionPatch.changedFunctions));
 		liveRevision = exceptionPatch.revision;
 		if (Runtime.callInt(loaded, exceptionIndex) != 42)
@@ -192,7 +198,8 @@ class HotReloadMain {
 			compiler.update("Value.hx", 'function value():Int { return $expected; }');
 			var iteration = compiler.compile("Main");
 			Runtime.patchSet(loaded,
-				new PatchSet(liveRevision, iteration.revision, iteration.patchBytes, iteration.changedFunctions));
+				new PatchSet(liveRevision, iteration.revision, iteration.artifact.hashLink().patchBytes,
+				iteration.changedFunctions));
 			liveRevision = iteration.revision;
 			if (Runtime.callInt(loaded, readIndex) != expected)
 				throw 'stress patch $i returned the wrong value';
@@ -211,14 +218,15 @@ class HotReloadMain {
 			|| pair.changedFunctions.indexOf(readIndex) < 0
 			|| pair.changedFunctions.indexOf(requireFunctionId(initial, "main")) < 0)
 			throw "two-function edit did not produce an atomic pair";
-		var pairDecoded = HlPatchReader.decode(pair.patchBytes),
+		var pairDecoded = HlPatchReader.decode(pair.artifact.hashLink().patchBytes),
 			hasRelocation = false;
 		for (patchedFunction in pairDecoded.functions)
 			if (patchedFunction.relocations.length > 0)
 				hasRelocation = true;
 		if (!hasRelocation)
 			throw "patched calls were not encoded as stable-ID relocations";
-		Runtime.patchSet(loaded, new PatchSet(liveRevision, pair.revision, pair.patchBytes, pair.changedFunctions));
+		Runtime.patchSet(loaded,
+			new PatchSet(liveRevision, pair.revision, pair.artifact.hashLink().patchBytes, pair.changedFunctions));
 		liveRevision = pair.revision;
 		if (Runtime.patchJitCount(loaded) - beforePair != pair.changedFunctions.length)
 			throw "patch did not JIT exactly the edited functions and their inlined caller";
@@ -236,7 +244,8 @@ class HotReloadMain {
 		Sys.sleep(0.01);
 		compiler.update("Value.hx", "function value():Int { return 47; }");
 		var concurrentPatch = compiler.compile("Main");
-		Runtime.patchSet(loaded, new PatchSet(liveRevision, concurrentPatch.revision, concurrentPatch.patchBytes,
+		Runtime.patchSet(loaded,
+			new PatchSet(liveRevision, concurrentPatch.revision, concurrentPatch.artifact.hashLink().patchBytes,
 			concurrentPatch.changedFunctions));
 		liveRevision = concurrentPatch.revision;
 		if (!finished.wait(5.0) || workerResult != 39088169)
@@ -284,7 +293,8 @@ class HotReloadMain {
 		for (stage in 1...4) {
 			Runtime.injectPatchFailure(loaded, stage);
 			try {
-				Runtime.patchSet(loaded, new PatchSet(liveRevision, failurePatch.revision, failurePatch.patchBytes,
+				Runtime.patchSet(loaded,
+					new PatchSet(liveRevision, failurePatch.revision, failurePatch.artifact.hashLink().patchBytes,
 					failurePatch.changedFunctions));
 				throw 'injected patch failure $stage unexpectedly succeeded';
 			} catch (error:RuntimeError) {
@@ -299,7 +309,8 @@ class HotReloadMain {
 				throw 'injected patch failure $stage changed published state';
 		}
 		Runtime.patchSet(loaded,
-			new PatchSet(liveRevision, failurePatch.revision, failurePatch.patchBytes, failurePatch.changedFunctions));
+			new PatchSet(liveRevision, failurePatch.revision, failurePatch.artifact.hashLink().patchBytes,
+			failurePatch.changedFunctions));
 		liveRevision = failurePatch.revision;
 		if (Runtime.liveRevision(loaded) != liveRevision || Runtime.callInt(loaded, readIndex) != 49)
 			throw "patch did not recover after injected staging failures";
@@ -325,7 +336,8 @@ class HotReloadMain {
 
 		try {
 			Runtime.patchSet(loaded,
-				new PatchSet(liveRevision - 1, liveRevision, failurePatch.patchBytes, failurePatch.changedFunctions));
+				new PatchSet(liveRevision - 1, liveRevision, failurePatch.artifact.hashLink().patchBytes,
+				failurePatch.changedFunctions));
 			throw "stale patch unexpectedly succeeded";
 		} catch (error:RuntimeError) {
 			if (error.status != RuntimeStatus.StalePatch)
@@ -343,7 +355,8 @@ class HotReloadMain {
 		var foreignPatch = foreign.compile("Main");
 		try {
 			Runtime.patchSet(loaded,
-				new PatchSet(liveRevision, liveRevision + 1, foreignPatch.patchBytes, foreignPatch.changedFunctions));
+				new PatchSet(liveRevision, liveRevision + 1, foreignPatch.artifact.hashLink().patchBytes,
+				foreignPatch.changedFunctions));
 			throw "foreign-module patch unexpectedly succeeded";
 		} catch (error:RuntimeError) {
 			if (error.status != RuntimeStatus.Incompatible)
@@ -382,7 +395,8 @@ class HotReloadMain {
 	static function applyCompetingPatch(loaded:LoadedModule, patch:CompileResult, baseRevision:Int):String {
 		try {
 			Runtime.patchSet(loaded,
-				new PatchSet(baseRevision, patch.revision, patch.patchBytes, patch.changedFunctions));
+				new PatchSet(baseRevision, patch.revision, patch.artifact.hashLink().patchBytes,
+				patch.changedFunctions));
 			return "ok";
 		} catch (error:RuntimeError) {
 			return error.status == RuntimeStatus.StalePatch ? "stale" : 'runtime-${error.status}';
@@ -399,8 +413,9 @@ class HotReloadMain {
 		compiler.update("Main.hx",
 			"class Box { public var value:Int; public function new(value:Int):Void { this.value = value; } } function make():Box { return new Box(40); } function read(box:Box):Int { return box.value; } function fail():Int { throw new Box(1); } function main():Int { return read(make()); }");
 		var initial = compiler.compile("Main"),
-			loaded = Runtime.load(HlWriter.encode(initial.module).flatten(), initial.runtimeIdentity);
-		var retained = Runtime.retainObject(loaded, initial.functionIds.get("Main.make"));
+			loaded = Runtime.load(HlWriter.encode(initial.artifact.hashLink().module).flatten(),
+				initial.artifact.hashLink().runtimeIdentity);
+		var retained = Runtime.retainObject(loaded, initial.artifact.hashLink().functionIds.get("Main.make"));
 		var retirement = Runtime.retirementStatus(loaded);
 		if (retirement.ownedNativeRoots == 0 || !retirement.has(OwnedNativeRoots))
 			throw "loaded module globals were not attributed to their native owner";
@@ -411,7 +426,7 @@ class HotReloadMain {
 		if (retirement.registryReaders != 0 || retirement.has(RegistryReaders))
 			throw "retirement status leaked an inactive registry reader";
 		try {
-			Runtime.callInt(loaded, initial.functionIds.get("Main.fail"));
+			Runtime.callInt(loaded, initial.artifact.hashLink().functionIds.get("Main.fail"));
 			throw "module exception unexpectedly returned";
 		} catch (error:RuntimeError) {
 			if (error.status != RuntimeStatus.Exception)
@@ -421,8 +436,9 @@ class HotReloadMain {
 			"class Box { public var value:Int; public function new(value:Int):Void { this.value = value; } } function make():Box { return new Box(40); } function read(box:Box):Int { return box.value + 2; } function fail():Int { throw new Box(1); } function main():Int { return read(make()); }");
 		var changed = compiler.compile("Main");
 		Runtime.patchSet(loaded,
-			new PatchSet(initial.revision, changed.revision, changed.patchBytes, changed.changedFunctions));
-		if (Runtime.callIntObject(loaded, initial.functionIds.get("Main.read"), retained) != 42)
+			new PatchSet(initial.revision, changed.revision, changed.artifact.hashLink().patchBytes,
+			changed.changedFunctions));
+		if (Runtime.callIntObject(loaded, initial.artifact.hashLink().functionIds.get("Main.read"), retained) != 42)
 			throw "patched code could not consume a retained object with the same layout";
 		retained.release();
 		Runtime.dispose(loaded);
@@ -433,8 +449,9 @@ class HotReloadMain {
 		compiler.update("Main.hx",
 			"function value():Int { return 40; } function make():() -> Int { return value; } function main():Int { return value(); }");
 		var initial = compiler.compile("Main"),
-			loaded = Runtime.load(HlWriter.encode(initial.module).flatten(), initial.runtimeIdentity);
-		var makeId = initial.functionIds.get("Main.make");
+			loaded = Runtime.load(HlWriter.encode(initial.artifact.hashLink().module).flatten(),
+				initial.artifact.hashLink().runtimeIdentity);
+		var makeId = initial.artifact.hashLink().functionIds.get("Main.make");
 		var initialClosure = Runtime.retainClosure(loaded, makeId);
 		if (Runtime.callRetainedClosureInt(initialClosure) != 40)
 			throw "initial static closure returned the wrong value";
@@ -442,7 +459,8 @@ class HotReloadMain {
 			"function value():Int { return 41; } function make():() -> Int { var marker = 1; return value; } function main():Int { return value(); }");
 		var first = compiler.compile("Main");
 		Runtime.patchSet(loaded,
-			new PatchSet(initial.revision, first.revision, first.patchBytes, first.changedFunctions));
+			new PatchSet(initial.revision, first.revision, first.artifact.hashLink().patchBytes,
+			first.changedFunctions));
 		if (Runtime.callRetainedClosureInt(initialClosure) != 41)
 			throw "initial static closure did not follow its stable function slot";
 		var retained = Runtime.retainClosure(loaded, makeId);
@@ -454,7 +472,8 @@ class HotReloadMain {
 			"function value():Int { return 42; } function make():() -> Int { var marker = 2; return value; } function main():Int { return value(); }");
 		var second = compiler.compile("Main");
 		Runtime.patchSet(loaded,
-			new PatchSet(first.revision, second.revision, second.patchBytes, second.changedFunctions));
+			new PatchSet(first.revision, second.revision, second.artifact.hashLink().patchBytes,
+			second.changedFunctions));
 		if (Runtime.callRetainedClosureInt(initialClosure) != 42 || Runtime.callRetainedClosureInt(retained) != 42)
 			throw "retained closure did not follow its stable function slot";
 		if (Runtime.retiredCodeAllocationCount(loaded) != 0)
@@ -482,12 +501,13 @@ class HotReloadMain {
 				+ Std.random(1000000);
 		FileSystem.createDirectory(directory);
 		var prefix = directory + "/jit-support-lifetime";
-		File.saveBytes(prefix + "-owner.hl", HlWriter.encode(ownerResult.module).flatten());
-		File.saveBytes(prefix + "-owner.hli", ownerResult.runtimeIdentity);
-		File.saveContent(prefix + "-owner.id", Std.string(ownerResult.functionIds.get("main")));
-		File.saveBytes(prefix + "-survivor.hl", HlWriter.encode(survivorResult.module).flatten());
-		File.saveBytes(prefix + "-survivor.hli", survivorResult.runtimeIdentity);
-		File.saveContent(prefix + "-survivor.id", Std.string(survivorResult.functionIds.get("main")));
+		File.saveBytes(prefix + "-owner.hl", HlWriter.encode(ownerResult.artifact.hashLink().module).flatten());
+		File.saveBytes(prefix + "-owner.hli", ownerResult.artifact.hashLink().runtimeIdentity);
+		File.saveContent(prefix + "-owner.id", Std.string(ownerResult.artifact.hashLink().functionIds.get("main")));
+		File.saveBytes(prefix + "-survivor.hl", HlWriter.encode(survivorResult.artifact.hashLink().module).flatten());
+		File.saveBytes(prefix + "-survivor.hli", survivorResult.artifact.hashLink().runtimeIdentity);
+		File.saveContent(prefix + "-survivor.id",
+			Std.string(survivorResult.artifact.hashLink().functionIds.get("main")));
 		var test = Sys.getEnv("HAXEON_HASHLINK_DIR") + "/haxeon-jit-support-lifetime";
 		#if windows
 		test += ".exe";
@@ -504,10 +524,10 @@ class HotReloadMain {
 		var compiler = new Compiler();
 		compiler.update("Main.hx", "function main():Int { return 42; }");
 		var result = compiler.compile("Main"),
-			bytes = HlWriter.encode(result.module).flatten(),
-			mainId = result.functionIds.get("main");
+			bytes = HlWriter.encode(result.artifact.hashLink().module).flatten(),
+			mainId = result.artifact.hashLink().functionIds.get("main");
 		for (i in 0...100) {
-			runDisposableGeneration(bytes, result.runtimeIdentity, mainId);
+			runDisposableGeneration(bytes, result.artifact.hashLink().runtimeIdentity, mainId);
 			if (Runtime.retryRetirements() != 0)
 				throw 'physical module retirement remained blocked at iteration $i';
 		}
@@ -588,20 +608,23 @@ class HotReloadMain {
 		var compiler = new Compiler();
 		compiler.update("Main.hx", unused);
 		var first = compiler.compile("Main");
-		var loaded = Runtime.load(HlWriter.encode(first.module).flatten(), first.runtimeIdentity);
-		if (!first.functionIds.exists("Spare.read") || !first.functionIds.exists("Spare.more"))
+		var loaded = Runtime.load(HlWriter.encode(first.artifact.hashLink().module).flatten(),
+			first.artifact.hashLink().runtimeIdentity);
+		if (!first.artifact.hashLink().functionIds.exists("Spare.read")
+			|| !first.artifact.hashLink().functionIds.exists("Spare.more"))
 			throw "a live module must keep the methods of a class nothing uses";
 		var step = 0, baseRevision = first.revision;
 		for (source in [used, unused, used, unused]) {
 			step++;
 			compiler.update("Main.hx", source);
 			var changed = compiler.compile("Main");
-			if (changed.requiresReload || changed.patchBytes == null)
+			if (changed.requiresReload || changed.artifact.hashLink().patchBytes == null)
 				throw 'step $step: making a class used or unused must patch, not reload: ${[for (reason in changed.reloadReasons) Std.string(reason)]}';
 			Runtime.patchSet(loaded,
-				new PatchSet(baseRevision, changed.revision, changed.patchBytes, changed.changedFunctions));
+				new PatchSet(baseRevision, changed.revision, changed.artifact.hashLink().patchBytes,
+				changed.changedFunctions));
 			baseRevision = changed.revision;
-			if (Runtime.callInt(loaded, changed.functionIds.get("main")) != 42)
+			if (Runtime.callInt(loaded, changed.artifact.hashLink().functionIds.get("main")) != 42)
 				throw 'step $step: the patched module does not run the edited program';
 		}
 		Runtime.dispose(loaded);
@@ -664,14 +687,17 @@ class HotReloadMain {
 			var compiler = new Compiler();
 			compiler.update("Main.hx", fixture.before);
 			var initial = compiler.compile("Main"),
-				mainId = initial.functionIds.get("main");
-			var loaded = Runtime.load(HlWriter.encode(initial.module).flatten(), initial.runtimeIdentity);
+				mainId = initial.artifact.hashLink().functionIds.get("main");
+			var loaded = Runtime.load(HlWriter.encode(initial.artifact.hashLink().module).flatten(),
+				initial.artifact.hashLink().runtimeIdentity);
 			compiler.update("Main.hx", fixture.after);
 			var changed = compiler.compile("Main");
-			if (changed.requiresReload || changed.patchBytes == null || changed.changedFunctions.length == 0)
+			if (changed.requiresReload || changed.artifact.hashLink().patchBytes == null
+				|| changed.changedFunctions.length == 0)
 				throw '${fixture.name}: compiler did not emit a body patch';
 			Runtime.patchSet(loaded,
-				new PatchSet(initial.revision, changed.revision, changed.patchBytes, changed.changedFunctions));
+				new PatchSet(initial.revision, changed.revision, changed.artifact.hashLink().patchBytes,
+				changed.changedFunctions));
 			if (Runtime.callInt(loaded, mainId) != 42)
 				throw '${fixture.name}: live runtime did not execute the patched behavior';
 			Runtime.dispose(loaded);
@@ -684,15 +710,16 @@ class HotReloadMain {
 		compiler.update("Main.hx",
 			"function helper():Int { return 1; } function main():Int { return 40 + helper() - 1; }");
 		var initial = compiler.compile("Main"),
-			mainId = initial.functionIds.get("main"),
-			helperId = initial.functionIds.get("Main.helper"),
-			loaded = Runtime.load(HlWriter.encode(initial.module).flatten(), initial.runtimeIdentity);
+			mainId = initial.artifact.hashLink().functionIds.get("main"),
+			helperId = initial.artifact.hashLink().functionIds.get("Main.helper"),
+			loaded = Runtime.load(HlWriter.encode(initial.artifact.hashLink().module).flatten(),
+				initial.artifact.hashLink().runtimeIdentity);
 		compiler.acknowledgePublication(initial.revision);
 		var state = compiler.exportIdentityState();
 		if (state.compare(compiler.exportIdentityState()) != 0)
 			throw "Acknowledged compiler state was not deterministic";
 		var resumed = new Compiler(state);
-		switch resumed.reconcileRuntime(initial.runtimeIdentity.sub(4, 16), initial.revision) {
+		switch resumed.reconcileRuntime(initial.artifact.hashLink().runtimeIdentity.sub(4, 16), initial.revision) {
 			case ContinuePatching:
 			case ReloadDomain(reason):
 				throw 'Restored compiler required reload: $reason';
@@ -704,10 +731,11 @@ class HotReloadMain {
 			|| changed.changedFunctions.length != 2
 			|| changed.changedFunctions.indexOf(mainId) < 0
 			|| changed.changedFunctions.indexOf(helperId) < 0
-			|| changed.patchBytes == null)
+			|| changed.artifact.hashLink().patchBytes == null)
 			throw "Restarted compiler did not emit the revision-2 code and source-metadata patch";
 		Runtime.patchSet(loaded,
-			new PatchSet(initial.revision, changed.revision, changed.patchBytes, changed.changedFunctions));
+			new PatchSet(initial.revision, changed.revision, changed.artifact.hashLink().patchBytes,
+			changed.changedFunctions));
 		resumed.acknowledgePublication(changed.revision);
 		if (Runtime.callInt(loaded, mainId) != 42)
 			throw "Surviving runtime did not execute the restarted compiler patch";

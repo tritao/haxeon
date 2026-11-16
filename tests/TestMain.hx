@@ -3,6 +3,7 @@ import compiler.Compiler;
 import compiler.Frontend;
 import compiler.abi.PatchPlanner.PatchDecision;
 import compiler.backend.wasm.WasmCfgAnalysis;
+import compiler.compilation.BackendArtifact.BackendArtifacts;
 import compiler.core.Diagnostic.CompileError;
 import compiler.core.Source.SourceFile;
 import compiler.documentation.Documentation.DocumentationTools;
@@ -2339,7 +2340,7 @@ class TestMain {
 		incrementalClass.update("Main.hx",
 			"class Math { public static function add(a:Int, b:Int):Int { return a + b; } } function main():Int { return Math.add(20, 22); }");
 		var incrementalResult = incrementalClass.compile("Main");
-		if (!incrementalResult.functionIndices.exists("Math.add")
+		if (!BackendArtifacts.hashLink(incrementalResult.artifact).functionIndices.exists("Math.add")
 			|| incrementalResult.retyped.join(",") != "Math.add,main")
 			throw "Incremental compiler did not retain the static class method as a function";
 		Sys.println("PASS: class fields, methods, and constructors parse as nominal declarations");

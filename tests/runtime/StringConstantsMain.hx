@@ -1,3 +1,4 @@
+using compiler.compilation.BackendArtifact.BackendArtifacts;
 import compiler.Compiler;
 import compiler.hl.HlWriter;
 import compiler.types.Type.CompilerType;
@@ -18,9 +19,9 @@ class StringConstantsMain {
 		fixed.registerNative("allocated", "std", "gc_total_allocated", [], CompilerType.TFloat);
 		fixed.update("Main.hx", source);
 		var fixedResult = fixed.compile("Main");
-		if (fixedResult.module.constants.length < 2)
-			throw 'A build nothing patches should hold each literal as a constant, got ${fixedResult.module.constants.length}';
-		for (constant in fixedResult.module.constants)
+		if (fixedResult.artifact.hashLink().module.constants.length < 2)
+			throw 'A build nothing patches should hold each literal as a constant, got ${fixedResult.artifact.hashLink().module.constants.length}';
+		for (constant in fixedResult.artifact.hashLink().module.constants)
 			if (constant.fields.length != 2)
 				throw "A String constant has two fields: its data and its length";
 		var live = new Compiler();
@@ -28,8 +29,9 @@ class StringConstantsMain {
 		live.registerNative("allocated", "std", "gc_total_allocated", [], CompilerType.TFloat);
 		live.update("Main.hx", source);
 		var liveResult = live.compile("Main");
-		if (liveResult.module.constants.length != fixedResult.module.constants.length)
-			throw 'A live module should hold the same ${fixedResult.module.constants.length} literal constants, got ${liveResult.module.constants.length}';
-		File.saveBytes(Sys.args()[0], HlWriter.encode(fixedResult.module).flatten());
+		if (liveResult.artifact.hashLink().module.constants.length
+			!= fixedResult.artifact.hashLink().module.constants.length)
+			throw 'A live module should hold the same ${fixedResult.artifact.hashLink().module.constants.length} literal constants, got ${liveResult.artifact.hashLink().module.constants.length}';
+		File.saveBytes(Sys.args()[0], HlWriter.encode(fixedResult.artifact.hashLink().module).flatten());
 	}
 }

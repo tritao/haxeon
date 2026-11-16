@@ -1,3 +1,4 @@
+using compiler.compilation.BackendArtifact.BackendArtifacts;
 import compiler.Compiler;
 import compiler.runtime.CompilerIntrinsics;
 
@@ -25,7 +26,7 @@ class ReachabilityPruneMain {
 		var irNames:Map<String, Bool> = [for (fn in result.ir.functions) fn.name => true];
 		expect(!irNames.exists("Main.unusedFree") && !irNames.exists("Dead.never"),
 			"the program of a plain build is pruned");
-		var names = result.functionIndices;
+		var names = result.artifact.hashLink().functionIndices;
 		expect(names.exists("main"), "main stays");
 		expect(!names.exists("Main.unusedFree") && !names.exists("unusedFree"),
 			"a function nothing calls is not in the module");
@@ -57,9 +58,10 @@ class ReachabilityPruneMain {
 			+ "function viaReceiver(b:Null<Base>):Int return b == null ? 0 : b.update(); "
 			+ "function main():Int { var none:Null<Base> = null; return viaReceiver(none) == 0 ? 42 : 1; }");
 		var stubbed = stubCompiler.compile("Main", null, false);
-		expect(stubbed.functionIndices.exists("Base.update"),
+		expect(stubbed.artifact.hashLink().functionIndices.exists("Base.update"),
 			"the method named by a call on an uncreated class keeps its slot");
-		expect(!stubbed.functionIndices.exists("fromBodyOnly") && !stubbed.functionIndices.exists("Main.fromBodyOnly"),
+		expect(!stubbed.artifact.hashLink().functionIndices.exists("fromBodyOnly")
+			&& !stubbed.artifact.hashLink().functionIndices.exists("Main.fromBodyOnly"),
 			"what the body of such a method calls is not in the module");
 		expect(GeneratedProgramRunner.exitCode(stubbed) == 42, "the program with a declaration-only method runs");
 		Sys.println("PASS: unreachable functions and the methods of unmentioned classes are dropped, reflection on a live class still works");

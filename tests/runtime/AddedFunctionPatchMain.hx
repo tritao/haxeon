@@ -1,3 +1,4 @@
+using compiler.compilation.BackendArtifact.BackendArtifacts;
 import compiler.Compiler;
 import compiler.hl.HlWriter;
 import runtime.PatchSet;
@@ -20,8 +21,9 @@ class AddedFunctionPatchMain {
 		var compiler = new Compiler();
 		compiler.update("Main.hx", program("", ""));
 		var build = compiler.compile("Main"),
-			live = Runtime.load(HlWriter.encode(build.module).flatten(), build.runtimeIdentity),
-			mainId = build.functionIds.get("main");
+			live = Runtime.load(HlWriter.encode(build.artifact.hashLink().module).flatten(),
+				build.artifact.hashLink().runtimeIdentity),
+			mainId = build.artifact.hashLink().functionIds.get("main");
 		if (Runtime.callInt(live, mainId) != 2)
 			throw "The program did not run correctly before the edits";
 		var edits = [
@@ -42,16 +44,18 @@ class AddedFunctionPatchMain {
 		for (edit in edits) {
 			compiler.update("Main.hx", edit.source);
 			var changed = compiler.compile("Main");
-			if (changed.requiresReload || changed.patchBytes == null)
+			if (changed.requiresReload || changed.artifact.hashLink().patchBytes == null)
 				throw '${edit.label} required a reload: ${[for (reason in changed.reloadReasons) Std.string(reason)].join(", ")}';
 			Runtime.patchSet(live,
-				new PatchSet(build.revision, changed.revision, changed.patchBytes, changed.changedFunctions));
+				new PatchSet(build.revision, changed.revision, changed.artifact.hashLink().patchBytes,
+				changed.changedFunctions));
 			var result = Runtime.callInt(live, mainId);
 			if (result != edit.expected)
 				throw 'After ${edit.label} the patched module returned $result instead of ${edit.expected}';
 			// A rejected patch falls back to loading the same build's full module, which must run on its own.
-			var fresh = Runtime.load(HlWriter.encode(changed.module).flatten(), changed.runtimeIdentity),
-				reloaded = Runtime.callInt(fresh, changed.functionIds.get("main"));
+			var fresh = Runtime.load(HlWriter.encode(changed.artifact.hashLink().module).flatten(),
+				changed.artifact.hashLink().runtimeIdentity),
+				reloaded = Runtime.callInt(fresh, changed.artifact.hashLink().functionIds.get("main"));
 			Runtime.dispose(fresh);
 			if (reloaded != edit.expected)
 				throw 'After ${edit.label} the full module returned $reloaded instead of ${edit.expected}';

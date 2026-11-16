@@ -1,3 +1,4 @@
+using compiler.compilation.BackendArtifact.BackendArtifacts;
 import compiler.Compiler;
 import compiler.hl.HlWriter;
 import runtime.PatchSet;
@@ -68,8 +69,9 @@ class LiveSignaturePatchMain {
 		var compiler = new Compiler();
 		compiler.update("Main.hx", program(1));
 		var build = compiler.compile("Main"),
-			live = Runtime.load(HlWriter.encode(build.module).flatten(), build.runtimeIdentity),
-			mainId = build.functionIds.get("main");
+			live = Runtime.load(HlWriter.encode(build.artifact.hashLink().module).flatten(),
+				build.artifact.hashLink().runtimeIdentity),
+			mainId = build.artifact.hashLink().functionIds.get("main");
 		// The kept point sums 3, a new one 5, the stored scaler doubles 4, and scale(1) is 2.
 		expect(Runtime.callInt(live, mainId), 305082, "before the edits");
 
@@ -97,11 +99,13 @@ class LiveSignaturePatchMain {
 		if (!reloaded.requiresReload)
 			throw 'Adding an enum must reload';
 		var retired =
-			[for (name in (reloaded.functionIds:Map<String, Int>).keys()) if (name.indexOf("~retired") >= 0) name];
+			[for (name in (reloaded.artifact.hashLink().functionIds:Map<String, Int>).keys())
+			if (name.indexOf("~retired") >= 0) name];
 		if (retired.length > 0)
 			throw 'A reload kept the retired functions ${retired.join(", ")}';
 		var again = compiler.compile("Main");
-		var kept = [for (name in (again.functionIds:Map<String, Int>).keys()) if (name.indexOf("~retired") >= 0) name];
+		var kept = [for (name in (again.artifact.hashLink().functionIds:Map<String, Int>).keys())
+			if (name.indexOf("~retired") >= 0) name];
 		if (kept.length > 0)
 			throw 'The build after a reload still names the retired functions ${kept.join(", ")}';
 
@@ -120,16 +124,18 @@ class LiveSignaturePatchMain {
 	}
 
 	static function apply(live:runtime.LoadedModule, build:Dynamic, changed:Dynamic, label:String):Dynamic {
-		if (changed.requiresReload || changed.patchBytes == null)
+		if (changed.requiresReload || BackendArtifacts.hashLink(changed.artifact).patchBytes == null)
 			throw '$label: required a reload: ${[for (reason in (changed.reloadReasons : Array<Dynamic>)) Std.string(reason)].join(", ")}';
 		Runtime.patchSet(live,
-			new PatchSet(build.revision, changed.revision, changed.patchBytes, changed.changedFunctions));
+			new PatchSet(build.revision, changed.revision, BackendArtifacts.hashLink(changed.artifact).patchBytes,
+			changed.changedFunctions));
 		return changed;
 	}
 
 	static function runFresh(build:Dynamic):Int {
-		var fresh = Runtime.load(HlWriter.encode(build.module).flatten(), build.runtimeIdentity);
-		var value = Runtime.callInt(fresh, build.functionIds.get("main"));
+		var fresh = Runtime.load(HlWriter.encode(BackendArtifacts.hashLink(build.artifact).module).flatten(),
+			BackendArtifacts.hashLink(build.artifact).runtimeIdentity);
+		var value = Runtime.callInt(fresh, BackendArtifacts.hashLink(build.artifact).functionIds.get("main"));
 		Runtime.dispose(fresh);
 		return value;
 	}

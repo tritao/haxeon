@@ -1,3 +1,4 @@
+using compiler.compilation.BackendArtifact.BackendArtifacts;
 import compiler.Compiler;
 import compiler.hl.HlWriter;
 import sys.io.File;
@@ -12,8 +13,9 @@ class NamespaceMain {
 		compiler.update("Main.hx",
 			"package app; function main():Int { var left = new left.Item(10); var right = new right.Item(32); return left.value + right.value; }");
 		var result = compiler.compile("Main");
-		if (!result.functionIndices.exists("left.Item.new") || !result.functionIndices.exists("right.Item.new"))
+		if (!result.artifact.hashLink().functionIndices.exists("left.Item.new")
+			|| !result.artifact.hashLink().functionIndices.exists("right.Item.new"))
 			throw "qualified nominal declarations collided";
-		File.saveBytes(Sys.args()[0], HlWriter.encode(result.module).flatten());
+		File.saveBytes(Sys.args()[0], HlWriter.encode(result.artifact.hashLink().module).flatten());
 	}
 }

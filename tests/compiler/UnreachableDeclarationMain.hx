@@ -1,3 +1,4 @@
+using compiler.compilation.BackendArtifact.BackendArtifacts;
 import compiler.Compiler;
 
 /** Covers incremental builds after a module stops being reachable from the entry point. */
@@ -43,10 +44,10 @@ class UnreachableDeclarationMain {
 	static function expectObjects(result:compiler.Compiler.CompileResult, names:Array<String>, present:Bool,
 			label:String):Void {
 		var typeNames:Map<String, Bool> = [];
-		for (type in result.module.types)
+		for (type in result.artifact.hashLink().module.types)
 			switch type {
 				case Object(name, _, _, _, _, _), Structure(name, _, _, _, _):
-					typeNames.set(result.module.strings[name], true);
+					typeNames.set(result.artifact.hashLink().module.strings[name], true);
 				default:
 			}
 		for (name in names)

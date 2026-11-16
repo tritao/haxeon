@@ -1,3 +1,4 @@
+import compiler.compilation.BackendArtifact.BackendArtifacts;
 import compiler.Compiler; // @formatter:off: the DAP tests address this file by line
 import compiler.hl.HlWriter;
 import runtime.PatchSet;
@@ -13,8 +14,8 @@ class DapHotReloadProbe {
 			"function value():Int {\n  var result = 42;\n  if (true) {\n    var scoped = result + 100;\n    result = scoped - 99;\n    scoped = scoped + 0;\n  }\n  result = result - 1;\n  try {\n    throw \"patched-probe\";\n  } catch (error:Int) {\n    result = 0;\n  } catch (error:String) {\n    result = result + 0;\n  }\n  return result;\n}");
 		compiler.update("Main.hx", "function main():Int { return Value.value(); }");
 		var initial = compiler.compile("Main");
-		var functionIndex = initial.functionIds.get("Value.value");
-		var loaded = Runtime.load(HlWriter.encode(initial.module).flatten(), initial.runtimeIdentity);
+		var functionIndex = BackendArtifacts.hashLink(initial.artifact).functionIds.get("Value.value");
+		var loaded = Runtime.load(HlWriter.encode(BackendArtifacts.hashLink(initial.artifact).module).flatten(), BackendArtifacts.hashLink(initial.artifact).runtimeIdentity);
 		for (gate in 0...100)
 			Sys.sleep(0.02);
 		var initialValue = Runtime.callInt(loaded, functionIndex);
@@ -27,12 +28,12 @@ class DapHotReloadProbe {
 			StringTools.replace("function value():Int {\n  var result = 44;\n  if (true) {\n    var scoped = result + 100;\n    result = scoped - 99;\n    scoped = scoped + 0;\n  }\n  result = result - 1;\n  try {\n    throw \"patched-probe\";\n  } catch (error:Int) {\n    result = 0;\n  } catch (error:String) {\n    result = result + 0;\n  }\n  return result;\n}",
 				"\n  ", "\n    "));
 		var changedAgain = compiler.compile("Main");
-		Runtime.patchSet(loaded, new PatchSet(initial.revision, changed.revision, changed.patchBytes, changed.changedFunctions));
+		Runtime.patchSet(loaded, new PatchSet(initial.revision, changed.revision, BackendArtifacts.hashLink(changed.artifact).patchBytes, changed.changedFunctions));
 		for (gate in 0...100)
 			Sys.sleep(0.02);
 		var patchedValue = Runtime.callInt(loaded, functionIndex);
 
-		Runtime.patchSet(loaded, new PatchSet(changed.revision, changedAgain.revision, changedAgain.patchBytes, changedAgain.changedFunctions));
+		Runtime.patchSet(loaded, new PatchSet(changed.revision, changedAgain.revision, BackendArtifacts.hashLink(changedAgain.artifact).patchBytes, changedAgain.changedFunctions));
 		for (gate in 0...100)
 			Sys.sleep(0.02);
 		var patchedAgainValue = Runtime.callInt(loaded, functionIndex);

@@ -1,3 +1,4 @@
+using compiler.compilation.BackendArtifact.BackendArtifacts;
 import compiler.Compiler;
 import compiler.Frontend;
 import compiler.backend.wasm.WasmBackend;
@@ -103,7 +104,8 @@ class GenericScalarMapOwnerMain {
 		var path = root + "/owned-map-" + target + inlining + "-" + Std.random(0x7fffffff)
 			+ (target == "hl" ? ".hl" : ".wasm");
 		File.saveBytes(path,
-			target == "hl" ? HlWriter.encode(result.module).flatten() : new WasmBackend().compile(result.ir,
+			target == "hl"
+			? HlWriter.encode(result.artifact.hashLink().module).flatten() : new WasmBackend().compile(result.ir,
 			{
 				target: target == "wasm32" ? Wasm32 : WasmGc,
 				debugNames: true

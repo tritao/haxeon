@@ -1,3 +1,4 @@
+using compiler.compilation.BackendArtifact.BackendArtifacts;
 import compiler.Compiler;
 import compiler.hl.HlWriter;
 import compiler.runtime.CompilerIntrinsics;
@@ -23,6 +24,6 @@ class LanguageFeaturesMain {
 			+ "    + (Constants.names.length == 2 && 'ffi'.toUpperCase() == 'FFI' && Math.min(2, 3) == 2 && Math.max(2, 3) == 3 ? 0 : -100)\n"
 			+ "    + (grid.length == 2 && grid[0].length == 2 && grid[1][1] == 11.0 ? 0 : -100);\n"
 			+ "}");
-		File.saveBytes(Sys.args()[0], HlWriter.encode(compiler.compile("Main").module).flatten());
+		File.saveBytes(Sys.args()[0], HlWriter.encode(compiler.compile("Main").artifact.hashLink().module).flatten());
 	}
 }

@@ -1,4 +1,5 @@
 import compiler.Compiler;
+import compiler.compilation.BackendArtifact.BackendArtifacts;
 import compiler.hl.HlWriter;
 import compiler.modules.ModulePath;
 import compiler.runtime.CompilerIntrinsics;
@@ -74,7 +75,7 @@ class Main {
 		var compiler = newCompiler(plain, directory);
 		compiler.update(sourcePath, File.getContent(sourcePath), module);
 		var result = compiler.compile(module);
-		File.saveBytes(outputPath, HlWriter.encode(result.module).flatten());
+		File.saveBytes(outputPath, HlWriter.encode(BackendArtifacts.hashLink(result.artifact).module).flatten());
 		Sys.println('compiled $sourcePath -> $outputPath');
 	}
 
@@ -113,10 +114,11 @@ class Main {
 			// A session asked to build again registers its source roots again, which is what makes it build rather than return its last result.
 			compiler.addStandardLibrarySourceRoot("stdlib");
 			compiler.addSourceRoot(directory == "" ? "." : directory);
-			var warm = HlWriter.encode(compiler.compile(module).module).flatten();
+			var warm = HlWriter.encode(BackendArtifacts.hashLink(compiler.compile(module).artifact).module).flatten();
 			var fresh = newCompiler(true, directory);
 			fresh.update(sourcePath, edited, module);
-			if (warm.compare(HlWriter.encode(fresh.compile(module).module).flatten()) != 0)
+			if (warm.compare(HlWriter.encode(BackendArtifacts.hashLink(fresh.compile(module).artifact).module)
+				.flatten()) != 0)
 				throw 'a warm rebuild of $sourcePath differs from a fresh build of the same text (edit ${editIndex + 1}: ${["a function nothing reaches, appended", "a kept function, appended", "functions inside the file"][editIndex]})';
 			last = warm;
 		}

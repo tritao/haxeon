@@ -1,3 +1,4 @@
+using compiler.compilation.BackendArtifact.BackendArtifacts;
 import compiler.Compiler;
 import compiler.abi.PatchPlanner.AbiChange;
 import compiler.hl.HlWriter;
@@ -33,10 +34,11 @@ class LiveStringConstantsPatchMain {
 		var compiler = newCompiler();
 		compiler.update("Main.hx", program("", "target"));
 		var build = compiler.compile("Main");
-		if (build.module.constants.length < 2)
-			throw 'A live module should hold its literals as constants, got ${build.module.constants.length}';
-		var live = Runtime.load(HlWriter.encode(build.module).flatten(), build.runtimeIdentity),
-			mainId = build.functionIds.get("main");
+		if (build.artifact.hashLink().module.constants.length < 2)
+			throw 'A live module should hold its literals as constants, got ${build.artifact.hashLink().module.constants.length}';
+		var live = Runtime.load(HlWriter.encode(build.artifact.hashLink().module).flatten(),
+			build.artifact.hashLink().runtimeIdentity),
+			mainId = build.artifact.hashLink().functionIds.get("main");
 		expect(Runtime.callInt(live, mainId) == 2000,
 			"The live module allocated while evaluating its literals, or computed the wrong total");
 		var edits = [
@@ -61,11 +63,11 @@ class LiveStringConstantsPatchMain {
 				newGlobals: 0
 			}
 		];
-		var globalsBefore = build.module.globals.length;
+		var globalsBefore = build.artifact.hashLink().module.globals.length;
 		for (edit in edits) {
 			compiler.update("Main.hx", edit.source);
 			var changed = compiler.compile("Main");
-			if (changed.requiresReload || changed.patchBytes == null)
+			if (changed.requiresReload || changed.artifact.hashLink().patchBytes == null)
 				throw '${edit.label} required a reload: ${[for (reason in changed.reloadReasons) Std.string(reason)].join(", ")}';
 			for (reason in changed.reloadReasons)
 				switch reason {
@@ -73,32 +75,35 @@ class LiveStringConstantsPatchMain {
 						throw '${edit.label} changed the layout of global $name';
 					default:
 				}
-			var decoded = HlPatchReader.decode(changed.patchBytes);
+			var decoded = HlPatchReader.decode(changed.artifact.hashLink().patchBytes);
 			expect(decoded.globals.length == edit.newGlobals
-				&& decoded.baseGlobals == (edit.newGlobals == 0 ? 0 : build.module.globals.length),
-				'${edit.label} should carry ${edit.newGlobals} new globals after ${build.module.globals.length}, got ${decoded.globals.length} after ${decoded.baseGlobals}');
+				&& decoded.baseGlobals == (edit.newGlobals == 0 ? 0 : build.artifact.hashLink().module.globals.length),
+				'${edit.label} should carry ${edit.newGlobals} new globals after ${build.artifact.hashLink().module.globals.length}, got ${decoded.globals.length} after ${decoded.baseGlobals}');
 			Runtime.patchSet(live,
-				new PatchSet(build.revision, changed.revision, changed.patchBytes, changed.changedFunctions));
+				new PatchSet(build.revision, changed.revision, changed.artifact.hashLink().patchBytes,
+				changed.changedFunctions));
 			var result = Runtime.callInt(live, mainId);
 			expect(result == edit.expected,
 				'After ${edit.label} the patched module returned $result instead of ${edit.expected}');
 			// A rejected patch falls back to loading the same build's full module, which must run on its own.
-			var fresh = Runtime.load(HlWriter.encode(changed.module).flatten(), changed.runtimeIdentity),
-				reloaded = Runtime.callInt(fresh, changed.functionIds.get("main"));
+			var fresh = Runtime.load(HlWriter.encode(changed.artifact.hashLink().module).flatten(),
+				changed.artifact.hashLink().runtimeIdentity),
+				reloaded = Runtime.callInt(fresh, changed.artifact.hashLink().functionIds.get("main"));
 			Runtime.dispose(fresh);
 			expect(reloaded == edit.expected,
 				'After ${edit.label} the full module returned $reloaded instead of ${edit.expected}');
 			build = changed;
 		}
-		expect(build.module.globals.length == globalsBefore + 2,
-			'Two new literals should add two globals, not ${build.module.globals.length - globalsBefore}');
+		expect(build.artifact.hashLink().module.globals.length == globalsBefore + 2,
+			'Two new literals should add two globals, not ${build.artifact.hashLink().module.globals.length - globalsBefore}');
 
 		// A new mutable global is not a constant: that still takes a reload.
 		compiler.update("Main.hx",
 			program("      if (phase == \"second\") total += 9;\n",
 			"second").split("class Probe {\n").join("class Probe {\n  public static var counter = 0;\n"));
 		var layout = compiler.compile("Main");
-		expect(layout.requiresReload && layout.patchBytes == null, "A new static variable must still require a reload");
+		expect(layout.requiresReload && layout.artifact.hashLink().patchBytes == null,
+			"A new static variable must still require a reload");
 		var layoutChanged = false;
 		for (reason in layout.reloadReasons)
 			switch reason {

@@ -1,3 +1,4 @@
+using compiler.compilation.BackendArtifact.BackendArtifacts;
 import compiler.Compiler;
 import compiler.backend.wasm.WasmBackend;
 import compiler.hl.HlWriter;
@@ -24,15 +25,16 @@ class NullStringMapMain {
 			if (temp == null) temp = "out";
 			var path = temp + "/null-map-" + target + inlining + (target == "hl" ? ".hl" : ".wasm");
 			sys.io.File.saveBytes(path,
-				target == "hl" ? HlWriter.encode(result.module).flatten() : new WasmBackend().compile(result.ir, {
+				target == "hl"
+				? HlWriter.encode(result.artifact.hashLink().module).flatten() : new WasmBackend().compile(result.ir, {
 					target: target == "wasm32" ? Wasm32 : WasmGc, debugNames: true, wasmMemoryStats: target == "wasm32",
 					wasmGcAllocationCount: target == "wasm-gc", exports: exports
 				}).bytes);
 			if (target == "hl") {
 				var status = Sys.command(TestHashLink.vm(), [path]);
 				if (status != 42) throw "HL null map returned " + status;
-				var live = runtime.Runtime.load(sys.io.File.getBytes(path), result.runtimeIdentity);
-				if (runtime.Runtime.callInt(live, result.functionIds.get("Main.census")) != 42)
+				var live = runtime.Runtime.load(sys.io.File.getBytes(path), result.artifact.hashLink().runtimeIdentity);
+				if (runtime.Runtime.callInt(live, result.artifact.hashLink().functionIds.get("Main.census")) != 42)
 					throw "HL null map query allocated";
 				runtime.Runtime.dispose(live);
 			} else {

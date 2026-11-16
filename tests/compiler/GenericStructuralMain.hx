@@ -1,3 +1,4 @@
+using compiler.compilation.BackendArtifact.BackendArtifacts;
 import compiler.Compiler;
 
 /**
@@ -18,7 +19,7 @@ class GenericStructuralMain {
 			"class Shape { public var b:Int; public var a:Int; public function new() { a = 1; b = 2; } }");
 		var result = compiler.compile("Main");
 		var specializations = 0;
-		for (name in result.functionIndices.keys())
+		for (name in result.artifact.hashLink().functionIndices.keys())
 			if (name.indexOf("generic:Reader.read") >= 0)
 				specializations++;
 		if (specializations != 3)
@@ -29,7 +30,7 @@ class GenericStructuralMain {
 			+ "public function read<T>(value:T, create:Void->T):Int { count += 2; var made = create(); return count + (made == null ? 0 : 1); } }");
 		result = compiler.compile("Main");
 		specializations = 0;
-		for (name in result.functionIndices.keys())
+		for (name in result.artifact.hashLink().functionIndices.keys())
 			if (name.indexOf("generic:Reader.read") >= 0)
 				specializations++;
 		if (specializations != 3)

@@ -1,3 +1,4 @@
+using compiler.compilation.BackendArtifact.BackendArtifacts;
 import compiler.core.Diagnostic.CompileError;
 import compiler.Compiler;
 import compiler.core.Source.SourceFile;
@@ -134,7 +135,7 @@ class NativeLayoutMain {
 		var compiled = targetCompiler.compile("NativeLayoutMain"),
 			compiledPair = requireClass(targetCompiler.lastTypedProgram.classes, "Pair");
 		expect(requireLayout(compiledPair.nativeLayouts, "portable-abi32").size == 24
-			&& compiled.module.ints.indexOf(24) >= 0,
+			&& compiled.artifact.hashLink().module.ints.indexOf(24) >= 0,
 			"CLI target selection must reach typing and lower layout intrinsics as constants");
 		var hxiTargetCompiler = new Compiler();
 		hxiTargetCompiler.addFfiInterface("native-layout-target.hxi",
@@ -147,7 +148,7 @@ class NativeLayoutMain {
 		var hxiCompiled = hxiTargetCompiler.compile("Target"),
 			hxiLongRecord = requireClass(hxiTargetCompiler.lastTypedProgram.classes, "LongRecord");
 		expect(requireLayout(hxiLongRecord.nativeLayouts, "x86_64-pc-windows-msvc").size == 4
-			&& hxiCompiled.module.ints.indexOf(4) >= 0,
+			&& hxiCompiled.artifact.hashLink().module.ints.indexOf(4) >= 0,
 			"the registered HXI target must reach record layout and query constant folding");
 		var cachedLayoutCompiler = new Compiler();
 		cachedLayoutCompiler.configure("native-layout-cached", "native-layout-cached",
@@ -162,7 +163,7 @@ class NativeLayoutMain {
 		var cachedLayoutCompiled = cachedLayoutCompiler.compile("Main"),
 			cachedTransform = requireClass(cachedLayoutCompiler.lastTypedProgram.classes, "Transform");
 		expect(requireLayout(cachedTransform.nativeLayouts, "portable-abi64").size == 24
-			&& cachedLayoutCompiled.module.ints.indexOf(42) >= 0,
+			&& cachedLayoutCompiled.artifact.hashLink().module.ints.indexOf(42) >= 0,
 			"retyped class methods must see cached cross-module layouts before folding sizeof/alignof queries");
 		var descriptorCompiler = new Compiler();
 		descriptorCompiler.configure("type-info-cache", "type-info-cache", ["native-abi-target=portable-abi64"]);
@@ -170,12 +171,12 @@ class NativeLayoutMain {
 		descriptorCompiler.update("Main.hx",
 			"class Main { static function main():Int return typeInfo<Record>().hash.length; }");
 		var firstDescriptorCompile = descriptorCompiler.compile("Main"),
-			firstDescriptorHash = findDescriptorHash(firstDescriptorCompile.module.strings);
+			firstDescriptorHash = findDescriptorHash(firstDescriptorCompile.artifact.hashLink().module.strings);
 		if (firstDescriptorHash == null)
 			throw "compiled typeInfo call did not publish its descriptor hash";
 		descriptorCompiler.update("Record.hx", "struct Record { public var x:Int; public var y:Int; }");
 		var changedDescriptorCompile = descriptorCompiler.compile("Main"),
-			changedDescriptorHash = findDescriptorHash(changedDescriptorCompile.module.strings);
+			changedDescriptorHash = findDescriptorHash(changedDescriptorCompile.artifact.hashLink().module.strings);
 		expect(changedDescriptorHash != null && changedDescriptorHash != firstDescriptorHash,
 			'changing a struct schema must change the emitted typeInfo hash: before=$firstDescriptorHash after=$changedDescriptorHash retyped=${changedDescriptorCompile.retyped}');
 		expect(changedDescriptorCompile.retyped.indexOf("Main.main") >= 0,

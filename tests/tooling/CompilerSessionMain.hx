@@ -1,3 +1,4 @@
+using compiler.compilation.BackendArtifact.BackendArtifacts;
 import compiler.Compiler.CompileResult;
 import compiler.hl.HlWriter;
 import compiler.tools.CompilerArguments;
@@ -35,18 +36,19 @@ class CompilerSessionMain {
 			"default builds must select development metadata");
 		var release = CompilerDriver.compile(CompilerArguments.parse(modeArgs.concat(["--build-mode=release"])),
 			_ -> {}, modeSession);
-		expect(release.module.debugSections.length == 1
-			&& release.module.debugSections[0].kind == HlWriter.FUNCTION_IDENTITIES
-			&& release.module.sourceSnapshots.length == 0,
+		expect(release.artifact.hashLink().module.debugSections.length == 1
+			&& release.artifact.hashLink().module.debugSections[0].kind == HlWriter.FUNCTION_IDENTITIES
+			&& release.artifact.hashLink().module.sourceSnapshots.length == 0,
 			"release artifacts must retain names but omit development spans and snapshots");
 		var development = CompilerDriver.compile(CompilerArguments.parse(modeArgs), _ -> {}, modeSession);
-		expect(development.module.debugSections.length == 3 && development.module.sourceSnapshots.length > 0,
+		expect(development.artifact.hashLink().module.debugSections.length == 3
+			&& development.artifact.hashLink().module.sourceSnapshots.length > 0,
 			"development artifacts must retain debug identities, spans and source snapshots");
 		var releaseAgain = CompilerDriver.compile(CompilerArguments.parse(modeArgs.concat(["--build-mode=release"])),
 			_ -> {}, modeSession);
-		expect(releaseAgain.module.debugSections.length == 1
-			&& releaseAgain.module.debugSections[0].kind == HlWriter.FUNCTION_IDENTITIES
-			&& releaseAgain.module.sourceSnapshots.length == 0,
+		expect(releaseAgain.artifact.hashLink().module.debugSections.length == 1
+			&& releaseAgain.artifact.hashLink().module.debugSections[0].kind == HlWriter.FUNCTION_IDENTITIES
+			&& releaseAgain.artifact.hashLink().module.sourceSnapshots.length == 0,
 			"a persistent session must honor changes to build mode");
 
 		// Live mode: this block asserts that backend assembly reuses lowered functions between compiles, which only a
@@ -141,7 +143,7 @@ class CompilerSessionMain {
 		expect(edited.metrics.declarationMs == 0.0 && edited.metrics.shapeConnectionMs == 0.0
 			&& edited.metrics.signatureTypingMs == 0.0,
 			"an explicitly typed class-method body edit must reuse validated declarations");
-		expect(File.getBytes(output).compare(HlWriter.encode(edited.module).flatten()) == 0,
+		expect(File.getBytes(output).compare(HlWriter.encode(edited.artifact.hashLink().module).flatten()) == 0,
 			"cached HashLink function encoding must match canonical serialization");
 		// With inlining, Main.main contains Value.get, so it must be rebuilt when Value.get changes.
 		var mainReused = functionByName(initial, "Main.main") == functionByName(edited, "Main.main");
@@ -268,8 +270,8 @@ class CompilerSessionMain {
 	}
 
 	static function functionByName(result:CompileResult, name:String):compiler.hl.HlFunction {
-		var index = result.functionIndices.get(name);
-		for (fn in result.module.functions)
+		var index = result.artifact.hashLink().functionIndices.get(name);
+		for (fn in result.artifact.hashLink().module.functions)
 			if (fn.functionIndex == index)
 				return fn;
 		throw 'Missing lowered function "$name"';

@@ -1,3 +1,4 @@
+using compiler.compilation.BackendArtifact.BackendArtifacts;
 import compiler.Compiler;
 import compiler.abi.PatchPlanner.AbiChange;
 import compiler.compilation.HashLinkBackendSession;
@@ -153,10 +154,11 @@ class LiveObjectLayoutMain {
 		var compiler = compiler();
 		compiler.update("Main.hx", original());
 		var build = compiler.compile("Main"),
-			live = Runtime.load(HlWriter.encode(build.module).flatten(), build.runtimeIdentity),
-			main = build.functionIds.get("main"),
-			fresh = build.functionIds.get("Main.fresh"),
-			reflected = build.functionIds.get("Main.reflected");
+			live = Runtime.load(HlWriter.encode(build.artifact.hashLink().module).flatten(),
+				build.artifact.hashLink().runtimeIdentity),
+			main = build.artifact.hashLink().functionIds.get("main"),
+			fresh = build.artifact.hashLink().functionIds.get("Main.fresh"),
+			reflected = build.artifact.hashLink().functionIds.get("Main.reflected");
 		expect("the first tick", Runtime.callInt(live, main), 106);
 		expect("the second tick", Runtime.callInt(live, main), 107);
 		expect("the field before it exists", Runtime.callInt(live, reflected), -1);
@@ -219,9 +221,10 @@ class LiveObjectLayoutMain {
 		var compiler = compiler();
 		compiler.update("Main.hx", boxes(true, false, withItems, "  return 0;\n"));
 		var build = compiler.compile("Main"),
-			live = Runtime.load(HlWriter.encode(build.module).flatten(), build.runtimeIdentity),
-			main = build.functionIds.get("main"),
-			later = build.functionIds.get("Main.later");
+			live = Runtime.load(HlWriter.encode(build.artifact.hashLink().module).flatten(),
+				build.artifact.hashLink().runtimeIdentity),
+			main = build.artifact.hashLink().functionIds.get("main"),
+			later = build.artifact.hashLink().functionIds.get("Main.later");
 		expect("the first push", Runtime.callInt(live, main), 2);
 		expect("the second push", Runtime.callInt(live, main), 3);
 		var revision = patch(compiler, live, build.revision,
@@ -233,11 +236,12 @@ class LiveObjectLayoutMain {
 		expect("the box made while the field was gone", Runtime.callInt(live, later), 1);
 		compiler.update("Main.hx", boxes(true, true, withItems, reading));
 		var failing = compiler.compile("Main"), status:Null<RuntimeStatus> = null, message = "";
-		if (failing.requiresReload || failing.patchBytes == null)
+		if (failing.requiresReload || failing.artifact.hashLink().patchBytes == null)
 			throw "adding a field whose initializer throws required a reload";
 		try
 			Runtime.patchSet(live,
-				new PatchSet(revision, failing.revision, failing.patchBytes, failing.changedFunctions))
+				new PatchSet(revision, failing.revision, failing.artifact.hashLink().patchBytes,
+				failing.changedFunctions))
 		catch (error:RuntimeError) {
 			status = error.status;
 			message = error.message;
@@ -287,21 +291,23 @@ class LiveObjectLayoutMain {
 		var compiler = compiler();
 		compiler.update("Main.hx", without);
 		var build = compiler.compile("Main"),
-			live = Runtime.load(HlWriter.encode(build.module).flatten(), build.runtimeIdentity),
-			rounds = build.functionIds.get("Main.rounds");
-		expect("starting the worker", Runtime.callInt(live, build.functionIds.get("Main.start")), 0);
+			live = Runtime.load(HlWriter.encode(build.artifact.hashLink().module).flatten(),
+				build.artifact.hashLink().runtimeIdentity),
+			rounds = build.artifact.hashLink().functionIds.get("Main.rounds");
+		expect("starting the worker", Runtime.callInt(live, build.artifact.hashLink().functionIds.get("Main.start")),
+			0);
 		var revision = build.revision;
 		for (cycle in 0...5) {
 			var before = Runtime.callInt(live, rounds);
 			revision = patch(compiler, live, revision, with, 'adding a field while a thread runs (cycle $cycle)');
 			// Let the worker check objects the migration reached and ones the new constructor made.
-			waitForRounds(live, build.functionIds, before + 20);
+			waitForRounds(live, build.artifact.hashLink().functionIds, before + 20);
 			revision = patch(compiler, live, revision, without,
 				'removing the field while a thread runs (cycle $cycle)');
 		}
-		var unsetMade = Runtime.callInt(live, build.functionIds.get("Main.unsetMade"));
+		var unsetMade = Runtime.callInt(live, build.artifact.hashLink().functionIds.get("Main.unsetMade"));
 		expect("checks of objects made before a patch that found the added field unset",
-			Runtime.callInt(live, build.functionIds.get("Main.finish")),
+			Runtime.callInt(live, build.artifact.hashLink().functionIds.get("Main.finish")),
 			0);
 		// A thread stopped inside old code finishes it after the commit: a construction it was in the middle of makes an object
 		// without the added field, one per patch at most for this worker (see LIVE_PATCHING.md, "Threads").
@@ -328,11 +334,12 @@ class LiveObjectLayoutMain {
 	static function patch(compiler:Compiler, live:LoadedModule, revision:Int, source:String, label:String):Int {
 		compiler.update("Main.hx", source);
 		var changed = compiler.compile("Main");
-		if (changed.requiresReload || changed.patchBytes == null)
-			throw '$label required a reload (requiresReload ${changed.requiresReload}, patch ${changed.patchBytes != null}): '
+		if (changed.requiresReload || changed.artifact.hashLink().patchBytes == null)
+			throw '$label required a reload (requiresReload ${changed.requiresReload}, patch ${changed.artifact.hashLink().patchBytes != null}): '
 				+ [for (reason in changed.reloadReasons) Std.string(reason)].join(", ")
 				+ ' revision ${changed.revision} base ${changed.baseRevision} changed ${changed.changedFunctions.length} regenerated ${changed.regenerated.length}';
-		Runtime.patchSet(live, new PatchSet(revision, changed.revision, changed.patchBytes, changed.changedFunctions));
+		Runtime.patchSet(live,
+			new PatchSet(revision, changed.revision, changed.artifact.hashLink().patchBytes, changed.changedFunctions));
 		return changed.revision;
 	}
 
@@ -344,7 +351,7 @@ class LiveObjectLayoutMain {
 		compiler.update("Main.hx", source);
 		var changed = compiler.compile("Main"),
 			reasons = [for (reason in changed.reloadReasons) Std.string(reason)];
-		if (!changed.requiresReload || changed.patchBytes != null)
+		if (!changed.requiresReload || changed.artifact.hashLink().patchBytes != null)
 			throw 'When $label the build should reload, but it patches';
 		if (reasons.indexOf(Std.string(expected)) < 0)
 			throw 'When $label the reasons should include $expected: ${reasons.join(", ")}';

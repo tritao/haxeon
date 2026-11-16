@@ -1,3 +1,4 @@
+using compiler.compilation.BackendArtifact.BackendArtifacts;
 import compiler.Compiler;
 
 /** Focused semantic coverage for source-declared HashLink bindings. */
@@ -10,8 +11,9 @@ class ExternMain {
 			"import Clock; function read(value:Clock):Float return value.shifted(); function main():Int return 42;");
 		var result = compiler.compile("Main");
 		var found = false;
-		for (native in result.module.natives)
-			if (result.module.strings[native.library] == "std" && result.module.strings[native.name] == "sys_time")
+		for (native in result.artifact.hashLink().module.natives)
+			if (result.artifact.hashLink().module.strings[native.library] == "std"
+				&& result.artifact.hashLink().module.strings[native.name] == "sys_time")
 				found = true;
 		if (!found)
 			throw "Extern abstract instance method did not produce a native binding";
@@ -22,9 +24,9 @@ class ExternMain {
 		var classResult = classCompiler.compile("Main"),
 			inherited = false,
 			overridden = false;
-		for (native in classResult.module.natives) {
-			var library = classResult.module.strings[native.library],
-				symbol = classResult.module.strings[native.name];
+		for (native in classResult.artifact.hashLink().module.natives) {
+			var library = classResult.artifact.hashLink().module.strings[native.library],
+				symbol = classResult.artifact.hashLink().module.strings[native.name];
 			if (library == "platform" && symbol == "poll")
 				inherited = true;
 			if (library == "override" && symbol == "renamed")

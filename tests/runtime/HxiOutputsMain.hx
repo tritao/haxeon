@@ -1,3 +1,4 @@
+using compiler.compilation.BackendArtifact.BackendArtifacts;
 import compiler.Compiler;
 import compiler.hl.HlWriter;
 import compiler.runtime.CompilerIntrinsics;
@@ -81,6 +82,6 @@ function main():Int {
 	return 42;
 }
 ');
-		File.saveBytes(output, HlWriter.encode(compiler.compile("Main").module).flatten());
+		File.saveBytes(output, HlWriter.encode(compiler.compile("Main").artifact.hashLink().module).flatten());
 	}
 }

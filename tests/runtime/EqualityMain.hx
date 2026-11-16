@@ -1,3 +1,4 @@
+using compiler.compilation.BackendArtifact.BackendArtifacts;
 import compiler.Compiler;
 import compiler.hl.HlWriter;
 import compiler.runtime.CompilerIntrinsics;
@@ -50,6 +51,6 @@ function main():Int {
   if (Hashing.hash(new Point(0.0, 2.0)) != Hashing.hash(new Point(-0.0, 2.0))) return 11;
   return 42;
 }');
-		File.saveBytes(Sys.args()[0], HlWriter.encode(compiler.compile("Main").module).flatten());
+		File.saveBytes(Sys.args()[0], HlWriter.encode(compiler.compile("Main").artifact.hashLink().module).flatten());
 	}
 }

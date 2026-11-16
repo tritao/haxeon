@@ -1,3 +1,4 @@
+using compiler.compilation.BackendArtifact.BackendArtifacts;
 import compiler.Compiler;
 import compiler.hl.HlWriter;
 import compiler.runtime.CompilerIntrinsics;
@@ -22,17 +23,19 @@ class PatchUnwindMain {
 			+ "function main():Int { return probe(); }\n";
 		compiler.update("Main.hx", program("boom"));
 		var first = compiler.compile("Main"),
-			live = Runtime.load(HlWriter.encode(first.module).flatten(), first.runtimeIdentity),
-			mainId = first.functionIds.get("main");
+			live = Runtime.load(HlWriter.encode(first.artifact.hashLink().module).flatten(),
+				first.artifact.hashLink().runtimeIdentity),
+			mainId = first.artifact.hashLink().functionIds.get("main");
 		var before = Runtime.callInt(live, mainId);
 		if (before != 7)
 			throw 'The exception stack is incomplete before any patch: $before';
 		compiler.update("Main.hx", program("bang"));
 		var changed = compiler.compile("Main");
-		if (changed.requiresReload || changed.patchBytes == null)
+		if (changed.requiresReload || changed.artifact.hashLink().patchBytes == null)
 			throw "Editing the thrown message did not produce a patch";
 		Runtime.patchSet(live,
-			new PatchSet(first.revision, changed.revision, changed.patchBytes, changed.changedFunctions));
+			new PatchSet(first.revision, changed.revision, changed.artifact.hashLink().patchBytes,
+			changed.changedFunctions));
 		var after = Runtime.callInt(live, mainId);
 		if (after != 7)
 			throw 'The exception stack lost frames after a patch: $after';

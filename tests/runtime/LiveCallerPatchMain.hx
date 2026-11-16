@@ -1,3 +1,4 @@
+using compiler.compilation.BackendArtifact.BackendArtifacts;
 import compiler.Compiler;
 import compiler.abi.PatchPlanner.PatchDecision;
 import compiler.hl.HlFunction;
@@ -23,17 +24,19 @@ class LiveCallerPatchMain {
 			"class Other {\n  public static function twice(v:Int):Int return Main.scale(v) + Main.scale(v);\n}\n");
 		compiler.update("Main.hx", source(0));
 		var build = compiler.compile("Main"),
-			live = Runtime.load(HlWriter.encode(build.module).flatten(), build.runtimeIdentity),
-			mainId = build.functionIds.get("main");
+			live = Runtime.load(HlWriter.encode(build.artifact.hashLink().module).flatten(),
+				build.artifact.hashLink().runtimeIdentity),
+			mainId = build.artifact.hashLink().functionIds.get("main");
 		// twice(5) = 10 + 10, scale(1) = 2.
 		expect(Runtime.callInt(live, mainId), 20 * 1000 + 2, "before the edits");
 		for (version in 1...callee.length) {
 			compiler.update("Main.hx", source(version));
 			var changed = compiler.compile("Main");
-			if (changed.requiresReload || changed.patchBytes == null)
+			if (changed.requiresReload || changed.artifact.hashLink().patchBytes == null)
 				throw 'version $version: required a reload: ${[for (reason in changed.reloadReasons) Std.string(reason)].join(", ")}';
 			Runtime.patchSet(live,
-				new PatchSet(build.revision, changed.revision, changed.patchBytes, changed.changedFunctions));
+				new PatchSet(build.revision, changed.revision, changed.artifact.hashLink().patchBytes,
+				changed.changedFunctions));
 			build = changed;
 			var expected = fresh(changed);
 			expect(Runtime.callInt(live, mainId), expected, 'version $version, the patched module against a fresh one');
@@ -85,8 +88,9 @@ class LiveCallerPatchMain {
 		return callee[version] + "function main():Int return Other.twice(5) * 1000 + scale(1);\n";
 
 	static function fresh(build:Dynamic):Int {
-		var module = Runtime.load(HlWriter.encode(build.module).flatten(), build.runtimeIdentity);
-		var value = Runtime.callInt(module, build.functionIds.get("main"));
+		var module = Runtime.load(HlWriter.encode(BackendArtifacts.hashLink(build.artifact).module).flatten(),
+			BackendArtifacts.hashLink(build.artifact).runtimeIdentity);
+		var value = Runtime.callInt(module, BackendArtifacts.hashLink(build.artifact).functionIds.get("main"));
 		Runtime.dispose(module);
 		return value;
 	}

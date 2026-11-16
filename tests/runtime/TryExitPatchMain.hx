@@ -1,3 +1,4 @@
+using compiler.compilation.BackendArtifact.BackendArtifacts;
 import compiler.Compiler;
 import compiler.hl.HlWriter;
 import runtime.PatchSet;
@@ -15,16 +16,18 @@ class TryExitPatchMain {
 			+ "; } } function main():Int { var first = Gate.pick(); Gate.open = false; return first * 100 + Gate.pick(); }";
 		compiler.update("Main.hx", program(1, 2));
 		var first = compiler.compile("Main"),
-			live = Runtime.load(HlWriter.encode(first.module).flatten(), first.runtimeIdentity),
-			mainId = first.functionIds.get("main");
+			live = Runtime.load(HlWriter.encode(first.artifact.hashLink().module).flatten(),
+				first.artifact.hashLink().runtimeIdentity),
+			mainId = first.artifact.hashLink().functionIds.get("main");
 		if (Runtime.callInt(live, mainId) != 102)
 			throw "The early-exit program did not run correctly before the edit";
 		compiler.update("Main.hx", program(3, 4));
 		var changed = compiler.compile("Main");
-		if (changed.requiresReload || changed.patchBytes == null)
+		if (changed.requiresReload || changed.artifact.hashLink().patchBytes == null)
 			throw "A body edit did not produce a compatible patch";
 		Runtime.patchSet(live,
-			new PatchSet(first.revision, changed.revision, changed.patchBytes, changed.changedFunctions));
+			new PatchSet(first.revision, changed.revision, changed.artifact.hashLink().patchBytes,
+			changed.changedFunctions));
 		// The first run left Gate.open true again, so the patched body takes the early exit and then the late one.
 		if (Runtime.callInt(live, mainId) != 304)
 			throw "The patched function kept its old body";

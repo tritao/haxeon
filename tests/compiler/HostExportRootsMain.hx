@@ -1,3 +1,4 @@
+using compiler.compilation.BackendArtifact.BackendArtifacts;
 import compiler.Compiler;
 import compiler.Compiler.CompileResult;
 import compiler.backend.wasm.WasmBackend;
@@ -58,7 +59,7 @@ class HostExportRootsMain {
 			if (temp == null) temp = "out";
 			var path = temp + "/host-enum-export-" + target + "-" + inlineEnabled + (target == "hl" ? ".hl" : ".wasm");
 			var bytes = target == "hl"
-				? HlWriter.encode(exposed.module).flatten() : new WasmBackend().compile(exposed.ir,
+				? HlWriter.encode(exposed.artifact.hashLink().module).flatten() : new WasmBackend().compile(exposed.ir,
 				{
 					target: target == "wasm32" ? Wasm32 : WasmGc,
 					debugNames: true,

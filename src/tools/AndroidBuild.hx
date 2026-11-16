@@ -2,6 +2,7 @@ package tools;
 
 import build.Target;
 import compiler.Compiler;
+import compiler.compilation.BackendArtifact.BackendArtifacts;
 import compiler.hl.HlWriter;
 import compiler.ir.Ir.IrType;
 import compiler.modules.ModulePath;
@@ -119,13 +120,14 @@ class AndroidBuild {
 			throw 'Android entry module "${sources.entry}" must define a top-level main():Void function';
 		if (mainFunction.arguments.length != 0 || mainFunction.result != IrType.Void)
 			throw 'Android entry function "main" must have signature main():Void';
-		var entryId = result.functionIds.get("main");
+		var build = BackendArtifacts.hashLink(result.artifact),
+			entryId = build.functionIds.get("main");
 		if (entryId == null)
 			throw 'Android entry function "main" has no stable ID';
 
 		FileSystem.createDirectory(Path.directory(output));
-		File.saveBytes(output, HlWriter.encode(result.module).flatten());
-		File.saveBytes(sidecar(output, ".hli"), result.runtimeIdentity);
+		File.saveBytes(output, HlWriter.encode(build.module).flatten());
+		File.saveBytes(sidecar(output, ".hli"), build.runtimeIdentity);
 		File.saveContent(sidecar(output, ".entry"), Std.string(entryId));
 		compiler.acknowledgePublication(result.revision);
 		File.saveBytes(sidecar(output, ".hcs"), compiler.exportIdentityState());
@@ -145,18 +147,19 @@ class AndroidBuild {
 				FileSystem.deleteFile(stale);
 		var compiler = prepare(sources, File.getBytes(baselinePath)),
 			result = compiler.compile(sources.entry),
+			build = BackendArtifacts.hashLink(result.artifact),
 			kind:String;
 		if (result.requiresReload) {
-			var entry = result.functionIds.get("main");
+			var entry = build.functionIds.get("main");
 			if (entry == null)
 				throw "Android reload module has no main function";
-			var bundle = reloadBundle(HlWriter.encode(result.module).flatten(), result.runtimeIdentity, entry);
+			var bundle = reloadBundle(HlWriter.encode(build.module).flatten(), build.runtimeIdentity, entry);
 			File.saveBytes(reloadPath, bundle);
 			Sys.println('compiled Android reload revision ${result.revision} (${bundle.length} bytes) -> $reloadPath');
 			kind = "reload";
-		} else if (result.patchBytes != null && result.patchBytes.length > 0) {
-			File.saveBytes(patchPath, result.patchBytes);
-			Sys.println('compiled Android patch revision ${result.revision} (${result.patchBytes.length} bytes) -> $patchPath');
+		} else if (build.patchBytes != null && build.patchBytes.length > 0) {
+			File.saveBytes(patchPath, build.patchBytes);
+			Sys.println('compiled Android patch revision ${result.revision} (${build.patchBytes.length} bytes) -> $patchPath');
 			kind = "patch";
 		} else {
 			Sys.println("unchanged");

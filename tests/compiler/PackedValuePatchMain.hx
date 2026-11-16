@@ -1,3 +1,4 @@
+using compiler.compilation.BackendArtifact.BackendArtifacts;
 import compiler.Compiler;
 import compiler.hl.HlType;
 import compiler.hl.HlWriter;
@@ -27,7 +28,7 @@ class PackedValuePatchMain {
 		compiler.update('Main.hx', mainSource);
 		var first = compiler.compile('Main');
 		var packed = false;
-		for (type in first.module.types)
+		for (type in first.artifact.hashLink().module.types)
 			switch type {
 				case Parameterized(kind, _) if (kind == HlType.Packed):
 					packed = true;
@@ -35,17 +36,19 @@ class PackedValuePatchMain {
 			}
 		if (!packed)
 			throw 'the fixture has no packed type';
-		var live = Runtime.load(HlWriter.encode(first.module).flatten(), first.runtimeIdentity);
+		var live = Runtime.load(HlWriter.encode(first.artifact.hashLink().module).flatten(),
+			first.artifact.hashLink().runtimeIdentity);
 		try {
-			var id = first.functionIds.get('Main.main');
+			var id = first.artifact.hashLink().functionIds.get('Main.main');
 			if (id == null || Runtime.callInt(live, id) != 40)
 				throw 'wrong initial value';
 			compiler.update('Point.hx', StringTools.replace(point, 'this.value=value;', 'this.value=value+2;'));
 			compiler.addSourceRoot('stdlib');
 			var next = compiler.compile('Main');
-			if (next.requiresReload || next.patchBytes == null)
+			if (next.requiresReload || next.artifact.hashLink().patchBytes == null)
 				throw 'body edit did not produce a patch';
-			Runtime.patchSet(live, new PatchSet(first.revision, next.revision, next.patchBytes, next.changedFunctions));
+			Runtime.patchSet(live, new PatchSet(first.revision, next.revision, next.artifact.hashLink().patchBytes,
+				next.changedFunctions));
 			if (Runtime.callInt(live, id) != 42)
 				throw 'wrong patched value';
 		} catch (error:Dynamic) {

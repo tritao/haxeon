@@ -16,7 +16,10 @@ import compiler.core.CancellationToken;
 import haxe.io.Bytes;
 import compiler.hl.HlCode;
 import compiler.hl.HlWriter;
+import compiler.compilation.BackendArtifact;
 import compiler.compilation.BackendSession.BackendAssemblyResult;
+import compiler.compilation.BackendSession.BackendTimings;
+import compiler.hl.persistence.HlRuntimeIdentity;
 
 /**
  * The HashLink backend of a compilation session. It owns what the next HashLink build starts from: the assembler of the last
@@ -63,13 +66,25 @@ class HashLinkBackendSession implements BackendSession {
 
 	/** An earlier result for this build: the module and everything derived from it stay, the timings are this build's (none). */
 	public function reuse(previous:BackendAssemblyResult, at:Float):BackendAssemblyResult {
-		assembler = previous.assembler;
+		var reusedAssembler = previous.assembler;
+		if (reusedAssembler == null)
+			throw "A HashLink session cannot reuse another backend's result";
+		assembler = reusedAssembler;
 		return {
-			assembly: previous.assembly,
-			assembler: previous.assembler,
+			artifact: previous.artifact,
+			assembler: reusedAssembler,
 			abi: previous.abi,
 			reloadReasons: previous.reloadReasons,
-			patchBytes: previous.patchBytes,
+			changedFunctions: previous.changedFunctions,
+			requiresReload: previous.requiresReload,
+			unchanged: previous.unchanged,
+			baseRevision: previous.baseRevision,
+			revision: previous.revision,
+			moduleFunctions: previous.moduleFunctions,
+			moduleNatives: previous.moduleNatives,
+			linkedFunctions: 0,
+			movedFunctions: 0,
+			timings: noTimings,
 			abiPlanningDoneAt: at,
 			backendAssemblyDoneAt: at,
 			patchEncodingDoneAt: at,
@@ -81,7 +96,19 @@ class HashLinkBackendSession implements BackendSession {
 
 	/** Why a module assembled from the same inputs differs from `previous`, or null when it is the same module. */
 	public function difference(previous:BackendAssemblyResult, fresh:BackendAssemblyResult):Null<String>
-		return moduleDifference(previous.assembly.module, fresh.assembly.module);
+		return moduleDifference(BackendArtifacts.hashLink(previous.artifact).module,
+			BackendArtifacts.hashLink(fresh.artifact).module);
+
+	static final noTimings:BackendTimings = {
+		cachePreparationMs: 0.0,
+		loweringMs: 0.0,
+		publicationMs: 0.0,
+		verificationMs: 0.0,
+		metadataMs: 0.0,
+		functionLoweringMs: 0.0,
+		debugAssemblyMs: 0.0,
+		lowerFinalizationMs: 0.0
+	};
 
 	/** What the lowering was done for besides the IR; entries made for another environment are not used (see `HlLoweredCache`). */
 	static function loweringEnvironment(assembler:HlModuleAssembler, context:CompilationContext):String
@@ -232,12 +259,38 @@ class HashLinkBackendSession implements BackendSession {
 			}], candidateAssembler.symbols.namedGlobals());
 		var allocationAfterPatch = AllocationMeter.sample();
 		assembler = candidateAssembler;
+		var stableIds = candidateAssembler.cache.stableIds;
 		return {
-			assembly: assembly,
+			artifact: HashLinkBuild({
+				module: assembly.module,
+				functionIndices: CompilationContext.copyIndices(assembly.functionIndices),
+				functionIds: CompilationContext.copyIndices(stableIds),
+				runtimeIdentity: HlRuntimeIdentity.encode(context.moduleId, assembly.revision, assembly.functionIndices,
+					stableIds),
+				patchBytes: patchBytes
+			}),
 			assembler: candidateAssembler,
 			abi: nextAbi,
 			reloadReasons: reloadReasons,
-			patchBytes: patchBytes,
+			changedFunctions: assembly.changedFunctions,
+			requiresReload: assembly.requiresReload,
+			unchanged: assembly.unchanged,
+			baseRevision: assembly.baseRevision,
+			revision: assembly.revision,
+			moduleFunctions: assembly.module.functions.length,
+			moduleNatives: assembly.module.natives.length,
+			linkedFunctions: candidateAssembler.reusedFunctions,
+			movedFunctions: candidateAssembler.movedFunctions,
+			timings: {
+				cachePreparationMs: assembly.cachePreparationMs,
+				loweringMs: assembly.loweringMs,
+				publicationMs: assembly.publicationMs,
+				verificationMs: assembly.verificationMs,
+				metadataMs: assembly.metadataMs,
+				functionLoweringMs: assembly.functionLoweringMs,
+				debugAssemblyMs: assembly.debugAssemblyMs,
+				lowerFinalizationMs: assembly.lowerFinalizationMs
+			},
 			assemblerCopyMs: assemblerCopiedAt - abiPlanningDoneAt,
 			snapshotAttachmentMs: backendAssemblyDoneAt - assembledAt,
 			abiPlanningDoneAt: abiPlanningDoneAt,

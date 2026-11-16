@@ -1,3 +1,4 @@
+using compiler.compilation.BackendArtifact.BackendArtifacts;
 import compiler.Compiler;
 import compiler.hl.HlWriter;
 import runtime.PatchSet;
@@ -16,14 +17,17 @@ class LiveOptionalScalarMain {
 			var compiler = new Compiler();
 			compiler.update("Main.hx", source(1));
 			var first = compiler.compile("Main"),
-				live = Runtime.load(HlWriter.encode(first.module).flatten(), first.runtimeIdentity),
-				id = first.functionIds.get("main");
+				live = Runtime.load(HlWriter.encode(first.artifact.hashLink().module).flatten(),
+					first.artifact.hashLink().runtimeIdentity),
+				id = first.artifact.hashLink().functionIds.get("main");
 			if (Runtime.callInt(live, id) != 41) throw "initial optional scalar call failed";
 			compiler.update("Main.hx", source(2));
 			var next = compiler.compile("Main");
 			if (next.requiresReload
-				|| next.patchBytes == null) throw "editing an optional scalar call unexpectedly required a reload";
-			Runtime.patchSet(live, new PatchSet(first.revision, next.revision, next.patchBytes, next.changedFunctions));
+				|| next.artifact.hashLink().patchBytes == null)
+				throw "editing an optional scalar call unexpectedly required a reload";
+			Runtime.patchSet(live, new PatchSet(first.revision, next.revision, next.artifact.hashLink().patchBytes,
+				next.changedFunctions));
 			if (Runtime.callInt(live, id) != 42) throw "live optional scalar clone retained its old body";
 			Runtime.dispose(live);
 		}

@@ -1,3 +1,4 @@
+using compiler.compilation.BackendArtifact.BackendArtifacts;
 import compiler.Compiler;
 import compiler.hl.HlWriter;
 import sys.io.File;
@@ -21,6 +22,6 @@ class CastTypeMain {
 		compiler.update("app/Measure.hx", MEASURE);
 		compiler.update("app/Main.hx", MAIN);
 		var result = compiler.compile("app.Main");
-		File.saveBytes(Sys.args()[0], HlWriter.encode(result.module).flatten());
+		File.saveBytes(Sys.args()[0], HlWriter.encode(result.artifact.hashLink().module).flatten());
 	}
 }

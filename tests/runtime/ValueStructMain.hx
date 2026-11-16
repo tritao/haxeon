@@ -1,3 +1,4 @@
+using compiler.compilation.BackendArtifact.BackendArtifacts;
 import compiler.Compiler;
 import compiler.core.Diagnostic.CompileError;
 import compiler.hl.HlCode.HlTypeDef;
@@ -14,7 +15,7 @@ class ValueStructMain {
 		var result = compiler.compile("Main"),
 			foundStructure = false,
 			foundPacked = false;
-		for (type in result.module.types)
+		for (type in result.artifact.hashLink().module.types)
 			switch type {
 				case Structure(_, _, _, _, _):
 					foundStructure = true;
@@ -25,8 +26,8 @@ class ValueStructMain {
 			}
 		if (!foundStructure || !foundPacked)
 			throw "value structures must emit HSTRUCT and packed embedded fields";
-		var restored = HlTypeDefStateCodec.decode(HlTypeDefStateCodec.encode(result.module.types),
-			result.module.strings.length, result.module.globals.length);
+		var restored = HlTypeDefStateCodec.decode(HlTypeDefStateCodec.encode(result.artifact.hashLink().module.types),
+			result.artifact.hashLink().module.strings.length, result.artifact.hashLink().module.globals.length);
 		if ([for (type in restored)
 			if (switch type {
 				case Structure(_, _, _, _, _): true;
@@ -56,7 +57,7 @@ class ValueStructMain {
 		var nativeResult = nativeValue.compile("Main");
 		if ([for (object in nativeResult.ir.objects) if (object.name == "Point") object].length != 0)
 			throw "C-represented values must not produce HashLink object declarations";
-		File.saveBytes(Sys.args()[0], HlWriter.encode(result.module).flatten());
+		File.saveBytes(Sys.args()[0], HlWriter.encode(result.artifact.hashLink().module).flatten());
 	}
 
 	static function expectCompileError(source:String, expected:String):Void {

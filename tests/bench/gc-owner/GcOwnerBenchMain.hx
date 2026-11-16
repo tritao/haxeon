@@ -1,4 +1,5 @@
 import compiler.Compiler;
+import compiler.compilation.BackendArtifact.BackendArtifacts;
 import compiler.hl.HlWriter;
 import runtime.Runtime;
 
@@ -96,8 +97,9 @@ function main():Int { return 0; }";
 			compiler.update("Main.hx", StringTools.replace(StringTools.replace(moduleSource, "ITER",
 				Std.string(iterations)), "LIVE", Std.string(liveNodes)));
 			var compiled = compiler.compile("Main");
-			var module = Runtime.load(HlWriter.encode(compiled.module).flatten(), compiled.runtimeIdentity);
-			var run = compiled.functionIds.get("Main.run");
+			var module = Runtime.load(HlWriter.encode(BackendArtifacts.hashLink(compiled.artifact).module).flatten(),
+				BackendArtifacts.hashLink(compiled.artifact).runtimeIdentity);
+			var run = BackendArtifacts.hashLink(compiled.artifact).functionIds.get("Main.run");
 			var c0 = GcStats.collections(),
 				m0 = GcStats.markMicros(),
 				a0 = GcStats.totalAllocated();

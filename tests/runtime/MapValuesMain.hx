@@ -1,3 +1,4 @@
+using compiler.compilation.BackendArtifact.BackendArtifacts;
 import compiler.Compiler;
 import compiler.hl.HlWriter;
 import runtime.Runtime;
@@ -18,8 +19,9 @@ class MapValuesMain {
 			+ 'var action = function() return options[selectedIndex]; return action(); }; '
 			+ 'return choose() == "One" ? 0 : 2; } }');
 		var result = compiler.compile("Main");
-		var live = Runtime.load(HlWriter.encode(result.module).flatten(), result.runtimeIdentity);
-		var code = Runtime.callInt(live, result.functionIds.get("Main.main"));
+		var live = Runtime.load(HlWriter.encode(result.artifact.hashLink().module).flatten(),
+			result.artifact.hashLink().runtimeIdentity);
+		var code = Runtime.callInt(live, result.artifact.hashLink().functionIds.get("Main.main"));
 		Runtime.dispose(live);
 		if (code != 0)
 			throw 'Map value iteration or nested capture failed: $code';

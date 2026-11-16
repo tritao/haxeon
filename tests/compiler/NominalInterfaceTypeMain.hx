@@ -1,3 +1,4 @@
+using compiler.compilation.BackendArtifact.BackendArtifacts;
 import compiler.Compiler;
 import compiler.Frontend;
 import compiler.backend.wasm.WasmBackend;
@@ -25,7 +26,8 @@ class NominalInterfaceTypeMain {
 				if (temp == null) temp = "out";
 				var path = temp + "/nominal-interface-" + target + inlining + (target == "hl" ? ".hl" : ".wasm");
 				sys.io.File.saveBytes(path,
-					target == "hl" ? HlWriter.encode(result.module).flatten() : new WasmBackend().compile(result.ir, {
+					target == "hl" ? HlWriter.encode(result.artifact.hashLink().module).flatten()
+					: new WasmBackend().compile(result.ir, {
 						target: target == "wasm32" ? Wasm32 : WasmGc, debugNames: true
 					}).bytes);
 				var js =

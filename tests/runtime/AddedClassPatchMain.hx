@@ -1,3 +1,4 @@
+using compiler.compilation.BackendArtifact.BackendArtifacts;
 import compiler.Compiler;
 import compiler.hl.HlCode.HlTypeDef;
 import compiler.hl.HlWriter;
@@ -36,8 +37,9 @@ class AddedClassPatchMain {
 		var compiler = new Compiler();
 		compiler.update("Main.hx", program("", "keys.length", "(x:Int) -> x + offset", ""));
 		var build = compiler.compile("Main"),
-			live = Runtime.load(HlWriter.encode(build.module).flatten(), build.runtimeIdentity),
-			mainId = build.functionIds.get("main");
+			live = Runtime.load(HlWriter.encode(build.artifact.hashLink().module).flatten(),
+				build.artifact.hashLink().runtimeIdentity),
+			mainId = build.artifact.hashLink().functionIds.get("main");
 		// 3 * 1000 + 15 * 10 + 6
 		var before = Runtime.callInt(live, mainId);
 		if (before != 3156)
@@ -62,11 +64,11 @@ class AddedClassPatchMain {
 			"new Counter(keys.length).bump()", "(x:Int) -> x * scale + offset",
 			" + total(new Wide()) * 100000 + total(new Fixed(7)) * 10000000 + weigh(new Heavy())"));
 		var changed = compiler.compile("Main");
-		if (changed.requiresReload || changed.patchBytes == null)
-			throw 'Adding classes required a reload (requiresReload ${changed.requiresReload}, patch ${changed.patchBytes != null}): '
+		if (changed.requiresReload || changed.artifact.hashLink().patchBytes == null)
+			throw 'Adding classes required a reload (requiresReload ${changed.requiresReload}, patch ${changed.artifact.hashLink().patchBytes != null}): '
 				+ [for (reason in changed.reloadReasons) Std.string(reason)].join(", ");
 		var objects = 0, virtuals = 0;
-		for (type in HlPatchReader.decode(changed.patchBytes).types)
+		for (type in HlPatchReader.decode(changed.artifact.hashLink().patchBytes).types)
 			switch type {
 				case Object(_, _, _, _, _, _): objects++;
 				case Virtual(_, _): virtuals++;
@@ -76,7 +78,8 @@ class AddedClassPatchMain {
 		if (objects < 5 || virtuals < 1)
 			throw 'The patch appends $objects object and $virtuals virtual types instead of at least 5 and 1';
 		Runtime.patchSet(live,
-			new PatchSet(build.revision, changed.revision, changed.patchBytes, changed.changedFunctions));
+			new PatchSet(build.revision, changed.revision, changed.artifact.hashLink().patchBytes,
+			changed.changedFunctions));
 		// Panel: Counter(3).bump() = 13. The stored closure is the one made before the edit: 10 + 5. The new f: 1 * 2 + 5.
 		// Wide: Counter(4).bump() + 100 = 114. Fixed: 7. Heavy, through the new interface Weighted: 9.
 		var expected = 13 * 1000 + 15 * 10 + 7 + 114 * 100000 + 7 * 10000000 + 9;
@@ -104,17 +107,19 @@ class AddedClassPatchMain {
 			"new Counter(keys.length).bump()", "(x:Int) -> x * scale + offset",
 			" + total(new Wide()) * 100000 + total(new Fixed(7)) * 10000000 + weigh(new Heavy())"));
 		var edited = compiler.compile("Main");
-		if (edited.requiresReload || edited.patchBytes == null)
+		if (edited.requiresReload || edited.artifact.hashLink().patchBytes == null)
 			throw 'Editing an added class required a reload: '
 				+ [for (reason in edited.reloadReasons) Std.string(reason)].join(", ");
 		Runtime.patchSet(live,
-			new PatchSet(changed.revision, edited.revision, edited.patchBytes, edited.changedFunctions));
+			new PatchSet(changed.revision, edited.revision, edited.artifact.hashLink().patchBytes,
+			edited.changedFunctions));
 		expected = 23 * 1000 + 15 * 10 + 7 + 124 * 100000 + 7 * 10000000 + 9;
 		after = Runtime.callInt(live, mainId);
 		if (after != expected)
 			throw 'After editing an added class the patched module returned $after instead of $expected';
-		var fresh = Runtime.load(HlWriter.encode(edited.module).flatten(), edited.runtimeIdentity);
-		var clean = Runtime.callInt(fresh, edited.functionIds.get("main"));
+		var fresh = Runtime.load(HlWriter.encode(edited.artifact.hashLink().module).flatten(),
+			edited.artifact.hashLink().runtimeIdentity);
+		var clean = Runtime.callInt(fresh, edited.artifact.hashLink().functionIds.get("main"));
 		Runtime.dispose(fresh);
 		// A fresh module runs the same code: the stored lambda did not change.
 		if (clean != expected)

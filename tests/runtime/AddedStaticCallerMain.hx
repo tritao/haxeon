@@ -1,3 +1,4 @@
+using compiler.compilation.BackendArtifact.BackendArtifacts;
 import compiler.Compiler;
 import compiler.hl.HlWriter;
 import compiler.runtime.CompilerIntrinsics;
@@ -25,8 +26,9 @@ class AddedStaticCallerMain {
 		compiler.addStandardLibrarySourceRoot("stdlib");
 		compiler.update("Main.hx", program("", "plural(keys.length, \"Item\")"));
 		var build = compiler.compile("Main"),
-			live = Runtime.load(HlWriter.encode(build.module).flatten(), build.runtimeIdentity),
-			mainId = build.functionIds.get("main");
+			live = Runtime.load(HlWriter.encode(build.artifact.hashLink().module).flatten(),
+				build.artifact.hashLink().runtimeIdentity),
+			mainId = build.artifact.hashLink().functionIds.get("main");
 		if (Runtime.callInt(live, mainId) != 14)
 			throw "The program did not run correctly before the edit";
 		compiler.update("Main.hx", program("  static function closeLabel(keys:Array<String>):String {\n"
@@ -34,11 +36,12 @@ class AddedStaticCallerMain {
 			+ "    return \"Close \" + plural(keys.length, terminals == keys.length ? \"Terminal\" : \"Item\") + ' ($terminals)';\n"
 			+ "  }\n", "closeLabel(keys)"));
 		var changed = compiler.compile("Main");
-		if (changed.requiresReload || changed.patchBytes == null)
-			throw 'The edit required a reload (requiresReload ${changed.requiresReload}, patch ${changed.patchBytes != null}): '
+		if (changed.requiresReload || changed.artifact.hashLink().patchBytes == null)
+			throw 'The edit required a reload (requiresReload ${changed.requiresReload}, patch ${changed.artifact.hashLink().patchBytes != null}): '
 				+ [for (reason in changed.reloadReasons) Std.string(reason)].join(", ");
 		Runtime.patchSet(live,
-			new PatchSet(build.revision, changed.revision, changed.patchBytes, changed.changedFunctions));
+			new PatchSet(build.revision, changed.revision, changed.artifact.hashLink().patchBytes,
+			changed.changedFunctions));
 		// "Close 3 Items (2)" twice.
 		var result = Runtime.callInt(live, mainId);
 		if (result != 34)
@@ -46,16 +49,18 @@ class AddedStaticCallerMain {
 		// Undoing the edit removes the function again, which patches too.
 		compiler.update("Main.hx", program("", "plural(keys.length, \"Item\")"));
 		var undone = compiler.compile("Main");
-		if (undone.requiresReload || undone.patchBytes == null)
+		if (undone.requiresReload || undone.artifact.hashLink().patchBytes == null)
 			throw 'Removing the function required a reload: '
 				+ [for (reason in undone.reloadReasons) Std.string(reason)].join(", ");
 		Runtime.patchSet(live,
-			new PatchSet(changed.revision, undone.revision, undone.patchBytes, undone.changedFunctions));
+			new PatchSet(changed.revision, undone.revision, undone.artifact.hashLink().patchBytes,
+			undone.changedFunctions));
 		result = Runtime.callInt(live, mainId);
 		if (result != 14)
 			throw 'After removing the function the patched module returned $result instead of 14';
-		var fresh = Runtime.load(HlWriter.encode(undone.module).flatten(), undone.runtimeIdentity);
-		result = Runtime.callInt(fresh, undone.functionIds.get("main"));
+		var fresh = Runtime.load(HlWriter.encode(undone.artifact.hashLink().module).flatten(),
+			undone.artifact.hashLink().runtimeIdentity);
+		result = Runtime.callInt(fresh, undone.artifact.hashLink().functionIds.get("main"));
 		Runtime.dispose(fresh);
 		if (result != 14)
 			throw 'After removing the function the full module returned $result instead of 14';

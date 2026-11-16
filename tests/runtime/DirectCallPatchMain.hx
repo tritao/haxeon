@@ -1,3 +1,4 @@
+using compiler.compilation.BackendArtifact.BackendArtifacts;
 import compiler.Compiler;
 import compiler.hl.HlWriter;
 import compiler.ir.IrInliner;
@@ -58,10 +59,11 @@ class DirectCallPatchMain {
 		var compiler = new Compiler();
 		compiler.update("Main.hx", program(1, false));
 		var build = compiler.compile("Main"),
-			live = Runtime.load(HlWriter.encode(build.module).flatten(), build.runtimeIdentity);
+			live = Runtime.load(HlWriter.encode(build.artifact.hashLink().module).flatten(),
+				build.artifact.hashLink().runtimeIdentity);
 		var check = (label:String, v:Int, extra:Bool) -> {
 			for (name => want in expected(v, extra)) {
-				var got = Runtime.callInt(live, build.functionIds.get(name));
+				var got = Runtime.callInt(live, build.artifact.hashLink().functionIds.get(name));
 				if (got != want)
 					throw 'After $label $name returned $got instead of $want';
 			}
@@ -71,8 +73,8 @@ class DirectCallPatchMain {
 		// The callers reach their callees with a call to the callee's own entry, not through the stub table. x86-64 and AArch64
 		// call a patchable function directly (HL_JIT_DIRECT_PATCHABLE_CALLS); elsewhere the hooks answer -1, every call goes
 		// through the function's stub, and only the results below are checked.
-		var directCalls = Runtime.callsDirectly(live, build.functionIds.get("Main.callLeaf"),
-			build.functionIds.get("Calc.leaf")) >= 0;
+		var directCalls = Runtime.callsDirectly(live, build.artifact.hashLink().functionIds.get("Main.callLeaf"),
+			build.artifact.hashLink().functionIds.get("Calc.leaf")) >= 0;
 		var direct = [
 			"Main.callLeaf" => "Calc.leaf",
 			"Main.callTiny" => "Calc.tiny",
@@ -82,13 +84,15 @@ class DirectCallPatchMain {
 		];
 		for (caller => callee in direct)
 			if (directCalls
-				&& Runtime.callsDirectly(live, build.functionIds.get(caller), build.functionIds.get(callee)) != 1)
+				&& Runtime.callsDirectly(live, build.artifact.hashLink().functionIds.get(caller),
+				build.artifact.hashLink().functionIds.get(callee)) != 1)
 				throw '$caller does not call $callee directly';
 		if (directCalls
-			&& Runtime.callsDirectly(live, build.functionIds.get("Calc.fact"), build.functionIds.get("Calc.fact")) != 1)
+			&& Runtime.callsDirectly(live, build.artifact.hashLink().functionIds.get("Calc.fact"),
+			build.artifact.hashLink().functionIds.get("Calc.fact")) != 1)
 			throw "A recursive function does not call itself directly";
 		for (name in ["Calc.leaf", "Calc.tiny", "Calc.fact", "Calc.fail"])
-			if (directCalls && Runtime.entryState(live, build.functionIds.get(name)) != 0)
+			if (directCalls && Runtime.entryState(live, build.artifact.hashLink().functionIds.get(name)) != 0)
 				throw 'The entry of $name was rewritten before any patch';
 
 		var edits = [
@@ -100,20 +104,22 @@ class DirectCallPatchMain {
 		for (edit in edits) {
 			compiler.update("Main.hx", program(edit.v, edit.extra));
 			var changed = compiler.compile("Main");
-			if (changed.requiresReload || changed.patchBytes == null)
+			if (changed.requiresReload || changed.artifact.hashLink().patchBytes == null)
 				throw 'The edit for ${edit.label} required a reload: ${[for (reason in changed.reloadReasons) Std.string(reason)].join(", ")}';
 			Runtime.patchSet(live,
-				new PatchSet(build.revision, changed.revision, changed.patchBytes, changed.changedFunctions));
+				new PatchSet(build.revision, changed.revision, changed.artifact.hashLink().patchBytes,
+				changed.changedFunctions));
 			build = changed;
 			check(edit.label, edit.v, edit.extra);
 			// Every patched function's original entry now jumps to its stub with one atomic store.
 			for (name in ["Calc.leaf", "Calc.tiny", "Calc.fact", "Calc.fail"])
-				if (directCalls && Runtime.entryState(live, build.functionIds.get(name)) != 2)
-					throw 'After ${edit.label} the entry of $name is in state ${Runtime.entryState(live, build.functionIds.get(name))}, not the atomic jump';
+				if (directCalls && Runtime.entryState(live, build.artifact.hashLink().functionIds.get(name)) != 2)
+					throw 'After ${edit.label} the entry of $name is in state ${Runtime.entryState(live, build.artifact.hashLink().functionIds.get(name))}, not the atomic jump';
 		}
 		// A full module built from the last source runs the same, so the patched run was not special.
-		var fresh = Runtime.load(HlWriter.encode(build.module).flatten(), build.runtimeIdentity);
-		var reloaded = Runtime.callInt(fresh, build.functionIds.get("Main.callLeaf"));
+		var fresh = Runtime.load(HlWriter.encode(build.artifact.hashLink().module).flatten(),
+			build.artifact.hashLink().runtimeIdentity);
+		var reloaded = Runtime.callInt(fresh, build.artifact.hashLink().functionIds.get("Main.callLeaf"));
 		Runtime.dispose(fresh);
 		if (reloaded != expected(1, true).get("Main.callLeaf"))
 			throw 'The full module returned $reloaded';

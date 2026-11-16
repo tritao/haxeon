@@ -1,3 +1,4 @@
+using compiler.compilation.BackendArtifact.BackendArtifacts;
 import compiler.Compiler;
 import compiler.compilation.CompilerPublication.ReconnectDecision;
 import compiler.core.Diagnostic.CompileError;
@@ -21,11 +22,11 @@ class ModuleMain {
 		var first = compiler.compile("Main");
 		var noOp = compiler.compile("Main");
 		if (noOp.revision != first.revision
-			|| noOp.module != first.module
+			|| noOp.artifact.hashLink().module != first.artifact.hashLink().module
 			|| noOp.metrics.retypedFunctions != 0
 			|| noOp.metrics.regeneratedFunctions != 0
 			|| noOp.changedFunctions.length != 0
-			|| noOp.patchBytes != null)
+			|| noOp.artifact.hashLink().patchBytes != null)
 			throw "Unchanged compilation did not reuse the last successful build";
 		var mainDependencies = compiler.modules.get("Main").semanticDependencies.get("main"),
 			hasBodyDependency = false;
@@ -52,18 +53,19 @@ class ModuleMain {
 			if (error != "Native registrations are frozen after the first compilation")
 				throw error;
 		}
-		var mathIndex = first.functionIndices.get("Math.add"),
-			mathId = first.functionIds.get("Math.add");
-		var twentyIndex = first.module.ints.indexOf(20);
+		var mathIndex = first.artifact.hashLink().functionIndices.get("Math.add"),
+			mathId = first.artifact.hashLink().functionIds.get("Math.add");
+		var twentyIndex = first.artifact.hashLink().module.ints.indexOf(20);
 		compiler.update("Aardvark.hx", "function helper(x:Int):Int { return x + 7; }");
 		var added = compiler.compile("Main");
-		if (added.functionIndices.get("Math.add") != mathIndex)
+		if (added.artifact.hashLink().functionIndices.get("Math.add") != mathIndex)
 			throw "Adding an earlier module renumbered Math.add";
-		if (added.functionIds.get("Math.add") != mathId)
+		if (added.artifact.hashLink().functionIds.get("Math.add") != mathId)
 			throw "Adding a function changed the stable Math.add identity";
-		if (added.module.ints.indexOf(20) != twentyIndex)
+		if (added.artifact.hashLink().module.ints.indexOf(20) != twentyIndex)
 			throw "Adding a constant renumbered an existing constant";
-		var firstBytes = HlWriter.encodeFunction(functionByIndex(added.module.functions, mathIndex)),
+		var firstBytes = HlWriter.encodeFunction(functionByIndex(added.artifact.hashLink().module.functions,
+			mathIndex)),
 			unchangedMain = compiler.modules.get("Main");
 		compiler.update("Math.hx", "function add(a:Int, b:Int):Int { var sum = a + b; return sum; }");
 		var result = compiler.compile("Main");
@@ -83,15 +85,16 @@ class ModuleMain {
 		// Typing and IR regeneration touch only the edited function. With inlining, the caller that inlined it changes too.
 		var expectedChanged = IrInliner.enabled ? 2 : 1;
 		if (result.changedFunctions.length != expectedChanged
-			|| result.changedFunctions.indexOf(result.functionIds.get("Math.add")) < 0
+			|| result.changedFunctions.indexOf(result.artifact.hashLink().functionIds.get("Math.add")) < 0
 			|| IrInliner.enabled
-			&& result.changedFunctions.indexOf(result.functionIds.get("main")) < 0)
+			&& result.changedFunctions.indexOf(result.artifact.hashLink().functionIds.get("main")) < 0)
 			throw 'Wrong changed stable functions: ${result.changedFunctions}';
-		if (result.patchBytes == null)
+		if (result.artifact.hashLink().patchBytes == null)
 			throw "Compatible body edit did not emit HLP bytes";
-		if (result.metrics.changedFunctions != expectedChanged || result.metrics.patchBytes != result.patchBytes.length)
+		if (result.metrics.changedFunctions != expectedChanged
+			|| result.metrics.patchBytes != result.artifact.hashLink().patchBytes.length)
 			throw "Compile metrics did not describe the compatible patch";
-		var decodedPatch = HlPatchReader.decode(result.patchBytes);
+		var decodedPatch = HlPatchReader.decode(result.artifact.hashLink().patchBytes);
 		var patchedIndices = [for (patched in decodedPatch.functions) patched.functionIndex];
 		if (decodedPatch.functions.length != expectedChanged || patchedIndices.indexOf(mathId) < 0)
 			throw "Compiler HLP did not contain exactly the changed function and the callers that inlined it";
@@ -99,7 +102,8 @@ class ModuleMain {
 			throw "Body edit unexpectedly requires reload";
 		if (compiler.modules.get("Unused").parseVersion != 0 || compiler.modules.get("Unused").typeVersion != 0)
 			throw 'Unreachable module had unexpected work: parse=${compiler.modules.get("Unused").parseVersion}, type=${compiler.modules.get("Unused").typeVersion}';
-		var secondBytes = HlWriter.encodeFunction(functionByIndex(result.module.functions, mathIndex));
+		var secondBytes = HlWriter.encodeFunction(functionByIndex(result.artifact.hashLink().module.functions,
+			mathIndex));
 		if (firstBytes.compare(secondBytes) != 0)
 			throw "Equivalent incremental builds were not deterministic";
 		var committedIdentity = compiler.exportIdentityState(),
@@ -139,14 +143,15 @@ class ModuleMain {
 		compiler.update("Main.hx",
 			"import Temp; function main():Int { print(\"native registration works\\n\"); return Math.add(20, 22); }");
 		var withOld = compiler.compile("Main"),
-			oldIndex = withOld.functionIndices.get("Temp.oldValue"),
-			oldId = withOld.functionIds.get("Temp.oldValue");
+			oldIndex = withOld.artifact.hashLink().functionIndices.get("Temp.oldValue"),
+			oldId = withOld.artifact.hashLink().functionIds.get("Temp.oldValue");
 		compiler.update("Temp.hx", "function freshValue():Int { return 4; }");
 		var removed = compiler.compile("Main");
-		if (removed.functionIndices.get("Temp.oldValue") != oldIndex
-			|| removed.functionIndices.get("Temp.freshValue") <= oldIndex)
+		if (removed.artifact.hashLink().functionIndices.get("Temp.oldValue") != oldIndex
+			|| removed.artifact.hashLink().functionIndices.get("Temp.freshValue") <= oldIndex)
 			throw "Removed function slot was not retained as a tombstone";
-		if (removed.functionIds.get("Temp.oldValue") != oldId || removed.functionIds.get("Temp.freshValue") == oldId)
+		if (removed.artifact.hashLink().functionIds.get("Temp.oldValue") != oldId
+			|| removed.artifact.hashLink().functionIds.get("Temp.freshValue") == oldId)
 			throw "Function removal reused or changed a stable identity";
 		// A removed function keeps its slot and last body, which the new code no longer calls, so the removal patches.
 		if (removed.requiresReload)
@@ -155,16 +160,17 @@ class ModuleMain {
 		if (unchanged.changedFunctions.length != 0 || unchanged.requiresReload)
 			throw "Unchanged build reported changes";
 		var compacted = compiler.compact("Main");
-		if (compacted.functionIndices.exists("Temp.oldValue"))
+		if (compacted.artifact.hashLink().functionIndices.exists("Temp.oldValue"))
 			throw "Compact build retained tombstone";
-		if (compacted.functionIds.get("Math.add") != mathId)
+		if (compacted.artifact.hashLink().functionIds.get("Math.add") != mathId)
 			throw "Compaction changed a live function identity";
 		var resumed = new Compiler(compiler.exportIdentityState());
 		resumed.update("Math.hx", "function add(a:Int, b:Int):Int { return a + b; }");
 		resumed.update("Main.hx", "function main():Int { return Math.add(20, 22); }");
 		var resumedBuild = resumed.compile("Main");
-		if (resumedBuild.functionIds.get("Math.add") != mathId
-			|| resumedBuild.runtimeIdentity.sub(4, 16).compare(compacted.runtimeIdentity.sub(4, 16)) != 0)
+		if (resumedBuild.artifact.hashLink().functionIds.get("Math.add") != mathId
+			|| resumedBuild.artifact.hashLink().runtimeIdentity.sub(4,
+			16).compare(compacted.artifact.hashLink().runtimeIdentity.sub(4, 16)) != 0)
 			throw "Serialized compiler identity did not survive restart";
 		var layoutA = new Compiler(), layoutB = new Compiler();
 		layoutA.registerNative("clock", "std", "sys_time", [], TFloat);
@@ -173,11 +179,12 @@ class ModuleMain {
 		layoutA.update("Main.hx", "function main():Int { return 1; }");
 		layoutB.update("Main.hx", "function main():Int { return 1; }");
 		var buildA = layoutA.compile("Main"), buildB = layoutB.compile("Main");
-		if (buildA.functionIds.get("main") != buildB.functionIds.get("main"))
+		if (buildA.artifact.hashLink().functionIds.get("main") != buildB.artifact.hashLink().functionIds.get("main"))
 			throw "Native layout changed persistent user-function identity";
-		if (buildA.functionIndices.get("main") == buildB.functionIndices.get("main"))
+		if (buildA.artifact.hashLink().functionIndices.get("main")
+			== buildB.artifact.hashLink().functionIndices.get("main"))
 			throw "Test did not exercise distinct backend native layouts";
-		File.saveBytes(output, HlWriter.encode(compacted.module).flatten());
+		File.saveBytes(output, HlWriter.encode(compacted.artifact.hashLink().module).flatten());
 
 		var missing = new Compiler();
 		missing.update("Main.hx", "function main():Int { return Missing.value(); }");
@@ -229,7 +236,7 @@ class ModuleMain {
 			return null;
 		}
 		var lambdaFirst = lambdaCompiler.compile("Main"),
-			lambdaId = lambdaIdIn(lambdaFirst.functionIds);
+			lambdaId = lambdaIdIn(lambdaFirst.artifact.hashLink().functionIds);
 		if (lambdaId == null)
 			throw "Generated lambda did not receive a stable function identity";
 		var lambdaUnchanged = lambdaCompiler.compile("Main");
@@ -237,14 +244,14 @@ class ModuleMain {
 			throw "Unchanged lambda build reported changes";
 		lambdaCompiler.update("Main.hx", "function main():Int { var f = () -> { return 41 + 1; }; return f(); }");
 		var lambdaBody = lambdaCompiler.compile("Main");
-		if (lambdaIdIn(lambdaBody.functionIds) != lambdaId || lambdaBody.retyped.length != 2)
+		if (lambdaIdIn(lambdaBody.artifact.hashLink().functionIds) != lambdaId || lambdaBody.retyped.length != 2)
 			throw "Lambda body edit did not preserve or regenerate its generated function";
 		var capturedCompiler = new Compiler();
 		capturedCompiler.update("Main.hx",
 			"function main():Int { var offset = 21; var f = (value:Int) -> { return value + offset; }; return f(21); }");
 		var capturedFirst = capturedCompiler.compile("Main"),
 			capturedLambdaId:Null<Int> = null;
-		for (name => id in capturedFirst.functionIds)
+		for (name => id in capturedFirst.artifact.hashLink().functionIds)
 			if (StringTools.startsWith(name, "$lambda:"))
 				capturedLambdaId = id;
 		if (capturedLambdaId == null || capturedFirst.ir.objects.length == 0)
@@ -259,9 +266,9 @@ class ModuleMain {
 		methodCompiler.update("Main.hx",
 			"class Editor { public function get():Int { return 21; } } function main():Int { var editor = new Editor(); return editor.get() + 21; }");
 		var methodBuild = methodCompiler.compile("Main");
-		if (methodBuild.patchBytes == null)
+		if (methodBuild.artifact.hashLink().patchBytes == null)
 			throw "Dynamic method body edit did not emit HLP bytes";
-		if (HlPatchReader.decode(methodBuild.patchBytes).functions.length == 0)
+		if (HlPatchReader.decode(methodBuild.artifact.hashLink().patchBytes).functions.length == 0)
 			throw "Dynamic method HLP patch was empty";
 		// A call relocation only exists while the call does, so keep the inliner out of this check.
 		var inliningWas = IrInliner.enabled;
@@ -273,7 +280,7 @@ class ModuleMain {
 		callManyCompiler.update("Main.hx",
 			"function sum(a:Int, b:Int, c:Int):Int { return a + b + c; } function main():Int { return sum(11, 20, 12); }");
 		var callManyBuild = callManyCompiler.compile("Main"),
-			callManyPatch = HlPatchReader.decode(callManyBuild.patchBytes),
+			callManyPatch = HlPatchReader.decode(callManyBuild.artifact.hashLink().patchBytes),
 			callManyRelocations = 0;
 		for (fn in callManyPatch.functions)
 			callManyRelocations += fn.relocations.length;
@@ -306,7 +313,8 @@ class ModuleMain {
 		catch (_:CompileError) {}
 		failedCompact.update("Main.hx", "function main():Int { return 41; }");
 		var afterCompactFailure = failedCompact.compile("Main");
-		if (afterCompactFailure.revision != beforeCompactFailure.revision + 1 || afterCompactFailure.patchBytes == null)
+		if (afterCompactFailure.revision != beforeCompactFailure.revision + 1
+			|| afterCompactFailure.artifact.hashLink().patchBytes == null)
 			throw "Failed compaction discarded the published backend baseline";
 		var publicationCompiler = new Compiler();
 		publicationCompiler.enablePublicationTracking();
@@ -329,7 +337,7 @@ class ModuleMain {
 			if (!unchangedPublication.unchanged
 				|| unchangedPublication.revision != publicationInitial.revision
 				|| unchangedPublication.baseRevision != publicationInitial.revision
-				|| unchangedPublication.patchBytes != null
+				|| unchangedPublication.artifact.hashLink().patchBytes != null
 				|| publicationCompiler.publicationStatus().hasPendingRevision)
 				throw "Unchanged build advanced the runtime revision or left publication pending";
 			try {
@@ -341,13 +349,13 @@ class ModuleMain {
 			}
 		}
 
-		switch publicationCompiler.reconcileRuntime(publicationInitial.runtimeIdentity.sub(4, 16),
+		switch publicationCompiler.reconcileRuntime(publicationInitial.artifact.hashLink().runtimeIdentity.sub(4, 16),
 			publicationInitial.revision) {
 			case ContinuePatching:
 			case ReloadDomain(reason):
 				throw 'Live acknowledged compiler required reload: $reason';
 		}
-		switch publicationCompiler.reconcileRuntime(publicationInitial.runtimeIdentity.sub(4, 16),
+		switch publicationCompiler.reconcileRuntime(publicationInitial.artifact.hashLink().runtimeIdentity.sub(4, 16),
 			publicationInitial.revision + 1) {
 			case ContinuePatching:
 				throw "Mismatched runtime revision was accepted";
@@ -357,7 +365,8 @@ class ModuleMain {
 		if (!resumedPublicationCompiler.publicationStatus().tracking
 			|| resumedPublicationCompiler.publicationStatus().acknowledgedRevision != publicationInitial.revision)
 			throw "Compiler restart lost the acknowledged publication baseline";
-		switch resumedPublicationCompiler.reconcileRuntime(publicationInitial.runtimeIdentity.sub(4, 16),
+		switch resumedPublicationCompiler.reconcileRuntime(publicationInitial.artifact.hashLink().runtimeIdentity.sub(4,
+			16),
 			publicationInitial.revision) {
 			case ContinuePatching:
 			case ReloadDomain(reason):
@@ -381,7 +390,8 @@ class ModuleMain {
 			throw "Rejected build advanced or left the runtime publication baseline pending";
 		var retriedPublication = publicationCompiler.compile("Main");
 		if (retriedPublication.revision != rejectedPublication.revision
-			|| retriedPublication.patchBytes.compare(rejectedPublication.patchBytes) != 0)
+			|| retriedPublication.artifact.hashLink().patchBytes
+			.compare(rejectedPublication.artifact.hashLink().patchBytes) != 0)
 			throw "Retry after runtime rejection disagreed with the rejected candidate";
 		publicationCompiler.acknowledgePublication(retriedPublication.revision);
 		var structuralCompiler = new Compiler();
@@ -392,7 +402,7 @@ class ModuleMain {
 			"class Editor { public var value:Int; public var generation:Int; public function new():Void { this.value = 42; this.generation = 1; } } function main():Int { var editor = new Editor(); return editor.value; }");
 		var structuralBuild = structuralCompiler.compile("Main");
 		// An added field patches the running class: its objects grow the field, initialized by the patch.
-		if (structuralBuild.requiresReload || structuralBuild.patchBytes == null)
+		if (structuralBuild.requiresReload || structuralBuild.artifact.hashLink().patchBytes == null)
 			throw 'Adding a field did not patch: '
 				+ [for (reason in structuralBuild.reloadReasons) Std.string(reason)].join(", ");
 		Sys.println("PASS: function fingerprints selectively retyped and regenerated cached artifacts");

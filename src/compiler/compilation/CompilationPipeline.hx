@@ -21,11 +21,6 @@ import compiler.semantic.SemanticSignature;
 import compiler.semantic.GenericSpecializationRegistry;
 import compiler.semantic.SemanticProgram;
 import compiler.types.TypedAst.TypedProgram;
-import compiler.hl.HlCode;
-import compiler.hl.incremental.HlModuleAssembler;
-import compiler.hl.patch.HlPatchWriter;
-import compiler.hl.persistence.HlRuntimeIdentity;
-import compiler.hl.persistence.HlAssemblerStateCodec;
 import haxe.io.Bytes;
 import compiler.types.Type.CompilerType;
 import compiler.ir.Ir.IrNative;
@@ -91,7 +86,7 @@ class CompilationPipeline {
 			?publicationBaseline:compiler.compilation.CompilerPublication.PublishedBaseline):CompileResult {
 		var frontend = FrontendCompilation.run(context, entryModule, token, rollbackModules, frontendStartedAt, true,
 			indexSemantics);
-		var modules = context.modules, moduleId = context.moduleId;
+		var modules = context.modules;
 		var ir = frontend.ir,
 			names = frontend.moduleNames,
 			typedNew = frontend.typedProgram;
@@ -131,10 +126,8 @@ class CompilationPipeline {
 		}
 		var nextAbi = backend.abi,
 			reloadReasons = backend.reloadReasons,
-			candidateAssembler = backend.assembler,
-			assembly = backend.assembly;
-		var patchBytes = backend.patchBytes,
-			abiPlanningDoneAt = backend.abiPlanningDoneAt,
+			timings = backend.timings;
+		var abiPlanningDoneAt = backend.abiPlanningDoneAt,
 			backendAssemblyDoneAt = backend.backendAssemblyDoneAt,
 			patchEncodingDoneAt = backend.patchEncodingDoneAt;
 		var allocationBeforeFinalize = AllocationMeter.sample();
@@ -159,28 +152,29 @@ class CompilationPipeline {
 			invalidationReasonCount += artifact.reasons.length;
 		if (Sys.getEnv("HAXEON_EXPLAIN_INVALIDATION") != null)
 			explainInvalidation(frontend.invalidations, retyped, regenerated);
-		var allocationPhases = frontend.allocationPhases.concat(backend.allocationPhases);
+		var allocationPhases = frontend.allocationPhases.concat(backend.allocationPhases),
+			patchSize = switch backend.artifact {
+				case HashLinkBuild(build):
+					var patch = build.patchBytes;
+					patch == null ? 0 : patch.length;
+				case WasmBuild(_): 0;
+			};
 		allocationPhases.push(AllocationMeter.delta("finalize", allocationBeforeFinalize, AllocationMeter.sample()));
 		return {
 			ir: ir,
-			module: assembly.module,
+			artifact: backend.artifact,
 			retyped: retyped,
 			invalidations: frontend.invalidations,
 			regenerated: regenerated,
-			changedFunctions: assembly.changedFunctions,
-			requiresReload: assembly.requiresReload,
+			changedFunctions: backend.changedFunctions,
+			requiresReload: backend.requiresReload,
 			reloadReasons: reloadReasons,
-			functionIndices: CompilationContext.copyIndices(assembly.functionIndices),
-			functionIds: CompilationContext.copyIndices(candidateAssembler.cache.stableIds),
 			moduleNames: names,
-			runtimeIdentity: HlRuntimeIdentity.encode(moduleId, assembly.revision, assembly.functionIndices,
-				candidateAssembler.cache.stableIds),
-			unchanged: assembly.unchanged
+			unchanged: backend.unchanged
 				&& (publicationBaseline == null
-				|| (publicationBaseline.backendAvailable && publicationBaseline.revision == assembly.revision)),
-			baseRevision: publicationBaseline == null ? assembly.baseRevision : publicationBaseline.revision,
-			revision: assembly.revision,
-			patchBytes: patchBytes,
+				|| (publicationBaseline.backendAvailable && publicationBaseline.revision == backend.revision)),
+			baseRevision: publicationBaseline == null ? backend.baseRevision : publicationBaseline.revision,
+			revision: backend.revision,
 			metrics: {
 				allocationPhases: allocationPhases,
 				elapsedMs: finishedAt - transactionStartedAt,
@@ -220,15 +214,15 @@ class CompilationPipeline {
 				abiPlanningMs: abiPlanningDoneAt - irAssemblyDoneAt,
 				backendAssemblyMs: backendAssemblyDoneAt - abiPlanningDoneAt,
 				backendAssemblerCopyMs: backend.assemblerCopyMs,
-				backendCachePreparationMs: backendReused ? 0.0 : assembly.cachePreparationMs,
-				backendLoweringMs: backendReused ? 0.0 : assembly.loweringMs,
-				backendPublicationMs: backendReused ? 0.0 : assembly.publicationMs,
+				backendCachePreparationMs: timings.cachePreparationMs,
+				backendLoweringMs: timings.loweringMs,
+				backendPublicationMs: timings.publicationMs,
 				backendSnapshotMs: backend.snapshotAttachmentMs,
-				backendVerificationMs: backendReused ? 0.0 : assembly.verificationMs,
-				backendMetadataMs: backendReused ? 0.0 : assembly.metadataMs,
-				backendFunctionLoweringMs: backendReused ? 0.0 : assembly.functionLoweringMs,
-				backendDebugAssemblyMs: backendReused ? 0.0 : assembly.debugAssemblyMs,
-				backendFinalizationMs: backendReused ? 0.0 : assembly.lowerFinalizationMs,
+				backendVerificationMs: timings.verificationMs,
+				backendMetadataMs: timings.metadataMs,
+				backendFunctionLoweringMs: timings.functionLoweringMs,
+				backendDebugAssemblyMs: timings.debugAssemblyMs,
+				backendFinalizationMs: timings.lowerFinalizationMs,
 				patchEncodingMs: patchEncodingDoneAt - backendAssemblyDoneAt,
 				finalizeMs: finishedAt - patchEncodingDoneAt,
 				modules: names.length,
@@ -236,13 +230,13 @@ class CompilationPipeline {
 				invalidatedArtifacts: frontend.invalidations.length,
 				invalidationReasons: invalidationReasonCount,
 				regeneratedFunctions: regenerated.length,
-				changedFunctions: assembly.changedFunctions.length,
-				moduleFunctions: assembly.module.functions.length,
-				moduleNatives: assembly.module.natives.length,
-				patchBytes: patchBytes == null ? 0 : patchBytes.length,
+				changedFunctions: backend.changedFunctions.length,
+				moduleFunctions: backend.moduleFunctions,
+				moduleNatives: backend.moduleNatives,
+				patchBytes: patchSize,
 				reuse: reusedFrom == null ? "none (" + frontend.reuseMiss + ")" : backendReused ? "ir+module" : "ir",
-				linkedFunctions: backendReused ? 0 : candidateAssembler.reusedFunctions,
-				movedFunctions: backendReused ? 0 : candidateAssembler.movedFunctions
+				linkedFunctions: backend.linkedFunctions,
+				movedFunctions: backend.movedFunctions
 			}
 		};
 	}

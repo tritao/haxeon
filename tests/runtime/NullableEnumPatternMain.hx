@@ -1,3 +1,4 @@
+using compiler.compilation.BackendArtifact.BackendArtifacts;
 import compiler.Compiler;
 import compiler.backend.Backend.BackendTarget;
 import compiler.backend.wasm.WasmBackend;
@@ -13,7 +14,7 @@ class NullableEnumPatternMain {
 			var result = compiler.compile("Main"),
 				build = incremental ? "incremental" : "clean";
 			var path = SuiteOutput.path('nullable-enum-pattern-$build.hl');
-			File.saveBytes(path, HlWriter.encode(result.module).flatten());
+			File.saveBytes(path, HlWriter.encode(result.artifact.hashLink().module).flatten());
 			var child = new sys.io.Process(Sys.getEnv("HAXEON_HASHLINK_DIR") + "/hl", [path]);
 			var output = child.stdout.readAll().toString() + child.stderr.readAll().toString(),
 				code = child.exitCode();

@@ -37,6 +37,7 @@ import compiler.abi.PatchPlanner.PatchDecision;
 import compiler.runtime.NativeRegistry;
 import compiler.runtime.NativeRegistry.NativeDefinition;
 import compiler.compilation.AnalysisTransaction;
+import compiler.compilation.BackendArtifact;
 import compiler.compilation.BackendSession;
 import compiler.compilation.HashLinkBackendSession;
 import compiler.compilation.CompilationTransaction;
@@ -115,30 +116,27 @@ typedef CompileResult = {
 	 */
 	final ir:IrProgram;
 
-	final module:HlCode;
+	/** What the backend emitted: a HashLink module with its identity and patch, or a Wasm module. */
+	final artifact:compiler.compilation.BackendArtifact;
+
 	final retyped:Array<String>;
 	final invalidations:Array<compiler.semantic.Invalidation.InvalidatedArtifact>;
 	final regenerated:Array<String>;
 	final changedFunctions:Array<Int>;
 	final requiresReload:Bool;
 	final reloadReasons:Array<AbiChange>;
-	final functionIndices:Map<String, Int>;
-	final functionIds:Map<String, Int>;
 
 	/** The modules of the compiled program (every module the frontend reached), sorted by name. */
 	final moduleNames:Array<String>;
-
-	final runtimeIdentity:Bytes;
 
 	/** No runtime publication is required; revision stays at the acknowledged baseline. */
 	final unchanged:Bool;
 
 	final revision:Int;
 
-	/** The revision `patchBytes` applies to. */
+	/** The revision the artifact's patch applies to. */
 	final baseRevision:Int;
 
-	final patchBytes:Null<Bytes>;
 	final metrics:CompileMetrics;
 }
 
@@ -884,87 +882,91 @@ class Compiler {
 			&& cachedEntry == entryModule) {
 			if (token != null)
 				token.check();
-			return {
-				ir: cached.ir,
-				module: cached.module,
-				retyped: [],
-				invalidations: [],
-				regenerated: [],
-				changedFunctions: [],
-				requiresReload: false,
-				reloadReasons: [],
-				functionIndices: cached.functionIndices,
-				functionIds: cached.functionIds,
-				moduleNames: cached.moduleNames,
-				runtimeIdentity: cached.runtimeIdentity,
-				unchanged: true,
-				baseRevision: cached.revision,
-				revision: cached.revision,
-				patchBytes: null,
-				metrics: {
-					allocationPhases: [],
-					elapsedMs: 0.0,
-					transactionSnapshotMs: 0.0,
-					candidateSetupMs: 0.0,
-					frontendMs: 0.0,
-					frontendGraphMs: 0.0,
-					graphParseMs: 0.0,
-					graphDependencyMs: 0.0,
-					graphInitializationMs: 0.0,
-					frontendRestarts: [],
-					frontendPassFunctions: [],
-					frontendPassReports: [],
-					semanticAssemblyMs: 0.0,
-					semanticAliasMs: 0.0,
-					semanticCanonicalizationMs: 0.0,
-					semanticContributionReuseMs: 0.0,
-					semanticContributionRebuildMs: 0.0,
-					semanticInvalidationMs: 0.0,
-					semanticAllocatedBytes: 0.0,
-					typingLoweringMs: 0.0,
-					analysisMs: 0.0,
-					declarationMs: 0.0,
-					shapeConnectionMs: 0.0,
-					signatureTypingMs: 0.0,
-					typerSetupMs: 0.0,
-					typerNoReturnMs: 0.0,
-					typerMetadataMs: 0.0,
-					typerClassBodiesMs: 0.0,
-					typerFunctionBodiesMs: 0.0,
-					typerGeneratedMs: 0.0,
-					bodyTransitionMs: 0.0,
-					typerAssemblyMs: 0.0,
-					finalizationTransitionMs: 0.0,
-					irGenerationMs: 0.0,
-					irAssemblyMs: 0.0,
-					abiPlanningMs: 0.0,
-					backendAssemblyMs: 0.0,
-					backendAssemblerCopyMs: 0.0,
-					backendCachePreparationMs: 0.0,
-					backendLoweringMs: 0.0,
-					backendPublicationMs: 0.0,
-					backendSnapshotMs: 0.0,
-					backendVerificationMs: 0.0,
-					backendMetadataMs: 0.0,
-					backendFunctionLoweringMs: 0.0,
-					backendDebugAssemblyMs: 0.0,
-					backendFinalizationMs: 0.0,
-					patchEncodingMs: 0.0,
-					finalizeMs: 0.0,
-					modules: cached.metrics.modules,
-					retypedFunctions: 0,
-					invalidatedArtifacts: 0,
-					invalidationReasons: 0,
-					regeneratedFunctions: 0,
-					changedFunctions: 0,
-					moduleFunctions: cached.metrics.moduleFunctions,
-					moduleNatives: cached.metrics.moduleNatives,
-					patchBytes: 0,
-					reuse: "result",
-					linkedFunctions: 0,
-					movedFunctions: 0
-				}
-			};
+			return {ir: cached.ir,
+				// The module is the one the last build delivered; there is nothing to patch.
+				artifact: switch cached.artifact {
+					case HashLinkBuild(build): HashLinkBuild({
+						module: build.module,
+						functionIndices: build.functionIndices,
+						functionIds: build.functionIds,
+						runtimeIdentity: build.runtimeIdentity,
+						patchBytes: null
+					});
+					case WasmBuild(build): WasmBuild(build);
+				},
+					retyped: [],
+					invalidations: [],
+					regenerated: [],
+					changedFunctions: [],
+					requiresReload: false,
+					reloadReasons: [],
+					moduleNames: cached.moduleNames,
+					unchanged: true,
+					baseRevision: cached.revision,
+					revision: cached.revision,
+					metrics: {
+						allocationPhases: [],
+						elapsedMs: 0.0,
+						transactionSnapshotMs: 0.0,
+						candidateSetupMs: 0.0,
+						frontendMs: 0.0,
+						frontendGraphMs: 0.0,
+						graphParseMs: 0.0,
+						graphDependencyMs: 0.0,
+						graphInitializationMs: 0.0,
+						frontendRestarts: [],
+						frontendPassFunctions: [],
+						frontendPassReports: [],
+						semanticAssemblyMs: 0.0,
+						semanticAliasMs: 0.0,
+						semanticCanonicalizationMs: 0.0,
+						semanticContributionReuseMs: 0.0,
+						semanticContributionRebuildMs: 0.0,
+						semanticInvalidationMs: 0.0,
+						semanticAllocatedBytes: 0.0,
+						typingLoweringMs: 0.0,
+						analysisMs: 0.0,
+						declarationMs: 0.0,
+						shapeConnectionMs: 0.0,
+						signatureTypingMs: 0.0,
+						typerSetupMs: 0.0,
+						typerNoReturnMs: 0.0,
+						typerMetadataMs: 0.0,
+						typerClassBodiesMs: 0.0,
+						typerFunctionBodiesMs: 0.0,
+						typerGeneratedMs: 0.0,
+						bodyTransitionMs: 0.0,
+						typerAssemblyMs: 0.0,
+						finalizationTransitionMs: 0.0,
+						irGenerationMs: 0.0,
+						irAssemblyMs: 0.0,
+						abiPlanningMs: 0.0,
+						backendAssemblyMs: 0.0,
+						backendAssemblerCopyMs: 0.0,
+						backendCachePreparationMs: 0.0,
+						backendLoweringMs: 0.0,
+						backendPublicationMs: 0.0,
+						backendSnapshotMs: 0.0,
+						backendVerificationMs: 0.0,
+						backendMetadataMs: 0.0,
+						backendFunctionLoweringMs: 0.0,
+						backendDebugAssemblyMs: 0.0,
+						backendFinalizationMs: 0.0,
+						patchEncodingMs: 0.0,
+						finalizeMs: 0.0,
+						modules: cached.metrics.modules,
+						retypedFunctions: 0,
+						invalidatedArtifacts: 0,
+						invalidationReasons: 0,
+						regeneratedFunctions: 0,
+						changedFunctions: 0,
+						moduleFunctions: cached.metrics.moduleFunctions,
+						moduleNatives: cached.metrics.moduleNatives,
+						patchBytes: 0,
+						reuse: "result",
+						linkedFunctions: 0,
+						movedFunctions: 0
+					}};
 		}
 		var result = new CompilationTransaction(this, entryModule, token, null, indexSemantics).run();
 		rememberCompile(entryModule, result);

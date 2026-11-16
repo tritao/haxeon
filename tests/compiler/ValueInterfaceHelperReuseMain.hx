@@ -1,3 +1,4 @@
+using compiler.compilation.BackendArtifact.BackendArtifacts;
 import compiler.Compiler;
 import compiler.backend.wasm.WasmBackend;
 import compiler.hl.HlWriter;
@@ -16,7 +17,8 @@ class ValueInterfaceHelperReuseMain {
 			if (temp == null) temp = "out";
 			var path = temp + "/interface-reuse-" + target + inlining + (target == "hl" ? ".hl" : ".wasm");
 			sys.io.File.saveBytes(path,
-				target == "hl" ? HlWriter.encode(result.module).flatten() : new WasmBackend().compile(result.ir, {
+				target == "hl"
+				? HlWriter.encode(result.artifact.hashLink().module).flatten() : new WasmBackend().compile(result.ir, {
 					target: target == "wasm32" ? Wasm32 : WasmGc,
 					debugNames: true
 				}).bytes);

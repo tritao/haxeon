@@ -1,3 +1,4 @@
+using compiler.compilation.BackendArtifact.BackendArtifacts;
 import compiler.Compiler;
 import compiler.Frontend;
 import compiler.core.Diagnostic.CompileError;
@@ -51,8 +52,9 @@ class ModuleVariablesMain {
 	static function expectValue(label:String, sources:Map<String, String>, expected:Int):Void {
 		var result = try compiled(sources).compile("Main") catch (error:CompileError)
 			throw '$label failed to compile: ${error.diagnostic.format()}',
-			live = Runtime.load(HlWriter.encode(result.module).flatten(), result.runtimeIdentity),
-			value = Runtime.callInt(live, result.functionIds.get("main"));
+			build = result.artifact.hashLink(),
+			live = Runtime.load(HlWriter.encode(build.module).flatten(), build.runtimeIdentity),
+			value = Runtime.callInt(live, build.functionIds.get("main"));
 		Runtime.dispose(live);
 		if (value != expected)
 			throw '$label: main returned $value instead of $expected';

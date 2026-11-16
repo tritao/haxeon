@@ -1,3 +1,4 @@
+using compiler.compilation.BackendArtifact.BackendArtifacts;
 import compiler.Compiler;
 import compiler.hl.HlWriter;
 import compiler.types.Type.CompilerType;
@@ -34,6 +35,6 @@ function main():Int {
 	static function main():Void {
 		var fixed = build(false).compile("Main");
 		build(true).compile("Main");
-		File.saveBytes(Sys.args()[0], HlWriter.encode(fixed.module).flatten());
+		File.saveBytes(Sys.args()[0], HlWriter.encode(fixed.artifact.hashLink().module).flatten());
 	}
 }

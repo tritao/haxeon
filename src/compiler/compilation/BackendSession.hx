@@ -5,26 +5,54 @@ import compiler.abi.RuntimeAbi.RuntimeAbiDescriptor;
 import compiler.core.AllocationMeter.PhaseAllocation;
 import compiler.core.CancellationToken;
 import compiler.hl.incremental.HlModuleAssembler;
-import compiler.hl.incremental.HlModuleAssembler.HlAssemblyResult;
 import compiler.ir.Ir.IrProgram;
-import haxe.io.Bytes;
 
 /** What a backend made of one build's IR. */
 typedef BackendAssemblyResult = {
-	final assembly:HlAssemblyResult;
+	final artifact:BackendArtifact;
 
-	/** The assembler the build left (HashLink); a reused result gives it back to the session. */
-	final assembler:HlModuleAssembler;
+	/** The assembler the build left (HashLink; null for another backend); a reused result gives it back to the session. */
+	final assembler:Null<HlModuleAssembler>;
 
 	final abi:RuntimeAbiDescriptor;
 	final reloadReasons:Array<AbiChange>;
-	final patchBytes:Null<Bytes>;
+
+	/** The function slots a patch replaces. */
+	final changedFunctions:Array<Int>;
+
+	final requiresReload:Bool;
+
+	/** The artifact is the one the running module already has. */
+	final unchanged:Bool;
+
+	final baseRevision:Int;
+	final revision:Int;
+	final moduleFunctions:Int;
+	final moduleNatives:Int;
+
+	/** Functions taken from the last plain build's lowering, and how many of them were re-indexed (see `HlLoweredCache`). */
+	final linkedFunctions:Int;
+
+	final movedFunctions:Int;
+	final timings:BackendTimings;
 	final abiPlanningDoneAt:Float;
 	final backendAssemblyDoneAt:Float;
 	final patchEncodingDoneAt:Float;
 	final assemblerCopyMs:Float;
 	final snapshotAttachmentMs:Float;
 	final allocationPhases:Array<PhaseAllocation>;
+}
+
+/** Where a backend's assembly spent its time (ms), for `CompileMetrics`. */
+typedef BackendTimings = {
+	final cachePreparationMs:Float;
+	final loweringMs:Float;
+	final publicationMs:Float;
+	final verificationMs:Float;
+	final metadataMs:Float;
+	final functionLoweringMs:Float;
+	final debugAssemblyMs:Float;
+	final lowerFinalizationMs:Float;
 }
 
 /**

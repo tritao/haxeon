@@ -1,3 +1,4 @@
+using compiler.compilation.BackendArtifact.BackendArtifacts;
 import compiler.Compiler;
 import compiler.core.Diagnostic.CompileError;
 import compiler.hl.HlWriter;
@@ -156,8 +157,8 @@ class StdlibMain {
 		var coreSymbols:Map<String, Bool> = ["__math_is_nan" => true, "__math_pow" => true,
 			"__reflect_compare" => true];
 		var bytesSymbols:Map<String, Bool> = ["__bytes_alloc" => true, "__bytes_of_string" => true];
-		for (native in result.module.natives) {
-			var symbol = result.module.strings[native.name];
+		for (native in result.artifact.hashLink().module.natives) {
+			var symbol = result.artifact.hashLink().module.strings[native.name];
 			stringToolsSymbols.remove(symbol);
 			stdSymbols.remove(symbol);
 			sysSymbols.remove(symbol);
@@ -183,7 +184,7 @@ class StdlibMain {
 			throw 'core source binding "$symbol" was not emitted';
 		for (symbol in bytesSymbols.keys())
 			throw 'haxe.io.Bytes source binding "$symbol" was not emitted';
-		File.saveBytes(output, HlWriter.encode(result.module).flatten());
+		File.saveBytes(output, HlWriter.encode(result.artifact.hashLink().module).flatten());
 
 		var invalid = new Compiler();
 		CompilerIntrinsics.register(invalid);

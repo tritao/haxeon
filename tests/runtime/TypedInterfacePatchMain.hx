@@ -1,3 +1,4 @@
+using compiler.compilation.BackendArtifact.BackendArtifacts;
 import compiler.Compiler;
 import compiler.hl.HlWriter;
 import runtime.PatchSet;
@@ -18,22 +19,25 @@ class TypedInterfacePatchMain {
 		var compiler = new Compiler();
 		compiler.update("Main.hx", source(false, 0));
 		var first = compiler.compile("Main"),
-			live = Runtime.load(HlWriter.encode(first.module).flatten(), first.runtimeIdentity),
-			main = first.functionIds.get("main");
+			live = Runtime.load(HlWriter.encode(first.artifact.hashLink().module).flatten(),
+				first.artifact.hashLink().runtimeIdentity),
+			main = first.artifact.hashLink().functionIds.get("main");
 		if (Runtime.callInt(live, main) != 2) throw "Initial typed class entry failed";
 		compiler.update("Main.hx", source(true, 9));
 		var appended = compiler.compile("Main");
-		if (appended.requiresReload || appended.patchBytes == null)
+		if (appended.requiresReload || appended.artifact.hashLink().patchBytes == null)
 			throw "Adding a typed interface implementation required a reload: " + Std.string(appended.reloadReasons);
 		Runtime.patchSet(live,
-			new PatchSet(first.revision, appended.revision, appended.patchBytes, appended.changedFunctions));
+			new PatchSet(first.revision, appended.revision, appended.artifact.hashLink().patchBytes,
+			appended.changedFunctions));
 		if (Runtime.callInt(live, main) != 11) throw "Appended typed class entry failed";
 		compiler.update("Main.hx", source(true, 10));
 		var edited = compiler.compile("Main");
 		if (edited.requiresReload
-			|| edited.patchBytes == null) throw "Editing a typed implementation required a reload";
+			|| edited.artifact.hashLink().patchBytes == null) throw "Editing a typed implementation required a reload";
 		Runtime.patchSet(live,
-			new PatchSet(appended.revision, edited.revision, edited.patchBytes, edited.changedFunctions));
+			new PatchSet(appended.revision, edited.revision, edited.artifact.hashLink().patchBytes,
+			edited.changedFunctions));
 		if (Runtime.callInt(live, main) != 12) throw "Cached typed class entry ignored a patched implementation";
 		Runtime.dispose(live);
 	}

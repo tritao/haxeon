@@ -1,3 +1,4 @@
+using compiler.compilation.BackendArtifact.BackendArtifacts;
 import compiler.Compiler;
 import compiler.hl.HlCode;
 import compiler.hl.patch.HlPatchReader;
@@ -20,17 +21,17 @@ class AddedFunctionLayoutMain {
 			+ use
 			+ "; }\n";
 		compiler.update("Main.hx", program("", ""));
-		var before = compiler.compile("Main").module;
+		var before = compiler.compile("Main").artifact.hashLink().module;
 		if (natives(before).get("native_invoke_2") == null)
 			throw "The program does not call C through a dispatch native";
 		compiler.update("Main.hx", program("function helper():Int { return 39; }\n", " + helper()"));
 		var after = compiler.compile("Main");
-		if (after.requiresReload || after.patchBytes == null)
+		if (after.requiresReload || after.artifact.hashLink().patchBytes == null)
 			throw 'Adding a function required a reload: ${[for (reason in after.reloadReasons) Std.string(reason)].join(", ")}';
 		for (name => slot in natives(before))
-			if (natives(after.module).get(name) != slot)
-				throw 'Adding a function moved native $name from slot $slot to ${natives(after.module).get(name)}';
-		var added = HlPatchReader.decode(after.patchBytes).addedFunctions;
+			if (natives(after.artifact.hashLink().module).get(name) != slot)
+				throw 'Adding a function moved native $name from slot $slot to ${natives(after.artifact.hashLink().module).get(name)}';
+		var added = HlPatchReader.decode(after.artifact.hashLink().patchBytes).addedFunctions;
 		if (added.length != 1 || added[0].functionIndex != before.natives.length + before.functions.length)
 			throw 'The added function does not take the next free slot ${before.natives.length + before.functions.length}: '
 				+ [for (function_ in added) '${function_.name}@${function_.functionIndex}'].join(", ");

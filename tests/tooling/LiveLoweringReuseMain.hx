@@ -1,3 +1,4 @@
+using compiler.compilation.BackendArtifact.BackendArtifacts;
 import compiler.Compiler.CompileResult;
 import compiler.tools.CompilerArguments;
 import compiler.tools.CompilerDriver;
@@ -52,8 +53,8 @@ class LiveLoweringReuseMain {
 	}
 
 	static function functionByName(result:CompileResult, name:String):compiler.hl.HlFunction {
-		var index = result.functionIndices.get(name);
-		for (fn in result.module.functions)
+		var index = result.artifact.hashLink().functionIndices.get(name);
+		for (fn in result.artifact.hashLink().module.functions)
 			if (fn.functionIndex == index)
 				return fn;
 		throw 'Missing lowered function "$name"';
