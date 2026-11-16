@@ -167,7 +167,8 @@ class WasmGcDynamicArrays {
 
 	function allocateLocal(type:WasmValueType):Int {
 		var key = localKey(type), free = freeLocals.get(key);
-		var local = free != null && free.length > 0 ? free.pop() : newLocal(type);
+		var reused = free == null ? null : free.pop(),
+			local = reused == null ? newLocal(type) : reused;
 		if (armLocals.length > 0)
 			armLocals[armLocals.length - 1].push({key: key, local: local});
 		return local;

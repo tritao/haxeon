@@ -302,10 +302,13 @@ class StatementTyper {
 		if (scope.isScoped(name))
 			fail("E1002", 'Cannot reassign scoped binding "$name"', span);
 		var current = scope.resolve(name);
-		// A Dynamic local, or a field of one, is incremented as `target = target + 1` with the Dynamic operators.
+		// A Dynamic local, or a field of one, is incremented as `target = target + 1` with the Dynamic operators, and a nullable
+		// number the same way, reading null as 0 as Haxe does.
 		var dot = name.indexOf("."),
 			root = dot < 0 ? null : scope.resolve(name.substring(0, dot));
-		if ((current != null && sameType(current, TDynamic)) || (current == null && root != null && sameType(root, TDynamic))) {
+		// The stored type decides, not a narrowed one: a `Null<Int>` incremented once reads as an Int but still holds a Null<Int>.
+		if ((current != null && (sameType(current, TDynamic) || ExpressionTyper.isNullableNumber(scope.resolveDeclared(name))))
+			|| (current == null && root != null && sameType(root, TDynamic))) {
 			// Adding keeps an Int an Int; subtracting would give a Float, as `target -= 1` does.
 			var step = delta > 0 ? IntegerLiteral(1, span) : Negate(IntegerLiteral(1, span), span);
 			return typeAssignment(name, Add(Variable(name, span), step, span), span, scope);
@@ -319,6 +322,10 @@ class StatementTyper {
 				staticField:Null<StaticFieldInfo> = null;
 			if (owner != null)
 				staticField = assignmentRules.findStaticField(owner, fieldName);
+			if (staticField != null && ExpressionTyper.isNullableNumber(staticField.type)) {
+				var step = delta > 0 ? IntegerLiteral(1, span) : Negate(IntegerLiteral(1, span), span);
+				return typeAssignment(name, Add(Variable(name, span), step, span), span, scope);
+			}
 			if (staticField == null || (!sameType(staticField.type, TInt) && !sameType(staticField.type, TFloat)))
 				fail("E1018", 'Increment requires a numeric local or static field "$name"', span);
 			assignmentRules.rejectInlineFieldMutation(staticField.owner, fieldName, span);
@@ -462,6 +469,7 @@ class StatementTyper {
 					scope.refineExpression(entryPath, mapValue, FlowAnalysis.entryFactsSurviveCalls(scope, typedArray));
 				TMapAssign(typedArray, typedIndex, value, span);
 			default:
+				typedIndex = ConversionResolver.plainValue(typedIndex, coerce);
 				if ((switch typedIndex.type {
 					case TNever: true;
 					case TAbstract(_, _, _): session.relations.isAssignable(typedIndex.type, TInt);
@@ -605,7 +613,7 @@ class StatementTyper {
 
 	public function typeIf(predicate:AstExpression, thenBranch:Array<AstStatement>, elseBranch:Array<AstStatement>, span:SourceSpan, scope:Scope,
 			result:Null<CompilerType>):TypedStatement {
-		var typedCondition = typeExpression(predicate, scope, null, false);
+		var typedCondition = ConversionResolver.plainValue(typeExpression(predicate, scope, null, false), coerce);
 		if (!TypeRelations.equals(typedCondition.type, TBool))
 			fail("E1004", "If condition must be Bool", span);
 		var thenScope = FlowAnalysis.narrowedScope(scope, typedCondition, true, session.isPureCall),
@@ -626,7 +634,7 @@ class StatementTyper {
 
 	public function typeWhile(predicate:AstExpression, body:Array<AstStatement>, span:SourceSpan, scope:Scope, result:Null<CompilerType>):TypedStatement {
 		LoopFlow.enter(session, scope, body.concat([Expression(predicate, span)]));
-		var typedCondition = typeExpression(predicate, scope, null, false);
+		var typedCondition = ConversionResolver.plainValue(typeExpression(predicate, scope, null, false), coerce);
 		if (!TypeRelations.equals(typedCondition.type, TBool))
 			fail("E1004", "While condition must be Bool", span);
 		var context = session.currentContext;
@@ -646,7 +654,7 @@ class StatementTyper {
 		context.loopDepth++;
 		var typedBody = typeStatements(body, bodyScope, result);
 		context.loopDepth--;
-		var typedCondition = typeExpression(predicate, bodyScope, null, false);
+		var typedCondition = ConversionResolver.plainValue(typeExpression(predicate, bodyScope, null, false), coerce);
 		if (!TypeRelations.equals(typedCondition.type, TBool))
 			fail("E1004", "Do-while condition must be Bool", span);
 		// The body runs at least once, so what it assigns holds afterwards, unless a break or continue can skip the rest of it.

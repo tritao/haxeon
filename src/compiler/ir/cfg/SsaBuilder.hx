@@ -115,8 +115,10 @@ class SsaBuilder {
 	function buildGraph():Void {
 		roots = [0];
 		var work = [0];
-		while (work.length > 0) {
+		while (true) {
 			var id = work.pop();
+			if (id == null)
+				break;
 			if (id < 0 || id >= cfg.blocks.length)
 				throw 'Unknown CFG block $id';
 			if (reachable[id])
@@ -326,8 +328,10 @@ class SsaBuilder {
 				work.push(block.id);
 				queued[block.id] = true;
 			}
-		while (work.length > 0) {
+		while (true) {
 			var id = work.pop();
+			if (id == null)
+				break;
 			queued[id] = false;
 			var input = live[id],
 				use = uses[id],

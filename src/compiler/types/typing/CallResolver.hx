@@ -1576,7 +1576,7 @@ class CallResolver {
 		if (name == "Std.int" || name == "Std.stdIntFloat") {
 			if (arguments.length != 1)
 				fail("E1008", 'Function "Std.int" expects 1 argument, got ${arguments.length}', span);
-			var value = typeExpression(arguments[0], scope, name == "Std.stdIntFloat" ? TFloat : null, false);
+			var value = ConversionResolver.plainValue(typeExpression(arguments[0], scope, name == "Std.stdIntFloat" ? TFloat : null, false), coerce);
 			return switch value.type {
 				case TInt: value;
 				case TFloat: new TypedExpression(TCall("__std_int_f64", [value]), TInt, span);
@@ -1610,7 +1610,7 @@ class CallResolver {
 					fail("E1009", "String.__alloc__ expects hl.Bytes data", bytes.span);
 			}
 			bytes = session.representation.boundaryCast(bytes, THlBytes);
-			var length = typeExpression(arguments[1], scope, TInt, false);
+			var length = ConversionResolver.plainValue(typeExpression(arguments[1], scope, TInt, false), coerce);
 			if (!sameType(length.type, TInt))
 				fail("E1009", "String.__alloc__ expects an Int length", length.span);
 			return new TypedExpression(TCall("__string_from_bytes", [bytes, length]), TString, span);
@@ -1618,7 +1618,7 @@ class CallResolver {
 		if (name == "String.fromCharCode") {
 			if (arguments.length != 1)
 				fail("E1008", 'Function "String.fromCharCode" expects 1 argument, got ${arguments.length}', span);
-			var code = typeExpression(arguments[0], scope, TInt, false);
+			var code = ConversionResolver.plainValue(typeExpression(arguments[0], scope, TInt, false), coerce);
 			if (!sameType(code.type, TInt))
 				fail("E1009", "String.fromCharCode expects an Int code", code.span);
 			return new TypedExpression(TStringFromCharCode(code), TString, span);
@@ -1931,12 +1931,12 @@ class CallResolver {
 		if (name == "pop") {
 			if (arguments.length != 0)
 				fail("E1008", "Array.pop expects no arguments", span);
-			return new TypedExpression(TArrayPop(receiver), element, span);
+			return takeOrNull(receiver, element, array -> new TypedExpression(TArrayPop(array), element, span), span);
 		}
 		if (name == "shift") {
 			if (arguments.length != 0)
 				fail("E1008", "Array.shift expects no arguments", span);
-			return new TypedExpression(TCollectionCall(receiver, "shift", []), element, span);
+			return takeOrNull(receiver, element, array -> new TypedExpression(TCollectionCall(array, "shift", []), element, span), span);
 		}
 		if (name == "resize") {
 			if (arguments.length != 1)
@@ -2413,4 +2413,24 @@ class CallResolver {
 
 	static function fail(code:String, message:String, span:SourceSpan):Void
 		throw new CompileError(new Diagnostic(code, message, span));
+
+	/**
+	 * `pop` and `shift` as Haxe types them: `Null<T>`, null when the array is empty (the runtime operation itself requires an
+	 * element). The receiver is evaluated once.
+	 */
+	function takeOrNull(receiver:TypedExpression, element:CompilerType, take:TypedExpression->TypedExpression, span:SourceSpan):TypedExpression {
+		var resultType:CompilerType = switch element {
+			case TNullable(_): element;
+			default: TNullable(element);
+		};
+		var id = '$' + 'array-take:${session.currentContext.arrayTakeTemporary++}',
+			array = new TypedExpression(TLocal(id), receiver.type, span),
+			empty = new TypedExpression(TEqual(new TypedExpression(TArrayLength(array), TInt, span), new TypedExpression(TIntLiteral(0), TInt, span)), TBool,
+				span),
+			taken = take(array),
+			present = taken.type.match(TNullable(_)) ? taken : new TypedExpression(TNullableWrap(taken), resultType, span),
+			nothing = new TypedExpression(TNullableWrap(new TypedExpression(TNullLiteral, TNull, span)), resultType, span);
+		return new TypedExpression(TBlockExpression([TVar(id, receiver, span)], new TypedExpression(TConditional(empty, nothing, present), resultType, span)),
+			resultType, span);
+	}
 }

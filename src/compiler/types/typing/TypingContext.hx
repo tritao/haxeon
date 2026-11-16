@@ -1,5 +1,6 @@
 package compiler.types.typing;
 
+import compiler.Diagnostic;
 import compiler.types.Type.CompilerType;
 import compiler.types.analysis.BindingStoragePlan;
 import compiler.types.analysis.Scope;
@@ -13,6 +14,12 @@ class TypingContext {
 	public var name(get, never):String;
 	public var lexicalOwner(get, never):Null<String>;
 	public final typeSubstitutions:Map<String, CompilerType>;
+
+	/**
+	 * Warnings raised while typing this body and the lambdas written in it. They are kept with what the body becomes (a
+	 * function or a field initializer), so a body reused unchanged by an incremental compile keeps them.
+	 */
+	public final warnings:Array<Diagnostic> = [];
 
 	/** Declarations (see `BindingWalker.key`) the body assigns, including from lambdas: they may need a cell to be captured. */
 	public final assignedDeclarations:Map<String, Bool> = [];
@@ -30,6 +37,8 @@ class TypingContext {
 	public final scopedBindings:Map<String, String> = [];
 	public var enumInterfaceTemporary:Int = 0;
 	public var nullableAbstractTemporary:Int = 0;
+	public var nullableDefaultTemporary:Int = 0;
+	public var arrayTakeTemporary:Int = 0;
 	public var keyPathTemporary:Int = 0;
 	public var diffTemporary:Int = 0;
 

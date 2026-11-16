@@ -154,9 +154,9 @@ class CfgBuilder {
 	}
 
 	public function endTry():Void {
-		if (activeTraps.length == 0)
-			throw "No active try block";
 		var trap = activeTraps.pop();
+		if (trap == null)
+			throw "No active try block";
 		emit(EndTry(trap.id, trap.preserveExceptionStack));
 	}
 

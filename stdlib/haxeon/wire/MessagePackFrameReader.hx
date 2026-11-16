@@ -81,9 +81,9 @@ class MessagePackFrameReader {
 
 	/** Transfers an assembled payload without a second framing copy. */
 	public function take():Null<Bytes> {
-		if (queued.length == 0)
-			return null;
 		var value = queued.shift();
+		if (value == null)
+			return null;
 		reservedBytes -= value.length;
 		return value;
 	}

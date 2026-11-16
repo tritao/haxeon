@@ -344,7 +344,8 @@ class BodyTyper {
 			statements: statements,
 			cells: copyMap(context.storage.cells),
 			cellCaptures: [],
-			span: fn.span
+			span: fn.span,
+			warnings: functionContext.warnings.copy()
 		};
 		for (name in context.storage.cells.keys()) {
 			if (context.storage.types.exists(name) && context.storage.kinds.exists(name))

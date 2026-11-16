@@ -39,7 +39,8 @@ class ValueArrayAccessMain {
 			+ 'function missingValue(a:Array<PlaceRoot>):Bool { try { var v = a[15].leaf.x; return false; } catch (error:Dynamic) { return true; } } '
 			+ 'function main():Int { var a:Array<PlaceRoot> = [new PlaceRoot(1)]; a[0].leaf.x = 4; a[0].leaf.bump(2); '
 			+ 'var copy = a[0]; a.push(copy); a[0].leaf.x = 8; for (i in 0...10) a.push(new PlaceRoot(i)); '
-			+ 'var popped = a.pop(); var shifted = a.shift(); if (popped.leaf.x != 9 || shifted.leaf.x != 8) return 0; '
+			+
+			'var popped = a.pop(); var shifted = a.shift(); if (popped == null || shifted == null) return 0; if (popped.leaf.x != 9 || shifted.leaf.x != 8) return 0; '
 			+ 'a.unshift(shifted); a.push(popped); '
 			+ 'a.unshift(new PlaceRoot(22)); a.insert(2, new PlaceRoot(33)); a.reverse(); a.reverse(); '
 			+ 'var removed = a.splice(2, 1); a.resize(16); var snapshot = a.copy(); a.resize(13); '

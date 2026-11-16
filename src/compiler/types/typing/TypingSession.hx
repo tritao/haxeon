@@ -1,5 +1,6 @@
 package compiler.types.typing;
 
+import compiler.Diagnostic;
 import compiler.semantic.GenericSpecializationRegistry;
 import compiler.semantic.SemanticProgram;
 import compiler.semantic.SemanticProgram.SemanticMethodInfo;
@@ -525,6 +526,14 @@ class TypingSession {
 			typedUnits.set(name, true);
 		bodyContexts.push(body);
 		return body;
+	}
+
+	/** Records a warning on the body being typed: the innermost one that is not a lambda, since a lambda is part of its function. */
+	public function warn(diagnostic:Diagnostic):Void {
+		var index = bodyContexts.length - 1;
+		while (index > 0 && compiler.semantic.LambdaName.is(bodyContexts[index].name))
+			index--;
+		bodyContexts[index].warnings.push(diagnostic);
 	}
 
 	public function leaveBody(body:TypingContext):Void {

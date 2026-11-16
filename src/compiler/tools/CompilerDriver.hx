@@ -41,6 +41,8 @@ class CompilerDriver {
 		var allocationAfterPrepare = AllocationMeter.sample();
 		report("compiling entry " + request.entry);
 		var result = compiler.compile(request.entry, cancellation, false);
+		for (warning in compiler.warnings(result.moduleNames))
+			report(warning.format());
 		try {
 			var compiledAt = Sys.time() * 1000.0;
 			var allocationAfterCompile = AllocationMeter.sample();

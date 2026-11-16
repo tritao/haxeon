@@ -29,6 +29,62 @@ class ConversionResolver {
 				new TypedExpression(value.expression, expected, value.span);
 		};
 
+	/**
+	 * `value` where Haxe needs a plain Int, Float, Bool or Int64 (an arithmetic, bitwise or ordering operand, a negation, a
+	 * condition): a nullable of one reads as that type, null giving its default, so `total += stack.pop()` and `if (flag)` work
+	 * on nullables as in Haxe. Anything else is returned as it is. Equality keeps the nullable, so `x == null` still sees null.
+	 */
+	public static function plainValue(value:TypedExpression, coerce:(TypedExpression, CompilerType, String, String) -> TypedExpression):TypedExpression
+		return switch value.type {
+			case TNullable(element) if (TypeRelations.hasNullDefault(element)): coerce(value, element, "operand", "E1010");
+			default: value;
+		};
+
+	/** `value ?? default`: a nullable scalar read as its element type, null giving the type's Haxe default. Evaluates `value` once. */
+	function nullableWithDefault(value:TypedExpression, expected:CompilerType, context:String, code:String):TypedExpression {
+		var element = switch value.type {
+			case TNullable(inner): inner;
+			default: value.type;
+		};
+		var span = value.span, id = '$' + 'nullable-default-value:${session.currentContext.nullableDefaultTemporary++}',
+			local = new TypedExpression(TLocal(id), value.type, span),
+			nilValue = new TypedExpression(TNullableWrap(new TypedExpression(TNullLiteral, TNull, span)), value.type, span),
+			isNull = new TypedExpression(TEqual(local, nilValue), TBool, span),
+			present = coerce(new TypedExpression(TCast(local), element, span), expected, context, code),
+			fallback = switch expected {
+				case TFloat: new TypedExpression(TFloatLiteral(0.0), TFloat, span);
+				case TBool: new TypedExpression(TBoolLiteral(false), TBool, span);
+				case TInt64: new TypedExpression(TIntToInt64(new TypedExpression(TIntLiteral(0), TInt, span)), TInt64, span);
+				default: new TypedExpression(TIntLiteral(0), TInt, span);
+			};
+		warnNullDefault(value, expected);
+		return new TypedExpression(TBlockExpression([TVar(id, value, span)], new TypedExpression(TConditional(isNull, fallback, present), expected, span)),
+			expected, span);
+	}
+
+	/**
+	 * W1001: a nullable read as its plain type turns null into a default silently, which hides a missing map entry or an
+	 * empty pop. The fix writes the default out with `??`, which says it was meant and reads the same.
+	 */
+	function warnNullDefault(value:TypedExpression, expected:CompilerType):Void {
+		var span = value.span,
+			defaultText = switch expected {
+				case TFloat: "0.0";
+				case TBool: "false";
+				default: "0";
+			};
+		var fixes:Array<DiagnosticFix> = if (span.end > span.start) [
+			{
+				id: "explicit-null-default",
+				title: 'Write the default: ?? $defaultText',
+				edits: [{span: span, replacement: '(${span.file.slice(span.start, span.end)} ?? $defaultText)'}]
+			}
+		] else [];
+		session.warn(new Diagnostic("W1001",
+			'${SemanticSignature.display(value.type)} is read as ${SemanticSignature.display(expected)}, so null becomes $defaultText; write "?? $defaultText" if that is meant',
+			span, Warning, fixes));
+	}
+
 	public function coerce(value:TypedExpression, expected:CompilerType, context:String, code:String = "E1009"):TypedExpression {
 		if ((switch (value.type) { case TNever: true; default: false; }))
 			return neverAs(value, expected);
@@ -134,6 +190,8 @@ class ConversionResolver {
 				new TypedExpression(TNullableWrap(value), expected, value.span);
 			case UnwrapNullable:
 				new TypedExpression(TCast(value), expected, value.span);
+			case UnwrapNullableDefault:
+				nullableWithDefault(value, expected, context, code);
 			case Incompatible:
 				fail(code, 'Type mismatch for $context: expected ${SemanticSignature.display(expected)}, got ${SemanticSignature.display(value.type)}',
 					value.span);

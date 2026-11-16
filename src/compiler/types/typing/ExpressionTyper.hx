@@ -1290,7 +1290,7 @@ class ExpressionTyper {
 					}
 			}
 		}
-		var typedCondition = predicate == null ? null : typeExpressionCallback(predicate, loopScope, TBool, false);
+		var typedCondition = predicate == null ? null : plain(typeExpressionCallback(predicate, loopScope, TBool, false));
 		if (typedCondition != null && (switch (typedCondition.type) {
 			case TBool: false;
 			default: true;
@@ -1389,7 +1389,7 @@ class ExpressionTyper {
 					loopScope.define(valueName, mapValue, span);
 				default:
 			}
-		var typedCondition = predicate == null ? null : typeExpressionCallback(predicate, loopScope, TBool, false);
+		var typedCondition = predicate == null ? null : plain(typeExpressionCallback(predicate, loopScope, TBool, false));
 		if (typedCondition != null && (switch (typedCondition.type) {
 			case TBool: false;
 			default: true;
@@ -1435,8 +1435,8 @@ class ExpressionTyper {
 	}
 
 	public function typeRange(start:AstExpression, rangeEnd:AstExpression, span:SourceSpan, scope:Scope):TypedExpression {
-		var typedStart = typeExpressionCallback(start, scope, TInt, false),
-			typedEnd = typeExpressionCallback(rangeEnd, scope, TInt, false);
+		var typedStart = plain(typeExpressionCallback(start, scope, TInt, false)),
+			typedEnd = plain(typeExpressionCallback(rangeEnd, scope, TInt, false));
 		if ((switch (typedStart.type) {
 			case TInt: false;
 			default: true;
@@ -1463,7 +1463,7 @@ class ExpressionTyper {
 					entryPath = FlowAnalysis.mapEntryPath(typedArray, typedKey),
 					refined = entryPath == null ? null : scope.resolveExpression(entryPath);
 				new TypedExpression(TMapGet(typedArray, typedKey), refined == null ? CallResolver.nullableMapValue(value) : refined, span);
-			default: if ((switch typedIndex.type {
+			default: typedIndex = plain(typedIndex); if ((switch typedIndex.type {
 					case TNever: true;
 					case TAbstract(_, _, _): session.relations.isAssignable(typedIndex.type, TInt);
 					default: false;
@@ -1676,7 +1676,7 @@ class ExpressionTyper {
 
 	public function typeConditional(predicate:AstExpression, whenTrue:AstExpression, whenFalse:AstExpression, span:SourceSpan, scope:Scope,
 			expectedType:Null<CompilerType>, contextualExpressionType:ContextualExpressionTypeCallback):TypedExpression {
-		var typedCondition = typeExpressionCallback(predicate, scope, TBool, false);
+		var typedCondition = plain(typeExpressionCallback(predicate, scope, TBool, false));
 		if (!sameType(typedCondition.type, TBool))
 			fail("E1011", "Conditional expression requires a Bool condition", span);
 		var trueScope = FlowAnalysis.narrowedScope(scope, typedCondition, true, session.isPureCall),
@@ -1825,6 +1825,7 @@ class ExpressionTyper {
 		var overloaded = callResolver.typeAbstractOperator("u-", [typedValue], span, scope);
 		if (overloaded != null)
 			return overloaded;
+		typedValue = plain(typedValue);
 		var dynamicResult = dynamicOperation("neg", [typedValue], TFloat, span);
 		if (dynamicResult != null)
 			return dynamicResult;
@@ -1834,19 +1835,23 @@ class ExpressionTyper {
 	}
 
 	public function logicalNot(value:AstExpression, span:SourceSpan, scope:Scope):TypedExpression {
-		var typedValue = typeExpressionCallback(value, scope, null, false);
+		var typedValue = plain(typeExpressionCallback(value, scope, null, false));
 		if (!sameType(typedValue.type, TBool))
 			fail("E1011", "Logical negation requires a Bool operand", span);
 		return new TypedExpression(TNot(typedValue), TBool, span);
 	}
+
+	/** See ConversionResolver.plainValue. */
+	inline function plain(value:TypedExpression):TypedExpression
+		return ConversionResolver.plainValue(value, coerce);
 
 	public function throwExpression(value:AstExpression, span:SourceSpan, scope:Scope):TypedExpression
 		return new TypedExpression(TThrowExpression(typeExpressionCallback(value, scope, null, false)), TNever, span);
 
 	public function postfixIncrement(target:AstExpression, delta:Int, span:SourceSpan, scope:Scope):TypedExpression {
 		var typedTarget = typeExpressionCallback(target, scope, null, false);
-		if (sameType(typedTarget.type, TDynamic))
-			return dynamicPostfixIncrement(target, delta, span, scope);
+		if (sameType(typedTarget.type, TDynamic) || isNullableNumber(storedType(target, typedTarget, scope)))
+			return rewrittenPostfixIncrement(target, delta, span, scope);
 		if (!sameType(typedTarget.type, TInt) && !sameType(typedTarget.type, TFloat))
 			fail("E1018", "Postfix increment requires a numeric target", span);
 		var operation:TypedExpressionKind = switch typedTarget.expression {
@@ -1882,10 +1887,36 @@ class ExpressionTyper {
 	}
 
 	/**
-	 * `target++` on a Dynamic value: the value is the old one, and the target becomes it plus (or minus) one:
-	 * `{ var old = target; target = old + 1; old }`.
+	 * The type a place stores, not what flow narrowing has proved of its current value: after `count++` a `Null<Int>` local
+	 * reads as an Int, but it still holds a `Null<Int>`.
 	 */
-	function dynamicPostfixIncrement(target:AstExpression, delta:Int, span:SourceSpan, scope:Scope):TypedExpression {
+	function storedType(target:AstExpression, typedTarget:TypedExpression, scope:Scope):CompilerType {
+		switch target {
+			case Variable(name, _):
+				var declared = scope.resolveDeclared(name);
+				if (declared != null)
+					return declared;
+			default:
+		}
+		return switch typedTarget.expression {
+			case TField(object, name): session.representation.resolveField(object.type, name, typedTarget.span).semantic;
+			default: typedTarget.type;
+		};
+	}
+
+	/** A `Null<Int>` or `Null<Float>`, which `++` and `--` treat as the number, null as 0, as Haxe does. */
+	public static function isNullableNumber(type:CompilerType):Bool
+		return switch type {
+			case TNullable(TInt | TFloat): true;
+			default: false;
+		};
+
+	/**
+	 * `target++` on a Dynamic value or a nullable number: the value is the old one, and the target becomes it plus (or minus)
+	 * one, `{ var old = target; target = old + 1; old }`, with the operators of the target's type (a nullable reads as its
+	 * number there).
+	 */
+	function rewrittenPostfixIncrement(target:AstExpression, delta:Int, span:SourceSpan, scope:Scope):TypedExpression {
 		var old = "__haxeon_incremented", // Adding keeps an Int an Int; subtracting would give a Float, as `target -= 1` does.
 			updated = Add(Variable(old, span), delta > 0 ? IntegerLiteral(1, span) : Negate(IntegerLiteral(1, span), span), span),
 			store = switch target {
@@ -2024,6 +2055,8 @@ class ExpressionTyper {
 			right = stringify(right);
 			return new TypedExpression(TAdd(left, right), TString, span);
 		}
+		left = plain(left);
+		right = plain(right);
 		var dynamicResult = dynamicOperation(add ? "add" : "sub", [left, right], add ? TDynamic : TFloat, span);
 		if (dynamicResult != null)
 			return dynamicResult;
@@ -2034,9 +2067,9 @@ class ExpressionTyper {
 	}
 
 	public function logical(a:AstExpression, b:AstExpression, scope:Scope, and:Bool, span:SourceSpan):TypedExpression {
-		var left = typeExpressionCallback(a, scope, null, false),
+		var left = plain(typeExpressionCallback(a, scope, null, false)),
 			rightScope = FlowAnalysis.narrowedScope(scope, left, and, session.isPureCall),
-			right = typeExpressionCallback(b, rightScope, null, false);
+			right = plain(typeExpressionCallback(b, rightScope, null, false));
 		if (!sameType(left.type, TBool) || !sameType(right.type, TBool))
 			fail("E1011", "Logical operators require Bool operands", span);
 		return new TypedExpression(and ? TAnd(left, right) : TOr(left, right), TBool, span);
@@ -2048,6 +2081,8 @@ class ExpressionTyper {
 		var overloaded = callResolver.typeAbstractOperator(operation == 2 ? "*" : "/", [left, right], span, scope);
 		if (overloaded != null)
 			return overloaded;
+		left = plain(left);
+		right = plain(right);
 		var dynamicResult = dynamicOperation(operation == 2 ? "mul" : "div", [left, right], TFloat, span);
 		if (dynamicResult != null)
 			return dynamicResult;
@@ -2063,6 +2098,8 @@ class ExpressionTyper {
 		var overloaded = callResolver.typeAbstractOperator("%", [left, right], span, scope);
 		if (overloaded != null)
 			return overloaded;
+		left = plain(left);
+		right = plain(right);
 		var dynamicResult = dynamicOperation("mod", [left, right], TFloat, span);
 		if (dynamicResult != null)
 			return dynamicResult;
@@ -2082,6 +2119,8 @@ class ExpressionTyper {
 		if (overloaded != null)
 			return overloaded;
 
+		left = plain(left);
+		right = plain(right);
 		var dynamicResult = dynamicOperation(["bitAnd", "bitXor", "bitOr", "shiftLeft", "shiftRight", "unsignedShiftRight"][operation], [left, right], TInt,
 			span);
 		if (dynamicResult != null)
@@ -2152,6 +2191,10 @@ class ExpressionTyper {
 			var test = constructorComparison(left, right, span);
 			if (test != null)
 				return test;
+		} else {
+			// An ordering reads a nullable number as the number, null as 0, as Haxe does; equality keeps the null.
+			left = plain(left);
+			right = plain(right);
 		}
 		var result = compareOperands(left, right, operation, span, reversed);
 		return operation == 2 ? enumValueComparison(result) : result;
@@ -2441,7 +2484,7 @@ class ExpressionTyper {
 	/**
 	 * `value` as a value of the nullable numeric type `other`, when it is a plain number that widens to the type
 	 * `other` wraps: `Null<Float> == 40` compares as a Float when the value is there, and is false when it is not.
-	 * Ordering comparisons of a nullable stay an error, since null has no place in the order.
+	 * Ordering comparisons read the nullable as its number instead (compareTyped).
 	 */
 	function widenToNullableNumeric(value:TypedExpression, other:CompilerType):Null<TypedExpression> {
 		var inner = switch other {

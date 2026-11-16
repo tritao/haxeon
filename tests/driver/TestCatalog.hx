@@ -211,6 +211,7 @@ class TestCatalog {
 		"BindingAnalysisMain",
 		"ImplicitConstructorMain",
 		"ClosureEffectsMain",
+		"TypingWarningsMain",
 		"EnumVisibilityMain",
 		"EnumImportOrderMain",
 		"ExpectedEnumContextMain",

@@ -341,9 +341,9 @@ class WasmValidator {
 						stack.push(parameter);
 					reachable = true;
 				case End:
-					if (controls.length == 0)
-						continue;
 					var frame = controls.pop();
+					if (frame == null)
+						continue;
 					if (frame.kind == 4 && frame.hasCatch && !reachable) {
 						reset(stack, frame.height, frame.result, false, fn, module, false);
 						reachable = false;

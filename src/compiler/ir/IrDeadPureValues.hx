@@ -44,8 +44,11 @@ class IrDeadPureValues {
 			}
 		}
 		for (binding in fn.debugBindings) mark(binding.value);
-		while (pending.length > 0) {
-			var value = pending.pop(), definition = definitions.get(value.id);
+		while (true) {
+			var value = pending.pop();
+			if (value == null)
+				break;
+			var definition = definitions.get(value.id);
 			if (definition != null) inputs(definition);
 		}
 		return IrFunctionRewrite.instructions(fn, located -> {

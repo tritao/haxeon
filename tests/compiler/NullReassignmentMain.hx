@@ -68,7 +68,8 @@ class NullReassignmentMain {
 		'var x:Null<Box>=new Box(); if(x==null) return 1; try {try {x=null;throw "stop";} catch(e:Dynamic) {throw e;}} catch(e:Dynamic) {} return x.value;',
 		'var h=new Holder(); if(h.slot==null) return 1; try {h.slot=null;throw "stop";} catch(e:Dynamic) {} return h.slot.value;',
 		'var h=new Holder(); if(h.slot==null) return 1; try {clear(h);} catch(e:Dynamic) {} return h.slot.value;',
-		'var x:Null<Int>=42; if(x==null) return 1; try {x=null;throw "stop";} catch(e:Dynamic) {} var y:Int=x; return y;'
+		// A nullable Int would read as 0 here, as in Haxe; a reference must still be checked again after the catch.
+		'var x:Null<Box>=new Box(); if(x==null) return 1; try {x=null;throw "stop";} catch(e:Dynamic) {} var y:Int=x.value; return y;'
 	];
 
 	static function compiler():Compiler {

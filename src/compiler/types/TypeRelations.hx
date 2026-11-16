@@ -17,6 +17,10 @@ enum ConversionPlan {
 	ToInterface(name:String);
 	WrapNullable;
 	UnwrapNullable;
+
+	/** A nullable Int, Float, Bool or Int64 read as the plain type: null becomes the type's default (0, 0.0, false), as in Haxe. */
+	UnwrapNullableDefault;
+
 	Incompatible;
 }
 
@@ -76,6 +80,13 @@ class TypeRelations {
 			return AbstractCast;
 		if (abstractIntToFloat(actual, expected))
 			return AbstractIntToFloat;
+		// Reading a nullable number as the number is a conversion toward an expected type, never part of assignability: a
+		// conditional or array literal mixing Null<Int> and Int stays Null<Int>, so its null is kept.
+		switch actual {
+			case TNullable(element) if (hasNullDefault(expected) && !conversion(element, expected).match(Incompatible)):
+				return UnwrapNullableDefault;
+			default:
+		}
 		if (!isAssignable(actual, expected))
 			return Incompatible;
 		switch actual {
@@ -709,6 +720,16 @@ class TypeRelations {
 	/** Reference types hold null, except value classes and structs: their values are copied into their storage. */
 	function acceptsNull(type:CompilerType):Bool
 		return isReference(type) && !isValueClass(type);
+
+	/**
+	 * Whether a nullable of `type` reads as `type` with a default for null, as Haxe does on static targets: `var x:Int = map.get(k)`
+	 * is 0 when the key is absent. Structs and value classes have no such default and stay explicit.
+	 */
+	public static function hasNullDefault(type:CompilerType):Bool
+		return switch type {
+			case TInt | TFloat | TBool | TInt64: true;
+			default: false;
+		};
 
 	/** Whether `type` is a value class or a struct with non-null value semantics. */
 	public function isValueClass(type:CompilerType):Bool

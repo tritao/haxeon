@@ -200,8 +200,10 @@ class IrNestedScalarReplacement {
 			var seen:Map<Int, Bool> = [], pending:Array<Int> = [];
 			var successors = graph.successors.get(handler.block);
 			if (successors != null) for (next in successors) pending.push(next);
-			while (pending.length > 0) {
+			while (true) {
 				var id = pending.pop();
+				if (id == null)
+					break;
 				if (id == home.id || seen.exists(id)) continue;
 				seen.set(id, true);
 				if (writes.exists(id)) return false;

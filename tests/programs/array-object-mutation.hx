@@ -14,5 +14,7 @@ function main():Int {
 		index++;
 	}
 	var last = values.pop();
+	if (last == null)
+		return 0;
 	return last.value + values.length;
 }

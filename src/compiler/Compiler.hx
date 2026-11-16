@@ -816,6 +816,19 @@ class Compiler {
 		return candidate;
 	}
 
+	/** The warnings the given modules have from their last successful typing, in module and source order. */
+	public function warnings(moduleNames:Array<String>):Array<Diagnostic> {
+		var result:Array<Diagnostic> = [];
+		for (name in moduleNames) {
+			var state = modules.get(name);
+			if (state != null)
+				for (diagnostic in state.diagnostics)
+					if (diagnostic.severity.match(Warning))
+						result.push(diagnostic);
+		}
+		return result;
+	}
+
 	public function compile(entryModule:String, ?token:CancellationToken, ?indexSemantics = true):CompileResult {
 		var cached = cachedCompileResult, cachedEntry = cachedCompileEntry;
 		if (!publication.status().tracking

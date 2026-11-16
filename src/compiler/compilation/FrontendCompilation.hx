@@ -236,6 +236,7 @@ class FrontendCompilation {
 			}
 			throw error;
 		}
+		TypingWarnings.publish(context, entryModule, names, typedNew, rollbackModules);
 		var reindexedModules:Map<String, Bool> = [];
 		for (functionName in selected.keys()) {
 			var module = owners.get(functionName);

@@ -475,8 +475,10 @@ class IrScalarReplacement {
 					work.push(writer);
 				}
 			var placed:Map<Int, Bool> = [];
-			while (work.length > 0) {
+			while (true) {
 				var current = work.pop();
+				if (current == null)
+					break;
 				if (!frontier.exists(current))
 					continue;
 				for (target in frontier.get(current)) {
@@ -648,8 +650,10 @@ class IrScalarReplacement {
 		var seen:Map<Int, Bool> = [], work:Array<Int> = [];
 		for (successor in graph.successors.get(id))
 			work.push(successor);
-		while (work.length > 0) {
+		while (true) {
 			var current = work.pop();
+			if (current == null)
+				break;
 			if (current == id)
 				return true;
 			if (seen.exists(current))

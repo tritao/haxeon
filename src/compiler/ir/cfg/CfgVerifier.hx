@@ -30,8 +30,10 @@ class CfgVerifier {
 		for (block in fn.blocks)
 			verifyBlock(fn, block, blocks, defined, available);
 		var reachable:Map<Int, Bool> = [], work = [0];
-		while (work.length > 0) {
+		while (true) {
 			var id = work.pop();
+			if (id == null)
+				break;
 			if (reachable.exists(id))
 				continue;
 			reachable.set(id, true);

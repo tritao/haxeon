@@ -276,11 +276,10 @@ class LambdaAlignment {
 			var print = after[ordinal];
 			if (print == null)
 				continue;
-			var list = waiting.get(print);
-			if (list != null && list.length > 0) {
-				var from:Int = list.shift();
+			var list = waiting.get(print),
+				from = list == null ? null : list.shift();
+			if (from != null)
 				mapping.set(from, ordinal);
-			}
 		}
 		return mapping;
 	}

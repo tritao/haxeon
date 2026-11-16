@@ -16,6 +16,13 @@ The current subset includes:
   nullable enum abstract without a default must cover `null` too. A catch-all or capture binds the nullable value.
 - `try`/`catch` binding `Dynamic`, `Int`, `Float`, `Bool`, `String`, a class, an interface or an enum
   (`catch (e:haxe.io.Error)`); a clause catches the values of its type and lets the others reach the next clause.
+- A nullable `Int`, `Float`, `Bool` or `Int64` reads as the plain type wherever one is needed, null giving its default (0,
+  0.0, false), as in Haxe: an assignment, argument or return (`var count:Int = map.get(key)` is 0 for a missing key), an
+  arithmetic, bitwise or ordering operand, `++` and `--`, a condition, an array index or a range bound. `==` and `!=` still
+  see null, and so does a join: `flag ? map.get(key) : 5` and `[map.get(key), 3]` stay nullable. Because the null goes
+  away silently, each such read warns (`W1001`), with a fix that writes the default out (`map.get(key) ?? 0`); a value
+  checked against null first does not warn.
+- `Array.pop` and `shift` return `Null<T>`, null when the array is empty, as in Haxe.
 - Closures with generated environments and shared cells for mutable captures
 - Arrays and compiler-owned primitive, string, and reference array operations
 - `Map` keyed by `String`, `Int`, an enum, or a struct that conforms to `Hashable`, holding primitive, reference or
@@ -95,14 +102,18 @@ HashLink):
 - Structure patterns (`case {x: 0, y: y}:`) and extractor patterns (`case parse(_) => value:`).
 - Rest parameters (`function sum(...values:Int)`).
 - In the standard library: `haxe.ds.List`, `haxe.ds.Vector`, `Lambda.fold`, the file handles of `sys.io.File.read` and
-  `write` (`getContent` and `saveContent` work), and `Type.getClass` / `Type.getClassName`.
+  `write` (`getContent` and `saveContent` work), and the `Type` API (`typeof`, `getClass`, `getClassName`): it needs
+  class and enum values (`Class<T>`, `Enum<T>`), which Haxeon does not have yet.
 - A method whose return type would be inferred from `++field` (`function next() return ++i;`): `E1020`. Declare the
   return type.
+- A lowercase name in a pattern that is also a function or variable in scope is read as that value instead of capturing
+  (`case Box(size):` beside a function `size`). Haxe captures; rename the binding.
 
 Stricter than Haxe:
 
 - A statement after a `try` whose every branch returns is `E1012` (unreachable); Haxe accepts it.
-- `Null<T>` does not convert implicitly to `T`: returning `map.get(key)` from a function declared `:Int` is `E1003`.
+- References are null-safe: a field of a `Null<T>` is read only where a null check proves it present (`E1005`), and a
+  switch over a nullable enum handles `null`. Haxe reads through and throws "Null access" when the program runs.
 - Map keys must be `Hashable` (above).
 
 ## C header import

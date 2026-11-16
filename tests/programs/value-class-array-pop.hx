@@ -30,10 +30,14 @@ function main():Int {
 	var failures = 0;
 	var popped = points();
 	var last = popped.pop();
+	if (last == null)
+		return 100;
 	if (last.x != 3.5 || last.y != 30 || popped.length != 2)
 		failures += 1;
 	var shifted = points();
 	var first = shifted.shift();
+	if (first == null)
+		return 100;
 	if (first.x != 1.5 || first.y != 10 || shifted.length != 2 || shifted[0].y != 20)
 		failures += 2;
 	var discarded = points();
@@ -49,6 +53,8 @@ function main():Int {
 		failures += 8;
 	var cells = [new Cell(1), new Cell(2)];
 	var cell = cells.pop();
+	if (cell == null)
+		return 100;
 	cell.count += 5;
 	if (cell.count != 7 || cells.length != 1 || cells[0].count != 1)
 		failures += 16;

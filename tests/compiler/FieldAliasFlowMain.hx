@@ -26,11 +26,13 @@ class FieldAliasFlowMain {
 		var dynamicResult = GeneratedProgramRunner.exitCode(dynamicCompiler.compile("Main"));
 		if (dynamicResult != 42) throw 'Dynamic field alias returned $dynamicResult';
 		var setter = new Compiler();
-		setter.update("Main.hx", 'class Cell { public var item:Null<Int>; public var trigger(get,set):Int; '
-			+ 'public function new() item=1; function get_trigger():Int return 0; function set_trigger(v:Int):Int { item=null; return v; } } '
-			+ 'function main():Int { var cell=new Cell(); if (cell.item != null) { cell.trigger=1; return cell.item + 1; } return 0; }');
+		// The fact is observed through a nullable reference, whose field needs the null check to still hold.
+		setter.update("Main.hx", 'class Box { public final n:Int; public function new(n:Int) this.n = n; } '
+			+ 'class Cell { public var item:Null<Box>; public var trigger(get,set):Int; '
+			+ 'public function new() item=new Box(1); function get_trigger():Int return 0; function set_trigger(v:Int):Int { item=null; return v; } } '
+			+ 'function main():Int { var cell=new Cell(); if (cell.item != null) { cell.trigger=1; return cell.item.n + 1; } return 0; }');
 		var rejected = false;
-		try setter.compile("Main") catch (error:CompileError) rejected = error.diagnostic.code == "E1010";
+		try setter.compile("Main") catch (error:CompileError) rejected = error.diagnostic.code == "E1005";
 		if (!rejected) throw "property setter preserved a field refinement across its side effects";
 		Sys.println("PASS: field writes invalidate alias refinements through incremental edits");
 	}

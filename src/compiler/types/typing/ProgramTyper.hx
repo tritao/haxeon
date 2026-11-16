@@ -641,6 +641,7 @@ class ProgramTyper {
 			if (!requestedValue && !isNativeValue && NativeLayout.containsUnsupportedRuntimeValueType(type))
 				BodyTyper.fail("E1022", 'Native layout types can only appear in value structs or native value record fields', field.span);
 			var initializer:Null<TypedExpression> = null,
+				initializerContextWarnings:Null<Array<compiler.Diagnostic>> = null,
 				inlineValue:Null<TypedExpression> = null,
 				parsedInitializer = field.initializer;
 			if (parsedInitializer != null) {
@@ -664,6 +665,7 @@ class ProgramTyper {
 						throw error;
 					}
 					bodyTyper.leaveBody(initializerContext);
+					initializerContextWarnings = initializerContext.warnings;
 				}
 			}
 			fieldNames.set(field.name, true);
@@ -678,7 +680,8 @@ class ProgramTyper {
 				isStatic: field.isStatic,
 				isInline: field.isInline,
 				isFinal: field.isFinal,
-				span: field.span
+				span: field.span,
+				warnings: initializerContextWarnings
 			});
 		}
 		var propertyFacts = StructProperties.evaluate(session.declarations, TInstance(NominalKind.Class, classDecl.name, []));
@@ -1234,7 +1237,8 @@ class ProgramTyper {
 			statements: statements.concat(method.statements),
 			cells: method.cells,
 			cellCaptures: method.cellCaptures,
-			span: method.span
+			span: method.span,
+			warnings: method.warnings
 		};
 	}
 

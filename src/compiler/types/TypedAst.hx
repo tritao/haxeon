@@ -363,6 +363,9 @@ typedef TypedFunction = {
 	final cells:Map<String, String>;
 	final cellCaptures:Map<String, String>;
 	final span:SourceSpan;
+
+	/** Warnings from typing the body, kept with it so a body an incremental compile reuses keeps them. */
+	final ?warnings:Array<compiler.Diagnostic>;
 }
 
 /** Class field after annotation inference and initializer type checking. */
@@ -381,6 +384,9 @@ typedef TypedField = {
 	final isInline:Bool;
 	final isFinal:Bool;
 	final span:SourceSpan;
+
+	/** Warnings from typing the initializer, kept as a function body's are. */
+	final ?warnings:Array<compiler.Diagnostic>;
 }
 
 /** Class declaration with resolved field, method, and inheritance contracts. */

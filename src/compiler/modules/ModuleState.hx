@@ -68,6 +68,12 @@ class ModuleState {
 	public var staticInitializerFingerprints:Map<String, String> = [];
 	public var instanceInitializerFingerprints:Map<String, String> = [];
 	public var bodyFingerprints:Map<String, String> = [];
+
+	/**
+	 * Typing warnings by the source function or field initializer that raised them (see TypingWarnings). A body typed again
+	 * replaces its entry; one an incremental compile reuses keeps it.
+	 */
+	public var typingWarnings:Map<String, Array<Diagnostic>> = [];
 	public var typedFunctions:Map<String, TypedFunction> = [];
 	public var typedSourceRevisions:Map<String, Int> = [];
 
@@ -171,6 +177,7 @@ class ModuleState {
 		result.conditionalDefines = conditionalDefines.copy();
 		result.semanticDependencies = copyDependencyMap(semanticDependencies);
 		result.diagnostics = diagnostics.copy();
+		result.typingWarnings = [for (key => warnings in typingWarnings) key => warnings.copy()];
 		result.signatureFingerprints = copyMap(signatureFingerprints);
 		result.interfaceFingerprints = copyMap(interfaceFingerprints);
 		result.aliasFingerprints = copyMap(aliasFingerprints);

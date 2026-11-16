@@ -154,7 +154,10 @@ class WasmCfgAnalysis {
 			if (requiredIndex(traversal.low, id) != requiredIndex(traversal.indices, id)) continue;
 			var members:Array<Int> = [], member:Int;
 			do {
-				member = traversal.stack.pop();
+				var popped = traversal.stack.pop();
+				if (popped == null)
+					throw "Strongly connected component stack emptied before its root";
+				member = popped;
 				traversal.onStack.remove(member);
 				members.push(member);
 			} while (member != id);

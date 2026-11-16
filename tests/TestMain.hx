@@ -332,12 +332,14 @@ class TestMain {
 		Frontend.compile('class MapPlan { public var wrapperTypeIndex:Int; public function new(index:Int) this.wrapperTypeIndex = index; } function main():Int { var values:Map<String, MapPlan> = []; var result = [for (key in values.keys()) values.get(key).wrapperTypeIndex]; return result.length; }');
 		Frontend.compile('class MapPlan { public var wrapperTypeIndex:Int; public function new(index:Int) this.wrapperTypeIndex = index; } class MapOwner { public var values:Map<String, MapPlan>; public function new(values:Map<String, MapPlan>) this.values = values; public function collect():Array<Int> return [for (key in values.keys()) values.get(key).wrapperTypeIndex]; } function main():Int return new MapOwner([]).collect().length;');
 		Frontend.compile('function consume(values:Iterator<Int>):Int { var total = 0; while (values.hasNext()) total += values.next(); return total; } function main():Int return consume([20, 22].iterator());');
-		expectCompileError('function main():Int { var values:Map<String, Int> = []; return values.get("answer"); }',
-			"Type mismatch for return: expected Int, got Null<Int>");
-		expectCompileError('function main():Int { var values:Map<String, Int> = []; if (values.exists("answer")) { values.remove("answer"); return values.get("answer"); } return 0; }',
-			"Type mismatch for return: expected Int, got Null<Int>");
-		expectCompileError('function main():Int { var values:Map<String, Int> = ["answer" => 42]; for (key in values.keys()) { values.remove(key); return values.get(key); } return 0; }',
-			"Type mismatch for return: expected Int, got Null<Int>");
+		// A missing map value read as Int is 0, as in Haxe: Null<Int> converts to Int with null as the default.
+		for (source in [
+			'function main():Int { var values:Map<String, Int> = []; return values.get("answer"); }',
+			'function main():Int { var values:Map<String, Int> = ["answer" => 42]; if (values.exists("answer")) { values.remove("answer"); return values.get("answer"); } return 1; }',
+			'function main():Int { var values:Map<String, Int> = ["answer" => 42]; for (key in values.keys()) { values.remove(key); return values.get(key); } return 1; }'
+		])
+			if (new IrInterpreter(Frontend.compile(source)).run("main") != 0)
+				throw "a missing Map<String, Int> value did not read as 0";
 		Frontend.compile('function value(flag:Bool):Int { var result:Null<Int> = flag ? 1 : null; if (result == null) result = 2; return result; } function main():Int return value(false);');
 		Frontend.compile('function main():Int { return "A".charCodeAt(0); }');
 		Frontend.compile('function main():Int { return "A".charAt(0) == "A" ? 42 : 0; }');
@@ -1075,31 +1077,33 @@ class TestMain {
 			{path: "Helper.hx", source: "class Helper { public static function check(v:Float):Bool return v > 0; }"},
 			{
 				path: "Main.hx",
-				source: "typedef Limits = {var lower:Null<Float>;}; function ok(l:Limits):Bool return l.lower != null && Helper.check(l.lower) && l.lower < 10; function main():Int return ok({lower: 1.0}) ? 42 : 0;"
+				// A nullable reference keeps its null check only while nothing can change it, so the impure call ends it.
+				source: "class Bound { public final value:Float; public function new(value:Float) this.value = value; } typedef Limits = {var lower:Null<Bound>;}; function ok(l:Limits):Bool return l.lower != null && Helper.check(l.lower.value) && l.lower.value < 10; function main():Int return ok({lower: new Bound(1.0)}) ? 42 : 0;"
 			}
 		],
 			{path: "Helper.hx", source: "class Helper { public static var count = 0; public static function check(v:Float):Bool { count++; return v > 0; } }"},
-			"numeric operands", "a pure helper's body gaining a field write");
+			"requires an object", "a pure helper's body gaining a field write");
 		expectDependentAnswerInvalidated([
 			{
 				path: "Base.hx",
-				source: "typedef Limits = {var lower:Null<Float>;}; class Base { public function new() {} public function m(v:Float):Bool return v > 0; public function ok(l:Limits):Bool return l.lower != null && this.m(l.lower) && l.lower < 10; }"
+				source: "class Bound { public final value:Float; public function new(value:Float) this.value = value; } typedef Limits = {var lower:Null<Bound>;}; class Base { public function new() {} public function m(v:Float):Bool return v > 0; public function ok(l:Limits):Bool return l.lower != null && this.m(l.lower.value) && l.lower.value < 10; }"
 			},
 			{path: "Sub.hx", source: "class Sub extends Base {}"},
-			{path: "Main.hx", source: "import Sub; function main():Int return new Sub().ok({lower: 1.0}) ? 42 : 0;"}
+			{path: "Main.hx", source: "import Sub; import Base.Bound; function main():Int return new Sub().ok({lower: new Bound(1.0)}) ? 42 : 0;"}
 		], {
 			path: "Sub.hx",
 			source: "class Sub extends Base { var c = 0; override public function m(v:Float):Bool { c++; return true; } }"
-		}, "numeric operands",
+		}, "requires an object",
 			"a subclass overriding a previously-pure base method with an impure one");
 		expectDependentAnswerInvalidated([
 			{path: "Guard.hx", source: "class Guard { public static function fail():Void throw \"no\"; }"},
 			{
+				// A nullable reference keeps its null check only while the guard never returns.
 				path: "Main.hx",
-				source: "import Guard; function get(v:Null<Float>):Float { if (v == null) Guard.fail(); return v + 1; } function main():Int return Std.int(get(41.0));"
+				source: "import Guard; class Bound { public final value:Float; public function new(value:Float) this.value = value; } function get(v:Null<Bound>):Float { if (v == null) Guard.fail(); return v.value + 1; } function main():Int return Std.int(get(new Bound(41.0)));"
 			}
 		],
-			{path: "Guard.hx", source: "class Guard { public static function fail():Void {} }"}, "numeric operands",
+			{path: "Guard.hx", source: "class Guard { public static function fail():Void {} }"}, "requires an object",
 			"a static helper that stopped never returning");
 		Sys.println("PASS: incremental recompiles retype callers whose purity or no-return dependency changed");
 		// An instance method can be overridden, so its call is typed by its declaration even when every body in the program
@@ -1108,13 +1112,13 @@ class TestMain {
 			"",
 			"class Sub extends Base { override public function fail():Void throw \"sub\"; }"
 		])
-			expectCompileError('class Base { public function new() {} public function fail():Void throw "no"; public function get(v:Null<Float>):Float { if (v == null) this.fail(); return v + 1; } } $subclass function main():Int return Std.int(new Base().get(41.0));',
-				"Arithmetic requires matching numeric operands");
+			expectCompileError('class Bound { public final value:Float; public function new(value:Float) this.value = value; } class Base { public function new() {} public function fail():Void throw "no"; public function get(v:Null<Bound>):Float { if (v == null) this.fail(); return v.value + 1; } } $subclass function main():Int return Std.int(new Base().get(new Bound(41.0)));',
+				'Field "value" requires an object');
 		// A base method is pure only once every concrete override is also pure - never merely
 		// because none happens to exist yet. A single impure override is enough to reject it, in
 		// one fresh compile, with no incremental edit involved.
-		expectCompileError("typedef Limits = {var lower:Null<Float>;} class Base { public function new() {} public function m():Bool return true; public function ok(l:Limits):Bool return l.lower != null && this.m() && l.lower < 10; } class Sub extends Base { var c = 0; override public function m():Bool { c++; return true; } } function main():Int { var l:Limits = {lower: 1.0}; return new Sub().ok(l) ? 42 : 0; }",
-			"Comparison requires matching numeric operands");
+		expectCompileError("class Bound { public final value:Float; public function new(value:Float) this.value = value; } typedef Limits = {var lower:Null<Bound>;} class Base { public function new() {} public function m():Bool return true; public function ok(l:Limits):Bool return l.lower != null && this.m() && l.lower.value < 10; } class Sub extends Base { var c = 0; override public function m():Bool { c++; return true; } } function main():Int { var l:Limits = {lower: new Bound(1.0)}; return new Sub().ok(l) ? 42 : 0; }",
+			'Field "value" requires an object: the null check on "l.lower" no longer holds after an assignment or call that may have changed it. Copy the checked value into a local ("var copy = value; if (copy != null) ...") and use the copy.');
 		Sys.println("PASS: a base method's purity requires every concrete override to also be pure");
 		var metadataProgram = new Parser(new Lexer(new SourceFile("Native.hx",
 			'@:hlNative("sample") private class Native { @:id(7) public var id:Int; @:noCompletion public static function read():Int return @:privateAccess 42; } @:wire enum MetadataStatus { @:id(5) Ready; }'))
@@ -1641,11 +1645,11 @@ class TestMain {
 		expectCompileError('class Part { public var value:Int = 7; public function new() {} } class Machine { public var part:Null<Part>; var count:Int = 0; public function new() part = new Part(); function change():Void part = null; public function check(flag:Bool):Int { if (part == null) return 0; if (flag) count++ else count += 2; change(); return part.value; } } function main():Int return new Machine().check(true);',
 			'Field "value" requires an object: the null check on "this.part" no longer holds after an assignment or call that may have changed it. Copy the checked value into a local ("var copy = value; if (copy != null) ...") and use the copy.');
 		Sys.println("PASS: branch joins do not promote mutable-field facts to call-stable facts");
-		expectCompileError('class Service { public static var calls = 0; public static function touch(value:Float):Bool { calls++; return value > 0; } } typedef Limits = {var lower:Null<Float>;}; function valid(limits:Limits):Bool return limits.lower != null && (Service.touch(limits.lower) || limits.lower < 0); function main():Int return valid({lower: 1.0}) ? 1 : 0;',
-			"Comparison requires matching numeric operands");
-		Sys.println("PASS: impure calls invalidate nullable numeric field refinements");
-		expectCompileError('class Service { public static var calls = 0; public static function touch(value:Float):Bool { calls++; return value > 0; } } typedef Limits = {var lower:Null<Float>;}; function valid(limits:Limits):Bool return limits.lower != null && Service.touch(limits.lower) && limits.lower < 0; function main():Int return valid({lower: 1.0}) ? 1 : 0;',
-			"Comparison requires matching numeric operands");
+		expectCompileError('class Service { public static var calls = 0; public static function touch(value:Float):Bool { calls++; return value > 0; } } class Bound { public final value:Float; public function new(value:Float) this.value = value; } typedef Limits = {var lower:Null<Bound>;}; function valid(limits:Limits):Bool return limits.lower != null && (Service.touch(limits.lower.value) || limits.lower.value < 0); function main():Int return valid({lower: new Bound(1.0)}) ? 1 : 0;',
+			'Field "value" requires an object: the null check on "limits.lower" no longer holds after an assignment or call that may have changed it. Copy the checked value into a local ("var copy = value; if (copy != null) ...") and use the copy.');
+		Sys.println("PASS: impure calls invalidate nullable field refinements");
+		expectCompileError('class Service { public static var calls = 0; public static function touch(value:Float):Bool { calls++; return value > 0; } } class Bound { public final value:Float; public function new(value:Float) this.value = value; } typedef Limits = {var lower:Null<Bound>;}; function valid(limits:Limits):Bool return limits.lower != null && Service.touch(limits.lower.value) && limits.lower.value < 0; function main():Int return valid({lower: new Bound(1.0)}) ? 1 : 0;',
+			'Field "value" requires an object: the null check on "limits.lower" no longer holds after an assignment or call that may have changed it. Copy the checked value into a local ("var copy = value; if (copy != null) ...") and use the copy.');
 		Sys.println("PASS: an impure right operand invalidates facts from the left side of a condition");
 		var branchingSuperCompiler = new Compiler();
 		branchingSuperCompiler.update("Main.hx",

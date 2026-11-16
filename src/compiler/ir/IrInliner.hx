@@ -376,7 +376,10 @@ class IrInliner {
 					if (low[node] == order[node]) {
 						var member:Int;
 						do {
-							member = stack.pop();
+							var popped = stack.pop();
+							if (popped == null)
+								throw "Strongly connected component stack emptied before its root";
+							member = popped;
 							onStack[member] = false;
 							components[member] = component;
 						} while (member != node);
@@ -575,7 +578,7 @@ class IrInliner {
 			result = IrStrengthReduction.run(result);
 		objectFrames.pop();
 		table.consulted = objectFrames.length > 0 ? objectFrames[objectFrames.length - 1] : null;
-		var consulted = frames.pop(), isImpure = frameImpure.pop();
+		var consulted = frames.pop(), isImpure = frameImpure.pop() == true;
 		frameSerials.pop();
 		frameIds.pop();
 		depth--;

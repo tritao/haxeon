@@ -60,9 +60,11 @@ class MemoryTransport implements MessageTransport {
 	}
 
 	public function receive():Null<Bytes> {
-		if (!isOpen() || incoming.length == 0)
+		if (!isOpen())
 			return null;
 		var message = incoming.shift();
+		if (message == null)
+			return null;
 		queuedBytes -= message.length;
 		return message;
 	}

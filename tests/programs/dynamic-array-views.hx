@@ -103,7 +103,8 @@ function main():Int {
 		return 13;
 	if (halvesView.pop() != 2.5 || halves.length != 0)
 		return 14;
-	if (!fails(() -> halvesView.pop(), "Array.pop on an empty array"))
+	// As in Haxe, pop on an empty array is null.
+	if (halvesView.pop() != null)
 		return 15;
 	if (!fails(() -> grownView[9], ""))
 		return 16;

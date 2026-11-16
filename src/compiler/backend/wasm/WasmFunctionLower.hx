@@ -385,7 +385,9 @@ class WasmFunctionLower {
   /** Emit the dominator tree without consuming the compiler host's call stack. */
   function structuredTree(body:Array<WasmInstruction>, state:StructuredEmission, id:Int):Void {
     var pending:Array<StructureWork> = [Tree(id)];
-    while (pending.length > 0) switch pending.pop() {
+    while (true) switch pending.pop() {
+      case null:
+        break;
       case Tree(blockId):
         if (state.structurer.isLoopHeader(blockId)) {
           body.push(Loop(null));
