@@ -724,8 +724,6 @@ const cases = [
       const compiled = new WebAssembly.Module(bytes);
       const ffiBytes = relative.endsWith("wasm-cli-gc-ffi-bytes.wasm");
       const utf8Results = relative.endsWith("utf8-result-wasm-gc.wasm");
-      // This fixture exercises Bytes through the Wasm GC target's linear-memory filesystem.
-      const memoryFilesystem = relative.endsWith("wasm-gc-cli-memory-filesystem.wasm");
       const shortStruct = relative.endsWith("wasm-cli-gc-ffi-short-struct.wasm");
       const borrowedArray = relative.endsWith("wasm-cli-gc-ffi-borrowed-array.wasm");
       const nestedArray = relative.endsWith("wasm-cli-gc-ffi-nested-array.wasm");
@@ -735,16 +733,15 @@ const cases = [
       const hasMemory = WebAssembly.Module.exports(compiled).some(entry => entry.name === "memory");
       if ((!ffiBytes && !shortStruct && !valueRecords && !utf8Results && !borrowedArray && !nestedArray && !rawPointer && WebAssembly.Module.imports(compiled).length !== 0)
           || (rawPointer && WebAssembly.Module.imports(compiled).length !== 1)
-          || (!ffiBytes && !shortStruct && !valueRecords && !utf8Results && !memoryFilesystem && !borrowedArray && !nestedArray && hasMemory)
+          || (!ffiBytes && !shortStruct && !valueRecords && !utf8Results && !borrowedArray && !nestedArray && hasMemory)
           || (utf8Results && (!hasMemory || WebAssembly.Module.imports(compiled).length !== 3))
           || (borrowedArray && (WebAssembly.Module.imports(compiled).length !== 2 || !hasMemory))
           || (nestedArray && (WebAssembly.Module.imports(compiled).length !== 1 || !hasMemory))
           || (valueRecords && !hasMemory)
-          || (memoryFilesystem && !hasMemory)
           || (ffiBytes && (WebAssembly.Module.imports(compiled).length !== 26 || !hasMemory))
           || (shortStruct && (WebAssembly.Module.imports(compiled).length !== 1 || !hasMemory))
           || WebAssembly.Module.customSections(compiled, "haxeon.gc.roots").length !== 0)
-        throw new Error("Wasm GC object module unexpectedly includes linear memory or custom root metadata");
+        throw new Error(`${relative}: Wasm GC object module has unexpected imports, linear memory or custom root metadata (imports: ${WebAssembly.Module.imports(compiled).map(entry => entry.module + "." + entry.name).join(", ") || "none"}, memory: ${hasMemory})`);
       moduleInstance = new WebAssembly.Instance(compiled, imports);
     } else {
       moduleInstance = (await WebAssembly.instantiate(bytes, imports)).instance;
