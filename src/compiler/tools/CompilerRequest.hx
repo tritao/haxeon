@@ -5,6 +5,15 @@ typedef PackageSourceRoot = {
 	final path:String;
 }
 
+/** What a compile server does with the session its last requests built (`--session=`). */
+enum abstract CompileSessionMode(String) to String {
+	/** Build on what the session holds: the default. A request with other settings starts it over anyway. */
+	var Reuse = "reuse";
+
+	/** Start the session over before compiling, so the result depends on the request alone, never on what came before it. */
+	var Fresh = "fresh";
+}
+
 typedef CompilerRequest = {
 	final target:String;
 	/** Build mode controls metadata required by development tools. */
@@ -28,6 +37,9 @@ typedef CompilerRequest = {
 
 	/** The passes and self-checks the compile runs (`--no-inline`, `--check-reuse`, ...). */
 	final options:compiler.CompileOptions;
+
+	/** Whether a compile server builds on its session or starts it over (`--session=reuse` or `--session=fresh`). */
+	final session:CompileSessionMode;
 
 	/**
 	 * Keep the append-only function, symbol and stable-id history across requests so a running module can be

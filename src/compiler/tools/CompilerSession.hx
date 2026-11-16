@@ -1,17 +1,18 @@
 package compiler.tools;
 
 import compiler.Compiler;
+import compiler.backend.Backend.BackendTarget;
+import compiler.backend.BackendTargets;
 import compiler.ffi.FfiRegistry.FfiConfiguration;
 import compiler.ffi.FfiRegistry.FfiInterfaceSource;
 import compiler.ffi.FfiRegistry.FfiProjectionSource;
 import compiler.ffi.HxiInterfaceOrder;
-import compiler.backend.Backend.BackendTarget;
-import compiler.backend.BackendTargets;
-import compiler.modules.ModulePath;
-import compiler.runtime.CompilerIntrinsics;
 import compiler.hl.HlCode;
 import compiler.hl.HlWriter;
 import compiler.hl.HlWriterCache;
+import compiler.modules.ModulePath;
+import compiler.runtime.CompilerIntrinsics;
+import compiler.tools.CompilerRequest.CompileSessionMode;
 import haxe.Json;
 import haxe.io.Bytes;
 import haxe.io.Path;
@@ -81,6 +82,9 @@ class CompilerSession {
 		};
 
 	public function prepare(request:CompilerRequest, report:String->Void):Compiler {
+		// A fresh request owes nothing to the requests before it.
+		if (request.session == CompileSessionMode.Fresh)
+			reset();
 		// Every consumer of a source in this request sees the same bytes.
 		requestSources = [];
 		var host = hostInterfaces(BackendTargets.parse(request.target)),

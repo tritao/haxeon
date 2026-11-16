@@ -2,6 +2,7 @@ package compiler.tools;
 
 import compiler.backend.Backend.BackendTarget;
 import compiler.backend.BackendTargets;
+import compiler.tools.CompilerRequest.CompileSessionMode;
 import compiler.tools.CompilerRequest.PackageSourceRoot;
 import sys.io.File;
 
@@ -34,7 +35,8 @@ class CompilerArguments {
 			roots:Array<String> = [],
 			defines:Array<String> = [],
 			paths:Array<String> = [],
-			optionFlags:Array<String> = [];
+			optionFlags:Array<String> = [],
+			session = CompileSessionMode.Reuse;
 		var packageRoots:Array<PackageSourceRoot> = [];
 		var index = 0;
 		while (index < arguments.length) {
@@ -87,6 +89,12 @@ class CompilerArguments {
 				dumpFunction = parseIndex(value(argument, "--dump-function="));
 			else if (compiler.CompileOptions.isFlag(argument))
 				optionFlags.push(argument);
+			else if (StringTools.startsWith(argument, "--session="))
+				session = switch value(argument, "--session=") {
+					case "reuse": CompileSessionMode.Reuse;
+					case "fresh": CompileSessionMode.Fresh;
+					case other: throw 'Compiler option "--session=" takes reuse or fresh, not "$other"';
+				};
 			else if (argument == "--live")
 				live = true;
 			else if (argument == "--wasm-shared-memory")
@@ -168,6 +176,7 @@ class CompilerArguments {
 			wasmGcStress: wasmGcStress,
 			wasmRuntimeNeutral: wasmRuntimeNeutral,
 			options: compiler.CompileOptions.fromArguments(optionFlags),
+			session: session,
 			live: live,
 			exports: exports,
 			ffiHeader: ffiHeader,

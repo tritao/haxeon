@@ -51,6 +51,23 @@ class CompilerSessionMain {
 			&& releaseAgain.artifact.hashLink().module.sourceSnapshots.length == 0,
 			"a persistent session must honor changes to build mode");
 
+		// `--session=reuse` (the default) builds on the session; `--session=fresh` starts it over, so the compile owes nothing to
+		// the requests before it and types everything again, to the same bytes.
+		var sessionArgs = modeArgs.concat(["--build-mode=release"]);
+		var reused = CompilerDriver.compile(CompilerArguments.parse(sessionArgs), _ -> {}, modeSession),
+			freshStart = CompilerDriver.compile(CompilerArguments.parse(sessionArgs.concat(["--session=fresh"])),
+				_ -> {},
+				modeSession);
+		expect(reused.metrics.retypedFunctions == 0, "a reused session types nothing again");
+		expect(freshStart.metrics.retypedFunctions > 0, "a fresh session types everything again");
+		expect(HlWriter.encode(reused.artifact.hashLink().module).flatten()
+			.compare(HlWriter.encode(freshStart.artifact.hashLink().module).flatten()) == 0,
+			"a fresh session builds the same module");
+		var rejectedMode = false;
+		try CompilerArguments.parse(modeArgs.concat(["--session=sometimes"])) catch (_:Dynamic)
+			rejectedMode = true;
+		expect(rejectedMode, "an unknown session mode must be rejected");
+
 		// Live mode: this block asserts that backend assembly reuses lowered functions between compiles, which only a
 		// session that keeps its assembler history does. ArtifactBuildMain covers the default, history-free mode.
 		var args = ["--target=hl", "--entry=Main", "--root=" + root, "--live", main, value],

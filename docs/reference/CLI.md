@@ -136,6 +136,10 @@ mix of them: `--no-inline`, `--no-load-store-forwarding`, `--no-strength-reducti
 reference for the reachability walk), `--check-reuse` (compare everything a compile reuses with a fresh build; slow, for
 the test suites) and `--wasm-legacy-exceptions` (below).
 
+A compile server keeps a session between requests and builds on it (`--session=reuse`, the default); a request with
+other settings starts it over anyway. `--session=fresh` starts it over before compiling, so the result depends on the
+request alone, never on what the server compiled before.
+
 `run --profile[=SOURCES]` launches the program under `hl --diagnostics`, records it with `hlprof-live` into an HLPC
 capture directory (`profile.hlpc`, `profile.pftrace`, `capture.json`, the bytecode) and prints a report when it ends.
 `SOURCES` is a comma list of `instrument`, `sampling` and `alloc`; without a list the default is `instrument`, which
