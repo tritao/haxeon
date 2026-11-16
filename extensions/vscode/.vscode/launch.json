@@ -1,0 +1,23 @@
+{
+	// F5 with this folder open: an Extension Development Host running the extension from source, on this checkout's
+	// tree. The extension's default server command, `haxeon-lsp`, is found on PATH in the checkout's scripts/.
+	"version": "0.2.0",
+	"configurations": [
+		{
+			"name": "Run the Haxeon extension",
+			"type": "extensionHost",
+			"request": "launch",
+			"args": [
+				"--extensionDevelopmentPath=${workspaceFolder}",
+				"${workspaceFolder}/../../haxeon-dev.code-workspace"
+			],
+			"env": {
+				"PATH": "${workspaceFolder}/../../scripts:${env:PATH}"
+			},
+			"outFiles": [
+				"${workspaceFolder}/dist/**/*.js"
+			],
+			"preLaunchTask": "npm: compile"
+		}
+	]
+}

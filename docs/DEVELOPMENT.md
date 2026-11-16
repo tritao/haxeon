@@ -111,9 +111,6 @@ The compiler builds itself. Three scripts cover that:
 
 Both bootstrap modes compile the same sorted manifest of every `.hx` file under `src/`, `lib/` and `stdlib/`.
 
-`scripts/bootstrap-status.sh` runs the real lexer, parser and typer over the compiler source tree and reports bootstrap
-progress. Pass `--json` for a machine-readable dashboard.
-
 The writer emits HashLink bytecode format version 8 (`HlCode.VERSION`), the newest the decoder in
 `vendor/hashlink/src/code.c` accepts.
 
