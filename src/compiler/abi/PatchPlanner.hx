@@ -207,7 +207,7 @@ class PatchPlanner {
 	 * function's code.
 	 *
 	 * `LambdaAlignment` matches lambdas by their code and says how to rename the running module's lambdas so every name stands
-	 * for its function again; a HashLink build applies those renames before it plans (`BackendAssembly`), so it gets here
+	 * for its function again; a HashLink build applies those renames before it plans (`HashLinkBackendSession`), so it gets here
 	 * with nothing left to rename. A group is reported when it cannot be matched, or when it would need renaming: a module that
 	 * cannot take the renames (a Wasm module, or one the compiler resumed without its layout) reloads instead. Function adapter
 	 * groups are never renamed; they must keep every name's function (`LambdaAlignment.keepsNames`).

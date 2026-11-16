@@ -37,6 +37,8 @@ import compiler.abi.PatchPlanner.PatchDecision;
 import compiler.runtime.NativeRegistry;
 import compiler.runtime.NativeRegistry.NativeDefinition;
 import compiler.compilation.AnalysisTransaction;
+import compiler.compilation.BackendSession;
+import compiler.compilation.HashLinkBackendSession;
 import compiler.compilation.CompilationTransaction;
 import compiler.compilation.CompilerPublication;
 import compiler.compilation.CompilerPublication.CompilerSnapshot;
@@ -269,8 +271,11 @@ class Compiler {
 	 */
 	public var pipelineSnapshot:Null<compiler.compilation.PipelineSnapshot> = null;
 
-	/** The lowered functions of the last plain build (see `HlLoweredCache`); follows the candidate like `inlineCache`. */
-	public var loweredCache:compiler.hl.incremental.HlLoweredCache = new compiler.hl.incremental.HlLoweredCache();
+	/**
+	 * The backend of this session (`BackendSession`): what turns the final IR into the artifact, with the state it keeps between
+	 * builds (the HashLink assembler and lowered functions). It follows the candidate like `inlineCache` does.
+	 */
+	public var backend:BackendSession;
 
 	/**
 	 * What the last verification of the final IR accepted (see `IrVerifyMemo`). It belongs to the IR, not to a backend, so it is not
@@ -291,7 +296,6 @@ class Compiler {
 
 	final graph = new ModuleGraph();
 	var sourceLoader = new ModuleSourceLoader();
-	var assembler:HlModuleAssembler;
 	final moduleId:Bytes;
 
 	public var types(default, null):TypeRegistry;
@@ -327,7 +331,7 @@ class Compiler {
 		if (cloneFrom != null) {
 			genericSpecializations = cloneFrom.genericSpecializations.copy();
 			moduleId = cloneFrom.moduleId;
-			assembler = cloneFrom.assembler;
+			backend = cloneFrom.backend;
 			types = cloneFrom.types.copy();
 			publishedAbi = cloneFrom.publishedAbi;
 			compiledOnce = cloneFrom.compiledOnce;
@@ -340,15 +344,16 @@ class Compiler {
 		} else if (identityState == null) {
 			genericSpecializations = new GenericSpecializationRegistry();
 			moduleId = HlRuntimeIdentity.createModuleId();
-			assembler = new HlModuleAssembler();
+			backend = new HashLinkBackendSession(new HlModuleAssembler());
 			types = new TypeRegistry();
 		} else {
 			var identity = HlRuntimeIdentity.decodePersistent(identityState);
 			genericSpecializations = new GenericSpecializationRegistry(identity.specializationState);
 			moduleId = identity.moduleId;
 			var assemblerState = identity.assemblerState;
-			assembler = assemblerState == null
+			var assembler = assemblerState == null
 				? new HlModuleAssembler(identity.stableIds) : HlAssemblerStateCodec.decode(assemblerState);
+			backend = new HashLinkBackendSession(assembler);
 			for (name => id in identity.stableIds)
 				if (assembler.cache.stableIds.get(name) != id)
 					throw "Assembler stable identities do not match compiler state";
@@ -391,11 +396,15 @@ class Compiler {
 	}
 
 	public function exportIdentityState():Bytes {
-		var state = publication.persistence();
-		var backend = state.tracking && state.revision > 0 ? HlAssemblerStateCodec.encode(assembler) : null;
-		return HlRuntimeIdentity.encodePersistent(moduleId, assembler.cache.stableIds, types.exportState(),
-			publishedAbi, state.tracking, state.revision,
-			state.abi, backend, genericSpecializations.exportState());
+		var state = publication.persistence(),
+			hashLink = backend.hashLink();
+		// Live patching, and with it the identity a later session resumes, is HashLink's; another backend persists no layout.
+		var assembler = hashLink == null ? null : hashLink.assembler,
+			assemblerState = state.tracking && state.revision > 0
+				&& assembler != null ? HlAssemblerStateCodec.encode(assembler) : null;
+		return HlRuntimeIdentity.encodePersistent(moduleId, assembler == null ? [] : assembler.cache.stableIds,
+			types.exportState(), publishedAbi, state.tracking, state.revision,
+			state.abi, assemblerState, genericSpecializations.exportState());
 	}
 
 	public function enablePublicationTracking():Void {
@@ -424,7 +433,7 @@ class Compiler {
 	public function rejectPublication(revision:Int):Void {
 		var candidate = publication.reject(revision);
 		restore(candidate.snapshot);
-		assembler = candidate.assembler;
+		backend = candidate.backend;
 	}
 
 	/**
@@ -433,14 +442,21 @@ class Compiler {
 	 * build. False when the compiler no longer holds that state.
 	 */
 	public function retractPublication(revision:Int):Bool {
-		var latest = assembler.lastRevision(),
+		var current = backend.hashLink();
+		if (current == null)
+			return false;
+		var latest = current.assembler.lastRevision(),
 			candidate = publication.retract(revision);
 		if (candidate == null)
 			return false;
 		restore(candidate.snapshot);
-		assembler = candidate.assembler.copy();
+		var retracted = candidate.backend.hashLink();
+		if (retracted == null)
+			return false;
+		var assembler = retracted.assembler.copy();
 		// The refused revisions were published; their numbers stay used.
 		assembler.continueRevisions(latest);
+		backend = new HashLinkBackendSession(assembler, retracted.loweredCache);
 		return true;
 	}
 
@@ -696,8 +712,10 @@ class Compiler {
 	}
 
 	public function compact(entryModule:String):CompileResult {
-		var result = new CompilationTransaction(this, entryModule, null,
-			new HlModuleAssembler(assembler.cache.stableIds)).run();
+		var hashLink = backend.hashLink();
+		if (hashLink == null)
+			throw "Compacting a module is a HashLink operation";
+		var result = new CompilationTransaction(this, entryModule, null, hashLink.compacting()).run();
 		rememberCompile(entryModule, result);
 		return result;
 	}
@@ -1010,13 +1028,13 @@ class Compiler {
 			semanticProgram: cachedSemanticProgram,
 			inlineCache: inlineCache,
 			pipelineSnapshot: pipelineSnapshot,
-			loweredCache: loweredCache,
+			backend: backend,
 			reachabilityCache: reachabilityCache,
 			declarationOwners: declarationOwners
 		};
 	}
 
-	function createCandidate(snapshot:CompilerSnapshot, startingAssembler:Null<HlModuleAssembler>):Compiler {
+	function createCandidate(snapshot:CompilerSnapshot, startingBackend:Null<BackendSession>):Compiler {
 		var candidate = new Compiler(null, null, null, this);
 		candidate.sourceLoader = sourceLoader.copy();
 		candidate.configurationIdentity = configurationIdentity;
@@ -1035,14 +1053,13 @@ class Compiler {
 		candidate.verifyMemo = verifyMemo;
 		candidate.inlineCache = inlineCache.copy();
 		candidate.pipelineSnapshot = pipelineSnapshot;
-		candidate.loweredCache = loweredCache.copy();
+		candidate.backend = (startingBackend == null ? backend : startingBackend).forCandidate();
 		candidate.publishedAbi = snapshot.publishedAbi;
 		candidate.compiledOnce = snapshot.compiledOnce;
 		candidate.rehydrationBaseline = snapshot.rehydrationBaseline;
 		candidate.cachedSemanticProgram = snapshot.semanticProgram;
 		candidate.reachabilityCache = copyReachabilityCache(reachabilityCache);
 		candidate.declarationOwners = declarationOwners.copy();
-		candidate.assembler = startingAssembler == null ? assembler : startingAssembler;
 		return candidate;
 	}
 
@@ -1057,14 +1074,13 @@ class Compiler {
 		lastTypedProgram = candidate.lastTypedProgram;
 		inlineCache = candidate.inlineCache;
 		pipelineSnapshot = candidate.pipelineSnapshot;
-		loweredCache = candidate.loweredCache;
+		backend = candidate.backend;
 		publishedAbi = candidate.publishedAbi;
 		compiledOnce = candidate.compiledOnce;
 		rehydrationBaseline = candidate.rehydrationBaseline;
 		cachedSemanticProgram = candidate.cachedSemanticProgram;
 		reachabilityCache = candidate.reachabilityCache;
 		declarationOwners = candidate.declarationOwners;
-		assembler = candidate.assembler;
 		genericSpecializations = candidate.genericSpecializations;
 		graph.rebuild(modules);
 	}
@@ -1093,7 +1109,7 @@ class Compiler {
 		cachedSemanticProgram = snapshot.semanticProgram;
 		inlineCache = snapshot.inlineCache;
 		pipelineSnapshot = snapshot.pipelineSnapshot;
-		loweredCache = snapshot.loweredCache;
+		backend = snapshot.backend;
 		reachabilityCache = snapshot.reachabilityCache;
 		declarationOwners = snapshot.declarationOwners;
 	}
@@ -1173,14 +1189,6 @@ class Compiler {
 
 	function irNatives():Array<IrNative>
 		return natives.irNatives();
-
-	function stableIdsBySlot(sourceAssembler:HlModuleAssembler, layout:Map<String, Int>):Map<Int, Int> {
-		var result:Map<Int, Int> = [];
-		for (name => id in sourceAssembler.cache.stableIds)
-			if (layout.exists(name))
-				result.set(layout.get(name), id);
-		return result;
-	}
 
 	static function mapIsEmpty(values:Map<String, Bool>):Bool {
 		for (_ in values.keys())

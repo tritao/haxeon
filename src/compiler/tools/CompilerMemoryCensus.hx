@@ -52,11 +52,20 @@ class CompilerMemoryCensus {
 					session.writerCache = new HlWriterCache();
 				}
 			},
-				{name: "lowered function cache", release: () -> compiler.loweredCache = new HlLoweredCache()},
-				{
-					name: "last assembler (function cache, symbols)",
-					release: () -> compiler.assembler = new HlModuleAssembler()
-				},
+				{name: "lowered function cache",
+				release: () -> {
+					var hashLink = compiler.backend.hashLink();
+					if (hashLink != null)
+						hashLink.loweredCache = new HlLoweredCache();
+				}
+			},
+				{name: "last assembler (function cache, symbols)",
+				release: () -> {
+					var hashLink = compiler.backend.hashLink();
+					if (hashLink != null)
+						hashLink.assembler = new HlModuleAssembler();
+				}
+			},
 				{
 					name: "inline cache",
 					release: () -> compiler.inlineCache = new IrInlineCache()

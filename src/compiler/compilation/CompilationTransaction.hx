@@ -4,23 +4,22 @@ import compiler.Compiler;
 import compiler.Compiler.CompileResult;
 import compiler.core.CancellationToken;
 import compiler.core.Diagnostic;
-import compiler.hl.incremental.HlModuleAssembler;
 
 /** Owns snapshot, rollback, and publication boundaries for one compilation. */
 class CompilationTransaction {
 	final compiler:Compiler;
 	final entryModule:String;
 	final token:Null<CancellationToken>;
-	final startingAssembler:Null<HlModuleAssembler>;
+	final startingBackend:Null<BackendSession>;
 	final indexSemantics:Bool;
 
 	public function new(compiler:Compiler, entryModule:String, token:Null<CancellationToken>,
-			startingAssembler:Null<HlModuleAssembler>,
+			startingBackend:Null<BackendSession>,
 			?indexSemantics = true) {
 		this.compiler = compiler;
 		this.entryModule = entryModule;
 		this.token = token;
-		this.startingAssembler = startingAssembler;
+		this.startingBackend = startingBackend;
 		this.indexSemantics = indexSemantics;
 	}
 
@@ -29,8 +28,8 @@ class CompilationTransaction {
 		compiler.publication.beforeCompile();
 		var snapshot = compiler.snapshot();
 		var snapshotDoneAt = Sys.time() * 1000.0;
-		var previousAssembler = compiler.assembler;
-		var candidate = compiler.createCandidate(snapshot, startingAssembler);
+		var previousBackend = compiler.backend;
+		var candidate = compiler.createCandidate(snapshot, startingBackend);
 		try {
 			var context = new CompilationContext(candidate, indexSemantics);
 			var frontendStartedAt = Sys.time() * 1000.0;
@@ -44,7 +43,7 @@ class CompilationTransaction {
 			if (result.unchanged)
 				compiler.publication.unchanged(result.revision);
 			else
-				compiler.publication.candidate(result.revision, abi, snapshot, previousAssembler);
+				compiler.publication.candidate(result.revision, abi, snapshot, previousBackend);
 			return result;
 		} catch (error:Dynamic) {
 			var failedDiagnostics:Map<String, Array<Diagnostic>> = [];

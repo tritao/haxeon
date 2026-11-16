@@ -9,39 +9,51 @@ import compiler.abi.PatchPlanner.PatchDecision;
 import compiler.abi.RuntimeAbi;
 import compiler.abi.RuntimeAbi.RuntimeAbiDescriptor;
 import compiler.hl.incremental.HlModuleAssembler;
-import compiler.hl.incremental.HlModuleAssembler.HlAssemblyResult;
+import compiler.hl.incremental.HlLoweredCache;
 import compiler.hl.patch.HlPatchWriter;
 import compiler.ir.Ir.IrProgram;
 import compiler.core.CancellationToken;
 import haxe.io.Bytes;
 import compiler.hl.HlCode;
 import compiler.hl.HlWriter;
-import compiler.core.AllocationMeter.PhaseAllocation;
+import compiler.compilation.BackendSession.BackendAssemblyResult;
 
-typedef BackendAssemblyResult = {
-	final assembly:HlAssemblyResult;
-	final assembler:HlModuleAssembler;
-	final abi:RuntimeAbiDescriptor;
-	final reloadReasons:Array<AbiChange>;
-	final patchBytes:Null<Bytes>;
-	final abiPlanningDoneAt:Float;
-	final backendAssemblyDoneAt:Float;
-	final patchEncodingDoneAt:Float;
-	final assemblerCopyMs:Float;
-	final snapshotAttachmentMs:Float;
-	final allocationPhases:Array<PhaseAllocation>;
-}
-
-/** Plans and assembles one IR candidate for the HashLink backend. */
-class BackendAssembly {
+/**
+ * The HashLink backend of a compilation session. It owns what the next HashLink build starts from: the assembler of the last
+ * successful build (its layout, stable function ids and revision history, which live patches address) and the lowered functions
+ * of the last plain build. A build assembles on the candidate's copy (`forCandidate`), so a failed build leaves both as they were.
+ */
+class HashLinkBackendSession implements BackendSession {
 	/**
 	 * Reserved slots a live HashLink build gives each object (see `HlLower.reservedSlots`): how many fields a session can
 	 * add to one class before the edit needs a reload, which lays the slots out afresh. Each costs a pointer per instance.
 	 */
 	public static var liveFieldReserve:Int = 4;
 
+	/** The assembler of the last successful build. */
+	public var assembler:HlModuleAssembler;
+
+	/** The lowered functions of the last plain build (see `HlLoweredCache`). */
+	public var loweredCache:HlLoweredCache;
+
+	public function new(assembler:HlModuleAssembler, ?loweredCache:HlLoweredCache) {
+		this.assembler = assembler;
+		this.loweredCache = loweredCache == null ? new HlLoweredCache() : loweredCache;
+	}
+
+	public function hashLink():Null<HashLinkBackendSession>
+		return this;
+
+	/** The same assembler, with a copy of the lowered cache the candidate build can fill. */
+	public function forCandidate():BackendSession
+		return new HashLinkBackendSession(assembler, loweredCache.copy());
+
+	/** A session that assembles a fresh layout with the same stable function ids (`Compiler.compact`). */
+	public function compacting():HashLinkBackendSession
+		return new HashLinkBackendSession(new HlModuleAssembler(assembler.cache.stableIds), loweredCache);
+
 	/** What the assembly reads besides the IR: an assembly made in an equal environment from an equal IR is the same module. */
-	public static function environmentKey(context:CompilationContext):String
+	public function environmentKey(context:CompilationContext):String
 		return [
 			"live:" + context.livePatching,
 			"wasm:" + context.isWasmTarget(),
@@ -50,7 +62,8 @@ class BackendAssembly {
 		].join(",");
 
 	/** An earlier result for this build: the module and everything derived from it stay, the timings are this build's (none). */
-	public static function reused(previous:BackendAssemblyResult, at:Float):BackendAssemblyResult
+	public function reuse(previous:BackendAssemblyResult, at:Float):BackendAssemblyResult {
+		assembler = previous.assembler;
 		return {
 			assembly: previous.assembly,
 			assembler: previous.assembler,
@@ -64,9 +77,10 @@ class BackendAssembly {
 			snapshotAttachmentMs: 0.0,
 			allocationPhases: []
 		};
+	}
 
 	/** Why a module assembled from the same inputs differs from `previous`, or null when it is the same module. */
-	public static function difference(previous:BackendAssemblyResult, fresh:BackendAssemblyResult):Null<String>
+	public function difference(previous:BackendAssemblyResult, fresh:BackendAssemblyResult):Null<String>
 		return moduleDifference(previous.assembly.module, fresh.assembly.module);
 
 	/** What the lowering was done for besides the IR; entries made for another environment are not used (see `HlLoweredCache`). */
@@ -92,14 +106,15 @@ class BackendAssembly {
 		return "module tables or debug sections differ";
 	}
 
-	public static function assemble(context:CompilationContext, ir:IrProgram, regenerated:Array<String>,
+	/** Assembles `ir`; the session keeps the candidate assembler, which the compiler adopts with the candidate. */
+	public function assemble(context:CompilationContext, ir:IrProgram, regenerated:Array<String>,
 			relocated:Array<String>,
 			token:Null<CancellationToken>):BackendAssemblyResult {
 		var allocationAtStart = AllocationMeter.sample();
 		compiler.ir.IrReachabilityReport.report("final program", ir);
 		var nextAbi = RuntimeAbi.describe(ir),
 			previousAbi = context.publishedAbi,
-			baseAssembler = context.assembler;
+			baseAssembler = assembler;
 		// Compilation sessions retain a HashLink assembly even when the requested
 		// artifact is Wasm. Keep its closure ABI adaptation local to that assembly;
 		// the Wasm backend receives the original logical program and builds its own
@@ -153,8 +168,7 @@ class BackendAssembly {
 		// Without live patching nothing addresses this module by slot, symbol index or stable id, so assemble
 		// from scratch: the result depends only on the source, never on what the session compiled before.
 		// A plain build links the functions of the last one whose IR is unchanged instead of lowering them again (see `HlLoweredCache`).
-		var loweredCache:Null<compiler.hl.incremental.HlLoweredCache> = context.livePatching
-			? null : context.loweredCache;
+		var loweredCache:Null<HlLoweredCache> = context.livePatching ? null : this.loweredCache;
 		var candidateAssembler = loweredCache != null ? new HlModuleAssembler(null,
 			loweredCache.debug) : context.compiledOnce
 			&& PatchPlanner.requiresFreshLayout(decision) ? freshLayout(baseAssembler) : baseAssembler.copy();
@@ -186,7 +200,7 @@ class BackendAssembly {
 			fresh.fieldReserve = candidateAssembler.fieldReserve;
 			fresh.developmentMetadata = candidateAssembler.developmentMetadata;
 			fresh.irVerified = candidateAssembler.irVerified;
-			fresh.loweredCache = new compiler.hl.incremental.HlLoweredCache();
+			fresh.loweredCache = new HlLoweredCache();
 			var freshAssembly = fresh.assemble(assemblyIr, context.rehydratedChanges(regenerated, assemblyIr), decision,
 				relocated,
 				PatchPlanner.dispatchedFunctions(previousAbi, nextAbi));
@@ -208,7 +222,7 @@ class BackendAssembly {
 			|| assembly.requiresReload
 			|| assembly.changedFunctions.length == 0 ? null : HlPatchWriter.encode(assembly.module, context.moduleId,
 			assembly.changedSlots,
-			context.stableIdsBySlot(candidateAssembler, assembly.functionIndices), assembly.baseRevision,
+			stableIdsBySlot(candidateAssembler, assembly.functionIndices), assembly.baseRevision,
 			assembly.revision, assembly.baseInts,
 			assembly.baseFloats, assembly.baseStrings, assembly.baseTypes, null, assembly.addedFunctions,
 			assembly.baseGlobals, assembly.objectLayout, [for (guard in assembly.guards)
@@ -217,6 +231,7 @@ class BackendAssembly {
 					description:guard.description
 			}], candidateAssembler.symbols.namedGlobals());
 		var allocationAfterPatch = AllocationMeter.sample();
+		assembler = candidateAssembler;
 		return {
 			assembly: assembly,
 			assembler: candidateAssembler,
@@ -251,6 +266,14 @@ class BackendAssembly {
 		var fresh = new HlModuleAssembler(ids);
 		fresh.continueRevisions(previous.lastRevision());
 		return fresh;
+	}
+
+	static function stableIdsBySlot(source:HlModuleAssembler, layout:Map<String, Int>):Map<Int, Int> {
+		var result:Map<Int, Int> = [];
+		for (name => id in source.cache.stableIds)
+			if (layout.exists(name))
+				result.set(layout.get(name), id);
+		return result;
 	}
 
 	static function attachSourceSnapshots(context:CompilationContext, code:HlCode):Void {

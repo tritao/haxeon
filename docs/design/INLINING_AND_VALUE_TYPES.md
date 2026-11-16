@@ -75,7 +75,7 @@ The IR is SSA per function (`IrFunction`: blocks of `Located<IrInstruction>`, `I
 Functions are generated independently and cached per module (`ModuleState.irFunctions`, versioned by `irVersions`).
 The only point where every function and the object tables coexist, before both backends, is between
 `IrGenerator.assemble` (`compilation/FrontendCompilation.hx`, the call at about line 473) and
-`BackendAssembly.assemble`. HashLink and both Wasm backends consume the same `IrProgram`, so one pass covers all
+`HashLinkBackendSession.assemble`. HashLink and both Wasm backends consume the same `IrProgram`, so one pass covers all
 targets. `IrProgramAssembler.assemble` already scans all functions and rewrites `Call` to `CNativeCall` in place.
 
 **The pass must not mutate cached `IrFunction` objects.** They are shared by `ModuleState.copy()` and by transaction

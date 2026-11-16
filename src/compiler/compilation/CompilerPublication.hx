@@ -2,7 +2,6 @@ package compiler.compilation;
 
 import compiler.abi.RuntimeAbi.RuntimeAbiDescriptor;
 import compiler.core.Diagnostic;
-import compiler.hl.incremental.HlModuleAssembler;
 import compiler.ir.Ir.IrObject;
 import compiler.modules.ModuleState;
 import compiler.semantic.SemanticProgram;
@@ -28,7 +27,7 @@ typedef CompilerSnapshot = {
 	final inlineCache:compiler.ir.IrInliner.IrInlineCache;
 
 	final pipelineSnapshot:Null<compiler.compilation.PipelineSnapshot>;
-	final loweredCache:compiler.hl.incremental.HlLoweredCache;
+	final backend:BackendSession;
 	final reachabilityCache:Map<String, compiler.Compiler.ReachabilityCache>;
 	final declarationOwners:compiler.semantic.DeclarationOwners;
 }
@@ -46,7 +45,9 @@ typedef PendingPublication = {
 	final revision:Int;
 	final abi:RuntimeAbiDescriptor;
 	final snapshot:CompilerSnapshot;
-	final assembler:HlModuleAssembler;
+
+	/** The backend session the build started from (see `CompilationTransaction`). */
+	final backend:BackendSession;
 }
 
 /** Read-only summary of the current publication state machine. */
@@ -113,7 +114,7 @@ class CompilerPublication {
 		}
 
 	public function candidate(revision:Int, abi:RuntimeAbiDescriptor, snapshot:CompilerSnapshot,
-			assembler:HlModuleAssembler):Void
+			backend:BackendSession):Void
 		state = switch state {
 			case Untracked: Untracked;
 			case Ready(baseline): Pending({
@@ -121,7 +122,7 @@ class CompilerPublication {
 				revision: revision,
 				abi: abi,
 				snapshot: snapshot,
-				assembler: assembler
+				backend: backend
 			});
 			case Pending(candidate): throw 'Publication revision ${candidate.revision} is still pending';
 		};

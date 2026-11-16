@@ -4,7 +4,6 @@ import compiler.Compiler;
 import compiler.Compiler.ReachabilityCache;
 import compiler.abi.RuntimeAbi.RuntimeAbiDescriptor;
 import compiler.core.AllocationMeter;
-import compiler.hl.incremental.HlModuleAssembler;
 import compiler.ir.Ir.IrCNative;
 import compiler.ir.Ir.IrNative;
 import compiler.ir.Ir.IrObject;
@@ -51,7 +50,7 @@ class CompilationContext {
 	public var parseBytes = 0.0;
 	public var parseCount = 0.0;
 
-	public var assembler(get, set):HlModuleAssembler;
+	public var backend(get, never):BackendSession;
 	public var publishedAbi(get, set):Null<RuntimeAbiDescriptor>;
 	public var compiledOnce(get, set):Bool;
 	public var livePatching(get, never):Bool;
@@ -59,7 +58,6 @@ class CompilationContext {
 	public var cachedSemanticProgram(get, set):Null<SemanticProgram>;
 	public var lastTypedProgram(get, never):Null<TypedProgram>;
 	public var pipelineSnapshot(get, set):Null<PipelineSnapshot>;
-	public var loweredCache(get, never):compiler.hl.incremental.HlLoweredCache;
 	public var verifyMemo(get, never):compiler.ir.IrVerifyMemo;
 
 	public function new(owner:Compiler, ?buildSemanticModels = true) {
@@ -178,9 +176,6 @@ class CompilationContext {
 	public function rehydratedChanges(regenerated:Array<String>, program:IrProgram):Array<String>
 		return owner.rehydratedChanges(regenerated, program);
 
-	public function stableIdsBySlot(source:HlModuleAssembler, layout:Map<String, Int>):Map<Int, Int>
-		return owner.stableIdsBySlot(source, layout);
-
 	public function setLastTypedProgram(value:TypedProgram):Void
 		owner.lastTypedProgram = value;
 
@@ -221,9 +216,6 @@ class CompilationContext {
 	public static function copyIndices(source:Map<String, Int>):Map<String, Int>
 		return Compiler.copyIndices(source);
 
-	function get_loweredCache():compiler.hl.incremental.HlLoweredCache
-		return owner.loweredCache;
-
 	function get_verifyMemo():compiler.ir.IrVerifyMemo
 		return owner.verifyMemo;
 
@@ -242,13 +234,8 @@ class CompilationContext {
 		return [for (name in names) name + "=" + owner.defines.get(name)].join("\n");
 	}
 
-	function get_assembler():HlModuleAssembler
-		return owner.assembler;
-
-	function set_assembler(value:HlModuleAssembler):HlModuleAssembler {
-		owner.assembler = value;
-		return value;
-	}
+	function get_backend():BackendSession
+		return owner.backend;
 
 	function get_publishedAbi():Null<RuntimeAbiDescriptor>
 		return owner.publishedAbi;

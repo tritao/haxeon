@@ -1012,9 +1012,11 @@ class FrontendCompilation {
 				irCNatives.push(native);
 		build.irCNatives = irCNatives;
 		// A live HashLink build initializes the fields it adds to running objects (see `IrProgramAssembler.liveInitializersFrom`).
-		var published = context.assembler,
+		var hashLink = context.backend.hashLink(),
+			published = hashLink == null ? null : hashLink.assembler,
 			liveInitializers = context.livePatching
 				&& !context.isWasmTarget()
+				&& published != null
 				&& published.isPublished() ? IrProgramAssembler.liveInitializersFrom(generator, typedNew,
 				name -> published.publishedObject(name),
 				(name, field) -> published.publishedField(name, field)) : [];

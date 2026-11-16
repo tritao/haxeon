@@ -1,6 +1,6 @@
 package compiler.compilation;
 
-import compiler.compilation.BackendAssembly.BackendAssemblyResult;
+import compiler.compilation.BackendSession.BackendAssemblyResult;
 import compiler.ir.Ir.IrProgram;
 import compiler.ir.IrFunction;
 import compiler.ir.codec.CanonicalIrCodec;

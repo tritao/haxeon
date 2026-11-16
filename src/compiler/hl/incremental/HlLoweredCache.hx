@@ -13,7 +13,7 @@ class HlLoweredCache {
 	/** Identities and opcode spans of functions whose IR and code did not change. */
 	public final debug:HlDebugMetadataCache;
 
-	/** What the entries were lowered for besides their IR (see `BackendAssembly.loweringEnvironment`). */
+	/** What the entries were lowered for besides their IR (see `HashLinkBackendSession.loweringEnvironment`). */
 	public var environment = "";
 
 	public function new(?debug:HlDebugMetadataCache)

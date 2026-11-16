@@ -158,7 +158,7 @@ The rest of the repository:
 `IrProgramAssembler.assemble`, from the generated functions and the declaration tables to the finished program (the runtime surface and
 the entry function are its `runtime-surface` stage). `target` runs from `FrontendCompilation.run` after the frontend has recorded its
 positional and live metadata, from the closed enum tag ABI to the inliner and the frontend verifier. `retainedHashLink` runs in
-`BackendAssembly` on the copy of the program a Wasm build keeps for its HashLink assembly. A stage wraps an existing pass as it is;
+`HashLinkBackendSession` on the copy of the program a Wasm build keeps for its HashLink assembly. A stage wraps an existing pass as it is;
 target differences are the stages a target enables, read from `IrPipelineContext` (the `TargetProfile`, the value-array lane target,
 live patching and development metadata), not branches at the call sites. The Wasm module builders still run their own passes,
 interleaved with the module they build.

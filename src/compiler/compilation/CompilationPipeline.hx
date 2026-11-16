@@ -106,17 +106,18 @@ class CompilationPipeline {
 			irAssemblyDoneAt = frontend.irAssemblyDoneAt;
 		// A build whose pipeline inputs equal the last plain build's reuses its module too, unless HAXEON_CHECK_REUSE=1 assembles
 		// it again to compare.
-		var backendKey = BackendAssembly.environmentKey(context),
+		var session = context.backend,
+			backendKey = session.environmentKey(context),
 			reusedFrom = frontend.reused,
 			previousBackend = reusedFrom != null
 				&& reusedFrom.backend != null
 				&& reusedFrom.backendEnvironment == backendKey ? reusedFrom.backend : null,
 			checkingReuse = Sys.getEnv("HAXEON_CHECK_REUSE") == "1",
 			backendReused = previousBackend != null && !checkingReuse,
-			backend = backendReused ? BackendAssembly.reused(previousBackend,
-				irAssemblyDoneAt) : BackendAssembly.assemble(context, ir, regenerated, frontend.relocated, token);
+			backend = backendReused ? session.reuse(previousBackend,
+				irAssemblyDoneAt) : session.assemble(context, ir, regenerated, frontend.relocated, token);
 		if (previousBackend != null && checkingReuse) {
-			var difference = BackendAssembly.difference(previousBackend, backend);
+			var difference = session.difference(previousBackend, backend);
 			if (difference != null)
 				throw 'HAXEON_CHECK_REUSE: the module reused for equal pipeline inputs differs from a fresh assembly ($difference)';
 		}
@@ -139,7 +140,6 @@ class CompilationPipeline {
 		var allocationBeforeFinalize = AllocationMeter.sample();
 		context.setLastTypedProgram(typedNew);
 		context.publishedAbi = nextAbi;
-		context.assembler = candidateAssembler;
 		context.clearRehydrationBaseline();
 		for (name in names) {
 			var state:compiler.modules.ModuleState = modules.get(name);
