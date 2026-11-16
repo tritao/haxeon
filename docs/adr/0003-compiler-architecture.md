@@ -39,8 +39,9 @@ twenty retained caches. Some record precise dependencies:
 
 Others invalidate coarsely, each by its own rule:
 
-- `CompilerSession.reset()` throws the whole compiler away when a configuration, a manifest or a lazily loaded module's
-  structural-declaration token changes, or when a module is shadowed (`CompilerSession.hx:93-128`).
+- `CompilerSession.reset()` throws the whole compiler away when the configuration changes or a lazily loaded module's file
+  is gone. A typedef, enum or abstract that changes shape does not: its fingerprint (`ModuleChangeAnalyzer`) invalidates
+  what depends on it, as a class's does.
 - `cachedSemanticProgram` and `lastTypedProgram` are dropped on any signature or structural change, and the
   reachability cache on any structural change (`FrontendCompilation.hx:88-178`).
 - An edited module retypes all of its own functions (`ModuleSemanticSnapshot`).

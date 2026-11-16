@@ -116,8 +116,7 @@ class CompilerSessionMain {
 			compile()
 		catch (error:compiler.core.Diagnostic.CompileError) {
 			invalidSnapshot = true;
-			expect(error.diagnostic.span.file.path == value,
-				"shape-lexer diagnostics must name the real source, not <session-shapes>");
+			expect(error.diagnostic.span.file.path == "Value.hx", "a syntax error must name the module's source");
 		}
 		expect(invalidSnapshot, "a malformed source snapshot must be reported");
 		File.saveContent(value, "class Value { public static function get():Int { return 8; } }");
@@ -215,53 +214,77 @@ class CompilerSessionMain {
 		File.saveContent(generic, File.getContent(generic).split("return 7;").join("return 11;"));
 		compile();
 		compareFresh(12);
+		// A typedef, enum or abstract that changes shape changes the layout or the lowering of the classes that use it, though their
+		// text is the same. The session keeps its compiler, and the warm build runs as a fresh build of the same sources does.
 		var shape = root + "/Shape.hx",
+			kind = root + "/Kind.hx",
+			meters = root + "/Meters.hx",
 			holder = root + "/Holder.hx",
 			shapeMain = root + "/ShapeMain.hx";
 		File.saveContent(shape, "typedef Shape = { var x:Int; }");
+		File.saveContent(kind,
+			"enum Kind { Small; Large; } class Kinds { public static function large():Kind return Large; }");
+		File.saveContent(meters,
+			"abstract Meters(Int) { public inline function new(value:Int) this = value; public function toInt():Int return this; }");
 		File.saveContent(holder,
-			"class Holder { public var values:Array<Shape> = []; public function new() {} public function size():Int return values.length; }");
+			"class Holder { public var values:Array<Shape> = []; public var kind:Kind = Kind.Kinds.large(); public var distance:Meters = new Meters(5); public function new() values.push({x: 3}); public function size():Int return values.length + values[0].x + distance.toInt() + switch kind { case Large: 20; case _: 10; }; }");
 		File.saveContent(shapeMain,
 			"class ShapeMain { public static function main():Int return new Holder().size(); }");
 		var shapeArgs = [
 			"--target=hl",
 			"--entry=ShapeMain",
 			"--root=" + root,
+			"--live",
 			shapeMain,
 			holder,
 			shape,
-			"--output=" + root + "/shape.hl"
+			kind,
+			meters
 		],
 			shapeSession = new CompilerSession(),
 			shapeMessages:Array<String> = [];
-		CompilerDriver.compile(CompilerArguments.parse(shapeArgs), shapeMessages.push, shapeSession);
 		var runtime = FileSystem.fullPath(Sys.getEnv("HAXEON_HASHLINK_DIR") + "/hl"
 			+ (Sys.systemName() == "Windows" ? ".exe" : ""));
 		var variable = Sys.systemName() == "Windows" ? "PATH" : Sys.systemName() == "Mac"
 			? "DYLD_LIBRARY_PATH" : "LD_LIBRARY_PATH";
 		var previousPath = Sys.getEnv(variable);
 		Sys.putEnv(variable, FileSystem.fullPath("out")
-			+ ":"
+			+ (Sys.systemName() == "Windows" ? ";" : ":")
 			+ FileSystem.fullPath(Sys.getEnv("HAXEON_HASHLINK_DIR"))
-			+ (previousPath == null ? "" : ":" + previousPath));
-		expect(Sys.command(runtime, [root + "/shape.hl"]) == 0, "initial typedef program must execute");
-		shapeMessages = [];
-		File.saveContent(shape, "typedef Shape = { var x:Int; ?y:Int; }");
-		CompilerDriver.compile(CompilerArguments.parse(shapeArgs), shapeMessages.push, shapeSession);
-		expect(shapeMessages.indexOf("reusing compiler session") < 0,
-			"a typedef shape edit must reset cached field ABI");
-		expect(Sys.command(runtime, [root + "/shape.hl"]) == 0, "edited typedef program must execute");
-		shapeMessages = [];
-		File.saveContent(shape, "// enum in a comment\ntypedef Shape = { var x:Int; ?y:Int; }");
-		CompilerDriver.compile(CompilerArguments.parse(shapeArgs), shapeMessages.push, shapeSession);
+			+ (previousPath == null ? "" : (Sys.systemName() == "Windows" ? ";" : ":") + previousPath));
+		function shapeBuild(label:String):Void {
+			shapeMessages = [];
+			CompilerDriver.compile(CompilerArguments.parse(shapeArgs.concat(["--output=" + root + "/shape.hl"])),
+				shapeMessages.push, shapeSession);
+			CompilerDriver.compile(CompilerArguments.parse(shapeArgs.concat(["--output=" + root + "/shape-fresh.hl"])),
+				_ -> {});
+			expect(Sys.command(runtime, [root + "/shape-fresh.hl"]) == 29, '$label: the fresh program must execute');
+			expect(Sys.command(runtime, [root + "/shape.hl"]) == 29,
+				'$label: the warm program must run as the fresh one');
+		}
+		shapeBuild("the initial build");
+		File.saveContent(shape, "typedef Shape = { var x:Int; @:optional var y:Int; }");
+		shapeBuild("a typedef shape edit");
 		expect(shapeMessages.indexOf("reusing compiler session") >= 0,
-			"a comment edit must retain the compiler session");
-		expect(Sys.command(runtime, [root + "/shape.hl"]) == 0, "comment-edited program must execute");
+			"a typedef shape edit must keep the compiler session");
+		File.saveContent(kind,
+			"enum Kind { Tiny; Small; Large; } class Kinds { public static function large():Kind return Large; }");
+		shapeBuild("an enum shape edit");
+		expect(shapeMessages.indexOf("reusing compiler session") >= 0,
+			"an enum shape edit must keep the compiler session");
+		File.saveContent(meters,
+			"abstract Meters(Float) { public inline function new(value:Int) this = value; public function toInt():Int return Std.int(this); }");
+		shapeBuild("an abstract shape edit");
+		expect(shapeMessages.indexOf("reusing compiler session") >= 0,
+			"an abstract shape edit must keep the compiler session");
+		File.saveContent(shape, "// enum in a comment\ntypedef Shape = { var x:Int; @:optional var y:Int; }");
+		shapeBuild("a comment edit");
+		expect(shapeMessages.indexOf("reusing compiler session") >= 0, "a comment edit must keep the compiler session");
 		Sys.putEnv(variable, previousPath);
 		for (path in FileSystem.readDirectory(root))
 			FileSystem.deleteFile(root + "/" + path);
 		FileSystem.deleteDirectory(root);
-		Sys.println("PASS: compiler session reuse, edits, failure recovery, source removal, FFI/lazy imports, generic and typedef invalidation");
+		Sys.println("PASS: compiler session reuse, edits, failure recovery, source removal, FFI/lazy imports, generic invalidation, and typedef, enum and abstract shape edits");
 	}
 
 	static function expect(condition:Bool, message:String):Void {

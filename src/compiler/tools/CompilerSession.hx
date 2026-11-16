@@ -12,10 +12,6 @@ import compiler.runtime.CompilerIntrinsics;
 import compiler.hl.HlCode;
 import compiler.hl.HlWriter;
 import compiler.hl.HlWriterCache;
-import compiler.core.Source.SourceFile;
-import compiler.syntax.Lexer;
-import compiler.syntax.ConditionalCompilation;
-import compiler.syntax.Token.TokenKind;
 import haxe.Json;
 import haxe.io.Bytes;
 import haxe.io.Path;
@@ -28,7 +24,6 @@ class CompilerSession {
 	var compiler:Null<Compiler>;
 	var configuration:Null<String>;
 	var writerCache = new HlWriterCache();
-	var sourceTexts:Map<String, String> = [];
 	var unrecordedPublication:Null<{output:String, marker:String}>;
 	var requestSources:Map<String, String> = [];
 
@@ -40,7 +35,6 @@ class CompilerSession {
 		configuration = null;
 		writerCache = new HlWriterCache();
 		encodedModule = null;
-		sourceTexts = [];
 	}
 
 	/**
@@ -83,7 +77,7 @@ class CompilerSession {
 		};
 
 	public function prepare(request:CompilerRequest, report:String->Void):Compiler {
-		// Every consumer of a source in this request sees the same bytes, including shape checks.
+		// Every consumer of a source in this request sees the same bytes.
 		requestSources = [];
 		var host = hostInterfaces(BackendTargets.parse(request.target)),
 			interfacePaths = request.ffiInterfaces.concat(host.interfaces),
@@ -111,18 +105,6 @@ class CompilerSession {
 			});
 		if (configuration != identity)
 			reset();
-		if (compiler != null)
-			for (path in request.paths) {
-				var before = sourceTexts.get(path);
-				var after = readChanged(path);
-				if (before != null
-					&& after != before
-					&& hasStructuralDeclaration(path, before, after,
-					Compiler.defineMap(request.defines.concat(CompilerDriver.targetDefines(request.target))))) {
-					reset();
-					break;
-				}
-			}
 		if (compiler == null) {
 			interfaces = [for (path in interfacePaths) {
 				path:path, text:read(path)
@@ -131,32 +113,29 @@ class CompilerSession {
 				path:path, text:read(path)
 			}];
 		}
-		// Modules resolved lazily (notably stdlib) have absolute source paths.
-		// Refresh those too: retaining only the explicit manifest would cache stale imports.
-		if (compiler != null) {
+		// A module resolved lazily (notably stdlib) has an absolute source path; one whose file is gone takes a new session, which
+		// resolves its imports again. An edited one is refreshed below, as the manifest's sources are.
+		if (compiler != null)
 			for (state in compiler.modules) {
 				var path = state.source.path;
 				if (Path.isAbsolute(path) && !FileSystem.exists(path)) {
 					reset();
 					break;
 				}
-				if (Path.isAbsolute(path)) {
-					var changed = readChanged(path);
-					if (changed != state.source.text
-						&& hasStructuralDeclaration(path, state.source.text, changed,
-						Compiler.defineMap(request.defines.concat(CompilerDriver.targetDefines(request.target))))) {
-						// A typedef/enum/abstract edit can change an unchanged class's field ABI.
-						// Rebuild that semantic graph until transitive shape invalidation is complete.
-						reset();
-						break;
-					}
-				}
 			}
+		// The request reads its sources before it calls `report`: a write after that point belongs to the next request.
+		var existing = compiler;
+		if (existing != null) {
+			for (path in request.paths)
+				read(path);
+			for (state in existing.modules)
+				if (Path.isAbsolute(state.source.path))
+					read(state.source.path);
 		}
 		if (request.live)
 			takeBackRefusedRevisions(request, report);
 		// `report` is caller code, so nothing proved about the field survives a call to it; a local does.
-		var existing = compiler;
+		existing = compiler;
 		if (existing == null) {
 			var resumed = request.live ? resumeLiveModule(request, identity, interfaces, projections, report) : null;
 			var created = resumed == null ? new Compiler() : resumed;
@@ -200,8 +179,6 @@ class CompilerSession {
 		SourceManifestLoader.load(compiler, ["stdlib"], hostModules, null, readChanged);
 		for (path in hostModules)
 			compiler.addRootModule(ModulePath.fromFile(SourceManifestLoader.projectPath(path, ["stdlib"])));
-		for (path in request.paths)
-			sourceTexts.set(path, read(path));
 		compiler.setExportedFunctions(request.exports);
 		return compiler;
 	}
@@ -331,41 +308,4 @@ class CompilerSession {
 
 	function readChanged(path:String):Null<String>
 		return read(path);
-
-	static function hasStructuralDeclaration(path:String, before:String, after:String, defines:Map<String, String>):Bool
-		return structuralDeclarations(path, before, defines) != structuralDeclarations(path, after, defines);
-
-	static function structuralDeclarations(path:String, source:String, defines:Map<String, String>):String {
-		var file = new SourceFile(path, source);
-		var conditional = ConditionalCompilation.process(file, defines);
-		var tokens = new Lexer(file, conditional.text).tokenize();
-		var result:Array<String> = [];
-		var depth = 0, capturing = false, bodyDepth = 0;
-		for (token in tokens) {
-			if (!capturing
-				&& depth == 0
-				&& (token.kind == TokenKind.Typedef
-				|| token.kind == TokenKind.Enum
-				|| (token.kind == TokenKind.Identifier && token.text == "abstract"))) {
-				capturing = true;
-				bodyDepth = 0;
-			}
-			if (capturing) {
-				result.push(token.text);
-				if (token.kind == TokenKind.LeftBrace)
-					bodyDepth++;
-				else if (token.kind == TokenKind.RightBrace) {
-					bodyDepth--;
-					if (bodyDepth == 0)
-						capturing = false;
-				} else if (token.kind == TokenKind.Semicolon && bodyDepth == 0)
-					capturing = false;
-			}
-			if (token.kind == TokenKind.LeftBrace)
-				depth++;
-			else if (token.kind == TokenKind.RightBrace)
-				depth--;
-		}
-		return result.join("\x1f");
-	}
 }
