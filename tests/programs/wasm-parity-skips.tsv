@@ -5,7 +5,6 @@
 # name	mode	reason
 messagepack-interop	skip	Reads its vectors from fixture files through sys.io.File and Sys.args
 trace	skip	trace needs host output (wasm32 __sys_print import; no Wasm GC lowering)
-short-circuit	skip	Uses trace, which needs host output on Wasm
 date-runtime	skip	Date natives are not implemented on Wasm
 sys-runtime	skip	Sys natives are not implemented on Wasm
 native-memory	skip	The native memory runtime is not implemented on Wasm
