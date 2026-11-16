@@ -89,6 +89,33 @@ jobs:
         shell: pwsh
         run: ./.tools/haxe/haxe.exe --cwd . common.hxml --run build.HaxeonBuild bootstrap
 
+      # A program that cannot start (a missing DLL) or crashes fails with its status, instead of waiting on a loader or error
+      # dialog nobody can close: HashLink's own SetErrorMode does not reach the programs the test scripts start through bash.
+      - name: No error dialogs
+        if: matrix.platform == 'windows'
+        shell: pwsh
+        run: |
+          Set-ItemProperty -Path 'HKLM:\SYSTEM\CurrentControlSet\Control\Windows' -Name ErrorMode -Value 2 -Type DWord
+          New-Item -Path 'HKLM:\SOFTWARE\Microsoft\Windows\Windows Error Reporting' -Force | Out-Null
+          Set-ItemProperty -Path 'HKLM:\SOFTWARE\Microsoft\Windows\Windows Error Reporting' -Name DontShowUI -Value 1 -Type DWord
+
+      # The native GC and JIT helper tests (programs linked with libhl.lib, the static VM core, since e7052822), each alone and
+      # with a time limit, while the core step below stalls before its first result on Windows. It does not fail the job.
+      - name: Native helper tests (diagnostic)
+        if: matrix.platform == 'windows'
+        shell: bash
+        continue-on-error: true
+        timeout-minutes: 20
+        run: |
+          for test in gc-allocation-paths gc-empty-pages gc-owner-pages jit-inline-allocation jit-boxed-allocation; do
+            echo "::group::$test"
+            start=$SECONDS
+            status=0
+            timeout -k 10 300 bash "tests/integration/test-$test.sh" || status=$?
+            echo "$test: exit $status after $((SECONDS - start)) s (124: timed out)"
+            echo "::endgroup::"
+          done
+
       - name: Run cross-platform core tests
         if: matrix.platform == 'windows'
         shell: pwsh
