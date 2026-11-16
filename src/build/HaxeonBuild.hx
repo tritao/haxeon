@@ -137,7 +137,7 @@ class HaxeonBuild {
 			root(),
 			"--jobs",
 			jobs
-		]);
+		].concat(arguments.slice(1)));
 	}
 
 	static function doctor():Int {
@@ -242,7 +242,7 @@ class HaxeonBuild {
 		Sys.println("  native [preset]  Configure and build HashLink and the runtime");
 		Sys.println("  bootstrap        Rebuild the checked-in compiler through convergence");
 		Sys.println("  bootstrap-self   Verify the checked-in compiler rebuilds identically");
-		Sys.println("  test [jobs]      Run the cross-platform core test catalog");
+		Sys.println("  test [jobs] [--suite NAMES] [--test REGEX] [--list]  Run the test driver, or the cases selected");
 		Sys.println("  doctor           Check required build tools");
 		return status;
 	}

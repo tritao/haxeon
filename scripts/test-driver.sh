@@ -1,4 +1,6 @@
 #!/usr/bin/env bash
+# The test driver on private copies of the VM and runtime: `scripts/test-driver.sh [jobs] [--suite NAMES] [--test REGEX] [--list]`.
+# The options after the job count go to tests/driver/TestDriver.hx, to run some cases instead of all of them.
 set -euo pipefail
 root_dir=$(cd "$(dirname "$0")/.." && pwd)
 hashlink_dir=$("$root_dir/scripts/hashlink-path.sh")
@@ -39,4 +41,4 @@ without_build_directories() {
 library_path=$(without_build_directories "${LD_LIBRARY_PATH:-}")
 dyld_library_path=$(without_build_directories "${DYLD_LIBRARY_PATH:-}")
 (cd "$root_dir" && LD_LIBRARY_PATH="$work${library_path:+:$library_path}" \
-	DYLD_LIBRARY_PATH="$work${dyld_library_path:+:$dyld_library_path}" "$work/hl" "$build_hl" test "${1:-4}")
+	DYLD_LIBRARY_PATH="$work${dyld_library_path:+:$dyld_library_path}" "$work/hl" "$build_hl" test "${1:-4}" "${@:2}")

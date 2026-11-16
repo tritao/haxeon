@@ -66,6 +66,8 @@ The same canonical IR can also be emitted as experimental `wasm32` or `wasm-gc`;
 see [`reference/WASM_BACKEND.md`](reference/WASM_BACKEND.md) for the representation
 boundary, linear-memory and collector contracts, GC target, and test commands.
 
+## Compiler packages and layering
+
 `compiler.core` (`src/compiler/core`) is the bottom of the compiler: source files and spans (`Source`), diagnostics
 (`Diagnostic`, `AmbiguousName`), qualified names, provider operations (`Provides`), preallocated arrays, request cancellation
 (`CancellationToken`, `CancellationError`) and the allocation and IR pass meters. Every other compiler package may import it, and it
@@ -80,7 +82,74 @@ imports the other. A name the IR and a backend both use, such as `IrProgramAssem
 HashLink lowering (`HlScalarValueLocals`, `HlLoweringView`) which value places stay in registers, also on Wasm; `ir` imports
 `runtime` and `ffi` and is imported by `runtime`, `ffi`, `modules.ModuleState` and `semantic.SemanticAssembly`;
 `semantic.SemanticAssembly` and `modules.CodeIdentityTable` import `compilation.CompilationContext`, which refers back to the root
-`Compiler`; and `syntax.Parser` calls `types.analysis.FinalLocalChecker`.
+`Compiler`; `ffi.HxiInterfaceOrder` and `runtime.CompilerIntrinsics` also name types declared beside the root `Compiler`; and
+`syntax.Parser` calls `types.analysis.FinalLocalChecker` and `BindingWalker`.
+
+`compiler.formatter` and `compiler.documentation` sit beside this chain. The formatter imports only `core` and `syntax`, and
+`service` uses it. Documentation imports `core`, `syntax` and `modules`, and `ffi`, `service` and `tools` use it.
+
+## Source map
+
+Entry points, in `src/`:
+
+| File | What it is |
+|---|---|
+| `Main.hx` | The command-line compiler that produces a complete HashLink module. The test driver compiles its program cases with it. |
+| `LspMain.hx` | The Language Server Protocol server, over stdio. |
+| `EditorServiceMain.hx` | A JSON-lines language service for a Pragtical host process. |
+| `FfiImportMain.hx` | The C and C++ header importer, which writes HXI. |
+| `FfiAuditMain.hx` | The cross-target C ABI auditor. |
+
+The project CLI (`tools.HaxeonCli`), the compiler CLI (`compiler.tools.HaxeonCompiler`) and the build workflow
+(`build.HaxeonBuild`) are started by main class, through `scripts/haxeon` and the tool cache
+([DEVELOPMENT.md](DEVELOPMENT.md#prebuilt-tools-haxeon-dev-tool-path)).
+
+Folders of `src/`:
+
+| Folder | Holds |
+|---|---|
+| `compiler/` | The compiler. Its packages are in the next table. |
+| `build/` | The build and bootstrap workflow (`HaxeonBuild`), project builds (`HaxeonProjectBuild`), build plans and the artifact cache, the client of the compiler worker, and the native CMake build. |
+| `project/` | `haxeon.json` manifests, package resolution, the lockfile, and source acquisition from paths, git, haxelib and the registry. |
+| `tools/` | The project CLI (`HaxeonCli`), the live host, the Android build and patch commands, lint, the heap inspector, and `tools/dev`: the `haxeon dev` commands for this checkout. |
+| `runtime/` | The host side of a reload domain: loaded modules and plugins, patch sets, the plugin lifecycle, and the native call API. |
+| `editor/` | Editor adapters: the JSON-lines protocol, the LSP server's pieces (`lsp/`) and the profiler view (`profiler/`). |
+| `profiler/` | The profiler session: capture decoding, symbolization and aggregation. |
+
+Packages of `src/compiler/`, bottom layer first:
+
+| Package | Holds |
+|---|---|
+| `core` | Sources and spans, diagnostics, qualified names, cancellation, meters. |
+| `syntax` | Lexer, parser, AST, conditional compilation. |
+| `types` | Types, the typed AST, typing of declarations and bodies (`typing/`), and checks over typed code (`analysis/`). |
+| `semantic` | Module analysis, declaration owners, aliases, dependency scanning, invalidation, generic specialization. |
+| `modules` | Per-module state, the module graph, source loading, the code identity table. |
+| `runtime` | What the compiler knows about the runtime: the native registry, intrinsics, runtime shapes and types. |
+| `ffi` | C and C++ header import through clang, HXI, projections, the C header emitter. |
+| `ir` | The SSA IR, `IrGenerator`, the whole-program passes and `IrPipeline`, the inliner, the verifier, the IR codec. |
+| `abi` | Descriptions of every runtime-visible declaration (`RuntimeAbi`) and `PatchPlanner`, which decides whether an edit can patch or needs a reload. |
+| `hl` | HashLink: lowering (`lower/`), the bytecode model and writer, incremental assembly (`incremental/`), patches (`patch/`). |
+| `backend` | The `Backend` interface, the linear-memory contract, and `wasm/`: the Wasm backend, with `linear/` for `wasm32` and `gc/` for `wasm-gc`. |
+| `compilation` | One build: `CompilationPipeline`, `FrontendCompilation`, `BackendAssembly`, and the candidate and publication transactions. |
+| root | `Compiler`, the session that holds the last successful build, and `Frontend`, a stateless path from source text to IR. |
+| `service` | The language service, the REPL, and the import lints. |
+| `tools` | The compiler CLI and driver, the compiler worker (`CompilerServer`, `CompilerSession`), the memory and allocation censuses, `BootstrapStatus`. |
+| `formatter`, `documentation` | The source formatter; documentation comments and the Haxe XML writer. |
+
+The rest of the repository:
+
+| Path | Holds |
+|---|---|
+| `stdlib/` | The standard library the compiler builds programs against: Haxe's own files and the `haxeon.*` packages. |
+| `lib/haxeon-io/` | The `haxeon.io` classes, a class path of the compiler (`common.hxml`). |
+| `native/` | C sources: the runtime HDLL (`runtime/`), the runtime linked into every `wasm32` module (`wasm/`), and code both share. |
+| `vendor/` | Pinned dependencies: the HashLink fork with the patchable runtime and JIT, the HashLink debugger, libffi, NativeKit, utest, and the vendored `format` library. |
+| `bootstrap/` | The checked-in compiler, `compiler.hl`. |
+| `packages/` | Optional native integration libraries (UI, GPU, audio, platform and others); see [`packages/README.md`](../packages/README.md). |
+| `android/`, `extensions/vscode/` | The Android host (Gradle) and the VS Code extension. |
+| `tests/`, `benchmarks/` | Test suites, listed in `tests/suites.txt`, and benchmarks. |
+| `scripts/`, `cmake/` | Launchers and wrappers; the native build and the pinned tool bootstrap. |
 
 ## Where the IR pass order lives
 
@@ -104,8 +173,8 @@ The current plan and the measurements are in [`design/WARM_REBUILD_REUSE.md`](de
 
 ### Layers of a plain build
 
-typed program, then IR (`IrGenerator`), then whole-program IR passes and `IrInliner`, then verification, then HashLink lowering
-(`HlLower`), then the writer. Each stage keeps what the next build can reuse:
+A plain build goes from the typed program to IR (`IrGenerator`), then the whole-program IR passes and `IrInliner`, then
+verification, then HashLink lowering (`HlLower`), then the writer. Each stage keeps what the next build can reuse:
 
 - **Pipeline shortcut.** When the typed-function IR, the canonical tables and the environment text (target, defines,
   `ProgramFacts.inputState`) equal the last plain build's, the final IR and the module bytes are reused (`reused: ir+module`).
@@ -144,21 +213,4 @@ function is lowered again (`HlFunctionEquality`: type, slot, registers, opcodes 
 frozen on purpose (retired by a signature change, or dropped from the program) are skipped. The full driver suite and `test-hot-reload` pass
 with it. It is a test aid, never a fallback.
 
-
-## Performance rules for compiler code
-
-- **Iterating a Map goes through dynamic calls in the stock-Haxe worker.** An iterator is a structural type, so `for (x in map)`,
-  `for (k => v in map)` and `map.keys()` make a dynamic call per element (about 3% of a cold build before the hot sites were fixed). On a
-  hot path keep an array next to the map, filled where entries are added, and iterate that. The Haxeon-built worker (ADR 0003 section 12)
-  may make this moot; until then it is measured, not folklore.
-- **Hash a name once.** A name used for several lookups in a pass (a callee, a local) is looked up once to get a dense number, and the
-  per-name state after that is an array indexed by it (see `SsaBuilder`, `IrInliner`).
-- **Allocation sites come from the allocation census, not the profiler.** `HAXEON_COMPILER_ALLOC_CENSUS=<file>` on a build and
-  `scripts/alloc-sites.py <file>` rank where a build allocates (stacks sampled by bytes, exact counts by type). The profiler's alloc samples
-  carry only the allocator's return address and cannot name a site.
-- **Do not build a key or a list to look something up or to iterate once.** A prefix test with `a + "."` per element, a `[x, y]` literal returned
-  from a helper that callers only loop over, and a `"len:owner:field"` map key each allocate per call; the census found them at 6.9%, 4.4% and 1.7% of a
-  cold build's bytes. Group once and look up by the parts (`IrInlineEnumEligibility`, `IrOptionalFieldStorage`), or give the helper `count`/`at`
-  (`IrOperands`). A callback is no substitute: a closure that captures allocates at each call.
-- **A new map keyed by a string that a pass fills and a hot loop reads is a candidate for the two rules above**; check a profile share before
-  and after (`hlprof-live`, folded stacks), not the wall time of a loaded machine.
+The performance rules for compiler code are in [DEVELOPMENT.md](DEVELOPMENT.md#performance-rules-for-compiler-code).
