@@ -193,6 +193,7 @@ class TestRunner {
 	 * Warm-rebuild coverage for a program: build it, add a function nothing reaches and rebuild in the same session, add a kept function
 	 * (so the module changes) and rebuild, then put both inside the file and rebuild again. Each rebuild must be the bytes of a fresh
 	 * session's build of the same text; with `--check-reuse` the compiler also compares what it reused with what it would have built.
+	 * Last, the original is built with its bodies typed in reverse order (`--reverse-typing-order`), which must not change a byte.
 	 * The edits are made to a copy of the program, so the other builds of it never see them; the program's own directory stays a root.
 	 */
 	function warmEdit(source:String, output:String, run:ProgramRun):CommandResult {
@@ -214,9 +215,11 @@ class TestRunner {
 			cut + 3) + unused + kept + original.substr(cut + 3);
 		var edits = [original + unused, original + unused + kept, inside],
 			labels = ["a function nothing reaches, appended", "a kept function, appended", "functions inside the file"];
-		function build(worker:CompileWorker, text:String, into:String, session:String):CommandResult {
+		function build(worker:CompileWorker, text:String, into:String, session:String,
+				?flags:Array<String>):CommandResult {
 			File.saveContent(copy, text);
-			return worker.compile(programRequest(copy, into, run, roots).concat(["--session=" + session]));
+			return worker.compile(programRequest(copy, into, run, roots).concat(["--session=" + session])
+				.concat(flags == null ? [] : flags));
 		}
 		var log = new StringBuf();
 		var result = compileWorkers().with(worker -> {
@@ -244,6 +247,18 @@ class TestRunner {
 						output: 'a warm rebuild of $source differs from a fresh build of the same text (edit ${index + 1}: ${labels[index]})\n'
 					};
 			}
+			// Typing a body depends only on the program and the body: typing them in reverse order must give the same bytes.
+			var reversed = build(worker, original, Path.join([directory, "reversed-0.hl"]), "fresh",
+				["--reverse-typing-order"]);
+			log.add(reversed.output);
+			if (reversed.status != 0)
+				return reversed;
+			if (File.getBytes(Path.join([directory, "warm-0.hl"]))
+				.compare(File.getBytes(Path.join([directory, "reversed-0.hl"]))) != 0)
+				return {
+					status: 1,
+					output: 'a build of $source that types its bodies in reverse order (--reverse-typing-order) differs from one in declaration order\n'
+				};
 			File.saveBytes(output, File.getBytes(Path.join([directory, 'warm-${edits.length}.hl'])));
 			return {status: 0, output: 'compiled $source (warm edit rebuilds) -> $output\n'};
 		});
