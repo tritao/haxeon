@@ -31,6 +31,36 @@ class ModuleChangeAnalyzerMain {
 		parseInto(aliasState, "typedef Count = Float;");
 		var aliasEdit = analyze(aliasState, aliasTypes, true);
 		expect(aliasEdit.structuralChanged.exists("alias:Count"), "alias representation edits should be structural");
+		expect(analyze(aliasState, aliasTypes, true).structuralChanged.exists("alias:Count"),
+			"an analysis must not publish its fingerprints: analyzing the same edit again finds the same change");
+
+		var enumState = parsedState("Color", "enum Color { Red; Green; }"),
+			enumTypes = new TypeRegistry();
+		publish(enumState, analyze(enumState, enumTypes, false));
+		parseInto(enumState, "enum Color { Red; Green(shade:Int); }");
+		var enumEdit = analyze(enumState, enumTypes, true);
+		expect(enumEdit.structuralChanged.exists("enum:Color"), "enum case edits should be structural");
+		publish(enumState, enumEdit);
+		parseInto(enumState, "enum Color { Red; Green(shade:Int); } // a comment");
+		expect(!analyze(enumState, enumTypes, true).structuralChanged.exists("enum:Color"),
+			"an enum whose shape is the published one is unchanged");
+
+		var abstractState = parsedState("Meters", "abstract Meters(Int) from Int {}"),
+			abstractTypes = new TypeRegistry();
+		publish(abstractState, analyze(abstractState, abstractTypes, false));
+		parseInto(abstractState, "abstract Meters(Float) from Int {}");
+		var abstractEdit = analyze(abstractState, abstractTypes, true);
+		expect(abstractEdit.structuralChanged.exists("abstract:Meters"),
+			"abstract representation edits should be structural");
+		publish(abstractState, abstractEdit);
+		parseInto(abstractState, "abstract Meters(Float) {}");
+		var conversionEdit = analyze(abstractState, abstractTypes, true);
+		expect(conversionEdit.structuralChanged.exists("abstract:Meters"),
+			"abstract conversion edits should be structural");
+		publish(abstractState, conversionEdit);
+		parseInto(abstractState, "abstract Meters(Float) {}\n");
+		expect(!analyze(abstractState, abstractTypes, true).structuralChanged.exists("abstract:Meters"),
+			"an abstract whose shape is the published one is unchanged");
 
 		var wireState = parsedState("Wire", "@:wire class Wire { @:id(1) public var value:Int; }");
 		var wireTypes = new TypeRegistry();
@@ -62,16 +92,8 @@ class ModuleChangeAnalyzerMain {
 	}
 
 	static function publish(state:ModuleState,
-			analysis:compiler.semantic.ModuleChangeAnalyzer.ModuleChangeAnalysis):Void {
-		state.signatureFingerprints = analysis.signatureFingerprints;
-		state.bodyFingerprints = analysis.bodyFingerprints;
-		state.interfaceFingerprints = analysis.interfaceFingerprints;
-		state.aliasFingerprints = analysis.aliasFingerprints;
-		state.enumFingerprints = analysis.enumFingerprints;
-		state.wireFieldFingerprints = analysis.wireFieldFingerprints;
-		state.staticInitializerFingerprints = analysis.staticInitializerFingerprints;
-		state.instanceInitializerFingerprints = analysis.instanceInitializerFingerprints;
-	}
+			analysis:compiler.semantic.ModuleChangeAnalyzer.ModuleChangeAnalysis):Void
+		ModuleChangeAnalyzer.publish(state, analysis);
 
 	static function expect(condition:Bool, message:String):Void {
 		if (!condition)

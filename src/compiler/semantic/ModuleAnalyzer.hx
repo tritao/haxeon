@@ -220,14 +220,7 @@ class ModuleAnalyzer {
 		mergeChanges(bodyChanged, changes.bodyChanged);
 		mergeChanges(signatureChanged, changes.signatureChanged);
 		mergeChanges(structuralChanged, changes.structuralChanged);
-		state.signatureFingerprints = changes.signatureFingerprints;
-		state.bodyFingerprints = changes.bodyFingerprints;
-		state.interfaceFingerprints = changes.interfaceFingerprints;
-		state.aliasFingerprints = changes.aliasFingerprints;
-		state.enumFingerprints = changes.enumFingerprints;
-		state.wireFieldFingerprints = changes.wireFieldFingerprints;
-		state.staticInitializerFingerprints = changes.staticInitializerFingerprints;
-		state.instanceInitializerFingerprints = changes.instanceInitializerFingerprints;
+		ModuleChangeAnalyzer.publish(state, changes);
 		state.dirty = false;
 	}
 

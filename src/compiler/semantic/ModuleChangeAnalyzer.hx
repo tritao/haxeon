@@ -16,6 +16,8 @@ typedef ModuleChangeAnalysis = {
 	final interfaceFingerprints:Map<String, String>;
 	final aliasFingerprints:Map<String, String>;
 	final enumFingerprints:Map<String, String>;
+	final abstractFingerprints:Map<String, String>;
+	final ownerConstraintFingerprints:Map<String, String>;
 	final wireFieldFingerprints:Map<String, String>;
 	final staticInitializerFingerprints:Map<String, String>;
 	final instanceInitializerFingerprints:Map<String, String>;
@@ -48,7 +50,6 @@ class ModuleChangeAnalyzer {
 		for (old in state.interfaceFingerprints.keys())
 			if (!interfaces.exists(old))
 				structuralChanged.set('interface:$old', true);
-		state.interfaceFingerprints = interfaces;
 		var aliases:Map<String, String> = [];
 		for (alias in ast.aliases) {
 			var aliasName = ModuleCanonicalizer.qualifiedTypeName(ast.packageName, alias.name),
@@ -64,7 +65,6 @@ class ModuleChangeAnalyzer {
 		for (old in state.aliasFingerprints.keys())
 			if (!aliases.exists(old))
 				structuralChanged.set('alias:$old', true);
-		state.aliasFingerprints = aliases;
 		var enums:Map<String, String> = [];
 		for (enumDecl in ast.enums) {
 			var enumName = ModuleCanonicalizer.qualifiedTypeName(ast.packageName, enumDecl.name),
@@ -92,7 +92,6 @@ class ModuleChangeAnalyzer {
 		for (old in state.enumFingerprints.keys())
 			if (!enums.exists(old))
 				structuralChanged.set('enum:$old', true);
-		state.enumFingerprints = enums;
 		var abstracts:Map<String, String> = [];
 		for (abstractDecl in ast.abstracts) {
 			var abstractName = ModuleCanonicalizer.qualifiedTypeName(ast.packageName, abstractDecl.name),
@@ -141,7 +140,6 @@ class ModuleChangeAnalyzer {
 		for (old in state.abstractFingerprints.keys())
 			if (!abstracts.exists(old))
 				structuralChanged.set('abstract:$old', true);
-		state.abstractFingerprints = abstracts;
 		var ownerConstraints:Map<String, String> = [];
 		for (classDecl in ast.classes) {
 			var name = ModuleCanonicalizer.qualifiedTypeName(ast.packageName, classDecl.name),
@@ -176,7 +174,6 @@ class ModuleChangeAnalyzer {
 		for (old in state.ownerConstraintFingerprints.keys())
 			if (!ownerConstraints.exists(old))
 				structuralChanged.set('constraint:$old', true);
-		state.ownerConstraintFingerprints = ownerConstraints;
 		var staticInitializers:Map<String, String> = [],
 			instanceInitializers:Map<String, String> = [];
 		for (classDecl in ast.classes) {
@@ -211,7 +208,6 @@ class ModuleChangeAnalyzer {
 		for (old in state.staticInitializerFingerprints.keys())
 			if (!staticInitializers.exists(old))
 				structuralChanged.set('static:$old', true);
-		state.staticInitializerFingerprints = staticInitializers;
 		for (old in state.instanceInitializerFingerprints.keys())
 			if (!instanceInitializers.exists(old)) {
 				var fieldName:String = old,
@@ -228,7 +224,6 @@ class ModuleChangeAnalyzer {
 					signatureChanged.set(className + ".new", true);
 				}
 			}
-		state.instanceInitializerFingerprints = instanceInitializers;
 		for (fn in ast.functions) {
 			var canonical = state.name == entry && fn.name == "main" ? "main" : state.name + "." + fn.name;
 			var signature = SemanticSignature.parsedFunction(fn, ast.aliases),
@@ -327,8 +322,6 @@ class ModuleChangeAnalyzer {
 		for (old in state.wireFieldFingerprints.keys())
 			if (!wireFields.exists(old))
 				structuralChanged.set(old, true);
-		state.signatureFingerprints = signatures;
-		state.bodyFingerprints = bodies;
 		return {
 			bodyChanged: bodyChanged,
 			signatureChanged: signatureChanged,
@@ -338,10 +331,26 @@ class ModuleChangeAnalyzer {
 			interfaceFingerprints: interfaces,
 			aliasFingerprints: aliases,
 			enumFingerprints: enums,
+			abstractFingerprints: abstracts,
+			ownerConstraintFingerprints: ownerConstraints,
 			wireFieldFingerprints: wireFields,
 			staticInitializerFingerprints: staticInitializers,
 			instanceInitializerFingerprints: instanceInitializers
 		};
+	}
+
+	/** Makes `analysis` the module's fingerprints, which the next analysis compares against. */
+	public static function publish(state:ModuleState, analysis:ModuleChangeAnalysis):Void {
+		state.signatureFingerprints = analysis.signatureFingerprints;
+		state.bodyFingerprints = analysis.bodyFingerprints;
+		state.interfaceFingerprints = analysis.interfaceFingerprints;
+		state.aliasFingerprints = analysis.aliasFingerprints;
+		state.enumFingerprints = analysis.enumFingerprints;
+		state.abstractFingerprints = analysis.abstractFingerprints;
+		state.ownerConstraintFingerprints = analysis.ownerConstraintFingerprints;
+		state.wireFieldFingerprints = analysis.wireFieldFingerprints;
+		state.staticInitializerFingerprints = analysis.staticInitializerFingerprints;
+		state.instanceInitializerFingerprints = analysis.instanceInitializerFingerprints;
 	}
 
 	static function fieldMetadataFingerprint(state:compiler.modules.ModuleState,
