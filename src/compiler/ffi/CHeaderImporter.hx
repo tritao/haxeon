@@ -909,12 +909,17 @@ class CHeaderImporter {
 		A function type without the annotation macro clang spells in front of it
 		when a calling convention makes it a macro-qualified type, as in
 		`MK_RETURNS_SPAN(count) const double *(handle) __attribute__((cdecl))`.
+		Apple's clang spells the macro without its arguments, `MK_RETURNS_SPAN const double *(handle) ...`:
+		a bare leading name is the macro only when what follows it is the desugared type.
 	**/
 	static function withoutMacroQualifier(type:String, desugared:Null<String>):String {
 		if (desugared == null || desugared == type)
 			return type;
 		var qualifier = ~/^[A-Za-z_][A-Za-z0-9_]*\([^()]*\)\s+/;
-		return qualifier.match(type) ? qualifier.matchedRight() : type;
+		if (qualifier.match(type))
+			return qualifier.matchedRight();
+		var bare = ~/^[A-Za-z_][A-Za-z0-9_]*\s+/;
+		return bare.match(type) && bare.matchedRight() == desugared ? desugared : type;
 	}
 
 	static function stripCallingConvention(type:String):String {
