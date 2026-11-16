@@ -4,7 +4,6 @@ import haxe.io.Bytes;
 import haxeon.agent.Cancelable;
 import haxeon.agent.HttpStreamSink;
 import nativekit.ffi.NativeKitNet;
-import nativekit.ffi.NativeKitNetTypes.HttpError;
 import nativekit.ffi.NativeKitNetTypes.HttpStreamHandle;
 import nativekit.ffi.NativeKitTypes.Result;
 
@@ -43,8 +42,7 @@ class NativeKitStreamRequest implements Cancelable {
 			return;
 		while (!finished) {
 			var read = NativeKitNet.nk_http_stream_read(open, scratch, scratch.length);
-			var code:Int = read.status;
-			if (code == HttpError.WouldBlock)
+			if (read.status == Result.HttpWouldBlock)
 				return;
 			if (read.status != Result.Ok) {
 				finishWith(describe(read.status));
