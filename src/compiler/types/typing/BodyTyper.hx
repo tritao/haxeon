@@ -190,7 +190,7 @@ class BodyTyper {
 				abiBoundaryCast: function(value, target) return session.representation.boundaryCast(value, target),
 				arrayElementType: function(type, span) return this.arrayElementType(type, span),
 				boundCell: function(name, scope) return this.boundCell(name, scope)
-			}, function(name, statements, start, scope) return this.assignedType(name, statements, start, scope));
+			});
 	}
 
 	static function declarationTypeSubstitutions(owner:String, parameters:Array<String>):Map<String, CompilerType> {
@@ -649,23 +649,15 @@ class BodyTyper {
 			scope:Scope):Null<CompilerType> {
 		if (StringTools.startsWith(name, '$' + 'null-coalesce:'))
 			return null;
+		// An empty array and `null` with no type from a later use take a type variable, which the first use that fixes it
+		// fills (`Monomorphs`).
 		switch initializer {
-			case NullLiteral(_):
-				var assigned = assignedLocalType(name, statements, start);
-				if (assigned != null)
-					return TNullable(assigned);
 			case MapLiteral(entries, _) if (entries.length == 0):
 				// A type the variable is later used at, such as a return or a typed argument, takes precedence.
 				var mapType = context.localExpectedTypes.exists(name) ? null : storedMapType(name, statements, start,
 					scope);
 				if (mapType != null)
 					return mapType;
-			case ArrayLiteral(values, _) if (values.length == 0):
-				var element = pushedElementType(name, statements, start);
-				if (element == null && !context.localExpectedTypes.exists(name))
-					element = storedElementType(name, statements, start, scope);
-				if (element != null)
-					return TArray(element);
 			default:
 		}
 		if (!usesLocalExpectedType(initializer))
@@ -675,113 +667,12 @@ class BodyTyper {
 			&& !isNullable(expected) ? TNullable(expected) : expected;
 	}
 
-	function pushedElementType(name:String, statements:Array<AstStatement>, start:Int,
-			?bindings:Map<String, CompilerType>):Null<CompilerType> {
-		var resolvedBindings:Map<String, CompilerType> = bindings == null ? [] : bindings;
-		for (index in start...statements.length)
-			switch statements[index] {
-				case Expression(expression, _):
-					var type = pushedElementFromExpression(name, expression, resolvedBindings);
-					if (type != null)
-						return type;
-				case If(_, yes, no, _):
-					var type = pushedElementType(name, yes, 0, resolvedBindings);
-					if (type == null)
-						type = pushedElementType(name, no, 0, resolvedBindings);
-					if (type != null)
-						return type;
-				case While(_, body, _), DoWhile(body, _, _):
-					var type = pushedElementType(name, body, 0, resolvedBindings);
-					if (type != null)
-						return type;
-				case ForIn(keyName, valueName, iterable, body, _):
-					var loopBindings = copyMap(resolvedBindings);
-					switch knownExpressionType(iterable, resolvedBindings) {
-						case TArray(element): loopBindings.set(keyName, element);
-						case TMap(key, value):
-							loopBindings.set(keyName, valueName == null ? value : key);
-							if (valueName != null) loopBindings.set(valueName, value);
-						case TRange: loopBindings.set(keyName, TInt);
-						default:
-					}
-					var type = pushedElementType(name, body, 0, loopBindings);
-					if (type != null)
-						return type;
-				case Try(tryBranch, catches, _):
-					var type = pushedElementType(name, tryBranch, 0, resolvedBindings);
-					if (type != null)
-						return type;
-					for (catchClause in catches) {
-						type = pushedElementType(name, catchClause.statements, 0, resolvedBindings);
-						if (type != null)
-							return type;
-					}
-				case Defer(body, _):
-					var type = pushedElementType(name, body, 0, resolvedBindings);
-					if (type != null)
-						return type;
-				case Switch(_, cases, defaultBranch, _, _):
-					for (switchCase in cases) {
-						var caseBindings = copyMap(resolvedBindings);
-						collectPatternBindingTypes(switchCase.value, caseBindings);
-						var type = pushedElementType(name, switchCase.statements, 0, caseBindings);
-						if (type != null)
-							return type;
-					}
-					var type = pushedElementType(name, defaultBranch, 0, resolvedBindings);
-					if (type != null)
-						return type;
-				case VarDeclaration(shadowed, _, _, _), UninitializedDeclaration(shadowed, _, _) if (shadowed == name):
-					return null;
-				default:
-			}
-		return null;
-	}
-
-	function pushedElementFromExpression(name:String, expression:AstExpression,
-			bindings:Map<String, CompilerType>):Null<CompilerType>
-		return switch expression {
-			case MethodCall(receiverExpression, methodName, arguments,
-				_) if (methodName == "push" && arguments.length == 1):
-				namesReceiver(receiverExpression, name) ? knownExpressionType(arguments[0], bindings) : null;
-			case Call(callName, arguments, _) if (callName == name + ".push"
-				&& arguments.length == 1): knownExpressionType(arguments[0], bindings);
-			default: null;
-		};
-
-	/**
-	 * The element type of an empty array literal, from the first thing stored into the variable that can be typed: a `push`,
-	 * `unshift` or `insert`, an assignment to an element, or an assignment of an array. Where `pushedElementType` only
-	 * recognises values whose type is plain from their syntax, this types the stored value where it is stored, in a scratch
-	 * scope holding the locals declared on the way to it, so `a.push(x == 1)` and `for (i in 0...3) a.push(i * 2)` work.
-	 */
-	function storedElementType(name:String, statements:Array<AstStatement>, start:Int, scope:Scope):Null<CompilerType> {
-		var speculative = new Scope(scope);
-		speculative.assumeAllAssigned();
-		return storedIn(name, statements, start, speculative, (statement, at) -> arrayStore(name, statement, at));
-	}
-
 	/** The key and value types of an untyped `new Map()`, from the first `set` or element assignment that can be typed. */
 	function storedMapType(name:String, statements:Array<AstStatement>, start:Int, scope:Scope):Null<CompilerType> {
 		var speculative = new Scope(scope);
 		speculative.assumeAllAssigned();
 		return storedIn(name, statements, start, speculative, (statement, at) -> mapStore(name, statement, at));
 	}
-
-	function arrayStore(name:String, statement:AstStatement, scope:Scope):Null<CompilerType>
-		return switch statement {
-			case Expression(expression, _), Return(expression, _):
-				var stored = storedValue(name, expression);
-				stored == null ? null : speculativeValueType(stored, scope);
-			case IndexAssignment(Variable(target, _), _, value, _) if (target == name): speculativeValueType(value,
-				scope);
-			case Assignment(assigned, value, _) if (assigned == name):
-				switch speculativeValueType(value, scope) {
-					case TArray(element): element;
-					default: null;
-				}
-			default: null;
-		};
 
 	function mapStore(name:String, statement:AstStatement, scope:Scope):Null<CompilerType>
 		return switch statement {
@@ -846,20 +737,6 @@ class BodyTyper {
 	 * Walks the statements after a declaration in source order, as typing will, keeping a scratch scope of the locals
 	 * they declare, and returns the first thing `probe` makes of a statement. A redeclaration of `name` ends the search.
 	 */
-	/** The type of the first assignment to `name` after `start`, typed with the locals declared on the way to it. */
-	function assignedType(name:String, statements:Array<AstStatement>, start:Int, scope:Scope):Null<CompilerType> {
-		var speculative = new Scope(scope);
-		speculative.assumeAllAssigned();
-		var type = storedIn(name, statements, start, speculative, (statement, at) -> switch statement {
-			case Assignment(assigned, value, _) if (assigned == name): speculativeValueType(value, at);
-			default: null;
-		});
-		return type == null ? null : switch type {
-			case TNull, TVoid, TNever: null;
-			default: type;
-		};
-	}
-
 	/** `storedIn` over the bodies of the lambdas in a statement's own expressions, with their typed arguments in scope. */
 	function storedInLambdas(name:String, statement:AstStatement, scope:Scope,
 			probe:(AstStatement, Scope) -> Null<CompilerType>):Null<CompilerType> {
@@ -986,29 +863,6 @@ class BodyTyper {
 		return null;
 	}
 
-	/** The value a statement stores into the array named `name` with `push`, `unshift` or `insert`, if it does. */
-	static function storedValue(name:String, expression:AstExpression):Null<AstExpression>
-		return switch expression {
-			case MethodCall(receiver, method, arguments, _) if (namesReceiver(receiver, name)): storedArgument(method,
-				arguments);
-			case Call(callName, arguments, _) if (StringTools.startsWith(callName, name + "."))
-				: storedArgument(callName.substring(name.length + 1), arguments);
-			default: null;
-		};
-
-	/** Whether `receiver` is the local `name`, or a conditional either branch of which is (`(flag ? a : b).push(x)`). */
-	static function namesReceiver(receiver:AstExpression, name:String):Bool
-		return switch receiver {
-			case Variable(variable, _): variable == name;
-			case Conditional(_, whenTrue, whenFalse, _): namesReceiver(whenTrue, name)
-				|| namesReceiver(whenFalse, name);
-			default: false;
-		};
-
-	static function storedArgument(method:String, arguments:Array<AstExpression>):Null<AstExpression>
-		return (method == "push" || method == "unshift")
-			&& arguments.length == 1 ? arguments[0] : method == "insert" && arguments.length == 2 ? arguments[1] : null;
-
 	/** The key and value a statement stores into the map named `name` with `set`, if it does. */
 	static function storedEntry(name:String, expression:AstExpression):Null<{key:AstExpression, value:AstExpression}>
 		return switch expression {
@@ -1019,83 +873,6 @@ class BodyTyper {
 			case Call(callName, [key, value], _) if (callName == name + ".set"): {key: key, value: value};
 			default: null;
 		};
-
-	function collectPatternBindingTypes(pattern:AstExpression, bindings:Map<String, CompilerType>):Void
-		switch pattern {
-			case Call(name, arguments, span):
-				var info = enumCaseInfo(name);
-				if (info == null && name.indexOf(".") < 0) {
-					var matchedName:Null<String> = null;
-					for (entry in session.enumsInFile(span.file.path))
-						for (enumCase in entry.declaration.cases)
-							if (enumCase.name == name
-								&& arguments.length >= requiredEnumParameters(enumCase.params)
-								&& arguments.length <= enumCase.params.length) {
-								if (matchedName != null)
-									return;
-								matchedName = entry.name;
-							}
-					if (matchedName != null)
-						info = enumCaseInfo(matchedName + "." + name);
-				}
-				if (info != null)
-					for (index in 0...arguments.length)
-						if (index < info.params.length)
-							switch arguments[index] {
-								case Variable(binding, _) if (binding != "_"):
-									bindings.set(binding,
-										enumParameterType(info.typeParameters, info.params[index],
-										info.aliasType ?? TInstance(NominalKind.Enum, info.enumName, [])));
-								default:
-							}
-			default:
-		}
-
-	function assignedLocalType(name:String, statements:Array<AstStatement>, start:Int):Null<CompilerType> {
-		for (index in start...statements.length)
-			switch statements[index] {
-				case Assignment(assigned, expression, _) if (assigned == name):
-					var type = knownExpressionType(expression);
-					if (type != null)
-						return type;
-				case If(_, yes, no, _):
-					var type = assignedLocalType(name, yes, 0);
-					if (type == null)
-						type = assignedLocalType(name, no, 0);
-					if (type != null)
-						return type;
-				case While(_, body, _), DoWhile(body, _, _), ForIn(_, _, _, body, _):
-					var type = assignedLocalType(name, body, 0);
-					if (type != null)
-						return type;
-				case Try(tryBranch, catches, _):
-					var type = assignedLocalType(name, tryBranch, 0);
-					if (type != null)
-						return type;
-					for (catchClause in catches) {
-						type = assignedLocalType(name, catchClause.statements, 0);
-						if (type != null)
-							return type;
-					}
-				case Defer(body, _):
-					var type = assignedLocalType(name, body, 0);
-					if (type != null)
-						return type;
-				case Switch(_, cases, defaultBranch, _, _):
-					for (switchCase in cases) {
-						var type = assignedLocalType(name, switchCase.statements, 0);
-						if (type != null)
-							return type;
-					}
-					var type = assignedLocalType(name, defaultBranch, 0);
-					if (type != null)
-						return type;
-				case VarDeclaration(shadowed, _, _, _), UninitializedDeclaration(shadowed, _, _) if (shadowed == name):
-					return null;
-				default:
-			}
-		return null;
-	}
 
 	function knownExpressionType(expression:AstExpression, ?bindings:Map<String, CompilerType>):Null<CompilerType>
 		return switch expression {

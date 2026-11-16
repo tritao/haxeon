@@ -32,7 +32,6 @@ typedef StatementCoerceCallback = (TypedExpression, CompilerType, String, String
 typedef ExpectedInitializerCallback = (String, AstExpression, Array<AstStatement>, Int, Scope) -> Null<CompilerType>;
 
 /** The type of the first assignment to a local, typed with the locals declared on the way to it. */
-typedef AssignedTypeCallback = (String, Array<AstStatement>, Int, Scope) -> Null<CompilerType>;
 typedef BindCellCallback = (String, SourceSpan, Scope, CompilerType) -> Void;
 typedef TypeStatementsCallback = (Array<AstStatement>, Scope, Null<CompilerType>) -> Array<TypedStatement>;
 typedef ExhaustiveEnumCallback = (CompilerType, Array<TypedSwitchCase>) -> Bool;
@@ -62,7 +61,6 @@ class StatementTyper {
 	final typeExpression:StatementExpressionCallback;
 	final coerce:StatementCoerceCallback;
 	final expectedInitializerType:ExpectedInitializerCallback;
-	final assignedType:AssignedTypeCallback;
 	final bindCell:BindCellCallback;
 	final typeStatements:TypeStatementsCallback;
 	final exhaustiveEnum:ExhaustiveEnumCallback;
@@ -78,9 +76,8 @@ class StatementTyper {
 			typeStatements:TypeStatementsCallback,
 			exhaustiveEnum:ExhaustiveEnumCallback, lowerType:LowerTypeCallback, unwrapNullable:NullableUnwrapper,
 			mapKeyIteratorSource:MapKeyIteratorSource,
-			switchRules:SwitchTypingRules, assignmentRules:AssignmentTypingRules, assignedType:AssignedTypeCallback) {
+			switchRules:SwitchTypingRules, assignmentRules:AssignmentTypingRules) {
 		this.session = session;
-		this.assignedType = assignedType;
 		this.typeExpression = typeExpression;
 		this.coerce = coerce;
 		this.expectedInitializerType = expectedInitializerType;
@@ -126,78 +123,19 @@ class StatementTyper {
 		};
 	}
 
-	/** Returns null for statements handled by the compound-statement dispatcher. */
-	/** The type of `var name;` is that of its first assignment in source order, which must be typeable where it is declared. */
-	function inferUninitializedType(name:String, statements:Array<AstStatement>, start:Int, scope:Scope,
-			span:SourceSpan):CompilerType {
-		var assigned = firstAssignment(name, statements, start);
-		if (assigned != null) {
-			var type:Null<CompilerType> = null;
-			var speculative = new Scope(scope);
-			speculative.assumeAllAssigned();
-			session.monomorphs.suspend();
-			try {
-				type = typeExpression(assigned, speculative, null, false).type;
-			} catch (_:CompileError) {}
-			session.monomorphs.resume();
-			if (type != null && (switch (type) {
-				case TNull: false;
-				default: true;
-			}) && (switch (type) {
-				case TVoid: false;
-				default: true;
-			}) && (switch (type) {
-				case TNever: false;
-				default: true;
-			}))
-				return type;
-		}
-		// The first assignment may read locals declared between the declaration and it (`var data = ...; records = f(data);`).
-		var reached = assignedType(name, statements, start, scope);
-		if (reached != null)
-			return reached;
-		// Otherwise its type is a type variable, which the first assignment fills (`Monomorphs`).
+	/**
+	 * The type of `var name;`: the one a later use expects (the result local of a block expression), or a type variable its
+	 * first assignment fills (`Monomorphs`).
+	 */
+	function uninitializedType(name:String, span:SourceSpan):CompilerType {
+		var expected = session.currentContext.localExpectedTypes.get(name);
+		if (expected != null)
+			return expected;
 		var variable = session.monomorphs.create('the type of local "$name"', span);
 		if (variable != null)
 			return variable;
-		throw new CompileError(new Diagnostic("E1002",
-			'Cannot infer type of local "$name"; add a type annotation or make its first assignment typeable at the declaration',
+		throw new CompileError(new Diagnostic("E1002", 'Cannot infer type of local "$name"; add a type annotation',
 			span));
-	}
-
-	static function firstAssignment(name:String, statements:Array<AstStatement>, start:Int):Null<AstExpression> {
-		for (index in start...statements.length) {
-			var found:Null<AstExpression> = switch statements[index] {
-				case Assignment(assigned, expression, _) if (assigned == name): expression;
-				case If(_, yes, no, _):
-					var inYes = firstAssignment(name, yes, 0);
-					inYes != null ? inYes : firstAssignment(name, no, 0);
-				case While(_, body, _), DoWhile(body, _, _), ForIn(_, _, _, body, _): firstAssignment(name, body, 0);
-				case Try(tryBranch, catches, _):
-					var inTry = firstAssignment(name, tryBranch, 0);
-					if (inTry == null)
-						for (catchClause in catches) {
-							inTry = firstAssignment(name, catchClause.statements, 0);
-							if (inTry != null)
-								break;
-						}
-					inTry;
-				case Switch(_, cases, defaultBranch, _, _):
-					var inCase:Null<AstExpression> = null;
-					for (switchCase in cases) {
-						inCase = firstAssignment(name, switchCase.statements, 0);
-						if (inCase != null)
-							break;
-					}
-					inCase != null ? inCase : firstAssignment(name, defaultBranch, 0);
-				case VarDeclaration(shadowed, _, _, _),
-					UninitializedDeclaration(shadowed, _, _) if (shadowed == name): return null;
-				default: null;
-			};
-			if (found != null)
-				return found;
-		}
-		return null;
 	}
 
 	public function typeSimpleStatement(statement:AstStatement, scope:Scope, result:Null<CompilerType>,
@@ -207,13 +145,11 @@ class StatementTyper {
 		return switch statement {
 			case ErrorStatement(_): [];
 			case UninitializedDeclaration(name, declared, span):
-				// Without an annotation, the type a later use expects (the result local of a block expression) comes first.
-				var expected = context.localExpectedTypes.get(name);
 				var declaredType = (switch (declared) {
 					case InferredType: true;
 					default: false;
-				}) ? (expected != null ? expected : inferUninitializedType(name, statements, statementIndex + 1, scope,
-					span)) : session.declarations.resolve(declared, null, context.typeSubstitutions);
+				}) ? uninitializedType(name, span) : session.declarations.resolve(declared, null,
+					context.typeSubstitutions);
 				scope.define(name, declaredType, span, false);
 				bindCell(name, span, scope, declaredType);
 				[TDeclare(scope.requireId(name), declaredType, span)];

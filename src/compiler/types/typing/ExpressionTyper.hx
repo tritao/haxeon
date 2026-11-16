@@ -2104,6 +2104,13 @@ class ExpressionTyper {
 		};
 
 	public function commonConditionalType(left:CompilerType, right:CompilerType):Null<CompilerType> {
+		// Branches whose types still hold empty type variables share them, as Haxe unifies branch types:
+		// `(flag ? flags : names).push(x)` fills both arrays' element from the one push.
+		if (session.monomorphs.active()) {
+			compiler.types.Monomorphs.unify(left, right);
+			left = compiler.types.Monomorphs.resolve(left);
+			right = compiler.types.Monomorphs.resolve(right);
+		}
 		if ((switch (left) {
 			case TNever: true;
 			default: false;

@@ -2090,6 +2090,16 @@ class CallResolver {
 			if (RuntimeType.arrayName(compiler.types.Monomorphs.resolve(element)) == null)
 				fail("E1016", "This array element type has no compiler-owned runtime ABI", span);
 		});
+		// A comparison with an element still to be fixed fixes it from the value compared, as Haxe unifies the two, before
+		// what the method needs of the element (its equality, its storage) is decided.
+		var comparedValue:Null<TypedExpression> = null;
+		if ((name == "indexOf" || name == "contains" || name == "remove")
+			&& arguments.length == 1
+			&& compiler.types.Monomorphs.containsUnbound(element)) {
+			comparedValue = coerce(typeExpressionValue(arguments[0], scope, element), element, "array element",
+				"E1002");
+			element = compiler.types.Monomorphs.resolve(element);
+		}
 		if (name == "push" || name == "add") {
 			if (arguments.length != 1)
 				fail("E1008", 'Array.$name expects one argument', span);
@@ -2168,7 +2178,8 @@ class CallResolver {
 			if (arguments.length != 1)
 				fail("E1008", "Array.remove expects one argument", span);
 			requestArrayValueEquality(element, span);
-			var value = coerce(typeExpressionValue(arguments[0], scope, element), element, "array element", "E1002");
+			var value = comparedValue != null ? comparedValue
+				: coerce(typeExpressionValue(arguments[0], scope, element), element, "array element", "E1002");
 			return new TypedExpression(TCollectionCall(receiver, "remove", [value]), TBool, span);
 		}
 		if (name == "insert") {
@@ -2240,7 +2251,8 @@ class CallResolver {
 			if (arguments.length != 1)
 				fail("E1008", "Array.indexOf expects one argument", span);
 			requestArrayValueEquality(element, span);
-			var value = coerce(typeExpressionValue(arguments[0], scope, element), element, "array element", "E1002");
+			var value = comparedValue != null ? comparedValue
+				: coerce(typeExpressionValue(arguments[0], scope, element), element, "array element", "E1002");
 			var base = switch element {
 				case TNullable(inner): inner;
 				default: element;
@@ -2255,7 +2267,8 @@ class CallResolver {
 			if (arguments.length != 1)
 				fail("E1008", "Array.contains expects one argument", span);
 			requestArrayValueEquality(element, span);
-			var value = coerce(typeExpressionValue(arguments[0], scope, element), element, "array element", "E1002"),
+			var value = comparedValue != null ? comparedValue
+				: coerce(typeExpressionValue(arguments[0], scope, element), element, "array element", "E1002"),
 				base = switch element {
 					case TNullable(inner): inner;
 					default: element;
