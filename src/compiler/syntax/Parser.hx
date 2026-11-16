@@ -4,6 +4,7 @@ import compiler.core.Diagnostic;
 import compiler.syntax.Ast.AstExpression;
 import compiler.syntax.Ast.AstArgument;
 import compiler.syntax.Ast.AstFieldAccess;
+import compiler.syntax.Ast.AstField;
 import compiler.syntax.Ast.AstFunction;
 import compiler.syntax.Ast.AstClass;
 import compiler.syntax.Ast.AstInterface;
@@ -166,6 +167,7 @@ class Parser {
 			consume(TokenKind.Semicolon);
 		}
 		var functions = [],
+			fields:Array<AstField> = [],
 			aliases:Array<AstTypeAlias> = [],
 			enums:Array<AstEnum> = [],
 			enumAbstracts:Array<AstEnumAbstract> = [],
@@ -202,6 +204,16 @@ class Parser {
 						fail(current(), "A struct cannot be declared extern");
 					classes.push(parseClass(visibility != null && visibility.kind == TokenKind.Private, metadata,
 						externDeclaration, isStruct));
+				} else if (check(TokenKind.Var) || check(TokenKind.Final)
+					|| check(TokenKind.Inline) && (peekKind(1) == TokenKind.Var || peekKind(1) == TokenKind.Final)) {
+					// A module-level variable: public unless `private`, as module-level declarations are (a class's field is private).
+					if (externDeclaration)
+						fail(current(), "A module-level variable cannot be declared extern");
+					var start = visibility == null ? current().span : visibility.span,
+						isPublic = visibility == null || visibility.kind == TokenKind.Public,
+						isInline = match(TokenKind.Inline),
+						isFinal = match(TokenKind.Final);
+					fields.push(parseField(metadata, isPublic, true, isInline, isFinal, start));
 				} else if (visibility != null)
 					fail(current(), "Top-level visibility modifier is not supported for this declaration");
 				else if (check(TokenKind.Identifier) && current().text == "abstract") {
@@ -228,7 +240,8 @@ class Parser {
 			abstracts: abstracts,
 			interfaces: interfaces,
 			classes: classes,
-			functions: functions
+			functions: functions,
+			fields: fields
 		};
 	}
 
@@ -283,7 +296,7 @@ class Parser {
 	static function isTopLevelStart(token:Token):Bool
 		return switch token.kind {
 			case TokenKind.Function, TokenKind.Class, TokenKind.Interface, TokenKind.Enum, TokenKind.Typedef,
-				TokenKind.Public, TokenKind.Private,
+				TokenKind.Public, TokenKind.Private, TokenKind.Var, TokenKind.Final,
 				TokenKind.At: true;
 			case TokenKind.Identifier: token.text == "abstract" || token.text == "extern";
 			default: false;
@@ -870,48 +883,8 @@ class Parser {
 						methodName = check(TokenKind.New) ? advance().text : consume(TokenKind.Identifier).text;
 					methods.push(parseFunctionBody(functionStart, methodName, true, isStatic, isExtern, memberMetadata,
 						isInline, isPublic, isOverride));
-				} else {
-					var fieldStart = current().span;
-					match(TokenKind.Var);
-					var fieldName = consume(TokenKind.Identifier).text;
-					var readAccess = null, writeAccess = null;
-					if (match(TokenKind.LeftParen)) {
-						readAccess = parseFieldAccess();
-						consume(TokenKind.Comma);
-						writeAccess = parseFieldAccess();
-						consume(TokenKind.RightParen);
-					}
-					var fieldType = match(TokenKind.Colon) ? parseType() : null,
-						outerMember = enterLambdaMember(fieldName);
-					var initializer:Null<AstExpression> = null;
-					try {
-						if (match(TokenKind.Assign))
-							initializer = parseExpression();
-					} catch (error:CompileError) {
-						leaveLambdaMember(outerMember);
-						throw error;
-					}
-					leaveLambdaMember(outerMember);
-					if (fieldType == null) {
-						if (initializer == null)
-							fail(current(), 'Field "$fieldName" requires a type or initializer');
-					}
-					// Like local declarations, a braced initializer (block or switch) may omit the trailing semicolon.
-					var end = initializer == null ? consume(TokenKind.Semicolon).span : expressionEnd(initializer);
-					fields.push({
-						name: fieldName,
-						isPublic: isPublic,
-						metadata: memberMetadata,
-						type: fieldType,
-						initializer: initializer,
-						readAccess: readAccess,
-						writeAccess: writeAccess,
-						isStatic: isStatic,
-						isInline: isInline,
-						isFinal: isFinal,
-						span: fieldStart.merge(end)
-					});
-				}
+				} else
+					fields.push(parseField(memberMetadata, isPublic, isStatic, isInline, isFinal));
 			} catch (error:CompileError) {
 				if (!recovering)
 					throw error;
@@ -933,6 +906,54 @@ class Parser {
 			fields: fields,
 			methods: methods,
 			span: start.merge(end)
+		};
+	}
+
+	/**
+	 * A field after its modifiers, of a class or of the module: `var` (optional after `final`), the name, `(get, set)`, the type
+	 * and the initializer, at least one of the last two.
+	 */
+	function parseField(memberMetadata:Array<compiler.syntax.Ast.AstMetadata>, isPublic:Null<Bool>, isStatic:Bool,
+			isInline:Bool, isFinal:Bool, ?start:SourceSpan):AstField {
+		var fieldStart = start == null ? current().span : start;
+		match(TokenKind.Var);
+		var fieldName = consume(TokenKind.Identifier).text;
+		var readAccess = null, writeAccess = null;
+		if (match(TokenKind.LeftParen)) {
+			readAccess = parseFieldAccess();
+			consume(TokenKind.Comma);
+			writeAccess = parseFieldAccess();
+			consume(TokenKind.RightParen);
+		}
+		var fieldType = match(TokenKind.Colon) ? parseType() : null,
+			outerMember = enterLambdaMember(fieldName);
+		var initializer:Null<AstExpression> = null;
+		try {
+			if (match(TokenKind.Assign))
+				initializer = parseExpression();
+		} catch (error:CompileError) {
+			leaveLambdaMember(outerMember);
+			throw error;
+		}
+		leaveLambdaMember(outerMember);
+		if (fieldType == null) {
+			if (initializer == null)
+				fail(current(), 'Field "$fieldName" requires a type or initializer');
+		}
+		// Like local declarations, a braced initializer (block or switch) may omit the trailing semicolon.
+		var end = initializer == null ? consume(TokenKind.Semicolon).span : expressionEnd(initializer);
+		return {
+			name: fieldName,
+			isPublic: isPublic,
+			metadata: memberMetadata,
+			type: fieldType,
+			initializer: initializer,
+			readAccess: readAccess,
+			writeAccess: writeAccess,
+			isStatic: isStatic,
+			isInline: isInline,
+			isFinal: isFinal,
+			span: fieldStart.merge(end)
 		};
 	}
 

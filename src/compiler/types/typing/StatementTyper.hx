@@ -310,6 +310,7 @@ class StatementTyper {
 	}
 
 	public function typeIncrement(name:String, delta:Int, span:SourceSpan, scope:Scope):TypedStatement {
+		name = sourceTarget(name, span, scope);
 		if (scope.isScoped(name))
 			fail("E1002", 'Cannot reassign scoped binding "$name"', span);
 		var current = scope.resolve(name);
@@ -364,7 +365,26 @@ class StatementTyper {
 			span) : TIncrement(scope.requireId(name), delta, span);
 	}
 
+	/**
+	 * A bare assignment target that names a module-level variable arrives qualified, with its source name on the span (see
+	 * ModuleCanonicalizer.targetSpan). As for a read, the source name wins when it names a local, a member of `this` or a static
+	 * of the enclosing class.
+	 */
+	function sourceTarget(name:String, span:SourceSpan, scope:Scope):String {
+		var source = span.isBareReference ? span.referenceName : null;
+		if (source == null || source == name || source.indexOf(".") >= 0)
+			return name;
+		if (scope.resolve(source) != null)
+			return source;
+		var thisType = scope.resolve("this"), owner = session.currentContext.lexicalOwner;
+		if (thisType != null && assignmentRules.findFieldType(thisType, source) != null
+			|| owner != null && assignmentRules.findStaticField(owner, source) != null)
+			return source;
+		return name;
+	}
+
 	public function typeAssignment(name:String, expression:AstExpression, span:SourceSpan, scope:Scope):TypedStatement {
+		name = sourceTarget(name, span, scope);
 		var dot = name.lastIndexOf(".");
 		if (dot < 0) {
 			if (scope.isScoped(name))

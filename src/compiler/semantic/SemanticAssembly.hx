@@ -128,9 +128,36 @@ class SemanticAssembly {
 				for (abstractDecl in parsed.enumAbstracts)
 					enumAbstractDeclarations.set(ModuleCanonicalizer.qualifiedTypeName(parsed.packageName,
 						abstractDecl.name), abstractDecl);
+				// Field inference reads this map only: each class of the module sees the module's functions as static methods, after
+				// its own, so a static initializer may call one (`static var x = f();`, a module-level `var x = f();`, `Mod.f()`).
+				var moduleFunctions:Array<AstFunction> = [
+					for (fn in parsed.functions)
+						if (fn.typeParameters == null || fn.typeParameters.length == 0)
+						({
+							name: fn.name,
+							isStatic: true,
+							arguments: fn.arguments,
+							result: fn.result,
+							statements: [],
+							span: fn.span
+						}:AstFunction)
+				];
 				for (classDecl in parsed.classes)
 					classDeclarations.set(ModuleCanonicalizer.qualifiedTypeName(parsed.packageName, classDecl.name),
-						classDecl);
+						moduleFunctions.length == 0 ? classDecl : {
+							name: classDecl.name,
+							isStruct: classDecl.isStruct,
+							isExtern: classDecl.isExtern,
+							typeParameters: classDecl.typeParameters,
+							typeConstraints: classDecl.typeConstraints,
+							isPrivate: classDecl.isPrivate,
+							metadata: classDecl.metadata,
+							base: classDecl.base,
+							interfaces: classDecl.interfaces,
+							fields: classDecl.fields,
+							methods: classDecl.methods.concat(moduleFunctions),
+							span: classDecl.span
+						});
 			}
 
 		var discoveryPrefixes:Map<String, Array<String>> = [];
@@ -324,6 +351,10 @@ class SemanticAssembly {
 			}
 			for (fn in ast.functions)
 				locals.set(fn.name, true);
+			// Module-level variables (static fields of the module's class, see ModuleFields) are named as the functions are.
+			if (ast.fields != null)
+				for (field in ast.fields)
+					locals.set(field.name, true);
 			var canonicalFunctions:Array<AstFunction>;
 			if (state.canonicalRevision == state.revision && state.canonicalEntry == entryModule
 				&& state.canonicalAliasKey == aliasKey)

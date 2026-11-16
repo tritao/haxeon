@@ -397,9 +397,11 @@ class ModuleAnalyzer {
 					abstracts: program.abstracts,
 					interfaces: program.interfaces,
 					classes: program.classes,
-					functions: program.functions
+					functions: program.functions,
+					fields: program.fields
 				};
 		}
+		program = ModuleFields.fold(program, state.name);
 		return new LookupParse(state.source, conditional.defines, tokens, program);
 	}
 

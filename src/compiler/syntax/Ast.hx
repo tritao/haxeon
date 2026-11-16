@@ -368,4 +368,10 @@ typedef AstProgram = {
 	final interfaces:Array<AstInterface>;
 	final classes:Array<AstClass>;
 	final functions:Array<AstFunction>;
+
+	/**
+	 * Module-level `var` and `final` declarations, as the parser reads them: static fields of no class yet. ModuleFields.fold makes
+	 * them static fields of the module's class, the class named like the module, so nothing after parsing sees this list.
+	 */
+	final ?fields:Array<AstField>;
 }

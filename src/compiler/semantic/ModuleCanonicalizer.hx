@@ -350,14 +350,26 @@ class ModuleCanonicalizer {
 	/**
 	 * An assignment target is a name, not an expression, so `Cache.entries = x` reaches here as the dotted string
 	 * "Cache.entries" and its receiver must be qualified like any other reference to an imported class. A bare name is
-	 * a local, a field of `this`, or a static of the enclosing class, and is never an import.
+	 * a local, a field of `this`, a static of the enclosing class, or a module-level variable of this module (qualified as
+	 * reads are), and is never an import.
 	 */
-	static function canonicalAssignmentTarget(name:String, locals:LocalScope, aliases:Null<AliasTable>):String {
+	static function canonicalAssignmentTarget(name:String, module:String, locals:LocalScope,
+			aliases:Null<AliasTable>):String {
 		if (name.indexOf(".") < 0)
-			return name;
+			return locals.get(name) == true ? module + "." + name : name;
 		var imported = importedReference(name, locals, aliases);
 		return imported == null ? name : imported;
 	}
+
+	/**
+	 * The span of an assignment or increment whose bare target was qualified as a module-level variable, carrying the source name
+	 * as a read's does: a local, a member of `this` or a static of the enclosing class of that name takes precedence (typing).
+	 */
+	static function targetSpan(name:String, module:String, locals:LocalScope,
+			span:compiler.core.Source.SourceSpan):compiler.core.Source.SourceSpan
+		return name.indexOf(".") >= 0
+			|| locals.get(name) != true ? span : new compiler.core.Source.SourceSpan(span.file,
+			span.start, span.end, true, name);
 
 	public static function canonicalStatement(s:AstStatement, module:String, entry:String, locals:LocalScope,
 			?aliases:AliasTable):AstStatement
@@ -371,8 +383,8 @@ class ModuleCanonicalizer {
 				ScopedDeclaration(n, t == null ? null : canonicalType(t, aliases),
 					canonicalExpression(e, module, entry, locals, aliases), span);
 			case Assignment(n, e,
-				span): Assignment(canonicalAssignmentTarget(n, locals, aliases),
-				canonicalExpression(e, module, entry, locals, aliases), span);
+				span): Assignment(canonicalAssignmentTarget(n, module, locals, aliases),
+				canonicalExpression(e, module, entry, locals, aliases), targetSpan(n, module, locals, span));
 			case IndexAssignment(array, offset, e,
 				span): IndexAssignment(canonicalExpression(array, module, entry, locals, aliases),
 				canonicalExpression(offset, module, entry, locals, aliases),
@@ -395,7 +407,9 @@ class ModuleCanonicalizer {
 			case ReturnVoid(span): ReturnVoid(span);
 			case Break(span): Break(span);
 			case Continue(span): Continue(span);
-			case Increment(name, delta, span): Increment(name, delta, span);
+			case Increment(name, delta, span): Increment(canonicalAssignmentTarget(name, module, locals, aliases),
+				delta,
+				targetSpan(name, module, locals, span));
 			case If(c, y, n,
 				span): If(canonicalExpression(c, module, entry, locals, aliases),
 				canonicalBlock(y, module, entry, locals, aliases),
@@ -546,6 +560,9 @@ class ModuleCanonicalizer {
 					resolved = imported;
 				else if (name.indexOf(".") < 0 && locals.get(name) == true)
 					resolved = module == entry && name == "main" ? "main" : module + "." + name;
+				else if (dot > 0 && locals.get(prefix) == true)
+					// A method of a module-level variable (`names.push(x)`): the variable is qualified as a read of it is.
+					resolved = module + "." + name;
 				Call(resolved, [
 					for (index in 0...args.length)
 						index == 1 && isTypeTestCall(name) ? canonicalTypeArgument(args[index], module, entry, locals,

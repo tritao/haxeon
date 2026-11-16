@@ -16,6 +16,10 @@ class Frontend {
 
 	public static function compileFile(file:SourceFile):IrProgram {
 		var ast = new Parser(new Lexer(file).tokenize()).parseProgram();
+		// They are static fields of the module's class (ModuleFields), and this pipeline has no module.
+		if (ast.fields != null && ast.fields.length > 0)
+			throw new compiler.core.Diagnostic.CompileError(new compiler.core.Diagnostic("E0002",
+				"Module-level variables need a module: compile them with compiler.Compiler", ast.fields[0].span));
 		// The convenience frontend has no target; keep its IR portable.
 		return IrProgramAssembler.generate(Typer.type(ast), TargetProfile.portable);
 	}
