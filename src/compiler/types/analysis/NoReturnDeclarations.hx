@@ -34,7 +34,11 @@ class NoReturnDeclarations {
 	 * the method and the declaring base's key. The declarations looked at are the class's ancestors and every interface it
 	 * or an ancestor implements, with the interfaces those extend.
 	 */
-	public static function undeclaredOverride(classes:Map<String, AstClass>, interfaces:Map<String, AstInterface>):Null<{method:AstFunction, base:String}> {
+	public static function undeclaredOverride(classes:Map<String, AstClass>,
+			interfaces:Map<String, AstInterface>):Null<{
+				method:AstFunction,
+				base:String
+			}> {
 		for (className => classDecl in classes) {
 			var bases = declaringBases(classes, interfaces, classDecl);
 			if (bases.length == 0)
@@ -51,7 +55,11 @@ class NoReturnDeclarations {
 	}
 
 	/** The `@:noReturn` methods of what `classDecl` inherits from or implements, as their keys by method name. */
-	static function declaringBases(classes:Map<String, AstClass>, interfaces:Map<String, AstInterface>, classDecl:AstClass):Array<{name:String, key:String}> {
+	static function declaringBases(classes:Map<String, AstClass>, interfaces:Map<String, AstInterface>,
+			classDecl:AstClass):Array<{
+				name:String,
+				key:String
+			}> {
 		var found:Array<{name:String, key:String}> = [],
 			seen:Map<String, Bool> = [];
 		function visitInterface(name:String):Void {

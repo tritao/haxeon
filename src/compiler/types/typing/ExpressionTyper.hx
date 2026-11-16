@@ -2444,11 +2444,12 @@ class ExpressionTyper {
 	}
 
 	/** The index of the constructor without arguments `expression` is known to be, or -1. */
-	static function knownConstructor(expression:TypedExpression, scope:Null<Scope>):Int
+	function knownConstructor(expression:TypedExpression, scope:Null<Scope>):Int
 		return switch expression.expression {
 			case TEnumLiteral(_, index): index;
 			case TEnumConstruct(_, index, arguments) if (arguments.length == 0): index;
 			case TLocal(id) if (scope != null): scope.knownConstructor(id);
+			case TStaticField(owner, field): callResolver.staticFinalConstructor(owner, field);
 			default: -1;
 		};
 

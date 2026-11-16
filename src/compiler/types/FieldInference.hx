@@ -37,6 +37,8 @@ class FieldInference {
 			case Call(_, _, _): InferredType;
 			case Member(_, _, _): InferredType;
 			case Variable(name, _) if (name.indexOf(".") > 0): InferredType;
+			// A bare name may be a constructor of an enum this file declares, which only the declarations can tell.
+			case Variable(_, _): InferredType;
 			default:
 				throw new CompileError(new Diagnostic("E1002",
 					'Cannot infer type of field "${field.name}" from this initializer', field.span));
@@ -246,7 +248,8 @@ class FieldInference {
 				return ArrayType(element);
 			default:
 		}
-		var enumType = enumConstructorType(expression, owner, classes, aliases, enums, enumAbstracts);
+		var enumType = enumConstructorType(expression, owner, classes, aliases, enums, enumAbstracts,
+			field.span.file.path);
 		if (enumType != null) {
 			return enumType;
 		}
@@ -294,7 +297,7 @@ class FieldInference {
 	static function enumConstructorType(expression:AstExpression, currentOwner:String,
 			classes:Map<String, compiler.syntax.Ast.AstClass>, aliases:AliasTable,
 			enums:Map<String, compiler.syntax.Ast.AstEnum>,
-			enumAbstracts:Map<String, compiler.syntax.Ast.AstEnumAbstract>):Null<AstType> {
+			enumAbstracts:Map<String, compiler.syntax.Ast.AstEnumAbstract>, file:String):Null<AstType> {
 		var path:Null<String> = null, hasArguments = false;
 		switch expression {
 			case Member(Variable(owner, _), name, _):
@@ -309,7 +312,9 @@ class FieldInference {
 		if (path == null)
 			return null;
 		var separator = path.lastIndexOf(".");
-		if (separator <= 0)
+		if (separator < 0)
+			return bareConstructorType(path, hasArguments, enums, file);
+		if (separator == 0)
 			return null;
 		var written = path.substring(0, separator),
 			caseName = path.substring(separator + 1);
@@ -339,6 +344,26 @@ class FieldInference {
 			if (enumCase.name == caseName && (enumCase.params.length == 0) != hasArguments)
 				return NamedType(written);
 		return null;
+	}
+
+	/**
+	 * The enum a bare constructor (`Red`, `Mixed(1)`) belongs to, among the enums declared in `file`, as the typer resolves
+	 * a bare constructor: only when exactly one of them has a constructor of that name taking arguments or not.
+	 */
+	static function bareConstructorType(caseName:String, hasArguments:Bool,
+			enums:Map<String, compiler.syntax.Ast.AstEnum>, file:String):Null<AstType> {
+		var found:Null<String> = null;
+		for (name => declaration in enums) {
+			if (declaration.span.file.path != file || declaration.typeParameters.length > 0)
+				continue;
+			for (enumCase in declaration.cases)
+				if (enumCase.name == caseName && (enumCase.params.length == 0) != hasArguments) {
+					if (found != null)
+						return null;
+					found = name;
+				}
+		}
+		return found == null ? null : NamedType(found);
 	}
 
 	static function resolveDeclaration<T>(name:String, currentOwner:String, aliases:AliasTable,

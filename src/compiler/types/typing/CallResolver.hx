@@ -1249,6 +1249,31 @@ class CallResolver {
 			false, null, null, enumCase.aliasName);
 	}
 
+	/**
+	 * The index of the constructor without arguments that `owner.field` always holds: a static `final` field initialized
+	 * with one (`static final DEFAULT = Mode.Fast;`, or a bare constructor of an enum in the same file), else -1.
+	 */
+	public function staticFinalConstructor(owner:String, field:String):Int {
+		var classDecl = session.classDecls.get(owner);
+		if (classDecl == null)
+			return -1;
+		for (candidate in classDecl.fields) {
+			if (candidate.name != field || !candidate.isStatic || !candidate.isFinal)
+				continue;
+			var initializer = candidate.initializer;
+			var path = initializer == null ? null : switch initializer {
+				case Variable(name, _): name;
+				case Member(Variable(owner, _), name, _): owner + "." + name;
+				default: null;
+			};
+			if (path == null)
+				return -1;
+			var constructor = path.indexOf(".") < 0 ? uniqueEnumCaseInfo(path, 0, candidate.span) : enumCaseInfo(path);
+			return constructor == null || constructor.params.length > 0 ? -1 : constructor.index;
+		}
+		return -1;
+	}
+
 	public function enumCaseInfo(name:String):Null<EnumConstructorInfo> {
 		var separator = name.lastIndexOf(".");
 		if (separator < 0)

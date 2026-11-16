@@ -9,6 +9,9 @@ private enum InlineConstantValue {
 	Text(value:String);
 	Boolean(value:Bool);
 	NullValue;
+
+	/** A constructor without arguments: an enum value has no identity, so the constructor is the value. */
+	Constructor(enumName:String, index:Int);
 }
 
 /** Evaluates the side-effect-free expression subset allowed in inline fields. */
@@ -27,6 +30,9 @@ class InlineConstantEvaluator {
 			case TStringLiteral(text): InlineConstantValue.Text(text);
 			case TBoolLiteral(flag): InlineConstantValue.Boolean(flag);
 			case TNullLiteral: InlineConstantValue.NullValue;
+			case TEnumLiteral(name, index): InlineConstantValue.Constructor(name, index);
+			case TEnumConstruct(name, index,
+				arguments) if (arguments.length == 0): InlineConstantValue.Constructor(name, index);
 			case TIntToFloat(inner):
 				switch evaluateValue(inner) {
 					case InlineConstantValue.Integer(number): InlineConstantValue.Floating(number);
@@ -96,6 +102,8 @@ class InlineConstantEvaluator {
 			case InlineConstantValue.Text(text): new TypedExpression(TStringLiteral(text), TString, span);
 			case InlineConstantValue.Boolean(flag): new TypedExpression(TBoolLiteral(flag), TBool, span);
 			case InlineConstantValue.NullValue: new TypedExpression(TNullLiteral, TNull, span);
+			case InlineConstantValue.Constructor(name, index): new TypedExpression(TEnumLiteral(name, index), type,
+				span);
 		};
 	}
 
