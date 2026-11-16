@@ -1,21 +1,15 @@
 #!/usr/bin/env bash
 set -euo pipefail
-case "$(uname -s)" in
-MINGW* | MSYS* | CYGWIN*)
-	# Its C program links against libhl, which the Windows job builds with MSVC and the shell's compiler cannot link.
-	echo 'SKIP: the native helper needs a C compiler that links against the MSVC-built libhl'
-	exit 0
-	;;
-esac
 root=$(cd "$(dirname "$0")/../.." && pwd)
+source "$root/scripts/lib/env.sh"
 work=$(mktemp -d "${TMPDIR:-/tmp}/haxeon-jit-box.XXXXXX")
 trap 'rm -rf "$work"' EXIT
 library=${HL_GC_TEST_LIBRARY_DIR:-$("$root/scripts/hashlink-path.sh")}
-"${CC:-cc}" -shared -fPIC -I"$root/vendor/hashlink/src" "$root/tests/native/jit_box_hooks.c" -L"$library" -lhl -o "$work/jitbox.hdll"
+haxeon_cc_libhl --hdll "$work/jitbox.hdll" "$root/tests/native/jit_box_hooks.c"
 "$root/.tools/haxe/haxe" -cp "$root/tests/native" -hl "$work/probe.hl" -main BoxAllocationProbe
 for mode in 0 1; do
  status=0
- HL_JIT_BOX_CENSUS="$work/census-$mode.json" HL_JIT_ALLOC_INLINE=1 HL_JIT_ALLOC_BOX=$mode HL_GC_MIN_TRIGGER=65536 LD_LIBRARY_PATH="$work:$library${LD_LIBRARY_PATH:+:$LD_LIBRARY_PATH}" DYLD_LIBRARY_PATH="$work:$library${DYLD_LIBRARY_PATH:+:$DYLD_LIBRARY_PATH}" "${HL_JIT_TEST_VM:-$("$root/scripts/hashlink-path.sh")/hl}" "$work/probe.hl" || status=$?
+ HL_JIT_BOX_CENSUS="$work/census-$mode.json" HL_JIT_ALLOC_INLINE=1 HL_JIT_ALLOC_BOX=$mode HL_GC_MIN_TRIGGER=65536 PATH="$work:$library:$PATH" LD_LIBRARY_PATH="$work:$library${LD_LIBRARY_PATH:+:$LD_LIBRARY_PATH}" DYLD_LIBRARY_PATH="$work:$library${DYLD_LIBRARY_PATH:+:$DYLD_LIBRARY_PATH}" "${HL_JIT_TEST_VM:-$("$root/scripts/hashlink-path.sh")/hl}" "$work/probe.hl" || status=$?
  # The VM reports whether compiled code allocates inline on this target (hl_jit_alloc_supported).
  if [[ $status == 77 ]]; then
   echo 'SKIP: this target has no inline JIT allocation'

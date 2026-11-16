@@ -6,6 +6,7 @@
 #   haxeon_export_library_path [DIR...] # put out/, the HashLink directory and DIRs on the library path
 #   haxeon_timeout SECONDS COMMAND...   # run COMMAND, stopped after SECONDS, like GNU timeout (macOS has none)
 #   haxeon_shared_library NAME          # the file a CMake shared library NAME builds to here: libNAME.so, libNAME.dylib, NAME.dll
+#   haxeon_cc_libhl [--hdll] OUT SRC... # build a test program (or HashLink library) against libhl: cc, or cl on Windows
 #
 # haxeon_root is the repository root and haxeon_haxe the pinned Haxe, wherever the sourcing script lives. haxeon_suite_out is where a
 # test writes the files it reads back: HAXEON_SUITE_OUT, the directory of its own the suite runner gives each suite, else out/ (a run by
@@ -85,5 +86,34 @@ haxeon_shared_library() {
 	Darwin) printf 'lib%s.dylib' "$1" ;;
 	MINGW* | MSYS* | CYGWIN*) printf '%s.dll' "$1" ;;
 	*) printf 'lib%s.so' "$1" ;;
+	esac
+}
+
+# Builds C sources against this checkout's libhl into OUTPUT, a program or, with --hdll, a HashLink library: with cc on
+# Linux and macOS, and on Windows with MSVC's cl, which libhl is built with there (the shell's MinGW cannot link it; the
+# Windows job sets up MSVC's environment). CFLAGS adds compiler flags for cc; the library directory is HL_GC_TEST_LIBRARY_DIR
+# or the checkout's HashLink.
+haxeon_cc_libhl() {
+	local hdll= output library source sources=()
+	if [[ $1 == --hdll ]]; then
+		hdll=1
+		shift
+	fi
+	output=$1
+	shift
+	library=${HL_GC_TEST_LIBRARY_DIR:-$("$haxeon_root/scripts/hashlink-path.sh")}
+	case "$(uname -s)" in
+	MINGW* | MSYS* | CYGWIN*)
+		for source in "$@"; do
+			sources+=("$(cygpath -w "$source")")
+		done
+		MSYS2_ARG_CONV_EXCL='*' cl -nologo -O2 ${hdll:+-LD} -I"$(cygpath -w "$haxeon_root/vendor/hashlink/src")" "${sources[@]}" \
+			-Fo"$(cygpath -w "$(dirname "$output")")\\" -Fe"$(cygpath -w "$output")" -link -LIBPATH:"$(cygpath -w "$library")" libhl.lib \
+			>/dev/null
+		;;
+	*)
+		# shellcheck disable=SC2086 # CFLAGS holds several flags
+		"${CC:-cc}" ${CFLAGS:-} ${hdll:+-shared -fPIC} -I"$haxeon_root/vendor/hashlink/src" "$@" -L"$library" -lhl -lpthread -o "$output"
+		;;
 	esac
 }
