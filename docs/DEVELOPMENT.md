@@ -27,7 +27,7 @@ next to `summary.txt`.
 ./scripts/test.sh                                  # dev test ci; TEST_JOBS sets the jobs (default 16), SKIP_FORMAT_CHECK=1 skips the format check
 ./scripts/test.sh --only driver-default,wasm-backend
 scripts/haxeon dev test full --list                # the suites a mode runs, with their lanes and pools
-./scripts/gate.sh quick|wave|full [jobs]           # dev test MODE --gate: a report in out/gate (docs/TEST_SUITE_COST.md section 8)
+./scripts/gate.sh quick|wave|full [jobs]           # dev test MODE --gate: a report in out/gate (docs/reports/2026-11-test-suite-cost.md section 8)
 ```
 
 A new suite is a line in `tests/suites.txt`, not a stage in a script. Give it the groups it belongs to; put it in a `lane` or `pool`
@@ -164,7 +164,7 @@ Pinned tool versions, archive checksums, extraction, and submodule setup are
 defined once in `cmake/Bootstrap.cmake`. The platform setup scripts are thin
 launchers for that shared bootstrap rather than separate installers.
 
-Haxe sources are formatted by `haxeon fmt` (docs/CLI.md), with imports sorted by `haxeon lint`. This tree has no `format` setting,
+Haxe sources are formatted by `haxeon fmt` (docs/reference/CLI.md), with imports sorted by `haxeon lint`. This tree has no `format` setting,
 so it uses the standard style: tabs and 120 columns. `--check` covers every `.hx` file outside vendored code; a test file whose
 lines are part of the test carries `@formatter:off` at the end of its first line.
 

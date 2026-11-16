@@ -76,11 +76,11 @@ their failures; public inspection snapshots still expose values to reflection.
 Struct boxes can still occur at real dynamic and reflective boundaries. For example, inspecting a dynamic style value
 materializes a box; a type census should distinguish `@`-prefixed struct boxes from the former class allocations. The
 compiler scalarizes supported direct and typed calls, optional locals and inline field copies; unsupported or escaping
-values retain the normal boxed ABI. See [STRUCTS.md](../../../docs/STRUCTS.md) for the calling conventions and attribution.
+values retain the normal boxed ABI. See [STRUCTS.md](../../../docs/design/STRUCTS.md) for the calling conventions and attribution.
 The same-machine 30-cycle HashLink census starts after the initial editor frame and includes scenario setup. It counts
 allocations by type. Entries after conversion are
 struct boxes (`@haxeon.ui.*`) if a dynamic boundary is exercised. The per-action KiB and Wasm GC Showcase comparisons are in
-[STRUCTS.md](../../../docs/STRUCTS.md).
+[STRUCTS.md](../../../docs/design/STRUCTS.md).
 
 The Wasm GC Showcase counts in that comparison instrument generated `struct.new` and `array.new` operations. The compiler
 flag `--wasm-gc-allocation-count` and CMake option `NKUI_HAXEON_WASM_GC_ALLOCATION_COUNT` are disabled by default; with
@@ -374,7 +374,7 @@ was restored. The HashLink pin, VM library and native runtime are unchanged.
 This is the first wall-clock comparison of the combined passes on the current buildable editor: equality-model
 control `238c54eb`, detached outer `51947204d`, with no MachineKit source correction copied in. Both images use
 the same app sources and VM `d1eb6136`. The previous corrected-snapshot opcode counts in
-[BYTECODE_OPPORTUNITIES.md](../../../docs/BYTECODE_OPPORTUNITIES.md) remain historical; they are not the timing baseline.
+[BYTECODE_OPPORTUNITIES.md](../../../docs/reports/2026-11-bytecode-opportunities.md) remain historical; they are not the timing baseline.
 The current HashLink modules measure 112,538,876 bytes before and 103,141,814 after (9,397,062 bytes / 8.35% smaller).
 
 Nine alternating control/candidate action pairs use the same fixed affinity on four physical performance cores

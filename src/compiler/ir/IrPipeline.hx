@@ -170,7 +170,7 @@ class IrPipeline {
 	}
 
 	/**
-	 * What a plain build's prune keeps (docs/REACHABILITY_WALK.md): the roots are the entry function, the initializers `__init` runs and
+	 * What a plain build's prune keeps (docs/design/REACHABILITY_WALK.md): the roots are the entry function, the initializers `__init` runs and
 	 * the exported functions; the reflection helpers are generated after the walk, so what they will call is reached through these
 	 * dependencies.
 	 */
@@ -265,7 +265,7 @@ class IrPipeline {
 	}
 
 	/**
-	 * The prune point (docs/REACHABILITY_WALK.md): after the enum providers and generic owner erasure, which settle the class names and the
+	 * The prune point (docs/design/REACHABILITY_WALK.md): after the enum providers and generic owner erasure, which settle the class names and the
 	 * helpers, and before every later pass. The entry function is created last, so the roots are what it calls: main, and the
 	 * initializers `__init` runs. With HAXEON_CHECK_REUSE=1, after each later stage that checks the prune nothing may call a function it
 	 * removed (the failure of 2026-11-10).

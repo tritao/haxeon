@@ -175,7 +175,7 @@ class TestRunner {
 	 */
 	static final warmEditKnownFailures:Map<String, String> = [
 		"enum-generated-dependencies"
-			=> "docs/HELPER_OWNERSHIP.md: a shared helper's origin is chosen by the first requester"
+			=> "docs/design/HELPER_OWNERSHIP.md: a shared helper's origin is chosen by the first requester"
 	];
 
 	/** The result for a warm edit build of a program that is marked as a known failure, or null when `run` is not such a build. */

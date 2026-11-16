@@ -4,7 +4,7 @@ import compiler.ir.IrBuilder;
 import compiler.ir.IrFunction;
 
 /**
- * The `Unreachable` terminator (a method nothing can receive a call for, see the declaration-only slot in docs/REACHABILITY_WALK.md) is a
+ * The `Unreachable` terminator (a method nothing can receive a call for, see the declaration-only slot in docs/design/REACHABILITY_WALK.md) is a
  * trap, not an exception: on HashLink the fatal runtime native `__unreachable` aborts the process, on Wasm it is `unreachable`. A hand-built
  * program whose `main` calls a function that ends in it must not return, on every target.
  */

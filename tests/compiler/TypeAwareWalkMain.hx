@@ -7,7 +7,7 @@ import compiler.ir.IrProviders;
 import compiler.ir.IrTypeAwareWalk;
 import compiler.ir.TypeKey;
 
-/** The type-aware reachability walk on small IR graphs (docs/REACHABILITY_WALK.md). */
+/** The type-aware reachability walk on small IR graphs (docs/design/REACHABILITY_WALK.md). */
 class TypeAwareWalkMain {
 	static function main():Void {
 		dynamicSite();

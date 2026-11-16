@@ -1,7 +1,7 @@
 package compiler.ir;
 
 /**
- * Dense class ids for the interface dispatch tables (docs/INTERFACE_VALUES.md). The ids are persistent state of a live session:
+ * Dense class ids for the interface dispatch tables (docs/design/INTERFACE_VALUES.md). The ids are persistent state of a live session:
  *
  * - a class that had an id keeps it, as long as the session lives;
  * - a class without one takes the next free id, in the order of the stable class identity (its name), never in declaration order or the order

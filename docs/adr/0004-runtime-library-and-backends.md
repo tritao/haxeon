@@ -196,7 +196,7 @@ Rejected:
 
 The compiler worker is built with stock Haxe, so the API is reached through `@:hlNative` declarations, not syntax.
 
-The census of 2026-11-09 (`COMPILER_MEMORY.md`, page census by kind) found that most empty page space is in small blocks
+The census of 2026-11-09 (`../reports/2026-11-compiler-memory.md`, page census by kind) found that most empty page space is in small blocks
 (16 to 255 bytes) that die and leave pages part full. Large buffers can account for at most about 0.35 GB, so a byte-buffer
 arena was rejected, and regions are the tool for this.
 

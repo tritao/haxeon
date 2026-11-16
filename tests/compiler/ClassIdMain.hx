@@ -4,7 +4,7 @@ import compiler.ir.IrClassIds;
 import compiler.ir.IrFunction;
 import compiler.ir.IrInterpreter;
 
-/** `ClassId` and the persistent class ids (docs/INTERFACE_VALUES.md): the instruction verifies, round trips and runs, and the ids are stable. */
+/** `ClassId` and the persistent class ids (docs/design/INTERFACE_VALUES.md): the instruction verifies, round trips and runs, and the ids are stable. */
 class ClassIdMain {
 	static function expect(condition:Bool, message:String):Void {
 		if (!condition)

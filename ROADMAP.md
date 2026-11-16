@@ -5,8 +5,8 @@ WebAssembly (`wasm32`, `wasm-gc`) from one IR. The official Haxe compiler is the
 oracle only; it is not part of a normal build.
 
 This file tracks the compiler, runtime and editor gates toward converting the Pragtical editor. Language features are
-planned in [docs/LANGUAGE_ROADMAP.md](docs/LANGUAGE_ROADMAP.md). What the language supports, and the ordinary Haxe it
-does not yet compile, is in [docs/LANGUAGE_SUPPORT.md](docs/LANGUAGE_SUPPORT.md). Status as of 2026-11-15.
+planned in [docs/design/LANGUAGE_ROADMAP.md](docs/design/LANGUAGE_ROADMAP.md). What the language supports, and the ordinary Haxe it
+does not yet compile, is in [docs/reference/LANGUAGE_SUPPORT.md](docs/reference/LANGUAGE_SUPPORT.md). Status as of 2026-11-15.
 
 ## Architecture
 
@@ -33,18 +33,18 @@ slots, statics with a stable `__init`, closures with shared capture cells, array
 with payloads, enum abstracts, abstracts with operators, properties, typedefs (generic and cross-module), imports
 (wildcard and `as` namespaces), pattern matching (nested, alternatives with guards, arrays, captures), exceptions with
 typed catch filters, dynamic objects and reflection, structs with `Equatable`/`Hashable`, key paths, and scoped cleanup.
-What the Wasm backends cover is in [docs/WASM_BACKEND.md](docs/WASM_BACKEND.md).
+What the Wasm backends cover is in [docs/reference/WASM_BACKEND.md](docs/reference/WASM_BACKEND.md).
 
-- [ ] The Haxe compatibility gaps in [LANGUAGE_SUPPORT.md](docs/LANGUAGE_SUPPORT.md#not-yet-supported): `using` static
+- [ ] The Haxe compatibility gaps in [LANGUAGE_SUPPORT.md](docs/reference/LANGUAGE_SUPPORT.md#not-yet-supported): `using` static
   extensions, indexing `Dynamic` values, structure and extractor patterns, rest parameters, and pattern captures that
   share a name with a function or variable.
 - [ ] Strictness only where Haxe would fail at run time
-  ([Stricter than Haxe](docs/LANGUAGE_SUPPORT.md#not-yet-supported)): `E1012` after a returning `try` becomes a warning,
+  ([Stricter than Haxe](docs/reference/LANGUAGE_SUPPORT.md#not-yet-supported)): `E1012` after a returning `try` becomes a warning,
   `W1001` can be silenced per project or per expression, and an identity-keyed map covers Haxe's `ObjectMap`.
 - [ ] Runtime library: file handles (`sys.io.File.read`/`write`), `haxe.ds.List`, `haxe.ds.Vector`, the rest of `Lambda`,
   `Type.getClass`/`getClassName`.
 - [~] Typed storage for the standard reference maps and nullable-element arrays, and inline `Null<T>` through the callable
-  ABI ([LANGUAGE_ROADMAP.md](docs/LANGUAGE_ROADMAP.md#order), items 7 and 8).
+  ABI ([LANGUAGE_ROADMAP.md](docs/design/LANGUAGE_ROADMAP.md#order), items 7 and 8).
 - [ ] Width subtyping for anonymous structures (needs a design document).
 
 ### B. Incremental compiler service
@@ -102,7 +102,7 @@ repository. It is built and tested by the `nativekit-packages` workflow.
   `component` and `editing`.
 - [ ] One test harness style, with the framework smoke test split by feature.
 
-The evidence and the order are in [docs/ARCHITECTURE_REVIEW.md](docs/ARCHITECTURE_REVIEW.md), phase 4.
+The evidence and the order are in [docs/reports/2026-11-architecture-review.md](docs/reports/2026-11-architecture-review.md), phase 4.
 
 ## Next
 

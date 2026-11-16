@@ -1,0 +1,1594 @@
+# Structs
+
+Status: implementation in progress. `struct` replaces
+both `@:value class` and `@:value @:repr("C") class`; their uses will be ported and the old forms removed in the same change.
+The broader plan for conformances and struct-specialized generics is in [LANGUAGE_ROADMAP.md](LANGUAGE_ROADMAP.md).
+
+## Implemented so far
+
+Stage 1a (2026-10-31): temporary receivers are rejected for field
+writes, compound assignments, increments and methods not proven receiver-read-only. Getter and call-result chains identify
+the source expression that produced the copy. A method can have unrelated global effects and still be called on a temporary
+when receiver-effect analysis proves that it does not write the receiver. Its result is tracked alongside purity facts so
+incremental compilation invalidates callers when that answer changes. Compound-assignment receiver
+bindings preserve places instead of introducing value copies. `RawPtr.ref` and `RawPtr.load()` have distinct internal
+operations, so loading a value does not accidentally create a writable pointer place. Postfix increments through a
+native pointer update the pointed-to field, including nested fields, and evaluate the pointer expression once.
+Receiver-effect analysis follows statically dispatched methods on the same struct, including recursive cycles, and treats
+primitive field arguments as values rather than aliases. Property getters remain effectful unless their dependencies are
+proven pure; a method or getter that can write the receiver still requires a writable place.
+
+Value types declare `Equatable` and `Hashable` to select one equality and hash implementation per type; `Diffable` is
+independent and is available to structs and classes.
+`Hashable` implies `Equatable`; generated implementations recurse through fields that support the same conformance, and
+diagnostics name unsupported fields. A handwritten `equals(other:T):Bool` supplies equality; a handwritten hash is
+required with it for `Hashable`. Struct comparisons without `Equatable` are rejected. Classes and interface instances always compare by
+identity; classes cannot conform to `Equatable` or `Hashable`. `haxeon.Equality.equals` and `==` use that same implementation. `Diff.mask/apply/bit/all` operate
+on `Diffable` declarations. `Diff.copy` remains only for mutable `Diffable` classes; a struct is copied by binding
+it to a value.
+The compiler-only `__reference_equal` primitive is available only to modules the source loader resolved from the
+compiler-registered standard-library root; a path that merely contains `stdlib` does not grant access. It backs
+identity-keyed collections; user code compares class references with `==`.
+Focused checks cover immutable copies, generic forwarding, mutable-copy independence and nested writable places on
+HashLink. Nullable struct bindings now copy present payloads, preserve absence and use fieldwise equality; an absent
+value raises a catchable null-access error when cast to its non-null struct. A focused program covers these behaviours,
+including nested managed fields, on HashLink, Wasm32 and Wasm GC. Locals, parameters, returns and array elements retain
+their existing boxed representation; fields store a presence flag and recursively flattened payload inline. The compiler
+rejects direct and indirect by-value layout cycles, including cycles through `Null<S>`; references and arrays break cycles.
+Captured value bindings use shared cells when a field write or mutating receiver can change them, including nullable values;
+known reference-type receivers continue to be captured directly. Tests cover writes inside and outside closures.
+
+The stage 1a checkpoint passed: the full driver reported 617 passed and 0 failed (baseline: 608 passed), the compiler
+reached a self-hosting fixed point, and 390 fixtures agreed across HashLink, Wasm32 and Wasm GC (14 existing skips).
+The standalone Wasm backend suite passed; its runtime-freshness check was skipped because a wasm32-capable clang was not
+configured. The nullable-field and capture fixtures also passed on all three targets with inlining disabled. Mutating
+methods called on `p.ref` still change a loaded copy; this native-memory gap belongs to stage 3. The native-place probe
+returns 4 instead of 0 after fixing postfix increments; it returned 6 with a compiler built from pristine `27da944b`.
+
+Equality audit: `ExpressionTyper.compareOperands` already requested deep structural equality for both `struct`
+and legacy `@:value class` at the starting revision. That rejected value types containing ordinary class references and
+compared array and payload-enum fields deeply. The new fieldwise operation accepts those class fields and uses their
+ordinary reference equality; arrays and payload enums now also follow their own `==`. `struct-value-semantics.hx` covers
+ordinary, nested, legacy and native-width value equality; `struct-field-equality.hx` covers the changed field behaviour.
+The other value-copy/map/array/escape fixtures compare scalar fields or absence. At the compiler-conformance checkpoint,
+there were no production value declarations in `src` or `stdlib`; UI value migrations are tracked separately under
+[ADR 0002](../adr/0002-reactive-ui-model.md) and [UI value types](../../packages/ui/docs/VALUE_TYPES.md).
+
+Checked on 2026-10-29: a `struct` with fields, a constructor and non-virtual methods compiles and runs with copy semantics
+(`var w = v; w.x = 6` leaves `v` alone). Measured per 1,000 operations, against a `class` of the same shape:
+
+| pattern | struct | class |
+|---|---|---|
+| local temporaries | ~0 | 49 KB |
+| returned from a small function (the inliner may have inlined it) | ~0 | 23 KB |
+| field of a holder object | 25 KB | 41 KB |
+| pushed into an `Array` | 42 KB | 51 KB |
+
+So a struct costs nothing as a temporary and sits inline in its holder, but still allocates in an `Array` or `Map`. It saves
+the object header and not the data: converting a small immutable class such as `Rect` mostly helps temporaries, not storage.
+The rest of this design (interface conformance, attributes, native layout, fieldwise `==`) was not checked here and may not
+be implemented.
+
+## Why
+
+Haxeon has two value forms today, and each covers half of what fixed-layout
+data needs:
+
+| | `@:value class` | `@:value @:repr("C") class` (native record) |
+|---|---|---|
+| Purpose | avoid one heap object per small value | data with an exact C layout in native memory |
+| Semantics | copied on every bind ([value semantics](INLINING_AND_VALUE_TYPES.md#value-semantics)) | address-only: no copies, no identity, no GC header |
+| Local, argument, return value | yes | no ("address-only and cannot be stored by value") |
+| Stored | inline in its parent object | native memory only: arenas, FFI buffers |
+| Field types | any Haxe type | fixed-width scalars, `Int`, `Float`, `Bool`, pointers, nested records |
+| Layout | HashLink's; no C promise | C ABI through `HxiAbi`; `sizeof`/`offsetof` fold to constants |
+| Field access | `v.x` | manual: `offsetof`, `byteOffset`, `castTo` |
+| Methods | direct calls | none |
+
+Some data has to be both: stored in native memory, and also used as an
+ordinary value in code. Examples are ECS components (Beartooth's component
+schema is the first consumer), network messages, GPU buffer records and file
+format records. A component lives in a native column and is copied into a
+Wasm script's memory, while script code does
+`var h = e.get<Health>(); h.value -= 10;`. Neither current form can do
+both.
+
+## Model
+
+```haxe
+struct Health implements Component {
+	@replicate @range(0, 100) var value:Float32;
+	var regenRate:Float32;
+	var lastHitBy:EntityRef;
+
+	public function new(value:Float32) {
+		this.value = value;
+	}
+
+	public function damage(amount:Float32):Void {
+		value -= amount;
+	}
+}
+```
+
+- **A struct is a value type.** It has today's value-class semantics:
+  - a copy on every bind;
+  - in-place writes through places;
+  - no identity, and `null` is excluded;
+  - no inheritance;
+  - constructors and non-virtual methods, called directly.
+- **Conformance.** `struct Name implements A implements B` declares conformance to interfaces; classes and enums use the same spelling.
+  Interfaces remain the abstraction; there is no separate trait feature. A generic bound such as
+  `lerp<T:Interpolate>` dispatches statically after specialization for each struct type, without boxing. Converting a
+  struct to an interface-typed value boxes it, like a Rust `dyn Trait`; using an interface as a bound does not.
+  Retroactive conformance requires coherence rules and is deferred, as are associated types and default interface
+  methods, until a concrete need arises. [ADR 0002](../adr/0002-reactive-ui-model.md) also plans class-only `Observable`
+  conformance, whose field bits share `Diffable`'s numbering; it is future work, not part of this migration.
+- **Declared equality.** Conformance to `Equatable` or `Hashable` declares value equality; the compiler synthesizes
+  it when possible, as described in [Equality and hashing](#equality-and-hashing).
+
+### Flat and Portable
+
+The compiler works out two properties from a struct's fields. Neither has to
+be written. Explicit assertions use `@flat` or `@portable` on a struct;
+an assertion that does not hold is a compile error that names the offending
+field. These attributes verify the inferred property; they cannot grant it.
+`Flat` and `Portable` are compiler-recognized representation constraints,
+not base classes or ordinary marker interfaces.
+
+- **`Flat`:** no managed references. A struct is flat when every field is one
+  of these:
+  - fixed-width scalars, `Int`, `Float`, `Bool`;
+  - an `enum abstract` over an integer type;
+  - `RawPtr<T>`;
+  - a flat struct, or a fixed array of a flat type.
+
+  Strings, arrays, class instances, closures, `Dynamic` and enums that carry
+  data are not flat. A flat struct gets:
+  - a C layout wherever it is stored;
+  - use through `RawPtr<T>`, `NativeSpan<T>` and `Arena`;
+  - a full descriptor, with offsets (see Reflection), and C header output.
+- **`Portable`:** flat, and no `RawPtr` anywhere, including in nested fields.
+  - Its layout is identical on every supported target. Pointer width is the
+    only layout difference between `hl` (64-bit), `wasm32` and native
+    x86-64/arm64, and all of them are little-endian.
+  - Its record representation needs no layout translation between supported
+    targets. This is not proof that its logical value transfers as raw bytes:
+    process/world-local tokens still require descriptor codecs to translate
+    their referents. Portable layout, ownership and logical serialization are
+    separate contracts.
+  - A cross-target layout test enforces this claim.
+
+Both properties can be used as generic constraints: `T:Flat`, `T:Portable`.
+FFI records are flat. Data that crosses processes or targets should be
+portable.
+
+### Interface requirements and compiler checking
+
+An interface can require representation properties of its implementing types.
+Requirements propagate transitively through interface conformance. For example,
+a GPU library could define:
+
+```haxe
+interface GpuRecord extends Portable {
+}
+
+struct Vertex implements GpuRecord {
+    var x:Float32;
+    var y:Float32;
+}
+
+struct Invalid implements GpuRecord {
+    var name:String; // Error: GpuRecord requires Portable; name is managed.
+}
+```
+
+`interface GpuRecord extends Portable` requires implementers to be portable; it does
+not assert a storage layout for the interface itself. `Vertex : GpuRecord`
+declares conformance, not implementation inheritance. No additional
+`@portable` assertion is necessary on `Vertex`.
+
+The compiler knows `Flat` and `Portable`, but has no special knowledge of any
+library interface. This is a general interface requirement mechanism available
+to libraries, including interfaces such as `NativeRecord : Flat`.
+
+An interface doesn't have to require a property to use it. Beartooth's
+`Component` requires none: a component may hold strings and sequences, and the
+world reads the inferred flatness from the descriptor to choose native or
+managed storage. Engine components that native code reads assert `@flat`.
+
+After resolving field types, the compiler recursively infers the properties,
+records them in type metadata, and checks explicit assertions, generic
+constraints and inherited interface requirements against that metadata.
+`Portable` implies `Flat`. For generic structs, inference uses the actual type
+arguments, or their proven constraints inside generic code. Declaring
+conformance cannot bypass the field checks. Diagnostics identify the required
+property and the field path that violates it, including nested fields.
+
+The inferred properties determine layout, native-memory eligibility, descriptor
+form and whether fields require GC tracing. They add no runtime interface
+object or dispatch. Tests must cover transitive interface requirements,
+nested pointer/reference rejection and generic instantiations, as well as the
+cross-target layout checks.
+
+A struct that isn't flat is still a valid value type. It can't be placed in
+native memory or exported as a C header, and it gets a reduced descriptor
+instead of a full one.
+
+## Layout and bytes
+
+Wasm32 and Wasm GC flatten struct fields into their containing managed object. Wasm32 uses the native offsets and
+widths for flat fields, including nested records and padding; a managed record can also contain reference slots next
+to its flat fields. A cross-target fixture checks copies and null access, verifies the nested bytes on Wasm32, and
+checks that references survive a stressed collection. With inlining either enabled or disabled, constructing 1,024
+holders allocates 1,024 objects on each Wasm target, with no additional object for the struct field.
+
+- **One layout.** A flat struct uses its `HxiAbi` C layout in every place it
+  can live:
+  - inline in a GC object or array;
+  - in a local that hasn't been scalar-replaced;
+  - in native memory.
+
+  Moving a flat struct between managed storage and native memory is then a
+  copy of `sizeof<T>()` bytes.
+- **Padding is always zero.** The bytes between fields are zero after every
+  construction and copy:
+  - HashLink `New` already zero-fills;
+  - `Arena.alloc` of a flat type must zero-fill (it returns `malloc` memory
+    today);
+  - whole-record stores write zero padding;
+  - field stores never touch padding.
+
+  With this rule, byte comparison of flat structs is well defined.
+- **Two comparisons.** `==` compares fields, so `-0 == 0` and `NaN != NaN`.
+  `bitEquals(a, b)`, for flat types only, compares bytes. Change detection
+  (replication, undo) wants `bitEquals`: any change to a bit counts as a
+  change.
+
+## Native memory operations
+
+These extend [native values and memory](../reference/NATIVE_MEMORY.md), which excluded
+them in its first foundation.
+
+- **Whole-record copies:** `p.load()` and `p.store(v)` for a flat struct
+  pointee. This is a copy between storage locations, not a by-value calling
+  convention change.
+- **Field places through pointers:** `p.ref.value -= 10` and
+  `p.ref.pos.x = 0`. `p.ref` is a place, never a value. It lowers to a load
+  or store at a constant offset, with no copy of the record.
+  `p.ref.pos.addr()` gives the `RawPtr<Vec3>` of the nested field.
+- **Spans:** `NativeSpan<T>.get(i)` copies a flat struct out, and
+  `span.at(i).ref.x` accesses one field in place.
+- **Wasm32:** `RawPtr` memory instructions have to lower to linear memory.
+  `WasmFunctionLower` currently rejects them, and creator scripts in
+  Beartooth need them. `wasm-gc` native memory is deferred.
+
+## Scoped mutable access
+
+[SCOPED_PLACES.md](SCOPED_PLACES.md) proposes restricted `ref` parameters and
+scoped callbacks, which operate on caller-provided places without granting
+pointer escape. Ordinary struct parameters still copy. The proposal is
+deferred: Beartooth's component API uses whole-value `get`/`set`/`update`
+and doesn't need it.
+
+## Immutability and copies
+
+Value types have one well-known trap: a write to a field of a temporary copy changes the copy and is silently lost, as
+in `node.style.padding.left = 4` when `style` or `padding` is reached through a getter or call result. C# rejects it
+(CS1612) and added `readonly struct` for values that should never be edited in place; Swift rejects it through `let`.
+
+- **Writes to a temporary are a compile error.** A field write, compound assignment or mutating method call whose target
+  is not a place (a local, a field of a place, an array element, a `p.ref` place) is rejected, naming the expression that
+  produced the copy.
+- **A struct whose fields are all `final` is immutable.** It can only be replaced as a whole. Small values (colors,
+  rectangles, insets, transforms) should be written this way; the trap above then cannot arise for them, and replacing a
+  whole field is what code holding them does anyway. Mutable structs remain for records edited in place, such as world
+  components and store records.
+- Struct bindings are ordinary value copies, including final fields. `Diff.copy` is only for `Diffable` classes.
+- `Diff.apply` writes changed, writable fields of its target. It reports immutable fields by name.
+
+The flow analyzer can infer construction as effect-free when it writes only the fresh receiver, does not let that
+receiver escape, and its initializers and callees are effect-free. It tracks nested constructors in the same purity
+fixpoint as other functions, so a getter that constructs a value can preserve a caller's nullable field refinements.
+Effectful or unsupported constructors and initializers invalidate those refinements, including after incremental edits.
+The proof covers exact non-generic declarations without inherited initialization.
+
+Fresh values copied into inline fields, including closure environments, stay scalar when eligible. Copies snapshot their
+leaves before writing; values at genuine escape boundaries retain their existing allocation. HashLink frame-owned scalar
+locals include full-width native fields across exception handlers, while narrow fields retain their storage conversions.
+
+A same-machine, same-compiler attribution sampled 28 warmed tab transitions. In bytes, the all-five prototype's
+`LayoutStyle` grew from 16,896 to 19,008 with Rect/Insets and 29,240 with all five on console-to-telemetry and
+telemetry-to-console; on the other two transitions it grew from 18,048 to 20,304 and 30,960. In transition order,
+`ResolvedLayoutItem` was 2,960/17,360/6,560/3,440 bytes as classes and 4,736/27,776/10,496/5,504 with Rect/Insets.
+In the all-five prototype `LayoutNode` grew by 1,344–1,416 bytes; `ResolvedLayoutItem` changed by +888, +5,208, +1,968
+and +1,032 bytes respectively. Eliminating `Rect` saved 1,840, 9,280, 3,760 and 2,080 bytes, while eliminating
+`LayoutAxis` saved 1,824, 2,064, 2,064 and 1,824 bytes. These are independent per-type medians, not additive action
+totals. The holder increase exposed unnecessary per-build work, addressed by retaining stable pane and inspector variants
+and by reusing private style templates while preserving immutable full-width values.
+
+On Wasm32, ordinary struct fields currently use boxed backing storage. Replacing a field copies the new value into its
+existing backing place, including nested value fields, so a receiver already bound to that place sees changes made by a
+callback. A field's first assignment adopts its newly copied value. This does not add a box per replacement; value reads
+still make their usual independent copies. Wasm GC uses flattened fields for the same place semantics.
+
+## Enum value semantics and inline layout
+
+An enum value has no identity. Recursive enums, enums with a disproportionately large case, and values boxed at Dynamic,
+reflection or native boundaries retain exactly the same value semantics as inline values. A payload enum declares
+`enum E implements Equatable` or `enum E implements Hashable` to use `==` and `!=`; comparing a payload enum without that conformance is
+an error, as for structs. Comparing a value with a constructor without fields (`value == Blocked`) asks which constructor
+the value is, as in Haxe: it compares case tags, is false for a null value, and needs no conformance. What counts is what an
+operand holds, not how it is written: a local initialized with such a constructor and never reassigned (`final` or not) is
+that constructor. App and library code use declared equality or case
+patterns rather than reflective `Type.enumEq`. Synthesized equality compares the case tag and then its payload fields
+according to their own declared equality. Synthesized hashing uses the same tag and payload distinctions. Handwritten
+implementations are allowed under the same equality/hash contract as structs. Enums without payloads have tag equality and are trivially
+`Equatable` and `Hashable`. `Type.enumEq` remains reflective structural comparison and agrees with synthesized equality
+for a conforming enum.
+
+A payload-free constructor of a boxed enum reuses one immutable cached value instead of allocating on every reference.
+HashLink uses its existing case cache; Wasm32 and Wasm GC initialize a module global lazily on the first reference to
+each case. Wasm32 registers those globals as collector roots before generating the collector, and Wasm GC globals are
+managed roots. Repeated references, switches, comparisons, and stores into existing fields or arrays allocate nothing
+after the cases are initialized. This also applies to the payload-free cases of a recursive or otherwise boxed payload
+enum. Sharing storage exposes no identity: equality, hashing and `EnumIndex` retain their value semantics.
+
+`Reflect.compare` does not define an order for enum values. Comparing an enum through that API returns its existing
+invalid-comparison result (`0xAABBCCDD`), including when both operands are the same boxed value. Equality conformance
+does not imply an ordering, and using an allocation address would make boxing observable. This rule applies across
+HashLink, Wasm32 and Wasm GC; reflective structural equality remains available through `Type.enumEq`.
+
+Handwritten payload-enum conformance uses instance methods inside the enum declaration, matching structs:
+`equals(other:E):Bool` and, for `Hashable`, `hash():Int`. Direct calls and declared equality use those methods; a
+handwritten equality on a `Hashable` enum requires a handwritten hash. The methods are statically dispatched for each
+concrete enum type so generic arguments retain their type semantics. `Type.enumEq` deliberately remains structural,
+including when the enum supplies handwritten equality. Nullary enums retain tag equality and do not override it.
+
+At a genuine conversion to `Dynamic`, a generic enum needs its concrete type arguments to select handwritten or
+constrained equality after the escape. The boxed enum's runtime descriptor carries that type; an already-boxed enum
+therefore does not need a second wrapper allocation. Declared equality and reflective structural equality use separate
+generated operations. Casts, type tests, reflection and native boundaries preserve the source enum type; a raw pointer or
+object identity comparison is not a fallback. Dynamic array reads and writes use the same enum descriptor as typed access.
+An erased `Array<E<T>>` view must retain the concrete enum type at each element escape, including when the array was
+created and populated before that view. An erased boxed enum ABI cannot recover the right conformance by inspecting
+the nominal enum name or its payload in general (a case may not contain `T` at all). Preserving array
+aliases therefore also requires carrying the concrete type through the boxed representation; choosing equality by nominal
+name, payload shape, or object identity would change program meaning. The selected design gives each concrete boxed enum
+specialization a canonical runtime type descriptor, sharing its physical layout when possible. The descriptor selects the
+conformance and survives ordinary array reads and native/reflection escapes. It is per type, not an allocation or side
+table entry per element. Inline enum values keep their statically known type and materialize the same descriptor only at
+a genuine erased boundary. Generic code that constructs or erases such an enum must retain the concrete specialization,
+as described in `../reference/GENERIC_SPECIALIZATION.md`. This descriptor is implemented for boxed enum values; inline enum
+representation remains pending.
+
+Concrete enum payload schemas are now retained before erasure, including unused constructors and
+constructors which do not mention a generic parameter. A local generic factory, an instance body, a captured closure
+or a typedef cannot silently replace that schema with `Dynamic`. By-value recursion is determined from the semantic
+declaration graph and persists in canonical IR, so erased by-value cycles cannot accidentally become eligible for inline
+storage. The existing boxed generic transport separately bounds cyclic descriptor families, including non-regular
+families through references; that transport check does not determine inline eligibility. Their value transport and source
+inline lowering remain unfinished.
+
+The candidate inline layout uses tag zero for null and one-based case tags, followed by the maximum scalar-word and
+reference-slot counts across cases. The scalar and reference payloads overlap across cases. Classification is stable
+across targets: an enum containing itself by value stays boxed. Direct enum payloads, value structs and `Null<value>`
+continue a value-containment path. Arrays, maps, iterators, key paths, closures, managed classes and anonymous records
+are reference payloads: each cuts the path and occupies one reference slot, regardless of the types it refers to.
+Consequently `enum Tree { Node(children:Array<Tree>); }` and `enum H { On(f:H->Void); }` have finite inline layouts.
+This rule is shared by the semantic classifier and IR layout planner; Wasm GC does not require conservative boxing
+for these reference cycles. An enum also stays boxed if its largest case needs more than eight 64-bit scalar
+words plus reference slots and more than twice the next-largest case (using one as the minimum comparison size). This
+bounds the cost of putting one exceptional payload in every containing value. The thresholds are an implementation
+choice to be checked against the required no-regression measurements. The IR layout planner now implements this
+classification and overlapping payload shape; source enum storage and lowering remain pending. Classification packs
+scalar leaves into 64-bit words on a canonical 64-bit HashLink layout, even when the physical payload can use 32-bit
+words. Thus sixteen `Int` payloads occupy eight decision units, whereas seventeen occupy nine; pointer-width differences
+cannot change eligibility between targets. Flat payloads use the independently calculated canonical
+`portable-abi64` C layout for this decision, including its padding. The planner requires that layout rather than
+reusing Wasm offsets: nine pointers in a Wasm Flat record occupy only five 64-bit words, but nine in the canonical
+record. Each physical case is then planned again with the enum's common word width. Array and closure payloads are
+reference leaves and retain their semantic element and call types: the private payload record must not leak into
+their public runtime descriptors or reflection ABI.
+A one-case payload uses the same tag and lane scheme, leaving the layout usable for optional scalar values in the
+planned scalar stage without implementing scalar specialization here.
+
+The payload word accessor transports `Float32` through its 32-bit representation, including when a field crosses
+a word boundary. HashLink uses allocation-free native bit conversions and Wasm uses reinterpret instructions;
+the interpreter implements the same conversions. The word-access fixture covers signed zero, subnormals, infinity
+and NaN with 32- and 64-bit payload words, with inlining enabled and disabled. After scalar replacement, 8 and
+1,024 calls allocate zero objects on HashLink, Wasm32 and Wasm GC. This is payload-access infrastructure; it does
+not activate source enum storage or scalar generic specialization.
+
+The case-access helpers now construct and project nested payloads through those words and traced reference slots,
+including narrow signed fields, optional scalars and optional managed structs. New cases initialize unused references
+to null. Raw pointers and type handles use scalar words; Wasm callback handles do too, while HashLink callbacks stay
+in the traced lane. Managed objects and Dynamic values cannot enter the scalar-word protocol.
+
+Opaque reference slots can pass through the existing private scalar ABI and verified lane accessors without a
+Dynamic box. Carrier accessor names encode a field path, not a leaf ordinal: optional scalar erasure can change the
+number of preceding leaves. The verifier checks the actual carrier field and complete array/index/value signature.
+Private enum records, including scalar-only records, and values containing reference carriers require a logical
+adapter at a Dynamic boundary; hiding a carrier in a nested value does not permit an escape. Public enum, array and
+closure descriptors must continue to describe the source types.
+
+Native fixtures exercise the helpers on all three targets with inlining enabled and disabled. At 8 / 1,024 calls,
+mixed payload construction and forwarding allocate only the explicitly created source objects; packet array access
+and pointer/type transport allocate nothing after setup. HashLink major collections and an exposed Wasm GC collection
+also preserve a source whose only live root is its payload reference slot. These are physical payload tests, not source
+enum activation: concrete generic enum metadata, logical container/closure ABIs and genuine escape adapters remain
+required before typed source enum storage changes.
+
+Logical enum arrays now have an explicit IR storage association: `Array<E>` retains `E` in its public descriptor,
+while its typed element accessors transport the private tag/scalar/reference record. Null uses tag zero without an
+additional optional wrapper. Dynamic array reads materialize the nominal boxed enum; checked writes unpack it back
+into the lanes. Source `Null<E>` already lowers to the same null-capable `Enum(E)` IR type; the array factory rejects
+a redundant `Nullable(Enum(E))` wrapper instead of treating it as a second array representation. Native-created ordinary enum arrays migrate through the same validated forwarding-header protocol
+as struct arrays, preserving aliases. Wasm GC validates both the logical enum type and its actual backing array type
+before reading elements or publishing that forwarding header. The post-array-lowering verifier rejects ordinary
+reference-array operations on enum lane arrays as well as struct lane arrays.
+
+The assembled-program array pass discovers registered inline enum elements alongside structs. Container and iterator
+types keep the nominal enum descriptor; typed element operations use the registered private value storage. The pass
+checks that distinction on reads, writes, insertion/removal and iterator results. Recursive or oversized enums without
+inline storage retain ordinary reference arrays, including when both representations occur in the same program.
+
+Interface methods with value arguments or results use the typed value-call ABI even for nongeneric contracts.
+Direct calls and bound methods, including inherited contracts, share dispatchers selected from physical layouts.
+The same policy applies to structs and inline enum storage; ordinary reference-only interface calls keep their
+reference ABI. Source IR stays immutable across this normalization, and regenerating a dispatcher recomputes its
+implementation set.
+
+Typed scalar closures use the same private callable ABI as direct scalar functions for traced reference leaves and
+raw result slots. The verifier requires exact component types and actual verified function targets; a native symbol
+cannot claim that ABI by borrowing its naming prefix. Dynamic and reflective escapes still require their logical
+adapters. Wasm's typed-call null-check helpers retain the private ABI when they forward these components.
+
+Declared and reflective enum equality helpers participate in the same scalar/reference value-call ABI as other
+generated value functions. Their naming policy is owned by `EnumEqualityGenerator` and shared by HashLink's scalar
+argument rewrite and the Wasm value ABI. Eligible inline enum equality and checked unboxing retain value packets in
+leaves across those calls; genuine Dynamic materialization still creates the nominal boxed enum. This transport rule
+does not enable source inline storage by itself or relax place-snapshot ownership checks.
+
+Dynamic writes and insertions snapshot all checked scalar and reference leaves before changing the destination.
+The shared lane policy then prepares capacity and any missing reference backing in one storage transaction, shifts
+an insertion if needed, and commits those leaves. A failed conversion preserves the original length, contents and
+aliases. Absent optional payloads clear their storage through the presence setter; inactive leaves are not stored,
+including type handles, which have no typed null value. This removes the temporary one-element staging array on
+HashLink, Wasm32 and Wasm GC. Once capacity and reference backing exist, repeated dynamic stores and insertions allocate
+zero objects; genuine Dynamic input/output boxes remain escape costs.
+
+These are tested logical-array ABI helpers, not source-level inline enum activation. The fixtures exercise typed
+copy isolation, array-only reference roots across collection, null and payload Dynamic round trips, native-array
+migration and alias writes. Typed read/write copies allocate zero objects at 8 and 1,024 calls on all three targets;
+constructing and iterating arrays of 8 versus 1,024 elements allocates four objects in either case: the header,
+two backing lanes and iterator. Storage does not add an element box. Both inlining modes are covered. Canonical IR version 15 retains the logical/storage association
+with an explicit presence flag and rejects obsolete serialized versions. The live-patch ABI includes the storage
+association: changing between boxed and lane storage requires a domain reload even when the enum cases are unchanged.
+Body edits with unchanged storage remain patchable. Closure ABI rewriting preserves the enum's
+storage association and recursion classification, including when an unrelated nullable field triggers Wasm nullable
+erasure. Source lowering, logical enum closure adapters and complete
+source-field reflection adapters still need to be connected before widening the closed source subset to those escapes.
+
+This rule avoids making allocation strategy observable and does not require an identity token in the agreed tag, scalar
+and reference-slot layout. Existing payload-enum comparisons declare conformance where value equality is intended and
+express any former identity-dependent distinction explicitly. The compiler enforces this rule for boxed enums. The first source inline subset excludes any use whose logical equality adapter is not yet connected.
+
+Boxed-enum kind checks use the runtime representation rather than source enum type tokens. Wasm GC enum bases
+share one tagged root, so the check is one `ref.test`; the root reuses the existing tag and adds no payload field or
+per-value allocation. Wasm32 loads the header once and uses a balanced decision tree over the module's resolved enum
+type IDs, without a lookup allocation or an added header field. `Reflect.compare` returns the
+invalid-comparison result when either operand is an enum, including when the other operand is null. These checks
+apply to canonical escape boxes; typed inline packets keep their scalar/reference lanes.
+
+### Payload-free enums are scalar tags
+
+An enum whose constructors all have zero parameters always uses a nominal four-byte tag in locals, parameters,
+results, class and struct fields, generic fields, and arrays. Payload-enum escape eligibility does not apply to
+these types: there is no payload or reference to spill. Constructor indices are encoded as index plus one;
+zero represents null, including `Null<E>`, without another wrapper or presence bit. Such fields are Flat and
+Portable; a record containing an enum tag and an Int occupies eight bytes with four-byte alignment.
+
+The IR retains the enum's nominal identity separately from its I32 carrier. An enum tag is not an Int and tags
+of different enums are not interchangeable. Flattened interface boxes retain the nominal tag and its four-byte
+scalar-storage metadata; the verifier rejects other tag storage widths. Typed array access uses four-byte scalar lanes and preserves the
+nominal element descriptor, including through iterator and Dynamic views. A genuine Dynamic or reflection escape
+returns the enum's cached boxed case; checked unboxing verifies the exact enum type before reading its index.
+HashLink also records a distinct `HENUMTAG` type whose value occupies four bytes. Its descriptor retains the boxed
+enum type and case-cache global indices. Native boxed-enum payload reflection and formatting therefore retain the logical enum type instead
+of treating the stored tag as an Int. Cache slots are ordinary module globals, rooted and remapped with the module;
+no untracked cache allocation outlives it. Closure signatures retain this nominal descriptor while using the I32 ABI.
+Reflected class and anonymous-record fields use logical get/set adapters, so reflective writes cannot store an
+integer or a case of another enum in a tag field. Escaping closures use the same checked box/unbox boundary.
+
+Release modules omit boxed enum descriptors when no boxed carrier or reflective descriptor is reachable.
+After source typing, a closed tag that never crosses such a boundary uses the ordinary integer ABI,
+including integer array allocation, rather than generating lane-array bridges for an unobservable nominal
+descriptor. The escape proof follows class fields and methods, inherited interfaces, arrays, iterators and
+closure signatures transitively. Genuine Dynamic/reflection/native boundaries keep nominal checked adapters.
+Development/live-patch modules retain their descriptors, since subsequent patches can add reflective uses.
+A constant tag constructor is not an allocation safepoint and introduces no GC-root stores.
+`EnumTagReleaseSizeMain` pairs the same release program using a tag enum and an Int abstract (fields, calls,
+closures and arrays), checks that the tag version is no larger on all three targets with inlining off/on,
+and separately verifies nested reflection and erased-array get/set.
+
+`EnumTagStorageMain` checks the nominal IR carrier, its codec, lane layout and malformed-IR rejection.
+`SourceEnumTagMain` checks source-level fields, Flat sizes, nullable tags, arrays/iterators, reflection get/set,
+wrong-type casts, closures and generic fields on HashLink, Wasm32 and Wasm GC with inlining off and on.
+Repeated typed operations and warmed Dynamic round trips allocate zero objects at 8 and 1,024 iterations.
+`EnumTagPatchMain` covers native scalar descriptors across symbol persistence and live body patches, including
+retained fields and fresh module loads. Wasm's existing Dynamic formatter supports nullary case names but does not
+format payload enums; extending that formatter is a separate follow-up, not part of tag storage.
+Enums with any payload constructor keep the classification and widening inventory below; their nullary cases
+still reuse cached boxed instances when the enum is classified boxed.
+
+### Source inline enum activation: remaining blockers
+
+The production pipeline selects source enum storage before optional-flow, reflection and scalar-call lowering. The
+first payload subset is closed and non-generic; unsupported uses select boxed storage for the whole payload enum, including uses in
+uncalled typed bodies. This conservative program-wide classification can be widened without changing the language
+semantics. The remaining inventory below distinguishes widening work from the first activation. Sizes describe scope, not elapsed time: **S** is a local change, **M** is a cross-cutting
+compiler change, and **L** spans multiple semantic/runtime boundaries. Update this list as each item lands.
+
+| ID | Remaining work | Size | Needed for the first subset? |
+|---|---|---|---|
+| E1 | Widen the conservative all-typed-use classification to reachable uses while preserving transitive escape checks through enclosing values, owners, containers and callbacks. | M | First subset implemented |
+| E2 | Supply independent canonical native Flat layouts for enum payloads and enclosing fields, then complete live reload checks when a source edit changes an enum representation; production constructors, matches, nulls, joins and snapshots are connected for closed non-native payloads. | M | First subset implemented; native Flat layouts excluded |
+| E3 | Complete allocation-free ordinary class/virtual/bound value calls, including inheritance, without introducing globally sized per-class typed tables. | L | Only for enums crossing those call forms |
+| E4 | Carry nullable struct result presence/scalar/reference leaves through escaping typed closures when those structs contain enums; the reproduced HashLink path still boxes. | M | Only for enums crossing that call form |
+| E6 | Complete nominal Dynamic, reflection, thrown-value and native escape adapters without extra temporary packets. | L | No; exclude unsupported escapes initially |
+| E7 | Connect logical enum descriptors through source closure signatures, reflected fields and erased container views without exposing private packet types; array/iterator lane associations are tested already. | M | Only for uses admitted by the first subset |
+| E8 | Carry enum value representations through generic owners/functions and their erased semantic descriptors; concrete payload schemas are retained already, but schema retention alone does not specialize their transport. | L | No; exclude unsupported generic uses initially |
+| E9 | Gate activated source forms on all targets/inlining modes, cached/edited builds and GC roots, and show a real editor allocation decrease without action or RSS regressions. | M | Yes |
+
+#### Widening order from measured editor allocations
+
+The published `f69bfe43` batch has no real-editor enum allocation decrease. Rank the next steps by the existing
+interaction, tab-matrix and selection censuses, rather than by inventory number. The table below covers the 15
+budgeted editor actions. Current-source isolated windows corroborate those aggregate censuses: count only the second
+matching input-through-frame action, excluding setup and all other actions. Every allocation is counted; stack sampling
+is separate. Diagnostic builds collect `IrInlineEnumEligibility.reasons` plus subsequent blocking reasons without
+changing selection; their editor, Wasm32 Showcase and Wasm GC Showcase outputs are byte-identical to the published
+modules. The action-window harness is a measurement-only change in the detached outer checkout.
+
+| Payload enum | Editor action | Objects / bytes per action | Editor blockers | Showcase blockers |
+|---|---|---:|---|---|
+| `DockNode` | Each of `hierarchy->sensors`, `sensors->hierarchy`, `console->telemetry`, `telemetry->console` | 54 / 1,992 | Permanent by-value recursion; also E3 calls, E6 reflection/Dynamic/casts and E7 descriptors | Not present |
+| `TextEditIntent` | `type-char` | 1 / 24 | E3 checked casts of `Virtual(...)`; E6 registered reflection/Dynamic reach; E7 runtime type descriptors | E6 registered reflection; E7 callable descriptors |
+| `PropertyValue` (setup control) | All 15 measured action windows | 0 / 0 | E3 calls, E6 reflection/Dynamic/casts and E7 descriptors | Not present |
+
+No other payload enum allocates in these windows. In particular, backspace uses a payload-free cached intent.
+`PropertyValue`'s 14 objects / 312 bytes in the selection aggregate are setup costs, not a per-selection allocation.
+`TextEditorHistoryKind` is payload-free and adds no per-action enum allocation. The current effect/decoration/mask values and scalar sizing modes account for no repeated allocations in these
+windows. Their planned ports remain required, but are not evidence for prioritizing an unrelated blocker ahead of the
+measured typing path.
+
+A widening trial still allocated one 24-byte `TextEditIntent` on `type-char`; virtual-call and runtime-descriptor
+boundaries remain the next work. `DockNode` has permanent by-value recursion, so its repeated allocation calls for UI
+reuse rather than changing its compiler representation. [Trial measurements](../history/structs-measurements-2026-11.md).
+
+The following widening work is explicitly a follow-up after this session, not an activation prerequisite. The census
+evidence is bounded to the 15 budgeted action windows above; it does not claim these features are cost-free in every
+possible program. Keep the documented boxed classification for their unsupported uses until their complete ABIs land.
+
+| Follow-up | Remaining work | Current census evidence |
+|---|---|---|
+| E3 | Ordinary/bound class value calls and inheritance, with typed constant-time dispatch and no global dense tables | `PropertyValue` is blocked here but allocates zero in all 15 windows; `TextEditIntent` is not blocked here |
+| E4 | Nullable struct closure result presence plus scalar/reference leaves when the struct contains an enum | No allocating finite payload enum in these windows needs this path; nullable enums themselves already use tag zero |
+| E8 | Concrete generic enum instances and enum transport in generic owners/functions/erased views | No additional allocating finite payload enum in these windows is unlocked by this work |
+| E6 beyond the typing path | General direct enum Dynamic/reflection/throw/native escape adapters | Only the callable/reflection paths needed by `TextEditIntent` are in this session; no other finite payload enum allocates in these windows |
+| E7 beyond the typing path | Remaining callable payload/container/descriptor associations | Implement what admits `TextEditIntent`; broader descriptor/container widening has no additional measured enum cost in these windows |
+| E1/E2 general widening | Reachable-use classification, canonical native Flat enum layouts and representation-changing reload coverage | No measured finite enum besides the typing path is waiting for these; UI native-boundary mappings remain part of the required ports |
+
+The final shared-reach/closed-tag closeout supersedes that preliminary typing
+result. A calibrated isolated action census on `0e2acb1e` measures `type-char`
+at **417 objects / 16,360 bytes**, versus the published `bb4072f8` checkpoint's
+418 / 16,384. The missing site is exactly the 24-byte `TextEditIntent` from the
+input callback. Its 32-byte closure retains its allocation and changes only its
+signature. All other 14 action totals are identical. This does not activate the
+general E3/E4/E8 families: their broader ABI follow-ups stay deferred. The frozen
+census tables and the final delta are distinguished in `../reports/2026-10-allocation-census.md`
+and `packages/ui/docs/VALUE_TYPES.md`.
+
+#### UI sizing conversion: measured stop
+
+The payload `LayoutSizing` port was tried against `1fae06c3` on 2026-11-09 and withheld under the no-regression
+rule. The trial used `Fit`, `Grow(weight:Float)`, `Fixed(size:Float)` and `Percent(fraction:Float)`, deleted
+`LayoutAxis.value`/`growWeight`, retained `min`/`max`, and explicitly mapped the cases to the unchanged native
+transaction fields. The initial trial passed the HashLink framework suite; after replacing enum stringify with explicit
+case formatting, the final trial passed all six UI snapshot checks (HashLink/Wasm32/Wasm GC, inlining off/on).
+Whole-program eligibility still selected **boxed** storage.
+
+The trace first rejects the enum at `ComputedStyle.setAxis`'s ordinary method argument. Other reasons include
+`ComputedStyle.getAxis`'s result, `StyleAxisProperty.sameAxis`, ordinary method receivers/calls, checked/Dynamic
+escapes, registered reflection layouts and runtime descriptors. These uses reach the enum through its enclosing
+`LayoutAxis` struct; removing a direct enum stringify did not remove the blockers.
+
+An exact HashLink census isolates the typed transport: construct `AxisSink` before the window, then repeat
+`sink.setAxis(LayoutAxis.fixed(i))`, where `setAxis` stores its `LayoutAxis` argument in a field. Warm the path before
+starting the census, stop before dumping, and check the final axis after the window. Control uses the committed
+integer sizing tag; candidate uses the payload enum. Both use the same compiler and checkout-built VM.
+
+| Typed updates | Control objects / bytes | Payload-enum objects / bytes | Allocated type |
+|---:|---:|---:|---|
+| 8 | 0 / 0 | 8 / 192 | `enum<haxeon.ui.LayoutSizing>` |
+| 1,024 | 0 / 0 | 1,024 / 24,576 | `enum<haxeon.ui.LayoutSizing>` |
+
+This is an object/byte census, not a buffer-refill counter. The port would violate the required allocation-free typed
+value transport even though its results are correct. No editor allocation improvement or action-level comparison is
+claimed for this rejected trial. The required alternative is to complete E3 transport for enums inside struct
+arguments/results and the E6/E7 reflective-field/descriptor boundaries before landing this conversion. Those families
+were explicitly deferred from the remaining session; keep the current representation until that work is authorized.
+Do not introduce a second sizing API, enum alias, or per-call boxing fallback to land the port prematurely.
+
+The sizing trial remains withheld until E3 value transport and the E6/E7 reflection and descriptor boundaries are
+complete. [Trial records](../history/structs-measurements-2026-11.md#ui-sizing-trial-records).
+
+The first activation need not wait for E3/E4 and E6–E8 in their entirety. Start with a bounded, documented eligibility rule for
+finite concrete enums whose admitted uses have verified value storage and call ABIs and no unsupported Dynamic,
+reflection or native escape. A boundary through an enclosing object, container or closure counts too. An enum outside
+that eligibility rule keeps the existing boxed representation consistently; do not insert per-call boxing fallbacks
+into an otherwise inline typed path or add a feature flag/parallel implementation. By-value recursion and the
+disproportionately large-case rule above remain the permanent layout exclusions. Record the exact initial eligibility
+rule with E1/E2, then widen it one blocker at a time and keep this inventory current.
+
+The existing tag/scalar/reference planner, case access, declared equality/hash generation, logical array storage,
+checked lane verifier and constant-time interface dispatch are foundations to reuse, not additional activation projects.
+UI enum conversion follows source activation as its own measured commits; it is not a prerequisite for the first
+allocation improvement. Unrelated generic-owner correctness work is not an activation prerequisite unless an admitted
+enum use actually crosses that boundary.
+
+Host export staging for E5 is implemented: `Compiler.setExportedFunctions` declares host roots before source layout
+selection, using the same `Expose` retention as `@:expose`. The CLI supplies `--export` roots there and includes them
+in session identity; changing the roots invalidates compilation without modifying cached source IR. Equivalent root
+sets do not invalidate it. The cross-target host-root fixture returns a cached nominal enum at 8/1,024 calls with zero
+allocations in both inlining modes. Native declarations are checked by signature, including enclosing object/container/callback types; unrelated C natives do not prevent activation.
+Source `Null<E>` already uses the enum's tag-zero representation; E4 concerns an enclosing nullable struct, not an
+extra presence wrapper around the enum itself.
+
+### First source inline subset
+
+A non-generic enum is inline when its finite, proportionate layout is supported and every typed use in the assembled
+program has a verified lane representation. Construction, matching, nullable/tag tests, direct functions, typed
+nonescaping closures, ordinary fields, static fields and typed arrays/iterators use the existing value ABIs. Scalar and
+reference leaves travel together. Reading a field, element or argument snapshots the complete value; static assignments
+snapshot all leaves before publishing any of them. A null enum is an initialized tag-zero packet, never a null pointer
+to a private record; the IR verifier rejects that pointer form. Enum joins can read every incoming packet safely even
+on branch edges, since tag-zero packets also exist.
+
+The initial classification excludes concrete generic enum instances, unsupported ordinary/bound class value methods,
+non-null raw enum comparisons, enum-bearing native/host signatures, Dynamic/reflection/type-descriptor/exception
+escapes (including enclosing values), callable payload signatures and callable array/iterator elements requiring nominal
+adapters. Native Flat struct payloads and enum-bearing native fields wait for independent canonical layout input and recalculated physical offsets; a boxed field's old native offsets must never be reused for a larger packet. These exclusions apply to the
+whole enum; there is no switch or per-call boxing fallback. Arrays retain their nominal element descriptors and use the
+existing lane association and checked logical reflection bridges. Closure environments are internal typed storage, not
+bound class-method escapes. Registered object-reflection layouts count as escape surfaces even when their helpers are
+generated after classification. When a class or anonymous-record reference is reachable from a Dynamic escape or
+registered reflection layout, eligibility walks its fields transitively through class and anonymous-record references,
+nullable/value fields, arrays, iterators, map key/value types, closure signatures and captured closure environments,
+and interface implementations. On Wasm, anonymous layouts are registered even when their literal was nested inside a
+Dynamic object; on HashLink, the same reach includes HDYNOBJ and virtual structural values. Enums found in
+that graph stay boxed until reflective field get/set adapters are registered; the IR verifier cannot see the native
+runtime's nested `Reflect.field` traversal. Private enum packets are excluded from that public layout registry.
+
+After lowering, `IrVerifier` rejects a selected enum's nominal value carrier in every object/static field, native/C-native
+or interface/function signature, instruction output or operand, phi input, terminator and debug binding. The scan covers
+all bodies even during selective incremental verification. Only the generated box/unbox adapters, identified against
+the selected declaration and canonical adapter signature (including their existing scalar/optional ABI clones), may
+contain boxed enum temporaries. An arbitrary helper prefix does not grant that exception.
+
+ABI-dependent closure escape checks run after the selected target has constructed its explicit adapters. HashLink
+finishes that ABI in the frontend and can memoize verification there. Wasm finishes it in the backend and verifies
+the adapted program unconditionally. A Wasm compilation session also verifies its separately adapted auxiliary
+HashLink assembly; fresh recomputation uses that same adapted input. No private-payload escape is exempted merely
+because it occurs in a closure. Cold and edited builds with reuse checking, and forged unadapted backend payloads,
+exercise this ordering on both Wasm targets.
+
+Arrays and iterators retain logical `Enum(E)` element descriptors while transporting reference handles to lane storage;
+that exception does not admit an array or iterator of callbacks taking/returning nominal `E` values. A nominal enum type
+token is metadata, not a value: its uses are limited to matching array allocation/retyping descriptors and the array
+bridge's exact-type check; unused tokens left by allocation rewriting carry no value. Any other use fails verification.
+Public enum case schemas remain nominal descriptors. These invariants turn a missed eligibility/lowering case into a
+compiler error instead of allowing mismatched storage to reach a backend.
+
+The logical IR-only frontend still assembles nominal types without selecting a target representation. The production
+compiler supplies its target and host export roots to assembly before selecting the physical enum layout. Cached
+source functions remain nominal and unmodified; changing an escape reselects storage on the assembled copy.
+`SourceInlineEnumMain` checks cold and edited builds, including adding and removing Dynamic and registered-reflection escapes, on all three
+targets with inlining off and on. `InlineEnumDynamicReachMain` verifies that a Dynamic-root escape follows nested class,
+array, map and captured-closure references and rejects each enum for that reason; `InlineEnumReflectionReachMain` runs
+two-level `Reflect.field` get/set and `Reflect.fields` listing on all targets. The allocation fixture prepares reference payloads and a typed closure before the
+window, then exercises construction, null joins, static and object fields, copies and closure results at 8 and 1,024
+iterations. Explicit array iteration and element copies are checked separately from the allocation window, which does
+not include allocation of the iterator itself. E9's real-editor decrease remains a required measurement before the UI
+conversion milestone; a synthetic zero-allocation fixture alone does not close it.
+
+Typed closure references may also travel through ordinary class and interface method arguments without boxing their
+enum payloads. The Wasm planner admits this only when every possible receiver implementation has the exact callback
+signature; a mismatching implementation is not a typed transport. This closes the reproduced `rpc-lifecycle` Wasm32
+adapter-generation failure without admitting a new Dynamic escape or changing the representation classification.
+
+### Enum equality checkpoint measurements
+
+The equality and specialized-descriptor checkpoint retained the starting action-allocation reductions. Wasm GC
+Showcase editing fell from 12,835 to 12,622 objects per measured scenario; full, static and text-heavy remained at
+5,896. The measurements do not establish an RSS improvement. [Complete checkpoint history](../history/structs-measurements-2026-11.md#enum-equality-checkpoint-measurements-candidate).
+
+## Closed raw-value enums
+
+A native, wire or file-format constant keeps its declared raw value:
+
+```haxe
+enum abstract PixelFormat(Int) implements RawRepresentable {
+    var Rgba8 = 1;
+    var Rgb8 = 2;
+}
+var code:Int = PixelFormat.Rgba8.rawValue();
+var format:Null<PixelFormat> = PixelFormat.fromRaw(code);
+```
+
+`RawRepresentable` synthesizes inline `rawValue():Int|String` and static
+`fromRaw(value):Null<Self>` from the declaration's current constants. Unknown raw
+values return null; aliases with the same raw value denote the same value. Both
+members are reserved names. Constants must be compile-time Int/String values.
+The conformance rejects implicit `from`/`to` conversions. Explicit conversion is
+required in both directions, including calls, assignments and native boundaries.
+
+Enum abstracts retain their nominal type during checking and use their underlying
+scalar/reference representation in storage. Bare constants resolve from that
+nominal expected type; no declaration-side hint table survives erasure. Generic
+`T:RawRepresentable` calls resolve against the concrete enum abstract. Synthesized
+helpers are requested on demand and regenerated when constants change. Array search
+and String-array joining choose the raw storage operation while keeping the
+nominal element type for argument checks.
+`rawValue()` and constrained reads allocate nothing with inlining disabled too.
+`fromRaw()` follows the existing `Null<Int>`/`Null<String>` ABI; this feature does
+not introduce scalar nullable specialization (queue item a2).
+
+### Native enum boundaries
+
+A generated binding owns the native integer codes. Non-flags native enums are
+closed `enum abstract X(Int) implements RawRepresentable`; their parameters and
+record fields retain that type. There are no implicit Int conversions. Ordinary
+UI choices already migrated in this series retain their plain enums. Their
+exhaustive UI-to-native switches share one home, `haxeon.ui.NativeEnums`, including
+layout policy, cursor, effect, mask, cache and accessibility projections. UI
+fingerprints and snapshots use the UI case, independently of native codes.
+For future types, a UI choice that mirrors a native enum one to one uses the
+generated binding type directly; a separate UI enum and mapping are appropriate
+only when the UI meaning differs. RawRepresentable belongs on a distinct UI type
+only when that type's own number is a file, wire or persisted-data format.
+
+Typed reads from C use a generated checked decoder returning X directly, rather
+than the nullable `fromRaw` result. The successful path stays an integer carrier
+and allocates nothing. An unknown code throws at the native boundary. No open
+native enum mechanism is introduced; add one only for a real extensible platform
+contract. Flag reads retain the separate documented policy of masking bits the
+imported schema does not declare.
+
+One out-of-line decoder method is shared per native enum in its owning generated
+type module's decoder class. Dependent interfaces reuse that decoder rather than
+regenerating checks. Consecutive declared codes use exact range guards; sparse
+domains keep their gaps rejected rather than generating one switch arm per code.
+The regression
+fixture covers a dependency and separate function/type modules in the same
+package. Scalar and fixed-array record getters, output values, counted arrays,
+native results and span-call results use the checked projection. Callback enum
+arguments and results also validate at their generated boundary. Explicit raw
+native memory remains subject to the native-memory rules.
+
+The native-enum fixture rejects implicit Int/String conversions on all three
+targets, with inlining off/on. The focused count is zero objects for 8 and 1,024
+successful scalar/fixed-array decode/read/write iterations on each target.
+
+Native declarations must cover every valid code, including unnamed but finite
+values. NativeKit's GTK backend maps physical buttons 6/7 to native codes 5/6,
+while its public header names only codes 0–4 and 7. The binding import header names
+those missing values. The C importer merges compatible `hxi:enum` value groups
+for one integer typedef, canonicalizes the combined raw-value order, and rejects
+conflicting enum/flags contracts. This completes the closed domain 0–7 without
+changing the vendor pin or accepting arbitrary values; code 8 is rejected.
+
+The common native result domain includes the header-declared HTTP/transport
+errors carried in event results and receive calls. These finite domains are
+combined from C constants in the import header, so valid subsystem errors pass
+checked reads while unknown values still fail. The Net API remains in its own
+interface. Cross-target native-record tests cover a transport status, an HTTP
+status and rejection of an unknown result.
+
+## Closed flags
+
+`enum abstract Access(Int) implements Flags` declares named bits and combinations.
+Every nonzero constant must be a single bit or contain only declared single bits;
+zero and the signed high bit are supported. Implicit `from`/`to` conversions are
+rejected. Conformance uses the same declared-interface lookup as `Equatable`,
+`Hashable` and `RawRepresentable`, including inherited interfaces.
+
+The compiler synthesizes inline `|`, `&`, `contains`, `insert`, `remove`,
+`isEmpty`, `isSingle`, `empty`, `rawValue`, `fromRaw` and `toString`. Set updates
+return a new value. `contains(mask)` tests all bits, including an empty mask;
+use `!(value & mask).isEmpty()` to test any bit. `fromRaw(Int):Self` throws when
+unknown bits are present. Sets occupy one Int and operations do not allocate,
+including calls without inlining; formatting a combination creates a String.
+Haxeon's own flags use this conformance rather than `haxe.EnumFlags`.
+
+Native reads have a separate, explicit policy: generated field, out/inout,
+buffer and return-value projections mask the raw word with the union of the
+bits declared in the HXI schema before constructing the flags value. This drops
+platform or future native bits the Haxe type does not model; it does not weaken
+`Flags.fromRaw` for Haxeon data. Generated `__hxi_flags_from_native_*` helpers
+apply the same policy to handwritten event/persisted-data decoders. Raw pointer
+access remains raw memory: such decoders must use the boundary helper rather
+than call `fromRaw` directly. Signed high bits and 8/16/32/64-bit native words
+retain their declared bits.
+
+
+Integer `RawRepresentable.fromRaw` helpers use one typed switch with duplicate
+raw values combined; String helpers retain equality tests. General IR switch
+lowering currently emits branches, so backend jump-table selection remains a
+follow-up rather than a claimed benefit of this synthesis.
+
+## Equality and hashing
+
+Decided and implemented 2026-11-01. Value equality is declared by interface conformance, following Swift's
+`Equatable` and `Hashable` model:
+
+```haxe
+struct Color implements Hashable { /* fields */ }
+struct Record implements Hashable { /* fields */ }
+```
+
+`Equatable` supplies `==`; `Hashable` implies `Equatable`, so a type that is also a key ordinarily declares only
+`Hashable`. The compiler synthesizes equality and hashing when every field supports the required conformance, and names
+an offending field otherwise. Hand-written `equals` and `hash` implementations satisfy the same interfaces rather than
+forming a separate declaration mechanism. A value type has one equality used by `==`, maps, `haxeon.Equality.equals`,
+`haxeon.Hashing.hash` and containing types. Arrays are reference types with the operator distinction described below.
+
+`Array<T>` conforms to `Equatable` when `T` does. Equality compares lengths and then elements in order; null arrays
+compare equal only to null. This applies through a generic `T:Equatable` bound as well. Array `==` remains a reference
+identity comparison, including for arrays whose elements conform. Arrays are mutable and do not
+implicitly conform to `Hashable`, so they cannot serve as map keys. `Null<T>` retains the conformance of `T`.
+
+Anonymous structures and their typedefs are reference types: `==` compares identity. They conform to `Equatable`
+or `Hashable` when every field has the respective conformance. `Equality.equals` and hashing compare or hash fields
+in canonical field-name order; structurally equal anonymous keys therefore address the same map entry.
+Recursive anonymous structures are neither `Equatable` nor `Hashable`; use a struct or class with explicit equality.
+Equality on cyclic data is unsupported.
+
+A handwritten `equals(other:T):Bool` on a `Hashable` type requires a handwritten `hash():Int`. The compiler cannot
+infer which distinctions the custom equality ignores, so a hash synthesized from all fields could give unequal hashes
+to equal values. The author is responsible for keeping the two methods consistent. A handwritten hash may accompany
+synthesized equality. Classes cannot declare either value capability: the diagnostic says to use a struct for value
+equality. An ordinary class method named `equals` or `hash` remains an explicit method and cannot change `==`, `!=` or
+satisfy a value-capability bound. Class inheritance does not introduce a value comparison path.
+
+A struct that does not conform to `Equatable` cannot be compared with `==` or `!=`; the compiler diagnoses the missing
+conformance. Every class and interface reference uses identity, including an interface view of a boxed value. Two
+separate boxes are distinct through that interface; aliases are the same reference. There is no separate identity
+comparison API or operator. A genuine conversion to `Dynamic` still uses the runtime equality of the contained value,
+including declared equality for a boxed struct or enum.
+
+Generic `T:Equatable` and `T:Hashable` bounds admit value types only; classes and interface-typed views do not satisfy
+them. Primitives, integer enum abstracts and key paths retain their value semantics. Floats retain IEEE equality.
+A plain abstract has exactly its representation's equality: `==` and `haxeon.Equality.equals` compare the underlying
+value by that type's rules (an abstract over an array is identity under `==` and element-wise under
+`Equality.equals`), and it conforms to `Equatable` when its representation does. An `@:op(==)` overload on an Int or
+Float abstract still replaces `==`.
+Float hashing folds the IEEE bits after canonicalizing both zero signs and all NaNs, so equal values hash alike and
+infinities or large finite values do not require a numeric conversion. Value bounds on generic classes and functions, including `Map<K:Hashable, V>`,
+are checked at compile time and struct-bound calls dispatch without boxing. `haxeon.Equality.equals` requires
+`Equatable`; use `==` to compare class references by identity.
+Class instances used as keys in `haxe.ds.ObjectMap` use identity; declaring value conformance on a class is not a way
+to select map equality.
+
+String-keyed runtime maps preserve `null` as a distinct key, separate from `""` and `"null"`. Replacement, growth, copying,
+key/value iteration and removal retain that distinction. Use `exists` to distinguish an absent key from a stored null
+value. Queries of a missing null key do not allocate.
+
+Synthesis retains the existing field-conformance rule. A class-valued field cannot supply value conformance; a struct
+that needs such a field in its equality supplies an explicit `equals`, using `==` for the reference comparison. A
+handwritten hash must remain consistent with that equality. `Diffable` class snapshots compare their contents
+explicitly with `Diff.mask(a, b) == 0`; `a == b` continues to ask whether they are the same object.
+
+`Array<S>.indexOf`, `contains` and `remove` require `S` to implement `Equatable` and use that same declared equality, including a
+handwritten `equals`. They examine inline elements as values and `remove` shifts the lanes in place. Nullable struct
+arrays compare absence with absence and use the declared equality for present elements. Requiring the conformance keeps
+array lookup consistent with `==` instead of inventing an identity for copied values.
+
+A boxed struct and an `Array<Dynamic>` view retain the concrete struct's declared equality, including when reflection
+exposes the value. Each concrete struct registers its declared conformance with its runtime type, so recovering an
+array through an erased generic owner does not require a source-level struct-to-Dynamic conversion.
+Equality between different concrete struct types is false; comparing two values of the same
+nonconforming struct through Dynamic throws rather than assigning identity to their boxes. Array lookup uses the
+same portable equality loop for typed and Dynamic views.
+Handwritten `equals` receives value copies of both structs, so assigning their fields cannot change the caller's
+values. Mutations of shared referenced objects and external state follow ordinary reference semantics.
+
+Equality can execute user code, including code that changes the array being searched. Lookup examines the current
+array on each iteration. When `remove` finds a match, it removes the element currently at the matching index; if the
+comparison shortened the array so that index no longer exists, it returns `false`. Mutations made by `equals` remain.
+The same rule applies through a Dynamic view of the array.
+
+These three compiler-known interfaces are erased from HashLink's per-instance virtual-cache slots: their operations are
+statically selected, so retaining an interface cache would enlarge every conforming class and every inline value field.
+Ordinary runtime interfaces keep their cache slots and dispatch behavior.
+
+Field operations are a separate opt-in through the compiler-known `Diffable` interface, for example
+`struct Style implements Diffable implements Hashable` or `class Record implements Diffable`. The compiler synthesizes `Diff.bit`,
+`Diff.all` and `Diff.mask` for conforming types. Masks expose declaration order and field count, so the type's
+author must choose that contract; adding or reordering private fields must not silently expose it. Rust and Swift likewise
+do not synthesize field-level operations by default.
+For a derived class, inherited fields occupy the first bits in base-to-derived declaration order; copying, applying and
+fingerprinting use that same traversal.
+
+`Diff.apply` requires `Diffable` and writable destination fields; an immutable field produces a compile error naming
+the field. Struct binding already copies values, so `Diff.copy` is unnecessary for structs and remains for
+`Diffable` classes. `Diff.fingerprint(value)` synthesizes the same ordered field traversal as `Diff.mask` and combines
+`Hashing.hash` for each field. Every field must conform to `Hashable` when this operation is used. The result is a
+snapshot fingerprint, not a map-key contract, so it is valid for mutable `Diffable` classes. Float fields follow the
+same `Hashable` behavior: `0.0` and `-0.0` match, and NaNs use the canonical hash. All `@:structural` declarations and
+the old mask and hash APIs have been removed.
+
+An `Observable` field containing a struct must currently be replaced as a whole: copy the field into a local, modify
+the local, and assign it back. The compiler rejects nested field writes, increments, mutating method calls and bound
+mutating method references rooted in a tracked Observable struct field, because those places cannot yet preserve
+invalidation and exception semantics. Reads,
+read-only methods, and places rooted in `@:unobservable` fields remain available. Whole-field assignment tracks the
+change normally and remains eligible for value scalarization. In a scalar-and-reference struct fixture, replacing the
+old in-place write with copy-and-assign retained zero allocations on HashLink for 1,024 writes and on Wasm32 and Wasm GC
+for 8 and 1,024 writes, with inlining enabled and disabled.
+
+Conformance provides one mechanism for both equality and generic bounds, without a separate metadata layer. Rust uses
+`derive` because it lacks conformance with compiler synthesis. Retroactive conformance, associated types and default
+interface methods remain deferred until there is a concrete need.
+
+The data-record aliasing audit converted `TextStyle`, `ParagraphStyle`, `DockTextWidthKey`, `Shortcut`,
+`EffectParameter`, `InkOverflow`, `CustomEffectDefinition`, and the app's `CncPresentation` and `HobbingTelemetry`
+records to structs with the needed conformances. These values carry configuration, keys or snapshots; callers rely on
+their contents rather than reference identity. The UI continues to encode values at its existing scalar native boundary.
+`LayoutStyle` stays a mutable `Diffable` class with identity equality: its struct prototype boxes at layout-node call sites and
+regresses transition allocations. Its content comparisons use `Diff.mask`; render and style caches use
+the compiler-generated `Diff.fingerprint` snapshot, which hashes its stored fields without making it a map key. The census
+and per-action measurements are recorded in [UI value types](../../packages/ui/docs/VALUE_TYPES.md). Future ADR 0002 per-field `@Channel(...)` declarations fold into
+the masks produced by `Diffable`. Current rules are summarized in [STRUCTURAL_EQUALITY.md](../reference/STRUCTURAL_EQUALITY.md).
+
+At a genuine Dynamic callback boundary, HashLink boxes a headerless struct as a typed Dynamic value and copies the
+payload; a value returned from the generic callback wrapper is copied into the typed result as well. This keeps a
+saved Dynamic value independent of later writes to either the original argument or the returned value, and keeps its
+managed references alive across GC. Wasm32 and Wasm GC follow the same observable value semantics.
+
+## Nullable structs
+
+`null` is excluded from struct values, but "absent" is a real state: an optional color or clip rectangle. A `Null<S>`
+field stores a presence flag and the value inline in its holder. Testing null reads the flag, assigning null clears the
+flag and zeroes the payload, and reading an absent value raises the usual null-access error. Eligible nonescaping locals,
+parameters and returns also use a presence flag and flattened leaves. Shared IR retains `Nullable(Obj(S))` until lowering;
+escaping and unsupported boundaries use their boxed representation. Methods called on a field place use a specialized
+receiver so their writes remain visible through aliases.
+
+Arrays of structs, including `Null<S>` elements, use inline scalar and reference lanes. Nullable elements carry their
+presence flag in the scalar lane, with no box per element. An element place retains its array and index rather than an
+interior pointer, so growth cannot leave a pending write addressing an old backing store. A nullable by-value cycle
+such as `struct Node { var next:Null<Node>; }` has no finite inline layout and is rejected.
+
+### Allocation-free optional value flow
+
+The UI migration exposed allocations when a `Null<Rect>` traveled from an inline field through a local, a typed
+callback and another inline field. The compiler changes below keep eligible value flow scalar while preserving the
+boxed representation at genuine escape boundaries.
+
+#### Implemented: non-optional HashLink value temporaries
+
+Eligible direct calls, including statically known typed closures and monomorphic methods, specialize non-optional
+value arguments into scalar parameters. Results use references to caller-owned scalar slots; the references are confined
+to the call and cannot escape. This uses HashLink's existing reference instructions, avoiding a new VM calling convention.
+Calls that cannot be proven safe retain their original boxed ABI, including calls that exceed the VM's 256-argument JIT
+limit. The VM's temporary argument table now matches its existing 256-argument storage limit; its register allocator
+tracks stack arguments individually instead of using a 32-bit mask. This extends the existing calling convention without
+adding a second VM ABI. Inline-field construction and copies are scalar-replaced even when ordinary function inlining is disabled.
+Typed static-initialization checks preserve the value representation instead of converting it to Dynamic.
+
+The same-machine HashLink medians below are KiB per action. The all-five column is the full-width exploratory
+conversion before removing repeated holder allocations. Selection uses a direct allocation census because the budget
+script does not report that action's bytes. `Gc.totalAllocated` reports reservations in chunks, so tiny differences
+between adjacent actions can move between those actions; a direct per-action census checks the current counts. For
+example, backspace measured 18.1 KiB in another reservation-based run, but its direct census fell from 18,392 to
+17,056 bytes.
+
+| Action | Classes | Rect/Insets | All five | Current |
+| --- | ---: | ---: | ---: | ---: |
+| console → telemetry | 110.9 | 112.7 | 125.0 | 74.9 |
+| hierarchy → sensors | 158.2 | 162.1 | 183.5 | 118.2 |
+| sensors → hierarchy | 124.8 | 126.9 | 145.0 | 82.2 |
+| telemetry → console | 128.6 | 131.0 | 145.5 | 95.3 |
+| hover away | 24.9 | 25.0 | 26.5 | 15.0 |
+| hover enter | 2.6 | 2.6 | 2.6 | 0.5 |
+| hover field | 22.1 | 22.2 | 25.0 | 14.0 |
+| hover inside | 0.6 | 0.6 | 0.6 | 0.5 |
+| hover other | 13.1 | 13.2 | 14.3 | 10.0 |
+| idle | 0.2 | 0.2 | 0.2 | 0.2 |
+| idle focused | 0.2 | 0.2 | 0.2 | 0.2 |
+| scroll inspector | 22.3 | 21.6 | 23.7 | 21.3 |
+| type backspace | 17.8 | 17.9 | 18.7 | 16.3 |
+| type character | 17.8 | 17.9 | 18.7 | 16.2 |
+| selection (census) | 927.7 | — | — | 895.7 |
+
+The 120-frame instrumented Wasm GC Showcase counts generated `struct.new` and `array.new` operations; these counts do
+not establish byte sizes or cover separately encoded function bodies.
+
+| Showcase scenario | Classes | Rect/Insets | All five | Current |
+| --- | ---: | ---: | ---: | ---: |
+| Full | 8,654 | 6,496 | 6,138 | 5,896 |
+| Editing | 15,482 | 13,528 | 13,168 | 12,833 |
+| Static | 8,654 | 6,496 | 6,136 | 5,894 |
+| Text-heavy | 8,656 | 6,496 | 6,138 | 5,896 |
+
+A separate same-compiler replay uses fixed frame times to compare allocations against the class build in each scenario.
+The corresponding class totals were 8,656, 15,688, 8,656 and 8,656 respectively; none of the 120 frames in any
+scenario allocated more objects than its corresponding class frame.
+
+#### Implemented: optional field-to-field copies
+
+Nullable value copies remain explicit in the typed tree until the destination is known. A direct field-to-field copy
+snapshots the source presence flag and every flattened leaf before writing the destination slots. Owner expressions run
+in source order, and source and destination null errors occur at their original accesses. This preserves nested optionals,
+managed references, side effects, and overlapping or identical places. Other copies keep their boxed representation.
+
+This removes the paired allocations in the optional clip getter and its copy caller.
+
+#### Implemented: scalar optional flow
+
+Nonescaping optional locals carry a presence flag and recursively flattened leaves. Eligible direct calls, typed closures
+and exact-type methods use specialized scalar component carriers; calls across unsupported or reference-representation
+boundaries materialize the logical value. Mutated local places keep their current components across branches, loops,
+callbacks and exception handlers. Value-method specializations preserve receiver writes on both normal and exceptional
+returns. HashLink keeps eligible flat value places in frame registers, including across handlers, and extends its existing
+scalar call convention to the component carriers. Bounded value constructors, including validation branches and joins,
+and isolated value phis can also be scalar-replaced without ordinary inlining. Constructor expansion preserves validation
+and exception order; recursive and unsupported exception-handler bodies retain their calls. Native-layout optional values
+also use scalar flow, preserving narrow integer and Float32 stores; unsupported receiver aliases retain their boxed representation. Packed arrays remain a separate design.
+
+Value joins are split before selecting the scalar call ABI. Eligible read-only fresh receivers, direct closures,
+branching and nested value constructors, native-layout optional values, and structural equality and hashing can also
+remain scalar. Receiver aliases retain writeback semantics; narrow native stores retain truncation and Float32 rounding.
+Dynamic, reflective, native and otherwise unsupported boundaries retain the boxed ABI.
+
+The cross-target tests exercise present and absent values, nested managed fields, aliases, side effects, typed closures,
+recursion, exceptions and reentrancy, as well as allocation bounds. They run on HashLink, Wasm32 and Wasm GC with and
+without inlining.
+
+### Dynamic fields holding values
+
+The UI style pipeline stores known types in declarations, computed styles and transitions, using per-kind typed
+implementations. `Dynamic` values are materialized for inspection, debugging
+and reflection. This removes avoidable erasure and the temporary inline-axis and cached local-snapshot boxing paths,
+without a compiler transformation that would have to preserve dynamic access, reflection, identity, mutation, exception
+order and native escape. A same-machine 30-cycle HashLink census after initial setup found no allocations of the five
+value types in interaction, tab matrix or selection stress; see [UI value types](../../packages/ui/docs/VALUE_TYPES.md).
+
+Generic owners and functions specialize for struct type arguments, providing unboxed `Array<S>`, `Map<K, S>`,
+`State<S>` and typed closures. This also enables later replacement of per-kind declaration implementations with
+`StyleValueOf<T>`. Interface bounds dispatch statically for each specialized struct, without boxing; an
+interface-typed value remains a boxed dynamic boundary. Equality and hashing are compiler-known capabilities declared
+through `Equatable` and `Hashable`, so bounds such as `Map<K:Hashable, V>` are checked at compile time. This remains
+separate from the stage 0 UI migration. The specialization policies and escape boundaries are documented in
+[GENERIC_SPECIALIZATION.md](../reference/GENERIC_SPECIALIZATION.md).
+
+## Representation on Wasm GC
+
+Wasm GC cannot embed one struct type inside another, so the backend recursively flattens struct fields into their holder.
+It specializes methods on field places, preserving intermediate writes visible to callbacks, and represents nonescaping
+values with scalar locals, including across exception handlers. Direct calls and eligible typed closure and virtual calls
+pass scalar parameters and return multiple values. Scalar receiver methods return their updated fields even on a Haxe
+exception, before the original exception is rethrown. Narrow fields retain their stored-width behaviour. Dynamic,
+external and other reference-representation boundaries still materialize boxes when required. Eligible optional locals
+use scalar components as described above; array elements retain their boxed representation. Native-memory operations
+continue to use linear memory.
+
+The inline array representation uses one scalar lane and, only when needed, one traced reference lane. Scalar
+fields are interleaved per element in 32-bit words when their stored widths permit it, and in 64-bit words otherwise;
+reference slots have their own fixed per-element stride. Nested values are expanded, including presence flags and
+payloads for optionals. HashLink uses the same split so its collector scans references without interpreting scalar bits.
+The array and its lanes own their storage; an element place retains the array and index, not a pointer that growth could
+invalidate. Growing an array of non-null structs can leave slots unwritten; a validity bitmap in the scalar lane keeps
+those slots distinct from initialized values. Nullable struct elements use their existing presence flag. The bitmap is
+stored after the payload within the same allocation, and growth relocates it when capacity changes. A mutating method
+called on an element place accesses its fields through the retained array and index, so callbacks see completed writes,
+growth cannot strand a write in an old allocation, and writes made before an exception remain visible.
+
+A flat value retains its C field offsets, internal padding and exact byte stride within the scalar lane. That stride
+need not divide a lane word: consecutive three-byte records, for example, can start in different parts of a 32-bit
+word. Reads and writes therefore handle fields crossing word boundaries; padding remains zero. A flat value nested in
+a managed struct retains its C alignment and padding inside that struct's scalar portion. Native-memory copies use the
+same bytes.
+
+Wasm GC specializes typed scalar accessors while the nullable element and field layouts are still available. Word
+width, stride, field offset and width are compile-time facts; only the array, index and optional written value remain
+runtime arguments. The accessor casts the scalar lane once. Aligned full-word fields load or store directly; partial
+or crossing fields use shifts and masks over at most two words. Truly untyped native accesses retain checked runtime
+metadata and operate in word fragments rather than byte loops. Scalar range operations copy whole words with
+`array.copy`, clear complete words with `array.fill`, and use byte helpers only for unaligned ends. Unaligned middle
+words reuse the same span kernel. Overlapping copies preserve their direction, reference slots remain traced, and
+non-null initialization checks retain their normal exception behavior. Bitmap presence is tested outside clear and
+reverse loops. These operations need no staging arrays.
+
+Before inline enum storage, range and structural policy is defined once in
+portable SSA (`IrValueLaneRuntime`). Wasm consumes that IR; HashLink's native runtime uses C generated from the same
+verified functions, with a checked generated artifact for the direct C build entry points. Bounds normalization,
+growth selection, overlap direction, validity propagation and size publication belong to this common definition.
+Backend primitives handle physical lane allocation/copy/clear, header access, barriers and exception-safe storage
+replacement. A storage replacement retains the old lanes until both new allocations and their copies succeed.
+The checked-in generated C header is consumed directly by native builds, which require no Haxe toolchain. The compiler
+test verifies deterministic generation and rejects header drift; it is not an independently maintained implementation. Allocation geometry is a compile-time
+policy constant: HashLink retains geometric rounding for sparse requests; Wasm jumps directly to the request after
+one growth step. The same reserve algorithm handles both, preserving existing lane sizes and allocation counts.
+The uniform-growth experiments (factor two, factor 1.5, and factor 1.5 with a byte-sized minimum first capacity)
+were rejected because paired editor RSS growth increased; the measurements are in
+[VALUE_TYPES.md](../../packages/ui/docs/VALUE_TYPES.md#minimum-first-capacity-growth-trial-not-accepted).
+The decided contract for a future uniform allocator remains: `resize(n)` allocates exactly `n` when it needs new
+storage, keeps existing capacity when `n` fits, and does not trim on shrink. Known-length constructors size exactly;
+implicit growth may reserve spare capacity. Explicit trimming, if needed, belongs in a separate method such as
+`shrinkToFit`. These experiments have not changed the committed allocators.
+Linked lane validation uses the normal Haxe exception channel, including modules whose source has no explicit throw;
+the exported Wasm exception tag identifies those failures. Raw storage-only primitive tests retain trap checks.
+The three handwritten structural implementations have been removed together; only physical storage primitives
+remain target-specific.
+
+Lane classification follows each target's actual representation: for example, a native callback is a traced managed
+handle on HashLink but a scalar function-table index on Wasm. Both use the same two-lane scheme without treating a
+HashLink-managed pointer as untraced data or boxing the Wasm index.
+
+The Wasm GC type plan represents an inline value array as a subtype of the shared array wrapper, preserving an
+`Array<Dynamic>` view's identity. Its inherited data field holds the scalar lane, or the reference lane if there are no
+scalar words; an additional nullable field holds the reference lane when both are needed. This permits one-lane values
+without an empty second backing array. For mixed values the reference lane is allocated on the first non-null store;
+null reads, stores and clears do not allocate it. Generated dynamic bridge closures are shared between arrays of the
+same shape. The plan reserves `i32`, `i64`, and nullable `anyref` lane types only in modules that use the value-array
+allocator.
+
+The Wasm GC array rewrite has been exercised through the frontend and backend with packed values,
+nullable elements, managed references, growth and collection operations. On this machine, an instrumented 100-element
+push-and-iteration test counted 14 Wasm GC objects for scalar values and 25 for nullable values with a managed reference;
+the counts include array growth and shared bridge closures. The scalar test counted 214 before generated element helpers
+were included in the scalar call ABI. These are compiler tests, not editor or Showcase measurements. The rewrite is
+enabled in the normal compilation pipeline.
+
+The same instrumented 100-element tests count 11 allocations on Wasm32 and 14 on Wasm GC for struct elements with
+nullable scalar fields, nullable struct elements, and alternating `pop`/`shift` removals. A lookup test performs 5,050
+handwritten equality calls with the same counts. Non-escaping nullable scalars flow as a presence flag and scalar
+payload through joins; a Dynamic escape still materializes the required box. Generated element boundaries and scalar
+call arguments are lowered independently of the inlining setting.
+
+Compiler-generated reference-slot accesses use an internal lane-reference carrier, separate from Haxe `Dynamic`.
+Packing and unpacking the carrier preserve the reference itself: HashLink reinterprets the traced pointer, Wasm32
+preserves the linear-memory address, and Wasm GC checks the exact reference type on extraction. The verifier confines
+the carrier to lane operations, so an unboxed native handle cannot accidentally be treated as a Dynamic box. Wasm GC
+rejects a scalar handle in this path; its lane layout stores those handles in the scalar lane instead.
+The slot-access emitter uses the planned byte offset, width and signedness for scalar leaves and the reference-slot
+index for managed leaves. It does not allocate a temporary value, and it leaves element growth, initialization and
+optional-ancestor checks to the enclosing array-place operation. Generated place helpers take the array and index on
+every access; their checks distinguish assigning an optional field from dereferencing that field. The place lowering
+must invoke those checks before evaluating later operands.
+When a method reads a nullable scalar from an element, it captures the presence and payload at that read. Both values
+flow separately through control-flow joins, so a later callback cannot change the snapshot and no nullable box is needed.
+For a value copied between two places in one element, the method rewrite reads every source leaf before writing the
+destination leaves. This keeps self-copy and overlapping projections well defined, including nested optional flags and
+references. Constructed values and value arguments, including nullable scalar fields, are split into scalar fields before
+the lane writes.
+
+When a lane-backed array is viewed through `Array<Dynamic>`, the view keeps the same array identity. Its dynamic reads
+materialize a value, and writes check the element type before changing the array and copy the value into the lanes.
+HashLink's array header carries shared type-specific read, write and type-check accessors for this boundary; copies retain
+the same accessors. The compiler must share these accessors per concrete element layout, rather than allocating closures
+for every array or element. Empty HashLink value arrays allocate their backing lanes on the first write, avoiding the
+working-set cost of reserving storage for arrays that remain empty. Ordinary typed accesses do not call these accessors.
+An unwritten slot of a non-null value array reads as null through a dynamic view, matching existing dynamic-array behavior.
+
+Explicit typed iterators retain the array and an index, and read values through the lane accessors.
+Iterator creation keeps the concrete array type through typing; it does not erase an enum array through a Dynamic view first. This applies to
+array iterators and the array views used by map iterators, including nullable enum elements. Their generated
+structural adapters use the scalar value calling convention, so iterating does not allocate a box per element, even
+with inlining disabled. Dynamic iteration and reflection materialize a value at the escape. HashLink array string
+conversion uses the array representation's read accessor, including for arrays nested in other arrays; it must not
+interpret the scalar lane as a contiguous array of object pointers. Allocation tests count zero allocations for 8 and
+1,024 typed reads on HashLink, Wasm32 and Wasm GC in both inlining modes.
+
+On the same machine as the original value-struct baseline, the iterator safety fix preserved the four tab-switch
+allocation medians at 112.6, 78.1, 74.5 and 92.9 KiB. Nine paired interaction captures with the previous and current
+native libraries matched on every action; hover-field was 12.4 KiB in every capture. The 30-cycle selection census
+counted 342,096 allocations, versus 342,877 at the original baseline. Wasm GC Showcase counts for full, static,
+text-heavy and editing were 5,896, 5,896, 5,896 and 12,622, respectively (original: 5,896, 5,896, 5,896, 12,835).
+Nine paired 500-cycle captures using the same editor bytecode and the previous/current native libraries had median RSS
+window growth of 30.00/4.06/0.78/4.84 MiB and 30.00/3.91/0.78/4.84 MiB. Their median paired first-window delta was
++0.15 MiB; an identical-runtime control had a +0.31 MiB paired median, so the difference is within observed variation.
+
+A dynamic array that is later checked as `Array<S>` may already have aliases to its original header. On HashLink the
+conversion builds and validates a lane descriptor before changing that header, then keeps the header as a forwarding
+handle to the descriptor. Its length and capacity track the descriptor across growth and shrinking. This extra
+descriptor is only needed for the dynamic conversion; an array created as `Array<S>` directly owns its lanes. A failed
+conversion leaves the dynamic array and its aliases unchanged. Native-created arrays with boxed struct storage use the
+same conversion: HashLink's raw struct pointers acquire a temporary Dynamic wrapper while the fields are copied.
+
+The Wasm GC prototype uses a one-element forwarding lane in the original wrapper when converting ordinary dynamic
+storage. The lane points at the inline descriptor, which in turn retains the original header and synchronizes its
+length. Validation and descriptor construction precede publishing the forwarding lane. Directly created inline arrays
+do not allocate a forwarding lane. Frontend tests cover dynamic aliases, growth, iteration, insertion, copying, reversal,
+resizing, and a rejected conversion; native boxed struct arrays are converted at the dynamic boundary.
+
+The Wasm32 prototype reserves an extended array header for inline values. Its scalar backing is untraced; its separate
+reference backing is traced using the element count times the reference stride. Bridge closures and a forwarding header
+are also traced. Ordinary arrays retain their existing header. A standalone Wasm32 test exercises packed scalar and
+reference-slot reads, writes, clears, bounds checks and initialization bits. The allocator and growth operation have
+also been exercised under forced collection, retaining a reference reachable only through the array and relocating the
+validity bitmap. Frontend-rewritten fixtures also exercise insertion, resize, copy, slice, concat, splice, reversal,
+nested fields and managed references under forced collection. Generated element boundaries are expanded as mandatory
+lowering before scalar replacement, independently of user-controlled inlining. A 100-element push-and-iteration census
+falls from 211 allocations to 11 for scalar values and counts 22 for nullable values with a managed reference. A converted
+dynamic array keeps its original header as a forwarding handle; the descriptor synchronizes its length and traces both
+headers. Frontend tests exercise dynamic aliases, collection operations, nullable references and rejected conversions
+under forced collection. Normal compiler integration and the cross-target parity gates cover these paths.
+
+The generated HashLink bridge has been exercised through dynamic reads and writes, including nested nullable structs
+and reference clearing. Dynamic writes and insertions currently stage the converted element in a temporary lane array
+before changing the destination, so a conversion exception cannot expose partial writes. These temporary allocations
+occur at dynamic escapes; typed element access uses the lanes directly.
+
+`copy`, `slice` and `concat` on a concrete struct array lower directly to lane range operations. The targetless IR
+interpreter implements the same independent value-copy semantics for these operations in its own representation;
+portable IR no longer contains a generated per-element copy loop or a pass to remove one.
+Allocation tests copy, slice and concatenate arrays of 8 and 5,000 managed-reference values on HashLink: both sizes
+allocate nine objects and no value boxes. The corresponding scalar-array test allocates six objects for 8 or 1,024
+values on Wasm32 and Wasm GC, with inlining both enabled and disabled; all three results remain independent copies.
+A specialized generic function performing the same three operations on structs with a managed reference allocates
+nine objects for either 8 or 1,024 elements on each Wasm target. A HashLink census records nine arrays plus the census
+dump's byte buffer for both sizes, with no struct boxes; the allocation count does not grow per element.
+
+On the same machine, the 30-cycle HashLink selection census fell from 342,877 allocations to 342,351. The nine-run
+median RSS growth windows were 30.47 / 4.06 / 0.94 / 4.69 MiB at the original baseline and 30.00 / 3.75 / 0.94 /
+4.84 MiB with lazy lanes. A same-checkout pre-array control measured 30.00 / 3.75 / 0.94 / 4.84 MiB; its last window
+matches the inline-array result. Eagerly allocating lanes for empty arrays raised that last median to 5.47 MiB, which
+is why the runtime waits for the first write. A fixed-time, 120-frame Wasm GC Showcase comparison counted 5,896 objects
+for each of full, static and text-heavy, and 12,835 for editing, both before and after the array change. Browser
+requestAnimationFrame runs varied with frame intervals, so the fixed-time comparison keeps the scenarios identical.
+
+The editor's per-action HashLink allocation medians, in KiB, were:
+
+| Action | Baseline | Inline arrays | Current compiler |
+| --- | ---: | ---: | ---: |
+| hierarchy → sensors | 114.6 | 112.6 | 112.6 |
+| sensors → hierarchy | 80.1 | 78.6 | 80.1 |
+| console → telemetry | 74.5 | 74.5 | 74.5 |
+| telemetry → console | 92.9 | 92.9 | 92.9 |
+| hover enter / inside | 0.5 / 0.5 | 0.5 / 0.5 | 0.5 / 0.5 |
+| hover other / field / away | 10.0 / 12.4 / 13.6 | 10.0 / 12.4 / 13.6 | 10.0 / 12.4 / 13.6 |
+| scroll inspector | 21.2 | 21.2 | 21.2 |
+| idle / idle focused | 0.2 / 0.2 | 0.2 / 0.2 | 0.2 / 0.2 |
+| type character / backspace | 16.1 / 16.6 | 16.1 / 16.1 | 16.1 / 16.2 |
+
+A subsequent same-checkout comparison of the generic-owner work measured 342,352 selection allocations with both the
+committed and modified compilers. Nine alternating 500-cycle RSS runs gave median growth windows of
+30.31 / 3.75 / 0.78 / 4.84 MiB for the control and 29.84 / 3.75 / 0.94 / 4.84 MiB for the modified compiler. The third
+window is 0.16 MiB higher; the original recorded baseline and the modified result are both 0.94 MiB. A separate
+nine-pair same-binary control produced median differences of up to 0.31 MiB in other windows, so this measurement
+cannot establish an exact RSS match. The 500-cycle allocation census counted 1,827,398 control allocations versus
+1,827,404 modified allocations, while the modified run allocated 129,336 fewer bytes overall; the six extra allocations
+were byte arrays. Further work must retain this evidence when evaluating memory changes.
+
+After generic owners, the specialized map and direct array range lowering, the 30-cycle selection census recorded
+342,111 allocations (the starting baseline was 342,877). In nine alternating 500-cycle runs, the committed control's
+median RSS growth windows were 29.84 / 4.06 / 0.78 / 4.84 MiB and the new compiler's were 29.84 / 3.91 / 0.78 /
+4.84 MiB. The original baseline was 30.47 / 4.06 / 0.94 / 4.69 MiB. The last window remains 0.15 MiB above that
+original measurement but matches the paired control; the earlier same-binary paired control varied by up to 0.31 MiB,
+so the measurements do not establish an exact match to the original. The headless memory gate passed all three runs.
+
+After preserving inlined receiver checks, five alternating 100-cycle interaction runs measured the same 12.41 KiB
+median for hover-field on control and current. Nine alternating 500-cycle runs measured RSS windows of
+30.31 / 3.75 / 0.78 / 4.84 MiB for control and 30.16 / 3.75 / 0.78 / 5.00 MiB for current. The last-window
+difference is smaller than the earlier 0.31 MiB same-binary variation and does not establish an RSS change. The
+selection census remained 342,111; the fixed-time Wasm GC object counts remained 5,896 for full, static and
+text-heavy and 12,835 for editing.
+
+With the final generic map, state and closure work, the 30-cycle selection census recorded 342,112 allocations. Five
+alternating 100-cycle interaction runs matched at the displayed precision, including 12.41 KiB for hover-field. Nine
+alternating RSS runs measured 30.00 / 3.59 / 0.78 / 5.00 MiB for control and 30.16 / 3.59 / 0.78 / 5.00 MiB for
+current; the 0.16 MiB difference in the first window is below the earlier 0.31 MiB same-binary variation. The fixed-time
+Wasm GC Showcase remained at 5,896 objects for full, static and text-heavy, and 12,835 for editing.
+
+The pre-change representation, checked on 2026-10-31 in `WasmGcRepresentation`, had these costs:
+
+- An ordinary value class is a separate Wasm GC struct, referenced from its holder, and every copy (`TCopy`) allocates a
+  new one. Scalar replacement removes copies that never leave a function, but a value stored in a field and read back
+  costs more on Wasm GC than a class instance does.
+- A flat record with native layout is stored as bytes in an `i8` array payload. Each scalar field read or write is
+  assembled byte by byte, and reading a nested inline record allocates a view object.
+
+Required for structs on Wasm GC:
+
+- **Flattening.** A struct field contributes its scalar fields directly to the holder's Wasm GC struct
+  (`padding_left`, `padding_top`, …), recursively, so reading `holder.padding.left` is one `struct.get`.
+- **Scalarized locals, parameters and returns.** A struct local is one Wasm local per field, passed as several
+  parameters and returned through multi-value returns, so a copy is a set of local moves.
+- **Byte payloads only where bytes are the point**: data shared with native code or linear memory. Their field access
+  should use wide array loads where the engine supports them rather than one byte at a time.
+
+With inlining disabled on this x86-64 machine, an instruction-level Wasm GC allocation census counted the following
+allocations over 100,000 iterations, including setup. Comparing zero iterations confirms that all remaining allocations
+are setup; the field, copies and calls allocate nothing in the loop.
+
+| Workload | Before | After |
+|---|---:|---:|
+| Field read and copy | 200,003 | 1 |
+| Value argument and return | 400,003 | 1 |
+| Static, captured and bound typed closure calls | 600,008 | 7 |
+
+For one million iterations of the same programs, paired on Node 22.21.1 with inlining disabled, three warmups and nine
+samples gave these median times on an Intel i5-13600K. The machine was shared with other work during measurement.
+
+| Workload | Before (ms) | After (ms) |
+|---|---:|---:|
+| Field read and copy | 4.791 | 0.641 |
+| Value argument and return | 18.412 | 0.671 |
+| Static, captured and bound typed closure calls | 27.865 | 9.956 |
+
+The five-sample `scripts/benchmark-wasm32-gc.sh` control exercises the Wasm32 linear-memory collector, not the Wasm GC
+backend. Its median times before and after were 0.080/0.096 ms for stress allocation bursts, 0.031/0.035 ms for budgeted
+bursts, 0.789/0.822 ms for deep chains and 1.593/1.673 ms for wide arrays. Allocation counts and bytes were unchanged
+(2,048/32,768 for bursts, 20,000/320,000 for chains and 30,002/600,056 for arrays).
+
+The stage 1b checkpoint passed: the driver reported 622 passed and 0 failed, self-hosting reached a fixed point, and
+395 fixtures agreed across HashLink, Wasm32 and Wasm GC with 14 existing skips, both with and without inlining. The
+standalone Wasm backend and native-memory integration tests passed. The Wasm runtime freshness check was skipped because
+a wasm32-capable clang was not configured.
+
+## Array capacity policy (decided follow-up)
+
+The decided follow-up uses one growth policy for ordinary and struct-lane arrays on every target. When implicit growth (`push`, `insert`,
+or a write past the end) needs storage, the new capacity is `max(required, capacity * 2)`. Explicit growth via
+`resize(n)` allocates exactly `n`; constructors, copies, slices, concatenations and splice results whose lengths
+are known also allocate exactly those lengths. There is no target-specific minimum or growth setting.
+
+`resize(n)` retains an existing capacity that already fits `n`. Shrinking clears the discarded elements and their
+managed references, and regrowth exposes zero/null or uninitialized elements according to their element type.
+This is the decided meaning of explicit sizing: "exactly n" applies to a new allocation. Reactive tracking and UI
+frame queues retain their reusable buffers during clearing. Explicit capacity trimming would be a separate method,
+not part of `resize` or this growth-policy change. `pop`, `shift`, removal and splice
+also retain the original array's capacity. An unrepresentable doubled capacity fails before replacing storage.
+
+Measure factor 2 first, record and justify any action that allocates more, and reconsider factor 1.5 only if factor 2
+regresses. The preceding consolidation preserved old capacity geometry so its measurements isolate the shared
+implementation. The follow-up removes that interim compile-time setting.
+
+The measured factor-2 and permitted factor-1.5 candidates have not met the HashLink memory no-regression rule.
+The committed runtime therefore retains its existing policy; the proposed implementation is parked on disk.
+See [UI value types](../../packages/ui/docs/VALUE_TYPES.md#uniform-array-growth-factor-2-trial-not-accepted)
+for the paired allocation censuses, per-action KiB and RSS windows. Exact explicit sizing and capacity retention on
+shrink remain the decision, rather than an open syntax or semantics question. The next implementation must resolve
+the small-array allocation and memory cost without raising a ceiling or introducing target-specific growth settings.
+
+## Fixed arrays
+
+A flat struct field can be a fixed array, `var slots:Int32[4];`.
+
+- Length is a compile-time constant; `slots.length` folds.
+- Indexing is bounds-checked; unchecked access goes through a pointer.
+- Layout matches C's `int32_t slots[4]`.
+- Fixed arrays are flat when their element type is, and portable when their
+  element type is.
+
+## Reflection
+
+`typeInfo<T>()` folds to a constant descriptor for every struct:
+
+- **Flat structs** get a full descriptor:
+  - the name, size and alignment;
+  - each field's name, offset, type and typed annotations;
+  - a content hash over all of the above.
+- **Non-flat structs** get a reduced descriptor: the name, each field's
+  name, type and typed annotations, and a content hash. There are no
+  offsets or size, because the layout is not a C layout. Element types of
+  arrays and nested structs are described recursively.
+
+Non-flat descriptors have these known consumers in Beartooth:
+- components and resources with string or sequence fields, stored in
+  managed columns;
+- generator parameters, which hold child lists and arrays;
+- remote-event payloads, which hold strings and lists;
+- saved player data.
+
+All of them need tooling, codecs and schema evolution without being flat.
+
+The build also writes descriptors out as an artifact, in a versioned binary
+format with a JSON dump for tests. Descriptors are cached incrementally and
+invalidated with their module, like IR.
+
+### Descriptors and the wire layer
+
+Haxeon ends up with two schema strategies. Each fits a different kind of
+data, and both stay:
+
+| | `@:wire` + `@:id(n)` ([MESSAGEPACK.md](../reference/MESSAGEPACK.md)) | Descriptors |
+|---|---|---|
+| Field identity | permanent numeric IDs, written by the programmer | field names, plus `@renamedFrom` for renames |
+| Schema at runtime | compiled into both ends; not sent | sent with the data, or checked by hash |
+| Fits | protocols between independently versioned programs whose schema programmers own (RPC services, an engine's session protocol, tool protocols) | schemas owned by end users (game creators), types known only at runtime, and data files that embed their schema |
+| Precedent | protobuf | Avro |
+
+Rules for descriptor-driven encoding:
+- **Same build at both ends** (checked by comparing schema hashes): encode
+  fields by position. No IDs or names are written.
+- **Across builds** (persisted data, messages between different versions):
+  record the writer's schema hash and keep its descriptor available. The
+  reader matches fields by name:
+  - added fields take their defaults;
+  - removed fields are skipped;
+  - `@renamedFrom` maps old names.
+
+  A changed field type needs an explicit migration function.
+- **No numbering.** The compiler never numbers fields automatically.
+  Numbers derived from declaration order would decode reordered fields
+  into the wrong fields without any error, once data crosses builds.
+
+A descriptor-driven codec reuses the wire layer's MessagePack writer and
+reader, its limits and its canonical byte rules. Only how fields are looked
+up differs.
+
+### Typed annotations
+
+Metadata on structs and fields is checked against declared annotation types,
+so an unknown or ill-typed annotation is a compile error:
+
+```haxe
+@:annotation enum abstract Replicate(Int) {
+	var all;
+	var owner;
+}
+
+@:annotation struct Range {
+	var min:Float;
+	var max:Float;
+}
+```
+
+Annotation values become part of the descriptor. Libraries define their own
+annotation types; the compiler knows only the mechanism.
+
+### Context-hidden fields
+
+The compiler-generated `$haxeonObservableState` on an `Observable` class is a runtime
+subscription handle, not a model field. It is omitted from wire codecs, public
+reflection, equality, hashing and `Diff` field numbering. A wire round-trip of
+an Observable record therefore has the same bytes and public fields as the
+record without tracking. The source is allocated when the object is first read
+in a tracking scope; ordinary construction and untracked access do not need it.
+
+This compiler-owned hidden field is distinct from the proposed annotation
+mechanism below, which controls source visibility by build context.
+
+An annotation type can declare that the fields it marks are hidden unless a
+compile context is active:
+
+```haxe
+@:annotation @:hiddenUnless("server") struct Server {}
+```
+
+Reading or writing a hidden field is then a compile error that names the
+field, the annotation and the active context. Descriptors still list hidden
+fields, because the contexts that can see them need their layout. The
+compiler knows contexts and rules, not what "server" means. Beartooth uses
+this for server-only component fields; an application can use it for
+editor-only data.
+
+The same annotation can also mark a type (a struct or a class) or a method. A
+hidden declaration is left out of builds whose context doesn't make it visible,
+and naming it from code compiled in such a build is a compile error that names
+the declaration, the annotation and the active context. An override takes the
+context of the method it overrides. Beartooth uses this at every level, so one
+behavior class can hold server, client and shared members while each build of a
+game contains only its own side's code (Beartooth's script plan, SR-D7).
+
+Beartooth's remote methods also need the other build to see a hidden method's
+signature, but not its body, so that it can be called through a typed proxy.
+Whether that is a compiler feature or generated proxies is decided with S8.
+
+## C headers
+
+Flat structs marked for export are emitted as C headers. A header exported
+from a struct and imported back through HXI must reproduce the same struct:
+same `HxiAbi` layout, same field names and types. Projects check generated
+headers in, and a build check reports headers that are out of date.
+
+## Migration
+
+- `@:value class` becomes `struct`. Flatness is worked out as usual.
+- `@:value @:repr("C") class` becomes a flat `struct` with inferred C layout. These records
+  gain by-value use, which only adds capability.
+- HXI-imported records become flat structs. This also completes the
+  unification of HXI record projections that
+  [NATIVE_MEMORY.md](../reference/NATIVE_MEMORY.md) lists as future work.
+- Port every use of the old forms in the same change and remove them.
+- **One semantic change:** equality on former value classes follows declared `Equatable` conformance. Audit existing
+  comparisons before the change lands.
+
+## Dependencies
+
+- **Scalar replacement** ([inlining stage 2](INLINING_AND_VALUE_TYPES.md#plan))
+  and **construct-in-place** (stage 3). Without them, every struct local on
+  HashLink allocates a heap temporary. Both now run inside the inliner
+  (`IrScalarReplacement`; construct-in-place on HashLink, `8e33f0cd`), with one
+  known limit: an object whose class has a value class field is not scalar
+  replaced, which is exactly the nested case (a style holding insets and colors).
+  Lifting that limit is needed before nested structs are recommended for hot code.
+- **Wasm GC representation** (stage 1b above). Without it, structs allocate more
+  on Wasm GC than classes do.
+- **Live patching.** A change to a struct's layout is a structural type
+  change, so it remains a reload boundary until the runtime has a non-moving
+  type arena ([live patching](../reference/LIVE_PATCHING.md)). Migrating stored data
+  across a layout change is a host concern (for example a Beartooth world).
+  It needs the old and new descriptors, which reflection provides.
+
+## Stages
+
+Each stage keeps the driver suite, Wasm parity and the self-hosting fixed
+point green.
+
+0. **Spike.** Make `typeInfo<T>()` work for one existing native record on
+   HashLink, and emit its descriptor.
+   - Checkpoint: the descriptor agrees with `sizeof`/`offsetof`, its hash is
+     identical across builds and targets, and the change is small. If it
+     isn't small, revisit this design before S1.
+1. **`struct` keyword.**
+   - Parsing, the value-class semantics above, interface conformance used as
+     generic constraints, field-wise `==`, and language server and formatter
+     support.
+   - Checkpoint: value-class tests pass when rewritten with `struct`, and the
+     Wasm parity suite runs them.
+1a. **Copies and optionals.**
+   - The temporary-write error; immutable structs (all fields `final`); `Null<S>` fields with an inline presence flag.
+     Array elements retain their existing boxed representation until inline struct arrays are implemented later.
+   - Checkpoint: the error fires on getter and call-result chains, and `Null<S>` programs give the same results on all
+     targets.
+   - Nested scalar replacement now tracks recursive value fields and whole-field copies, including construction into
+     inline HashLink fields. A 100,000-iteration nested-layout census fell from 100,000 allocations (2,400,000 bytes)
+     to zero; see [scalar replacement](INLINING_AND_VALUE_TYPES.md#scalar-replacement) for the limits.
+1b. **Wasm GC representation.**
+   - Flatten struct fields into their holder, scalarize locals, parameters and returns.
+   - Checkpoint: a struct stored in a field, read and copied allocates nothing on Wasm GC, and the parity suite passes.
+2. **`Flat` and `Portable`.**
+   - Working out the two properties, asserting them with attributes, and
+     using them as constraints, including transitive interface requirements.
+   - Field-path diagnostics and generic-instantiation checks; no engine-specific
+     compiler knowledge.
+   - C layout for flat structs inline in GC objects; the padding rule.
+   - Checkpoint: the cross-target layout test (`hl`, `wasm32`, x86-64 and
+     arm64 headers) agrees for portable structs.
+3. **Native memory operations.**
+   - Whole-record `load`/`store`, `p.ref` places, `NativeSpan` of structs,
+     and zero-filling `Arena.alloc`.
+   - Migrate native records and HXI records to structs.
+3a. **Scoped mutable places** (deferred; no current consumer).
+   - Validate the restricted ref/scoped callback contract in SCOPED_PLACES.md.
+   - Include escape diagnostics, transitive non-suspension checks and module
+     contract preservation. Native and Wasm parity gate the creator edit API.
+4. **Wasm32 native memory.**
+   - Lower `RawPtr` operations to linear memory.
+   - Checkpoint: the native-memory parity programs pass on `wasm32`.
+5. **Reflection and typed annotations.**
+   - Full descriptors for flat structs and reduced descriptors for
+     non-flat ones, the descriptor artifact, incremental caching and
+     `@:annotation` types.
+   - A descriptor-driven MessagePack codec: positional within one build,
+     matched by name across builds.
+6. **C header output.** The HXI round-trip test.
+7. **Fixed arrays.**
+8. **Context-hidden fields, types and methods.**
+
+## Open questions
+
+- **Fixed-array syntax.** `Int32[4]`, or a type such as `Fixed<Int32, 4>`,
+  which would need integer generic arguments?
+- **HashLink layout.** Does HashLink's inline layout for value structures
+  already agree with `HxiAbi` for every flat field type? If not, the compiler
+  has to insert explicit padding fields when it lowers flat structs inside
+  GC objects.
+- **Generic structs.** Value classes don't support generics yet. Deferred
+  until a concrete need, such as a fixed-capacity ring buffer.

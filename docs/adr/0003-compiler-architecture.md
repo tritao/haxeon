@@ -122,7 +122,7 @@ gives the same answer, and recomputed otherwise.
 
 - There is one engine and one invalidation rule. Each existing cache becomes a query or is deleted. The precise recorders
   we already have (semantic edges, purity and no-return answers, inline-cache dependencies, `LoweringView` in
-  `WARM_REBUILD_REUSE.md`) become reads in this model.
+  `../design/WARM_REBUILD_REUSE.md`) become reads in this model.
 - A coarse reset is allowed only where an input really is global (a different target, a different compiler), and it is
   a named input of the queries, not a separate path.
 - Answers are compared by value: a structural digest where comparing the whole value would be expensive. Raw source
@@ -144,7 +144,7 @@ Each layer reads only the layers above it, through queries:
    helper set, method resolution tables.
 6. **Target IR:** per-function rewrites that read only their function, the summaries and declared reads such as callee
    signatures, or callee bodies for the inliner.
-7. **Backend lowering:** per function, relocatable (`WARM_REBUILD_REUSE.md` design A), for HashLink and each Wasm backend.
+7. **Backend lowering:** per function, relocatable (`../design/WARM_REBUILD_REUSE.md` design A), for HashLink and each Wasm backend.
 8. **Link:** assigns indices and writes the module or the patch.
 
 The Wasm builders stop running IR passes themselves: whatever they need runs in layer 6 for their target. A pass that
@@ -320,7 +320,7 @@ Each step is its own series of commits. Every commit keeps the full driver suite
 passing. Unported code keeps running whole-program, so the pipeline is correct at every step. Old forms are deleted when
 their last user is ported; there are no compatibility aliases.
 
-- **M0 (landed, `WARM_REBUILD_REUSE.md`):**
+- **M0 (landed, `../design/WARM_REBUILD_REUSE.md`):**
   - merged passes return unchanged functions;
   - the program-level no-op shortcut;
   - relocatable HashLink lowering with a link step, `LoweringView` as the only way lowering sees other entities, and the
@@ -360,11 +360,11 @@ This record is not where the current state lives.
   typing. The measure is `app` warm builds after a one-line edit (357M objects on 2026-11-08), together with the cold
   build.
 - **Upfront work.** The pass interface, summaries and structured identities come before the edit-case win from caching
-  individual passes. The plan in `WARM_REBUILD_REUSE.md` (step 4) is reordered to match.
+  individual passes. The plan in `../design/WARM_REBUILD_REUSE.md` (step 4) is reordered to match.
 - **Memory.** Retained queries cost memory. Each migration step reports the compiler worker's resident memory after a
   warm `app` build.
 - **Rejected alternatives:**
-  - **More per-stage caches** (the original step 4 of `WARM_REBUILD_REUSE.md`) gives faster wins on the passes ported
+  - **More per-stage caches** (the original step 4 of `../design/WARM_REBUILD_REUSE.md`) gives faster wins on the passes ported
     first, but adds a cache and an invalidation rule per pass. That is the source of the bugs described above.
   - **A rewrite** would lose the parts that work (typer, live patching, the existing precise recorders) and stall
     language and backend work.

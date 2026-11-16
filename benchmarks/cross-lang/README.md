@@ -118,7 +118,7 @@ from fused array reads, since string intrinsics were not added. The full four-la
 nine-run measurement, starting at load 3.96; it also verifies every benchmark's output.
 
 Validation passed with the inliner both on and off. Details, mutation evidence and the native audit are in
-[`docs/JIT_NATIVE_PROPERTIES.md`](../../docs/JIT_NATIVE_PROPERTIES.md).
+[`docs/reference/JIT_NATIVE_PROPERTIES.md`](../../docs/reference/JIT_NATIVE_PROPERTIES.md).
 
 Haxeon's IR inliner is on by default (`HAXEON_INLINE=0` turns it off). It matters mostly for nbody (0.34s without it)
 and spectral-norm (0.295s without it). The HashLink debugger shows inlined callee lines under the caller's frame and a
@@ -170,7 +170,7 @@ one-minute load <=4 gave:
 
 Both trees improved in all nine pairs. RSS was unchanged, and the sub-1% nbody difference is within noise.
 Full validation and the rejected intermediate variants are recorded in
-[GC_ALLOCATION_PROFILE.md](../../docs/GC_ALLOCATION_PROFILE.md).
+[GC_ALLOCATION_PROFILE.md](../../docs/reports/2026-10-gc-allocation-profile.md).
 
 ### Short ASCII byte decoding
 
@@ -179,7 +179,7 @@ before allocating the String. Unicode and larger ranges keep the existing decode
 original path. Nine alternating pairs on core 0 measured fasta at 0.454398s before and 0.438277s after (3.55% faster);
 the other five benchmarks changed by −0.33% to +1.08%, within noise, with peak RSS level. The snapshot is required
 because allocation callbacks and finalizers can mutate or invalidate the input.
-See [the measurement and validation report](../../docs/FASTA_OUTPUT_PROFILE.md). The cross-language table above was
+See [the measurement and validation report](../../docs/reports/2026-10-fasta-output-profile.md). The cross-language table above was
 not regenerated.
 
 ### Bounded empty-page retention
@@ -191,7 +191,7 @@ restores immediate release, and `HL_GC_EMPTY_BUDGET=<bytes>` changes the cap.
 Nine alternating pairs on core 0, identical bytecode, load <=4, measured binarytrees at 1.082926 → 0.810813 s
 (25.13% faster) and merkletrees at 0.448802 → 0.374593 s (16.53%). Their peak RSS was essentially unchanged.
 The other benchmarks had no regression beyond noise. Reduced page release/refaulting corrects the earlier
-cache-miss explanation. See [the full measurement and validation report](../../docs/GC_EMPTY_PAGE_RETENTION.md).
+cache-miss explanation. See [the full measurement and validation report](../../docs/reports/2026-10-gc-empty-page-retention.md).
 The cross-language table above was not regenerated.
 
 ### Guarded JIT object allocation (opt-in)
@@ -200,14 +200,14 @@ The cross-language table above was not regenerated.
 Nine alternating pairs on core 0, identical bytecode and load <=4 measured binarytrees at 0.810601 → 0.574274 s
 (29.15% faster) and merkletrees at 0.293442 → 0.248573 s (15.29%). Peak RSS was essentially unchanged and none of
 the other four benchmarks regressed. The feature remains off by default; its per-site cold stubs increase code size.
-See [the full report](../../docs/JIT_INLINE_ALLOCATION.md) for validation, startup limitations and all six results.
+See [the full report](../../docs/reports/2026-10-jit-inline-allocation.md) for validation, startup limitations and all six results.
 The cross-language table above was not regenerated.
 
 ### Rejected integer-box allocation experiment
 
 A guarded inline integer-box prototype measured merkletrees at 0.247260 → 0.198725 s (19.63% faster), but repeated
 LRU comparisons showed a 1–2% regression against the accepted runtime. It was dropped under the no-regression gate;
-that variant was reverted. See [the experiment report](../../docs/JIT_BOXED_ALLOCATION.md).
+that variant was reverted. See [the experiment report](../../docs/reports/2026-10-jit-boxed-allocation.md).
 The cross-language table above was not regenerated.
 
 ### Corrected integer-box allocation (opt-in; final timing gate pending)
@@ -217,4 +217,4 @@ runtime text removes the earlier LRU regression. Nine alternating pairs on core 
 enabled on both sides measured merkletrees at 0.259076 → 0.207330 s (19.97% faster) and LRU at
 0.094389 → 0.093915 s (0.50% faster). The other four benchmarks and RSS showed no meaningful regression.
 Correctness validation is complete; compiler and startup/JIT paired timings remain pending due to external load.
-See [the follow-up report](../../docs/JIT_BOXED_ALLOCATION_LAYOUT.md). The cross-language table above was not regenerated.
+See [the follow-up report](../../docs/reports/2026-10-jit-boxed-allocation-layout.md). The cross-language table above was not regenerated.

@@ -56,7 +56,7 @@ typedef IrClassDependencies = {
 
 /**
  * A reachability walk that knows what a class or enum can be created, and follows typed operations to provider rows (ADR 0003 section 13,
- * `docs/REACHABILITY_WALK.md`). It is a pure function of a program and its roots: it reads the IR and returns sets, and nothing in the
+ * `docs/design/REACHABILITY_WALK.md`). It is a pure function of a program and its roots: it reads the IR and returns sets, and nothing in the
  * enum code or the passes calls it, so the roots, the created set and the used operations are all explicit.
  *
  * Edges: calls, closures; a method call reaches its implementation in every *created* subclass of the receiver's class (an interface call:

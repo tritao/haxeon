@@ -63,7 +63,7 @@ parallel-copy snapshots, emits real `OLabel` block markers, and leaves no SSA
 constructs in the serialized bytecode module or patch.
 
 The same canonical IR can also be emitted as experimental `wasm32` or `wasm-gc`;
-see [`WASM_BACKEND.md`](WASM_BACKEND.md) for the representation
+see [`reference/WASM_BACKEND.md`](reference/WASM_BACKEND.md) for the representation
 boundary, linear-memory and collector contracts, GC target, and test commands.
 
 `compiler.core` (`src/compiler/core`) is the bottom of the compiler: source files and spans (`Source`), diagnostics
@@ -99,8 +99,8 @@ it. The lists are built once; running one costs a predicate and a call per stage
 
 ## Warm builds: what landed (M0 and M1 of ADR 0003)
 
-The current plan and the measurements are in [`WARM_REBUILD_REUSE.md`](WARM_REBUILD_REUSE.md) and
-[`COMPILER_MEMORY.md`](COMPILER_MEMORY.md). This section is the short record.
+The current plan and the measurements are in [`design/WARM_REBUILD_REUSE.md`](design/WARM_REBUILD_REUSE.md) and
+[`reports/2026-11-compiler-memory.md`](reports/2026-11-compiler-memory.md). This section is the short record.
 
 ### Layers of a plain build
 

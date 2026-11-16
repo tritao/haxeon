@@ -4,7 +4,7 @@ import compiler.ir.Ir;
 
 /**
  * HAXEON_REACHABILITY_REPORT=<file>: appends, for the program at a named point of the pipeline, the counts of today's walk against the
- * type-aware walk (`IrTypeAwareWalk.compare`). The step 1 diagnostic of `docs/REACHABILITY_WALK.md`: it changes nothing and is off unless the
+ * type-aware walk (`IrTypeAwareWalk.compare`). The step 1 diagnostic of `docs/design/REACHABILITY_WALK.md`: it changes nothing and is off unless the
  * variable is set. The roots are the entry and every `@:keep` / `@:expose` function.
  */
 class IrReachabilityReport {

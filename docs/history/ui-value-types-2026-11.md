@@ -172,7 +172,7 @@ The raw-pointer Dynamic boundary was measured against the preceding browser-load
 and three pairs each of static, text-heavy and editing all had zero paired median object-count difference: respectively
 4,440 / 4,440 / 4,440 / 8,724 objects before and after. After typed interface dispatch and pruning unused scalar
 receiver clones, the same alternating measurement again found 4,440 / 4,440 / 4,440 / 8,724 objects on both sides.
-The checked pointer boundary and interface allocation tests are specified in `docs/GENERIC_SPECIALIZATION.md`.
+The checked pointer boundary and interface allocation tests are specified in `docs/reference/GENERIC_SPECIALIZATION.md`.
 
 Giving native callback and runtime type handles distinct Dynamic representations was measured against the preceding
 compiler with the browser-loaded Wasm GC Showcase. Nine full pairs and three pairs each of static, text-heavy and
@@ -2149,7 +2149,7 @@ Records and hashes are retained under `haxeon-flat-work/interface-value-gates`; 
 ## Constant-time typed interface dispatch (November 2026) — measurements
 
 Control is `ccf4a141`, with the editor frozen at `46044a2712525a635588feb4572fa0f2053dc06c`.
-The source audit and 1/8/32-implementation benchmark are in `GENERIC_SPECIALIZATION.md`. Only
+The source audit and 1/8/32-implementation benchmark are in `../reference/GENERIC_SPECIALIZATION.md`. Only
 `ViewportContent.paint(Canvas, Rect)` currently selects this ABI in the UI package (one implementer); no editor-only
 contract does. The editor profile module remains byte-identical at 99,957,149 bytes, SHA-256
 `89c9d7b7cf31ee776b6f70177a10e7bcde3f6b24b60f54e7e76bd1eeb1830c6b`.

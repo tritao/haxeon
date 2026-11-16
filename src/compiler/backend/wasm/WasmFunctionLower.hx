@@ -938,7 +938,7 @@ class WasmFunctionLower {
 		switch instruction {
 			case Phi(_, _):
 			case ClassId(_, _):
-				throw 'internal error: ClassId is lowered by the interface dispatch (docs/INTERFACE_VALUES.md), which Wasm does not have yet';
+				throw 'internal error: ClassId is lowered by the interface dispatch (docs/design/INTERFACE_VALUES.md), which Wasm does not have yet';
 			case PointerOffset(output, pointer, byteOffset):
 				emit(body,
 					[

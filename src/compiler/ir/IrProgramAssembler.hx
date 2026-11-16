@@ -615,7 +615,7 @@ class IrProgramAssembler {
 		context.exportedFunctions = exportedFunctions;
 		context.canonicalObjects = canonicalObjects;
 		context.pruneFromEntry = pruneFromEntry;
-		// What a plain build's prune keeps (docs/REACHABILITY_WALK.md): the roots are the entry function, the initializers `__init` runs and the
+		// What a plain build's prune keeps (docs/design/REACHABILITY_WALK.md): the roots are the entry function, the initializers `__init` runs and the
 		// exported functions.
 		var pruneRoots = entryPoint == null ? ["main", "Main.main"] : [entryPoint];
 		if (staticInitializers != null && staticInitializers.length > 0) {

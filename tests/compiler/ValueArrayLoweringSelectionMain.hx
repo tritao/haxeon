@@ -10,7 +10,7 @@ class ValueArrayLoweringSelectionMain {
 	 * Bytes one more element shape may cost per unrelated function (one with no array operation). A shape's pass still visits every function
 	 * once, to find out it is not selected, and fills one slot of the result: today that is about 95 bytes. The bound sits just above, so a
 	 * per-function, per-shape allocation of any size (a key string, a map, a copy of the function array) fails here. The true-zero version
-	 * is a pass that never visits unrelated functions per shape; it is a recorded option (docs/WARM_REBUILD_REUSE.md), not a requirement.
+	 * is a pass that never visits unrelated functions per shape; it is a recorded option (docs/design/WARM_REBUILD_REUSE.md), not a requirement.
 	 */
 	static inline final MAX_BYTES_PER_FUNCTION_PER_SHAPE = 128.0;
 

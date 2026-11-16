@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-"""Generates the interface-dispatch benchmark for N implementors (docs/INTERFACE_VALUES.md): the ways a call through an interface value could be
+"""Generates the interface-dispatch benchmark for N implementors (docs/design/INTERFACE_VALUES.md): the ways a call through an interface value could be
 dispatched when the value is the object, measured on HashLink.
 
   python3 generate.py N OUT.hx

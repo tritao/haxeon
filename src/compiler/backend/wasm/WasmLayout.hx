@@ -107,7 +107,7 @@ class WasmLayout {
 	public static inline final GC_BLOCK_CLEAR_SCAN_MASK = -5;
 	public static inline final GC_MIN_ALLOCATION_BUDGET = 262144;
 
-	// hx_heap in native/wasm/heap.c: wasm32 heap state, owned by the linked C runtime (docs/WASM_LINEAR_RUNTIME.md).
+	// hx_heap in native/wasm/heap.c: wasm32 heap state, owned by the linked C runtime (docs/design/WASM_LINEAR_RUNTIME.md).
 	public static inline final HEAP_STATE_HEAP_START = 0;
 	public static inline final HEAP_STATE_HEAP_TOP = 4;
 	public static inline final HEAP_STATE_BUDGET = 8;

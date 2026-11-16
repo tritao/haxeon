@@ -63,4 +63,4 @@ Concrete gaps found while compiling Materia. Longer-term direction is in
   - a `--check` mode for CI.
 
   It reads plain JSON, never `sokol-shdc`'s YAML. Writing shaders in Haxeon
-  itself is a deferred plan in [docs/SHADERS.md](docs/SHADERS.md).
+  itself is a deferred plan in [docs/design/SHADERS.md](docs/design/SHADERS.md).

@@ -3,7 +3,7 @@ package compiler.tools;
 import sys.io.File;
 
 /**
- * A compiler worker's memory after a build, for finding what a warm session keeps (see docs/COMPILER_MEMORY.md): with HAXEON_COMPILER_MEMORY_LOG=<file> every build
+ * A compiler worker's memory after a build, for finding what a warm session keeps (see docs/reports/2026-11-compiler-memory.md): with HAXEON_COMPILER_MEMORY_LOG=<file> every build
  * ends with a full collection and one line saying how much heap the collector held before it, how much stayed alive, and the process's
  * resident size. HAXEON_COMPILER_HEAP_DUMP=<file> also writes the live heap (HashLink's memory dump, as large as the heap) after the builds
  * named by HAXEON_COMPILER_HEAP_DUMP_ON, to <file>.<last word of the output name>.

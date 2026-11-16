@@ -57,7 +57,7 @@ cmake --build --preset release   # HashLink VM and Haxeon runtime
 
 `run --watch --live` keeps one process alive and applies patches between
 application ticks. It requires an entry class with `start`, `tick`, `saveState`,
-`close`, and `restoreState`; see [Project CLI](docs/CLI.md).
+`close`, and `restoreState`; see [Project CLI](docs/reference/CLI.md).
 
 | Platform | Status |
 |---|---|
@@ -112,7 +112,7 @@ the recipe or headers change:
 ```
 
 Unsupported constructs produce explicit diagnostics instead of a guessed
-binding. See [`docs/C_HEADER_FFI.md`](docs/C_HEADER_FFI.md) for the supported
+binding. See [`docs/reference/C_HEADER_FFI.md`](docs/reference/C_HEADER_FFI.md) for the supported
 subset, C++ profiles, ownership rules, and exception thunks.
 
 ### Cross-platform apps, including the browser
@@ -142,7 +142,7 @@ Wasm support is experimental and narrower than the desktop target:
   `sys.io.Process` are not available, and file access uses an in-memory store.
 - Wasm builds are build-only; `haxeon run` does not launch them.
 
-See [`docs/WASM_BACKEND.md`](docs/WASM_BACKEND.md) for the host ABI and test
+See [`docs/reference/WASM_BACKEND.md`](docs/reference/WASM_BACKEND.md) for the host ABI and test
 commands.
 
 ## ⚖️ How it compares
@@ -170,17 +170,17 @@ of a language that targets many platforms.
 
 | Topic | Where |
 |---|---|
-| Project CLI, manifests, dependencies, workspaces | [`docs/CLI.md`](docs/CLI.md) |
-| Supported Haxe subset, FFI, and native bindings | [`docs/LANGUAGE_SUPPORT.md`](docs/LANGUAGE_SUPPORT.md) |
-| Iterators, iterable parameters, and allocation behavior | [`docs/ITERATION.md`](docs/ITERATION.md) |
-| How patching works, reload rules, artifact builds | [`docs/LIVE_PATCHING.md`](docs/LIVE_PATCHING.md) |
+| Project CLI, manifests, dependencies, workspaces | [`docs/reference/CLI.md`](docs/reference/CLI.md) |
+| Supported Haxe subset, FFI, and native bindings | [`docs/reference/LANGUAGE_SUPPORT.md`](docs/reference/LANGUAGE_SUPPORT.md) |
+| Iterators, iterable parameters, and allocation behavior | [`docs/reference/ITERATION.md`](docs/reference/ITERATION.md) |
+| How patching works, reload rules, artifact builds | [`docs/reference/LIVE_PATCHING.md`](docs/reference/LIVE_PATCHING.md) |
 | Compiler pipeline, SSA IR, HLB/HLI/HLP formats | [`docs/ARCHITECTURE.md`](docs/ARCHITECTURE.md) |
-| Patch transactions in depth | [`docs/PATCH_TRANSACTIONS.md`](docs/PATCH_TRANSACTIONS.md) |
-| WebAssembly backend | [`docs/WASM_BACKEND.md`](docs/WASM_BACKEND.md) |
-| Android host | [`docs/ANDROID.md`](docs/ANDROID.md) |
+| Patch transactions in depth | [`docs/reference/PATCH_TRANSACTIONS.md`](docs/reference/PATCH_TRANSACTIONS.md) |
+| WebAssembly backend | [`docs/reference/WASM_BACKEND.md`](docs/reference/WASM_BACKEND.md) |
+| Android host | [`docs/reference/ANDROID.md`](docs/reference/ANDROID.md) |
 | Building, testing, bootstrapping, formatting | [`docs/DEVELOPMENT.md`](docs/DEVELOPMENT.md) |
-| Benchmarks and profiling | [`docs/BENCHMARKS.md`](docs/BENCHMARKS.md), [`docs/PROFILING.md`](docs/PROFILING.md) |
-| More design notes | [`docs/`](docs/) |
+| Benchmarks and profiling | [`docs/reference/BENCHMARKS.md`](docs/reference/BENCHMARKS.md), [`docs/reference/PROFILING.md`](docs/reference/PROFILING.md) |
+| Everything else: design notes, decisions, reports | [`docs/README.md`](docs/README.md) |
 
 ## 🗺️ Project direction
 

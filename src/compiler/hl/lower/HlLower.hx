@@ -894,7 +894,7 @@ class HlLower {
 				switch instruction.value {
 					case Phi(_, _):
 					case ClassId(_, _):
-						throw 'internal error: ClassId is lowered by the interface dispatch (docs/INTERFACE_VALUES.md), which HashLink does not have yet';
+						throw 'internal error: ClassId is lowered by the interface dispatch (docs/design/INTERFACE_VALUES.md), which HashLink does not have yet';
 					case ConstVoid(output):
 						defineRegister(output, registers, registerTypes);
 					case ConstInt(output, value):

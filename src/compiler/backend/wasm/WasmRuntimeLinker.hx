@@ -10,7 +10,7 @@ import haxe.io.Bytes;
 import haxe.io.BytesOutput;
 
 /**
- * Links a precompiled runtime module into a module being built (docs/WASM_LINEAR_RUNTIME.md).
+ * Links a precompiled runtime module into a module being built (docs/design/WASM_LINEAR_RUNTIME.md).
  *
  * The runtime may import only `env.memory`, which becomes the module's memory, and functions from `haxeon_guest`,
  * which bind to the module's functions of those names. It defines functions only. Its bodies are copied as bytes;

@@ -27,7 +27,7 @@ tests/integration/test-dap-hot-reload.sh             not run: DAP CLI and adapte
 tests/integration/test-dap-inline-config.sh          not run: DAP CLI and adapter (see group)
 tests/integration/test-dap-interaction.sh            not run: DAP CLI and adapter (see group)
 tests/integration/test-dap-logpoints.sh              not run: DAP CLI and adapter (see group)
-tests/integration/test-dap-scopes.sh                 not run: DAP CLI and adapter; known failure (docs/JIT_REGISTER_ALLOCATION_PHASE0.md)
+tests/integration/test-dap-scopes.sh                 not run: DAP CLI and adapter; known failure (docs/reports/2026-10-jit-register-allocation-phase0.md)
 tests/integration/test-dap-stepping.sh               not run: DAP CLI and adapter (see group)
 tests/integration/test-dap-watchpoints.sh            not run: DAP CLI and adapter (see group)
 

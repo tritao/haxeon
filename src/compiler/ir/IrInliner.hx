@@ -178,7 +178,7 @@ class IrInlineCache {
 }
 
 /**
- * Inlines small callees into their callers. See docs/INLINING_AND_VALUE_TYPES.md.
+ * Inlines small callees into their callers. See docs/design/INLINING_AND_VALUE_TYPES.md.
  *
  * The pass never mutates a function it was given: cached IR is shared between compiles and transaction snapshots, so a
  * caller that changes is rebuilt as a new IrFunction and unchanged callers keep their identity. Decisions depend only

@@ -5,7 +5,7 @@ import compiler.ir.IrTypeAwareWalk.IrClassDependencies;
 import compiler.ir.IrTypeAwareWalk.IrWalkResult;
 
 /**
- * The prune of ADR 0003 §13 at the 3a point of `IrProgramAssembler.assemble` (docs/REACHABILITY_WALK.md): after the enum providers are
+ * The prune of ADR 0003 §13 at the 3a point of `IrProgramAssembler.assemble` (docs/design/REACHABILITY_WALK.md): after the enum providers are
  * synthesized and before every later pass, a plain HashLink build drops the functions nothing reaches from the entry, so the passes
  * run on the reachable program. The walk is `IrTypeAwareWalk` (whole created classes); the backend's own prune after assembly
  * (`IrReachability.withGeneratedRuntimeRoots`) still runs and keeps a mentioned class's methods, so it removes nothing more of what this one kept.
@@ -22,7 +22,7 @@ typedef IrPruneResult = {
 class IrEntryPrune {
 	/**
 	 * On for plain HashLink builds. HAXEON_EARLY_PRUNE=0 is a migration reference, not a product option: it exists so the driver can build
-	 * every program both ways while the prune is new, and it is deleted with the driver's unpruned run (docs/REACHABILITY_WALK.md, "Removal").
+	 * every program both ways while the prune is new, and it is deleted with the driver's unpruned run (docs/design/REACHABILITY_WALK.md, "Removal").
 	 */
 	public static function enabled():Bool
 		return Sys.getEnv("HAXEON_EARLY_PRUNE") != "0";

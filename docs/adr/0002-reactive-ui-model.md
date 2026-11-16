@@ -22,7 +22,7 @@ The rationale for this record is mostly simplicity, and making near-zero allocat
 an optimization target: the current model is already fast (hover and typing about 0.4 ms). The expensive parts have to
 earn their place. The discussion behind this record, including the comparison
 with GPUI and the per-frame arena question, is summarized in `packages/ui/docs/ARCHITECTURE_NOTES.md`. The language and
-compiler features it needs are in `docs/UI_LANGUAGE_FEATURES.md`.
+compiler features it needs are in `docs/design/UI_LANGUAGE_FEATURES.md`.
 
 ## Context
 
@@ -224,10 +224,10 @@ values changes, and updates the existing nodes. This record makes that idea the 
    The costs: strings, text, callbacks and object references do not fit native records and need side tables, and raw
    records are harder to inspect than objects. With the incremental bridge, the speed gain is small; the case rests on
    deleting the transaction code. Adopted only if the stage 2 prototype shows a net simplification.
-   Records are `Flat` structs from `docs/STRUCTS.md`, the design written for Beartooth's world components: one C layout
+   Records are `Flat` structs from `docs/design/STRUCTS.md`, the design written for Beartooth's world components: one C layout
    inline in GC memory and in native memory, in-place field writes through `NativeSpan` and `p.ref`, and inferred flatness
    that splits native from managed fields, as Beartooth's world splits native from managed columns. That makes the side
-   tables a compiler-derived split rather than hand-written bookkeeping, and the prototype depends on `STRUCTS.md`
+   tables a compiler-derived split rather than hand-written bookkeeping, and the prototype depends on `../design/STRUCTS.md`
    stages 2 and 3.
 5. **Interaction state is signals; style rules are derived values.** Hovered, pressed, focused and disabled are per-node
    signals. Stylesheet rules compile to derived values over them, so a pointer move recomputes only the properties whose
@@ -261,7 +261,7 @@ values changes, and updates the existing nodes. This record makes that idea the 
    fields excluded with `@:unobservable` do not participate in field tracking; public getters track their observable
    inputs. These checks run in debug builds and every gate, not only
    verify runs. A compile-time
-   purity contract (`docs/PURITY.md`) is deferred until these checks show real holes.
+   purity contract (`docs/design/PURITY.md`) is deferred until these checks show real holes.
 
    Tracking scopes belong to the thread executing the computation. A worker reading an Observable while the UI builds
    must not append to the UI's collector or inherit its write restrictions. The active collector is thread-local and is
@@ -485,7 +485,7 @@ retention scenarios, budgets that may only go down, memory runs, compiler suites
    warmed state for the three implementations, and add isolated windows around the triggering input or simulation
    step through the submitted frame. The existing `submit` timer starts after those triggers, so preserve separate
    input and frame timings rather than treating it as total action time. Calibrate each census window with the marker
-   and byte-sum checks described in `ALLOCATION_CENSUS.md`; exclude only that marker. A panel-flow baseline failure
+   and byte-sum checks described in `../reports/2026-10-allocation-census.md`; exclude only that marker. A panel-flow baseline failure
    must be reproduced on control before it is classified as the known failure, and must not stand in for live-update
    measurements.
 4. **Conditional compiler support.** Result builders and lazy parameters need separate designs and target tests only

@@ -1,6 +1,6 @@
 // Allocation and sweeping for Haxeon's wasm32 (linear-memory) backend.
 //
-// Haxeon links this module into every wasm32 output (docs/WASM_LINEAR_RUNTIME.md). It owns the heap's free
+// Haxeon links this module into every wasm32 output (docs/design/WASM_LINEAR_RUNTIME.md). It owns the heap's free
 // lists; the guest marks live blocks and then calls haxeon_heap_sweep. The module has no data, globals or stack
 // of its own: all state is the hx_heap the guest reserves and passes in, laid out as WasmLayout.HEAP_STATE_*.
 //

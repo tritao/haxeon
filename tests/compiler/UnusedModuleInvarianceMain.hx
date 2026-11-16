@@ -2,7 +2,7 @@ import compiler.Compiler;
 import compiler.runtime.CompilerIntrinsics;
 
 /**
- * A program's output depends only on what it reaches (docs/FRONTEND_RESTART.md): adding a module nothing calls, one that itself calls `Reflect`,
+ * A program's output depends only on what it reaches (docs/design/FRONTEND_RESTART.md): adding a module nothing calls, one that itself calls `Reflect`,
  * must not change how the program's enums are stored or any function of the program. Built plain (the early prune runs), once without the module
  * and once with it as a root module.
  */
