@@ -320,6 +320,20 @@ class TestCatalog {
 		"BytesAsciiMain"
 	];
 
+	/**
+	 * Named mains that measure their own allocation, which depends on the rest of the program they are in: each is built alone. The
+	 * others share one program (TestRunner.runHaxeMains).
+	 */
+	public static final ownProgramMains = [
+		"FieldStorageSelectionMain",
+		"InlinerSourceIdentityMain",
+		"IrFunctionRewriteMain",
+		"NonNullFactsMain",
+		"ScalarClosureSelectionMain",
+		"ScalarPreflightSelectionMain",
+		"ValueArrayLoweringSelectionMain"
+	];
+
 	public static function namedCases():Array<NamedCase> {
 		var result = [];
 		for (name in compilerMains)
