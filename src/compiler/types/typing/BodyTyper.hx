@@ -199,7 +199,7 @@ class BodyTyper implements BodyTyping {
 		return value;
 	}
 
-	public function typeFunction(fn:AstFunction, ?owner:String, isStatic:Bool,
+	public function typeFunction(fn:AstFunction, ?owner:String, isStatic:Bool = false,
 			?substitutions:Map<String, CompilerType>, ?specializedName:String,
 			?abstractReceiver:CompilerType, ?physicalOwner:String,
 			?ownerTypeArguments:Array<CompilerType>):TypedFunction {
@@ -613,8 +613,8 @@ class BodyTyper implements BodyTyping {
 			return known;
 		return switch compiler.syntax.AstPredicates.unannotatedExpression(expression) {
 			case Variable(name, _): name.indexOf(".") >= 0 ? typeExpression(expression,
-				scope, null, false).type : scope.resolve(name);
-			case Member(_, _, _): typeExpression(expression, scope, null, false).type;
+				scope).type : scope.resolve(name);
+			case Member(_, _, _): typeExpression(expression, scope).type;
 			case Cast(_, target, castSpan): target == null ? null : lowerType(target, castSpan);
 			default: null;
 		};
@@ -851,7 +851,7 @@ class BodyTyper implements BodyTyping {
 						bindings = enumPattern.bindings;
 						predicates = enumPattern.predicates;
 					} else if (!isCatchAll) {
-						typedValue = coerce(typeExpression(elementPattern, scope, elementType, false), elementType,
+						typedValue = coerce(typeExpression(elementPattern, scope, elementType), elementType,
 							"array switch pattern", "E1019");
 						var literal = enumLiteral(typedValue);
 						if (literal != null)
@@ -1061,7 +1061,7 @@ class BodyTyper implements BodyTyping {
 											case Variable("_", _):
 											default:
 												var typed = coerce(typeExpression(field.value, new Scope(),
-													expectedField.type, false), expectedField.type,
+													expectedField.type), expectedField.type,
 													"enum object payload pattern", "E1019");
 												if (constantPatternKey(typed) == null)
 													fail("E1019",
@@ -1273,7 +1273,7 @@ class BodyTyper implements BodyTyping {
 			case Variable(_, span) if (constantName != null): Variable(Std.string(constantName), span);
 			default: value;
 		};
-		var typed = coerce(typeExpression(resolvedValue, new Scope(), type, false), type, "enum payload pattern",
+		var typed = coerce(typeExpression(resolvedValue, new Scope(), type), type, "enum payload pattern",
 			"E1019");
 		if (constantPatternKey(typed) == null)
 			fail("E1019", "Enum switch payload patterns must be constants, local names, or '_'", typed.span);
@@ -1382,7 +1382,7 @@ class BodyTyper implements BodyTyping {
 		};
 
 	public function typeExpression(expression:AstExpression, scope:Scope, ?expectedType:CompilerType,
-			inferDynamicLambdaResult:Bool):TypedExpression
+			inferDynamicLambdaResult:Bool = false):TypedExpression
 		return expressionTyper.typeExpression(expression, scope, expectedType, inferDynamicLambdaResult);
 
 	/** Dotted assignment syntax carries the statement span; each receiver still needs its own source range. */
@@ -1465,7 +1465,7 @@ class BodyTyper implements BodyTyping {
 				}
 				var thisType = scope.resolve("this");
 				if (thisType != null && findFieldType(thisType, name) != null)
-					return typedMemberWithFlow(typeExpression(Variable("this", span), scope, null, false), name, span,
+					return typedMemberWithFlow(typeExpression(Variable("this", span), scope), name, span,
 						scope);
 			}
 			var enumLiteral = sourceIsBareReference(span) ? expectedEnumLiteral(name, expectedType, span) : null;
@@ -1568,7 +1568,7 @@ class BodyTyper implements BodyTyping {
 					var field = findFieldType(thisType, name);
 					if (field == null)
 						fail("E1005", 'Unknown variable "$name"', span);
-					typedMemberWithFlow(typeExpression(Variable("this", span), scope, null, false), name, span, scope);
+					typedMemberWithFlow(typeExpression(Variable("this", span), scope), name, span, scope);
 				} else {
 					var parts = splitPath(name),
 						objectName = parts[0],
@@ -1636,7 +1636,7 @@ class BodyTyper implements BodyTyping {
 						}
 						classEnd--;
 					}
-					var object = typeExpression(Variable(objectName, span), scope, null, false);
+					var object = typeExpression(Variable(objectName, span), scope);
 					for (index in 1...parts.length)
 						object = typedMemberWithFlow(object, parts[index],
 							referencePrefixSpan(parts.slice(0, index + 1).join("."), span), scope);
@@ -1706,7 +1706,7 @@ class BodyTyper implements BodyTyping {
 											context.typeSubstitutions);
 								}];
 							var result = session.declarations.resolve(resultType, span, context.typeSubstitutions);
-							var value = typeExpression(literal, scope, TFunction(resolved, result), false);
+							var value = typeExpression(literal, scope, TFunction(resolved, result));
 							// An unbound generic result uses Dynamic as an inference hint.
 							return (switch (expectedResult) {
 								case TDynamic: true;
@@ -1740,7 +1740,7 @@ class BodyTyper implements BodyTyping {
 		if (ControlFlow.alwaysExits(typedStatements, function(type, cases) return this.exhaustiveEnum(type, cases)))
 			return new TypedExpression(TBlockExpression(typedStatements,
 				new TypedExpression(TUnreachable, TNever, span)), TNever, span);
-		var typedResult = typeExpression(result, blockScope, expectedType, false);
+		var typedResult = typeExpression(result, blockScope, expectedType);
 		if ((switch (expectedType) {
 			case TVoid: true;
 			default: false;
@@ -1780,7 +1780,7 @@ class BodyTyper implements BodyTyping {
 	}
 
 	public function typeMember(object:AstExpression, name:String, span:SourceSpan, scope:Scope):TypedExpression {
-		return typedMemberWithFlow(typeExpression(object, scope, null, false), name, span, scope);
+		return typedMemberWithFlow(typeExpression(object, scope), name, span, scope);
 	}
 
 	function typeGenericCallArguments(fn:AstFunction, arguments:Array<AstExpression>, scope:Scope, span:SourceSpan):{
@@ -1906,7 +1906,7 @@ class BodyTyper implements BodyTyping {
 		var body = enterBody(owner + ".__inline", declarationTypeSubstitutions(owner, typeParameters), owner);
 		var initializer:TypedExpression;
 		try {
-			initializer = coerce(typeExpression(expression, new Scope(), expected, false), expected,
+			initializer = coerce(typeExpression(expression, new Scope(), expected), expected,
 				'inline field "$owner.$name"', "E1002");
 		} catch (error:Dynamic) {
 			leaveBody(body);
@@ -2165,7 +2165,7 @@ class BodyTyper implements BodyTyping {
 	public function typeMethodCall(object:AstExpression, name:String, arguments:Array<AstExpression>, span:SourceSpan,
 			scope:Scope,
 			?expectedType:CompilerType):TypedExpression {
-		var receiver = unwrapNullable(typeExpression(object, scope, null, false));
+		var receiver = unwrapNullable(typeExpression(object, scope));
 		if (callResolver.isEnumMatch(receiver, name, arguments))
 			return callResolver.typeEnumMatch(object, arguments[0], span, scope);
 		return callResolver.typeMethodCall(receiver, name, arguments, span, scope, expectedType);
@@ -2216,7 +2216,7 @@ class BodyTyper implements BodyTyping {
 			defaultArgumentCaller = context.name;
 		var body = enterBody("$default:" + declarationName, null, parentPath(declarationName));
 		try {
-			var typed = typeExpression(expression, new Scope(), expected, false);
+			var typed = typeExpression(expression, new Scope(), expected);
 			var sources = session.defaultArgumentSources.get(defaultArgumentCaller);
 			if (sources == null) {
 				sources = [];
@@ -2431,10 +2431,10 @@ class BodyTyper implements BodyTyping {
 
 	public function resolveReceiver(name:String, span:SourceSpan, scope:Scope):Null<TypedExpression> {
 		if (scope.resolve(name) != null)
-			return typeExpression(Variable(name, span), scope, null, false);
+			return typeExpression(Variable(name, span), scope);
 		var thisType = scope.resolve("this");
 		if (thisType != null && findFieldType(thisType, name) != null)
-			return typeExpression(Variable(name, span), scope, null, false);
+			return typeExpression(Variable(name, span), scope);
 		var owner = context.lexicalOwner,
 			staticField:Null<{owner:String, type:CompilerType}> = null;
 		if (owner != null)

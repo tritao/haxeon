@@ -61,7 +61,7 @@ class GenericInstantiation {
 				expected = semanticExpected[index];
 			if (CallResolver.isPosInfosParameter(parameter))
 				arguments.push(bodyTyper.coerce(bodyTyper.typeExpression(bodyTyper.posInfosExpression(span), scope,
-					expected, false), expected,
+					expected), expected,
 					'position argument ${index + 1} to "$baseName"', "E1009"));
 			else if (defaultValue == null)
 				arguments.push(bodyTyper.coerce(new TypedExpression(TNullLiteral, TNull, span), expected,

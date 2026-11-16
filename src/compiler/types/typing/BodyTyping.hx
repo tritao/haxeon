@@ -22,13 +22,14 @@ import compiler.types.typing.SwitchTypingRules.SwitchCasePattern;
  * What the body typer's collaborators (ExpressionTyper, CallResolver, StatementTyper, ClosureTyper, GenericInstantiation,
  * InlineConstantResolver) call back into. BodyTyper implements it and hands itself to each of them once.
  *
- * Its methods declare no default values (Haxeon does not parse one on an interface method), so callers pass every
- * argument that has one in BodyTyper.
+ * A default a method declares here only makes its parameter optional: the one that applies is BodyTyper's, as for any
+ * call through an interface. `coerce`'s `code` has none, so a call passes it: a default for a string parameter is filled
+ * in the method (`DefaultArguments`), and passing "E1009" keeps the call from depending on that.
  */
 interface BodyTyping {
 	// Expressions, statements and types.
 	function typeExpression(expression:AstExpression, scope:Scope, ?expectedType:CompilerType,
-			inferDynamicLambdaResult:Bool):TypedExpression;
+			inferDynamicLambdaResult:Bool = false):TypedExpression;
 	function coerce(value:TypedExpression, expected:CompilerType, context:String, code:String):TypedExpression;
 	function typeStatements(statements:Array<AstStatement>, scope:Scope,
 			result:Null<CompilerType>):Array<TypedStatement>;
@@ -48,7 +49,8 @@ interface BodyTyping {
 	function expectedInitializerType(name:String, initializer:AstExpression):Null<CompilerType>;
 
 	// Functions, arguments and inline constants.
-	function typeFunction(fn:AstFunction, ?owner:String, isStatic:Bool, ?substitutions:Map<String, CompilerType>,
+	function typeFunction(fn:AstFunction, ?owner:String, isStatic:Bool = false,
+			?substitutions:Map<String, CompilerType>,
 			?specializedName:String, ?abstractReceiver:CompilerType, ?physicalOwner:String,
 			?ownerTypeArguments:Array<CompilerType>):TypedFunction;
 	function argumentType(argument:AstArgument, ?substitutions:Map<String, CompilerType>):CompilerType;
