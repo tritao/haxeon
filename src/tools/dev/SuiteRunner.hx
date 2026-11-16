@@ -106,6 +106,7 @@ class SuiteRunner {
 		console('${prefix()}${suites.length} suites; logs in $directory');
 		if (!setUp()) {
 			record("build: FAILED (see build-*.log)");
+			failed = true;
 			return finish();
 		}
 		record("build: ok");
