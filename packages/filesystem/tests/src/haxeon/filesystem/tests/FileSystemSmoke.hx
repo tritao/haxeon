@@ -1,11 +1,12 @@
 package haxeon.filesystem.tests;
 
 import haxeon.filesystem.FileSystemRoot;
+import nativekit.ffi.NativeKitFilesystemTypes.FileSystemEntryKind;
 
 class FileSystemSmoke {
 	static function main():Void {
 		var root = new FileSystemRoot(Sys.getCwd());
-		if (root.stat("").get_kind() != 2)
+		if (root.stat("").get_kind() != FileSystemEntryKind.Directory)
 			throw "root stat did not return a directory";
 
 		var cursor = root.openDirectory("");
