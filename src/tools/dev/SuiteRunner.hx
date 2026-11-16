@@ -191,6 +191,10 @@ class SuiteRunner {
 			Sys.putEnv(variable, resolved.get(variable));
 		Sys.putEnv("HAXEON_HASHLINK_DIR", build.HashLinkPath.directory(home));
 		Sys.putEnv("HAXEON_NATIVE_READY", "1");
+		// The suites that require Wasmtime run the one found here, wherever it was found.
+		var wasmtime = wasmtimePath();
+		if (wasmtime != null)
+			Sys.putEnv("WASMTIME", wasmtime);
 		var haxe = Sys.getEnv("HAXEON_HAXE");
 		launcherActive = haxe == null || haxe == "";
 		return true;
@@ -337,13 +341,20 @@ class SuiteRunner {
 	}
 
 	function wasmtimeAvailable():Bool {
-		if (haveWasmtime == null) {
-			var configured = Sys.getEnv("WASMTIME");
-			haveWasmtime = (configured != null && configured != "")
-				|| FileSystem.exists(Path.join([home, ".tools", "wasmtime-47.0.0", "wasmtime"]))
-				|| onPath("wasmtime");
-		}
+		if (haveWasmtime == null)
+			haveWasmtime = wasmtimePath() != null;
 		return haveWasmtime;
+	}
+
+	/** Wasmtime: WASMTIME, else the pinned copy under .tools, else the one on PATH; null when there is none. */
+	function wasmtimePath():Null<String> {
+		var configured = Sys.getEnv("WASMTIME");
+		if (configured != null && configured != "")
+			return configured;
+		var pinned = Path.join([home, ".tools", "wasmtime-47.0.0", "wasmtime"]);
+		if (FileSystem.exists(pinned))
+			return pinned;
+		return onPath("wasmtime") ? "wasmtime" : null;
 	}
 
 	function printLog(result:SuiteResult):Void {
