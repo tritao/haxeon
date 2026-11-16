@@ -11,7 +11,7 @@ build_dir=${NATIVEKIT_BUILD_DIR:-"$nativekit_dir/build-gpu"}
 cmake -S "$nativekit_dir" -B "$build_dir" -GNinja -DCMAKE_BUILD_TYPE=Debug \
     -DNK_BUILD_GPU=ON -DNK_BUILD_TESTS=ON -DNK_BUILD_EXAMPLES=ON
 cmake --build "$build_dir"
-"$gpu_dir/tools/check-hxi.sh"
+HAXEON_DIR="$haxeon_dir" "$gpu_dir/tools/update-haxeon-hxi.sh" --check
 if [[ -x "$haxeon_dir/scripts/build-runtime.sh" ]]; then
 	"$haxeon_dir/scripts/build-runtime.sh"
 elif [[ -x "$haxeon_dir/scripts/build-native.sh" ]]; then

@@ -27,7 +27,7 @@ fi
 
 cmake -S "$module_dir" -B "$build_dir" -DNKUI_NATIVEKIT_DIR="$repo_dir" -DNK_BUILD_EXAMPLES=ON
 cmake --build "$build_dir" --target nativekit_ui
-"$module_dir/tools/check-hxi.sh"
+HAXEON_DIR="$haxeon_dir" "$module_dir/tools/update-haxeon-hxi.sh" --check
 if [[ -x "$haxeon_dir/scripts/build-runtime.sh" ]]; then
     (cd "$haxeon_dir" && scripts/build-runtime.sh)
 elif [[ -x "$haxeon_dir/scripts/build-native.sh" ]]; then

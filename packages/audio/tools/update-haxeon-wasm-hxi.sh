@@ -21,6 +21,8 @@ fi
   --exclude-header="$nativekit_dir/include/nativekit_resource.h" \
   --source-label=modules/audio/bindings/nativekit_audio_import.h \
   --output="$destination" "$nativekit_dir/modules/audio/bindings/nativekit_audio_import.h"
-if [[ ${1:-} == --check ]]; then
-  diff -u "$output" "$destination"
+if [[ ${1:-} == --check ]] && ! cmp -s "$output" "$destination"; then
+  echo 'Haxeon wasm audio binding is stale; run tools/update-haxeon-wasm-hxi.sh' >&2
+  diff -u "$output" "$destination" || true
+  exit 1
 fi

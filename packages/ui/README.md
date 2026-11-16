@@ -171,8 +171,8 @@ With examples enabled, run the C API showcase with:
 
 It supports `--smoke-test` for a bounded rendering run. The Haxe framework
 showcase and framework tests live under `examples/ui_haxeon` and
-`tests/haxeon`; generated bindings are checked with
-`tools/check-hxi.sh`.
+`tests/haxeon`; generated bindings are regenerated with
+`tools/update-haxeon-hxi.sh` and verified with its `--check` option.
 
 `FontCollection.addSystemFallbacks()` installs both script and missing-character
 lookup. On Linux, Fontconfig is queried for the actual missing Unicode scalar,

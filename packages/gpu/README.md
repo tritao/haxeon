@@ -10,7 +10,7 @@ The `vendor/nativekit` submodule pins the supported NativeKit revision. Initiali
 
 ## Tooling
 
-Run tools from this package's `tools/` directory. Platform `tools/test-haxe-bindings.sh` performs ABI32/ABI64 checks and both platform and GPU runtime smoke tests. GPU `tools/check-hxi.sh` regenerates its reviewed interface; `tools/test-haxeon.sh` runs the graphical stress fixture.
+Run tools from this package's `tools/` directory. Platform `tools/test-haxe-bindings.sh` performs ABI32/ABI64 checks and both platform and GPU runtime smoke tests. GPU `tools/update-haxeon-hxi.sh` regenerates its reviewed interface and `--check` verifies it without writing; `tools/test-haxeon.sh` runs the graphical stress fixture.
 
 Generator source labels retain their original paths to preserve reviewed HXI content during extraction.
 

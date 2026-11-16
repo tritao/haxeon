@@ -18,27 +18,12 @@ HAXEON_DIR="$haxeon_dir" "$platform_dir/tools/update-haxeon-hxi.sh" --check
 HAXEON_DIR="$haxeon_dir" "$platform_dir/tools/update-haxeon-vulkan-hxi.sh" --check
 HAXEON_DIR="$haxeon_dir" "$platform_dir/tools/update-haxeon-net-hxi.sh" --check
 HAXEON_DIR="$haxeon_dir" "$platform_dir/tools/update-haxeon-wasm-hxi.sh" --check
+HAXEON_DIR="$haxeon_dir" "$platform_dir/tools/update-haxeon-net-wasm-hxi.sh" --check
 
-"$haxeon_dir/scripts/haxeon-ffi-audit" \
-    --target=x86_64-linux-gnu \
-    --target=x86_64-w64-windows-gnu \
-    --target=x86_64-apple-darwin \
-    --target=arm64-apple-darwin \
-    --profile=portable-abi64 \
-    --library=nativekit_gpu \
-    --interface=NativeKitGpu \
-    --depends=NativeKit \
-    --dependency-hxi="$platform_dir/bindings/nativekit.hxi" \
-    --include="$nativekit_dir/modules/gpu/include" \
-    --include="$gpu_dir/bindings" \
-    --include="$nativekit_dir/include" \
-    --exclude-header="$nativekit_dir/include/nativekit.h" \
-    --exclude-header="$nativekit_dir/include/nativekit_graphics.h" \
-    --source-label=modules/gpu/bindings/nativekit_gpu_import.h \
-    --output="$test_root/nativekit-gpu-abi64.hxi" \
-    "$gpu_dir/bindings/nativekit_gpu_import.h"
-cmp "$gpu_dir/bindings/nativekit-gpu.hxi" "$test_root/nativekit-gpu-abi64.hxi"
+HAXEON_DIR="$haxeon_dir" "$gpu_dir/tools/update-haxeon-hxi.sh" --check
 
+# No Wasm GPU binding is checked in, so the ABI32 run only audits that the GPU
+# import header agrees across the Wasm targets; its output is discarded.
 "$haxeon_dir/scripts/haxeon-ffi-audit" \
     --target=wasm32-unknown-wasi \
     --target=wasm32-unknown-emscripten \

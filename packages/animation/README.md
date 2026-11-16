@@ -74,7 +74,7 @@ cmake -S packages/animation/native -B build/animation-native -GNinja -DCMAKE_BUI
 cmake --build build/animation-native
 ctest --test-dir build/animation-native --output-on-failure
 scripts/haxeon run --project packages/animation/tests/haxeon.json
-packages/animation/native/tools/check-hxi.sh
+packages/animation/native/tools/update-haxeon-hxi.sh --check
 ```
 
 The native suite covers import, blending, IK, procedural rotations, lifetime/error handling and

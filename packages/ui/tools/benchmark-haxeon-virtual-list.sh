@@ -10,7 +10,7 @@ build_dir=${NATIVEKIT_BUILD_DIR:-"$haxeon_dir/out/packages/ui/native"}
 artifact="$build_dir/haxeon-ui-virtual-list-benchmark.hl"
 
 cmake --build "$build_dir" --target nativekit_ui
-"$module_dir/tools/check-hxi.sh"
+HAXEON_DIR="$haxeon_dir" "$module_dir/tools/update-haxeon-hxi.sh" --check
 if [[ -x "$haxeon_dir/scripts/build-runtime.sh" ]]; then
 	(cd "$haxeon_dir" && scripts/build-runtime.sh)
 elif [[ -x "$haxeon_dir/scripts/build-native.sh" ]]; then

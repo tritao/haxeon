@@ -10,7 +10,7 @@ build_dir=${NATIVEKIT_BUILD_DIR:-"$haxeon_dir/out/packages/ui/native"}
 
 cmake --build "$build_dir" --target nativekit_ui nativekit_ui_layout_snapshot_index_test
 "$build_dir/nativekit_ui_layout_snapshot_index_test"
-"$module_dir/tools/check-hxi.sh"
+HAXEON_DIR="$haxeon_dir" "$module_dir/tools/update-haxeon-hxi.sh" --check
 if [[ -x "$haxeon_dir/scripts/build-runtime.sh" ]]; then
 	"$haxeon_dir/scripts/build-runtime.sh"
 elif [[ -x "$haxeon_dir/scripts/build-native.sh" ]]; then

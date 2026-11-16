@@ -20,11 +20,14 @@ without copying the backing storage. Core declarations are supplied through
 Regenerate and verify the UI interface with:
 
 ```sh
-tools/check-hxi.sh
+tools/update-haxeon-hxi.sh
+tools/update-haxeon-hxi.sh --check
 ```
 
-That command compares Linux, MinGW, Intel macOS, and ARM macOS Clang targets
-under the `portable-abi64` contract before writing the canonical artifact.
+The first command compares Linux, MinGW, Intel macOS, and ARM macOS Clang targets
+under the `portable-abi64` contract before writing the canonical artifact. With
+`--check` it writes to a temporary file instead and fails if the checked-in
+interface differs.
 The Haxeon UI showcase is the executable contract for paths, text, images,
 transforms, clipping, layers, retained display lists, resizing, display scale,
 zero-length submission, and stale-resource rejection:
