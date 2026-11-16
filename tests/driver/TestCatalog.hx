@@ -60,6 +60,7 @@ class TestCatalog {
 		"ReachabilityPruneMain",
 		"TypedMetadataMergeMain",
 		"WarmRebuildReuseMain",
+		"StructuralWarmEditMain",
 		"WasmBackendSessionMain",
 		"PackedValuePatchMain",
 		"IrVerifyMemoMain",
