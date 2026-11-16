@@ -1145,8 +1145,11 @@ class ExpressionTyper {
 			var expectedField = anonymousField(expectedFields, field.name);
 			if (expectedFields != null && expectedField == null)
 				fail("E1002", 'Unexpected object field "${field.name}"', field.span);
-			var value = typeExpressionCallback(field.value, scope, expectedField == null ? null : expectedField.type,
-				false);
+			// A field of a dynamic object is Dynamic, so its value is typed in a Dynamic context: `{items: []}` passed as
+			// Dynamic holds an Array<Dynamic>, while a value that has a type of its own keeps it.
+			var fieldExpected = expectedField != null ? expectedField.type : objectExpected == null
+				&& isDynamicExpectation(expectedType) ? TDynamic : null;
+			var value = typeExpressionCallback(field.value, scope, fieldExpected, false);
 			if (expectedField != null)
 				value = coerce(value, expectedField.type, 'object field "${field.name}"', "E1002");
 			else if ((switch (value.type) {
