@@ -398,7 +398,7 @@ class FrontendCompilation {
 				semanticAssembly.facts, build.lowerToIr,
 				retainedFromPrevious(context, names, selected, build.lowerToIr,
 				[for (classDecl in canonicalProgram.classes) classDecl.name => true],
-				previousSemantic));
+				previousSemantic), context.options.reverseTypingOrder);
 			build.allocationAfterProgramTyping = AllocationMeter.sample();
 			build.typingDoneAt = now();
 			var typedNew = typedResult.program;

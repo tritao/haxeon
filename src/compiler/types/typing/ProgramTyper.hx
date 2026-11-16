@@ -34,8 +34,12 @@ class ProgramTyper {
 	final externTyper:ExternTyper;
 	final assembler:TypedProgramAssembler;
 
-	public function new(bodyTyper:BodyTyper) {
+	/** Type bodies and field initializers last declared first; see `CompileOptions.reverseTypingOrder`. */
+	final reverseTypingOrder:Bool;
+
+	public function new(bodyTyper:BodyTyper, reverseTypingOrder:Bool = false) {
 		this.bodyTyper = bodyTyper;
+		this.reverseTypingOrder = reverseTypingOrder;
 		this.session = bodyTyper.session;
 		this.externTyper = new ExternTyper(argument -> bodyTyper.argumentType(argument),
 			(type, span) -> bodyTyper.lowerType(type, span));
@@ -210,12 +214,9 @@ class ProgramTyper {
 						],
 						result:erasureType(interfaceDecl, method.result, method.span)
 				}]
-		}] : cachedMetadata.interfaces, typedClasses:Array<TypedClass> = cachedMetadata == null ? [
-			for (classDecl in program.classes)
-				if (classDecl.isExtern != true
-				&& externTyper.nativeLibrary(classDecl.name, classDecl.metadata) == null) typeClass(classDecl, selected,
-				true)
-		] : refreshCachedClasses(program.classes, cachedMetadata.classes, selected),
+		}] : cachedMetadata.interfaces, typedClasses:Array<TypedClass> = cachedMetadata == null
+			? typeDeclaredClasses(program.classes, selected) : refreshCachedClasses(program.classes,
+			cachedMetadata.classes, selected),
 			typedFunctions:Array<TypedFunction> = [];
 		// Unchanged code keeps the generic owners and generated classes it uses, whether or not the declaration metadata of the
 		// previous program is reused. Owners are asked for again and typed from the current declarations, so a program that
@@ -257,27 +258,28 @@ class ProgramTyper {
 			bindCachedNativeLayouts(typedClasses);
 		var metadataDoneAt = Sys.time() * 1000.0;
 		var allocationAfterMetadata = AllocationMeter.sample();
+		// Reversed, the three groups of bodies are typed last first as well as each group's bodies.
+		var moduleFunctions:Array<TypedFunction> = [], abstractFunctions:Array<TypedFunction> = [];
+		if (reverseTypingOrder) {
+			abstractFunctions = typeAbstractFunctions(program.abstracts, selected);
+			moduleFunctions = typeModuleFunctions(program.functions, selected);
+		}
 		if (cachedMetadata == null)
 			typedClasses = typeClassBodies(program.classes, typedClasses, selected);
 		var classBodiesDoneAt = Sys.time() * 1000.0;
 		var allocationAfterClassBodies = AllocationMeter.sample();
-		for (fn in program.functions)
-			if (fn.isExtern != true && !BodyTyper.isGeneric(fn) && (selected == null || selected.exists(fn.name)))
-				typedFunctions.push(bodyTyper.typeFunction(fn));
+		if (!reverseTypingOrder) {
+			moduleFunctions = typeModuleFunctions(program.functions, selected);
+			abstractFunctions = typeAbstractFunctions(program.abstracts, selected);
+		}
+		for (fn in moduleFunctions)
+			typedFunctions.push(fn);
 		for (classDecl in typedClasses)
 			for (method in classDecl.methods)
 				if (selected == null || selected.exists(method.name))
 					typedFunctions.push(method);
-		for (abstractDecl in program.abstracts)
-			for (method in abstractDecl.methods) {
-				var name = abstractDecl.name + "." + method.name;
-				if (abstractDecl.isExtern != true
-					&& method.isStatic
-					&& !BodyTyper.isGeneric(BodyTyper.requiredMapValue(session.signatures, name))
-					&& (selected == null || selected.exists(name)))
-					typedFunctions.push(bodyTyper.typeFunction(BodyTyper.requiredMapValue(session.signatures, name),
-						abstractDecl.name, true));
-			}
+		for (fn in abstractFunctions)
+			typedFunctions.push(fn);
 		var functionBodiesDoneAt = Sys.time() * 1000.0;
 		var allocationAfterFunctionBodies = AllocationMeter.sample();
 		// Field and signature types can request owners without a construction expression. A
@@ -1035,13 +1037,69 @@ class ProgramTyper {
 		}
 	}
 
+	/** The indices `0...count` in the order units are typed: declaration order, or reversed. */
+	function typingOrder(count:Int):Array<Int> {
+		var order = [for (index in 0...count) index];
+		if (reverseTypingOrder)
+			order.reverse();
+		return order;
+	}
+
+	/** The declared classes with their fields and initializers typed and their method bodies deferred, in declaration order. */
+	function typeDeclaredClasses(declarations:Array<AstClass>, selected:Null<Map<String, Bool>>):Array<TypedClass> {
+		var typed:Array<Null<TypedClass>> = [for (_ in declarations) null];
+		for (index in typingOrder(declarations.length)) {
+			var classDecl = declarations[index];
+			if (classDecl.isExtern != true && externTyper.nativeLibrary(classDecl.name, classDecl.metadata) == null)
+				typed[index] = typeClass(classDecl, selected, true);
+		}
+		return [for (typedClass in typed) if (typedClass != null) typedClass];
+	}
+
+	function typeModuleFunctions(functions:Array<AstFunction>, selected:Null<Map<String, Bool>>):Array<TypedFunction> {
+		var typed:Array<Null<TypedFunction>> = [for (_ in functions) null];
+		for (index in typingOrder(functions.length)) {
+			var fn = functions[index];
+			if (fn.isExtern != true && !BodyTyper.isGeneric(fn) && (selected == null || selected.exists(fn.name)))
+				typed[index] = bodyTyper.typeFunction(fn);
+		}
+		return [for (fn in typed) if (fn != null) fn];
+	}
+
+	function typeAbstractFunctions(abstracts:Array<compiler.syntax.Ast.AstAbstract>,
+			selected:Null<Map<String, Bool>>):Array<TypedFunction> {
+		var methods:Array<{owner:String, signature:AstFunction}> = [];
+		for (abstractDecl in abstracts)
+			for (method in abstractDecl.methods) {
+				var name = abstractDecl.name + "." + method.name;
+				if (abstractDecl.isExtern != true
+					&& method.isStatic
+					&& !BodyTyper.isGeneric(BodyTyper.requiredMapValue(session.signatures, name))
+					&& (selected == null || selected.exists(name)))
+					methods.push({
+						owner: abstractDecl.name,
+						signature: BodyTyper.requiredMapValue(session.signatures, name)
+					});
+			}
+		var typed:Array<Null<TypedFunction>> = [for (_ in methods) null];
+		for (index in typingOrder(methods.length))
+			typed[index] = bodyTyper.typeFunction(methods[index].signature, methods[index].owner, true);
+		return [for (fn in typed) if (fn != null) fn];
+	}
+
 	function typeClassBodies(declarations:Array<AstClass>, classes:Array<TypedClass>,
 			selected:Null<Map<String, Bool>>):Array<TypedClass> {
-		var byName:Map<String, AstClass> = [for (declaration in declarations) declaration.name => declaration];
-		return [for (typed in classes) {
-			var declaration = byName.get(typed.name);
-			if (declaration == null) typed else {
-				var substitutions = session.representation.erasedNominalSubstitutions(declaration.name);
+		var byName:Map<String, AstClass> = [for (declaration in declarations) declaration.name => declaration],
+			methods:Array<Null<Array<TypedFunction>>> = [for (_ in classes) null];
+		for (index in typingOrder(classes.length)) {
+			var declaration = byName.get(classes[index].name);
+			if (declaration != null)
+				methods[index] = typeClassMethods(declaration, classes[index].fields, selected, false,
+					session.representation.erasedNominalSubstitutions(declaration.name));
+		}
+		return [for (index in 0...classes.length) {
+			var typed = classes[index], typedMethods = methods[index];
+			if (typedMethods == null) typed else {
 				{
 					name:typed.name,
 						genericParameters:typed.genericParameters,
@@ -1053,7 +1111,7 @@ class ProgramTyper {
 						base:typed.base,
 						interfaces:typed.interfaces,
 						fields:typed.fields,
-						methods:typeClassMethods(declaration, typed.fields, selected, false, substitutions),
+						methods:typedMethods,
 						span:typed.span
 				};
 			}
@@ -1070,7 +1128,9 @@ class ProgramTyper {
 		for (field in fields)
 			if (!field.isStatic && field.initializer != null)
 				instanceInitializers.push(field);
-		for (method in classDecl.methods) {
+		var methodsTyped:Array<Null<TypedFunction>> = [for (_ in classDecl.methods) null];
+		for (methodIndex in typingOrder(classDecl.methods.length)) {
+			var method = classDecl.methods[methodIndex];
 			if (specialization != null && method.isStatic)
 				continue;
 			if (specialization == null && !method.isStatic && isConstrainedOwnerTemplate(classDecl.name))
@@ -1091,8 +1151,11 @@ class ProgramTyper {
 						specialization == null ? null : session.representation.receiverType(classDecl.name,
 						substitutions));
 			}
-			typedMethods.push(typedMethod);
+			methodsTyped[methodIndex] = typedMethod;
 		}
+		for (typedMethod in methodsTyped)
+			if (typedMethod != null)
+				typedMethods.push(typedMethod);
 		if (!hasConstructor
 			&& (specialization != null || !isConstrainedOwnerTemplate(classDecl.name))
 			&& instanceInitializers.length > 0

@@ -8,6 +8,7 @@ typedef CompileOptionsInit = {
 	final ?earlyPrune:Bool;
 	final ?checkReuse:Bool;
 	final ?wasmLegacyExceptions:Bool;
+	final ?reverseTypingOrder:Bool;
 }
 
 /**
@@ -40,6 +41,12 @@ class CompileOptions {
 	/** Emit Wasm GC exception handling in the legacy try/catch encoding, for hosts without the standard one. */
 	public final wasmLegacyExceptions:Bool;
 
+	/**
+	 * Type the program's function bodies and field initializers in reverse declaration order. Output must not change: a body's
+	 * typing may depend only on the program and the body, never on which bodies were typed before it. For the tests that check so.
+	 */
+	public final reverseTypingOrder:Bool;
+
 	public function new(?init:CompileOptionsInit) {
 		inlining = init == null || init.inlining != false;
 		loadStoreForwarding = init == null || init.loadStoreForwarding != false;
@@ -47,6 +54,7 @@ class CompileOptions {
 		earlyPrune = init == null || init.earlyPrune != false;
 		checkReuse = init != null && init.checkReuse == true;
 		wasmLegacyExceptions = init != null && init.wasmLegacyExceptions == true;
+		reverseTypingOrder = init != null && init.reverseTypingOrder == true;
 	}
 
 	/** These options with `inlining` set, the others kept. */
@@ -57,7 +65,8 @@ class CompileOptions {
 			strengthReduction: strengthReduction,
 			earlyPrune: earlyPrune,
 			checkReuse: checkReuse,
-			wasmLegacyExceptions: wasmLegacyExceptions
+			wasmLegacyExceptions: wasmLegacyExceptions,
+			reverseTypingOrder: reverseTypingOrder
 		});
 
 	/** The command-line flags that state these options, the defaults left out; `CompilerArguments` reads them back. */
@@ -75,6 +84,8 @@ class CompileOptions {
 			flags.push("--check-reuse");
 		if (wasmLegacyExceptions)
 			flags.push("--wasm-legacy-exceptions");
+		if (reverseTypingOrder)
+			flags.push("--reverse-typing-order");
 		return flags;
 	}
 
@@ -87,7 +98,7 @@ class CompileOptions {
 		return switch argument {
 			case "--no-inline", "--no-load-store-forwarding", "--no-strength-reduction", "--no-early-prune",
 				"--check-reuse",
-				"--wasm-legacy-exceptions": true;
+				"--wasm-legacy-exceptions", "--reverse-typing-order": true;
 			default: false;
 		};
 
@@ -99,6 +110,7 @@ class CompileOptions {
 			strengthReduction: arguments.indexOf("--no-strength-reduction") < 0,
 			earlyPrune: arguments.indexOf("--no-early-prune") < 0,
 			checkReuse: arguments.indexOf("--check-reuse") >= 0,
-			wasmLegacyExceptions: arguments.indexOf("--wasm-legacy-exceptions") >= 0
+			wasmLegacyExceptions: arguments.indexOf("--wasm-legacy-exceptions") >= 0,
+			reverseTypingOrder: arguments.indexOf("--reverse-typing-order") >= 0
 		});
 }
