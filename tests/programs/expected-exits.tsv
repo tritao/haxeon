@@ -599,3 +599,4 @@ enum-constants	42
 gc-stats	42
 dynamic-object-empty-array	42
 bytes-to-hex	42
+statement-metadata	42

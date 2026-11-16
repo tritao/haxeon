@@ -1462,6 +1462,10 @@ class Parser {
 	}
 
 	function parseStatements():Array<AstStatement> {
+		// Metadata on a statement (`@:privateAccess { ... }`) changes nothing it compiles to, as on an expression; taken
+		// here, the statement after it parses as it would without it, so a block stays a block statement.
+		if (check(TokenKind.At))
+			parseMetadata();
 		if (!check(TokenKind.Var) && !check(TokenKind.Final))
 			return [parseStatement()];
 		var immutable = check(TokenKind.Final);

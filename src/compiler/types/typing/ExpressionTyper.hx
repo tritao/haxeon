@@ -1885,9 +1885,9 @@ class ExpressionTyper {
 	public function typeCast(value:AstExpression, target:Null<AstType>, span:SourceSpan, scope:Scope,
 			expectedType:Null<CompilerType>,
 			lowerType:LowerExpressionTypeCallback):TypedExpression {
-		var targetType = target == null ? expectedType : lowerType(target, span);
-		if (targetType == null)
-			fail("E1003", "Untyped cast requires an expected type", span);
+		// An untyped cast with nothing to take a type from (an element of `cast [for (x in xs) cast f(x)]`) is Dynamic: its
+		// value goes wherever Dynamic goes, as Haxe's unknown type does there.
+		var targetType = target == null ? (expectedType == null ? TDynamic : expectedType) : lowerType(target, span);
 		// An explicit type ascription guides its operand; an untyped cast separates source inference from its destination.
 		var typedValue = typeExpressionCallback(value, scope, target == null ? null : targetType, false);
 		// Lowering requires a typed null. Preserve nullable targets directly; use the normal Dynamic cast for scalars.
