@@ -10,7 +10,6 @@ class PlatformAbi {
 
 	static final types:Map<String, Bool> = [
 		"haxe.io.Encoding" => true,
-		"haxe.io.Eof" => true,
 		"haxe.Json" => true,
 		"sys.io.File" => true,
 		"Type.ValueType" => true
@@ -48,7 +47,6 @@ class PlatformAbi {
 				} : null;
 			case CompilerType.TBytes: name == "length" ? {type: CompilerType.TInt, get: "__bytes_length", set: null} : null;
 			case CompilerType.TAbstract(_, _, underlying): field(underlying, name);
-			case CompilerType.TNativeAbstract(kind): nativeAbstractField(kind, name);
 			default: null;
 		};
 
@@ -58,19 +56,6 @@ class PlatformAbi {
 			case CompilerType.THlBytes:
 				name == "ucs2Length" ? {arguments: [CompilerType.TInt], result: CompilerType.TInt, nativeName: "__hl_bytes_ucs2_length"} : null;
 			case CompilerType.TAbstract(_, _, underlying): method(underlying, name);
-			default: null;
-		};
-
-	static function nativeAbstractField(kind:String, name:String):Null<{type:CompilerType, get:String, set:Null<String>}>
-		return switch kind {
-			case "realtime_bytes_input":
-				switch name {
-					case "position": {type: CompilerType.TInt, get: "__bytes_input_position", set: null};
-					case "bigEndian": {type: CompilerType.TBool, get: "__bytes_input_big_endian", set: "__bytes_input_set_big_endian"};
-					default: null;
-				}
-			case "realtime_bytes_output":
-				name == "bigEndian" ? {type: CompilerType.TBool, get: "__bytes_output_big_endian", set: "__bytes_output_set_big_endian"} : null;
 			default: null;
 		};
 

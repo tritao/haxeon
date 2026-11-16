@@ -93,10 +93,12 @@ class Input {
 	}
 
 	public function readFloat():Float
-		return ordered(4).getFloat(0);
+		return FPHelper.i32ToFloat(readInt32());
 
-	public function readDouble():Float
-		return ordered(8).getDouble(0);
+	public function readDouble():Float {
+		var first = readInt32(), second = readInt32();
+		return bigEndian ? FPHelper.i64ToDouble(second, first) : FPHelper.i64ToDouble(first, second);
+	}
 
 	public function readInt8():Int {
 		var n = readByte();
@@ -133,18 +135,5 @@ class Input {
 		var bytes = Bytes.alloc(len);
 		readFullBytes(bytes, 0, len);
 		return bytes.getString(0, len);
-	}
-
-	/** `count` bytes in little-endian order, for the Bytes readers. */
-	function ordered(count:Int):Bytes {
-		var bytes = Bytes.alloc(count);
-		readFullBytes(bytes, 0, count);
-		if (bigEndian)
-			for (i in 0...count >> 1) {
-				var swapped = bytes.get(i);
-				bytes.set(i, bytes.get(count - 1 - i));
-				bytes.set(count - 1 - i, swapped);
-			}
-		return bytes;
 	}
 }

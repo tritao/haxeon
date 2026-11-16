@@ -53,12 +53,14 @@ class HlRuntimeIdentity {
 		out.write(moduleId);
 		out.writeInt32(revision);
 		out.writeInt32(names.length);
-		out.writeInt32(indices.exists("__init") ? indices.get("__init") : -1);
+		var initIndex = indices.get("__init");
+		out.writeInt32(initIndex == null ? -1 : initIndex);
 		for (name in names) {
-			if (!stableIds.exists(name) || !indices.exists(name))
+			var stableId = stableIds.get(name), index = indices.get(name);
+			if (stableId == null || index == null)
 				throw 'Missing runtime identity mapping for "$name"';
-			out.writeInt32(stableIds.get(name));
-			out.writeInt32(indices.get(name));
+			out.writeInt32(stableId);
+			out.writeInt32(index);
 		}
 		return out.getBytes();
 	}

@@ -113,8 +113,6 @@ class WasmGcTypePlan {
 	public var bytesTypeIndex(default, null):Int = -1;
 	public var managedBytesTypeIndex(default, null):Int = -1;
 	public var nativePointerTypeIndex(default, null):Int = -1;
-	public var bytesInputTypeIndex(default, null):Int = -1;
-	public var bytesOutputTypeIndex(default, null):Int = -1;
 	public var closureTypeIndex(default, null):Int = -1;
 
 	/** Closure field holding its source-language signature ID (WasmGcClosureAdapters). */
@@ -375,8 +373,6 @@ class WasmGcTypePlan {
 			case Function(_, _): Ref(nullableType(closureTypeIndex));
 			case Bytes: Ref(nullableType(bytesTypeIndex));
 			case ManagedBytes: Ref(nullableType(managedBytesTypeIndex));
-			case Abstract("realtime_bytes_input"): Ref(nullableType(bytesInputTypeIndex));
-			case Abstract("realtime_bytes_output"): Ref(nullableType(bytesOutputTypeIndex));
 			// Native pointer values wrap a raw host pointer with explicit ownership state.
 			case Abstract("native_pointer"): Ref(nullableType(nativePointerTypeIndex));
 			case Abstract(name) if (mapTypes.exists(name)): Ref(nullableType(mapType(name)));
@@ -647,8 +643,6 @@ class WasmGcTypePlan {
 		bytesTypeIndex = reserveType();
 		managedBytesTypeIndex = reserveType();
 		nativePointerTypeIndex = reserveType();
-		bytesInputTypeIndex = reserveType();
-		bytesOutputTypeIndex = reserveType();
 		closureTypeIndex = reserveType();
 		boxedPrimitiveTypeIndices.set("i32", reserveType());
 		boxedPrimitiveTypeIndices.set("raw-ptr", reserveType());
@@ -766,17 +760,6 @@ class WasmGcTypePlan {
 			{type: Value(I32), mutable: true}, // Raw host pointer value.
 			{type: Value(I32), mutable: true}, // Release import function index, or -1 for borrowed pointers.
 			{type: Value(I32), mutable: true} // Closed state.
-		]));
-		setType(bytesInputTypeIndex, true, [], Struct([
-			{type: Value(Ref({nullable: true, heap: Type(managedBytesTypeIndex)})), mutable: false},
-			{type: Value(I32), mutable: true},
-			{type: Value(I32), mutable: true}
-		]));
-		setType(bytesOutputTypeIndex, true, [], Struct([
-			{type: Value(I32), mutable: true},
-			{type: Value(I32), mutable: true},
-			{type: Value(Ref({nullable: false, heap: Type(byteArrayTypeIndex)})), mutable: true},
-			{type: Value(I32), mutable: true}
 		]));
 		// Table slot (low bit set for a static target), receiver, and the signature it was created with.
 		setType(closureTypeIndex, true, [], Struct([

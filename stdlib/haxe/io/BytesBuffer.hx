@@ -2,53 +2,94 @@
 
 package haxe.io;
 
-/** An append-only buffer of bytes: build a `Bytes` from pieces, then take it with `getBytes`. */
+#if !wasm
+@:hlNative("haxeon_runtime", "__string_utf8_length")
+extern function stringUtf8Length(value:String):Int;
+
+@:hlNative("haxeon_runtime", "__bytes_set_utf8")
+extern function bytesSetUtf8(bytes:Bytes, pos:Int, value:String):Void;
+#end
+
+/**
+ * An append-only buffer of bytes, as in Haxe: build a `Bytes` from pieces, then take it with `getBytes`. Numbers are added
+ * little-endian. Haxe leaves using a buffer after `getBytes` undefined; here the bytes taken are shared until the next
+ * addition, which copies them first, so what `getBytes` returned never changes and taking costs no copy.
+ */
 class BytesBuffer {
-	var output:BytesOutput;
-	var size:Int = 0;
+	var b:Bytes;
+	var pos = 0;
+
+	/** Whether `getBytes` handed out `b`, so it must be copied before it changes. */
+	var shared = false;
 
 	/** The number of bytes added so far. */
 	public var length(get, never):Int;
 
-	public function new() {
-		output = new BytesOutput();
-		// Haxe's BytesBuffer writes numbers little-endian.
-		output.setBigEndian(false);
-	}
+	public function new()
+		b = Bytes.alloc(64);
 
 	function get_length():Int
-		return size;
+		return pos;
 
-	public function addByte(byte:Int):Void {
-		output.writeByte(byte);
-		size++;
+	/** The storage, writable, with room for `extra` more bytes. */
+	inline function room(extra:Int):Bytes
+		return pos + extra <= b.length && !shared ? b : grow(b, extra);
+
+	/** New storage with room for `extra` more bytes, holding what was added. */
+	function grow(bytes:Bytes, extra:Int):Bytes {
+		shared = false;
+		var capacity = bytes.length < 64 ? 64 : bytes.length;
+		while (capacity < pos + extra)
+			capacity *= 2;
+		var grown = Bytes.alloc(capacity);
+		grown.blit(0, bytes, 0, pos);
+		b = grown;
+		return grown;
 	}
 
-	public function add(src:Bytes):Void {
-		output.write(src);
-		size += src.length;
+	public inline function addByte(byte:Int):Void
+		room(1).set(pos++, byte);
+
+	public function add(src:Bytes):Void
+		addBytes(src, 0, src.length);
+
+	/** Adds `v` as UTF-8, the encoding of Haxeon strings. */
+	public function addString(v:String, ?encoding:Encoding):Void {
+		#if wasm
+		add(Bytes.ofString(v));
+		#else
+		var size = stringUtf8Length(v);
+		bytesSetUtf8(room(size), pos, v);
+		pos += size;
+		#end
 	}
 
-	public function addString(value:String, ?encoding:Encoding):Void
-		add(Bytes.ofString(value));
-
-	public function addInt32(value:Int):Void {
-		output.writeInt32(value);
-		size += 4;
+	public inline function addInt32(v:Int):Void {
+		room(4).setInt32(pos, v);
+		pos += 4;
 	}
 
-	public function addDouble(value:Float):Void {
-		output.writeDouble(value);
-		size += 8;
+	public function addInt64(v:haxe.Int64):Void {
+		addInt32(haxe.Int64.toInt(v));
+		addInt32(haxe.Int64.toInt(haxe.Int64.shr(v, 32)));
 	}
+
+	public function addFloat(v:Float):Void
+		addInt32(FPHelper.floatToI32(v));
+
+	public function addDouble(v:Float):Void
+		addInt64(FPHelper.doubleToI64(v));
 
 	public function addBytes(src:Bytes, pos:Int, len:Int):Void {
 		if (pos < 0 || len < 0 || pos + len > src.length)
-			throw "Out of bounds";
-		output.writeBytes(src, pos, len);
-		size += len;
+			throw Error.OutsideBounds;
+		room(len).blit(this.pos, src, pos, len);
+		this.pos += len;
 	}
 
-	public function getBytes():Bytes
-		return output.getBytes();
+	/** The bytes added so far, without copying them. */
+	public function getBytes():Bytes {
+		shared = true;
+		return Bytes.view(b, 0, pos);
+	}
 }

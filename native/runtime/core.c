@@ -204,22 +204,6 @@ typedef struct realtime_bytes {
 	varray *roots;
 } realtime_bytes;
 
-typedef struct {
-	void (*finalize)( void * );
-	vbyte *data;
-	int length;
-	int position;
-	bool big_endian;
-} realtime_bytes_input;
-
-typedef struct {
-	void (*finalize)( void * );
-	vbyte *data;
-	int length;
-	int capacity;
-	bool big_endian;
-} realtime_bytes_output;
-
 typedef struct { double milliseconds; } realtime_date;
 extern double hl_sys_time( void );
 

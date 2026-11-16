@@ -48,16 +48,18 @@ class Output {
 		}
 	}
 
-	public function writeFloat(x:Float):Void {
-		var bytes = Bytes.alloc(4);
-		bytes.setFloat(0, x);
-		writeOrdered(bytes);
-	}
+	public function writeFloat(x:Float):Void
+		writeInt32(FPHelper.floatToI32(x));
 
 	public function writeDouble(x:Float):Void {
-		var bytes = Bytes.alloc(8);
-		bytes.setDouble(0, x);
-		writeOrdered(bytes);
+		var bits = FPHelper.doubleToI64(x), low = haxe.Int64.toInt(bits), high = haxe.Int64.toInt(haxe.Int64.shr(bits, 32));
+		if (bigEndian) {
+			writeInt32(high);
+			writeInt32(low);
+		} else {
+			writeInt32(low);
+			writeInt32(high);
+		}
 	}
 
 	public function writeInt8(x:Int):Void {
@@ -122,15 +124,5 @@ class Output {
 	public function writeString(s:String, ?encoding:Encoding):Void {
 		var bytes = Bytes.ofString(s);
 		writeFullBytes(bytes, 0, bytes.length);
-	}
-
-	/** Writes `bytes`, given in little-endian order, in this output's order. */
-	function writeOrdered(bytes:Bytes):Void {
-		if (bigEndian) {
-			var i = bytes.length;
-			while (i > 0)
-				writeByte(bytes.get(--i));
-		} else
-			writeFullBytes(bytes, 0, bytes.length);
 	}
 }

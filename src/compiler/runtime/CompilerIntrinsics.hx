@@ -39,10 +39,7 @@ class CompilerIntrinsics {
 		"__bytes_sub",
 		"__bytes_compare",
 		"__bytes_to_string",
-		"__bytes_get_string",
-		"__bytes_input_position",
-		"__bytes_input_big_endian",
-		"__bytes_output_big_endian"
+		"__bytes_get_string"
 	];
 
 	/** Intrinsics that only read their operands or allocate fresh values. Calls that can reach user
@@ -79,9 +76,7 @@ class CompilerIntrinsics {
 		definitions.push(native("__string_from_bytes", "haxeon_runtime", "__string_from_bytes", [THlBytes, TInt], TString));
 		definitions.push(native("__string_bytes", "haxeon_runtime", "__string_bytes", [TString], THlBytes));
 		definitions.push(native("__hl_bytes_ucs2_length", "std", "ucs2length", [THlBytes, TInt], TInt));
-		var bytes:CompilerType = TBytes,
-			input:CompilerType = TNativeAbstract("realtime_bytes_input"),
-			output:CompilerType = TNativeAbstract("realtime_bytes_output");
+		var bytes:CompilerType = TBytes;
 
 		// Specialized Bytes representation and instance operations.
 		definitions.push(native("__bytes_length", "haxeon_runtime", "__bytes_length", [bytes], TInt));
@@ -99,15 +94,6 @@ class CompilerIntrinsics {
 		definitions.push(native("__bytes_compare", "haxeon_runtime", "__bytes_compare", [bytes, bytes], TInt));
 		definitions.push(native("__bytes_to_string", "haxeon_runtime", "__bytes_to_string", [bytes], TString));
 		definitions.push(native("__bytes_get_string", "haxeon_runtime", "__bytes_get_string", [bytes, TInt, TInt], TString));
-
-		// Specialized BytesInput representation and operations.
-		definitions.push(native("__bytes_input_position", "haxeon_runtime", "__bytes_input_position", [input], TInt));
-		definitions.push(native("__bytes_input_big_endian", "haxeon_runtime", "__bytes_input_big_endian", [input], TBool));
-		definitions.push(native("__bytes_input_set_big_endian", "haxeon_runtime", "__bytes_input_set_big_endian", [input, TBool], TVoid));
-
-		// Specialized BytesOutput representation and operations.
-		definitions.push(native("__bytes_output_big_endian", "haxeon_runtime", "__bytes_output_big_endian", [output], TBool));
-		definitions.push(native("__bytes_output_set_big_endian", "haxeon_runtime", "__bytes_output_set_big_endian", [output, TBool], TVoid));
 		return definitions;
 	}
 

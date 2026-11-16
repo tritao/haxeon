@@ -2,36 +2,36 @@
 
 package haxe.io;
 
-/** Byte output API over the compiler-owned native stream representation. */
-extern abstract BytesOutput(hl.Abstract<"realtime_bytes_output">) {
-	@:hlNative("haxeon_runtime", "__bytes_output_new")
-	public function new();
+/** An output collecting what is written into a `Bytes`, as in Haxe; `getBytes` takes it, after which nothing is written. */
+class BytesOutput extends Output {
+	final b = new BytesBuffer();
 
-	@:hlNative("haxeon_runtime", "__bytes_output_write_byte")
-	public function writeByte(value:Int):Void;
+	/** The number of bytes written so far. */
+	public var length(get, never):Int;
 
-	@:hlNative("haxeon_runtime", "__bytes_output_set_big_endian")
-	public function setBigEndian(value:Bool):Void;
+	public function new() {}
 
-	@:hlNative("haxeon_runtime", "__bytes_output_write_i32")
-	public function writeInt32(value:Int):Void;
+	function get_length():Int
+		return b.length;
 
-	/** Writes `value` rounded to a 32-bit IEEE float, in four bytes. */
-	@:hlNative("haxeon_runtime", "__bytes_output_write_f32")
-	public function writeFloat(value:Float):Void;
+	override public function writeByte(c:Int):Void
+		b.addByte(c);
 
-	@:hlNative("haxeon_runtime", "__bytes_output_write_f64")
-	public function writeDouble(value:Float):Void;
+	override public function writeBytes(buf:Bytes, pos:Int, len:Int):Int {
+		b.addBytes(buf, pos, len);
+		return len;
+	}
 
-	@:hlNative("haxeon_runtime", "__bytes_output_write_string")
-	public function writeString(value:String):Void;
+	override public function writeInt32(x:Int):Void
+		if (bigEndian)
+			super.writeInt32(x)
+		else
+			b.addInt32(x);
 
-	@:hlNative("haxeon_runtime", "__bytes_output_write")
-	public function write(bytes:Bytes):Void;
+	override public function writeString(s:String, ?encoding:Encoding):Void
+		b.addString(s);
 
-	@:hlNative("haxeon_runtime", "__bytes_output_write_range")
-	public function writeBytes(bytes:Bytes, position:Int, length:Int):Int;
-
-	@:hlNative("haxeon_runtime", "__bytes_output_get_bytes")
-	public function getBytes():Bytes;
+	/** The bytes written, without copying them. */
+	public function getBytes():Bytes
+		return b.getBytes();
 }

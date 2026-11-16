@@ -68,8 +68,7 @@ class WasmTypeIdPlan {
 
 	public static function forProgram(program:IrProgram):WasmTypeIdPlan {
 		var types:Array<IrType> = [Void, I32, I64, Bool, F32, F64, Bytes, RawPtr, ManagedBytes, Dyn, TypeRef, Array(Dyn),
-			Abstract("native_callback"), Abstract("native_pointer"), Abstract("realtime_bytes"), Abstract("realtime_bytes_input"),
-			Abstract("realtime_bytes_output"), Abstract("realtime_iterator")];
+			Abstract("native_callback"), Abstract("native_pointer"), Abstract("realtime_bytes"), Abstract("realtime_iterator")];
 		for (object in program.objects) {
 			types.push(Obj(object.name));
 			for (field in object.fields) types.push(field.type);

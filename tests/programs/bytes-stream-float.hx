@@ -4,8 +4,9 @@ import haxe.io.BytesOutput;
 // writeFloat stores a 32-bit IEEE float in either byte order, and readFloat returns it widened to Float.
 function main():Int {
 	var output = new BytesOutput();
+	output.bigEndian = true;
 	output.writeFloat(1.5);
-	output.setBigEndian(false);
+	output.bigEndian = false;
 	output.writeFloat(-0.15625);
 	output.writeFloat(0.1);
 	var bytes = output.getBytes();
@@ -17,9 +18,10 @@ function main():Int {
 	if (bytes.get(4) != 0x00 || bytes.get(6) != 0x20 || bytes.get(7) != 0xBE)
 		return 3;
 	var input = new BytesInput(bytes);
+	input.bigEndian = true;
 	if (input.readFloat() != 1.5 || input.position != 4)
 		return 4;
-	input.setBigEndian(false);
+	input.bigEndian = false;
 	if (input.readFloat() != -0.15625)
 		return 5;
 	// 0.1 is not a float; it comes back as the nearest one, not as the double.

@@ -156,24 +156,6 @@ class StdlibMain {
 		var dateSymbols:Map<String, Bool> = ["__date_now" => true, "__date_get_time" => true];
 		var coreSymbols:Map<String, Bool> = ["__math_is_nan" => true, "__math_pow" => true, "__reflect_compare" => true];
 		var bytesSymbols:Map<String, Bool> = ["__bytes_alloc" => true, "__bytes_of_string" => true];
-		var streamSymbols:Map<String, Bool> = [
-			"__bytes_input_new" => true,
-			"__bytes_input_read_byte" => true,
-			"__bytes_input_read_i32" => true,
-			"__bytes_input_read_f32" => true,
-			"__bytes_input_read_f64" => true,
-			"__bytes_input_read_string" => true,
-			"__bytes_input_read" => true,
-			"__bytes_output_new" => true,
-			"__bytes_output_write_byte" => true,
-			"__bytes_output_write_i32" => true,
-			"__bytes_output_write_f32" => true,
-			"__bytes_output_write_f64" => true,
-			"__bytes_output_write_string" => true,
-			"__bytes_output_write" => true,
-			"__bytes_output_write_range" => true,
-			"__bytes_output_get_bytes" => true
-		];
 		for (native in result.module.natives) {
 			var symbol = result.module.strings[native.name];
 			stringToolsSymbols.remove(symbol);
@@ -184,7 +166,6 @@ class StdlibMain {
 			dateSymbols.remove(symbol);
 			coreSymbols.remove(symbol);
 			bytesSymbols.remove(symbol);
-			streamSymbols.remove(symbol);
 		}
 		for (symbol in stringToolsSymbols.keys())
 			throw 'StringTools source binding "$symbol" was not emitted';
@@ -202,8 +183,6 @@ class StdlibMain {
 			throw 'core source binding "$symbol" was not emitted';
 		for (symbol in bytesSymbols.keys())
 			throw 'haxe.io.Bytes source binding "$symbol" was not emitted';
-		for (symbol in streamSymbols.keys())
-			throw 'byte stream source binding "$symbol" was not emitted';
 		File.saveBytes(output, HlWriter.encode(result.module).flatten());
 
 		var invalid = new Compiler();

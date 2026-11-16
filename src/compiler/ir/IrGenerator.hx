@@ -3679,8 +3679,7 @@ class IrGenerator {
 				switch kind {
 					case NominalKind.Class: // An owner alias is made only for a generic class with type arguments, so a class without any needs no signature string.
 						var physical = arguments.length == 0 ? null : facts.genericOwnerAliases.get(compiler.semantic.SemanticSignature.type(type));
-						Std.string(name) == "haxe.io.Eof"
-						|| physical == null
+						physical == null
 						&& isErasedGenericOwner(type) ? Dyn : Obj(physical == null ? name : physical);
 					case NominalKind.Interface: Virtual(name);
 					case NominalKind.Enum: Enum(compiler.types.typing.EnumRuntimeType.name(type));
