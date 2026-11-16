@@ -213,6 +213,8 @@ class BodyTyper implements BodyTyping {
 					'Native layout type "$argumentValueType" cannot be passed or stored as a Haxe runtime value yet',
 					argument.span);
 		}
+		fn = DefaultArguments.withPrologue(fn, [for (argument in fn.arguments) argumentType(argument, substitutions)],
+			session.relations);
 		var result = substitutions == null ? lowerType(fn.result, fn.span) : session.declarations.resolve(fn.result,
 			fn.span, substitutions);
 		if (compiler.ffi.NativeLayout.containsUnsupportedRuntimeValueType(result))

@@ -266,7 +266,8 @@ class ModuleCanonicalizer {
 	}
 
 	public static function canonicalInterface(interfaceDecl:compiler.syntax.Ast.AstInterface, aliases:AliasTable,
-			packageName:Null<String>):compiler.syntax.Ast.AstInterface
+			packageName:Null<String>, module:String, entry:String,
+			locals:LocalScope):compiler.syntax.Ast.AstInterface
 		return {
 			name: qualifiedTypeName(packageName, interfaceDecl.name),
 			typeParameters: interfaceDecl.typeParameters,
@@ -277,13 +278,13 @@ class ModuleCanonicalizer {
 			],
 			methods: [
 				for (method in interfaceDecl.methods)
-					canonicalInterfaceMethod(method, interfaceDecl.typeParameters, aliases)
+					canonicalInterfaceMethod(method, interfaceDecl.typeParameters, aliases, module, entry, locals)
 			],
 			span: interfaceDecl.span
 		};
 
 	static function canonicalInterfaceMethod(method:AstFunction, ownerTypeParameters:Array<String>,
-			aliases:AliasTable):AstFunction {
+			aliases:AliasTable, module:String, entry:String, locals:LocalScope):AstFunction {
 		var parameters = combinedTypeParameters(ownerTypeParameters, method.typeParameters);
 		var typeConstraints:Null<Array<AstTypeConstraint>> = method.typeConstraints == null
 			? null : [for (constraint in method.typeConstraints)
@@ -298,7 +299,7 @@ class ModuleCanonicalizer {
 				type:canonicalType(argument.type, aliases, parameters),
 				span:argument.span,
 				optional:argument.optional,
-				defaultValue:argument.defaultValue
+				defaultValue:canonicalOptionalExpression(argument.defaultValue, module, entry, locals, aliases)
 		}];
 		return AstFunctions.copy(method, method.name, false, method.metadata, method.typeParameters, typeConstraints,
 			arguments,

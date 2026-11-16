@@ -409,9 +409,13 @@ class CallResolver {
 	function typeExpressionValue(expression:AstExpression, scope:Scope, ?expectedType:CompilerType):TypedExpression
 		return bodyTyper.typeExpression(expression, scope, expectedType, false);
 
+	/**
+		Types a call's arguments against the callee's declared parameters, filling omitted ones. A virtual call
+		(`virtualCall`) passes null for an omitted argument the method that runs fills itself (`DefaultArguments`).
+	**/
 	public function typeDeclaredCallArguments(arguments:Array<AstExpression>, parameters:Array<AstArgument>,
 			scope:Scope, name:String, span:SourceSpan,
-			?substitutions:Map<String, CompilerType>):Array<TypedExpression> {
+			?substitutions:Map<String, CompilerType>, virtualCall:Bool = false):Array<TypedExpression> {
 		var required = parameters.length;
 		while (required > 0 && parameters[required - 1].optional == true)
 			required--;
@@ -434,7 +438,8 @@ class CallResolver {
 					expected, false), expected,
 					'position argument ${i + 1} to "$name"',
 					"E1009"));
-			else if (defaultValue == null)
+			else if (defaultValue == null
+				|| virtualCall && DefaultArguments.filledByCallee(parameter, expected, session.relations))
 				typed.push(bodyTyper.coerce(new TypedExpression(TNullLiteral, TNull, span), expected,
 					'default argument ${i + 1} to "$name"', "E1009"));
 			else
@@ -713,7 +718,7 @@ class CallResolver {
 				receiver);
 		}
 		var semanticArguments = typeDeclaredCallArguments(arguments, method.arguments, scope, methodKey, span,
-			substitutions),
+			substitutions, method.isExtern != true),
 			physicalArguments = session.representation.adaptMethodArguments(methodOwnerType, methodInfo.owner, method,
 				semanticArguments),
 			methodResult = session.representation.resolveMethodResult(methodOwnerType, methodInfo.owner, method),
@@ -1042,7 +1047,7 @@ class CallResolver {
 			methodOwnerType = projectNominal(receiver.type, methodInfo.owner),
 			substitutions = session.representation.nominalSubstitutions(methodOwnerType),
 			semanticArguments = typeDeclaredCallArguments(arguments, method.arguments, scope, methodKey, span,
-				substitutions),
+				substitutions, method.isExtern != true),
 			physicalArguments = session.representation.adaptMethodArguments(methodOwnerType, methodInfo.owner, method,
 				semanticArguments),
 			methodResult = session.representation.resolveMethodResult(methodOwnerType, methodInfo.owner, method),

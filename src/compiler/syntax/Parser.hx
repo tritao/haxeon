@@ -1084,12 +1084,15 @@ class Parser {
 					var optional = match(TokenKind.Question),
 						argumentName = consume(TokenKind.Identifier).text;
 					consume(TokenKind.Colon);
+					var type = parseType(),
+						span = previous().span,
+						defaultValue = match(TokenKind.Assign) ? parseExpression() : null;
 					arguments.push({
 						name: argumentName,
-						type: parseType(),
-						span: previous().span,
-						optional: optional,
-						defaultValue: null
+						type: type,
+						span: span,
+						optional: optional || defaultValue != null,
+						defaultValue: defaultValue
 					});
 				} while (match(TokenKind.Comma));
 			consume(TokenKind.RightParen);

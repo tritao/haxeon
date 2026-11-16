@@ -326,7 +326,8 @@ class SemanticAssembly {
 				functionStart = functions.length,
 				programFunctionStart = programFunctions.length;
 			for (interfaceDecl in ast.interfaces)
-				interfaces.push(ModuleCanonicalizer.canonicalInterface(interfaceDecl, aliases, ast.packageName));
+				interfaces.push(ModuleCanonicalizer.canonicalInterface(interfaceDecl, aliases, ast.packageName,
+					name, entryModule, locals));
 			for (alias in ast.aliases)
 				typeAliases.push(ModuleCanonicalizer.canonicalAlias(alias, aliases, ast.packageName));
 			for (enumDecl in ast.enums)
