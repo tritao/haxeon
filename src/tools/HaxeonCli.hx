@@ -2,7 +2,6 @@ package tools;
 
 import build.BuildOutput;
 import build.BuildSession;
-import build.CompilerSources;
 import build.HashLinkPath;
 import build.HaxeonNativePackageBuild;
 import build.HaxeonProjectBuild;
@@ -10,6 +9,7 @@ import build.NativeTargetSupport;
 import build.Target;
 import build.WorkspaceBuild;
 import build.WorkspaceManifest;
+import build.execution.CompilerClient;
 import build.execution.Executor;
 import build.execution.JobServer;
 import build.execution.ProcessRunner;
@@ -872,14 +872,12 @@ class HaxeonCli {
 		if (!FileSystem.exists(compiler))
 			throw 'Pinned Haxe is missing: $compiler (run scripts/build-native.sh)';
 
-		var compilerArguments = CompilerSources.classPath(Path.join([home, "src"])).concat([
-			"--run",
-			"compiler.tools.HaxeonCompiler",
+		var compilerArguments = [
 			"--target=" + (target == "host" ? "hl" : "wasm32"),
 			"--build-mode=" + options.buildMode,
 			"--output=" + output,
 			"--entry=" + config.entry
-		]);
+		];
 		for (root in config.sourceRoots)
 			compilerArguments.push("--root=" + resolvePath(root, projectDirectory));
 		for (define in config.defines.concat(options.defines))
@@ -891,13 +889,10 @@ class HaxeonCli {
 			compilerArguments.push(absoluteSource);
 		}
 
-		var compileStatus:Int;
-		try {
-			// CompilerDriver resolves Haxeon's bundled stdlib relative to the repo.
-			compileStatus = ProcessRunner.run(compiler, compilerArguments, home, new Map());
-		} catch (error:Dynamic) {
-			throw error;
-		}
+		// Compiled as the structured build compiles: in the project's compile server when one can run, so a rebuild reuses
+		// what the last one typed.
+		var compileStatus = CompilerClient.compile(compiler, Path.join([home, "src"]), compilerArguments, home,
+			Path.directory(output), projectDirectory);
 		if (compileStatus != 0)
 			return compileStatus;
 		if (!launch) {

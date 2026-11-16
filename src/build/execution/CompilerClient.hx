@@ -279,6 +279,40 @@ class CompilerClient {
 	 * Compiles once without a resident worker by running the compiler as a HashLink program, which is several
 	 * times faster than interpreting it. `fallback` (the interpreter) remains for hosts without that path.
 	 */
+	/**
+	 * Compiles as every `haxeon` command does: in the project's resident compile server, else in a one-shot HashLink build of the
+	 * compiler, else in the compiler interpreted by the pinned Haxe (`haxe`). The arguments are the compiler's own
+	 * (`CompilerArguments`).
+	 */
+	public static function compile(haxe:String, compilerSource:String, arguments:Array<String>, home:String,
+			buildRoot:String,
+			projectRoot:String, ?session:build.BuildSession):Int
+		return run(haxe, compilerSource, arguments, home, buildRoot, projectRoot,
+			() -> runOneShot(haxe, compilerSource, arguments, home, buildRoot, runtimeLibraryEnvironment(home),
+			() -> ProcessRunner.run(haxe, build.CompilerSources.classPath(compilerSource).concat([
+				"--run",
+				"compiler.tools.HaxeonCompiler"
+			]).concat(arguments), home, new Map())), session);
+
+	/** The environment a compiler run by HashLink needs to find its native libraries. */
+	public static function runtimeLibraryEnvironment(compilerHome:String):Map<String, String> {
+		var variable = switch Sys.systemName() {
+			case "Windows": "PATH";
+			case "Mac": "DYLD_LIBRARY_PATH";
+			case _: "LD_LIBRARY_PATH";
+		};
+		var directories = [
+			haxe.io.Path.join([compilerHome, "out"]),
+			build.HashLinkPath.directory(compilerHome)
+		],
+			existing = Sys.getEnv(variable);
+		if (existing != null && existing.length > 0)
+			directories.push(existing);
+		var environment = new Map<String, String>();
+		environment.set(variable, directories.join(Sys.systemName() == "Windows" ? ";" : ":"));
+		return environment;
+	}
+
 	public static function runOneShot(command:String, compilerSource:String, arguments:Array<String>, home:String,
 			buildRoot:String,
 			environment:Map<String, String>, fallback:Void->Int):Int {

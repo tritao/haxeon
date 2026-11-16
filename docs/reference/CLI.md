@@ -251,7 +251,7 @@ Native implementation changes do not invalidate independently compiled bytecode;
 Haxe sources, FFI interfaces/projections, compiler sources, and the standard
 library still do. Failed native builds still block the project build and launch.
 
-On Linux, macOS and Windows, host builds reuse a private compiler worker between
+On Linux, macOS and Windows, host and `wasm32` builds reuse a private compiler worker between
 CLI invocations (on Windows, only the compiled CLI; `scripts/haxeon.cmd` interprets
 the CLI and compiles one-shot). Small source edits retain semantic compiler state; changes to the
 source manifest, roots, defines, or FFI configuration reset it. Compiler or

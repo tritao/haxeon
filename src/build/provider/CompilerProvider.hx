@@ -86,7 +86,7 @@ class CompilerProvider {
 			argumentsWithLauncher = [artifact].concat(arguments);
 			inputs.push(command);
 			inputs.push(artifact);
-			environment = runtimeLibraryEnvironment(context.compilerHome);
+			environment = CompilerClient.runtimeLibraryEnvironment(context.compilerHome);
 		} else {
 			command = haxe.io.Path.join([context.compilerHome, ".tools", "haxe", "haxe" + suffix]);
 			argumentsWithLauncher = build.CompilerSources.classPath(compilerSourcePath).concat([
@@ -124,13 +124,8 @@ class CompilerProvider {
 			Directories.ensure(haxe.io.Path.directory(sourceManifest));
 			File.saveContent(sourceManifest, sourcePaths.join("\n") + "\n");
 			return context.selfHosted ? ProcessRunner.run(command, argumentsWithLauncher, context.compilerHome,
-				environment) : CompilerClient.run(command, compilerSourcePath, arguments, context.compilerHome,
-				context.environment.buildRoot, project.root,
-				() -> CompilerClient.runOneShot(command, compilerSourcePath, arguments, context.compilerHome,
-				context.environment.buildRoot,
-				runtimeLibraryEnvironment(context.compilerHome),
-				() -> ProcessRunner.run(command, argumentsWithLauncher, context.compilerHome, environment)),
-				context.session);
+				environment) : CompilerClient.compile(command, compilerSourcePath, arguments, context.compilerHome,
+				context.environment.buildRoot, project.root, context.session);
 		};
 		return new ExecutionAction(actionId, dependencies, inputs, [
 			output,
@@ -144,23 +139,5 @@ class CompilerProvider {
 		],
 			'Compile Haxe package "${project.rootPackage.name}" -> $output',
 			Compiler(command, argumentsWithLauncher, context.compilerHome, environment, invoke), false);
-	}
-
-	static function runtimeLibraryEnvironment(compilerHome:String):Map<String, String> {
-		var variable = switch Sys.systemName() {
-			case "Windows": "PATH";
-			case "Mac": "DYLD_LIBRARY_PATH";
-			case _: "LD_LIBRARY_PATH";
-		};
-		var directories = [
-			haxe.io.Path.join([compilerHome, "out"]),
-			build.HashLinkPath.directory(compilerHome)
-		],
-			existing = Sys.getEnv(variable);
-		if (existing != null && existing.length > 0)
-			directories.push(existing);
-		var environment = new Map<String, String>();
-		environment.set(variable, directories.join(Sys.systemName() == "Windows" ? ";" : ":"));
-		return environment;
 	}
 }
