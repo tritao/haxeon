@@ -70,22 +70,22 @@ function main() {
 
 	// A fixed point says the stages agree, not that they are right: a miscompilation the self-hosted compiler repeats when it
 	// builds itself passes every check above. The program cases state their expected results, so compiling them all with the
-	// self-hosted Main catches one wherever a case exercises it.
-	Sys.println("programs: compiling the program cases with the self-hosted Main");
+	// self-hosted compile server catches one wherever a case exercises it.
+	Sys.println("programs: compiling the program cases with the self-hosted compile server");
 	var programsLog = '$work/programs.log';
 	if (Script.run(Script.haxeon(), ["dev", "test-driver", Std.string(processorCount()), "--suite", "programs"],
 		{
 			cwd: root,
-			env: ["HAXEON_MAIN_HL" => '$work/entry-Main.hl'],
+			env: ["HAXEON_COMPILER_SERVER_HL" => '$work/entry-compiler.tools.CompilerServer.hl'],
 			log: programsLog
 		}) != 0) {
 		var failures = [for (line in sys.io.File.getContent(programsLog).split("\n")) if (StringTools.startsWith(line,
 			"FAIL")) line];
 		Sys.stderr().writeString(failures.slice(0, 20).join("\n") + "\n" + Script.tail(programsLog, 3) + "\n");
-		Script.fail("FAIL: the program cases do not all pass when the self-hosted Main compiles them");
+		Script.fail("FAIL: the program cases do not all pass when the self-hosted compile server compiles them");
 	}
 	var summary = Script.tail(programsLog, 1);
-	Sys.println('PASS: the self-hosted Main passes the program cases (${StringTools.replace(summary, "Test driver: ", "")})');
+	Sys.println('PASS: the self-hosted compile server passes the program cases (${StringTools.replace(summary, "Test driver: ", "")})');
 
 	// The same equality semantics through a stock-Haxe-built compiler and the self-hosted compiler.
 	Sys.println("equality guard: building the compiler with stock Haxe");

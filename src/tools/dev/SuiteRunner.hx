@@ -152,6 +152,7 @@ class SuiteRunner {
 		var artifacts = new ToolArtifacts(home),
 			pins = [
 				{variable: "HAXEON_MAIN_HL", main: "Main"},
+				{variable: "HAXEON_COMPILER_SERVER_HL", main: "compiler.tools.CompilerServer"},
 				{variable: "HAXEON_COMPILER_HL", main: "compiler.tools.HaxeonCompiler"},
 				{variable: "HAXEON_BUILD_HL", main: "build.HaxeonBuild"},
 				{variable: "HAXEON_TEST_CLI_HL", main: "tools.HaxeonCli"}

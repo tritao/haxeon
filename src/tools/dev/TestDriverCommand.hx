@@ -8,9 +8,10 @@ import sys.FileSystem;
  * passed to it (tests/driver/TestDriver.hx).
  *
  * The driver's first step is the native build, which publishes the VM by rename: this process and the driver keep running on
- * the file they started from. Program cases compile with the compiler prebuilt to HashLink (`HAXEON_MAIN_HL`), and both tools
- * come from the tool cache unless `HAXEON_BUILD_HL` or `HAXEON_MAIN_HL` pin a build. `HAXEON_TEST_INTERPRETED=1` compiles the
- * program cases with `haxe --run Main` instead, for debugging the compiler's sources under the Haxe interpreter.
+ * the file they started from. Program cases compile in compile servers prebuilt to HashLink (`HAXEON_COMPILER_SERVER_HL`), and
+ * both tools come from the tool cache unless `HAXEON_BUILD_HL` or `HAXEON_COMPILER_SERVER_HL` pin a build.
+ * `HAXEON_TEST_INTERPRETED=1` runs the compile servers with `haxe --run compiler.tools.CompilerServer` instead, for debugging the
+ * compiler's sources under the Haxe interpreter.
  */
 class TestDriverCommand {
 	public static function run(arguments:Array<String>, home:String):Int {
@@ -28,9 +29,10 @@ class TestDriverCommand {
 		if (buildTool == null)
 			buildTool = artifacts.resolve({main: "build.HaxeonBuild", classPaths: [], defines: []});
 		if (Sys.getEnv("HAXEON_TEST_INTERPRETED") == "1")
-			Sys.putEnv("HAXEON_MAIN_HL", "");
-		else if (pinned("HAXEON_MAIN_HL") == null)
-			Sys.putEnv("HAXEON_MAIN_HL", artifacts.resolve({main: "Main", classPaths: [], defines: []}));
+			Sys.putEnv("HAXEON_COMPILER_SERVER_HL", "");
+		else if (pinned("HAXEON_COMPILER_SERVER_HL") == null)
+			Sys.putEnv("HAXEON_COMPILER_SERVER_HL",
+				artifacts.resolve({main: "compiler.tools.CompilerServer", classPaths: [], defines: []}));
 		// The driver's progress as it happens, also into a pipe or a CI log (unless the caller chose).
 		if (Sys.getEnv("HL_STDOUT_FLUSH") == null)
 			Sys.putEnv("HL_STDOUT_FLUSH", "1");

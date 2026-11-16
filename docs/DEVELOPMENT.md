@@ -131,7 +131,8 @@ the pinned Haxe binary and its standard library, and the `--define` values, so a
 gets a new one. stdout is only the path; build diagnostics go to stderr. The newest three builds of each main are kept, and older ones
 are removed once they are an hour old. Run a build with the checkout's VM; the runtime is part of it.
 
-`HAXEON_MAIN_HL`, `HAXEON_COMPILER_HL` and `HAXEON_BUILD_HL` remain as pins: when set, a script uses that exact build instead
+`HAXEON_MAIN_HL`, `HAXEON_COMPILER_HL`, `HAXEON_COMPILER_SERVER_HL` (the compile server the test driver compiles program cases in)
+and `HAXEON_BUILD_HL` remain as pins: when set, a script uses that exact build instead
 (a frozen control compiler, for example). `haxeon dev test` resolves the tools once and exports them, so every suite of one run uses
 the same builds even if the sources change while it runs.
 

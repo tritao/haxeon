@@ -1,5 +1,6 @@
 package driver;
 
+import driver.CompileWorkers.CompileWorker;
 import driver.TestCatalog;
 import driver.TestCatalog.CompileStep;
 import driver.TestCatalog.ExecutableCase;
@@ -26,10 +27,10 @@ private typedef ProgramRun = {
 	var test:ProgramCase;
 	var plain:Bool;
 
-	/** A plain build without the early prune (`Main --no-early-prune`, `IrEntryPrune`): a migration reference, removed with the switch, so each program runs pruned (the default) and unpruned. */
+	/** A plain build without the early prune (`--no-early-prune`, `IrEntryPrune`): a migration reference, removed with the switch, so each program runs pruned (the default) and unpruned. */
 	var unpruned:Bool;
 
-	/** Built, edited twice and rebuilt in one compiler session (`Main --warm-edit`), each rebuild compared with a fresh build. */
+	/** Built, edited three times and rebuilt in one compile server session, each rebuild compared with a fresh build (`warmEdit`). */
 	var warm:Bool;
 }
 
@@ -48,66 +49,6 @@ private typedef ActiveCompile = {
 	var index:Int;
 	var run:ProgramRun;
 	var compile:PendingCompile;
-}
-
-/**
- * Compiler processes kept running across compiles (`Main --batch`), so a program's compile does not pay for starting the VM and
- * compiling the compiler: that was most of a small program's compile time. Each request is still built by a compiler of its own.
- * A process serves one request at a time and returns to the pool when its answer has been read; one that dies is not reused.
- */
-private class BatchCompilers {
-	static inline final DONE = "@@haxeon-batch-done@@ ";
-
-	final hl:String;
-	final main:String;
-	final idle:Array<Process> = [];
-
-	public function new(hl:String, main:String) {
-		this.hl = hl;
-		this.main = main;
-	}
-
-	public function start(arguments:Array<String>):PendingCompile {
-		// Standard error joins standard output, so no pipe is left unread while the process waits for its next request.
-		var worker = idle.length > 0 ? idle.pop() : new Process("sh",
-			["-c", 'exec "$0" "$@" 2>&1', hl, main, "--batch"]);
-		worker.stdin.writeString(arguments.join("\t") + "\n");
-		worker.stdin.flush();
-		return {finish: function(): CommandResult {
-			var output = new StringBuf();
-			while (true) {
-				var line:String;
-				try
-					line = worker.stdout.readLine()
-				catch (_:haxe.io.Eof) {
-					var status = worker.exitCode();
-					worker.close();
-					return {
-						status: status == 0 ? 1 : status,
-						output: output.toString() + "the batch compiler process ended before answering\n"
-					};
-				}
-				if (StringTools.startsWith(line, DONE)) {
-					idle.push(worker);
-					return {status: Std.parseInt(line.substr(DONE.length)), output: output.toString()};
-				}
-				output.add(line);
-				output.add("\n");
-			}
-		}
-		};
-	}
-
-	/** Ends every process with an empty request: each child holds the other pipes' writing ends, so closing ours ends none. */
-	public function close():Void {
-		for (worker in idle) {
-			worker.stdin.writeString("\n");
-			worker.stdin.flush();
-			worker.exitCode();
-			worker.close();
-		}
-		idle.resize(0);
-	}
 }
 
 /** One command of a test pipeline; `failure` returns a message when the exit status fails the test. */
@@ -138,38 +79,155 @@ class TestRunner {
 	/** `--check-reuse`: programs are also rebuilt warm, and every compile checks what it reuses (`CompileOptions.checkReuse`). */
 	public var checkReuse = false;
 
-	/** Compiler entry point prebuilt to HashLink bytecode (HAXEON_MAIN_HL), when scripts/test.sh provides one. */
-	final prebuiltMain:Null<String>;
+	/**
+	 * The command that starts a compile server (the rendezvous path is appended): the server prebuilt to HashLink bytecode
+	 * (`HAXEON_COMPILER_SERVER_HL`, which `haxeon dev test-driver` provides), else `haxe --run compiler.tools.CompilerServer`.
+	 */
+	final serverCommand:Array<String>;
 
 	public function new(root:String) {
 		this.root = root;
 		var suffix = Sys.systemName() == "Windows" ? ".exe" : "";
 		haxe = Path.join([root, ".tools", "haxe", "haxe" + suffix]);
 		hl = Path.join([Sys.getEnv("HAXEON_HASHLINK_DIR"), "hl" + suffix]);
-		var main = Sys.getEnv("HAXEON_MAIN_HL");
-		prebuiltMain = main != null && main != "" && FileSystem.exists(main) ? main : null;
+		var server = Sys.getEnv("HAXEON_COMPILER_SERVER_HL");
+		serverCommand = server != null && server != "" && FileSystem.exists(server) ? [hl, server] : [
+			haxe,
+			"--cwd",
+			root,
+			"common.hxml",
+			"--run",
+			"compiler.tools.CompilerServer"
+		];
 		configureRuntimeLibraryPath();
 	}
 
-	/** Set while programs are compiled with the prebuilt compiler (HAXEON_BATCH_COMPILE=0 compiles each in a process of its own). */
-	var batch:Null<BatchCompilers> = null;
+	/** The compile servers the programs compile in, while `runPrograms` runs. */
+	var workers:Null<CompileWorkers> = null;
 
-	/** Compile a program to HashLink: with the prebuilt compiler when available (in a batch process), else `haxe --run Main`. */
+	function compileWorkers():CompileWorkers {
+		var current = workers;
+		if (current == null) {
+			var temp = Sys.getEnv("TMPDIR");
+			if (temp == null || temp == "")
+				temp = Sys.systemName() == "Windows" ? Sys.getEnv("TEMP") : "/tmp";
+			current = new CompileWorkers(serverCommand, Path.join([
+				temp,
+				'haxeon-compile-workers-${Std.random(0x3fffffff)}'
+			]));
+			workers = current;
+		}
+		return current;
+	}
+
+	function closeCompileWorkers():Void {
+		var current = workers;
+		if (current != null)
+			current.close();
+		workers = null;
+	}
+
+	/** The compile request for `source`, built into `output`: a live build unless `plain`, with the run's options. */
+	function programRequest(source:String, output:String, run:ProgramRun, roots:Array<String>):Array<String> {
+		var arguments = [
+			"--target=hl",
+			"--entry=" + Path.withoutExtension(Path.withoutDirectory(source)),
+			"--output=" + output
+		];
+		for (root in roots)
+			arguments.push("--root=" + root);
+		if (!run.plain)
+			arguments.push("--live");
+		if (run.unpruned)
+			arguments.push("--no-early-prune");
+		if (checkReuse)
+			arguments.push("--check-reuse");
+		arguments.push(source);
+		return arguments;
+	}
+
+	/** Compiles a program to HashLink in a compile server, in a fresh session; a warm run builds and rebuilds it in one. */
 	function compileProgram(source:String, output:String, run:ProgramRun):PendingCompile {
-		var arguments = [source, output].concat((run.warm ? ["--warm-edit"] : run.plain
-			? ["--plain"] : []).concat(run.unpruned ? ["--no-early-prune"] : []).concat(checkReuse
-			? ["--check-reuse"] : []));
-		if (batch != null)
-			return batch.start(arguments);
-		var process = prebuiltMain != null ? new Process(hl,
-			[prebuiltMain].concat(arguments)) : new Process(haxe, [
-				"--cwd",
-				root,
-				"common.hxml",
-				"--run",
-				"Main"
-			].concat(arguments));
-		return {finish: () -> finishCommand(process)};
+		if (run.warm)
+			return {finish: () -> warmEdit(source, output, run)};
+		var pending = compileWorkers().start(programRequest(source, output, run, [Path.directory(source)])
+			.concat(["--session=fresh"]));
+		return {finish: () -> pending.finish()};
+	}
+
+	/**
+	 * Warm-rebuild coverage for a program: build it, add a function nothing reaches and rebuild in the same session, add a kept function
+	 * (so the module changes) and rebuild, then put both inside the file and rebuild again. Each rebuild must be the bytes of a fresh
+	 * session's build of the same text; with `--check-reuse` the compiler also compares what it reused with what it would have built.
+	 * The edits are made to a copy of the program, so the other builds of it never see them; the program's own directory stays a root.
+	 */
+	function warmEdit(source:String, output:String, run:ProgramRun):CommandResult {
+		var original = File.getContent(source),
+			name = Path.withoutDirectory(source),
+			temp = Sys.getEnv("TMPDIR");
+		if (temp == null || temp == "")
+			temp = Sys.systemName() == "Windows" ? Sys.getEnv("TEMP") : "/tmp";
+		var directory = Path.join([temp, 'haxeon-warm-edit-${Std.random(0x3fffffff)}']);
+		FileSystem.createDirectory(directory);
+		var copy = Path.join([directory, name]),
+			roots = [directory, Path.directory(source)];
+		var unused = "\nfunction __warmEditUnused():Int return 1;\n";
+		// The third edit lands inside the file, after the last top-level closing brace before the middle of the file, so the declarations
+		// before it keep their ranges and the ones after it move: both kinds of function must come out as a fresh build has them.
+		var kept = "@:keep function __warmEditKept():Int return 424242;\n",
+			cut = original.lastIndexOf("\n}\n", Std.int(original.length / 2));
+		var inside = cut < 0 ? original + unused + kept : original.substr(0,
+			cut + 3) + unused + kept + original.substr(cut + 3);
+		var edits = [original + unused, original + unused + kept, inside],
+			labels = ["a function nothing reaches, appended", "a kept function, appended", "functions inside the file"];
+		function build(worker:CompileWorker, text:String, into:String, session:String):CommandResult {
+			File.saveContent(copy, text);
+			return worker.compile(programRequest(copy, into, run, roots).concat(["--session=" + session]));
+		}
+		var log = new StringBuf();
+		var result = compileWorkers().with(worker -> {
+			var first = build(worker, original, Path.join([directory, "warm-0.hl"]), "fresh");
+			log.add(first.output);
+			if (first.status != 0)
+				return first;
+			for (index in 0...edits.length) {
+				var warm = build(worker, edits[index], Path.join([directory, 'warm-${index + 1}.hl']), "reuse");
+				log.add(warm.output);
+				if (warm.status != 0)
+					return warm;
+			}
+			// The fresh builds come last: each starts the session over.
+			for (index in 0...edits.length) {
+				var fresh = build(worker, edits[index], Path.join([directory, 'fresh-${index + 1}.hl']), "fresh");
+				log.add(fresh.output);
+				if (fresh.status != 0)
+					return fresh;
+				var warmBytes = File.getBytes(Path.join([directory, 'warm-${index + 1}.hl'])),
+					freshBytes = File.getBytes(Path.join([directory, 'fresh-${index + 1}.hl']));
+				if (warmBytes.compare(freshBytes) != 0)
+					return {
+						status: 1,
+						output: 'a warm rebuild of $source differs from a fresh build of the same text (edit ${index + 1}: ${labels[index]})\n'
+					};
+			}
+			File.saveBytes(output, File.getBytes(Path.join([directory, 'warm-${edits.length}.hl'])));
+			return {status: 0, output: 'compiled $source (warm edit rebuilds) -> $output\n'};
+		});
+		removeDirectory(directory);
+		return {status: result.status, output: log.toString() + result.output};
+	}
+
+	static function removeDirectory(path:String):Void {
+		if (!FileSystem.exists(path))
+			return;
+		for (entry in FileSystem.readDirectory(path)) {
+			var child = Path.join([path, entry]);
+			if (FileSystem.isDirectory(child))
+				removeDirectory(child);
+			else
+				FileSystem.deleteFile(child);
+		}
+		FileSystem.deleteDirectory(path);
 	}
 
 	/**
@@ -399,6 +457,7 @@ class TestRunner {
 			Sys.print(result.output);
 			failed = failed || !result.passed;
 		}
+		closeCompileWorkers();
 		return !failed;
 	}
 
@@ -460,10 +519,7 @@ class TestRunner {
 			return named.length;
 		}
 		var runs:Array<ProgramRun> = [for (test in tests) for (run in runsOf(test, checkReuse)) run];
-		// A batch process merges its streams through sh, which Windows may not have: there each program compiles in a process of
-		// its own, still with the prebuilt compiler.
-		if (prebuiltMain != null && Sys.getEnv("HAXEON_BATCH_COMPILE") != "0" && Sys.systemName() != "Windows")
-			batch = new BatchCompilers(hl, prebuiltMain);
+		compileWorkers().prestart(Std.int(Math.max(1, Math.min(jobs, runs.length))));
 		var failures = 0;
 		if (jobs == 1) {
 			for (run in runs) {
@@ -474,10 +530,7 @@ class TestRunner {
 			}
 		} else
 			failures = reportResults(runProgramsParallel(runs, Std.int(Math.min(jobs, runs.length))));
-		if (batch != null) {
-			batch.close();
-			batch = null;
-		}
+		closeCompileWorkers();
 		return failures;
 	}
 
