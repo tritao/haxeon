@@ -80,6 +80,13 @@ class TestRunner {
 	public var checkReuse = false;
 
 	/**
+	 * `--check-isolation`: each program is also compiled in a compile server started for it alone, and must come out byte for byte as
+	 * it does in the shared server, after whatever that server compiled before. A difference is state one compile left in the process
+	 * for the next (see CompilerStaticsMain).
+	 */
+	public var checkIsolation = false;
+
+	/**
 	 * The command that starts a compile server (the rendezvous path is appended): the server prebuilt to HashLink bytecode
 	 * (`HAXEON_COMPILER_SERVER_HL`, which `haxeon dev test-driver` provides), else `haxe --run compiler.tools.CompilerServer`.
 	 */
@@ -150,9 +157,36 @@ class TestRunner {
 	function compileProgram(source:String, output:String, run:ProgramRun):RunningCommand {
 		if (run.warm)
 			return {finish: () -> warmEdit(source, output, run)};
-		var pending = compileWorkers().start(programRequest(source, output, run, [Path.directory(source)])
-			.concat(["--session=fresh"]));
-		return {finish: () -> pending.finish()};
+		var roots = [Path.directory(source)],
+			pending = compileWorkers().start(programRequest(source, output, run, roots).concat(["--session=fresh"]));
+		// One build per program is checked, the live one, which keeps the most of a compile's state.
+		if (!checkIsolation || run.plain)
+			return {finish: () -> pending.finish()};
+		var alone = output + ".isolated",
+			isolated = compileWorkers().isolated(programRequest(source, alone, run, roots).concat(["--session=fresh"]));
+		return {finish: () -> {
+			var shared = pending.finish(), own = isolated.finish();
+			var result = shared;
+			if (shared.status == 0 && own.status != 0)
+				result = {
+					status: 1,
+					output: shared.output + own.output
+						+ '$source compiled in the shared compile server but not in one of its own\n'
+				};
+			else if (shared.status == 0
+				&& (!FileSystem.exists(alone) || File.getBytes(output).compare(File.getBytes(alone)) != 0))
+				result = {
+					status: 1,
+					output: shared.output
+						+ '$source compiles differently in a compile server that compiled other programs before it than in one of its own: '
+						+ 'an earlier compile left state in the process\n'
+				};
+			for (name in FileSystem.readDirectory(Path.directory(alone)))
+				if (StringTools.startsWith(name, Path.withoutDirectory(alone)))
+					FileSystem.deleteFile(Path.join([Path.directory(alone), name]));
+			return result;
+		}
+		};
 	}
 
 	/**

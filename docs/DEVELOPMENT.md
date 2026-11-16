@@ -45,6 +45,13 @@ It is `haxeon dev test-driver` after a native build. The driver compiles program
 Haxe interpreter. Running `haxe --run driver.TestDriver` by hand skips that setup: it needs the checkout's `hl` on `PATH` and
 `out` (the test libraries the driver's programs load) on the library path.
 
+Programs compile in compile servers (`compiler.tools.CompilerServer`), one after another in each, every compile in a fresh session.
+Two options check that a server's history cannot change a build. `--check-reuse` rebuilds each program warm after edits and
+compares it with a fresh build of the same text. `--check-isolation` also compiles each program's live build in a server started
+for it alone, which must write the same bytes as the shared server, whatever that compiled before; a difference is state a
+compile left in the process, which `CompilerStaticsMain` keeps out of compiler statics. The `driver-checked` and
+`driver-isolated` suites run them.
+
 ### The same commands on every platform
 
 Setup is two CMake invocations, wrapped by a script per shell. Everything after that is the `haxeon` command, spelled the

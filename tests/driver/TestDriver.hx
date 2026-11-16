@@ -11,6 +11,9 @@ private typedef DriverOptions = {
 
 	/** `--check-reuse`: every program is also rebuilt warm, and every compile checks what it reuses (`CompileOptions.checkReuse`). */
 	var checkReuse:Bool;
+
+	/** `--check-isolation`: every program must compile in the shared compile server exactly as in one of its own. */
+	var checkIsolation:Bool;
 }
 
 class TestDriver {
@@ -36,6 +39,7 @@ class TestDriver {
 		var options = parseOptions(Sys.args());
 		var runner = new TestRunner(options.root);
 		runner.checkReuse = options.checkReuse;
+		runner.checkIsolation = options.checkIsolation;
 		var failures = 0;
 		var selected = 0;
 		var phaseStarted = Sys.time();
@@ -151,7 +155,7 @@ class TestDriver {
 		var suites = ["all"];
 		var filter:Null<EReg> = null;
 		var listOnly = false;
-		var checkReuse = false;
+		var checkReuse = false, checkIsolation = false;
 		var jobs = 1;
 		var index = 0;
 		while (index < args.length) {
@@ -172,6 +176,8 @@ class TestDriver {
 					listOnly = true;
 				case "--check-reuse":
 					checkReuse = true;
+				case "--check-isolation":
+					checkIsolation = true;
 				case "--jobs":
 					if (index == args.length)
 						throw "--jobs requires a positive integer";
@@ -189,7 +195,8 @@ class TestDriver {
 			filter: filter,
 			listOnly: listOnly,
 			jobs: jobs,
-			checkReuse: checkReuse
+			checkReuse: checkReuse,
+			checkIsolation: checkIsolation
 		};
 	}
 }

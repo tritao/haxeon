@@ -75,6 +75,8 @@ ui-showcase                      quick       -- env -u HAXEON_COMPILER_HL bash p
 example-builds                   quick       -- python3 tests/integration/check-example-builds.py
 # Adds the warm-edit rebuilds and the reuse comparisons.
 driver-checked                   wave        -- scripts/test-driver.sh {jobs} --check-reuse
+# Compiles each program's live build again in a compile server of its own, which must write the same bytes.
+driver-isolated                  wave        -- scripts/test-driver.sh {jobs} --suite programs --check-isolation
 
 formatter-integration            ci          -- tests/integration/test-haxeon-formatter.sh
 native-publish-integration       ci          -- bash tests/integration/test-native-publish.sh

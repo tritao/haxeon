@@ -173,6 +173,23 @@ class CompileWorkers {
 		};
 	}
 
+	/**
+	 * Sends one request to a server started for it alone and stopped after it answers: a compile that owes nothing to any compile
+	 * before it in the same process. The server starts now and the request goes when `finish` is called, so its start overlaps
+	 * whatever runs meanwhile.
+	 */
+	public function isolated(arguments:Array<String>):{finish:Void->CompileOutcome} {
+		var worker = new CompileWorker(command, Path.join([directory, 'compile-worker-${started++}.json']));
+		return {finish: () -> {
+			var outcome = try worker.compile(arguments) catch (error:Dynamic) {
+				status:1, output:'the isolated compile server failed: $error\n'
+			};
+			worker.shutdown();
+			return outcome;
+		}
+		};
+	}
+
 	/** Runs `use` with a server of its own, for a sequence of requests that build on one session (a warm edit). */
 	public function with<T>(use:CompileWorker->T):T {
 		var worker = acquire();
