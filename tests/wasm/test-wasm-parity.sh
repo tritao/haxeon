@@ -9,6 +9,9 @@ mkdir -p "$parity_output_dir"
 haxeon_require_haxe
 source "$root_dir/scripts/haxeon-compiler.sh"
 haxeon_export_library_path
+# Local time is the host's on every target, so the suite fixes the zone: one with a half-hour offset and no daylight saving,
+# where reading local time as UTC shows (tests/fixtures/date-local-time).
+export TZ=Asia/Kolkata
 
 # The broader GC Bytes fixture includes GC-specific bounds behavior. The shared
 # bytes-view fixture checks portable aliasing and copy semantics on both targets.
@@ -117,6 +120,11 @@ for target in wasm32 wasm-gc; do
 	haxeon_compile_async \
 		--target="$target" --output="$parity_output_dir/wasm-parity-$target-bytes-compare.wasm" \
 		--entry=wasm-bytes-compare --root=tests/programs tests/programs/wasm-bytes-compare.hx
+done
+for target in wasm32 wasm-gc; do
+	haxeon_compile_async \
+		--target="$target" --output="$parity_output_dir/wasm-parity-$target-date-local-time.wasm" \
+		--entry=date-local-time --root=tests/fixtures/date-local-time tests/fixtures/date-local-time/date-local-time.hx
 done
 
 # Every program in the manifest runs on both targets and must exit as it does on HL, except
@@ -373,6 +381,16 @@ for inline in 0 1; do
 	done
 done
 
+# The local-time fixture runs on HashLink too, whose localtime reads the same TZ.
+haxeon_compile --target=hl --output="$parity_output_dir/date-local-time.hl" \
+	--entry=date-local-time --root=tests/fixtures/date-local-time tests/fixtures/date-local-time/date-local-time.hx
+status=0
+"$haxeon_hl" "$parity_output_dir/date-local-time.hl" || status=$?
+if [[ $status -ne 42 ]]; then
+	echo "date-local-time on HL expected exit 42, got $status" >&2
+	exit 1
+fi
+
 # Struct array places and Observable instrumentation also run on HashLink in both modes.
 for inline in 0 1; do
 	HAXEON_INLINE="$inline" haxeon_compile --target=hl \
@@ -485,6 +503,7 @@ haxeon_compile_async \
 	--entry=wasm-value-nested-roots --root=tests/programs tests/programs/wasm-value-nested-roots.hx
 
 cases+=(bytes-compare)
+cases+=(date-local-time)
 haxeon_compile_wait
 
 node - "$root_dir" "$parity_output_dir" "${cases[@]}" --inline-cases "${inline_cases[@]}" <<'JS'
