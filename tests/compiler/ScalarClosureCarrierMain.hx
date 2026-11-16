@@ -216,11 +216,12 @@ class ScalarClosureCarrierMain {
 		try {
 			var js =
 				'const e=new WebAssembly.Instance(new WebAssembly.Module(require("fs").readFileSync(process.argv[1]))).exports,c=e.__allocation_count||e["haxeon.memory.allocation_count"];e.prepare();for(const n of [8,1024]){const before=c(),result=e.perform(n),allocated=c()-before;if(result!==42*n||allocated!==0)throw Error(JSON.stringify({n,result,allocated}));console.log(JSON.stringify({n,result,allocated}));}',
-				child = new sys.io.Process(target == HashLink ? TestHashLink.vm() : "node", target == HashLink ? [module] : [
-					"-e",
-					js,
-					module
-				]),
+				child = new sys.io.Process(target == HashLink ? TestHashLink.vm() : "node",
+					target == HashLink ? [module] : [
+						"-e",
+						js,
+						module
+					]),
 				error = child.stderr.readAll().toString(),
 				captured = child.stdout.readAll().toString(),
 				status = child.exitCode();

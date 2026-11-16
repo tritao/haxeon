@@ -121,7 +121,11 @@ class HaxeonBuild {
 		// whole compiler with `haxe --run` for every one of them did not finish within the Windows job's hour.
 		var prebuilt = Sys.getEnv("HAXEON_MAIN_HL");
 		if (prebuilt == null || prebuilt == "")
-			Sys.putEnv("HAXEON_MAIN_HL", new tools.dev.ToolArtifacts(root()).resolve({main: "Main", classPaths: [], defines: []}));
+			Sys.putEnv("HAXEON_MAIN_HL", new tools.dev.ToolArtifacts(root()).resolve({
+				main: "Main",
+				classPaths: [],
+				defines: []
+			}));
 		return run(haxe(), [
 			"--cwd",
 			root(),
