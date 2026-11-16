@@ -77,11 +77,13 @@ class WasmBackendSession implements BackendSession {
 		compiler.ir.IrReachabilityReport.report("final program", ir);
 		var abi = RuntimeAbi.describe(ir), abiPlanningDoneAt = Sys.time() * 1000.0;
 		var allocationAfterAbi = AllocationMeter.sample();
-		var chosen = options(context), key = Json.stringify(chosen), known = encoded;
+		var chosen = options(context), key = Json.stringify(chosen), last = encoded, known = last;
 		if (known == null || known.ir != ir || known.options != key) {
 			known = {ir: ir, options: key, bytes: new WasmBackend().compile(ir, chosen).bytes};
 			encoded = known;
 		}
+		// Unchanged: the module is the bytes of the one this session built last.
+		var unchanged = last != null && (last == known || last.bytes.compare(known.bytes) == 0);
 		var builtAt = Sys.time() * 1000.0;
 		if (token != null)
 			token.check();
@@ -92,7 +94,7 @@ class WasmBackendSession implements BackendSession {
 			reloadReasons: [],
 			changedFunctions: [],
 			requiresReload: false,
-			unchanged: false,
+			unchanged: unchanged,
 			baseRevision: 0,
 			revision: 1,
 			moduleFunctions: ir.functions.length,
@@ -112,6 +114,7 @@ class WasmBackendSession implements BackendSession {
 		};
 	}
 
+	/** The last build's result for a build with its inputs: the module is the one this session built last, so it is unchanged. */
 	public function reuse(previous:BackendAssemblyResult, at:Float):BackendAssemblyResult
 		return {
 			artifact: previous.artifact,
@@ -120,7 +123,7 @@ class WasmBackendSession implements BackendSession {
 			reloadReasons: previous.reloadReasons,
 			changedFunctions: previous.changedFunctions,
 			requiresReload: previous.requiresReload,
-			unchanged: previous.unchanged,
+			unchanged: true,
 			baseRevision: previous.baseRevision,
 			revision: previous.revision,
 			moduleFunctions: previous.moduleFunctions,
