@@ -150,10 +150,9 @@ jobs:
         shell: pwsh
         run: ./tests/integration/test-haxeon-cli.ps1
 
-      - name: Self-hosted compiler gate
-        if: matrix.platform != 'windows'
-        run: ./scripts/bootstrap-compiler.sh --self
-
+      # The compiler's sources build themselves to a fixed point. Whether the checked-in bootstrap/compiler.hl is still that
+      # fixed point (bootstrap-compiler.sh --self) is not gated: it holds only until the next compiler change, and refreshing
+      # it (bootstrap-compiler.sh) is a step of its own.
       - name: Self-hosting fixed point
         if: matrix.platform != 'windows'
         run: ./scripts/check-self-hosting.sh

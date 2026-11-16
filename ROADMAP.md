@@ -83,8 +83,9 @@ served over LSP (`scripts/haxeon-lsp`) and the JSON-lines protocol.
 ### E. Self-hosting and release
 
 Done: the compiler's own sources compile with Haxeon; compiler A (built by official Haxe) and compiler B (built by A) are
-byte-identical; `bootstrap/compiler.hl` is checked in and rebuilt identically by `bootstrap-compiler.sh --self`; CI checks
-self-hosted convergence.
+byte-identical; CI checks that the sources build themselves to a fixed point (`check-self-hosting.sh`). `bootstrap/compiler.hl`
+is checked in and refreshed by `bootstrap-compiler.sh`; `bootstrap-compiler.sh --self` says whether it is still that fixed
+point, which no CI step requires.
 
 - [~] The differential suite compares official Haxe and Haxeon on ten paired programs (`tests/differential`); collections,
   diagnostics and reload classification need more coverage.
