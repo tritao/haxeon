@@ -67,11 +67,11 @@ entry_sources="$work/entry-sources.txt"
 building_entries=(compiler.tools.HaxeonCompiler Main FfiImportMain FfiAuditMain)
 # Each gap is "entry|why it does not build yet" (a plain list: macOS's bash 3.2 has no associative arrays).
 entry_gaps=(
-	"compiler.tools.CompilerServer|the Haxeon stdlib has no sys.io.File.append"
-	"tools.HaxeonCli|the Haxeon stdlib's sys.io.Process has its own API, not Haxe's new Process(command, arguments)"
-	"build.HaxeonBuild|the Haxeon stdlib's sys.io.Process has its own API, not Haxe's new Process(command, arguments)"
-	"LspMain|the Haxeon stdlib's sys.io.FileOutput is not a haxe.io.Output (no write)"
-	"EditorServiceMain|nullable values the language service reads without a check"
+	"compiler.tools.CompilerServer|the Haxeon stdlib's hl.Gc has no dumpMemory (CompilerMemoryCensus.hx)"
+	"tools.HaxeonCli|a field read on a nullable value with no check is rejected (BuildPlan.hx: byKey.get(key).dependencies)"
+	"build.HaxeonBuild|a field read on a nullable value with no check is rejected (BuildPlan.hx: byKey.get(key).dependencies)"
+	"LspMain|an empty array literal is not typed from its later uses (ProjectFormat.hx: visited = [])"
+	"EditorServiceMain|a field read on a nullable value with no check is rejected (LanguageService.hx: model.index)"
 )
 build_entry() {
 	(cd "$root_dir" && "$hl" "$work/stage-1.hl" --entry="$1" --root=src --root=stdlib --root=lib/haxeon-io \
