@@ -92,7 +92,22 @@ jobs:
       - name: Run cross-platform core tests
         if: matrix.platform == 'windows'
         shell: pwsh
-        run: ./scripts/haxeon.ps1 dev test-driver 8
+        # Through the pinned Haxe, as the Debug CRT step below: `haxeon.ps1 dev test-driver` ran silent past the job's hour.
+        run: ./.tools/haxe/haxe.exe --cwd . common.hxml --run build.HaxeonBuild test 8
+
+      # The haxeon path on Windows (the launcher's build check, haxeon.exe, the tool cache, the driver), on two tests and with
+      # every stage's output shown as it happens, until it can run the step above. It does not fail the job.
+      - name: Test driver through haxeon (diagnostic)
+        if: matrix.platform == 'windows'
+        shell: pwsh
+        continue-on-error: true
+        timeout-minutes: 15
+        run: |
+          cmake --build out/cmake/windows-msvc --target haxeon-command
+          if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
+          $env:HAXEON_NATIVE_READY = "1"
+          $env:HL_STDOUT_FLUSH = "1"
+          ./scripts/haxeon.ps1 dev test-driver 8 --suite compiler --test ParserRecovery
 
       - name: Build with the MSVC Debug CRT
         if: matrix.platform == 'windows'

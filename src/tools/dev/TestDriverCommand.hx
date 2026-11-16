@@ -31,6 +31,9 @@ class TestDriverCommand {
 			Sys.putEnv("HAXEON_MAIN_HL", "");
 		else if (pinned("HAXEON_MAIN_HL") == null)
 			Sys.putEnv("HAXEON_MAIN_HL", artifacts.resolve({main: "Main", classPaths: [], defines: []}));
+		// The driver's progress as it happens, also into a pipe or a CI log (unless the caller chose).
+		if (Sys.getEnv("HL_STDOUT_FLUSH") == null)
+			Sys.putEnv("HL_STDOUT_FLUSH", "1");
 		var previous = Sys.getCwd();
 		Sys.setCwd(home);
 		var status = Sys.command(vm, [buildTool, "test", jobs].concat(options));
