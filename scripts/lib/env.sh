@@ -107,9 +107,14 @@ haxeon_cc_libhl() {
 		for source in "$@"; do
 			sources+=("$(cygpath -w "$source")")
 		done
-		MSYS2_ARG_CONV_EXCL='*' cl -nologo -O2 ${hdll:+-LD} -I"$(cygpath -w "$haxeon_root/vendor/hashlink/src")" "${sources[@]}" \
-			-Fo"$(cygpath -w "$(dirname "$output")")\\" -Fe"$(cygpath -w "$output")" -link -LIBPATH:"$(cygpath -w "$library")" libhl.lib \
-			>/dev/null
+		# cl writes its diagnostics to standard output, with a line per file: show them only when the build fails.
+		local log status=0
+		log=$(MSYS2_ARG_CONV_EXCL='*' cl -nologo -O2 ${hdll:+-LD} -I"$(cygpath -w "$haxeon_root/vendor/hashlink/src")" "${sources[@]}" \
+			-Fo"$(cygpath -w "$(dirname "$output")")\\" -Fe"$(cygpath -w "$output")" -link -LIBPATH:"$(cygpath -w "$library")" libhl.lib) || status=$?
+		if [[ $status != 0 ]]; then
+			printf '%s\n' "$log" >&2
+			return "$status"
+		fi
 		;;
 	*)
 		# shellcheck disable=SC2086 # CFLAGS holds several flags
