@@ -88,6 +88,13 @@ class IrInlineEnumEligibility {
 				depend(node, field.type);
 		}
 		closeDependencies();
+		// Retained fields can survive even when no instruction reads or initializes them. Their container
+		// descriptors still carry closure signatures, so apply the same restriction as instruction outputs.
+		for (object in program.objects)
+			for (field in object.fields)
+				containerCallable(field.type);
+		for (field in program.staticFields)
+			containerCallable(field.type);
 		for (declaration in program.enums) if (!IrEnumTagStorage.eligible(declaration)) {
 			if (nativePayload(Enum(declaration.name), []))
 				block(declaration.name, "canonical native payload layout");
