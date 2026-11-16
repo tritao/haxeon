@@ -2371,9 +2371,7 @@ class CallResolver {
 			case TMap(key, value): {key: key, value: value};
 			default: throw "Not a map";
 		};
-		DeclaredConformance.requestHashableMapKey(session, mapType.key, span);
-		if (session.mapName(mapType.key, mapType.value) == null)
-			fail("E1016", "This map key/value type has no compiler-owned runtime ABI", span);
+		DeclaredConformance.requireMapRuntime(session, mapType.key, mapType.value, span);
 		if (name == "set") {
 			if (arguments.length != 2)
 				fail("E1008", "Map.set expects a key and value", span);

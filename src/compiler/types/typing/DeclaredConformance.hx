@@ -84,6 +84,20 @@ class DeclaredConformance {
 			? message : message + ' (recursive field "$field"; use a struct or class with explicit equals)';
 	}
 
+	/**
+	 * A map of `key` to `value` is used here: its key's hash and equality are requested, and the pair must have a runtime
+	 * map. For a map whose types a later use fixes (`new Map()`), that waits until they are known (`Monomorphs`).
+	 */
+	public static function requireMapRuntime(session:TypingSession, key:CompilerType, value:CompilerType,
+			span:SourceSpan):Void
+		session.monomorphs.whenKnown(TMap(key, value), function() {
+			var knownKey = compiler.types.Monomorphs.resolve(key),
+				knownValue = compiler.types.Monomorphs.resolve(value);
+			requestHashableMapKey(session, knownKey, span);
+			if (session.mapName(knownKey, knownValue) == null)
+				BodyTyper.fail("E1016", "This map key/value type has no compiler-owned runtime ABI", span);
+		});
+
 	/** Map operations need the same generated equality/hash helpers as ordinary value operations. */
 	public static function requestHashableMapKey(session:TypingSession, type:CompilerType, span:SourceSpan):Void {
 		if (session.isPayloadEnumKey(type)) {

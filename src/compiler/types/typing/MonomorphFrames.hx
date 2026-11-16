@@ -18,9 +18,6 @@ class MonomorphFrame {
 	/** Checks that need a type variable's type, run when the body is typed and they are filled. */
 	public final deferred:Array<Void->Void> = [];
 
-	/** While above zero, typing is speculative (thrown away), and makes no type variable. */
-	public var suspended = 0;
-
 	public function new(conversionMark:ClosureConversionMark)
 		this.conversionMark = conversionMark;
 }
@@ -48,12 +45,12 @@ class MonomorphFrames {
 	}
 
 	/**
-	 * A new type variable standing for the type of `origin` (a local, or a literal), or null where none may be made: no body
-	 * is being typed (a field initializer, a generated helper), or the typing is speculative.
+	 * A new type variable standing for `origin` (`the type of local "x"`), or null where no body is being typed (a field
+	 * initializer, a generated helper), which has no frame to settle one.
 	 */
 	public function create(origin:String, span:SourceSpan):Null<CompilerType> {
 		var frame = frames.length == 0 ? null : frames[frames.length - 1];
-		if (frame == null || frame.suspended > 0)
+		if (frame == null)
 			return null;
 		var cell = new MonomorphCell(origin, span);
 		frame.cells.push(cell);
@@ -63,15 +60,6 @@ class MonomorphFrames {
 	/** Whether the innermost body has made a type variable: only then can a type it meets mention one. */
 	public function active():Bool
 		return frames.length > 0 && frames[frames.length - 1].cells.length > 0;
-
-	/** Typing from here until `resume` is speculative: it makes no type variable. */
-	public function suspend():Void
-		if (frames.length > 0)
-			frames[frames.length - 1].suspended++;
-
-	public function resume():Void
-		if (frames.length > 0)
-			frames[frames.length - 1].suspended--;
 
 	/**
 	 * Runs `check` once the types it needs are known: now when `type` mentions no empty type variable, otherwise when the

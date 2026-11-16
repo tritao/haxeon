@@ -1204,9 +1204,7 @@ class ExpressionTyper {
 			expectedType:Null<CompilerType>):TypedExpression {
 		var expectedMap = mapExpectation(expectedType);
 		if (values.length == 0 && expectedMap != null) {
-			DeclaredConformance.requestHashableMapKey(session, expectedMap.key, span);
-			if (session.mapName(expectedMap.key, expectedMap.value) == null)
-				fail("E1016", "This map key/value type has no compiler-owned runtime ABI", span);
+			DeclaredConformance.requireMapRuntime(session, expectedMap.key, expectedMap.value, span);
 			return new TypedExpression(TMapLiteral([]), TMap(expectedMap.key, expectedMap.value), span);
 		}
 		// In a Dynamic context the elements still decide the type, as they would anywhere else ([new Child()] is an
@@ -1275,11 +1273,15 @@ class ExpressionTyper {
 				value: coerce(value, resolvedValue, "map value", "E1003")
 			});
 		}
+		// With nothing expected, `new Map()` has type variables for its key and value, which the first use that fixes them
+		// fills (`Monomorphs`).
+		if (keyType == null && entries.length == 0)
+			keyType = session.monomorphs.create("the key type of this empty map", span);
+		if (valueType == null && entries.length == 0)
+			valueType = session.monomorphs.create("the value type of this empty map", span);
 		if (keyType == null || valueType == null)
 			fail("E1003", "An empty map literal requires an expected key and value type", span);
-		DeclaredConformance.requestHashableMapKey(session, keyType, span);
-		if (session.mapName(keyType, valueType) == null)
-			fail("E1016", "This map key/value type has no compiler-owned runtime ABI", span);
+		DeclaredConformance.requireMapRuntime(session, keyType, valueType, span);
 		return new TypedExpression(TMapLiteral(typedEntries), TMap(keyType, valueType), span);
 	}
 
@@ -1352,9 +1354,7 @@ class ExpressionTyper {
 					fail("E1014", "Key/value array comprehension requires a Map", span);
 				keyType = TInt;
 			case TMap(key, mapValue):
-				DeclaredConformance.requestHashableMapKey(session, key, span);
-				if (session.mapName(key, mapValue) == null)
-					fail("E1016", "This map key/value type has no compiler-owned runtime ABI", span);
+				DeclaredConformance.requireMapRuntime(session, key, mapValue, span);
 				keyType = valueName == null ? mapValue : key;
 				if (valueName == null)
 					typedIterable = new TypedExpression(TCollectionCall(typedIterable, "values", []), TArray(mapValue),
@@ -1485,9 +1485,7 @@ class ExpressionTyper {
 					fail("E1014", "Key/value map comprehension requires a Map", span);
 				itemType = TInt;
 			case TMap(mapKey, mapValue):
-				DeclaredConformance.requestHashableMapKey(session, mapKey, span);
-				if (session.mapName(mapKey, mapValue) == null)
-					fail("E1016", "This map key/value type has no compiler-owned runtime ABI", span);
+				DeclaredConformance.requireMapRuntime(session, mapKey, mapValue, span);
 				itemType = valueName == null ? mapValue : mapKey;
 				if (valueName == null)
 					typedIterable = new TypedExpression(TCollectionCall(typedIterable, "values", []), TArray(mapValue),
@@ -1525,9 +1523,7 @@ class ExpressionTyper {
 			resultValue = expected == null ? typedValue.type : expected.value;
 		typedKey = coerce(typedKey, resultKey, "map comprehension key", "E1003");
 		typedValue = coerce(typedValue, resultValue, "map comprehension value", "E1003");
-		DeclaredConformance.requestHashableMapKey(session, resultKey, span);
-		if (session.mapName(resultKey, resultValue) == null)
-			fail("E1016", "This map key/value type has no compiler-owned runtime ABI", span);
+		DeclaredConformance.requireMapRuntime(session, resultKey, resultValue, span);
 		if (IterationProtocol.structuralIterator(typedIterable.type)) {
 			var resultType = TMap(resultKey, resultValue),
 				resultName = "$comprehension-result:" + span.start;
@@ -1581,9 +1577,7 @@ class ExpressionTyper {
 			typedArray = session.representation.boundaryCast(typedArray, forwardedArray);
 		return switch typedArray.type {
 			case TMap(key, value):
-				DeclaredConformance.requestHashableMapKey(session, key, span);
-				if (session.mapName(key, value) == null)
-					fail("E1016", "This map key/value type has no compiler-owned runtime ABI", span);
+				DeclaredConformance.requireMapRuntime(session, key, value, span);
 				var typedKey = coerce(typedIndex, key, "map key", "E1002"),
 					entryPath = FlowAnalysis.mapEntryPath(typedArray, typedKey),
 					refined = entryPath == null ? null : scope.resolveExpression(entryPath);
@@ -1626,9 +1620,7 @@ class ExpressionTyper {
 			lowerType:LowerExpressionTypeCallback):TypedExpression {
 		var loweredKey = lowerType(key, span),
 			loweredValue = lowerType(value, span);
-		DeclaredConformance.requestHashableMapKey(session, loweredKey, span);
-		if (session.mapName(loweredKey, loweredValue) == null)
-			fail("E1016", "This map key/value type has no compiler-owned runtime ABI", span);
+		DeclaredConformance.requireMapRuntime(session, loweredKey, loweredValue, span);
 		return new TypedExpression(TNewMap(loweredKey, loweredValue), TMap(loweredKey, loweredValue), span);
 	}
 

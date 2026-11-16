@@ -29,7 +29,7 @@ import compiler.types.TypedAst.TypedSwitchCoverageCase;
 
 typedef StatementExpressionCallback = (AstExpression, Scope, Null<CompilerType>, Bool) -> TypedExpression;
 typedef StatementCoerceCallback = (TypedExpression, CompilerType, String, String) -> TypedExpression;
-typedef ExpectedInitializerCallback = (String, AstExpression, Array<AstStatement>, Int, Scope) -> Null<CompilerType>;
+typedef ExpectedInitializerCallback = (String, AstExpression) -> Null<CompilerType>;
 
 /** The type of the first assignment to a local, typed with the locals declared on the way to it. */
 typedef BindCellCallback = (String, SourceSpan, Scope, CompilerType) -> Void;
@@ -177,9 +177,8 @@ class StatementTyper {
 							};
 					default:
 				}
-				var declaredType:Null<CompilerType> = declared == null ? expectedInitializerType(name, initializer,
-					statements, statementIndex + 1,
-					scope) : session.declarations.resolve(declared, null, context.typeSubstitutions);
+				var declaredType:Null<CompilerType> = declared == null ? expectedInitializerType(name,
+					initializer) : session.declarations.resolve(declared, null, context.typeSubstitutions);
 				var predeclared = false, recursiveCell:Null<String> = null;
 				if (declaredType != null)
 					switch initializer {
@@ -471,8 +470,7 @@ class StatementTyper {
 			typedIndex = typeExpression(offset, scope, null, false);
 		return switch typedArray.type {
 			case TMap(key, mapValue):
-				if (session.mapName(key, mapValue) == null)
-					fail("E1016", "This map key/value type has no compiler-owned runtime ABI", span);
+				DeclaredConformance.requireMapRuntime(session, key, mapValue, span);
 				typedIndex = coerce(typedIndex, key, "map key", "E1002");
 				var value = coerce(typeExpression(expression, scope, mapValue, false), mapValue, "map value", "E1002"),
 					entryPath = FlowAnalysis.mapEntryPath(typedArray, typedIndex);

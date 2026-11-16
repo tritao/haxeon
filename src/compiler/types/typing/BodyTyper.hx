@@ -168,8 +168,7 @@ class BodyTyper {
 			function(expression, scope, expected, inferDynamicLambdaResult) return this.typeExpression(expression,
 			scope, expected, inferDynamicLambdaResult),
 			function(value, expected, context, code) return this.coerce(value, expected, context, code),
-			function(name, initializer, statements, start, scope) return this.expectedInitializerType(name, initializer,
-			statements, start, scope),
+			function(name, initializer) return this.expectedInitializerType(name, initializer),
 			function(name, span, scope, type) this.bindCell(name, span, scope, type),
 			function(statements, scope, result) return this.typeStatements(statements, scope, result),
 			function(type, cases) return this.exhaustiveEnum(type, cases),
@@ -645,234 +644,18 @@ class BodyTyper {
 		};
 	}
 
-	function expectedInitializerType(name:String, initializer:AstExpression, statements:Array<AstStatement>, start:Int,
-			scope:Scope):Null<CompilerType> {
+	/** The type a later use expects of a local whose initializer has none of its own (`[]`, `null`, `{items: []}`). */
+	function expectedInitializerType(name:String, initializer:AstExpression):Null<CompilerType> {
 		if (StringTools.startsWith(name, '$' + 'null-coalesce:'))
 			return null;
-		// An empty array and `null` with no type from a later use take a type variable, which the first use that fixes it
-		// fills (`Monomorphs`).
-		switch initializer {
-			case MapLiteral(entries, _) if (entries.length == 0):
-				// A type the variable is later used at, such as a return or a typed argument, takes precedence.
-				var mapType = context.localExpectedTypes.exists(name) ? null : storedMapType(name, statements, start,
-					scope);
-				if (mapType != null)
-					return mapType;
-			default:
-		}
+		// Without a type a later use expects, an empty array or map and `null` take type variables, which the first use that
+		// fixes them fills (`Monomorphs`).
 		if (!usesLocalExpectedType(initializer))
 			return null;
 		var expected = context.localExpectedTypes.get(name);
 		return expected != null && containsNullLiteral(initializer)
 			&& !isNullable(expected) ? TNullable(expected) : expected;
 	}
-
-	/** The key and value types of an untyped `new Map()`, from the first `set` or element assignment that can be typed. */
-	function storedMapType(name:String, statements:Array<AstStatement>, start:Int, scope:Scope):Null<CompilerType> {
-		var speculative = new Scope(scope);
-		speculative.assumeAllAssigned();
-		return storedIn(name, statements, start, speculative, (statement, at) -> mapStore(name, statement, at));
-	}
-
-	function mapStore(name:String, statement:AstStatement, scope:Scope):Null<CompilerType>
-		return switch statement {
-			case Expression(expression, _), Return(expression, _):
-				var entry = storedEntry(name, expression);
-				entry == null ? null : mapTypeOf(entry.key, entry.value, scope);
-			case IndexAssignment(Variable(target, _), key, value, _) if (target == name): mapTypeOf(key, value, scope);
-			default: null;
-		};
-
-	function mapTypeOf(key:AstExpression, value:AstExpression, scope:Scope):Null<CompilerType> {
-		var keyType = speculativeValueType(key, scope),
-			valueType = speculativeValueType(value, scope);
-		return keyType == null || valueType == null ? null : TMap(keyType, valueType);
-	}
-
-	function speculativeValueType(expression:AstExpression, scope:Scope):Null<CompilerType> {
-		// A lambda is typed once and cached by position, so it must not be typed here against a scratch scope.
-		if (containsLambda(expression))
-			return null;
-		// The typing is thrown away, so it makes no type variable: one would never be filled.
-		session.monomorphs.suspend();
-		try {
-			var type = typeExpression(expression, scope).type;
-			session.monomorphs.resume();
-			return (switch (type) {
-				case TNull: true;
-				default: false;
-			}) || (switch (type) {
-				case TVoid: true;
-				default: false;
-			}) || (switch (type) {
-				case TNever: true;
-				default: false;
-			}) ? null : type;
-		} catch (_:Dynamic) {
-			session.monomorphs.resume();
-			return null;
-		}
-	}
-
-	static function containsLambda(expression:AstExpression):Bool {
-		switch expression {
-			case Lambda(_, _, _, _):
-				return true;
-			default:
-		}
-		for (child in AstChildren.expressions(expression))
-			if (containsLambda(child))
-				return true;
-		return false;
-	}
-
-	function declareSpeculative(scope:Scope, name:String, type:Null<CompilerType>, span:SourceSpan):Void {
-		if (type != null)
-			try
-				scope.define(name, type, span)
-			catch (_:Dynamic) {}
-	}
-
-	/**
-	 * Walks the statements after a declaration in source order, as typing will, keeping a scratch scope of the locals
-	 * they declare, and returns the first thing `probe` makes of a statement. A redeclaration of `name` ends the search.
-	 */
-	/** `storedIn` over the bodies of the lambdas in a statement's own expressions, with their typed arguments in scope. */
-	function storedInLambdas(name:String, statement:AstStatement, scope:Scope,
-			probe:(AstStatement, Scope) -> Null<CompilerType>):Null<CompilerType> {
-		switch statement {
-			// A local function declaration is handled where it is declared.
-			case VarDeclaration(_, _, Lambda(_, _, _, _), _):
-				return null;
-			default:
-		}
-		var found:Null<CompilerType> = null;
-		function visit(expression:AstExpression):Void {
-			if (found != null)
-				return;
-			switch expression {
-				case Lambda(arguments, body, _, _):
-					var inside = new Scope(scope);
-					for (argument in arguments)
-						if (!argument.type.match(InferredType))
-							declareSpeculative(inside, argument.name, lowerType(argument.type, argument.span),
-								argument.span);
-					found = storedIn(name, body, 0, inside, probe);
-					return;
-				default:
-			}
-			for (child in compiler.syntax.AstChildren.expressions(expression))
-				visit(child);
-		}
-		for (expression in compiler.syntax.AstChildren.statementExpressions(statement))
-			visit(expression);
-		return found;
-	}
-
-	function storedIn(name:String, statements:Array<AstStatement>, start:Int, outer:Scope,
-			probe:(AstStatement, Scope) -> Null<CompilerType>):Null<CompilerType> {
-		var scope = new Scope(outer);
-		for (index in start...statements.length) {
-			var statement = statements[index], found = probe(statement, scope);
-			if (found != null)
-				return found;
-			// A lambda the statement passes or calls (`Thread.create(() -> list.push(x))`) may fill the local too.
-			found = storedInLambdas(name, statement, scope, probe);
-			if (found != null)
-				return found;
-			switch statement {
-				case VarDeclaration(declaredName, declared, initializer, span):
-					if (declaredName == name)
-						return null;
-					declareSpeculative(scope, declaredName, declared == null || (switch (declared) {
-						case InferredType: true;
-						default: false;
-					}) ? speculativeValueType(initializer, scope) : lowerType(declared, span), span);
-					switch initializer {
-						case Lambda(arguments, body, _, _):
-							var inside = new Scope(scope);
-							for (argument in arguments)
-								if ((switch (argument.type) {
-									case InferredType: false;
-									default: true;
-								}))
-									declareSpeculative(inside, argument.name, lowerType(argument.type, argument.span),
-									argument.span);
-							found = storedIn(name, body, 0, inside, probe);
-						default:
-					}
-				case UninitializedDeclaration(declaredName, declared, span):
-					if (declaredName == name)
-						return null;
-					if ((switch (declared) {
-						case InferredType: false;
-						default: true;
-					}))
-						declareSpeculative(scope, declaredName, lowerType(declared, span), span);
-				case If(_, yes, no, _):
-					found = storedIn(name, yes, 0, scope, probe);
-					if (found == null)
-						found = storedIn(name, no, 0, scope, probe);
-				case While(_, body, _), DoWhile(body, _, _):
-					found = storedIn(name, body, 0, scope, probe);
-				case ForIn(keyName, valueName, iterable, body, span):
-					var loop = new Scope(scope);
-					switch speculativeValueType(iterable, scope) {
-						case TArray(element):
-							if (valueName == null) declareSpeculative(loop, keyName, element, span);
-							else {
-								declareSpeculative(loop, keyName, TInt, span);
-								declareSpeculative(loop, valueName, element, span);
-							}
-						case TRange:
-							declareSpeculative(loop, keyName, TInt, span);
-						case TMap(key, value):
-							if (valueName == null) declareSpeculative(loop, keyName, value, span);
-							else {
-								declareSpeculative(loop, keyName, key, span);
-								declareSpeculative(loop, valueName, value, span);
-							}
-						default:
-					}
-					found = storedIn(name, body, 0, loop, probe);
-				case Try(tryBranch, catches, _):
-					found = storedIn(name, tryBranch, 0, scope, probe);
-					for (catchClause in catches) {
-						if (found != null)
-							break;
-						var caught = new Scope(scope);
-						declareSpeculative(caught, catchClause.name, lowerType(catchClause.type, catchClause.span),
-							catchClause.span);
-						found = storedIn(name, catchClause.statements, 0, caught, probe);
-					}
-				case Defer(body, _):
-					found = storedIn(name, body, 0, new Scope(scope), probe);
-				case Switch(_, cases, defaultBranch, _, _):
-					for (switchCase in cases) {
-						if (found != null)
-							break;
-						found = storedIn(name, switchCase.statements, 0, scope, probe);
-					}
-					if (found == null)
-						found = storedIn(name, defaultBranch, 0, scope, probe);
-				default:
-			}
-			if (found != null)
-				return found;
-		}
-		return null;
-	}
-
-	/** The key and value a statement stores into the map named `name` with `set`, if it does. */
-	static function storedEntry(name:String, expression:AstExpression):Null<{key:AstExpression, value:AstExpression}>
-		return switch expression {
-			case MethodCall(Variable(receiver, _), "set", [key, value], _) if (receiver == name): {
-				key: key,
-				value: value
-			};
-			case Call(callName, [key, value], _) if (callName == name + ".set"): {key: key, value: value};
-			default: null;
-		};
 
 	function knownExpressionType(expression:AstExpression, ?bindings:Map<String, CompilerType>):Null<CompilerType>
 		return switch expression {
