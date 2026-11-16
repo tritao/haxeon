@@ -7,6 +7,7 @@ import compiler.semantic.SemanticSignature;
 import compiler.syntax.Ast.AstExpression;
 import compiler.syntax.Ast.AstFunction;
 import compiler.syntax.Ast.AstType;
+import compiler.syntax.AstFunctions;
 import compiler.types.Type.CompilerType;
 import compiler.types.Type.NominalKind;
 import compiler.types.TypeRelations;
@@ -146,21 +147,7 @@ class GenericInstantiation {
 			}
 		}
 		if (concrete.length > 0)
-			fn = {
-				name: fn.name,
-				isStatic: fn.isStatic,
-				isPublic: fn.isPublic,
-				isOverride: fn.isOverride,
-				isExtern: fn.isExtern,
-				isInline: fn.isInline,
-				metadata: fn.metadata,
-				typeParameters: fn.typeParameters,
-				typeConstraints: fn.typeConstraints,
-				arguments: specializedArguments,
-				result: fn.result,
-				statements: fn.statements,
-				span: fn.span
-			};
+			fn = AstFunctions.withArguments(fn, specializedArguments);
 		var constants:Map<String, String> = [],
 			constantIndices:Map<Int, Bool> = [],
 			constantPolicies:Array<String> = [],

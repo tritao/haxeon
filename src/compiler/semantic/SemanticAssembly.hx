@@ -6,6 +6,7 @@ import compiler.syntax.Ast.AstExpression;
 import compiler.syntax.Ast.AstFunction;
 import compiler.syntax.Ast.AstStatement;
 import compiler.syntax.Ast.AstType;
+import compiler.syntax.AstFunctions;
 import compiler.Diagnostic;
 import compiler.Diagnostic.CompileError;
 import compiler.compilation.CompilationContext;
@@ -311,20 +312,8 @@ class SemanticAssembly {
 					name, entryModule, locals);
 				abstracts.push(canonicalAbstract);
 				for (method in canonicalAbstract.methods) {
-					var qualified = canonicalAbstract.name + "." + method.name,
-						canonicalMethod:AstFunction = {
-							name: qualified,
-							isStatic: method.isStatic,
-							isPublic: method.isPublic,
-							isOverride: method.isOverride,
-							typeParameters: method.typeParameters,
-							typeConstraints: method.typeConstraints,
-							arguments: method.arguments,
-							result: method.result,
-							span: method.span,
-							statements: method.statements
-						};
-					functions.push(canonicalMethod);
+					var qualified = canonicalAbstract.name + "." + method.name;
+					functions.push(AstFunctions.withName(method, qualified));
 					owners.set(qualified, name);
 					if (canonicalAbstract.typeParameters.length > 0
 						|| (method.typeParameters != null && method.typeParameters.length > 0))
@@ -404,20 +393,7 @@ class SemanticAssembly {
 					var canonical = ModuleCanonicalizer.canonicalFunction(method, name, entryModule, locals,
 						className + "." + method.name, classAliases);
 					functions.push(canonical);
-					classMethods.push({
-						name: method.name,
-						isStatic: method.isStatic,
-						isPublic: method.isPublic,
-						isOverride: method.isOverride,
-						isExtern: method.isExtern,
-						metadata: method.metadata,
-						typeParameters: method.typeParameters,
-						typeConstraints: canonical.typeConstraints,
-						arguments: canonical.arguments,
-						result: canonical.result,
-						span: method.span,
-						statements: canonical.statements
-					});
+					classMethods.push(AstFunctions.withName(canonical, method.name));
 					owners.set(canonical.name, name);
 					if (classDecl.typeParameters.length > 0
 						|| (method.typeParameters != null && method.typeParameters.length > 0))
@@ -521,15 +497,7 @@ class SemanticAssembly {
 				changedSignatures.set(qualified, true);
 				changedSignatures.set(constructor.owner, true);
 			}
-			functions.push({
-				name: qualified,
-				isStatic: false,
-				metadata: [],
-				arguments: constructor.method.arguments,
-				result: constructor.method.result,
-				statements: constructor.method.statements,
-				span: constructor.method.span
-			});
+			functions.push(AstFunctions.withName(constructor.method, qualified));
 			var callers = reverseCalls.get(baseConstructor);
 			if (callers == null) {
 				callers = [];

@@ -2,10 +2,12 @@ package compiler.semantic;
 
 import compiler.semantic.DeclarationLifecycle.DeclarationStage;
 import compiler.syntax.Ast.AstAbstract;
+import compiler.syntax.Ast.AstArgument;
 import compiler.syntax.Ast.AstClass;
 import compiler.syntax.Ast.AstFunction;
 import compiler.syntax.Ast.AstInterface;
 import compiler.syntax.Ast.AstProgram;
+import compiler.syntax.AstFunctions;
 import compiler.types.DeclarationIndex;
 import compiler.types.SignatureInference;
 import compiler.types.TypeRelations;
@@ -182,10 +184,8 @@ class SemanticProgram {
 
 	static function withBody(signature:AstFunction, body:AstFunction):AstFunction {
 		// Preserve validated declaration attributes (notably inline) when only source syntax changes.
-		var result:Dynamic = Reflect.copy(signature);
-		Reflect.setField(result, "arguments", [for (index in 0...signature.arguments.length) {
-			var argument = signature.arguments[index],
-				current = body.arguments[index];
+		var arguments:Array<AstArgument> = [for (index in 0...signature.arguments.length) {
+			var argument = signature.arguments[index], current = body.arguments[index];
 			{
 				name:argument.name,
 					type:argument.type,
@@ -193,11 +193,10 @@ class SemanticProgram {
 					defaultValue:current.defaultValue,
 					span:current.span
 			};
-		}]);
-		Reflect.setField(result, "metadata", body.metadata);
-		Reflect.setField(result, "span", body.span);
-		Reflect.setField(result, "statements", body.statements);
-		return cast result;
+		}];
+		return AstFunctions.copy(signature, signature.name, signature.isStatic, body.metadata, signature.typeParameters,
+			signature.typeConstraints, arguments,
+			signature.result, body.statements, body.span);
 	}
 
 	function new(program:AstProgram, declarations:DeclarationIndex, ?preparedSignatures:Map<String, AstFunction>,
@@ -277,17 +276,6 @@ class SemanticProgram {
 		if (methodParameters != null)
 			for (parameter in methodParameters)
 				parameters.push(parameter);
-		return {
-			name: method.name,
-			isStatic: method.isStatic,
-			isPublic: method.isPublic,
-			isOverride: method.isOverride,
-			typeParameters: parameters.length == 0 ? null : parameters,
-			typeConstraints: method.typeConstraints,
-			arguments: method.arguments,
-			result: method.result,
-			span: method.span,
-			statements: method.statements
-		};
+		return AstFunctions.withTypeParameters(method, parameters.length == 0 ? null : parameters);
 	}
 }

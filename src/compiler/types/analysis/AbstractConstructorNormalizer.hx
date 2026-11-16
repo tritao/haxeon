@@ -7,6 +7,7 @@ import compiler.syntax.Ast.AstFunction;
 import compiler.syntax.Ast.AstStatement;
 import compiler.syntax.Ast.AstSwitchCase;
 import compiler.syntax.Ast.AstType;
+import compiler.syntax.AstFunctions;
 
 /** Recasts an abstract constructor as an ordinary function returning its representation. */
 class AbstractConstructorNormalizer {
@@ -19,16 +20,10 @@ class AbstractConstructorNormalizer {
 			statements.push(rewriteStatement(statement, resultName));
 		if (!alwaysExits(constructor.statements))
 			statements.push(Return(Variable(resultName, constructor.span), constructor.span));
-		return {
-			name: constructor.name,
-			isStatic: true,
-			typeParameters: constructor.typeParameters == null ? [] : constructor.typeParameters,
-			typeConstraints: constructor.typeConstraints,
-			arguments: constructor.arguments,
-			result: representation,
-			statements: statements,
-			span: constructor.span
-		};
+		return AstFunctions.copy(constructor, constructor.name, true, constructor.metadata,
+			constructor.typeParameters == null ? [] : constructor.typeParameters, constructor.typeConstraints,
+			constructor.arguments, representation,
+			statements, constructor.span);
 	}
 
 	static function rewriteStatement(statement:AstStatement, resultName:String):AstStatement

@@ -182,6 +182,7 @@ class TestCatalog {
 		"SemanticWorkspaceMain",
 		"SemanticProgramMain",
 		"TyperBoundaryMain",
+		"FunctionModifiersMain",
 		"AbiMatrixMain",
 		"AddedFunctionLayoutMain",
 		"ParserRecoveryMain",

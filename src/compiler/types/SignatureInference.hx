@@ -9,6 +9,7 @@ import compiler.syntax.Ast.AstFunction;
 import compiler.syntax.Ast.AstProgram;
 import compiler.syntax.Ast.AstStatement;
 import compiler.syntax.Ast.AstType;
+import compiler.syntax.AstFunctions;
 
 /** Lexically scoped types used while collecting lightweight signature constraints. */
 private class InferenceEnvironment {
@@ -185,22 +186,11 @@ class SignatureInference {
 			}
 		} else if (arguments.length != 0)
 			return method;
-		return {name: method.name,
-			isStatic: method.isStatic,
-			isPublic: method.isPublic,
-			isOverride: method.isOverride,
-			isExtern: method.isExtern,
-			isInline: method.isInline,
-			metadata: method.metadata,
-			typeParameters: method.typeParameters,
-			typeConstraints: method.typeConstraints,
-			arguments: arguments,
-			result: (switch (method.result) {
+		return AstFunctions.withSignature(method, method.name, method.typeConstraints, arguments,
+			(switch (method.result) {
 				case InferredType: true;
 				default: false;
-			}) ? propertyType : method.result,
-				statements: method.statements,
-				span: method.span};
+			}) ? propertyType : method.result, method.statements);
 	}
 
 	function constraintsFor(constraints:Map<String, Map<String, AstType>>, name:String):Map<String, AstType>
@@ -417,29 +407,15 @@ class SignatureInference {
 		var candidates:Array<AstType> = [];
 		var hasValueReturn = collectReturnTypes(fn.statements, environment, enums, methods, candidates);
 		if (candidates.length == 0)
-			return hasValueReturn ? fn : withResult(fn, VoidType);
+			return hasValueReturn ? fn : AstFunctions.withResult(fn, VoidType);
 		var inferred:Null<AstType> = candidates[0];
 		for (candidate in candidates)
 			if (!sameType(inferred, candidate))
 				return fn;
 		if (inferred == null)
 			return fn;
-		return withResult(fn, inferred);
+		return AstFunctions.withResult(fn, inferred);
 	}
-
-	function withResult(fn:AstFunction, result:AstType):AstFunction
-		return {
-			name: fn.name,
-			isStatic: fn.isStatic,
-			isPublic: fn.isPublic,
-			isOverride: fn.isOverride,
-			typeParameters: fn.typeParameters,
-			typeConstraints: fn.typeConstraints,
-			arguments: fn.arguments,
-			result: result,
-			statements: fn.statements,
-			span: fn.span
-		};
 
 	function collectReturnTypes(statements:Array<AstStatement>, environment:InferenceEnvironment,
 			enums:Map<String, AstEnum>,
@@ -743,18 +719,7 @@ class SignatureInference {
 					defaultValue:argument.defaultValue
 			};
 		}];
-		return {
-			name: fn.name,
-			isStatic: fn.isStatic,
-			isPublic: fn.isPublic,
-			isOverride: fn.isOverride,
-			typeParameters: fn.typeParameters,
-			typeConstraints: fn.typeConstraints,
-			arguments: arguments,
-			result: fn.result,
-			statements: fn.statements,
-			span: fn.span
-		};
+		return AstFunctions.withArguments(fn, arguments);
 	}
 
 	function constrainFromField(inferred:Map<String, AstType>, argumentName:String, fieldName:String,

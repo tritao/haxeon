@@ -1,6 +1,7 @@
 package compiler.semantic;
 
 import compiler.syntax.AstChildren;
+import compiler.syntax.AstFunctions;
 import compiler.syntax.Ast;
 import compiler.syntax.Ast.AstExpression;
 import compiler.syntax.Ast.AstFunction;
@@ -20,21 +21,14 @@ class ModuleCanonicalizer {
 		if (functionAliases != null && typeParameters != null)
 			for (parameter in typeParameters)
 				functionAliases.set(parameter, parameter);
-		return {name: name,
-			isStatic: fn.isStatic,
-			isPublic: fn.isPublic,
-			isOverride: fn.isOverride,
-			isExtern: fn.isExtern,
-			isInline: fn.isInline,
-			metadata: fn.metadata,
-			typeParameters: fn.typeParameters,
-			typeConstraints: fn.typeConstraints == null ? null : [for (constraint in fn.typeConstraints)
+		var typeConstraints:Null<Array<AstTypeConstraint>> = fn.typeConstraints == null
+			? null : [for (constraint in fn.typeConstraints)
 			{
 				parameter:constraint.parameter,
 					type:canonicalType(constraint.type, functionAliases, fn.typeParameters),
 					span:constraint.span
 			}],
-				arguments: [for (argument in fn.arguments)
+				arguments:Array<AstArgument> = [for (argument in fn.arguments)
 				{
 			name:argument.name,
 				type:canonicalType(argument.type, functionAliases, fn.typeParameters),
@@ -42,10 +36,10 @@ class ModuleCanonicalizer {
 				optional:argument.optional,
 				defaultValue:canonicalOptionalExpression(argument.defaultValue, module, entry, locals, functionAliases)
 		}],
-			result: canonicalType(fn.result, functionAliases, fn.typeParameters),
-			span: fn.span,
-			statements: canonicalBlock(fn.statements, module, entry, locals, functionAliases,
-			[for (argument in fn.arguments) argument.name])};
+			result = canonicalType(fn.result, functionAliases, fn.typeParameters),
+			statements = canonicalBlock(fn.statements, module, entry, locals, functionAliases,
+			[for (argument in fn.arguments) argument.name]);
+		return AstFunctions.withSignature(fn, name, typeConstraints, arguments, result, statements);
 	}
 
 	/**
@@ -249,21 +243,14 @@ class ModuleCanonicalizer {
 		if (parameters.length > 0)
 			for (parameter in parameters)
 				methodAliases.set(parameter, parameter);
-		return {name: name,
-			isStatic: method.isStatic,
-			isPublic: method.isPublic,
-			isOverride: method.isOverride,
-			isExtern: method.isExtern,
-			isInline: method.isInline,
-			metadata: method.metadata,
-			typeParameters: method.typeParameters,
-			typeConstraints: method.typeConstraints == null ? null : [for (constraint in method.typeConstraints)
+		var typeConstraints:Null<Array<AstTypeConstraint>> = method.typeConstraints == null
+			? null : [for (constraint in method.typeConstraints)
 			{
 				parameter:constraint.parameter,
 					type:canonicalType(constraint.type, methodAliases, parameters),
 					span:constraint.span
 			}],
-				arguments: [for (argument in method.arguments)
+				arguments:Array<AstArgument> = [for (argument in method.arguments)
 				{
 			name:argument.name,
 				type:canonicalType(argument.type, methodAliases, parameters),
@@ -271,49 +258,51 @@ class ModuleCanonicalizer {
 				optional:argument.optional,
 				defaultValue:canonicalOptionalExpression(argument.defaultValue, module, entry, locals, methodAliases)
 		}],
-			result: canonicalType(method.result, methodAliases, parameters),
-			span: method.span,
-			statements: canonicalBlock(method.statements, module, entry, locals, methodAliases,
-			[for (argument in method.arguments) argument.name])};
+			result = canonicalType(method.result, methodAliases, parameters),
+			statements = canonicalBlock(method.statements, module, entry, locals, methodAliases,
+			[for (argument in method.arguments) argument.name]);
+		return AstFunctions.withSignature(method, name, typeConstraints, arguments, result, statements);
 	}
 
 	public static function canonicalInterface(interfaceDecl:compiler.syntax.Ast.AstInterface, aliases:AliasTable,
 			packageName:Null<String>):compiler.syntax.Ast.AstInterface
-		return {name: qualifiedTypeName(packageName, interfaceDecl.name),
+		return {
+			name: qualifiedTypeName(packageName, interfaceDecl.name),
 			typeParameters: interfaceDecl.typeParameters,
 			typeConstraints: canonicalConstraints(interfaceDecl.typeConstraints, aliases, interfaceDecl.typeParameters),
 			bases: [
 				for (base in interfaceDecl.bases)
 					canonicalType(base, aliases, interfaceDecl.typeParameters)
 			],
-				methods: [for (method in interfaceDecl.methods)
+			methods: [
+				for (method in interfaceDecl.methods)
+					canonicalInterfaceMethod(method, interfaceDecl.typeParameters, aliases)
+			],
+			span: interfaceDecl.span
+		};
+
+	static function canonicalInterfaceMethod(method:AstFunction, ownerTypeParameters:Array<String>,
+			aliases:AliasTable):AstFunction {
+		var parameters = combinedTypeParameters(ownerTypeParameters, method.typeParameters);
+		var typeConstraints:Null<Array<AstTypeConstraint>> = method.typeConstraints == null
+			? null : [for (constraint in method.typeConstraints)
+			{
+				parameter:constraint.parameter,
+					type:canonicalType(constraint.type, aliases, parameters),
+					span:constraint.span
+			}],
+				arguments:Array<AstArgument> = [for (argument in method.arguments)
 				{
-					name:method.name,
-						isStatic:false,
-						typeParameters:method.typeParameters,
-						typeConstraints:method.typeConstraints == null
-						? null : [for (constraint in method.typeConstraints)
-						{
-							parameter:constraint.parameter,
-								type:canonicalType(constraint.type, aliases,
-								combinedTypeParameters(interfaceDecl.typeParameters, method.typeParameters)),
-								span:constraint.span
-						}],
-							arguments:[for (argument in method.arguments)
-							{
-						name:argument.name,
-							type:canonicalType(argument.type, aliases,
-							combinedTypeParameters(interfaceDecl.typeParameters, method.typeParameters)),
-							span:argument.span,
-							optional:argument.optional,
-							defaultValue:argument.defaultValue
-					}],
-						result:canonicalType(method.result, aliases,
-						combinedTypeParameters(interfaceDecl.typeParameters, method.typeParameters)),
-						statements:[],
-						span:method.span
-				}],
-					span: interfaceDecl.span};
+			name:argument.name,
+				type:canonicalType(argument.type, aliases, parameters),
+				span:argument.span,
+				optional:argument.optional,
+				defaultValue:argument.defaultValue
+		}];
+		return AstFunctions.copy(method, method.name, false, method.metadata, method.typeParameters, typeConstraints,
+			arguments,
+			canonicalType(method.result, aliases, parameters), [], method.span);
+	}
 
 	static function canonicalConstraints(constraints:Null<Array<compiler.syntax.Ast.AstTypeConstraint>>,
 			aliases:AliasTable,
