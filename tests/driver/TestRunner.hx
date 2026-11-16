@@ -615,7 +615,9 @@ class TestRunner {
 	}
 
 	function configureRuntimeLibraryPath():Void {
-		var paths = ["out", Sys.getEnv("HAXEON_HASHLINK_DIR")]; // "out" is relative so it is the out of the directory a run starts in
+		// "out" is relative, so a run finds the out of the directory it starts in first; the checkout's own out follows, for a
+		// program a test starts in another directory (a watched app in its project).
+		var paths = ["out", Path.join([root, "out"]), Sys.getEnv("HAXEON_HASHLINK_DIR")];
 		var variable = Sys.systemName() == "Windows"
 			? "PATH" : (Sys.systemName() == "Mac" ? "DYLD_LIBRARY_PATH" : "LD_LIBRARY_PATH");
 		var existing = Sys.getEnv(variable);

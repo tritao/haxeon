@@ -48,9 +48,12 @@ class CompilerInputsMain {
 		expect(first.get("Main")[1] == FileSystem.fullPath(main),
 			"explicit sources report physical paths rather than diagnostic paths");
 		expect(first.get("Value")[2] == ContentDigest.makeHex(File.getBytes(value)), "the digest is the module text's");
-		expect(first.get("Value")[1] == FileSystem.fullPath(value)
-			|| StringTools.endsWith(first.get("Value")[1], "/late/Value.hx"),
-			"the path is the file read");
+		// Compared normalized: a module found under a root is reported by the root it was found under, and on Windows the
+		// root's separators are back slashes.
+		var valuePath = haxe.io.Path.normalize(first.get("Value")[1]);
+		expect(valuePath == haxe.io.Path.normalize(FileSystem.fullPath(value))
+			|| StringTools.endsWith(valuePath, "/late/Value.hx"),
+			"the path is the file read: " + first.get("Value")[1]);
 		var again = compile();
 		expect(again.get("Value")[2] == first.get("Value")[2], "an unchanged compile reports the same digests");
 		File.saveContent(value, "class Value { public static function get():Int { return 8; } }");

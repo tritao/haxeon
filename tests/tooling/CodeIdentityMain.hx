@@ -59,8 +59,9 @@ class Main {
 		process.close();
 		expect(code == 0, '$tag: the program exited with $code: $text');
 		var identities = new Map<String, String>();
-		for (line in text.split("\n")) {
-			var cut = line.indexOf("=");
+		// Trimmed: on Windows the program's standard output ends its lines with \r\n.
+		for (rawLine in text.split("\n")) {
+			var line = StringTools.trim(rawLine), cut = line.indexOf("=");
 			if (cut > 0)
 				identities.set(line.substr(0, cut), line.substr(cut + 1));
 		}

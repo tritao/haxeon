@@ -2230,7 +2230,7 @@ class LspProtocolMain {
 	static function request(protocol:LspProtocol, message:String):Dynamic {
 		var responses = protocol.handle(message);
 		if (responses.length != 1)
-			throw "Expected one LSP response";
+			throw 'Expected one LSP response to ${message.substr(0, 200)}, got ${responses.length}: ${responses.join(" | ").substr(0, 600)}';
 		var result:Dynamic = Json.parse(responses[0]);
 		if (result.error != null)
 			throw result.error.message;

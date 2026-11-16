@@ -98,7 +98,12 @@ class RuntimeLibrary {
 	/** One line: which library, what it lacks, and how to rebuild it. */
 	public static function describe(home:String, missing:Array<String>):String {
 		var shown = missing.slice(0, 4).join(", ") + (missing.length > 4 ? ", ..." : "");
-		return 'the native runtime library ${libraryPath(home)} is out of date: it lacks ${missing.length} function${missing.length == 1 ? "" : "s"} the runtime sources define ($shown). Rebuild it with: ${Path.join([home, "scripts", "build-native.sh"])}';
+		return 'the native runtime library ${libraryPath(home)} is out of date: it lacks ${missing.length} function${missing.length == 1 ? "" : "s"} the runtime sources define ($shown). Rebuild it with: ${rebuildCommand(home)}';
+	}
+
+	/** The script that rebuilds the native runtime here: PowerShell's on Windows, bash's elsewhere. */
+	public static function rebuildCommand(home:String):String {
+		return Path.join([home, "scripts", Sys.systemName() == "Windows" ? "build-native.ps1" : "build-native.sh"]);
 	}
 
 	/** Throws `describe` when the library is out of date. */

@@ -82,7 +82,9 @@ class RuntimeLibraryMain {
 		])).length == 0, "a complete library lacks nothing");
 
 		// The whole check on a temporary checkout.
-		var root = FileSystem.fullPath(".") + "/out/runtime-library-test-" + Std.random(0x3fffffff);
+		// Normalized: the messages name paths with forward slashes, and Windows gives the working directory with back ones.
+		var root = haxe.io.Path.normalize(FileSystem.fullPath(".")) + "/out/runtime-library-test-"
+			+ Std.random(0x3fffffff);
 		directories(root);
 		var hdll = root + "/out/haxeon_runtime.hdll";
 		check(RuntimeLibrary.missing(root).length == 0, "no sources and no library: nothing to compare");
@@ -99,7 +101,7 @@ class RuntimeLibraryMain {
 		var text = RuntimeLibrary.describe(root, lacking);
 		check(text.indexOf(hdll) >= 0 && text.indexOf("out of date") >= 0 && text.indexOf("__c") >= 0
 			&& text.indexOf("lacks 1 function ") >= 0
-			&& text.indexOf("scripts/build-native.sh") >= 0,
+			&& text.indexOf(RuntimeLibrary.rebuildCommand(root)) >= 0,
 			"the message names the library, the function and the rebuild command: " + text);
 		var long = RuntimeLibrary.describe(root, ["__1", "__2", "__3", "__4", "__5", "__6"]);
 		check(long.indexOf("lacks 6 functions") >= 0 && long.indexOf("__4, ...") >= 0 && long.indexOf("__5") < 0,
