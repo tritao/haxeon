@@ -218,6 +218,12 @@ implemented.
 indexing `Dynamic` values (JSON), structure and extractor patterns, rest parameters, and the missing standard library
 types and functions. Each is plain Haxe semantics, so it needs a test per backend, not a design document.
 
+Haxeon stays stricter than Haxe only where Haxe's code would fail when it runs (null-safe references), and follows
+Haxe where it has defined behaviour. Three follow-ups apply that rule: `E1012` after a `try` that always returns
+becomes a warning; `W1001` (a nullable scalar read as its default) can be silenced per project or per expression; and an
+identity-keyed map stands in for Haxe's `ObjectMap`, beside the `Hashable` maps. The map needs a short design note for
+its key rules and runtime storage; the other two do not.
+
 ### Smaller conveniences
 
 Check each against what Haxeon already supports before designing it.

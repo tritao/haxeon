@@ -117,10 +117,19 @@ HashLink):
 
 Stricter than Haxe:
 
-- A statement after a `try` whose every branch returns is `E1012` (unreachable); Haxe accepts it.
+Haxeon is stricter than Haxe only where Haxe's code would fail when it runs. Where Haxe has defined behaviour, Haxeon
+follows it, as with the scalar defaults of `Null<Int>` above (which follow Haxe's static targets; on JavaScript the
+value stays null), and a warning can point out a surprising case.
+
 - References are null-safe: a field of a `Null<T>` is read only where a null check proves it present (`E1005`), and a
   switch over a nullable enum handles `null`. Haxe reads through and throws "Null access" when the program runs.
-- Map keys must be `Hashable` (above).
+- Map keys must be `Hashable` (above). The rule stays for structs, but Haxe's identity-keyed maps (`ObjectMap`, a class
+  instance as key) have no Haxeon equivalent yet; one is planned.
+- A statement after a `try` whose every branch returns is `E1012` (unreachable); Haxe accepts it. This one does not meet
+  the rule, so it is due to become a warning.
+
+Planned with these rules: a way to silence `W1001`, per project or per expression, for code that relies on the defaults
+on purpose; and fixing the pattern capture that reads a function or variable of the same name (above).
 
 ## C header import
 

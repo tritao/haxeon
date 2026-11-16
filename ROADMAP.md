@@ -36,7 +36,11 @@ typed catch filters, dynamic objects and reflection, structs with `Equatable`/`H
 What the Wasm backends cover is in [docs/WASM_BACKEND.md](docs/WASM_BACKEND.md).
 
 - [ ] The Haxe compatibility gaps in [LANGUAGE_SUPPORT.md](docs/LANGUAGE_SUPPORT.md#not-yet-supported): `using` static
-  extensions, indexing `Dynamic` values, structure and extractor patterns, rest parameters.
+  extensions, indexing `Dynamic` values, structure and extractor patterns, rest parameters, and pattern captures that
+  share a name with a function or variable.
+- [ ] Strictness only where Haxe would fail at run time
+  ([Stricter than Haxe](docs/LANGUAGE_SUPPORT.md#not-yet-supported)): `E1012` after a returning `try` becomes a warning,
+  `W1001` can be silenced per project or per expression, and an identity-keyed map covers Haxe's `ObjectMap`.
 - [ ] Runtime library: file handles (`sys.io.File.read`/`write`), `haxe.ds.List`, `haxe.ds.Vector`, the rest of `Lambda`,
   `Type.getClass`/`getClassName`.
 - [~] Typed storage for the standard reference maps and nullable-element arrays, and inline `Null<T>` through the callable
