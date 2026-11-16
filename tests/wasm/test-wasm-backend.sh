@@ -377,7 +377,9 @@ const cases = [
           if (error) errors += text; else printed += text;
         },
         flush_output: error => flushes.push(error),
-        date_now: () => Date.now()
+        date_now: () => Date.now(),
+        // As haxeon-host.js: the guest's offset is local time minus UTC, JavaScript's the other way round.
+        date_timezone_offset: time => -new Date(time).getTimezoneOffset()
       };
       hostServicesCheck = () => {
         if (printed !== "wasm-host-services.hx:4: host trace\nhost println\nstdout λ" || errors !== "stderr 雪" || JSON.stringify(flushes) !== "[0,1]")
