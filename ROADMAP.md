@@ -85,6 +85,20 @@ self-hosted convergence.
 - [~] The differential suite compares official Haxe and Haxeon on ten paired programs (`tests/differential`); collections,
   diagnostics and reload classification need more coverage.
 
+### F. UI library
+
+`packages/ui` (`haxeon.ui`) is the retained UI framework above NativeKit and the largest Haxeon program in this
+repository. It is built and tested by the `nativekit-packages` workflow.
+
+- [~] One component model: the scoped model is used by two library widgets; the self-updating and retained-edit widgets
+  and the `context.state` callers still use the older mechanisms.
+- [ ] One frame render path in the native renderer (`api.cpp` has two largely duplicated ones).
+- [ ] `UiContext` and `BuildContext` split by responsibility, and `core` free of dependencies on `debug`, `widgets`,
+  `component` and `editing`.
+- [ ] One test harness style, with the framework smoke test split by feature.
+
+The evidence and the order are in [docs/ARCHITECTURE_REVIEW.md](docs/ARCHITECTURE_REVIEW.md), phase 4.
+
 ## Next
 
 1. Close the Haxe compatibility gaps in section A, `using` first, so ordinary Haxe and Pragtical code compiles.
