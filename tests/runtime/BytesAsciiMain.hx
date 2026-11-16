@@ -9,12 +9,24 @@ import sys.io.File;
 class BytesAsciiMain {
 	static function main():Void {
 		var nativePath = "out/bytes_decode_guards.hdll";
-		var built = Sys.command("cc", [
+		var hashlink = Sys.getEnv("HAXEON_HASHLINK_DIR");
+		// libhl is built with MSVC on Windows, so its guard library is too (from the Visual Studio environment CI sets up).
+		var built = Sys.systemName() == "Windows" ? Sys.command("cl", [
+			"-nologo",
+			"-LD",
+			"-Ivendor/hashlink/src",
+			"tests/native/bytes_decode_guards.c",
+			"-Fe" + nativePath,
+			"-Foout/",
+			"-link",
+			"-LIBPATH:" + hashlink,
+			"libhl.lib"
+		]) : Sys.command("cc", [
 			"-shared",
 			"-fPIC",
 			"-Ivendor/hashlink/src",
 			"tests/native/bytes_decode_guards.c",
-			"-L" + Sys.getEnv("HAXEON_HASHLINK_DIR"),
+			"-L" + hashlink,
 			"-lhl",
 			"-o",
 			nativePath

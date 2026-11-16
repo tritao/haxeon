@@ -51,7 +51,13 @@ function main():Int {
 	if (!Sys.putEnv("HAXEON_SYS_É", "válue-ß") || Sys.getEnv("HAXEON_SYS_É") != "válue-ß")
 		return 6;
 	var snapshot = Sys.environment();
-	if (snapshot.get("HAXEON_SYS_É") != "válue-ß" || snapshot.get("PATH") != Sys.getEnv("PATH"))
+	// Windows names variables without regard to case (its runners spell it "Path"); the snapshot keeps the stored name.
+	var pathKey = "PATH";
+	if (systemName == "Windows")
+		for (key in snapshot.keys())
+			if (key.toUpperCase() == "PATH")
+				pathKey = key;
+	if (snapshot.get("HAXEON_SYS_É") != "válue-ß" || snapshot.get(pathKey) != Sys.getEnv("PATH"))
 		return 14;
 	var command = systemName == "Windows" ? "cmd /C \"echo xé>nul\"" : "test xé = xé";
 	if (Sys.command(command) != 0)

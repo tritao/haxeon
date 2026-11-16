@@ -6,8 +6,10 @@ root=$(cd "$(dirname "$0")/../.." && pwd)
 work=$(mktemp -d "${TMPDIR:-/tmp}/haxeon-gc-owner.XXXXXX")
 trap 'rm -rf "$work"' EXIT
 library=${HL_GC_TEST_LIBRARY_DIR:-$("$root/scripts/hashlink-path.sh")}
+# libhl is built with MSVC on Windows, which the shell's MinGW compiler cannot link against: use cl there.
+case "$(uname -s)" in MINGW* | MSYS* | CYGWIN*) windows=1 ;; *) windows= ;; esac
 build() {
-	if command -v "${CC:-cc}" >/dev/null 2>&1; then
+	if [[ -z $windows ]] && command -v "${CC:-cc}" >/dev/null 2>&1; then
 		"${CC:-cc}" -O2 -I"$root/vendor/hashlink/src" "$root/tests/native/$1.c" -L"$library" -lhl -lpthread -o "$work/$1"
 	elif command -v cl >/dev/null 2>&1; then
 		# MSVC from a Visual Studio command prompt
@@ -18,7 +20,7 @@ build() {
 run() {
 	PATH="$library:$PATH" LD_LIBRARY_PATH="$library${LD_LIBRARY_PATH:+:$LD_LIBRARY_PATH}" DYLD_LIBRARY_PATH="$library${DYLD_LIBRARY_PATH:+:$DYLD_LIBRARY_PATH}" "$@"
 }
-if ! command -v "${CC:-cc}" >/dev/null 2>&1 && ! command -v cl >/dev/null 2>&1; then
+if { [[ -n $windows ]] || ! command -v "${CC:-cc}" >/dev/null 2>&1; } && ! command -v cl >/dev/null 2>&1; then
 	# Windows without MSVC on the path (run from a Visual Studio command prompt to include this test)
 	echo "SKIP: no C compiler for the native owner tests"
 	exit 0

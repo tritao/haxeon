@@ -24,7 +24,8 @@ function sizeOf(path:String):Int {
 }
 
 function main():Int {
-	var directory = "out/gc-dump-paths-é";
+	// A directory of this build's own: the test driver runs a program's builds at once, and on Windows in one directory.
+	var directory = "out/" + haxe.io.Path.withoutExtension(haxe.io.Path.withoutDirectory(Sys.programPath())) + "-dumps-é";
 	clear(directory);
 	hl.Gc.censusStart(0);
 	var kept = [for (i in 0...100) new Box(i)];
