@@ -3,7 +3,7 @@
  * `hl module.hl` runs any module; `haxeon ...` runs the CLI's bytecode, which the native build compiles and publishes beside
  * this executable (HAXEON_CLI_BYTECODE). An executable built in a checkout belongs to it, as the shell launchers did:
  * HAXEON_HOME and HAXEON_HASHLINK_DIR name that checkout. HAXEON_CLI_HL runs other CLI bytecode instead. */
-#include <hl.h>
+/* No hl.h: its macros (_GUID) break <windows.h>, and the VM's entry point is all this needs of HashLink. */
 #include <stdio.h>
 #include <stdlib.h>
 #include <string.h>
@@ -12,10 +12,11 @@
 #	error "HAXEON_SOURCE_DIR, HAXEON_HASHLINK_DIR and HAXEON_CLI_BYTECODE come from CMakeLists.txt"
 #endif
 
-#ifdef HL_WIN
+#ifdef _WIN32
 #	include <windows.h>
+#	include <io.h>
 
-int hl_vm_main( int argc, pchar *argv[] );
+int hl_vm_main( int argc, wchar_t *argv[] );
 
 static wchar_t *widen( const char *text ) {
 	int length = MultiByteToWideChar(CP_UTF8,0,text,-1,NULL,0);
