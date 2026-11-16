@@ -254,7 +254,10 @@ class Compiler {
 		natives = cloneFrom == null ? new NativeRegistry(nativeConfiguration) : cloneFrom.natives.clone();
 		if (cloneFrom != null) {
 			moduleId = cloneFrom.moduleId;
-			state = cloneFrom.state.copyForCandidate();
+			state = new SessionState(cloneFrom.types.copy(), cloneFrom.state.genericSpecializations.copy(),
+				cloneFrom.backend);
+			state.publishedAbi = cloneFrom.state.publishedAbi;
+			state.compiledOnce = cloneFrom.state.compiledOnce;
 			// A clone is what actually compiles, so it must assemble the way its source was asked to.
 			livePatching = cloneFrom.livePatching;
 			developmentMetadata = cloneFrom.developmentMetadata;
@@ -720,46 +723,12 @@ class Compiler {
 		cachedCompileResult = result;
 	}
 
-	/** A compiler whose state is a copy of this one's, which a build works on (see `SessionState.copyForCandidate`). */
-	function createCandidate(startingBackend:Null<BackendSession>):Compiler {
-		var candidate = new Compiler(null, null, null, this);
-		candidate.sourceLoader = sourceLoader.copy();
-		candidate.configurationIdentity = configurationIdentity;
-		candidate.configurationScopeIdentity = configurationScopeIdentity;
-		candidate.defines = [for (name => value in defines) name => value];
-		candidate.backendTarget = backendTarget;
-		candidate.state = state.copyForCandidate(startingBackend);
-		return candidate;
-	}
-
-	/** Takes the state a successful build left. */
-	function adoptCandidate(candidate:Compiler):Void {
-		state = candidate.state;
+	/** Takes the state a successful build left (see `SessionState.copyForCandidate`). */
+	function adoptCandidate(candidate:SessionState):Void {
+		state = candidate;
 		graph.rebuild(modules);
 	}
 
-	static function explicitFunctionSignatures(functions:Array<AstFunction>):Bool {
-		for (fn in functions) {
-			switch fn.result {
-				case InferredType:
-					return false;
-				default:
-			}
-			for (argument in fn.arguments)
-				switch argument.type {
-					case InferredType:
-						return false;
-					default:
-				}
-		}
-		return true;
-	}
-
-	function nativeSignatures():Map<String, {arguments:Array<CompilerType>, result:CompilerType}> {
-		return natives.signatures();
-	}
-
-	/** What every module identity is mixed with: the compiler (or the `compiler-version` define, for tests) and the defines. */
 	function get_modules():Map<String, ModuleState>
 		return state.modules;
 
@@ -823,20 +792,4 @@ class Compiler {
 	/** True when the active target uses one of the experimental WebAssembly backends. */
 	public function isWasmTarget():Bool
 		return BackendTargets.isWasm(backendTarget);
-
-	function irNatives():Array<IrNative>
-		return natives.irNatives();
-
-	static function mapIsEmpty(values:Map<String, Bool>):Bool {
-		for (_ in values.keys())
-			return false;
-		return true;
-	}
-
-	static function copyIndices(source:Map<String, Int>):Map<String, Int> {
-		var result:Map<String, Int> = [];
-		for (name => index in source)
-			result.set(name, index);
-		return result;
-	}
 }

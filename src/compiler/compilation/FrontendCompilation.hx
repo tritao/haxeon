@@ -235,7 +235,7 @@ class FrontendCompilation {
 		// pass is an incremental one over it: it has the newly reachable modules to type, and the work of this pass carries over.
 		if (includeTypedRuntimeDependencies(context, build.runtimeDependencies, build.typedNew.functions,
 			build.semanticAssembly.owners, build.names, rollbackModules)) {
-			context.setLastTypedProgram(build.typedNew);
+			context.state.lastTypedProgram = build.typedNew;
 			return run(context, entryModule, token, rollbackModules, snapshotDoneAt, lowerToIr, indexSemantics, [], [],
 				[], {
 					regenerated: build.regenerated,
@@ -280,7 +280,7 @@ class FrontendCompilation {
 		var context = build.context,
 			entryModule = build.entryModule,
 			token = build.token,
-			modules = context.modules,
+			modules = context.state.modules,
 			graph = context.graph;
 		var bodyChanged:Map<String, Bool> = pendingBody == null ? [] : pendingBody,
 			signatureChanged:Map<String, Bool> = pendingSignatures == null ? [] : pendingSignatures,
@@ -290,7 +290,7 @@ class FrontendCompilation {
 		build.structuralChanged = structuralChanged;
 		var names:Array<String> = [],
 			initializationClasses:Array<String> = [],
-			cachedReachability = context.cachedReachability(entryModule),
+			cachedReachability = context.state.cachedReachability(entryModule),
 			reuseGraph = cachedReachability != null;
 		if (cachedReachability != null)
 			for (name in cachedReachability.names) {
@@ -326,7 +326,7 @@ class FrontendCompilation {
 				for (classDecl in ast.classes)
 					initializationClasses.push(ModuleCanonicalizer.qualifiedTypeName(ast.packageName, classDecl.name));
 			}
-			context.cacheReachability(entryModule, names, initializationClasses);
+			context.state.cacheReachability(entryModule, names, initializationClasses);
 			build.graphInitializationMs = now() - initializationStartedAt;
 		}
 		build.names = names;
@@ -341,11 +341,11 @@ class FrontendCompilation {
 	static function parseReached(build:FrontendBuild, name:String):ModuleState {
 		var context = build.context;
 		var phaseStarted = now();
-		var state = context.writableState(name, build.rollbackModules);
+		var state = context.state.writableState(name, build.rollbackModules);
 		context.parse(state, build.entryModule, build.bodyChanged, build.signatureChanged, build.structuralChanged);
 		build.graphParseMs += now() - phaseStarted;
 		phaseStarted = now();
-		context.addTypeDependencies(state);
+		context.moduleAnalyzer.addTypeDependencies(state);
 		build.graphDependencyMs += now() - phaseStarted;
 		return state;
 	}
@@ -376,7 +376,7 @@ class FrontendCompilation {
 		build.runtimeDependencies = [];
 		try {
 			checkCancelled(build.token);
-			var previousSemantic = context.cachedSemanticProgram;
+			var previousSemantic = context.state.semanticProgram;
 			var canReuseSemantic = previousSemantic != null
 				&& CompilationContext.mapIsEmpty(build.signatureChanged)
 				&& CompilationContext.mapIsEmpty(build.structuralChanged)
@@ -389,9 +389,9 @@ class FrontendCompilation {
 				semantic = SemanticProgram.analyze(canonicalProgram);
 			build.allocationAfterAnalysis = AllocationMeter.sample();
 			build.analysisDoneAt = now();
-			var typedResult = Typer.typeAnalyzedMeasured(semantic, selected, context.nativeSignatures(),
-				semanticAssembly.entryPoint, context.genericSpecializations,
-				context.nativeLayoutTarget(), canReuseSemantic ? context.lastTypedProgram : null,
+			var typedResult = Typer.typeAnalyzedMeasured(semantic, selected, context.natives.signatures(),
+				semanticAssembly.entryPoint, context.state.genericSpecializations,
+				context.nativeLayoutTarget(), canReuseSemantic ? context.state.lastTypedProgram : null,
 				semanticAssembly.facts, build.lowerToIr,
 				retainedFromPrevious(context, names, selected, build.lowerToIr,
 				[for (classDecl in canonicalProgram.classes) classDecl.name => true],
@@ -415,16 +415,16 @@ class FrontendCompilation {
 			// seeds: fail here, naming it, and do not compile what was typed against the wrong representation.
 			for (dependency in runtimeDependencies)
 				if (RuntimeDependencyTracker.changesRepresentation(dependency.target)) {
-					var representationModule = context.loadSourceModuleDependency(dependency.target);
+					var representationModule = context.moduleAnalyzer.loadSourceModuleDependency(dependency.target);
 					if (representationModule == null || names.indexOf(representationModule) < 0)
 						throw 'Representation module "${dependency.target}" must be seeded but is not in the program (needed by "${dependency.functionName}")';
 				}
-			context.cachedSemanticProgram = semantic;
+			context.state.semanticProgram = semantic;
 		} catch (error:CompileError) {
 			for (name in names) {
-				var state:compiler.modules.ModuleState = context.modules.get(name);
+				var state:compiler.modules.ModuleState = context.state.modules.get(name);
 				if (state.source.path == error.diagnostic.span.file.path)
-					context.writableState(name, build.rollbackModules).diagnostics.push(error.diagnostic);
+					context.state.writableState(name, build.rollbackModules).diagnostics.push(error.diagnostic);
 			}
 			throw error;
 		}
@@ -443,17 +443,18 @@ class FrontendCompilation {
 		build.reindexedModules = reindexedModules;
 		if (build.indexSemantics) {
 			for (module in reindexedModules.keys()) {
-				var state = context.writableState(module, build.rollbackModules);
+				var state = context.state.writableState(module, build.rollbackModules);
 				state.semanticModel = new compiler.semantic.SemanticModel(state.parsedAst(), state.source,
 					state.revision, state.tokens);
 			}
-			context.invalidateSemanticResolutionCache();
+			context.state.semanticWorkspace.invalidateResolutionCache();
 			for (module in reindexedModules.keys()) {
-				var state = context.modules.get(module);
+				var state = context.state.modules.get(module);
 				if (state != null) {
 					var model = state.semanticModel;
 					if (model != null)
-						model.index.indexTypeReferences(context.resolveSemanticType, build.token);
+						model.index.indexTypeReferences(context.state.semanticWorkspace.resolveTypeSymbolId,
+							build.token);
 				}
 			}
 		}
@@ -466,11 +467,11 @@ class FrontendCompilation {
 			typedNew = build.typedNew,
 			generator = build.generator,
 			carried = build.carried,
-			objectCache = context.objectCache,
-			canonicalObjectCache = context.canonicalObjectCache;
+			objectCache = context.state.objectCache,
+			canonicalObjectCache = context.state.canonicalObjectCache;
 		build.retyped = carried == null ? [] : carried.retyped.copy();
 		build.regenerated = carried == null ? [] : carried.regenerated.copy();
-		var previousTyped = context.lastTypedProgram;
+		var previousTyped = context.state.lastTypedProgram;
 		build.currentSpecializedOwners = [
 			for (classDecl in typedNew.classes)
 				if (classDecl.specializationOrigin != null) classDecl.name => true
@@ -579,7 +580,7 @@ class FrontendCompilation {
 				}
 				generatedNames.set(fn.name, true);
 			}
-			var state = context.writableState(module, rollbackModules);
+			var state = context.state.writableState(module, rollbackModules);
 			state.typedFunctions.set(fn.name, fn);
 			state.typedSourceRevisions.set(fn.name, state.revision);
 			var dependencies = state.semanticDependencies.get(fn.name);
@@ -593,7 +594,7 @@ class FrontendCompilation {
 				for (target in constants.keys())
 					SemanticDependencyCollector.addDependency(state.semanticDependencies, fn.name,
 						SemanticDependencyKind.InlineConstant, target,
-						context.resolveSemanticSymbol(target));
+						context.state.semanticWorkspace.resolveSymbolId(target));
 			var sourceRecord = defaultArgumentSources.get(fn.name);
 			if (sourceRecord != null)
 				state.defaultArgumentSources.set(fn.name, sourceRecord);
@@ -615,8 +616,8 @@ class FrontendCompilation {
 			else
 				state.keyPathUses.remove(fn.name);
 			if (indexSemantics && state.semanticModel != null)
-				state.semanticModel.index.indexTypedFunction(fn, context.resolveSemanticSymbol,
-					context.resolveSemanticEnumCase, token);
+				state.semanticModel.index.indexTypedFunction(fn, context.state.semanticWorkspace.resolveSymbolId,
+					context.state.semanticWorkspace.resolveEnumCaseId, token);
 			// A lambda names the function it is written in as its origin, so it is retyped with that function.
 			var semanticOrigin = fn.origin;
 			var semanticallyInvalidated = invalidated.exists(fn.name) || semanticOrigin != null
@@ -634,7 +635,7 @@ class FrontendCompilation {
 			} else
 				state.pendingIrFunctions.set(fn.name, true);
 		}
-		var objectCache = context.objectCache;
+		var objectCache = context.state.objectCache;
 		for (object in build.currentObjects)
 			objectCache.set(object.name, object);
 		build.allocationAfterFunctions = AllocationMeter.sample();
@@ -651,7 +652,7 @@ class FrontendCompilation {
 	/** Bumps the type version of the modules typing touched, and drops each module's cached functions that no longer belong to it. */
 	static function pruneCachedFunctions(build:FrontendBuild):Void {
 		var context = build.context,
-			modules = context.modules,
+			modules = context.state.modules,
 			names = build.names,
 			owners = build.semanticAssembly.owners;
 		var functionNamesByModule:Map<String, Array<String>> = [];
@@ -817,13 +818,13 @@ class FrontendCompilation {
 			valid.remove(cached);
 		var removed = [for (cached in state.typedFunctions.keys()) if (!valid.exists(cached)) cached];
 		if (removed.length > 0)
-			removeCachedFunctions(build.context.writableState(name, build.rollbackModules), removed);
+			removeCachedFunctions(build.context.state.writableState(name, build.rollbackModules), removed);
 	}
 
 	/** Lowers the functions an earlier check-only build typed but did not lower, when this build lowers. */
 	static function generatePendingIr(build:FrontendBuild):Void {
 		var context = build.context,
-			modules = context.modules,
+			modules = context.state.modules,
 			generator = build.generator,
 			regenerated = build.regenerated;
 		if (build.lowerToIr)
@@ -834,7 +835,7 @@ class FrontendCompilation {
 					pending = [for (functionName in state.pendingIrFunctions.keys()) functionName];
 				pending.sort(Reflect.compare);
 				if (pending.length > 0)
-					state = context.writableState(name, build.rollbackModules);
+					state = context.state.writableState(name, build.rollbackModules);
 				for (functionName in pending) {
 					checkCancelled(build.token);
 					var fn = state.typedFunctions.get(functionName);
@@ -915,7 +916,7 @@ class FrontendCompilation {
 	 */
 	static function collectCachedIr(build:FrontendBuild):Void {
 		var context = build.context,
-			modules = context.modules,
+			modules = context.state.modules,
 			names = build.names,
 			owners = build.semanticAssembly.owners;
 		var cachedNames:Array<String> = [];
@@ -953,7 +954,7 @@ class FrontendCompilation {
 				}
 				if (!rehashed.keys().hasNext() && !state.editedSinceIrScan)
 					continue;
-				var writable = context.writableState(moduleName, build.rollbackModules);
+				var writable = context.state.writableState(moduleName, build.rollbackModules);
 				for (functionName => replacement in rehashed)
 					writable.irFunctions.set(functionName, replacement);
 				writable.editedSinceIrScan = false;
@@ -988,11 +989,11 @@ class FrontendCompilation {
 		var context = build.context,
 			generator = build.generator,
 			typedNew = build.typedNew;
-		var resolvedObjects = resolvedObjectsFrom(context.objectCache, typedNew,
+		var resolvedObjects = resolvedObjectsFrom(context.state.objectCache, typedNew,
 			functionNamesOf(build.cachedNames, typedNew));
 		var objectNames = [for (name in resolvedObjects.keys()) name];
 		objectNames.sort(Reflect.compare);
-		var irNatives = context.irNatives();
+		var irNatives = context.natives.irNatives();
 		for (native in IrProgramAssembler.nativesFrom(generator, typedNew)) {
 			for (existing in irNatives)
 				if (existing.name == native.name)
@@ -1006,13 +1007,13 @@ class FrontendCompilation {
 			for (native in compiler.ir.IrInstrumentation.natives())
 				if (![for (existing in irNatives) existing.name].contains(native.name))
 					irNatives.push(native);
-		var irCNatives = context.irCNatives();
+		var irCNatives = context.ffi.cNatives();
 		for (native in IrProgramAssembler.cNativesFrom(generator, typedNew))
 			if (![for (existing in irCNatives) existing.name].contains(native.name))
 				irCNatives.push(native);
 		build.irCNatives = irCNatives;
 		// A live HashLink build initializes the fields it adds to running objects (see `IrProgramAssembler.liveInitializersFrom`).
-		var hashLink = context.backend.hashLink(),
+		var hashLink = context.state.backend.hashLink(),
 			published = hashLink == null ? null : hashLink.assembler,
 			liveInitializers = context.livePatching
 				&& !context.isWasmTarget()
@@ -1050,7 +1051,7 @@ class FrontendCompilation {
 		var inputs = pipelineInputs(context, generator, build.instrumentScope, cached, build.initializers, irNatives,
 			irCNatives, objects,
 			build.interfaces, build.enums, build.staticFields, entryPoint, build.reflectable),
-			previousPipeline = context.pipelineSnapshot,
+			previousPipeline = context.state.pipelineSnapshot,
 			reuseMiss = context.livePatching ? "live patching" : previousPipeline == null
 				? "no earlier build" : previousPipeline.mismatch(inputs),
 			matchesPrevious = reuseMiss == null,
@@ -1066,12 +1067,12 @@ class FrontendCompilation {
 			ir = reusedPipeline.ir;
 			inlinerChanged = [];
 		} else {
-			var canonicalObjectCache = context.canonicalObjectCache;
+			var canonicalObjectCache = context.state.canonicalObjectCache;
 			compiler.core.IrPassMeter.reset();
 			ir = IrProgramAssembler.assemble(generator, cached, irNatives, objects, build.interfaces,
 				build.enums, build.staticFields,
 				build.initializers, entryPoint, irCNatives, build.reflectable,
-				context.inlineCache().staticChecks, context.valueArrayTarget(),
+				context.state.inlineCache.staticChecks, context.valueArrayTarget(),
 				context.exportedFunctions(), !context.livePatching && !context.isWasmTarget()
 				&& compiler.ir.IrEntryPrune.enabled(), [for (object in objects) {
 					if (object.isValue && object.nativeLayout != null) {
@@ -1085,11 +1086,12 @@ class FrontendCompilation {
 				ownPrints:Map<String, String> = [];
 			for (fn in cached)
 				if (PositionalName.is(fn.name))
-					ownPrints.set(fn.name, context.inlineCache().positionalFingerprint(fn, cNativeNames));
-			context.inlineCache().finishPositionalFingerprints();
+					ownPrints.set(fn.name, context.state.inlineCache.positionalFingerprint(fn, cNativeNames));
+			context.state.inlineCache.finishPositionalFingerprints();
 			ir.positionalFingerprints = PositionalName.nested(ownPrints);
 			if (context.livePatching) {
-				var texts:Map<String, String> = [for (state in context.modules) state.source.path => state.source.text];
+				var texts:Map<String, String> =
+					[for (state in context.state.modules) state.source.path => state.source.text];
 				for (fn in cached)
 					if (PositionalName.is(fn.name)) {
 						var place = PositionalName.placeOf(fn),
@@ -1100,7 +1102,7 @@ class FrontendCompilation {
 						ir.positionalSources.set(parsed.path, texts.get(parsed.path));
 					}
 			}
-			var semantic = context.cachedSemanticProgram;
+			var semantic = context.state.semanticProgram;
 			if (context.livePatching && !context.isWasmTarget() && semantic != null)
 				ir.parameterDefaults = parameterDefaults(ir, semantic.signatures);
 			// The passes and their order are `IrPipeline.target`, from the closed enum tag ABI to the frontend verifier.
@@ -1108,10 +1110,10 @@ class FrontendCompilation {
 			passes.livePatching = context.livePatching;
 			passes.developmentMetadata = context.developmentMetadata;
 			passes.reflectable = build.reflectable;
-			passes.inlineCache = context.inlineCache();
+			passes.inlineCache = context.state.inlineCache;
 			passes.inlineEnabled = context.inlineEnabled();
 			passes.instrumentScope = build.instrumentScope;
-			passes.verifyMemo = context.verifyMemo;
+			passes.verifyMemo = context.state.verifyMemo;
 			passes.checkingReuse = checkingReuse;
 			ir = compiler.ir.IrPipeline.target.run(ir, passes);
 			inlinerChanged = passes.inlinerChanged;
@@ -1123,7 +1125,7 @@ class FrontendCompilation {
 			// The prune ran early (HAXEON_EARLY_PRUNE): after the last pass nothing may call what it removed (`IrEntryPrune`).
 			if (compiler.ir.IrEntryPrune.checking())
 				compiler.ir.IrEntryPrune.checkRemoved("the pipeline", ir.functions, ir.prunedFunctions);
-			context.pipelineSnapshot = context.livePatching ? null : new PipelineSnapshot(inputs, ir);
+			context.state.pipelineSnapshot = context.livePatching ? null : new PipelineSnapshot(inputs, ir);
 		}
 		build.ir = ir;
 		build.inlinerChanged = inlinerChanged;
@@ -1153,7 +1155,7 @@ class FrontendCompilation {
 		build.regenerated = regenerated;
 		build.relocated = build.matchesPrevious
 			&& !build.checkingReuse
-			? [] : [for (name in build.context.inlineCache().relocated) if (!listed.exists(name)) name];
+			? [] : [for (name in build.context.state.inlineCache.relocated) if (!listed.exists(name)) name];
 	}
 
 	static function result(build:FrontendBuild, ir:Null<IrProgram>, relocated:Array<String>, irAssemblyDoneAt:Float,
@@ -1241,7 +1243,7 @@ class FrontendCompilation {
 	 * module and cannot make a specialized map either.
 	 */
 	static function seedRepresentationModules(context:CompilationContext):Void {
-		var module = context.loadSourceModuleDependency(compiler.runtime.RuntimeType.SPECIALIZED_MAP);
+		var module = context.moduleAnalyzer.loadSourceModuleDependency(compiler.runtime.RuntimeType.SPECIALIZED_MAP);
 		if (module != null && context.rootModules.indexOf(module) < 0)
 			context.rootModules.push(module);
 	}
@@ -1269,14 +1271,14 @@ class FrontendCompilation {
 			rollbackModules:Map<String, ModuleState>):Void {
 		var used:Map<String, Bool> = [];
 		for (name in names) {
-			var state = context.modules.get(name);
+			var state = context.state.modules.get(name);
 			if (state != null)
 				for (literals in state.keyPathUses)
 					for (literal in literals.keys())
 						used.set(literal, true);
 		}
 		for (name in names) {
-			var state = context.modules.get(name);
+			var state = context.state.modules.get(name);
 			if (state == null)
 				continue;
 			var unused = [
@@ -1285,7 +1287,7 @@ class FrontendCompilation {
 					&& !used.exists(keyPathLiteralOf(cached))) cached
 			];
 			if (unused.length > 0)
-				removeCachedFunctions(context.writableState(name, rollbackModules), unused);
+				removeCachedFunctions(context.state.writableState(name, rollbackModules), unused);
 		}
 	}
 
@@ -1316,7 +1318,7 @@ class FrontendCompilation {
 			declared:Map<String, Bool>, previousSemantic:Null<SemanticProgram>):Null<RetainedFromPrevious> {
 		var result:Map<String, Bool> = [],
 			retainedEnums:Map<String, Bool> = [],
-			previous = context.lastTypedProgram;
+			previous = context.state.lastTypedProgram;
 		if (previous == null)
 			return null;
 		// A source declaration removed by this edit is not a generated class, even though it is absent from the new program.
@@ -1348,7 +1350,7 @@ class FrontendCompilation {
 		var functions:Map<String, IrFunction> = [],
 			physicalMethods:Map<String, String> = [];
 		for (module in modules) {
-			var state = context.modules.get(module);
+			var state = context.state.modules.get(module);
 			if (state == null)
 				continue;
 			for (name => fn in state.irFunctions)
@@ -1826,7 +1828,7 @@ class FrontendCompilation {
 			// Only targets without native dynamic objects (Wasm) call the stdlib's class; elsewhere the dependency is unused.
 			if (dependency.target == PlatformAbi.DYNAMIC_OBJECT_CLASS && !context.isWasmTarget())
 				continue;
-			var target = context.loadSourceModuleDependency(dependency.target);
+			var target = context.moduleAnalyzer.loadSourceModuleDependency(dependency.target);
 			if (target == null)
 				throw 'Typed runtime dependency "${dependency.target}" from "${dependency.functionName}" has no source module';
 			if (names.indexOf(target) >= 0)
@@ -1835,7 +1837,7 @@ class FrontendCompilation {
 				owner:Null<String> = null;
 			if (StringTools.startsWith(dependency.functionName,
 				compiler.types.typing.RuntimeDependencyTracker.TYPE_ORIGIN_PREFIX))
-				owner = context.declarationOwner(dependency.functionName
+				owner = context.state.declarationOwners.get(dependency.functionName
 					.substr(compiler.types.typing.RuntimeDependencyTracker.TYPE_ORIGIN_PREFIX.length));
 			else if (fn != null)
 				owner = resolveFunctionModule(fn, owners, typedByName, []);
@@ -1846,7 +1848,7 @@ class FrontendCompilation {
 				owner = initializerModule(dependency.functionName, owners);
 			if (owner == null)
 				throw 'Typed runtime dependency from unknown function "${dependency.functionName}"';
-			var state = context.writableState(owner, rollbackModules);
+			var state = context.state.writableState(owner, rollbackModules);
 			if (state.dependencies.indexOf(target) < 0) {
 				context.frontendRestarts.push('${dependency.functionName} needs $target');
 				state.dependencies.push(target);
@@ -1861,17 +1863,17 @@ class FrontendCompilation {
 			reindexedModules:Map<String, Bool>):Void {
 		for (classDecl in typed.classes)
 			for (module in reindexedModules.keys()) {
-				if (!context.modules.exists(module))
+				if (!context.state.modules.exists(module))
 					continue;
-				var state = context.modules.get(module),
+				var state = context.state.modules.get(module),
 					model = state.semanticModel;
 				if (model == null || !modelOwnsType(model.program, classDecl.name))
 					continue;
 				for (field in classDecl.fields)
 					if (field.initializer != null)
 						model.index.indexTypedInitializer(classDecl.name + "." + field.name, field.initializer,
-							context.resolveSemanticSymbol,
-							context.resolveSemanticEnumCase);
+							context.state.semanticWorkspace.resolveSymbolId,
+							context.state.semanticWorkspace.resolveEnumCaseId);
 			}
 	}
 
@@ -1880,7 +1882,7 @@ class FrontendCompilation {
 			reindexedModules:Map<String, Bool>,
 			rollbackModules:Map<String, ModuleState>):Void {
 		for (module in reindexedModules.keys()) {
-			var state = context.writableState(module, rollbackModules),
+			var state = context.state.writableState(module, rollbackModules),
 				model = state.semanticModel;
 			if (model == null)
 				continue;
@@ -1890,7 +1892,8 @@ class FrontendCompilation {
 					if (dependency.kind != SemanticDependencyKind.Body
 						&& dependency.kind != SemanticDependencyKind.Initializer) {
 						var targetId = dependency.targetId == null
-							? context.resolveSemanticType(dependency.target) : dependency.targetId;
+							? context.state.semanticWorkspace.resolveTypeSymbolId(dependency.target)
+							: dependency.targetId;
 						SemanticDependencyCollector.addDependency(resolved, owner, dependency.kind, dependency.target,
 							targetId);
 					}
@@ -1961,7 +1964,7 @@ class FrontendCompilation {
 	static function addResolvedNamedTypeDependency(result:Map<String, Array<compiler.modules.ModuleState.SemanticDependency>>,
 			owner:String,
 			kind:SemanticDependencyKind, target:String, context:CompilationContext):Void {
-		var targetId = context.resolveSemanticType(target);
+		var targetId = context.state.semanticWorkspace.resolveTypeSymbolId(target);
 		if (targetId != null)
 			SemanticDependencyCollector.addDependency(result, owner, kind, target, targetId);
 	}

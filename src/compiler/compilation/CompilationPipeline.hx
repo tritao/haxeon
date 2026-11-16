@@ -85,7 +85,7 @@ class CompilationPipeline {
 			?publicationBaseline:compiler.compilation.CompilerPublication.PublishedBaseline):CompileResult {
 		var frontend = FrontendCompilation.run(context, entryModule, token, rollbackModules, frontendStartedAt, true,
 			indexSemantics);
-		var modules = context.modules;
+		var modules = context.state.modules;
 		var ir = frontend.ir,
 			names = frontend.moduleNames,
 			typedNew = frontend.typedProgram;
@@ -100,7 +100,7 @@ class CompilationPipeline {
 			irAssemblyDoneAt = frontend.irAssemblyDoneAt;
 		// A build whose pipeline inputs equal the last plain build's reuses its module too, unless HAXEON_CHECK_REUSE=1 assembles
 		// it again to compare.
-		var session = context.backend,
+		var session = context.state.backend,
 			backendKey = session.environmentKey(context),
 			reusedFrom = frontend.reused,
 			previousBackend = reusedFrom != null
@@ -115,13 +115,13 @@ class CompilationPipeline {
 			if (difference != null)
 				throw 'HAXEON_CHECK_REUSE: the module reused for equal pipeline inputs differs from a fresh assembly ($difference)';
 		}
-		var snapshot = context.pipelineSnapshot;
+		var snapshot = context.state.pipelineSnapshot;
 		if (snapshot != null && !backendReused) {
 			// A new object: the one in the compiler is the last successful build's, and a build that fails must leave it as it is.
 			var next = new PipelineSnapshot(snapshot.inputs, snapshot.ir);
 			next.backend = backend;
 			next.backendEnvironment = backendKey;
-			context.pipelineSnapshot = next;
+			context.state.pipelineSnapshot = next;
 		}
 		var nextAbi = backend.abi,
 			reloadReasons = backend.reloadReasons,
@@ -130,13 +130,13 @@ class CompilationPipeline {
 			backendAssemblyDoneAt = backend.backendAssemblyDoneAt,
 			patchEncodingDoneAt = backend.patchEncodingDoneAt;
 		var allocationBeforeFinalize = AllocationMeter.sample();
-		context.setLastTypedProgram(typedNew);
-		context.publishedAbi = nextAbi;
-		context.clearRehydrationBaseline();
+		context.state.lastTypedProgram = typedNew;
+		context.state.publishedAbi = nextAbi;
+		context.state.rehydrationBaseline = null;
 		for (name in names) {
 			var state:compiler.modules.ModuleState = modules.get(name);
 			if (state.lastGoodRevision != state.revision) {
-				state = context.writableState(name, rollbackModules);
+				state = context.state.writableState(name, rollbackModules);
 				state.lastGoodTokens = state.tokens;
 				state.lastGoodAst = state.ast;
 				state.lastGoodSemanticModel = state.semanticModel;
@@ -144,7 +144,7 @@ class CompilationPipeline {
 				state.lastGoodRevision = state.revision;
 			}
 		}
-		context.compiledOnce = true;
+		context.state.compiledOnce = true;
 		var finishedAt = Sys.time() * 1000.0;
 		var invalidationReasonCount = 0;
 		for (artifact in frontend.invalidations)

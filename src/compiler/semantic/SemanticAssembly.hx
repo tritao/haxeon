@@ -54,7 +54,7 @@ class SemanticAssembly {
 		var allocatedAtStart = hl.Gc.stats().totalAllocated;
 		#end
 		var contributionReuseMs = 0.0, contributionRebuildMs = 0.0;
-		var modules = context.modules;
+		var modules = context.state.modules;
 		var functions:Array<AstFunction> = [],
 			programFunctions:Array<AstFunction> = [],
 			typeAliases:Array<compiler.syntax.Ast.AstTypeAlias> = [],
@@ -239,7 +239,7 @@ class SemanticAssembly {
 				contributionReuseMs += Sys.time() * 1000.0 - contributionStartedAt;
 				continue;
 			}
-			var importedTypes = context.importAliases(ast.imports, ast.importAliases),
+			var importedTypes = context.moduleAnalyzer.importAliases(ast.imports, ast.importAliases),
 				locals = LocalScope.ofNames([]),
 				aliases = AliasTable.of(importedTypes);
 			// An explicit import outranks a same-named type elsewhere in the
@@ -360,7 +360,7 @@ class SemanticAssembly {
 				&& state.canonicalAliasKey == aliasKey)
 				canonicalFunctions = state.canonicalFunctions;
 			else {
-				state = context.writableState(name, rollbackModules);
+				state = context.state.writableState(name, rollbackModules);
 				canonicalFunctions = [
 					for (fn in ast.functions)
 						ModuleCanonicalizer.canonicalFunction(fn, name, entryModule, locals, null, aliases)
@@ -492,7 +492,7 @@ class SemanticAssembly {
 				});
 				owners.set(className + ".new", name);
 			}
-			state = context.writableState(name, rollbackModules);
+			state = context.state.writableState(name, rollbackModules);
 			state.canonicalAliases = typeAliases.slice(aliasStart);
 			// An alias remains an invalidation node even though typed values use its resolved type.
 			for (alias in state.canonicalAliases)
@@ -614,9 +614,9 @@ class SemanticAssembly {
 					separator = changedDependency.indexOf(":"),
 					target = separator < 0 ? changedDependency : changedDependency.substring(separator + 1,
 						changedDependency.length),
-					targetId = context.resolveSemanticType(target);
+					targetId = context.state.semanticWorkspace.resolveTypeSymbolId(target);
 				if (targetId == null)
-					targetId = context.resolveSemanticSymbol(target);
+					targetId = context.state.semanticWorkspace.resolveSymbolId(target);
 				var targetKey = targetId == null ? target : targetId;
 				if (structuralTargets.exists(targetKey))
 					continue;
@@ -771,10 +771,10 @@ class SemanticAssembly {
 			var changed = work[workCursor++];
 			if (changedSignatures.exists(changed))
 				invalidate(invalid, invalidationReasons, changed, SignatureChanged, changed,
-					context.resolveSemanticSymbol(changed));
+					context.state.semanticWorkspace.resolveSymbolId(changed));
 			else if (!invalid.exists(changed))
 				invalidate(invalid, invalidationReasons, changed, DependencySignature, changed);
-			var changedId = context.resolveSemanticSymbol(changed);
+			var changedId = context.state.semanticWorkspace.resolveSymbolId(changed);
 			var helperOrigin = helperOrigins.get(changed);
 			if (helperOrigin != null && !invalid.exists(helperOrigin)) {
 				work.push(helperOrigin);
@@ -853,7 +853,7 @@ class SemanticAssembly {
 		var selected:Map<String, Bool> = [];
 		for (name in invalid.keys())
 			selected.set(name, true);
-		var entryPoint = context.executableEntryPoint(entryModule);
+		var entryPoint = context.state.executableEntryPoint(entryModule);
 		var canonicalProgram:AstProgram = {
 			packageName: null,
 			imports: [],

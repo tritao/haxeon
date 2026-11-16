@@ -28,14 +28,14 @@ class CompilationTransaction {
 		compiler.publication.beforeCompile();
 		var snapshot = compiler.state;
 		var snapshotDoneAt = Sys.time() * 1000.0;
-		var candidate = compiler.createCandidate(startingBackend);
+		var candidate = snapshot.copyForCandidate(startingBackend);
 		try {
-			var context = new CompilationContext(candidate, indexSemantics);
+			var context = new CompilationContext(compiler, candidate, indexSemantics);
 			var frontendStartedAt = Sys.time() * 1000.0;
 			var result = CompilationPipeline.compile(context, entryModule, token, snapshot.modules,
 				transactionStartedAt, snapshotDoneAt, frontendStartedAt,
 				indexSemantics, compiler.publication.baseline());
-			var abi = candidate.state.publishedAbi;
+			var abi = candidate.publishedAbi;
 			if (abi == null)
 				throw "Compilation did not produce a runtime ABI";
 			compiler.adoptCandidate(candidate);

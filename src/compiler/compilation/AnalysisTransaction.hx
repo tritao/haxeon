@@ -20,7 +20,7 @@ class AnalysisTransaction {
 
 	public function run():AnalysisResult {
 		var snapshot = compiler.state,
-			candidate = compiler.createCandidate(null),
+			candidate = snapshot.copyForCandidate(),
 			startedAt = Sys.time() * 1000.0;
 		var diagnosticWork = [entryModule],
 			diagnosticSeen:Map<String, Bool> = [],
@@ -36,13 +36,13 @@ class AnalysisTransaction {
 				diagnosticWork.push(dependency);
 		}
 		try {
-			var context = new CompilationContext(candidate);
+			var context = new CompilationContext(compiler, candidate);
 			var frontend = FrontendCompilation.run(context, entryModule, token, snapshot.modules, startedAt, false);
-			context.setLastTypedProgram(frontend.typedProgram);
+			candidate.lastTypedProgram = frontend.typedProgram;
 			for (name in frontend.moduleNames) {
 				var state:ModuleState = candidate.modules.get(name);
 				if (state.lastGoodRevision != state.revision) {
-					state = context.writableState(name, snapshot.modules);
+					state = candidate.writableState(name, snapshot.modules);
 					state.lastGoodTokens = state.tokens;
 					state.lastGoodAst = state.ast;
 					state.lastGoodSemanticModel = state.semanticModel;

@@ -28,7 +28,7 @@ class CodeIdentityTable {
 			body:Map<String, Bool>, signatures:Map<String, Bool>, structural:Map<String, Bool>):Void {
 		if (names.indexOf(MODULE) < 0)
 			return;
-		var modules = context.modules;
+		var modules = context.state.modules;
 		var state = modules.get(MODULE);
 		if (state == null)
 			return;
@@ -38,10 +38,10 @@ class CodeIdentityTable {
 		var text = render(state.source.text, computed);
 		if (text == state.source.text)
 			return;
-		state = context.writableState(MODULE, rollback);
+		state = context.state.writableState(MODULE, rollback);
 		state.render(new SourceFile(state.source.path, text, state.source.isStandardLibrarySource));
 		context.parse(state, entry, body, signatures, structural);
-		context.addTypeDependencies(state);
+		context.moduleAnalyzer.addTypeDependencies(state);
 	}
 
 	/**

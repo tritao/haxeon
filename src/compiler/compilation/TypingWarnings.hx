@@ -17,7 +17,7 @@ class TypingWarnings {
 			rollbackModules:Map<String, ModuleState>):Void {
 		var moduleByPath:Map<String, String> = [];
 		for (name in names) {
-			var state = context.modules.get(name);
+			var state = context.state.modules.get(name);
 			if (state != null)
 				moduleByPath.set(state.source.path, name);
 		}
@@ -44,7 +44,7 @@ class TypingWarnings {
 					record(moduleByPath.get(field.span.file.path), classDecl.name + ".__init." + field.name,
 						field.warnings);
 		for (name in names) {
-			var state = context.modules.get(name);
+			var state = context.state.modules.get(name);
 			if (state == null)
 				continue;
 			var stored = state.typingWarnings,
@@ -68,7 +68,7 @@ class TypingWarnings {
 				&& sameWarnings([for (diagnostic in state.diagnostics) if (isWarning(diagnostic)) diagnostic],
 				warnings))
 				continue;
-			state = context.writableState(name, rollbackModules);
+			state = context.state.writableState(name, rollbackModules);
 			state.typingWarnings = next;
 			state.diagnostics = errors.concat(warnings);
 		}

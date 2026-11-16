@@ -145,7 +145,7 @@ class HashLinkBackendSession implements BackendSession {
 		var allocationAtStart = AllocationMeter.sample();
 		compiler.ir.IrReachabilityReport.report("final program", ir);
 		var nextAbi = RuntimeAbi.describe(ir),
-			previousAbi = context.publishedAbi,
+			previousAbi = context.state.publishedAbi,
 			baseAssembler = assembler;
 		var assemblyIr = ir;
 		if (!context.livePatching) {
@@ -190,7 +190,7 @@ class HashLinkBackendSession implements BackendSession {
 		// A plain build links the functions of the last one whose IR is unchanged instead of lowering them again (see `HlLoweredCache`).
 		var loweredCache:Null<HlLoweredCache> = context.livePatching ? null : this.loweredCache;
 		var candidateAssembler = loweredCache != null ? new HlModuleAssembler(null,
-			loweredCache.debug) : context.compiledOnce
+			loweredCache.debug) : context.state.compiledOnce
 			&& PatchPlanner.requiresFreshLayout(decision) ? freshLayout(baseAssembler) : baseAssembler.copy();
 		candidateAssembler.fieldReserve = context.livePatching ? liveFieldReserve : 0;
 		candidateAssembler.developmentMetadata = context.developmentMetadata || context.livePatching;
@@ -202,7 +202,7 @@ class HashLinkBackendSession implements BackendSession {
 		}
 		var assemblerCopiedAt = Sys.time() * 1000.0;
 		var allocationAfterCopy = AllocationMeter.sample();
-		var assembly = candidateAssembler.assemble(assemblyIr, context.rehydratedChanges(regenerated, assemblyIr),
+		var assembly = candidateAssembler.assemble(assemblyIr, context.state.rehydratedChanges(regenerated, assemblyIr),
 			decision, relocated,
 			PatchPlanner.dispatchedFunctions(previousAbi, nextAbi));
 		for (detail in assembly.layoutReasons)
@@ -220,7 +220,8 @@ class HashLinkBackendSession implements BackendSession {
 			fresh.developmentMetadata = candidateAssembler.developmentMetadata;
 			fresh.irVerified = candidateAssembler.irVerified;
 			fresh.loweredCache = new HlLoweredCache();
-			var freshAssembly = fresh.assemble(assemblyIr, context.rehydratedChanges(regenerated, assemblyIr), decision,
+			var freshAssembly = fresh.assemble(assemblyIr, context.state.rehydratedChanges(regenerated, assemblyIr),
+				decision,
 				relocated,
 				PatchPlanner.dispatchedFunctions(previousAbi, nextAbi));
 			if (fresh.developmentMetadata)
@@ -327,7 +328,7 @@ class HashLinkBackendSession implements BackendSession {
 				if (location.sourceHash != 0)
 					referenced.set(location.sourceHash, true);
 		var byHash:Map<Int, Bytes> = [];
-		for (state in context.modules) {
+		for (state in context.state.modules) {
 			var source = state.source, hash = source.contentHash();
 			if (!referenced.exists(hash))
 				continue;
