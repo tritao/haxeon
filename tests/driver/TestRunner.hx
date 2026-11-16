@@ -576,9 +576,18 @@ class TestRunner {
 		return finishCommand(new Process(command, arguments));
 	}
 
+	/**
+	 * Waits for `process`, draining both of its streams at once: one read to its end while the process fills the other
+	 * would wait forever once that pipe is full, and on Windows a pipe holds 4 KB.
+	 */
 	function finishCommand(process:Process):CommandResult {
+		var stderr = "", drained = new sys.thread.Lock();
+		sys.thread.Thread.create(() -> {
+			stderr = process.stderr.readAll().toString();
+			drained.release();
+		});
 		var stdout = process.stdout.readAll().toString();
-		var stderr = process.stderr.readAll().toString();
+		drained.wait();
 		var status = process.exitCode();
 		process.close();
 		return {status: status, output: stdout + stderr};
