@@ -162,7 +162,11 @@ def ordered(frames, patterns):
 
 total = sum(count for _, count in stacks)
 assert total > 0, "no samples"
-launcher = [f for f, _ in stacks if re.match(r"(hl|libhl\.[^+]*|hl_dyn_call\w*|hl_call_method)\+0x", f[0])]
+# The launcher's frames above the program are left out. A sample taken before the program's first frame (the main
+# thread entering hl_dyn_call) has none of the program's, and nothing above it to leave out.
+launcher = [f for f, _ in stacks
+            if any(x.startswith("app.") for x in f)
+            and re.match(r"(hl|libhl\.[^+]*|hl_dyn_call\w*|hl_call_method)\+0x", f[0])]
 assert not launcher, "stacks start in HashLink's launcher: " + ";".join(launcher[0])
 # Haxe calls native code that calls back into Haxe: the native frames sit between the Haxe ones, the static one named
 # like the exported ones.
