@@ -64,14 +64,11 @@ echo "PASS: the compiler builds itself to a fixed point"
 # list is cut as the gaps close.
 entry_sources="$work/entry-sources.txt"
 (cd "$root_dir" && find src stdlib lib/haxeon-io -name '*.hx' | LC_ALL=C sort) >"$entry_sources"
-building_entries=(compiler.tools.HaxeonCompiler Main FfiImportMain FfiAuditMain)
+building_entries=(compiler.tools.HaxeonCompiler Main FfiImportMain FfiAuditMain EditorServiceMain compiler.tools.CompilerServer build.HaxeonBuild)
 # Each gap is "entry|why it does not build yet" (a plain list: macOS's bash 3.2 has no associative arrays).
 entry_gaps=(
-	"compiler.tools.CompilerServer|the Haxeon stdlib's hl.Gc has no dumpMemory (CompilerMemoryCensus.hx)"
-	"tools.HaxeonCli|a field read on a nullable value with no check is rejected (BuildPlan.hx: byKey.get(key).dependencies)"
-	"build.HaxeonBuild|a field read on a nullable value with no check is rejected (BuildPlan.hx: byKey.get(key).dependencies)"
-	"LspMain|an empty array literal is not typed from its later uses (ProjectFormat.hx: visited = [])"
-	"EditorServiceMain|a field read on a nullable value with no check is rejected (LanguageService.hx: model.index)"
+	"tools.HaxeonCli|the Haxeon stdlib has no DateTools.format, and its Date no local-time fields (ProfileCapture.hx)"
+	"LspMain|the Haxeon stdlib's haxe.Int64 has no mul (ProfilerSession.hx)"
 )
 build_entry() {
 	(cd "$root_dir" && "$hl" "$work/stage-1.hl" --entry="$1" --root=src --root=stdlib --root=lib/haxeon-io \
