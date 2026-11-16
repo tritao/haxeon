@@ -4,6 +4,8 @@ root=$(cd "$(dirname "$0")/../.." && pwd)
 work=$(mktemp -d "${TMPDIR:-/tmp}/haxeon-jit-alloc.XXXXXX")
 trap 'rm -rf "$work"' EXIT
 library=${HL_GC_TEST_LIBRARY_DIR:-$("$root/scripts/hashlink-path.sh")}
+# Windows looks for DLLs and HashLink libraries on PATH.
+case "$(uname -s)" in MINGW* | MSYS* | CYGWIN*) export PATH="$work:$library:$PATH" ;; esac
 "${CC:-cc}" -shared -fPIC -I"$root/vendor/hashlink/src" "$root/tests/native/jit_alloc_hooks.c" -L"$library" -lhl -o "$work/jitalloc.hdll"
 "$root/.tools/haxe/haxe" -cp "$root/tests/native" -hl "$work/probe.hl" -main JitAllocationProbe
 for mode in 0 1; do
