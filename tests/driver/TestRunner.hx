@@ -520,12 +520,22 @@ class TestRunner {
 				};
 		}
 
-		next = 0;
-		var active:Array<ActiveProgram> = [];
-		while (next < compiled.length || active.length > 0) {
-			while (next < compiled.length && active.length < jobs) {
-				var index = compiled[next++];
-				var run = runs[index];
+		// A program's builds run one at a time: a program writes the files it names (out/<name>...), and on Windows its runs
+		// share one directory, where they would race on them; other programs run alongside.
+		var pending = compiled.copy(), active:Array<ActiveProgram> = [];
+		while (pending.length > 0 || active.length > 0) {
+			while (active.length < jobs) {
+				var position = -1;
+				for (candidate in 0...pending.length) {
+					var name = runs[pending[candidate]].test.name;
+					if (!Lambda.exists(active, running -> running.run.test.name == name)) {
+						position = candidate;
+						break;
+					}
+				}
+				if (position < 0)
+					break;
+				var index = pending.splice(position, 1)[0], run = runs[index];
 				active.push({index: index, run: run, process: startProgram(runOutput(root, run))});
 			}
 			var job = active.shift();
