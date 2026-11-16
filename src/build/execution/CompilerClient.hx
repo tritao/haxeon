@@ -97,11 +97,12 @@ class CompilerClient {
 					launchArguments.push(workerArtifact);
 					launchArguments.push(statePath);
 					var launch = launchArguments.map(SysTools.quoteUnixArg).join(" ");
-					// Redirect all three streams so the worker cannot keep the caller's
-					// pipes open after the build exits.
+					// The shell redirects its own three streams first, so neither the worker nor the subshell that
+					// `&` makes of the command list (which outlives the build on macOS, where nothing detaches the
+					// worker) can keep the caller's pipes open after the build exits.
 					var detach = Sys.systemName() == "Linux" ? "setsid -f " : "",
 						status = Sys.command("sh", ["-c",
-							"umask 077; cd "
+							"exec < /dev/null > " + SysTools.quoteUnixArg(logPath) + " 2>&1; umask 077; cd "
 							+ SysTools.quoteUnixArg(home)
 							+ " && export "
 							+ libraryVariable
@@ -114,9 +115,7 @@ class CompilerClient {
 					+ " && export HL_GC_MARK_THRESHOLD=\"${HL_GC_MARK_THRESHOLD:-0.4}\" && trap '' HUP && "
 						+ detach
 						+ launch
-						+ " > "
-						+ SysTools.quoteUnixArg(logPath)
-						+ " 2>&1 < /dev/null &"]);
+						+ " &"]);
 					if (status != 0)
 						throw "Could not start compiler worker";
 				}
