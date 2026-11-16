@@ -1,6 +1,6 @@
 package compiler.ffi;
 
-import compiler.Compiler.FfiInterfaceSource;
+import compiler.ffi.FfiRegistry.FfiInterfaceSource;
 import compiler.ffi.HxiModel.HxiInterface;
 
 /**

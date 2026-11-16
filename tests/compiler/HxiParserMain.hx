@@ -369,7 +369,7 @@ class HxiParserMain {
 			'both project to "ReadOutResult"');
 		var unknownInterfaceCompiler = newCompiler();
 		unknownInterfaceCompiler.addFfiProjection("unknown-interface.hxmap", '{"interface":"unknown_interface"}');
-		expectProfileError(function() unknownInterfaceCompiler.irCNatives(),
+		expectProfileError(function() unknownInterfaceCompiler.ffi.cNatives(),
 			"names unknown interface \"unknown_interface\"");
 		var aliasCompiler = newCompiler();
 		aliasCompiler.addFfiProjection("native-names.hxmap",
@@ -927,8 +927,8 @@ class HxiParserMain {
 			"span results should round-trip through the HXI writer");
 		var compiler = newCompiler();
 		compiler.addFfiInterface("nativekit.hxi", valid);
-		expect(compiler.ffiInterfaces().length == 1
-			&& compiler.ffiInterfaces()[0].library == "nativekit", "compiler should retain validated FFI models");
+		expect(compiler.ffi.interfaces().length == 1
+			&& compiler.ffi.interfaces()[0].library == "nativekit", "compiler should retain validated FFI models");
 		var composed = newCompiler();
 		composed.addFfiInterface("base.hxi",
 			'interface base @target("x86_64-linux-gnu") @library("base") { struct point @layout(8, 4) { x: i32 @offset(0); y: i32 @offset(4); } extern fn open(value: point) -> point; }');
@@ -942,7 +942,7 @@ class HxiParserMain {
 			.indexOf("function draw(arg0:point):point return point.__hxi_attach(__hxi_raw_draw(arg0));") >= 0
 			&& dependentProjection.source.text.indexOf("function open(") < 0,
 			"dependent HXI projections should reuse shared declarations and omit duplicate natives");
-		var composedNatives = composed.irCNatives();
+		var composedNatives = composed.ffi.cNatives();
 		expect(composedNatives.length == 2
 			&& composedNatives[0].name == "base.__hxi_raw_open"
 			&& composedNatives[1].name == "dependent.__hxi_raw_draw",
@@ -1034,7 +1034,7 @@ class HxiParserMain {
 		compiler.update("Main.hx",
 			"import nativekit; import nativekit.NativekitConstants; function main():Int return nativekit.nk_version() + NativekitConstants.NK_OK;");
 		compiler.analyze("Main");
-		expect(compiler.irCNatives().length == 2 && compiler.irCNatives()[1].name == "nativekit.nk_version",
+		expect(compiler.ffi.cNatives().length == 2 && compiler.ffi.cNatives()[1].name == "nativekit.nk_version",
 			"compiler should retain executable C descriptors for projected functions");
 		var constantCompiler = newCompiler();
 		constantCompiler.addFfiInterface("fixture.hxi",

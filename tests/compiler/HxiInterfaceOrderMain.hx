@@ -1,6 +1,6 @@
 import compiler.Compiler;
-import compiler.Compiler.FfiConfiguration;
-import compiler.Compiler.FfiInterfaceSource;
+import compiler.ffi.FfiRegistry.FfiConfiguration;
+import compiler.ffi.FfiRegistry.FfiInterfaceSource;
 import compiler.ffi.HxiInterfaceOrder;
 
 /** FFI interfaces are registered dependencies first, whatever order their files sort in. */
@@ -27,7 +27,7 @@ class HxiInterfaceOrderMain {
 		Sys.println("PASS: interfaces come after the interfaces they depend on");
 		var configuration = new FfiConfiguration(sorted);
 		var compiler = new Compiler(null, null, configuration);
-		if (compiler.ffiInterfaces().length != 4)
+		if (compiler.ffi.interfaces().length != 4)
 			throw "Compiler configuration did not register the entire dependency graph";
 		if (names(sorted) != "a-policy.hxi,b-runtime.hxi,c-simkit.hxi,d-other.hxi")
 			throw "Compiler configuration mutated the caller's interface order";

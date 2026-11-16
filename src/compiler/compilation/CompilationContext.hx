@@ -172,7 +172,7 @@ class CompilationContext {
 	}
 
 	public function irCNatives():Array<IrCNative>
-		return owner.irCNatives();
+		return owner.ffi.cNatives();
 
 	public function rehydratedChanges(regenerated:Array<String>, program:IrProgram):Array<String>
 		return owner.rehydratedChanges(regenerated, program);

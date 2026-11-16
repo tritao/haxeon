@@ -54,57 +54,8 @@ import compiler.modules.ModuleSourceLoader;
 import compiler.semantic.ModuleCanonicalizer;
 import compiler.semantic.LambdaCollector;
 import compiler.semantic.SemanticWorkspace;
-import compiler.ffi.HxiModel.HxiInterface;
-import compiler.ffi.HxiModel.HxiDeclaration;
-import compiler.ffi.HxiAbi;
-import compiler.ffi.HxiParser;
-import compiler.ffi.HxiValidator;
-import compiler.ffi.HxiProjection;
-import compiler.ffi.HxiProjectionProfile;
-import compiler.ffi.HxiProjectedModule;
-
-typedef FfiInterfaceSource = {
-	final path:String;
-	final text:String;
-}
-
-typedef FfiProjectionSource = {
-	final path:String;
-	final text:String;
-}
-
-/** Immutable source snapshot used when rebuilding a compiler candidate. */
-class FfiConfiguration {
-	final interfaces:Array<FfiInterfaceSource>;
-	final projections:Array<FfiProjectionSource>;
-
-	public function new(?interfaces:Array<FfiInterfaceSource>, ?projections:Array<FfiProjectionSource>) {
-		this.interfaces = interfaces == null
-			? [] : compiler.ffi.HxiInterfaceOrder.dependenciesFirst([for (source in interfaces)
-			{
-				path:source.path,
-					text:source.text
-			}]);
-		this.projections = projections == null ? [] : [for (source in projections) {
-			path:source.path, text:source.text
-		}];
-	}
-
-	public function interfaceSources():Array<FfiInterfaceSource>
-		return [for (source in interfaces) {
-			path:source.path, text:source.text
-		}];
-
-	public function projectionSources():Array<FfiProjectionSource>
-		return [for (source in projections) {
-			path:source.path, text:source.text
-		}];
-}
-
-typedef FfiComposition = {
-	final omitted:Map<String, Bool>;
-	final declarations:Map<String, HxiDeclaration>;
-}
+import compiler.ffi.FfiRegistry;
+import compiler.ffi.FfiRegistry.FfiConfiguration;
 
 /** Public alias for a host-native declaration accepted by the compiler. */
 typedef NativeFunction = NativeDefinition;
@@ -306,15 +257,10 @@ class Compiler {
 	public var types(default, null):TypeRegistry;
 
 	final natives:NativeRegistry;
-	final ffiInterfaceSources:Array<FfiInterfaceSource> = [];
-	final ffiInterfaceModels:Map<String, HxiInterface> = [];
-	final ffiProjectionSources:Array<FfiProjectionSource> = [];
-	final ffiProjectionProfiles:Map<String, HxiProjectionProfile> = [];
-	final ffiProjectionPaths:Map<String, String> = [];
-	final ffiProjectionCache:Map<String, Array<HxiProjectedModule>> = [];
-	final ffiSourceOrigins:Map<String, Map<String, compiler.core.Source.SourceSpan>> = [];
-	final ffiCompositionCache:Map<String, FfiComposition> = [];
-	final ffiAbiCache:Map<String, HxiAbi> = [];
+
+	/** The FFI interfaces and projections this compiler was given (`addFfiInterface`, `addFfiProjection`). */
+	public final ffi:FfiRegistry;
+
 	var objectCache:Map<String, IrObject> = [];
 	var canonicalObjectCache:Map<String, IrObject> = [];
 	var publishedAbi:Null<RuntimeAbiDescriptor>;
@@ -376,28 +322,12 @@ class Compiler {
 				beginRehydration(assembler);
 			}
 		}
-		if (cloneFrom != null) {
-			for (source in cloneFrom.ffiInterfaceSources)
-				ffiInterfaceSources.push(source);
-			for (name => model in cloneFrom.ffiInterfaceModels)
-				ffiInterfaceModels.set(name, model);
-			for (source in cloneFrom.ffiProjectionSources)
-				ffiProjectionSources.push(source);
-			for (name => profile in cloneFrom.ffiProjectionProfiles)
-				ffiProjectionProfiles.set(name, profile);
-			for (name => path in cloneFrom.ffiProjectionPaths)
-				ffiProjectionPaths.set(name, path);
-			for (name => projected in cloneFrom.ffiProjectionCache)
-				ffiProjectionCache.set(name, projected);
-			for (name => composition in cloneFrom.ffiCompositionCache)
-				ffiCompositionCache.set(name, composition);
-			for (name => abi in cloneFrom.ffiAbiCache)
-				ffiAbiCache.set(name, abi);
-		} else if (ffiConfiguration != null) {
+		ffi = cloneFrom == null ? new FfiRegistry(projectedFfiModule) : cloneFrom.ffi.clone(projectedFfiModule);
+		if (cloneFrom == null && ffiConfiguration != null) {
 			for (source in ffiConfiguration.interfaceSources())
-				registerFfiInterface(source.path, source.text, false);
+				ffi.registerInterface(source.path, source.text);
 			for (source in ffiConfiguration.projectionSources())
-				registerFfiProjection(source.path, source.text, false);
+				ffi.registerProjection(source.path, source.text);
 		}
 	}
 
@@ -480,190 +410,24 @@ class Compiler {
 
 	/** Parse and register one immutable target-specific ABI interface before compilation. */
 	public function addFfiInterface(path:String, source:String):Void {
-		registerFfiInterface(path, source, true);
+		if (compiledOnce)
+			throw "FFI interfaces are frozen after the first compilation";
+		ffi.registerInterface(path, source);
 	}
 
 	/** Register Haxe-only naming policy without changing the generated ABI model. */
 	public function addFfiProjection(path:String, source:String):Void {
-		registerFfiProjection(path, source, true);
-	}
-
-	function registerFfiProjection(path:String, source:String, enforceFreeze:Bool):Void {
-		if (enforceFreeze && compiledOnce)
+		if (compiledOnce)
 			throw "FFI projections are frozen after the first compilation";
-		var profile = HxiProjectionProfile.parse(path, source),
-			name = profile.interfaceName;
-		if (name == null)
-			throw 'FFI projection "$path" does not name an interface';
-		if (ffiProjectionProfiles.exists(name))
-			throw 'FFI projection for interface "$name" is already registered';
-		var model = ffiInterfaceModels.get(name);
-		if (model != null) {
-			var composition = ffiComposition(model);
-			HxiProjection.validateProfile(path, model, composition.omitted, composition.declarations, profile);
-		}
-		ffiProjectionProfiles.set(name, profile);
-		ffiProjectionPaths.set(name, path);
-		ffiProjectionSources.push({path: path, text: source});
-		if (model != null) {
-			ffiProjectionCache.remove(name);
-			refreshFfiProjection(model);
-		}
+		ffi.registerProjection(path, source);
 	}
 
-	function registerFfiInterface(path:String, source:String, enforceFreeze:Bool):Void {
-		if (enforceFreeze && compiledOnce)
-			throw "FFI interfaces are frozen after the first compilation";
-		var model = HxiParser.parse(path, source);
-		if (ffiInterfaceModels.exists(model.name))
-			throw 'FFI interface "${model.name}" is already registered';
-		var dependencies:Array<HxiInterface> = [];
-		for (dependencyName in model.dependencies) {
-			var dependency = ffiInterfaceModels.get(dependencyName);
-			if (dependency != null)
-				dependencies.push(dependency);
-		}
-		HxiValidator.validateComposition(model, dependencies);
-		var composition = buildFfiComposition(model),
-			profile = ffiProjectionProfiles.get(model.name);
-		if (profile != null)
-			HxiProjection.validateProfile(ffiProjectionPaths.get(model.name), model, composition.omitted,
-				composition.declarations, profile);
-		ffiInterfaceModels.set(model.name, model);
-		ffiInterfaceSources.push({path: path, text: source});
-		ffiCompositionCache.set(model.name, composition);
-		refreshFfiProjection(model);
-	}
-
-	/** Validated ABI interfaces in deterministic interface-name order. */
-	public function ffiInterfaces():Array<HxiInterface> {
-		var names = [for (name in ffiInterfaceModels.keys()) name];
-		names.sort(Reflect.compare);
-		return [for (name in names) ffiInterfaceModels.get(name)];
-	}
-
-	public function irCNatives():Array<IrCNative> {
-		for (name in sortedFfiProjectionNames())
-			if (!ffiInterfaceModels.exists(name))
-				throw 'FFI projection "${ffiProjectionPaths.get(name)}" names unknown interface "$name"';
-		var result:Array<IrCNative> = [];
-		for (model in ffiInterfaces()) {
-			var composition = ffiComposition(model);
-			for (native in HxiProjection.cNatives(model, composition.omitted, composition.declarations,
-				ffiAbi(model, composition),
-				ffiProjectionProfiles.get(model.name)))
-				result.push(native);
-		}
-		return result;
-	}
-
-	function refreshFfiProjection(model:HxiInterface):Void {
-		var projections = ffiProjectionCache.get(model.name);
-		if (projections == null) {
-			var composition = ffiComposition(model);
-			projections = HxiProjection.modules(model, composition.omitted, composition.declarations,
-				ffiAbi(model, composition),
-				ffiProjectionProfiles.get(model.name));
-			ffiProjectionCache.set(model.name, projections);
-		}
-		if (projections.length > 0)
-			for (projection in projections)
-				if (projection.source.length > 0) {
-					ffiSourceOrigins.set(projection.path + ".hx", projection.origins);
-					update(projection.path + ".hx", projection.source);
-				} else
-					sourceGeneration++;
-	}
-
-	/** Resolve generated declarations and their helper members to the owning ABI source. */
-	public function ffiSourceOrigin(path:String, name:String):Null<compiler.core.Source.SourceSpan> {
-		var origins = ffiSourceOrigins.get(path);
-		if (origins == null)
-			return null;
-		var candidate = name;
-		while (candidate.length > 0) {
-			var origin = origins.get(candidate);
-			if (origin != null)
-				return origin;
-			var dot = candidate.indexOf(".");
-			if (dot < 0)
-				break;
-			candidate = candidate.substr(dot + 1);
-		}
-		// Synthesized methods such as SurfaceHandle.invalid() belong to their type.
-		var member = name.lastIndexOf(".");
-		return member < 0 ? null : ffiSourceOrigin(path, name.substr(0, member));
-	}
-
-	function ffiAbi(model:HxiInterface, composition:FfiComposition):HxiAbi {
-		var abi = ffiAbiCache.get(model.name);
-		if (abi == null) {
-			abi = HxiAbi.forInterface(model, composition.declarations);
-			ffiAbiCache.set(model.name, abi);
-		}
-		return abi;
-	}
-
-	function ffiComposition(model:HxiInterface):FfiComposition {
-		var cached = ffiCompositionCache.get(model.name);
-		if (cached != null)
-			return cached;
-		var result = buildFfiComposition(model);
-		ffiCompositionCache.set(model.name, result);
-		return result;
-	}
-
-	function buildFfiComposition(model:HxiInterface):FfiComposition {
-		// Imported HXI files can repeat declarations from included headers. Keep
-		// those snapshots available for ABI classification, but emit each shared
-		// declaration and native symbol from its owning interface only.
-		var omitted:Map<String, Bool> = [],
-			declarations:Map<String, HxiDeclaration> = [],
-			visited:Map<String, Bool> = [],
-			active:Map<String, Bool> = [];
-		for (dependency in model.dependencies)
-			collectFfiDependency(model.name, dependency, omitted, declarations, visited, active);
-		return {omitted: omitted, declarations: declarations};
-	}
-
-	function sortedFfiProjectionNames():Array<String> {
-		var names = [for (name in ffiProjectionProfiles.keys()) name];
-		names.sort(Reflect.compare);
-		return names;
-	}
-
-	function collectFfiDependency(owner:String, name:String, omitted:Map<String, Bool>,
-			declarations:Map<String, HxiDeclaration>, visited:Map<String, Bool>,
-			active:Map<String, Bool>):Void {
-		if (active.get(name) == true)
-			throw 'Cyclic HXI dependency involving "$owner" and "$name"';
-		if (visited.get(name) == true)
-			return;
-		var dependency = ffiInterfaceModels.get(name);
-		if (dependency == null)
-			throw 'FFI interface "$owner" depends on unknown interface "$name"';
-		active.set(name, true);
-		for (nested in dependency.dependencies)
-			collectFfiDependency(owner, nested, omitted, declarations, visited, active);
-		active.remove(name);
-		visited.set(name, true);
-		for (declaration in dependency.declarations) {
-			var declarationName = ffiDeclarationName(declaration);
-			omitted.set(declarationName, true);
-			if (!declarations.exists(declarationName))
-				declarations.set(declarationName, declaration);
-		}
-	}
-
-	static function ffiDeclarationName(declaration:HxiDeclaration):String
-		return switch declaration {
-			case Opaque(name, _) | Alias(name, _, _) | Handle(name, _, _, _) | Constant(name, _, _) | Structure(name, _,
-				_, _, _) | Enumeration(name, _, _, _, _) | Callback(name, _, _, _, _) | Function(name, _, _, _, _, _, _,
-				_): name;
-		};
-
-	function ffiConfigurationSnapshot():FfiConfiguration
-		return new FfiConfiguration(ffiInterfaceSources, ffiProjectionSources);
+	/** A module the FFI registry projected from an interface: a source update, or with no text a change of the build inputs. */
+	function projectedFfiModule(path:String, source:String):Void
+		if (source.length > 0)
+			update(path, source);
+		else
+			sourceGeneration++;
 
 	/** Modules compiled with every entry, whatever it imports: what a host calls into (haxeon.wasm.HostError). */
 	public final rootModules:Array<String> = [];
@@ -1179,7 +943,7 @@ class Compiler {
 		if (configured != null)
 			return configured;
 		var interfaceTarget:Null<String> = null;
-		for (model in ffiInterfaces()) {
+		for (model in ffi.interfaces()) {
 			if (interfaceTarget == null)
 				interfaceTarget = model.target;
 			else if (interfaceTarget != model.target)

@@ -17,13 +17,13 @@ class HaxeProjectConfiguration {
 	public final entries:ReadOnlyArray<String>;
 	public final defines:ReadOnlyArray<String>;
 	public final libraries:ReadOnlyArray<String>;
-	public final ffi:compiler.Compiler.FfiConfiguration;
+	public final ffi:compiler.ffi.FfiRegistry.FfiConfiguration;
 	public final ffiIdentity:String;
 
 	public function new(file:String, classPaths:Array<String>, entries:Array<String>, defines:Array<String>,
 			libraries:Array<String>,
-			?ffi:compiler.Compiler.FfiConfiguration) {
-		this.ffi = ffi == null ? new compiler.Compiler.FfiConfiguration() : ffi;
+			?ffi:compiler.ffi.FfiRegistry.FfiConfiguration) {
+		this.ffi = ffi == null ? new compiler.ffi.FfiRegistry.FfiConfiguration() : ffi;
 		ffiIdentity = Sha256.encode(haxe.Json.stringify({
 			interfaces: this.ffi.interfaceSources(),
 			projections: this.ffi.projectionSources()
@@ -444,7 +444,7 @@ class ProjectWorkspace {
 				projectionPaths = [for (path in projections.keys()) path];
 			interfacePaths.sort(Reflect.compare);
 			projectionPaths.sort(Reflect.compare);
-			var ffi = new compiler.Compiler
+			var ffi = new compiler.ffi.FfiRegistry
 				.FfiConfiguration(compiler.ffi.HxiInterfaceOrder.dependenciesFirst([for (path in interfacePaths)
 				{
 					path:path,

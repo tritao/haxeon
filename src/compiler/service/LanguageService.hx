@@ -252,7 +252,7 @@ class LanguageService {
 	}
 
 	public function configure(identity:String, scopeIdentity:String, defines:Array<String>,
-			?ffi:compiler.Compiler.FfiConfiguration,
+			?ffi:compiler.ffi.FfiRegistry.FfiConfiguration,
 			ffiIdentity:String = ""):Void {
 		var key = haxe.Json.stringify({scope: scopeIdentity, ffi: ffiIdentity});
 		if (activeConfiguration != key) {
@@ -1341,7 +1341,7 @@ class LanguageService {
 
 	function definitionLocation(state:ModuleState,
 			symbol:compiler.semantic.SemanticIndex.IndexedSemanticSymbol):SymbolLocation {
-		var origin = compiler.ffiSourceOrigin(symbol.declaration.file.path, symbol.name);
+		var origin = compiler.ffi.sourceOrigin(symbol.declaration.file.path, symbol.name);
 		return origin == null ? {
 			path: symbol.declaration.file.path,
 			span: symbol.declaration,

@@ -1,9 +1,9 @@
 package compiler.tools;
 
 import compiler.Compiler;
-import compiler.Compiler.FfiConfiguration;
-import compiler.Compiler.FfiInterfaceSource;
-import compiler.Compiler.FfiProjectionSource;
+import compiler.ffi.FfiRegistry.FfiConfiguration;
+import compiler.ffi.FfiRegistry.FfiInterfaceSource;
+import compiler.ffi.FfiRegistry.FfiProjectionSource;
 import compiler.ffi.HxiInterfaceOrder;
 import compiler.backend.Backend.BackendTarget;
 import compiler.backend.BackendTargets;
