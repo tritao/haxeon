@@ -34,7 +34,7 @@ class EnumAbstractValues {
 		session.enumAbstractConstantOwner = declaration.name;
 		try {
 			var storage = typer.lowerType(declaration.underlying, declaration.span);
-			var expression = typer.coerce(typer.typeExpression(value.value, new Scope(), storage), storage,
+			var expression = typer.coerce(typer.typeExpression(value.value, new Scope(), storage, false), storage,
 				'enum abstract value "$key"', "E1002");
 			session.enumAbstractConstantOwner = previous;
 			session.enumAbstractConstantsInProgress.remove(key);

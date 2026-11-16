@@ -1,0 +1,91 @@
+package compiler.types.typing;
+
+import compiler.core.Source.SourceSpan;
+import compiler.semantic.SemanticProgram.SemanticMethodInfo;
+import compiler.syntax.Ast.AstArgument;
+import compiler.syntax.Ast.AstExpression;
+import compiler.syntax.Ast.AstFunction;
+import compiler.syntax.Ast.AstStatement;
+import compiler.syntax.Ast.AstType;
+import compiler.types.Type.CompilerType;
+import compiler.types.TypedAst.TypedExpression;
+import compiler.types.TypedAst.TypedFunction;
+import compiler.types.TypedAst.TypedStatement;
+import compiler.types.TypedAst.TypedSwitchArrayPattern;
+import compiler.types.TypedAst.TypedSwitchCase;
+import compiler.types.TypedAst.TypedSwitchCoverageCase;
+import compiler.types.TypedAst.TypedSwitchPredicate;
+import compiler.types.analysis.Scope;
+import compiler.types.typing.SwitchTypingRules.SwitchCasePattern;
+
+/**
+ * What the body typer's collaborators (ExpressionTyper, CallResolver, StatementTyper, ClosureTyper, GenericInstantiation,
+ * InlineConstantResolver) call back into. BodyTyper implements it and hands itself to each of them once.
+ *
+ * Its methods declare no default values (Haxeon does not parse one on an interface method), so callers pass every
+ * argument that has one in BodyTyper.
+ */
+interface BodyTyping {
+	// Expressions, statements and types.
+	function typeExpression(expression:AstExpression, scope:Scope, ?expectedType:CompilerType,
+			inferDynamicLambdaResult:Bool):TypedExpression;
+	function coerce(value:TypedExpression, expected:CompilerType, context:String, code:String):TypedExpression;
+	function typeStatements(statements:Array<AstStatement>, scope:Scope,
+			result:Null<CompilerType>):Array<TypedStatement>;
+	function lowerType(type:AstType, span:SourceSpan):CompilerType;
+	function arrayElementType(type:CompilerType, span:SourceSpan):CompilerType;
+	function exhaustiveEnum(type:CompilerType, cases:Array<TypedSwitchCase>):Bool;
+
+	// Expression forms BodyTyper owns.
+	function typeVariableExpression(name:String, span:SourceSpan, scope:Scope,
+			expectedType:Null<CompilerType>):TypedExpression;
+	function typeMember(object:AstExpression, name:String, span:SourceSpan, scope:Scope):TypedExpression;
+	function typeBlockExpression(statements:Array<AstStatement>, result:AstExpression, span:SourceSpan, scope:Scope,
+			expectedType:Null<CompilerType>):TypedExpression;
+	function typeMethodCall(object:AstExpression, name:String, arguments:Array<AstExpression>, span:SourceSpan,
+			scope:Scope, ?expectedType:CompilerType):TypedExpression;
+	function contextualExpressionType(expression:AstExpression, scope:Scope):Null<CompilerType>;
+	function expectedInitializerType(name:String, initializer:AstExpression):Null<CompilerType>;
+
+	// Functions, arguments and inline constants.
+	function typeFunction(fn:AstFunction, ?owner:String, isStatic:Bool, ?substitutions:Map<String, CompilerType>,
+			?specializedName:String, ?abstractReceiver:CompilerType, ?physicalOwner:String,
+			?ownerTypeArguments:Array<CompilerType>):TypedFunction;
+	function argumentType(argument:AstArgument, ?substitutions:Map<String, CompilerType>):CompilerType;
+	function typeDefaultExpression(expression:AstExpression, expected:CompilerType,
+			declarationName:String):TypedExpression;
+	function posInfosExpression(span:SourceSpan):AstExpression;
+	function typeInlineInitializer(expression:AstExpression, owner:String, name:String, expected:CompilerType,
+			typeParameters:Array<String>):TypedExpression;
+
+	// Members, fields and receivers.
+	function findFieldType(type:CompilerType, name:String):Null<CompilerType>;
+	function fieldType(type:CompilerType, name:String, span:SourceSpan):CompilerType;
+	function typedMember(typedObject:TypedExpression, name:String, span:SourceSpan):TypedExpression;
+	function typedMemberWithFlow(object:TypedExpression, name:String, span:SourceSpan, scope:Scope):TypedExpression;
+	function resolveReceiver(name:String, span:SourceSpan, scope:Scope):Null<TypedExpression>;
+	function lexicalMethod(name:String):Null<SemanticMethodInfo>;
+	function findStaticFieldNullable(className:String, name:String):Null<{owner:String, type:CompilerType}>;
+	function findStaticField(className:String, name:String, span:SourceSpan):{owner:String, type:CompilerType};
+	function rejectInlineFieldMutation(owner:String, name:String, span:SourceSpan):Void;
+	function instancePropertyAccessor(type:CompilerType, name:String, read:Bool):Null<String>;
+	function propertySetterCall(object:TypedExpression, setter:String, value:TypedExpression,
+			span:SourceSpan):TypedExpression;
+
+	// Captured locals.
+	function boundCell(name:String, scope:Scope):Null<String>;
+	function bindCell(name:String, span:SourceSpan, scope:Scope, type:CompilerType):Void;
+
+	// Switch rules, shared by statement switches and switch expressions.
+	function switchCasePattern(value:AstExpression, expected:CompilerType, scope:Scope):SwitchCasePattern;
+
+	/** The type constant cases compare as (the subject's, or the value type of a nullable one), or null when none apply. */
+	function switchConstantType(subject:CompilerType):Null<CompilerType>;
+
+	function switchArrayPatternKey(pattern:TypedSwitchArrayPattern):Null<String>;
+	function switchCaseKey(value:TypedExpression, predicates:Array<TypedSwitchPredicate>):Null<String>;
+	function enumCaseCovered(type:CompilerType, constructorIndex:Int, cases:Array<TypedSwitchCoverageCase>):Bool;
+
+	/** The values of a closed enum abstract keyed as switch cases are (with `null` for a nullable one), or null when the subject is not one. */
+	function closedEnumAbstractValues(type:CompilerType):Null<Array<{name:String, key:String}>>;
+}

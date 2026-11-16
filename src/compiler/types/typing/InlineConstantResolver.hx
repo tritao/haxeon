@@ -3,33 +3,19 @@ package compiler.types.typing;
 import compiler.core.Diagnostic;
 import compiler.core.Diagnostic.CompileError;
 import compiler.core.Source.SourceSpan;
-import compiler.syntax.Ast.AstExpression;
 import compiler.syntax.Ast.AstField;
-import compiler.types.Type.CompilerType;
-import compiler.types.TypedAst.TypedExpression;
 import compiler.types.InlineConstantEvaluator;
-import compiler.types.analysis.Scope;
 import compiler.types.typing.TypingSession.ResolvedInlineConstant;
-
-typedef InlineStaticField = {owner:String, type:CompilerType};
-typedef InlineStaticFieldLookup = (String, String) -> Null<InlineStaticField>;
-typedef InlineInitializerTyper = (AstExpression, String, String, CompilerType, Array<String>) -> TypedExpression;
-typedef InlineCoerceCallback = (TypedExpression, CompilerType, String, String) -> TypedExpression;
 
 /** Resolves inline fields, detects cycles, and memoizes their typed constant values. */
 class InlineConstantResolver {
 	final session:TypingSession;
-	final findStaticField:InlineStaticFieldLookup;
-	final typeInitializer:InlineInitializerTyper;
-	final coerce:InlineCoerceCallback;
+	final bodyTyper:BodyTyping;
 	final dependencyCollectors:Array<Map<String, Bool>> = [];
 
-	public function new(session:TypingSession, findStaticField:InlineStaticFieldLookup,
-			typeInitializer:InlineInitializerTyper, coerce:InlineCoerceCallback) {
+	public function new(session:TypingSession, bodyTyper:BodyTyping) {
 		this.session = session;
-		this.findStaticField = findStaticField;
-		this.typeInitializer = typeInitializer;
-		this.coerce = coerce;
+		this.bodyTyper = bodyTyper;
 	}
 
 	/** Every active initializer consumes nested constants, even when their values were already memoized. */
@@ -56,7 +42,7 @@ class InlineConstantResolver {
 			}
 		if (field == null || field.initializer == null)
 			return null;
-		var staticField = findStaticField(owner, name);
+		var staticField = bodyTyper.findStaticFieldNullable(owner, name);
 		if (staticField == null)
 			return null;
 		var key = staticField.owner + "." + name,
@@ -72,7 +58,8 @@ class InlineConstantResolver {
 		dependencyCollectors.push(dependencies);
 		var resolved:ResolvedInlineConstant;
 		try {
-			var initializer = typeInitializer(field.initializer, staticField.owner, name, staticField.type,
+			var initializer = bodyTyper.typeInlineInitializer(field.initializer, staticField.owner, name,
+				staticField.type,
 				classDecl.typeParameters),
 				literal = InlineConstantEvaluator.evaluate(initializer);
 			if (literal == null)
@@ -83,7 +70,7 @@ class InlineConstantResolver {
 			resolved = {
 				dependencies: targets,
 				initializer: initializer,
-				value: coerce(literal, staticField.type, 'inline field "${staticField.owner}.$name"', "E1002")
+				value: bodyTyper.coerce(literal, staticField.type, 'inline field "${staticField.owner}.$name"', "E1002")
 			};
 		} catch (error:Dynamic) {
 			dependencyCollectors.pop();

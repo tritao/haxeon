@@ -4,20 +4,17 @@ import compiler.types.TypedAst.TypedFunctionRole;
 import compiler.core.Diagnostic;
 import compiler.core.Diagnostic.CompileError;
 import compiler.core.Source.SourceSpan;
-import compiler.semantic.SemanticProgram.SemanticMethodInfo;
 import compiler.syntax.Ast.AstArgument;
 import compiler.syntax.Ast.AstExpression;
 import compiler.syntax.Ast.AstStatement;
 import compiler.syntax.Ast.AstType;
 import compiler.types.Type.CompilerType;
-import compiler.types.Type.NominalKind;
 import compiler.types.TypeRelations;
 import compiler.types.TypedAst.CellStorageKind;
 import compiler.types.TypedAst.TypedCapture;
 import compiler.types.TypedAst.TypedCaptureSource;
 import compiler.types.TypedAst.TypedExpression;
 import compiler.types.TypedAst.TypedExpressionKind;
-import compiler.types.TypedAst.TypedStatement;
 import compiler.types.analysis.AssignedDeclarations;
 import compiler.types.analysis.BindingWalker;
 import compiler.types.analysis.FreeVariables;
@@ -25,48 +22,14 @@ import compiler.types.analysis.ControlFlow;
 import compiler.types.analysis.LexicalStorageAnalysis;
 import compiler.types.analysis.Scope;
 
-typedef ClosureExpressionCallback = (AstExpression, Scope, Null<CompilerType>, Bool) -> TypedExpression;
-typedef ClosureLowerTypeCallback = (type:AstType, span:SourceSpan) -> CompilerType;
-typedef ClosureMethodLookupCallback = String->Null<SemanticMethodInfo>;
-typedef ClosureFieldLookupCallback = (CompilerType, String) -> Null<CompilerType>;
-typedef ClosureBoundCellCallback = (String, Scope) -> Null<String>;
-typedef ClosureEnterBodyCallback = (String, Null<Map<String, CompilerType>>, Null<String>) -> TypingContext;
-typedef ClosureLeaveBodyCallback = TypingContext->Void;
-typedef ClosureBindCellCallback = (String, SourceSpan, Scope, CompilerType) -> Void;
-typedef ClosureTypeStatementsCallback = (Array<AstStatement>, Scope, Null<CompilerType>) -> Array<TypedStatement>;
-typedef ClosureAlwaysReturnsCallback = Array<TypedStatement>->Bool;
-
 /** Types lambda bodies and coordinates their capture and closure-conversion records. */
 class ClosureTyper {
 	final session:TypingSession;
-	final typeExpression:ClosureExpressionCallback;
-	final lowerType:ClosureLowerTypeCallback;
-	final lexicalMethod:ClosureMethodLookupCallback;
-	final findFieldType:ClosureFieldLookupCallback;
-	final boundCell:ClosureBoundCellCallback;
-	final enterBody:ClosureEnterBodyCallback;
-	final leaveBody:ClosureLeaveBodyCallback;
-	final bindCell:ClosureBindCellCallback;
-	final typeStatements:ClosureTypeStatementsCallback;
-	final alwaysReturns:ClosureAlwaysReturnsCallback;
+	final bodyTyper:BodyTyping;
 
-	public function new(session:TypingSession, typeExpression:ClosureExpressionCallback,
-			lowerType:ClosureLowerTypeCallback,
-			lexicalMethod:ClosureMethodLookupCallback, findFieldType:ClosureFieldLookupCallback,
-			boundCell:ClosureBoundCellCallback,
-			enterBody:ClosureEnterBodyCallback, leaveBody:ClosureLeaveBodyCallback, bindCell:ClosureBindCellCallback,
-			typeStatements:ClosureTypeStatementsCallback, alwaysReturns:ClosureAlwaysReturnsCallback) {
+	public function new(session:TypingSession, bodyTyper:BodyTyping) {
 		this.session = session;
-		this.typeExpression = typeExpression;
-		this.lowerType = lowerType;
-		this.lexicalMethod = lexicalMethod;
-		this.findFieldType = findFieldType;
-		this.boundCell = boundCell;
-		this.enterBody = enterBody;
-		this.leaveBody = leaveBody;
-		this.bindCell = bindCell;
-		this.typeStatements = typeStatements;
-		this.alwaysReturns = alwaysReturns;
+		this.bodyTyper = bodyTyper;
 	}
 
 	public function typeLambda(arguments:Array<AstArgument>, body:Array<AstStatement>, identity:String, span:SourceSpan,
@@ -90,7 +53,7 @@ class ClosureTyper {
 			var argumentType = (switch (argument.type) {
 				case InferredType: true;
 				default: false;
-			}) ? (expectedFunction == null ? null : expectedFunction.arguments[i]) : lowerType(argument.type,
+			}) ? (expectedFunction == null ? null : expectedFunction.arguments[i]) : bodyTyper.lowerType(argument.type,
 				argument.span);
 			if (argumentType != null
 				&& (switch (argument.type) {
@@ -123,10 +86,10 @@ class ClosureTyper {
 		if (scope.resolve("this") != null)
 			for (name in freeVariables.keys())
 				if (scope.resolve(name) == null) {
-					var method = lexicalMethod(name),
+					var method = bodyTyper.lexicalMethod(name),
 						receiverType = scope.resolve("this");
 					if (method != null && !method.isStatic || receiverType != null
-						&& findFieldType(receiverType, name) != null)
+						&& bodyTyper.findFieldType(receiverType, name) != null)
 						freeVariables.set("this", true);
 				}
 		var pathConstants:Map<String, String> = [],
@@ -150,8 +113,8 @@ class ClosureTyper {
 				var captureType:CompilerType = capturedType;
 				var declaredCaptureType = scope.resolveDeclared(name);
 				var cellClass:Null<String> = null;
-				if (boundCell(name, scope) != null)
-					cellClass = boundCell(name, scope);
+				if (bodyTyper.boundCell(name, scope) != null)
+					cellClass = bodyTyper.boundCell(name, scope);
 				if (cellClass == null && scope.isCellCapture(name))
 					cellClass = scope.requireCellClass(name);
 				var captured = scope.declarationOf(name);
@@ -216,7 +179,7 @@ class ClosureTyper {
 		var capturedIdentity = compiler.semantic.LambdaName.withCaptures(identity, [for (capture in captures)
 			capture.field + ":" + compiler.types.DeclarationIndex.typeKey(capture.storageType)]);
 		var lambdaName = compiler.semantic.LambdaName.of(outerContext.name, capturedIdentity),
-			lambdaContext = enterBody(lambdaName, outerContext.typeSubstitutions, null),
+			lambdaContext = session.enterBody(lambdaName, outerContext.typeSubstitutions, null),
 			context = session.currentContext;
 		context.scope = typedBodyScope;
 		context.receiver = typedBodyScope.resolve("this");
@@ -245,9 +208,10 @@ class ClosureTyper {
 			context.storage.request(binding, "$cell:" + lambdaName + ":" + BindingWalker.nameOf(binding),
 				ExceptionEdge);
 		for (i in 0...arguments.length)
-			bindCell(arguments[i].name == "_" ? "$discard:" + i : arguments[i].name, arguments[i].span, typedBodyScope,
+			bodyTyper.bindCell(arguments[i].name == "_" ? "$discard:" + i : arguments[i].name, arguments[i].span,
+				typedBodyScope,
 				lambdaArguments[i].type);
-		var typedBody = typeStatements(body, typedBodyScope, expectedFunction == null
+		var typedBody = bodyTyper.typeStatements(body, typedBodyScope, expectedFunction == null
 			|| inferContextualResult ? null : expectedFunction.result),
 			inferredResult:CompilerType;
 		if (expectedFunction != null && !inferContextualResult)
@@ -260,11 +224,12 @@ class ClosureTyper {
 		var lambdaCells = copyMap(context.storage.cells),
 			lambdaCellTypes = copyMap(context.storage.types),
 			lambdaCellKinds = copyMap(context.storage.kinds);
-		leaveBody(lambdaContext);
+		session.leaveBody(lambdaContext);
 		if ((switch (inferredResult) {
 			case TVoid: false;
 			default: true;
-		}) && !alwaysReturns(typedBody))
+		}) && !ControlFlow.returnsOnEveryPath(typedBody,
+			function(type, cases) return bodyTyper.exhaustiveEnum(type, cases)))
 			fail("E1006", 'Function $lambdaName does not return on every path', span);
 		var environment:Null<String> = null;
 		if (captures.length > 0)

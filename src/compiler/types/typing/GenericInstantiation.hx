@@ -4,50 +4,23 @@ import compiler.core.Diagnostic;
 import compiler.core.Diagnostic.CompileError;
 import compiler.core.Source.SourceSpan;
 import compiler.semantic.SemanticSignature;
-import compiler.syntax.Ast.AstExpression;
 import compiler.syntax.Ast.AstFunction;
 import compiler.syntax.Ast.AstType;
 import compiler.syntax.AstFunctions;
 import compiler.types.Type.CompilerType;
-import compiler.types.Type.NominalKind;
 import compiler.types.TypeRelations;
 import compiler.types.IterationProtocol;
 import compiler.types.TypedAst.TypedExpression;
-import compiler.types.TypedAst.TypedFunction;
 import compiler.types.analysis.Scope;
-import compiler.types.typing.CallResolver.ArgumentTypeCallback;
-import compiler.types.typing.CallResolver.DefaultExpressionCallback;
-import compiler.types.typing.CallResolver.TypeExpressionCallback;
-
-typedef GenericCoerceCallback = (TypedExpression, CompilerType, String, String) -> TypedExpression;
-typedef GenericCoerceArgumentsCallback = (Array<TypedExpression>, Array<CompilerType>,
-	String) -> Array<TypedExpression>;
-typedef SpecializedFunctionTyper = (AstFunction, Null<String>, Bool, Null<Map<String, CompilerType>>, Null<String>,
-	Null<CompilerType>) -> TypedFunction;
 
 /** Resolves generic substitutions and requests/reuses emitted function specializations. */
 class GenericInstantiation {
 	final session:TypingSession;
-	final typeExpression:TypeExpressionCallback;
-	final coerce:GenericCoerceCallback;
-	final coerceArguments:GenericCoerceArgumentsCallback;
-	final argumentType:ArgumentTypeCallback;
-	final typeDefaultExpression:DefaultExpressionCallback;
-	final posInfosExpression:SourceSpan->AstExpression;
-	final typeFunction:SpecializedFunctionTyper;
+	final bodyTyper:BodyTyping;
 
-	public function new(session:TypingSession, typeExpression:TypeExpressionCallback, coerce:GenericCoerceCallback,
-			coerceArguments:GenericCoerceArgumentsCallback, argumentType:ArgumentTypeCallback,
-			typeDefaultExpression:DefaultExpressionCallback,
-			posInfosExpression:SourceSpan->AstExpression, typeFunction:SpecializedFunctionTyper) {
+	public function new(session:TypingSession, bodyTyper:BodyTyping) {
 		this.session = session;
-		this.typeExpression = typeExpression;
-		this.coerce = coerce;
-		this.coerceArguments = coerceArguments;
-		this.argumentType = argumentType;
-		this.typeDefaultExpression = typeDefaultExpression;
-		this.posInfosExpression = posInfosExpression;
-		this.typeFunction = typeFunction;
+		this.bodyTyper = bodyTyper;
 	}
 
 	public function specialize(baseName:String, fn:AstFunction, arguments:Array<TypedExpression>, span:SourceSpan,
@@ -81,19 +54,21 @@ class GenericInstantiation {
 						span);
 				}
 			}
-		var semanticExpected = [for (argument in fn.arguments) argumentType(argument, substitutions)];
+		var semanticExpected = [for (argument in fn.arguments) bodyTyper.argumentType(argument, substitutions)];
 		for (index in arguments.length...fn.arguments.length) {
 			var parameter = fn.arguments[index],
 				defaultValue = parameter.defaultValue,
 				expected = semanticExpected[index];
 			if (CallResolver.isPosInfosParameter(parameter))
-				arguments.push(coerce(typeExpression(posInfosExpression(span), scope, expected, false), expected,
+				arguments.push(bodyTyper.coerce(bodyTyper.typeExpression(bodyTyper.posInfosExpression(span), scope,
+					expected, false), expected,
 					'position argument ${index + 1} to "$baseName"', "E1009"));
 			else if (defaultValue == null)
-				arguments.push(coerce(new TypedExpression(TNullLiteral, TNull, span), expected,
+				arguments.push(bodyTyper.coerce(new TypedExpression(TNullLiteral, TNull, span), expected,
 					'default argument ${index + 1} to "$baseName"', "E1009"));
 			else
-				arguments.push(coerce(typeDefaultExpression(defaultValue, expected, baseName), expected,
+				arguments.push(bodyTyper.coerce(bodyTyper.typeDefaultExpression(defaultValue, expected, baseName),
+					expected,
 					'default argument ${index + 1} to "$baseName"',
 					"E1009"));
 		}
@@ -143,7 +118,8 @@ class GenericInstantiation {
 				// under the same concrete-type list.
 				if (IterationProtocol.name(expected) != null)
 					concrete.push(expected);
-				semanticArguments.push(coerce(argument, expected, 'argument ${index + 1} to "$baseName"', "E1009"));
+				semanticArguments.push(bodyTyper.coerce(argument, expected, 'argument ${index + 1} to "$baseName"',
+					"E1009"));
 			}
 		}
 		if (concrete.length > 0)
@@ -163,7 +139,8 @@ class GenericInstantiation {
 				constantPolicies.push("keypath:" + index + "=" + definition.name);
 			}
 		}
-		var genericCall = session.representation.resolveGenericCall(fn, substitutions, semanticArguments, argumentType),
+		var genericCall = session.representation.resolveGenericCall(fn, substitutions, semanticArguments,
+			function(argument, argumentSubstitutions) return bodyTyper.argumentType(argument, argumentSubstitutions)),
 			genericRepresentation = genericCall.representation,
 			representationSubstitutions = genericRepresentation.substitutions,
 			specializationPolicies = genericRepresentation.policies.concat(constantPolicies),
@@ -184,7 +161,7 @@ class GenericInstantiation {
 				representationSubstitutions) : receiver.type;
 		if (!session.emittedGenericBodies.exists(specialization.name)) {
 			session.emittedGenericBodies.set(specialization.name, true);
-			session.closureConversion.addFunction(typeFunction(fn, owner, receiver == null ? isStatic : true,
+			session.closureConversion.addFunction(bodyTyper.typeFunction(fn, owner, receiver == null ? isStatic : true,
 				representationSubstitutions,
 				specialization.name, representationReceiver));
 		}

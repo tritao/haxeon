@@ -20,19 +20,19 @@ class StringConversion {
 		};
 
 	public static function convert(session:TypingSession, value:TypedExpression,
-			coerce:(TypedExpression, CompilerType, String, String) -> TypedExpression):TypedExpression {
+			bodyTyper:BodyTyping):TypedExpression {
 		var named = name(session, value);
 		if (named != null)
 			return named;
 		if (isStringConvertible(session, value.type))
-			return coerce(value, TString, "string conversion", "E1010");
+			return bodyTyper.coerce(value, TString, "string conversion", "E1010");
 		switch value.type {
 			// A Null<String> is the same reference as a String; conversion itself writes null as "null".
 			case TNullable(inner) if (TypeRelations.equals(inner, TString)):
 				return new TypedExpression(TCast(value), TString, value.span);
 			default:
 		}
-		var dynamicValue = coerce(value, TDynamic, "string conversion", "E1010");
+		var dynamicValue = bodyTyper.coerce(value, TDynamic, "string conversion", "E1010");
 		if (TypeRelations.equals(value.type, TFloat) || TypeRelations.equals(value.type, TDynamic)) {
 			session.runtimeDependencyTracker.record(session.currentContext.name, "Std");
 			return new TypedExpression(TCall("Std.string", [dynamicValue]), TString, value.span);

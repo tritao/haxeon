@@ -39,9 +39,10 @@ class ConversionResolver {
 	 * on nullables as in Haxe. Anything else is returned as it is. Equality keeps the nullable, so `x == null` still sees null.
 	 */
 	public static function plainValue(value:TypedExpression,
-			coerce:(TypedExpression, CompilerType, String, String) -> TypedExpression):TypedExpression
+			bodyTyper:BodyTyping):TypedExpression
 		return switch value.type {
-			case TNullable(element) if (TypeRelations.hasNullDefault(element)): coerce(value, element, "operand",
+			case TNullable(element) if (TypeRelations.hasNullDefault(element)): bodyTyper.coerce(value, element,
+				"operand",
 				"E1010");
 			default: value;
 		};

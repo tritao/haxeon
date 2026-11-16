@@ -8,8 +8,6 @@ import compiler.syntax.Ast.AstExpression;
 import compiler.syntax.Ast.AstFunction;
 import compiler.syntax.Ast.AstStatement;
 import compiler.syntax.Ast.AstType;
-import compiler.syntax.Ast.AstClass;
-import compiler.syntax.Ast.AstEnum;
 import compiler.syntax.AstChildren;
 import compiler.syntax.AstPredicates;
 import compiler.types.Type.CompilerType;
@@ -31,8 +29,6 @@ import compiler.semantic.SemanticSignature;
 import compiler.types.TypedAst.TypedExpression;
 import compiler.types.TypedAst.TypedExpressionKind;
 import compiler.types.TypedAst.TypedFunction;
-import compiler.types.TypedAst.TypedClass;
-import compiler.types.TypedAst.TypedField;
 import compiler.types.TypedAst.TypedStatement;
 import compiler.types.TypedAst.TypedSwitchBinding;
 import compiler.types.TypedAst.TypedSwitchFieldAccess;
@@ -41,7 +37,6 @@ import compiler.types.TypedAst.TypedSwitchCase;
 import compiler.types.TypedAst.TypedSwitchCoverageCase;
 import compiler.types.TypedAst.TypedSwitchArrayPattern;
 import compiler.types.TypedAst.TypedSwitchArrayElement;
-import compiler.types.TypedAst.TypedSwitchObjectFieldAccess;
 import compiler.core.Diagnostic;
 import compiler.core.Diagnostic.CompileError;
 import compiler.core.Source.SourceSpan;
@@ -55,7 +50,7 @@ import compiler.core.Source.SourceSpan;
 @:allow(compiler.types.typing.DeclaredConformance)
 @:allow(compiler.types.typing.EnumEqualityGenerator)
 @:allow(compiler.types.typing.EnumConformanceMethods)
-class BodyTyper {
+class BodyTyper implements BodyTyping {
 	final session:TypingSession;
 	final expressionTyper:ExpressionTyper;
 	final closureTyper:ClosureTyper;
@@ -82,114 +77,14 @@ class BodyTyper {
 			specializations:Null<GenericSpecializationRegistry>, ?nativeAbiTarget:String) {
 		this.session = new TypingSession(externals, specializations, nativeAbiTarget);
 		this.conversionResolver = new ConversionResolver(session);
-		this.inlineConstantResolver = new InlineConstantResolver(session,
-			function(owner, name) return this.findStaticFieldNullable(owner, name),
-			function(expression, owner, name, expected, typeParameters) return this.typeInlineInitializer(expression,
-			owner, name, expected, typeParameters),
-			function(value, expected, context, code) return this.coerce(value, expected, context, code));
+		this.inlineConstantResolver = new InlineConstantResolver(session, this);
 		this.anonymousTypeRegistry = new AnonymousTypeRegistry(session);
-		this.closureTyper = new ClosureTyper(session,
-			function(expression, scope, expected, inferDynamicLambdaResult) return this.typeExpression(expression,
-			scope, expected, inferDynamicLambdaResult),
-			function(type, span) return this.lowerType(type, span), function(name) return this.lexicalMethod(name),
-			function(type, name) return this.findFieldType(type, name),
-			function(name, scope) return this.boundCell(name, scope),
-			function(name, substitutions, owner) return this.enterBody(name, substitutions, owner),
-			function(body) this.leaveBody(body),
-			function(name, span, scope, type) this.bindCell(name, span, scope, type),
-			function(statements, scope, result) return this.typeStatements(statements, scope, result),
-			function(statements) return ControlFlow.returnsOnEveryPath(statements,
-			function(type, cases) return this.exhaustiveEnum(type, cases)));
-		var switchRules:SwitchTypingRules = {
-			casePattern: function(value: AstExpression, expected: CompilerType,
-					scope: Scope) return this.switchCasePattern(value, expected, scope),
-			constantType: function(subject: CompilerType) return this.switchConstantType(subject),
-			arrayPatternKey: function(pattern: TypedSwitchArrayPattern) return this.switchArrayPatternKey(pattern),
-			caseKey: function(value: TypedExpression,
-					predicates: Array<TypedSwitchPredicate>) return this.switchCaseKey(value, predicates),
-			enumCaseCovered: function(type: CompilerType, index: Int,
-					cases: Array<TypedSwitchCoverageCase>) return this.enumCaseCovered(type, index, cases),
-			enumLiteral: function(value: TypedExpression) return enumLiteral(value),
-			isEnum: function(type: CompilerType) return isEnum(type),
-			isNullableEnum: function(type: CompilerType) return isNullableEnum(type),
-			enumName: function(type: CompilerType) return enumName(type),
-			closedEnumAbstractValues: function(type: CompilerType) return this.closedEnumAbstractValues(type)
-		};
-		this.genericInstantiation = new GenericInstantiation(session,
-			function(expression, scope, expected, inferDynamicLambdaResult) return this.typeExpression(expression,
-			scope, expected, inferDynamicLambdaResult),
-			function(value, expected, context, code) return this.coerce(value, expected, context, code),
-			function(arguments, expected, name) return this.coerceArguments(arguments, expected, name),
-			function(argument, substitutions) return this.argumentType(argument, substitutions),
-			function(expression, expected, declarationName) return this.typeDefaultExpression(expression, expected,
-			declarationName),
-			function(span) return this.posInfosExpression(span),
-			function(fn, owner, isStatic, substitutions, specializedName,
-				abstractReceiver) return this.typeFunction(fn, owner, isStatic, substitutions, specializedName,
-			abstractReceiver));
-		this.callResolver = new CallResolver(session, genericInstantiation,
-			function(expression, scope, expected, inferDynamicLambdaResult) return this.typeExpression(expression,
-			scope, expected, inferDynamicLambdaResult),
-			function(value, expected, context, code) return this.coerce(value, expected, context, code),
-			function(argument, substitutions) return this.argumentType(argument, substitutions),
-			function(span) return this.posInfosExpression(span),
-			function(expression, expected, declarationName) return this.typeDefaultExpression(expression, expected,
-			declarationName), functionTypeParameters,
-			function(pattern, actual, parameters, substitutions,
-				span) this.genericInstantiation.inferTypeParameters(pattern, actual, parameters, substitutions, span),
-			inheritanceName, function(type, name) return this.findFieldType(type, name),
-			function(receiver, name, span) return this.typedMember(receiver, name, span),
-			function(type, span) return this.lowerType(type, span),
-			function(type, span) return this.arrayElementType(type, span),
-			function(name, span, scope) return this.resolveReceiver(name, span, scope),
-			function(receiver, name, span, scope) return this.typedMemberWithFlow(receiver, name, span, scope));
-		this.expressionTyper = new ExpressionTyper(session, conversionResolver, callResolver,
-			function(expression, scope, expected, inferDynamicLambdaResult) return this.typeExpression(expression,
-			scope, expected, inferDynamicLambdaResult),
-			function(value, expected, context, code) return this.coerce(value, expected, context, code), switchRules,
-			anonymousTypeRegistry,
-			function(type, span) return this.arrayElementType(type, span),
-			function(type, span) return this.lowerType(type, span), {
-				variable: function(name, span, scope, expected) return this.typeVariableExpression(name, span, scope,
-					expected),
-				lambda: function(arguments, body, identity, span, scope, expected,
-						inferDynamicLambdaResult) return this.closureTyper.typeLambda(arguments, body, identity, span,
-					scope, expected,
-					inferDynamicLambdaResult,
-					session.currentContext),
-				member: function(object, name, span, scope) return this.typeMember(object, name, span, scope),
-				block: function(statements, result, span, scope, expected) return this.typeBlockExpression(statements,
-					result, span, scope, expected),
-				methodCall: function(object, name, arguments, span, scope, expected) return this.typeMethodCall(object,
-					name, arguments, span, scope, expected),
-				contextualType: function(expression, scope) return this.contextualExpressionType(expression, scope)
-			});
-		this.statementTyper = new StatementTyper(session,
-			function(expression, scope, expected, inferDynamicLambdaResult) return this.typeExpression(expression,
-			scope, expected, inferDynamicLambdaResult),
-			function(value, expected, context, code) return this.coerce(value, expected, context, code),
-			function(name, initializer) return this.expectedInitializerType(name, initializer),
-			function(name, span, scope, type) this.bindCell(name, span, scope, type),
-			function(statements, scope, result) return this.typeStatements(statements, scope, result),
-			function(type, cases) return this.exhaustiveEnum(type, cases),
-			function(type, span) return this.lowerType(type, span), unwrapNullable,
-			CallResolver.mapKeyIteratorSource, switchRules, {
-				findStaticField: function(owner, name) return this.findStaticFieldNullable(owner, name),
-				requireStaticField: function(owner, name, span) return this.findStaticField(owner, name, span),
-				rejectInlineFieldMutation: function(owner, name, span) this.rejectInlineFieldMutation(owner, name,
-					span),
-				findFieldType: function(type, name) return this.findFieldType(type, name),
-				instancePropertyAccessor: function(type, name, read) return this.instancePropertyAccessor(type, name,
-					read),
-				propertySetterCall: function(object, setter, value, span) return this.propertySetterCall(object, setter,
-					value, span),
-				fieldType: function(type, name, span) return this.fieldType(type, name, span),
-				fieldRepresentationType: function(type, name, span) return session.representation.resolveField(type,
-					name, span).physical,
-				abiBoundaryCast: function(value, target) return session.representation.boundaryCast(value, target),
-				arrayElementType: function(type, span) return this.arrayElementType(type, span),
-				boundCell: function(name, scope) return this.boundCell(name, scope)
-			});
+		this.closureTyper = new ClosureTyper(session, this);
+		this.genericInstantiation = new GenericInstantiation(session, this);
+		this.callResolver = new CallResolver(session, genericInstantiation, this);
+		this.expressionTyper = new ExpressionTyper(session, conversionResolver, callResolver, closureTyper,
+			anonymousTypeRegistry, this);
+		this.statementTyper = new StatementTyper(session, this);
 	}
 
 	static function declarationTypeSubstitutions(owner:String, parameters:Array<String>):Map<String, CompilerType> {
@@ -247,7 +142,7 @@ class BodyTyper {
 		return compiler.core.QualifiedName.split(path);
 	}
 
-	static function enumName(type:Null<CompilerType>):Null<String> {
+	public static function enumName(type:Null<CompilerType>):Null<String> {
 		return switch enumInstance(type) {
 			case TInstance(Enum, name, _): name;
 			case _: null;
@@ -304,7 +199,7 @@ class BodyTyper {
 		return value;
 	}
 
-	function typeFunction(fn:AstFunction, ?owner:String, isStatic:Bool = false,
+	public function typeFunction(fn:AstFunction, ?owner:String, isStatic:Bool,
 			?substitutions:Map<String, CompilerType>, ?specializedName:String,
 			?abstractReceiver:CompilerType, ?physicalOwner:String,
 			?ownerTypeArguments:Array<CompilerType>):TypedFunction {
@@ -448,12 +343,12 @@ class BodyTyper {
 		return map.statements(statements);
 	}
 
-	function boundCell(name:String, scope:Scope):Null<String> {
+	public function boundCell(name:String, scope:Scope):Null<String> {
 		var id = scope.resolveId(name);
 		return id == null ? null : context.storage.cell(id);
 	}
 
-	function bindCell(name:String, span:SourceSpan, scope:Scope, type:CompilerType):Void {
+	public function bindCell(name:String, span:SourceSpan, scope:Scope, type:CompilerType):Void {
 		var id = scope.requireId(name),
 			declaration = LexicalStorageAnalysis.key(name, span);
 		// Refine conservative receiver writes once their type is known. Whole assignments keep their storage and flow effects.
@@ -531,7 +426,7 @@ class BodyTyper {
 			validateDeferredExpression(child, loopDepth);
 	}
 
-	function typeStatements(statements:Array<AstStatement>, scope:Scope,
+	public function typeStatements(statements:Array<AstStatement>, scope:Scope,
 			result:Null<CompilerType>):Array<TypedStatement> {
 		var output:Array<TypedStatement> = [];
 		for (statementIndex in 0...statements.length) {
@@ -671,7 +566,7 @@ class BodyTyper {
 		};
 
 	/** The type a later use expects of a local whose initializer has none of its own (`[]`, `null`, `{items: []}`). */
-	function expectedInitializerType(name:String, initializer:AstExpression):Null<CompilerType> {
+	public function expectedInitializerType(name:String, initializer:AstExpression):Null<CompilerType> {
 		if (StringTools.startsWith(name, '$' + 'null-coalesce:'))
 			return null;
 		// Without a type a later use expects, an empty array or map and `null` take type variables, which the first use that
@@ -710,14 +605,14 @@ class BodyTyper {
 			default: null;
 		};
 
-	function contextualExpressionType(expression:AstExpression, scope:Scope):Null<CompilerType> {
+	public function contextualExpressionType(expression:AstExpression, scope:Scope):Null<CompilerType> {
 		var known = knownExpressionType(expression);
 		if (known != null)
 			return known;
 		return switch compiler.syntax.AstPredicates.unannotatedExpression(expression) {
 			case Variable(name, _): name.indexOf(".") >= 0 ? typeExpression(expression,
-				scope).type : scope.resolve(name);
-			case Member(_, _, _): typeExpression(expression, scope).type;
+				scope, null, false).type : scope.resolve(name);
+			case Member(_, _, _): typeExpression(expression, scope, null, false).type;
 			case Cast(_, target, castSpan): target == null ? null : lowerType(target, castSpan);
 			default: null;
 		};
@@ -736,7 +631,7 @@ class BodyTyper {
 		return method == null ? name : method.owner + "." + name;
 	}
 
-	function lexicalMethod(name:String):Null<SemanticMethodInfo> {
+	public function lexicalMethod(name:String):Null<SemanticMethodInfo> {
 		if (name.indexOf(".") >= 0 || context.lexicalOwner == null)
 			return null;
 		return findMethod(context.lexicalOwner, name);
@@ -954,7 +849,7 @@ class BodyTyper {
 						bindings = enumPattern.bindings;
 						predicates = enumPattern.predicates;
 					} else if (!isCatchAll) {
-						typedValue = coerce(typeExpression(elementPattern, scope, elementType), elementType,
+						typedValue = coerce(typeExpression(elementPattern, scope, elementType, false), elementType,
 							"array switch pattern", "E1019");
 						var literal = enumLiteral(typedValue);
 						if (literal != null)
@@ -997,7 +892,7 @@ class BodyTyper {
 		};
 	}
 
-	function switchArrayPatternKey(pattern:TypedSwitchArrayPattern):Null<String> {
+	public function switchArrayPatternKey(pattern:TypedSwitchArrayPattern):Null<String> {
 		var keys:Array<String> = [];
 		for (element in pattern.elements) {
 			if (element.isCatchAll || element.value == null)
@@ -1164,7 +1059,7 @@ class BodyTyper {
 											case Variable("_", _):
 											default:
 												var typed = coerce(typeExpression(field.value, new Scope(),
-													expectedField.type), expectedField.type,
+													expectedField.type, false), expectedField.type,
 													"enum object payload pattern", "E1019");
 												if (constantPatternKey(typed) == null)
 													fail("E1019",
@@ -1247,7 +1142,7 @@ class BodyTyper {
 	}
 
 	/** Classifies one case pattern, declaring the names it binds in `scope`. */
-	function switchCasePattern(value:AstExpression, expected:CompilerType,
+	public function switchCasePattern(value:AstExpression, expected:CompilerType,
 			scope:Scope):SwitchTypingRules.SwitchCasePattern {
 		var capture = switchCapture(value, expected, scope),
 			pattern = capture == null ? value : capture.pattern,
@@ -1376,7 +1271,8 @@ class BodyTyper {
 			case Variable(_, span) if (constantName != null): Variable(Std.string(constantName), span);
 			default: value;
 		};
-		var typed = coerce(typeExpression(resolvedValue, new Scope(), type), type, "enum payload pattern", "E1019");
+		var typed = coerce(typeExpression(resolvedValue, new Scope(), type, false), type, "enum payload pattern",
+			"E1019");
 		if (constantPatternKey(typed) == null)
 			fail("E1019", "Enum switch payload patterns must be constants, local names, or '_'", typed.span);
 		return {
@@ -1449,7 +1345,7 @@ class BodyTyper {
 			: 'path:${path}:${objectPath}:${Std.string(constantPatternKey(value))}';
 	}
 
-	function switchCaseKey(value:TypedExpression, predicates:Array<TypedSwitchPredicate>):Null<String>
+	public function switchCaseKey(value:TypedExpression, predicates:Array<TypedSwitchPredicate>):Null<String>
 		return switch value.expression {
 			case TIntLiteral(v): 'int:$v';
 			case TStringLiteral(v): 'string:$v';
@@ -1459,7 +1355,7 @@ class BodyTyper {
 			default: null;
 		};
 
-	static function enumLiteral(value:TypedExpression):Null<{name:String, index:Int}>
+	public static function enumLiteral(value:TypedExpression):Null<{name:String, index:Int}>
 		return switch value.expression {
 			case TEnumLiteral(name, index): {name: name, index: index};
 			case TNullableWrap(inner), TCast(inner), TAbiCast(inner): enumLiteral(inner);
@@ -1483,8 +1379,8 @@ class BodyTyper {
 			default: null;
 		};
 
-	function typeExpression(expression:AstExpression, scope:Scope, ?expectedType:CompilerType,
-			inferDynamicLambdaResult:Bool = false):TypedExpression
+	public function typeExpression(expression:AstExpression, scope:Scope, ?expectedType:CompilerType,
+			inferDynamicLambdaResult:Bool):TypedExpression
 		return expressionTyper.typeExpression(expression, scope, expectedType, inferDynamicLambdaResult);
 
 	/** Dotted assignment syntax carries the statement span; each receiver still needs its own source range. */
@@ -1497,7 +1393,7 @@ class BodyTyper {
 			span.referenceName) : span;
 	}
 
-	function typeVariableExpression(name:String, span:SourceSpan, scope:Scope,
+	public function typeVariableExpression(name:String, span:SourceSpan, scope:Scope,
 			expectedType:Null<CompilerType>):TypedExpression {
 		// Canonical module names are fallbacks: a source-level member takes precedence, including an inherited one.
 		var sourceName = span.isBareReference ? span.referenceName : null,
@@ -1567,7 +1463,8 @@ class BodyTyper {
 				}
 				var thisType = scope.resolve("this");
 				if (thisType != null && findFieldType(thisType, name) != null)
-					return typedMemberWithFlow(typeExpression(Variable("this", span), scope), name, span, scope);
+					return typedMemberWithFlow(typeExpression(Variable("this", span), scope, null, false), name, span,
+						scope);
 			}
 			var enumLiteral = sourceIsBareReference(span) ? expectedEnumLiteral(name, expectedType, span) : null;
 			if (enumLiteral != null)
@@ -1669,7 +1566,7 @@ class BodyTyper {
 					var field = findFieldType(thisType, name);
 					if (field == null)
 						fail("E1005", 'Unknown variable "$name"', span);
-					typedMemberWithFlow(typeExpression(Variable("this", span), scope), name, span, scope);
+					typedMemberWithFlow(typeExpression(Variable("this", span), scope, null, false), name, span, scope);
 				} else {
 					var parts = splitPath(name),
 						objectName = parts[0],
@@ -1737,7 +1634,7 @@ class BodyTyper {
 						}
 						classEnd--;
 					}
-					var object = typeExpression(Variable(objectName, span), scope);
+					var object = typeExpression(Variable(objectName, span), scope, null, false);
 					for (index in 1...parts.length)
 						object = typedMemberWithFlow(object, parts[index],
 							referencePrefixSpan(parts.slice(0, index + 1).join("."), span), scope);
@@ -1779,7 +1676,8 @@ class BodyTyper {
 		return false;
 	}
 
-	function typeBlockExpression(statements:Array<AstStatement>, result:AstExpression, span:SourceSpan, scope:Scope,
+	public function typeBlockExpression(statements:Array<AstStatement>, result:AstExpression, span:SourceSpan,
+			scope:Scope,
 			expectedType:Null<CompilerType>):TypedExpression {
 		// Result annotations are represented by a parser-generated local binding.
 		// Fill only omitted parameter types from the surrounding function context;
@@ -1806,7 +1704,7 @@ class BodyTyper {
 											context.typeSubstitutions);
 								}];
 							var result = session.declarations.resolve(resultType, span, context.typeSubstitutions);
-							var value = typeExpression(literal, scope, TFunction(resolved, result));
+							var value = typeExpression(literal, scope, TFunction(resolved, result), false);
 							// An unbound generic result uses Dynamic as an inference hint.
 							return (switch (expectedResult) {
 								case TDynamic: true;
@@ -1840,7 +1738,7 @@ class BodyTyper {
 		if (ControlFlow.alwaysExits(typedStatements, function(type, cases) return this.exhaustiveEnum(type, cases)))
 			return new TypedExpression(TBlockExpression(typedStatements,
 				new TypedExpression(TUnreachable, TNever, span)), TNever, span);
-		var typedResult = typeExpression(result, blockScope, expectedType);
+		var typedResult = typeExpression(result, blockScope, expectedType, false);
 		if ((switch (expectedType) {
 			case TVoid: true;
 			default: false;
@@ -1879,8 +1777,8 @@ class BodyTyper {
 		return new TypedExpression(TBlockExpression(typedStatements, typedResult), typedResult.type, span);
 	}
 
-	function typeMember(object:AstExpression, name:String, span:SourceSpan, scope:Scope):TypedExpression {
-		return typedMemberWithFlow(typeExpression(object, scope), name, span, scope);
+	public function typeMember(object:AstExpression, name:String, span:SourceSpan, scope:Scope):TypedExpression {
+		return typedMemberWithFlow(typeExpression(object, scope, null, false), name, span, scope);
 	}
 
 	function typeGenericCallArguments(fn:AstFunction, arguments:Array<AstExpression>, scope:Scope, span:SourceSpan):{
@@ -1969,7 +1867,8 @@ class BodyTyper {
 		};
 	}
 
-	function typedMemberWithFlow(object:TypedExpression, name:String, span:SourceSpan, scope:Scope):TypedExpression {
+	public function typedMemberWithFlow(object:TypedExpression, name:String, span:SourceSpan,
+			scope:Scope):TypedExpression {
 		var objectPath = FlowAnalysis.accessPath(object);
 		if (objectPath != null) {
 			var refinedObject = scope.resolveExpression(objectPath);
@@ -2000,12 +1899,12 @@ class BodyTyper {
 	function resolveInlineConstant(owner:String, name:String, span:SourceSpan):Null<ResolvedInlineConstant>
 		return inlineConstantResolver.resolve(owner, name, span);
 
-	function typeInlineInitializer(expression:AstExpression, owner:String, name:String, expected:CompilerType,
+	public function typeInlineInitializer(expression:AstExpression, owner:String, name:String, expected:CompilerType,
 			typeParameters:Array<String>):TypedExpression {
 		var body = enterBody(owner + ".__inline", declarationTypeSubstitutions(owner, typeParameters), owner);
 		var initializer:TypedExpression;
 		try {
-			initializer = coerce(typeExpression(expression, new Scope(), expected), expected,
+			initializer = coerce(typeExpression(expression, new Scope(), expected, false), expected,
 				'inline field "$owner.$name"', "E1002");
 		} catch (error:Dynamic) {
 			leaveBody(body);
@@ -2055,7 +1954,7 @@ class BodyTyper {
 		dependencies.set(target, true);
 	}
 
-	function typedMember(typedObject:TypedExpression, name:String, span:SourceSpan):TypedExpression {
+	public function typedMember(typedObject:TypedExpression, name:String, span:SourceSpan):TypedExpression {
 		// A field of a Dynamic value is looked up when the program runs, and is itself Dynamic.
 		if (sameType(typedObject.type, TDynamic)) {
 			session.runtimeDependencyTracker.record(session.currentContext.name, "Reflect");
@@ -2187,13 +2086,13 @@ class BodyTyper {
 			default: false;
 		};
 
-	static function unwrapNullable(value:TypedExpression):TypedExpression
+	public static function unwrapNullable(value:TypedExpression):TypedExpression
 		return switch value.type {
 			case TNullable(element): new TypedExpression(value.expression, element, value.span);
 			default: value;
 		};
 
-	function instancePropertyAccessor(type:CompilerType, name:String, read:Bool):Null<String>
+	public function instancePropertyAccessor(type:CompilerType, name:String, read:Bool):Null<String>
 		return switch type {
 			case TInstance(Class, className, _) if (session.classDecls.exists(className)):
 				var declaration = requiredMapValue(session.classDecls, className),
@@ -2218,7 +2117,7 @@ class BodyTyper {
 	 * A call of the property setter `setter` on `object` with `value`. As for a getter, the setter of a
 	 * generic class takes and returns its type parameter's representation, not the substituted type.
 	 */
-	function propertySetterCall(object:TypedExpression, setter:String, value:TypedExpression,
+	public function propertySetterCall(object:TypedExpression, setter:String, value:TypedExpression,
 			span:SourceSpan):TypedExpression {
 		var method = requiredMapValue(session.signatures, setter),
 			methodInfo = session.methodInfo.get(setter),
@@ -2231,14 +2130,14 @@ class BodyTyper {
 	function fieldRepresentationType(type:CompilerType, name:String, span:SourceSpan):CompilerType
 		return session.representation.resolveField(type, name, span).physical;
 
-	function findStaticField(className:String, name:String, span:SourceSpan):{owner:String, type:CompilerType} {
+	public function findStaticField(className:String, name:String, span:SourceSpan):{owner:String, type:CompilerType} {
 		var result = findStaticFieldNullable(className, name);
 		if (result != null)
 			return result;
 		throw new CompileError(new Diagnostic("E1005", 'Unknown static field "$className.$name"', span));
 	}
 
-	function findStaticFieldNullable(className:String, name:String):Null<{owner:String, type:CompilerType}> {
+	public function findStaticFieldNullable(className:String, name:String):Null<{owner:String, type:CompilerType}> {
 		if (!session.classDecls.exists(className))
 			return null;
 		var classDecl = requiredMapValue(session.classDecls, className);
@@ -2252,7 +2151,7 @@ class BodyTyper {
 		return base == null ? null : findStaticFieldNullable(inheritanceName(base), name);
 	}
 
-	function rejectInlineFieldMutation(owner:String, name:String, span:SourceSpan):Void {
+	public function rejectInlineFieldMutation(owner:String, name:String, span:SourceSpan):Void {
 		var classDecl = session.classDecls.get(owner);
 		if (classDecl == null)
 			return;
@@ -2261,10 +2160,10 @@ class BodyTyper {
 				fail("E1002", 'Cannot assign to inline field "$owner.$name"', span);
 	}
 
-	function typeMethodCall(object:AstExpression, name:String, arguments:Array<AstExpression>, span:SourceSpan,
+	public function typeMethodCall(object:AstExpression, name:String, arguments:Array<AstExpression>, span:SourceSpan,
 			scope:Scope,
 			?expectedType:CompilerType):TypedExpression {
-		var receiver = unwrapNullable(typeExpression(object, scope));
+		var receiver = unwrapNullable(typeExpression(object, scope, null, false));
 		if (callResolver.isEnumMatch(receiver, name, arguments))
 			return callResolver.typeEnumMatch(object, arguments[0], span, scope);
 		return callResolver.typeMethodCall(receiver, name, arguments, span, scope, expectedType);
@@ -2289,7 +2188,7 @@ class BodyTyper {
 		return callResolver.typeDeclaredCallArguments(arguments, parameters, scope, name, span, substitutions);
 	}
 
-	function argumentType(argument:compiler.syntax.Ast.AstArgument,
+	public function argumentType(argument:compiler.syntax.Ast.AstArgument,
 			?substitutions:Map<String, CompilerType>):CompilerType {
 		var type = if ((switch (argument.type) {
 			case InferredType: true;
@@ -2307,7 +2206,7 @@ class BodyTyper {
 	static function isPosInfosParameter(argument:compiler.syntax.Ast.AstArgument):Bool
 		return CallResolver.isPosInfosParameter(argument);
 
-	function typeDefaultExpression(expression:AstExpression, expected:CompilerType,
+	public function typeDefaultExpression(expression:AstExpression, expected:CompilerType,
 			declarationName:String):TypedExpression {
 		// Defaults are resolved in the callee's scope but their substituted constants belong to the caller's artifact.
 		var previousCaller = defaultArgumentCaller;
@@ -2315,7 +2214,7 @@ class BodyTyper {
 			defaultArgumentCaller = context.name;
 		var body = enterBody("$default:" + declarationName, null, parentPath(declarationName));
 		try {
-			var typed = typeExpression(expression, new Scope(), expected);
+			var typed = typeExpression(expression, new Scope(), expected, false);
 			var sources = session.defaultArgumentSources.get(defaultArgumentCaller);
 			if (sources == null) {
 				sources = [];
@@ -2333,7 +2232,7 @@ class BodyTyper {
 		}
 	}
 
-	function posInfosExpression(span:SourceSpan):AstExpression {
+	public function posInfosExpression(span:SourceSpan):AstExpression {
 		var owner = parentPath(context.name),
 			separator = context.name.lastIndexOf("."),
 			method = separator < 0 ? context.name : context.name.substring(separator + 1, context.name.length);
@@ -2356,7 +2255,7 @@ class BodyTyper {
 			default: "";
 		};
 
-	static function inheritanceName(type:AstType):String
+	public static function inheritanceName(type:AstType):String
 		return switch type {
 			case NamedType(name), AppliedType(name, _): name;
 			default: throw "Inheritance requires a nominal type";
@@ -2378,8 +2277,8 @@ class BodyTyper {
 		};
 	}
 
-	function coerce(value:TypedExpression, expected:CompilerType, context:String,
-			code:String = "E1009"):TypedExpression {
+	public function coerce(value:TypedExpression, expected:CompilerType, context:String,
+			code:String):TypedExpression {
 		if ((switch expected {
 			case TDynamic: true;
 			default: false;
@@ -2415,7 +2314,7 @@ class BodyTyper {
 		return minimum;
 	}
 
-	function fieldType(type:CompilerType, name:String, span:SourceSpan):CompilerType
+	public function fieldType(type:CompilerType, name:String, span:SourceSpan):CompilerType
 		return session.representation.resolveField(type, name, span).semantic;
 
 	function expectedEnumLiteral(name:String, expectedType:Null<CompilerType>, span:SourceSpan):Null<TypedExpression> {
@@ -2528,12 +2427,12 @@ class BodyTyper {
 	static function sourceIsBareReference(span:SourceSpan):Bool
 		return span.isBareReference;
 
-	function resolveReceiver(name:String, span:SourceSpan, scope:Scope):Null<TypedExpression> {
+	public function resolveReceiver(name:String, span:SourceSpan, scope:Scope):Null<TypedExpression> {
 		if (scope.resolve(name) != null)
-			return typeExpression(Variable(name, span), scope);
+			return typeExpression(Variable(name, span), scope, null, false);
 		var thisType = scope.resolve("this");
 		if (thisType != null && findFieldType(thisType, name) != null)
-			return typeExpression(Variable(name, span), scope);
+			return typeExpression(Variable(name, span), scope, null, false);
 		var owner = context.lexicalOwner,
 			staticField:Null<{owner:String, type:CompilerType}> = null;
 		if (owner != null)
@@ -2548,7 +2447,7 @@ class BodyTyper {
 		return null;
 	}
 
-	function findFieldType(type:CompilerType, name:String):Null<CompilerType>
+	public function findFieldType(type:CompilerType, name:String):Null<CompilerType>
 		return switch type {
 			case TAnonymous(_, fields):
 				var found:Null<CompilerType> = null;
@@ -2574,7 +2473,8 @@ class BodyTyper {
 			default: null;
 		};
 
-	function enumCaseCovered(type:CompilerType, constructorIndex:Int, cases:Array<TypedSwitchCoverageCase>):Bool {
+	public function enumCaseCovered(type:CompilerType, constructorIndex:Int,
+			cases:Array<TypedSwitchCoverageCase>):Bool {
 		if (!isEnum(type))
 			return false;
 		for (switchCase in cases)
@@ -2636,14 +2536,14 @@ class BodyTyper {
 	 * The type a switch over `subject` compares its constant cases as: Int, String, or an enum abstract over one, each also
 	 * nullable, when `case null` is matched apart from the value. Null for subjects without constant cases.
 	 */
-	function switchConstantType(subject:CompilerType):Null<CompilerType>
+	public function switchConstantType(subject:CompilerType):Null<CompilerType>
 		return switch subject {
 			case TInt | TString: subject;
 			case TNullable(inner): switchConstantType(inner);
 			default: EnumAbstractValues.switchable(session, subject) ? subject : null;
 		};
 
-	function closedEnumAbstractValues(type:CompilerType):Null<Array<{name:String, key:String}>> {
+	public function closedEnumAbstractValues(type:CompilerType):Null<Array<{name:String, key:String}>> {
 		switch type {
 			case TNullable(inner):
 				var values = closedEnumAbstractValues(inner);
@@ -2669,7 +2569,7 @@ class BodyTyper {
 		return values;
 	}
 
-	function exhaustiveEnum(type:CompilerType, cases:Array<TypedSwitchCase>):Bool {
+	public function exhaustiveEnum(type:CompilerType, cases:Array<TypedSwitchCase>):Bool {
 		if (isNullableEnum(type))
 			return false;
 		var enumName = enumName(type);
@@ -2691,7 +2591,7 @@ class BodyTyper {
 	}
 
 	/** `span` is where `type` is written: a name that fails to resolve, or resolves ambiguously, is reported there. */
-	function lowerType(type:AstType, span:SourceSpan):CompilerType
+	public function lowerType(type:AstType, span:SourceSpan):CompilerType
 		return session.representation.semanticType(type, span, context.typeSubstitutions);
 
 	static function copyMap<T>(source:Map<String, T>):Map<String, T> {
@@ -2710,14 +2610,14 @@ class BodyTyper {
 	static function isGeneric(fn:AstFunction):Bool
 		return functionTypeParameters(fn).length > 0;
 
-	static function functionTypeParameters(fn:AstFunction):Array<String> {
+	public static function functionTypeParameters(fn:AstFunction):Array<String> {
 		var parameters = fn.typeParameters;
 		if (parameters == null)
 			return [];
 		return parameters;
 	}
 
-	function arrayElementType(type:CompilerType, span:SourceSpan):CompilerType
+	public function arrayElementType(type:CompilerType, span:SourceSpan):CompilerType
 		return switch type {
 			case TArray(element): element;
 			default:
@@ -2746,14 +2646,14 @@ class BodyTyper {
 			default: false;
 		};
 
-	static function isEnum(type:CompilerType):Bool
+	public static function isEnum(type:CompilerType):Bool
 		return switch type {
 			case TInstance(Enum, _, _): true;
 			case TNullable(inner), TAbstract(_, _, inner): isEnum(inner);
 			default: false;
 		};
 
-	static function isNullableEnum(type:CompilerType):Bool
+	public static function isNullableEnum(type:CompilerType):Bool
 		return switch type {
 			case TNullable(inner): isEnum(inner);
 			default: false;

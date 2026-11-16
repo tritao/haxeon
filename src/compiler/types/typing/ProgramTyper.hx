@@ -263,7 +263,7 @@ class ProgramTyper {
 		var allocationAfterClassBodies = AllocationMeter.sample();
 		for (fn in program.functions)
 			if (fn.isExtern != true && !BodyTyper.isGeneric(fn) && (selected == null || selected.exists(fn.name)))
-				typedFunctions.push(bodyTyper.typeFunction(fn));
+				typedFunctions.push(bodyTyper.typeFunction(fn, null, false));
 		for (classDecl in typedClasses)
 			for (method in classDecl.methods)
 				if (selected == null || selected.exists(method.name))
@@ -702,7 +702,8 @@ class ProgramTyper {
 						scope.defineReceiver(session.representation.receiverType(classDecl.name, erasedSubstitutions),
 							field.span);
 					try {
-						initializer = bodyTyper.coerce(bodyTyper.typeExpression(parsedInitializer, scope, type), type,
+						initializer = bodyTyper.coerce(bodyTyper.typeExpression(parsedInitializer, scope, type, false),
+							type,
 							(field.isStatic ? 'static field "${classDecl.name}.${field.name}"'
 							: 'field "${classDecl.name}.${field.name}"'), "E1002");
 					} catch (error:Dynamic) {

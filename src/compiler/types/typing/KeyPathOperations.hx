@@ -7,20 +7,16 @@ import compiler.types.TypeRelations;
 import compiler.types.TypedAst.TypedExpression;
 import compiler.types.TypedAst.TypedStatement;
 import compiler.types.analysis.Scope;
-import compiler.types.typing.CallResolver.CoerceCallback;
-import compiler.types.typing.CallResolver.TypeCallMemberWithFlowCallback;
-import compiler.types.typing.CallResolver.TypeExpressionCallback;
 
 /** Path operations preserve typed field access instead of crossing Dynamic. */
 class KeyPathOperations {
 	public static function call(session:TypingSession, receiver:TypedExpression, name:String,
 			arguments:Array<AstExpression>, span:SourceSpan,
-			scope:Scope, typeExpression:TypeExpressionCallback, coerce:CoerceCallback,
-			member:TypeCallMemberWithFlowCallback):Null<TypedExpression> {
+			scope:Scope, bodyTyper:BodyTyping):Null<TypedExpression> {
 		return switch receiver.type {
 			case TKeyPath(root, value, writable) if (name == "then"):
 				if (arguments.length != 1) fail("E1008", "KeyPath.then expects 1 argument", span);
-				var next = typeExpression(arguments[0], scope, null, false);
+				var next = bodyTyper.typeExpression(arguments[0], scope, null, false);
 				switch next.type {
 					case TKeyPath(nextRoot, result, nextWritable):
 						if (!TypeRelations.equals(value, nextRoot)) fail("E1009",
@@ -51,11 +47,12 @@ class KeyPathOperations {
 				if (arguments.length != 1)
 					throw new compiler.core.Diagnostic.CompileError(new compiler.core.Diagnostic("E1008",
 						'KeyPath.get expects 1 argument, got ${arguments.length}', span));
-				var target = coerce(typeExpression(arguments[0], scope, root, false), root, "key path root", "E1009"),
+				var target = bodyTyper.coerce(bodyTyper.typeExpression(arguments[0], scope, root, false), root,
+					"key path root", "E1009"),
 					definition = KeyPathTyping.known(session, receiver);
 				if (definition != null) {
 					for (entry in definition.fields)
-						target = member(target, entry.field.name, span, scope);
+						target = bodyTyper.typedMemberWithFlow(target, entry.field.name, span, scope);
 					target;
 				} else {
 					new AnonymousTypeRegistry(session).register(receiver.type);
@@ -72,7 +69,7 @@ class KeyPathOperations {
 					fail(StringTools.startsWith(message, "Cannot mutate a struct inside Observable")
 						? "E1027" : "E1009", message, span);
 				}
-				var target = typeExpression(arguments[0], scope, root, false);
+				var target = bodyTyper.typeExpression(arguments[0], scope, root, false);
 				if (!session.relations.isAssignable(target.type, root)) fail("E1009", "Type mismatch for key path root",
 					target.span);
 				// A place must retain its storage: ordinary argument coercion copies structs.
@@ -80,10 +77,12 @@ class KeyPathOperations {
 					root);
 				if (definition != null) {
 					for (index in 0...definition.fields.length - 1)
-						target = member(target, definition.fields[index].field.name, span, scope);
+						target = bodyTyper.typedMemberWithFlow(target, definition.fields[index].field.name, span,
+							scope);
 					ValuePlaceRules.requireWritable(session, target, span);
 					var last = definition.fields[definition.fields.length - 1],
-						assigned = coerce(typeExpression(arguments[1], scope, value, false), value, "key path value",
+						assigned = bodyTyper.coerce(bodyTyper.typeExpression(arguments[1], scope, value, false), value,
+							"key path value",
 							"E1009"),
 						physical = session.representation.resolveField(target.type, last.field.name, span).physical;
 					new TypedExpression(TBlockExpression([TFieldAssign(target, last.field.name,
@@ -95,7 +94,8 @@ class KeyPathOperations {
 						path = hold(session, receiver, "path", span, statements),
 						place = session.relations.isValueClass(root) ? capturePlace(session, target, span, statements)
 							: hold(session, target, "root", span, statements),
-						assigned = hold(session, coerce(typeExpression(arguments[1], scope, value, false), value,
+						assigned = hold(session,
+							bodyTyper.coerce(bodyTyper.typeExpression(arguments[1], scope, value, false), value,
 							"key path value", "E1009"), "value", span, statements),
 						rootValue = session.relations.isValueClass(root) ? hold(session,
 							ValueCopy.bind(session, place, root), "root", span, statements) : place;
