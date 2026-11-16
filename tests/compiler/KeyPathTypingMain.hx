@@ -1,3 +1,4 @@
+import compiler.CompileOptions;
 import compiler.core.Diagnostic.CompileError;
 import compiler.core.Source.SourceFile;
 import compiler.semantic.SemanticSignature;
@@ -86,7 +87,8 @@ class KeyPathTypingMain {
 			c.update('Main.hx',
 				'import model.Box; function main():Int { var box:Box<Int> = new Box(42); var path = \\model.Box<Int>.item; return path.get(box); }');
 			c.configure(inlineEnabled ? 'inline-on' : 'inline-off', 'test',
-				['haxeon-inline=' + (inlineEnabled ? '1' : '0')]);
+				[]);
+			c.options = new CompileOptions({inlining: inlineEnabled});
 			if (new compiler.ir.IrInterpreter(c.compile('Main').ir).run('main') != 42)
 				throw 'Qualified generic-root path failed with inline=' + inlineEnabled;
 		}

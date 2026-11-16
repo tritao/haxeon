@@ -135,6 +135,9 @@ class TestRunner {
 	final haxe:String;
 	final hl:String;
 
+	/** `--check-reuse`: programs are also rebuilt warm, and every compile checks what it reuses (`CompileOptions.checkReuse`). */
+	public var checkReuse = false;
+
 	/** Compiler entry point prebuilt to HashLink bytecode (HAXEON_MAIN_HL), when scripts/test.sh provides one. */
 	final prebuiltMain:Null<String>;
 
@@ -154,7 +157,8 @@ class TestRunner {
 	/** Compile a program to HashLink: with the prebuilt compiler when available (in a batch process), else `haxe --run Main`. */
 	function compileProgram(source:String, output:String, run:ProgramRun):PendingCompile {
 		var arguments = [source, output].concat((run.warm ? ["--warm-edit"] : run.plain
-			? ["--plain"] : []).concat(run.unpruned ? ["--no-early-prune"] : []));
+			? ["--plain"] : []).concat(run.unpruned ? ["--no-early-prune"] : []).concat(checkReuse
+			? ["--check-reuse"] : []));
 		if (batch != null)
 			return batch.start(arguments);
 		var process = prebuiltMain != null ? new Process(hl,
@@ -390,7 +394,7 @@ class TestRunner {
 
 	public function runProgram(test:ProgramCase):Bool {
 		var failed = false;
-		for (run in runsOf(test)) {
+		for (run in runsOf(test, checkReuse)) {
 			var result = runProgramCaptured(run, 0);
 			Sys.print(result.output);
 			failed = failed || !result.passed;
@@ -399,10 +403,10 @@ class TestRunner {
 	}
 
 	/**
-	 * The builds of one program: live and plain, and, when HAXEON_CHECK_REUSE=1 asks for the reuse checks, a third that is edited and
+	 * The builds of one program: live and plain, and, when the driver checks reuse (`--check-reuse`), a third that is edited and
 	 * rebuilt warm. A cold compile in a fresh process reuses nothing, so only that third build exercises the checks on a program.
 	 */
-	static function runsOf(test:ProgramCase):Array<ProgramRun> {
+	static function runsOf(test:ProgramCase, checkReuse:Bool):Array<ProgramRun> {
 		var runs:Array<ProgramRun> = [
 			{
 				test: test,
@@ -423,7 +427,7 @@ class TestRunner {
 				warm: false
 			}
 		];
-		if (Sys.getEnv("HAXEON_CHECK_REUSE") == "1") {
+		if (checkReuse) {
 			runs.push({
 				test: test,
 				plain: true,
@@ -455,7 +459,7 @@ class TestRunner {
 			].join(""));
 			return named.length;
 		}
-		var runs:Array<ProgramRun> = [for (test in tests) for (run in runsOf(test)) run];
+		var runs:Array<ProgramRun> = [for (test in tests) for (run in runsOf(test, checkReuse)) run];
 		// A batch process merges its streams through sh, which Windows may not have: there each program compiles in a process of
 		// its own, still with the prebuilt compiler.
 		if (prebuiltMain != null && Sys.getEnv("HAXEON_BATCH_COMPILE") != "0" && Sys.systemName() != "Windows")

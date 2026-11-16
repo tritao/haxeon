@@ -161,7 +161,7 @@ for inline in 0 1; do
         fi
         for entry in "${entries[@]}"; do
             artifact="$tmp/$entry-$inline-$target.$suffix"
-            if ! HAXEON_INLINE="$inline" "$hl" "$compiler" "${options[@]}" --entry="$entry" --output="$artifact" "${common[@]}" \
+            if ! "$hl" "$compiler" $( ((inline)) || echo --no-inline ) "${options[@]}" --entry="$entry" --output="$artifact" "${common[@]}" \
                     --ffi-interface="$platform_hxi" --ffi-projection="$root/packages/platform/bindings/nativekit.hxmap" \
                     --ffi-interface="$net_hxi" --ffi-projection="$root/packages/platform/bindings/nativekit-net.hxmap" \
                     --ffi-interface="$ui_hxi" --ffi-projection="$ui/bindings/nativekit-ui.hxmap" \
@@ -171,7 +171,7 @@ for inline in 0 1; do
             fi
             if [[ $target == hl ]]; then
                 set +e
-                HAXEON_INLINE="$inline" "$hl" "$artifact"
+                "$hl" "$artifact"
                 status=$?
                 set -e
                 if [[ $status != 42 ]]; then echo "FAIL: $target inline=$inline returned $status" >&2; exit 1; fi
@@ -209,7 +209,7 @@ JS
                 done
                 if [[ $selected == 0 ]]; then continue; fi
             fi
-            if HAXEON_INLINE="$inline" "$hl" "$compiler" "${options[@]}" --entry="$entry" \
+            if "$hl" "$compiler" $( ((inline)) || echo --no-inline ) "${options[@]}" --entry="$entry" \
                     --output="$tmp/rejected.$suffix" "${common[@]}" \
                     --ffi-interface="$platform_hxi" --ffi-projection="$root/packages/platform/bindings/nativekit.hxmap" \
                     --ffi-interface="$net_hxi" --ffi-projection="$root/packages/platform/bindings/nativekit-net.hxmap" \

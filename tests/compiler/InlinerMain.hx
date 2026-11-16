@@ -1,3 +1,4 @@
+import compiler.CompileOptions;
 import compiler.Frontend;
 import compiler.ir.Ir;
 import compiler.ir.IrFunction;
@@ -16,7 +17,8 @@ class InlinerMain {
 			+ "function loop(value:Pair):Int { var total = 0; for (i in 0...4) total += read(value); return total; } "
 			+ "function main():Int return loop(new Pair(1, 2));");
 		IrScalarArguments.rewrite(scalarCalls);
-		IrInliner.run(scalarCalls, new IrInlineCache(), compiler.ir.TargetProfile.hashLink, false);
+		IrInliner.run(scalarCalls, new IrInlineCache(), compiler.ir.TargetProfile.hashLink,
+			new CompileOptions({inlining: false}));
 		IrVerifier.verify(scalarCalls);
 		expect(allocations(programFunction(scalarCalls, "loop")) == 0,
 			"a direct scalar argument does not allocate a temporary when ordinary inlining is disabled");
@@ -30,7 +32,8 @@ class InlinerMain {
 			+ "return value.inner.n + value.inner.label.length; } "
 			+ "function main():Int return read(new Outer(new Inner(1, 'a')));");
 		IrScalarArguments.rewrite(nestedCalls);
-		IrInliner.run(nestedCalls, new IrInlineCache(), compiler.ir.TargetProfile.hashLink, false);
+		IrInliner.run(nestedCalls, new IrInlineCache(), compiler.ir.TargetProfile.hashLink,
+			new CompileOptions({inlining: false}));
 		IrVerifier.verify(nestedCalls);
 		expect(allocations(programFunction(nestedCalls, "$scalar-arguments:read")) == 0,
 			"a nested managed value argument stays scalar across a branch");
@@ -43,7 +46,8 @@ class InlinerMain {
 		compiler.ir.IrValuePhiScalarization.rewrite(receiverProgram);
 		IrScalarArguments.rewrite(receiverProgram);
 		compiler.ir.IrValuePhiScalarization.rewrite(receiverProgram);
-		IrInliner.run(receiverProgram, new IrInlineCache(), compiler.ir.TargetProfile.hashLink, false);
+		IrInliner.run(receiverProgram, new IrInlineCache(), compiler.ir.TargetProfile.hashLink,
+			new CompileOptions({inlining: false}));
 		IrVerifier.verify(receiverProgram);
 		expect(allocations(programFunction(receiverProgram, "read")) == 0,
 			"a fresh receiver stays scalar through a read-only method that calls out");
@@ -58,7 +62,8 @@ class InlinerMain {
 		compiler.ir.IrValueConstructors.rewrite(nestedConstructors);
 		compiler.ir.IrValuePhiScalarization.rewrite(nestedConstructors);
 		IrScalarArguments.rewrite(nestedConstructors);
-		IrInliner.run(nestedConstructors, new IrInlineCache(), compiler.ir.TargetProfile.hashLink, false);
+		IrInliner.run(nestedConstructors, new IrInlineCache(), compiler.ir.TargetProfile.hashLink,
+			new CompileOptions({inlining: false}));
 		IrVerifier.verify(nestedConstructors);
 		expect(allocations(programFunction(nestedConstructors, "$scalar-arguments:make")) == 0,
 			"nested value constructors stay scalar when ordinary inlining is disabled");
@@ -73,7 +78,8 @@ class InlinerMain {
 		compiler.ir.IrValuePhiScalarization.rewrite(equality);
 		IrScalarArguments.rewrite(equality);
 		compiler.ir.IrValuePhiScalarization.rewrite(equality);
-		IrInliner.run(equality, new IrInlineCache(), compiler.ir.TargetProfile.hashLink, false);
+		IrInliner.run(equality, new IrInlineCache(), compiler.ir.TargetProfile.hashLink,
+			new CompileOptions({inlining: false}));
 		IrVerifier.verify(equality);
 		expect(allocations(programFunction(equality, "same")) == 0,
 			"generated equality accepts scalar getter results without allocating with inlining disabled");
@@ -94,7 +100,8 @@ class InlinerMain {
 		compiler.ir.IrValuePhiScalarization.rewrite(capturedValue);
 		IrScalarArguments.rewrite(capturedValue);
 		compiler.ir.IrValuePhiScalarization.rewrite(capturedValue);
-		IrInliner.run(capturedValue, new IrInlineCache(), compiler.ir.TargetProfile.hashLink, false);
+		IrInliner.run(capturedValue, new IrInlineCache(), compiler.ir.TargetProfile.hashLink,
+			new CompileOptions({inlining: false}));
 		IrVerifier.verify(capturedValue);
 		expect(allocations(programFunction(capturedValue, "capture")) == 2,
 			"a value copied into either escaping closure remains scalar; only the closure environments allocate");
@@ -121,8 +128,6 @@ class InlinerMain {
 		}
 		expect(nativeClone, "full-width native value arguments stay scalar across exception handlers");
 		expect(!narrowClone, "narrow native fields keep their stored representation across exception handlers");
-		// This unit suite exercises inlining explicitly, independently of the frontend option.
-		IrInliner.enabled = true;
 		var source =
 			"@:value class P { public var a:Int; public function new(a:Int) this.a = a; public function twiceA():Int return a + a; } "
 			+ "function twice(x:Int):Int return x + x; "

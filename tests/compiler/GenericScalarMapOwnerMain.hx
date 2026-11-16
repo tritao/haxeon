@@ -1,4 +1,5 @@
 using compiler.compilation.BackendArtifact.BackendArtifacts;
+import compiler.CompileOptions;
 import compiler.Compiler;
 import compiler.Frontend;
 import compiler.backend.wasm.WasmBackend;
@@ -70,7 +71,8 @@ class GenericScalarMapOwnerMain {
 		for (target in ["hl", "wasm32", "wasm-gc"]) for (inlining in [false, true]) {
 			var compiler = new Compiler(null, CompilerIntrinsics.configuration());
 			compiler.configure("map-owner-" + target + inlining, "map-owner",
-				CompilerDriver.targetDefines(target).concat(["haxeon-inline=" + (inlining ? 1 : 0)]));
+				CompilerDriver.targetDefines(target));
+			compiler.options = new CompileOptions({inlining: inlining});
 			var fixed = StringTools.replace(StringTools.replace(probe, "Map<String,V>", "Map<String,Bool>"), "Null<V>",
 				"Null<Bool>");
 			compiler.update("Probe.hx", fixed);
@@ -89,7 +91,8 @@ class GenericScalarMapOwnerMain {
 		var compiler = new Compiler(null, CompilerIntrinsics.configuration());
 		compiler.livePatching = false;
 		compiler.configure("owned-map-" + target + inlining, "owned-map",
-			CompilerDriver.targetDefines(target).concat(["haxeon-inline=" + (inlining ? 1 : 0)]));
+			CompilerDriver.targetDefines(target));
+		compiler.options = new CompileOptions({inlining: inlining});
 		compiler.update("haxeon/ui/host/UiHostPendingResources.hx",
 			File.getContent("packages/ui/haxe/haxeon/ui/host/UiHostPendingResources.hx"));
 		compiler.update("Main.hx", 'import haxeon.ui.host.UiHostPendingResources; function main():Int {'

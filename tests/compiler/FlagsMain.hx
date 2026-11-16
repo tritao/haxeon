@@ -1,5 +1,6 @@
 using StringTools;
 
+import compiler.CompileOptions;
 import compiler.Compiler;
 import compiler.backend.Backend.BackendTarget;
 import compiler.ir.Ir;
@@ -12,7 +13,8 @@ class FlagsMain {
 		var c = new Compiler(null, compiler.runtime.CompilerIntrinsics.configuration());
 		c.addStandardLibrarySourceRoot("stdlib");
 		c.configure("flags-" + target + inlining, "flags",
-			CompilerDriver.targetDefines(target).concat(["haxeon-inline=" + (inlining ? 1 : 0)]));
+			CompilerDriver.targetDefines(target));
+		c.options = new CompileOptions({inlining: inlining});
 		return c;
 	}
 

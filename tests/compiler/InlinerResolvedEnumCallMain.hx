@@ -45,9 +45,9 @@ class InlinerResolvedEnumCallMain {
 				];
 				IrVerifier.verify(program);
 				var cache = new IrInlineCache();
-				IrInliner.run(program, cache, profile, true);
+				IrInliner.run(program, cache, profile);
 				IrVerifier.verify(program);
-				IrInliner.run(program, cache, profile, true);
+				IrInliner.run(program, cache, profile);
 				IrVerifier.verify(program);
 				var providerCalls = 0, adapterCalls = 0;
 				for (block in program.functions[0].blocks)

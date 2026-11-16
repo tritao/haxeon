@@ -26,14 +26,16 @@ class ObjectReflection {
 	 */
 	public static function generate(facts:ProgramFacts, natives:Null<Array<IrNative>>, objects:Null<Array<IrObject>>,
 			reflectable:Null<Array<String>>,
-			functions:Array<IrFunction>, tableDispatch:Bool = false, ?reached:Map<String, Bool>):Null<Array<IrNative>> {
+			functions:Array<IrFunction>, tableDispatch:Bool = false, ?reached:Map<String, Bool>,
+			checking:Bool = false):Null<Array<IrNative>> {
 		if (natives == null)
 			return null;
 		var symbols = helperSymbols();
 		var objectTable:Map<String, IrObject> = objects == null ? [] : [for (object in objects) object.name => object];
-		// Check mode: the helpers generated for one native call exactly what its layouts need, and the walk was told at least that.
+		// When the compile checks its reuse (`checking`): the helpers generated for one native call exactly what its layouts need,
+		// and the walk was told at least that.
 		function verify(native:IrNative, used:Array<ReflectedLayout>, start:Int):Void
-			if (IrEntryPrune.checking())
+			if (checking)
 				checkHelpers(native.symbol, used, functions.slice(start), objectTable, facts.observableFieldBits);
 		var remaining:Array<IrNative> = [],
 			layouts:Null<Array<ReflectedLayout>> = null;

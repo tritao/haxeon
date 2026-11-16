@@ -61,7 +61,7 @@ class InlinerCycleMain {
 
 	static function main():Void {
 		var cache = new IrInlineCache(), first = program();
-		IrInliner.run(first, cache, TargetProfile.wasm, true);
+		IrInliner.run(first, cache, TargetProfile.wasm);
 		expect(callees(first, "ping").indexOf("pong") >= 0, "ping keeps its call to pong, which is in its cycle");
 		expect(callees(first, "pong").indexOf("ping") >= 0, "pong keeps its call to ping");
 		expect(callees(first, "outer").indexOf("leaf") < 0, "a function outside the cycle still inlines leaf");
@@ -69,12 +69,11 @@ class InlinerCycleMain {
 			expect(cache.memo.get(name) != null, '$name has a memo');
 		var memos = [for (name in ["ping", "pong", "outer"]) cache.memo.get(name)];
 		var second = program();
-		var changed = IrInliner.run(second, cache, TargetProfile.wasm, true);
+		var changed = IrInliner.run(second, cache, TargetProfile.wasm);
 		expect(changed.length == 0, "the same program changes nothing");
-		// Under HAXEON_CHECK_REUSE the memos are recomputed and compared (a difference throws), so only a plain run keeps the objects.
-		if (Sys.getEnv("HAXEON_CHECK_REUSE") != "1")
-			for (i => name in ["ping", "pong", "outer"])
-				expect(cache.memo.get(name) == memos[i], '$name keeps its memo');
+		// A run that checks its reuse recomputes the memos and compares them; this one does not, so it keeps the objects.
+		for (i => name in ["ping", "pong", "outer"])
+			expect(cache.memo.get(name) == memos[i], '$name keeps its memo');
 		Sys.println("PASS: call cycles are memoized and not inlined into each other");
 	}
 

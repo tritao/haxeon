@@ -1,7 +1,6 @@
 package compiler.hl.incremental;
 
 import compiler.ir.Ir.IrProgram;
-import compiler.ir.IrEntryPrune;
 import compiler.ir.IrReachability;
 
 /**
@@ -14,12 +13,15 @@ class HlPlainBuild {
 	 * What a plain module is made of: a copy of `program` without the functions the entry does not reach, and without the methods of
 	 * a class no reachable function mentions, with the reachable names. `program` keeps everything (other backends and tools read it).
 	 */
-	public static function reachable(program:IrProgram):{program:IrProgram, reachable:Map<String, Bool>} {
+	public static function reachable(program:IrProgram, checkReuse:Bool = false):{
+		program:IrProgram,
+		reachable:Map<String, Bool>
+	} {
 		var pruned = program.copy(),
 			walk = IrReachability.walkWithGeneratedRuntimeRoots(program, program.entryPoint, null, true);
 		IrReachability.prune(pruned, walk.reachable);
 		IrReachability.trimTables(pruned, walk);
-		if (IrEntryPrune.checking())
+		if (checkReuse)
 			IrReachability.checkTables(pruned);
 		return {program: pruned, reachable: walk.reachable};
 	}

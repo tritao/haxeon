@@ -1,3 +1,4 @@
+import compiler.CompileOptions;
 import compiler.ir.Ir;
 import compiler.ir.IrBuilder;
 import compiler.ir.IrFunction;
@@ -161,7 +162,7 @@ class ScalarClosureCarrierMain {
 		main.returnValue(main.constInt(42));
 		p.functions.push(new IrFunction("main", main.arguments, I32, main.blocks, Ordinary));
 		compiler.ir.IrInliner.run(p, new compiler.ir.IrInliner.IrInlineCache(), compiler.ir.TargetProfile.wasm,
-			inlineEnabled);
+			new CompileOptions({inlining: inlineEnabled}));
 		compiler.ir.IrVerifier.verify(p);
 		var root = Sys.getEnv("TMPDIR");
 		if (root == null) root = "/tmp";

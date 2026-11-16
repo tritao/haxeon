@@ -1,3 +1,4 @@
+import compiler.CompileOptions;
 import compiler.backend.Backend.BackendTarget;
 import compiler.backend.wasm.WasmBackend;
 import compiler.ir.Ir;
@@ -232,7 +233,7 @@ class IteratorTypeDescriptorMain {
 				false, true)];
 			compiler.ir.IrNullableScalarFlow.rewrite(program);
 			compiler.ir.IrInliner.run(program, new compiler.ir.IrInliner.IrInlineCache(),
-				compiler.ir.TargetProfile.wasm, inlineEnabled);
+				compiler.ir.TargetProfile.wasm, new CompileOptions({inlining: inlineEnabled}));
 			var wasm = new WasmBackend().compile(program, {
 				target: target,
 				debugNames: true,
@@ -264,7 +265,7 @@ class IteratorTypeDescriptorMain {
 			runtime.update("Main.hx", source);
 			var program = runtime.compile("Main").ir;
 			compiler.ir.IrInliner.run(program, new compiler.ir.IrInliner.IrInlineCache(),
-				compiler.ir.TargetProfile.wasm, inlineEnabled);
+				compiler.ir.TargetProfile.wasm, new CompileOptions({inlining: inlineEnabled}));
 			var wasm = new WasmBackend().compile(program, {
 				target: target,
 				debugNames: true,

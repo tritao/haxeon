@@ -46,7 +46,11 @@ class CompilerSession {
 	public function encodeHashLink(code:HlCode):haxeon.io.SegmentedBytes {
 		var known = encodedModule;
 		if (known == null || known.code != code) {
-			known = {code: code, bytes: HlWriter.encode(code, writerCache)};
+			var session = compiler;
+			known = {
+				code: code,
+				bytes: HlWriter.encode(code, writerCache, session != null && session.options.checkReuse)
+			};
 			encodedModule = known;
 		}
 		return known.bytes;
@@ -97,6 +101,8 @@ class CompilerSession {
 				sharedMemory: request.sharedMemory == true,
 				entry: request.entry,
 				defines: request.defines,
+				// Another set of passes or checks is another session: caches (inlining, pipeline, lowering) hold their results.
+				options: request.options.key(),
 				roots: request.roots,
 				packageRoots: request.packageRoots,
 				paths: request.paths,
@@ -146,6 +152,7 @@ class CompilerSession {
 			}
 			var defines = request.defines.concat(CompilerDriver.targetDefines(request.target));
 			compiler.configure("cli:" + request.target + ":" + defines.join("|"), "cli:" + request.target, defines);
+			compiler.options = request.options;
 			if (resumed == null) {
 				for (source in projections) {
 					report("loading FFI projection " + source.path);

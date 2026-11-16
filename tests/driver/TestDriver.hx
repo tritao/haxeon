@@ -8,6 +8,9 @@ private typedef DriverOptions = {
 	var filter:Null<EReg>;
 	var listOnly:Bool;
 	var jobs:Int;
+
+	/** `--check-reuse`: every program is also rebuilt warm, and every compile checks what it reuses (`CompileOptions.checkReuse`). */
+	var checkReuse:Bool;
 }
 
 class TestDriver {
@@ -32,6 +35,7 @@ class TestDriver {
 	static function run():Int {
 		var options = parseOptions(Sys.args());
 		var runner = new TestRunner(options.root);
+		runner.checkReuse = options.checkReuse;
 		var failures = 0;
 		var selected = 0;
 		var phaseStarted = Sys.time();
@@ -147,6 +151,7 @@ class TestDriver {
 		var suites = ["all"];
 		var filter:Null<EReg> = null;
 		var listOnly = false;
+		var checkReuse = false;
 		var jobs = 1;
 		var index = 0;
 		while (index < args.length) {
@@ -165,6 +170,8 @@ class TestDriver {
 					filter = new EReg(args[index++], "i");
 				case "--list":
 					listOnly = true;
+				case "--check-reuse":
+					checkReuse = true;
 				case "--jobs":
 					if (index == args.length)
 						throw "--jobs requires a positive integer";
@@ -181,7 +188,8 @@ class TestDriver {
 			suites: suites,
 			filter: filter,
 			listOnly: listOnly,
-			jobs: jobs
+			jobs: jobs,
+			checkReuse: checkReuse
 		};
 	}
 }

@@ -39,9 +39,12 @@ class HlWriter {
 	function bytes():HaxeBytes
 		return output.finish().flatten();
 
-	/** The module as segments: the cached encodings of unchanged functions are shared, not copied. */
-	public static function encode(code:HlCode, ?cache:HlWriterCache):SegmentedBytes {
-		HlValidator.validate(code, cache);
+	/**
+	 * The module as segments: the cached encodings of unchanged functions are shared, not copied. `checkReuse` adds the validator's
+	 * consistency checks of what it reuses (`CompileOptions.checkReuse`).
+	 */
+	public static function encode(code:HlCode, ?cache:HlWriterCache, checkReuse:Bool = false):SegmentedBytes {
+		HlValidator.validate(code, cache, checkReuse);
 		var writer = new HlWriter(cache);
 		writer.writeCode(code);
 		return writer.output.finish();

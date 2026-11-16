@@ -6,7 +6,7 @@ import compiler.hl.incremental.HlSymbolTable;
 import compiler.hl.lower.HlLower;
 
 /**
- * HAXEON_CHECK_REUSE=1 lowers every function a live build keeps again and compares it with the kept one. This shows the check can
+ * A compile that checks its reuse lowers every function a live build keeps again and compares it with the kept one. This shows the check can
  * fail: a kept entry with one operand changed must be reported by name, and the same entries unchanged must pass.
  */
 class LiveKeptCheckMain {
@@ -17,8 +17,9 @@ class LiveKeptCheckMain {
 		HlLower.lower(program, layout);
 		var symbols = new HlSymbolTable(), cache = new HlLoweredCache();
 		HlLower.lowerStableMeasured(program, symbols, layout, null, [], null, null, 0, true, false, cache, false, true);
-		Sys.putEnv("HAXEON_CHECK_REUSE", "1");
-		HlLower.lowerStableMeasured(program, symbols, layout, null, [], null, null, 0, true, false, cache, false, true);
+		HlLower.lowerStableMeasured(program, symbols, layout, null, [], null, null, 0, true, false, cache, false, true,
+			null,
+			true);
 		Sys.println("PASS: kept functions lower to the same code again");
 		var entry = cache.entries.get("value");
 		if (entry == null)
@@ -39,7 +40,7 @@ class LiveKeptCheckMain {
 		var message:Null<String> = null;
 		try
 			HlLower.lowerStableMeasured(program, symbols, layout, null, [], null, null, 0, true, false, cache, false,
-				true)
+				true, null, true)
 		catch (error:Dynamic)
 			message = Std.string(error);
 		if (message == null || message.indexOf("kept function value") < 0 || message.indexOf("opcode") < 0)

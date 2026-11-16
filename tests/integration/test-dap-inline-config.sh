@@ -39,7 +39,7 @@ HX
 export LD_LIBRARY_PATH="$root/out:$("$root/scripts/hashlink-path.sh")"
 export XDG_CACHE_HOME="$work/inline-debug-cache"
 export HAXEON_HOME="$root" HAXEON_COMPILER_SOURCE="$root/src"
-export HAXEON_INLINE=1 HAXEON_BOUNDS=0 HAXEON_NATIVE_READY=1
+export HAXEON_BOUNDS=0 HAXEON_NATIVE_READY=1
 "$root/.tools/haxe/haxe" --cwd "$root" -cp "$root/src" -cp "$root/lib/haxeon-io" --run tools.HaxeonCli build --project "$project/haxeon.json"
 python3 - "$DAP_CLI_HOME/config/adapters.json" "$root/vendor/hashlink-debugger" <<'PY'
 import subprocess, json,sys
@@ -65,4 +65,4 @@ done
 stack=$("${dap[@]}" stack --name "$session")
 python3 -c 'import subprocess, json,sys; f=json.load(sys.stdin)["data"]["stackFrames"][0];assert f["name"]=="Main.helper",f' <<< "$stack"
 "${dap[@]}" continue --name "$session" >/dev/null
-printf '%s\n' 'PASS: manifest inline=false overrides HAXEON_INLINE=1 and stops at an inline helper function breakpoint'
+printf '%s\n' 'PASS: manifest inline=false turns inlining off and stops at an inline helper function breakpoint'

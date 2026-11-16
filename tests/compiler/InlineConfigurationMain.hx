@@ -1,6 +1,6 @@
+import compiler.CompileOptions;
 import compiler.Compiler;
 import compiler.ir.Ir;
-import compiler.ir.IrInliner;
 import project.PackageManifest;
 
 class InlineConfigurationMain {
@@ -40,20 +40,22 @@ class InlineConfigurationMain {
 		var source =
 			'class Main { static inline function helper(x:Int):Int { return x + 1; } public static function main():Int { return helper(41); } }';
 		var first = new Compiler(),
-			second = new Compiler(),
-			global = IrInliner.enabled;
+			second = new Compiler();
 		first.update("Main.hx", source);
 		second.update("Main.hx", source);
-		first.configure("inline-off", "test", ["haxeon-inline=0"]);
-		second.configure("inline-on", "test", ["haxeon-inline=1"]);
+		first.options = new CompileOptions({inlining: false});
+		second.options = new CompileOptions({inlining: true});
 		expect(helperCalls(first) == 1, "disabled compiler retains function for breakpoints");
 		expect(helperCalls(second) == 0, "enabled compiler still inlines");
 		expect(helperCalls(first) == 1, "another compiler cannot change this compiler's choice");
-		first.configure("inline-on", "test", ["haxeon-inline=1"]);
+		first.options = new CompileOptions({inlining: true});
 		expect(helperCalls(first) == 0, "memo invalidation after changing choice");
-		first.configure("inline-off-again", "test", ["haxeon-inline=0"]);
+		first.options = new CompileOptions({inlining: false});
 		expect(helperCalls(first) == 1, "restore uninlined published IR");
-		expect(IrInliner.enabled == global, "per-compiler configuration does not mutate global state");
-		Sys.println("PASS: inline configuration is per compiler and invalidates cached IR");
+		var flags = CompileOptions.fromArguments(["--no-inline", "--check-reuse"]);
+		expect(!flags.inlining && flags.checkReuse && flags.loadStoreForwarding
+			&& flags.arguments().join(" ") == "--no-inline --check-reuse",
+			"options read from and written as flags");
+		Sys.println("PASS: inline options are per compiler, invalidate cached IR, and round-trip as flags");
 	}
 }

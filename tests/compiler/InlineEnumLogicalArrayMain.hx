@@ -1,3 +1,4 @@
+import compiler.CompileOptions;
 import compiler.ir.Ir;
 import compiler.ir.IrBuilder;
 import compiler.ir.IrFunction;
@@ -320,7 +321,7 @@ class InlineEnumLogicalArrayMain {
 			target == HashLink)];
 		compiler.ir.IrNullableScalarFlow.rewrite(p);
 		compiler.ir.IrInliner.run(p, new compiler.ir.IrInliner.IrInlineCache(), compiler.ir.TargetProfile.wasm,
-			inlineEnabled);
+			new CompileOptions({inlining: inlineEnabled}));
 		compiler.ir.IrVerifier.verify(p);
 		compiler.ir.IrVerifier.verifyValueArraysLowered(p);
 		var entry = new IrBuilder(), captures:Array<{path:String, count:Int, build:Bool}>= [];

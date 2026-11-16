@@ -146,7 +146,7 @@ class CompilerSessionMain {
 			"cached HashLink function encoding must match canonical serialization");
 		// With inlining, Main.main contains Value.get, so it must be rebuilt when Value.get changes.
 		var mainReused = functionByName(initial, "Main.main") == functionByName(edited, "Main.main");
-		expect(compiler.ir.IrInliner.enabled ? !mainReused : mainReused,
+		expect(!mainReused,
 			"backend assembly must reuse functions from unchanged source files, except callers that inlined an edited callee");
 		compareFresh(9);
 		var lazy = root + "/Lazy.hx";

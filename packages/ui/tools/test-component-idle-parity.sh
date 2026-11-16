@@ -17,7 +17,7 @@ for inline in 0 1; do
       if [[ "$target" == wasm32 ]]; then flags+=(--wasm-memory-stats --wasm-gc-stress)
       else flags+=(--wasm-gc-allocation-count); fi
     fi
-    HAXEON_INLINE="$inline" "$hl" "$compiler" --target="$target" --output="$work/test" --entry=ComponentIdleParity \
+    "$hl" "$compiler" $( ((inline)) || echo --no-inline ) --target="$target" --output="$work/test" --entry=ComponentIdleParity \
       --root="$ui/tests/haxeon" --root="$ui/haxe" --root="$ui/bindings/haxe" \
       --root="$root/packages/editor/src" --root="$root/packages/platform/src" \
       --ffi-interface="$root/packages/platform/bindings/nativekit$suffix.hxi" --ffi-projection="$root/packages/platform/bindings/nativekit.hxmap" \

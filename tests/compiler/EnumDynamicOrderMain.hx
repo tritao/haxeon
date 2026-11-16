@@ -1,4 +1,5 @@
 using compiler.compilation.BackendArtifact.BackendArtifacts;
+import compiler.CompileOptions;
 import compiler.Compiler;
 import compiler.Frontend;
 import compiler.backend.wasm.WasmBackend;
@@ -26,7 +27,8 @@ class EnumDynamicOrderMain {
 		var compiler = new Compiler(null, compiler.runtime.CompilerIntrinsics.configuration());
 		compiler.addStandardLibrarySourceRoot("stdlib");
 		compiler.configure("enum-order-" + target + inlining, "enum-order",
-			CompilerDriver.targetDefines(target).concat(["haxeon-inline=" + (inlining ? 1 : 0)]));
+			CompilerDriver.targetDefines(target));
+		compiler.options = new CompileOptions({inlining: inlining});
 		compiler.update("Main.hx", sys.io.File.getContent("tests/programs/enum-dynamic-equality.hx"));
 		var result = compiler.compile("Main"),
 			path = temp + "/enum-order-" + target + inlining + (target == "hl" ? ".hl" : ".wasm");

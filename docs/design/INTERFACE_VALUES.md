@@ -131,7 +131,7 @@ cores), so read the ratios, not the digits. HashLink, Haxeon plain build.
 3. Wasm moves to the same entry in the same series, as its own commit inside the same push, so no release has two dispatch codegens. Gate:
    Wasm module sizes and the wasm-parity corpus do not get worse.
 4. Tests: the reflection view (above), the native audit (the 11 `HVIRTUAL` sites in `native/runtime`), a warm-edit test that adds an implementor and
-   must equal a cold build under `HAXEON_CHECK_REUSE=1`, the live patch of an added implementor, and the `hl_dyn_cast*` check above.
+   must equal a cold build under `--check-reuse`, the live patch of an added implementor, and the `hl_dyn_cast*` check above.
 5. Gate: `InterfaceMountRepro` allocates 0 bytes on HashLink, Wasm32 and Wasm GC; the driver passes in both prune modes; the live regression
    (a retained object and its interface view through edits and added implementors) passes.
 

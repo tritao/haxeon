@@ -4,7 +4,7 @@ import compiler.ir.Ir;
 
 /**
  * A pass's by-name view of the function list. After the early prune (`IrEntryPrune`) a lookup of a name the prune removed is a
- * decision made on a function that is no longer there; with HAXEON_CHECK_REUSE=1 it throws, naming the pass and the name. A pass that
+ * decision made on a function that is no longer there; with `--check-reuse` it throws, naming the pass and the name. A pass that
  * needs a function the prune would remove must ask for it by (type, operation) through `IrProviders` instead, so the walk reaches it.
  */
 class IrFunctionIndex {

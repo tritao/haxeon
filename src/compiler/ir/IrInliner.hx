@@ -196,12 +196,6 @@ class IrInliner {
 	static inline var MaxFunctionInstructions = 3000;
 	static inline var MaxChainDepth = 24;
 
-	/**
-	 * On unless `HAXEON_INLINE=0`. The build tool derives its worker identity and cache fingerprint from the same
-	 * variable (`CompilerClient.inlineOption`, `ActionFingerprint.appendCompilerOptions`); keep the three in step.
-	 */
-	public static var enabled:Bool = Sys.getEnv("HAXEON_INLINE") != "0";
-
 	final profile:TargetProfile;
 
 	final byName:Map<String, IrFunction> = [];
@@ -266,11 +260,19 @@ class IrInliner {
 	 */
 	final components:Array<Int> = [];
 
-	/** HAXEON_CHECK_REUSE=1: a function with a usable memo is inlined again and the two results must be equal. */
-	static final checkingMemo:Bool = Sys.getEnv("HAXEON_CHECK_REUSE") == "1";
+	/** The compile checks its reuse (`CompileOptions.checkReuse`): a function with a usable memo is inlined again and the two results must be equal. */
+	final checkingMemo:Bool;
 
-	function new(program:IrProgram, cache:IrInlineCache, profile:TargetProfile, allowInline:Bool) {
-		this.allowInline = allowInline;
+	/** Each inlined function goes through load/store forwarding and strength reduction, as the options ask. */
+	final loadStoreForwarding:Bool;
+
+	final strengthReduction:Bool;
+
+	function new(program:IrProgram, cache:IrInlineCache, profile:TargetProfile, options:compiler.CompileOptions) {
+		this.allowInline = options.inlining;
+		this.loadStoreForwarding = options.loadStoreForwarding;
+		this.strengthReduction = options.strengthReduction;
+		this.checkingMemo = options.checkReuse;
 		this.profile = profile;
 		entryPoint = program.entryPoint;
 		this.cache = cache;
@@ -296,8 +298,8 @@ class IrInliner {
 			entryPoint,
 			"profile=" + profile.key(),
 			"inline=" + allowInline,
-			"loadstore=" + IrLoadStoreForwarding.enabled,
-			"strength=" + IrStrengthReduction.enabled
+			"loadstore=" + loadStoreForwarding,
+			"strength=" + strengthReduction
 		].join(";"));
 		var objects:Map<String, IrObject> = [],
 			subclasses:Map<String, Array<String>> = [];
@@ -445,10 +447,12 @@ class IrInliner {
 	 * published by the previous compile. Those functions must be re-lowered and patched even when their own source did
 	 * not change, because a callee they inlined did.
 	 */
-	public static function run(program:IrProgram, cache:IrInlineCache, profile:TargetProfile, ?allowInline:Bool,
+	/** Inlines `program`'s functions as `options` ask (the defaults, without them: every pass on, no reuse checks). */
+	public static function run(program:IrProgram, cache:IrInlineCache, profile:TargetProfile,
+			?options:compiler.CompileOptions,
 			?instrument:IrInstrumentation.IrInstrumentationScope):Array<String> {
 		program.functions = cache.stableSources(program.functions);
-		var inliner = new IrInliner(program, cache, profile, allowInline == null ? enabled : allowInline),
+		var inliner = new IrInliner(program, cache, profile, options == null ? new compiler.CompileOptions() : options),
 			functions:Array<IrFunction> = [],
 			changed:Array<String> = [],
 			relocated:Array<String> = [];
@@ -580,9 +584,9 @@ class IrInliner {
 		table.consulted = consultedObjects;
 		var result = allowInline ? inlineCalls(original) : profile.packedValueFields
 			? IrScalarReplacement.rewrite(original, table, false, true) : original;
-		if (IrLoadStoreForwarding.enabled)
+		if (loadStoreForwarding)
 			result = IrLoadStoreForwarding.run(result, table);
-		if (IrStrengthReduction.enabled)
+		if (strengthReduction)
 			result = IrStrengthReduction.run(result);
 		objectFrames.pop();
 		table.consulted = objectFrames.length > 0 ? objectFrames[objectFrames.length - 1] : null;
@@ -604,7 +608,7 @@ class IrInliner {
 			[for (objectName in consultedObjects.keys()) objectName => printOf(objectName)];
 		if (usable && checkingMemo && memo != null) {
 			if (!compiler.ir.codec.IrFunctionStateEquality.same(memo.result, result))
-				throw 'HAXEON_CHECK_REUSE: the inlined form of $name differs from the one its memo holds';
+				throw '--check-reuse: the inlined form of $name differs from the one its memo holds';
 			result = memo.result;
 		}
 		done[id] = result;

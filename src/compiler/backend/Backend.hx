@@ -26,6 +26,12 @@ typedef BackendOptions = {
 	final ?wasmGcAllocationCount:Bool;
 	final ?wasmGcStress:Bool;
 	final ?wasmRuntimeNeutral:Bool;
+
+	/** Wasm GC exception handling in the legacy try/catch encoding (`CompileOptions.wasmLegacyExceptions`). */
+	final ?wasmLegacyExceptions:Bool;
+
+	/** The backend's own passes check what they reuse and prune, as the compile does (`CompileOptions.checkReuse`). */
+	final ?checkReuse:Bool;
 	final ?exports:Array<String>;
 
 	/** The C runtime linked into wasm32 modules; defaults to stdlib/haxeon/wasm/linear-runtime.wasm. */

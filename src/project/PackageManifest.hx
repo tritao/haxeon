@@ -118,7 +118,7 @@ class PackageManifest {
 	public final target:String;
 	public final defines:Array<String>;
 
-	/** Explicit project choice; null inherits HAXEON_INLINE. */
+	/** Explicit project choice; `false` builds with `--no-inline`, null keeps the default (inlining on). */
 	public final inlineEnabled:Null<Bool>;
 
 	public final outputDir:String;

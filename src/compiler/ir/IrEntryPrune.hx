@@ -11,7 +11,7 @@ import compiler.ir.IrTypeAwareWalk.IrWalkResult;
  * (`IrReachability.withGeneratedRuntimeRoots`) still runs and keeps a mentioned class's methods, so it removes nothing more of what this one kept.
  *
  * A later pass that calls a function this prune removed would produce a program that does not link (the failure of 2026-11-10), so
- * with HAXEON_CHECK_REUSE=1 `checkRemoved` runs after the passes and names the pass, the caller and the removed function.
+ * with `--check-reuse` `checkRemoved` runs after the passes and names the pass, the caller and the removed function.
  */
 /** What the prune removed, and the natives reached code calls. */
 typedef IrPruneResult = {
@@ -20,16 +20,6 @@ typedef IrPruneResult = {
 }
 
 class IrEntryPrune {
-	/**
-	 * On for plain HashLink builds. HAXEON_EARLY_PRUNE=0 is a migration reference, not a product option: it exists so the driver can build
-	 * every program both ways while the prune is new, and it is deleted with the driver's unpruned run (docs/design/REACHABILITY_WALK.md, "Removal").
-	 */
-	public static function enabled():Bool
-		return Sys.getEnv("HAXEON_EARLY_PRUNE") != "0";
-
-	public static function checking():Bool
-		return Sys.getEnv("HAXEON_CHECK_REUSE") == "1";
-
 	/** The walk `run` prunes by, without removing anything: what `roots` (and `@:keep`) reach in `program`. */
 	public static function walk(program:IrProgram, roots:Array<String>,
 			?classDependencies:IrClassDependencies):IrWalkResult {

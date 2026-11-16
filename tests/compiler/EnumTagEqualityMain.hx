@@ -1,3 +1,4 @@
+import compiler.CompileOptions;
 import compiler.Compiler;
 import compiler.backend.Backend.BackendTarget;
 import compiler.ir.Ir;
@@ -17,7 +18,8 @@ class EnumTagEqualityMain {
 		var session = new Compiler(null, compiler.runtime.CompilerIntrinsics.configuration());
 		session.addStandardLibrarySourceRoot("stdlib");
 		session.configure("tag-equality-" + target + inlining, "tag-equality",
-			CompilerDriver.targetDefines(target).concat(["haxeon-inline=" + (inlining ? 1 : 0)]));
+			CompilerDriver.targetDefines(target));
+		session.options = new CompileOptions({inlining: inlining});
 		var cases = [for (index in 0...32) "C" + index + ";"].join(" ");
 		session.update("Main.hx",
 			'enum Wide implements Hashable { $cases } '

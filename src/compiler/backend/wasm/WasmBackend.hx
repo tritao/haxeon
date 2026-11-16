@@ -108,7 +108,9 @@ class WasmBackend implements Backend {
 			importMemory: options.importMemory, sharedMemory: options.sharedMemory, memoryBase: options.memoryBase,
 			memoryContract: options.memoryContract, wasmMemoryStats: options.wasmMemoryStats,
 			wasmGcAllocationCount: options.wasmGcAllocationCount, wasmGcStress: options.wasmGcStress,
-			wasmRuntimeNeutral: options.wasmRuntimeNeutral, exports: options.exports,
+			wasmRuntimeNeutral: options.wasmRuntimeNeutral, wasmLegacyExceptions: options.wasmLegacyExceptions,
+			checkReuse: options.checkReuse,
+			exports: options.exports,
 			wasmLinearRuntime: options.wasmLinearRuntime
 		};
 
@@ -119,6 +121,7 @@ class WasmBackend implements Backend {
 		var target = WasmTarget.forBackend(options.target, options.debugNames),
 			passes = new IrPipelineContext(TargetProfile.wasm,
 				target.referenceModel == Gc ? IrValueLaneTarget.WasmGc : IrValueLaneTarget.Wasm32);
+		passes.options = new compiler.CompileOptions({checkReuse: options.checkReuse == true});
 		program = logical.run(program, passes);
 		// Capture lane shapes while nullable element/field types still retain their logical layout.
 		var scalarAccessors = target.referenceModel == Gc

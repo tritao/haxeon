@@ -81,7 +81,7 @@ class IrOpportunityCensus {
 		"smallDirectCalls"
 	];
 
-	public static function report(program:IrProgram, ?allowInline:Bool):Void {
+	public static function report(program:IrProgram, allowInline:Bool):Void {
 		if (Sys.getEnv("HAXEON_IR_CENSUS") != "1")
 			return;
 		var rows:Array<CensusRow> = [],
@@ -91,7 +91,7 @@ class IrOpportunityCensus {
 			objects:Map<String, IrObject> = [];
 		for (object in program.objects)
 			objects.set(object.name, object);
-		var inlineMode = allowInline == null ? IrInliner.enabled : allowInline;
+		var inlineMode = allowInline;
 		var smallFunctions:Map<String, Bool> = [];
 		for (fn in program.functions) {
 			var budget = fn.inlineHint ? IrInliner.HintBudget : IrInliner.SmallBudget;

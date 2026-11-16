@@ -1,3 +1,4 @@
+import compiler.CompileOptions;
 import compiler.ir.Ir;
 import compiler.ir.IrFunction;
 
@@ -86,7 +87,8 @@ class ReflectionTagProjectionMain {
 		var session = new compiler.Compiler(null, compiler.runtime.CompilerIntrinsics.configuration());
 		session.addStandardLibrarySourceRoot("stdlib");
 		session.configure("reflection-tag-projection-" + target + inlining, "reflection-tag-projection",
-			compiler.tools.CompilerDriver.targetDefines(target).concat(["haxeon-inline=" + (inlining ? 1 : 0)]));
+			compiler.tools.CompilerDriver.targetDefines(target));
+		session.options = new CompileOptions({inlining: inlining});
 		session.update("Main.hx",
 			'enum Mode { First; Second; } '
 			+ '\nclass Holder { public var mode:Mode; public var number:Int; public var callback:Mode->Mode; public function new() {mode=Second;number=17;callback=function(value:Mode):Mode return value;} } '

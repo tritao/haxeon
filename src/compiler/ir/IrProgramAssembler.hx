@@ -592,7 +592,7 @@ class IrProgramAssembler {
 			?staticChecks:IrStaticCheckCache,
 			?valueTarget:compiler.ir.IrValueLaneLayout.IrValueLaneTarget, ?exportedFunctions:Array<String>,
 			pruneFromEntry = false,
-			?canonicalObjects:Array<IrObject>):IrProgram {
+			?canonicalObjects:Array<IrObject>, ?options:compiler.CompileOptions):IrProgram {
 		var allFunctions:Array<IrFunction> = [];
 		if (staticInitializers != null)
 			for (initializer in staticInitializers)
@@ -611,6 +611,8 @@ class IrProgramAssembler {
 					builder.blocks, Ordinary));
 			}
 		var context = new IrPipelineContext(generator.profile, valueTarget);
+		if (options != null)
+			context.options = options;
 		context.entryPoint = entryPoint;
 		context.staticInitializers = staticInitializers;
 		context.staticChecks = staticChecks;

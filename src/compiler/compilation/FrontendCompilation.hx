@@ -972,14 +972,14 @@ class FrontendCompilation {
 			cached.push(functions.get(functionName));
 		}
 		build.cached = cached;
-		if (Sys.getEnv("HAXEON_CHECK_REUSE") == "1")
+		if (context.options.checkReuse)
 			for (functionName in cachedNames) {
 				var holder = modules.get(owners.get(functionName));
 				if (holder == null)
-					throw 'HAXEON_CHECK_REUSE: cached function "$functionName" has no owning module';
+					throw '--check-reuse: cached function "$functionName" has no owning module';
 				var held = holder.irFunctions.get(functionName);
 				if (compiler.ir.IrSourceRehash.of(held, currentHashes) != held)
-					throw 'HAXEON_CHECK_REUSE: cached function "$functionName" of module "${owners.get(functionName)}" names a file hash that is not the file\'s current one';
+					throw '--check-reuse: cached function "$functionName" of module "${owners.get(functionName)}" names a file hash that is not the file\'s current one';
 			}
 		dropUnusedKeyPathFields(build.typedNew, cached);
 	}
@@ -1046,7 +1046,7 @@ class FrontendCompilation {
 			irCNatives = build.irCNatives,
 			objects = build.objects,
 			entryPoint = build.semanticAssembly.entryPoint;
-		// A plain build whose pipeline inputs equal the last build's gets that build's final IR: no pass runs. With HAXEON_CHECK_REUSE=1
+		// A plain build whose pipeline inputs equal the last build's gets that build's final IR: no pass runs. With `--check-reuse`
 		// the passes run anyway and the result is compared with the reused one.
 		var inputs = pipelineInputs(context, generator, build.instrumentScope, cached, build.initializers, irNatives,
 			irCNatives, objects,
@@ -1055,7 +1055,7 @@ class FrontendCompilation {
 			reuseMiss = context.livePatching ? "live patching" : previousPipeline == null
 				? "no earlier build" : previousPipeline.mismatch(inputs),
 			matchesPrevious = reuseMiss == null,
-			checkingReuse = Sys.getEnv("HAXEON_CHECK_REUSE") == "1",
+			checkingReuse = context.options.checkReuse,
 			reusedPipeline:Null<PipelineSnapshot> = matchesPrevious ? previousPipeline : null,
 			ir:IrProgram,
 			inlinerChanged:Array<String>;
@@ -1074,14 +1074,14 @@ class FrontendCompilation {
 				build.initializers, entryPoint, irCNatives, build.reflectable,
 				context.state.inlineCache.staticChecks, context.valueArrayTarget(),
 				context.exportedFunctions(), !context.livePatching && !context.isWasmTarget()
-				&& compiler.ir.IrEntryPrune.enabled(), [for (object in objects) {
+				&& context.options.earlyPrune, [for (object in objects) {
 					if (object.isValue && object.nativeLayout != null) {
 						var canonical = canonicalObjectCache.get(object.name);
 						if (canonical == null)
 							throw 'Missing canonical layout for "${object.name}"';
 						canonical;
 					} else object;
-				}]);
+				}], context.options);
 			var cNativeNames = [for (native in irCNatives) native.name].join(","),
 				ownPrints:Map<String, String> = [];
 			for (fn in cached)
@@ -1111,19 +1111,18 @@ class FrontendCompilation {
 			passes.developmentMetadata = context.developmentMetadata;
 			passes.reflectable = build.reflectable;
 			passes.inlineCache = context.state.inlineCache;
-			passes.inlineEnabled = context.inlineEnabled();
+			passes.options = context.options;
 			passes.instrumentScope = build.instrumentScope;
 			passes.verifyMemo = context.state.verifyMemo;
-			passes.checkingReuse = checkingReuse;
 			ir = compiler.ir.IrPipeline.target.run(ir, passes);
 			inlinerChanged = passes.inlinerChanged;
 			if (reusedPipeline != null) {
 				var difference = PipelineSnapshot.irDifference(reusedPipeline.ir, ir);
 				if (difference != null)
-					throw 'HAXEON_CHECK_REUSE: the final IR reused for equal pipeline inputs differs from a fresh run ($difference)';
+					throw '--check-reuse: the final IR reused for equal pipeline inputs differs from a fresh run ($difference)';
 			}
-			// The prune ran early (HAXEON_EARLY_PRUNE): after the last pass nothing may call what it removed (`IrEntryPrune`).
-			if (compiler.ir.IrEntryPrune.checking())
+			// The prune ran early: after the last pass nothing may call what it removed (`IrEntryPrune`).
+			if (checkingReuse)
 				compiler.ir.IrEntryPrune.checkRemoved("the pipeline", ir.functions, ir.prunedFunctions);
 			context.state.pipelineSnapshot = context.livePatching ? null : new PipelineSnapshot(inputs, ir);
 		}
@@ -1217,7 +1216,7 @@ class FrontendCompilation {
 			"wasm:" + context.isWasmTarget(),
 			"live:" + context.livePatching,
 			"development:" + context.developmentMetadata,
-			"inline:" + context.inlineEnabled(),
+			"options:" + context.options.key(),
 			"instrument:" + (instrumentScope == null ? "-" : Std.string(instrumentScope)),
 			"exports:" + context.exportedFunctions().join(","),
 			// Reflection ignores a name that has no object (a typed program can list an empty anonymous type no function uses), and no

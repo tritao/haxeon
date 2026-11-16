@@ -397,7 +397,7 @@ class WasmGcModuleBuilder {
 		// Chrome's currently shipped Wasm EH implementation accepts the legacy
 		// try/catch opcodes but gates try_table/exnref behind a flag. Keep the
 		// legacy form available while the standardized lowering rolls out.
-		if (Sys.getEnv("HAXEON_WASM_LEGACY_EXCEPTIONS") != "1")
+		if (options.wasmLegacyExceptions != true)
 			WasmExceptionLowering.lower(module);
 		if (options.wasmGcAllocationCount == true)
 			instrumentGcAllocations(module);

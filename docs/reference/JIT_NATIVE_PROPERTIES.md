@@ -41,7 +41,7 @@ Validation and measurements are retained under `out/jit-validation/`, including 
 
 ## Final validation
 
-All 18 suite/mode combinations passed with defaults and with `HAXEON_INLINE=0`:
+All 18 suite/mode combinations passed with defaults and with `--no-inline`:
 
 | Suite | Inliner on | Inliner off |
 | --- | --- | --- |

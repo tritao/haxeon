@@ -1,3 +1,4 @@
+import compiler.CompileOptions;
 import compiler.Compiler;
 import compiler.backend.Backend.BackendTarget;
 import compiler.backend.wasm.WasmBackend;
@@ -19,7 +20,8 @@ class EnumEqualityHelperReuseMain {
 		var compiler = new Compiler(null, CompilerIntrinsics.configuration());
 		compiler.addStandardLibrarySourceRoot("stdlib");
 		compiler.configure("enum-equality-helper-reuse-" + target + "-" + inlineEnabled, "enum-equality-helper-reuse",
-			CompilerDriver.targetDefines(target).concat(["haxeon-inline=" + (inlineEnabled ? "1" : "0")]));
+			CompilerDriver.targetDefines(target));
+		compiler.options = new CompileOptions({inlining: inlineEnabled});
 		compiler.update("Equatable.hx", "interface Equatable {}");
 		compiler.update("Value.hx", "enum Value implements Equatable { Empty; Item(value:Int); }");
 		compiler.update("Box.hx",

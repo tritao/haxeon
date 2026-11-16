@@ -1,3 +1,4 @@
+import compiler.CompileOptions;
 import compiler.Compiler;
 import compiler.ir.IrInterpreter;
 
@@ -36,7 +37,8 @@ class DeclaredEqualityInliningMain {
 				"package haxeon; class Hashing { public static function hash<T:Hashable>(value:T):Int throw \"intrinsic\"; public static function mix(hash:Int, value:Int):Int return hash * 31 + value; }\n");
 			compiler.update("Main.hx", source);
 			compiler.configure(inlineEnabled ? "inline-on" : "inline-off", "test",
-				["haxeon-inline=" + (inlineEnabled ? "1" : "0")]);
+				[]);
+			compiler.options = new CompileOptions({inlining: inlineEnabled});
 			var result = compiler.compile("Main");
 			if (new IrInterpreter(result.ir).run("main") != 42)
 				throw 'declared value equality failed with inlining ${inlineEnabled ? "enabled" : "disabled"}';

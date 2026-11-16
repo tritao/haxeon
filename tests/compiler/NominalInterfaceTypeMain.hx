@@ -1,4 +1,5 @@
 using compiler.compilation.BackendArtifact.BackendArtifacts;
+import compiler.CompileOptions;
 import compiler.Compiler;
 import compiler.Frontend;
 import compiler.backend.wasm.WasmBackend;
@@ -20,7 +21,8 @@ class NominalInterfaceTypeMain {
 				var c = new Compiler(null, compiler.runtime.CompilerIntrinsics.configuration());
 				c.addStandardLibrarySourceRoot("stdlib");
 				c.configure("nominal-" + target + inlining, "nominal",
-					CompilerDriver.targetDefines(target).concat(["haxeon-inline=" + (inlining ? 1 : 0)]));
+					CompilerDriver.targetDefines(target));
+				c.options = new CompileOptions({inlining: inlining});
 				c.update("Main.hx", source);
 				var result = c.compile("Main"), temp = Sys.getEnv("TMPDIR");
 				if (temp == null) temp = "out";

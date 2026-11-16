@@ -6,7 +6,6 @@ import compiler.ir.SourceProvenance.Located;
 
 /** Exact post-inline arithmetic rewrites. */
 class IrStrengthReduction {
-	public static var enabled:Bool = Sys.getEnv("HAXEON_STRENGTH") != "0";
 
 	public static function run(fn:IrFunction):IrFunction {
 		var constants:Map<Int, Float> = [];

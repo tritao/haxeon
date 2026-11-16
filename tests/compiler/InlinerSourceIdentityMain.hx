@@ -28,31 +28,31 @@ class InlinerSourceIdentityMain {
 
 	static function main():Void {
 		var cache = new IrInlineCache(), first = program(1);
-		IrInliner.run(first, cache, compiler.ir.TargetProfile.wasm, true);
+		IrInliner.run(first, cache, compiler.ir.TargetProfile.wasm);
 		var memo = cache.memo.get("caller0");
 		var again = program(1),
 			before = AllocationMeter.sample(),
 			cpu = Sys.cpuTime(),
 			wall = Sys.time();
-		var changed = IrInliner.run(again, cache, compiler.ir.TargetProfile.wasm, true);
+		var changed = IrInliner.run(again, cache, compiler.ir.TargetProfile.wasm);
 		var bytes = AllocationMeter.sample().bytes - before.bytes,
 			used = Sys.cpuTime() - cpu,
 			elapsed = Sys.time() - wall;
 		if (cache.memo.get("caller0") != memo || changed.length != 0)
 			throw "Regenerated identical input must reuse the inlining memo";
-		if (Sys.getEnv("HAXEON_CHECK_REUSE") != "1" && bytes > 8 * 1024 * 1024)
+		if (bytes > 8 * 1024 * 1024)
 			throw 'Regenerated input allocated $bytes bytes, expected less than 8 MiB';
 		var fork = cache.copy();
 		var edited = program(2);
-		IrInliner.run(edited, fork, compiler.ir.TargetProfile.wasm, true);
+		IrInliner.run(edited, fork, compiler.ir.TargetProfile.wasm);
 		var fresh = program(2);
-		IrInliner.run(fresh, new IrInlineCache(), compiler.ir.TargetProfile.wasm, true);
+		IrInliner.run(fresh, new IrInlineCache(), compiler.ir.TargetProfile.wasm);
 		for (i in 0...fresh.functions.length)
 			if (IrFunctionStateCodec.encode(edited.functions[i])
 				.compare(IrFunctionStateCodec.encode(fresh.functions[i])) != 0)
 				throw "Callee edit differs from a cold inlining run";
 		var unchanged = program(1);
-		IrInliner.run(unchanged, cache, compiler.ir.TargetProfile.wasm, true);
+		IrInliner.run(unchanged, cache, compiler.ir.TargetProfile.wasm);
 		if (cache.memo.get("caller0") != memo)
 			throw "A speculative cache copy changed its parent's inputs";
 		var placements = new IrInlineCache();

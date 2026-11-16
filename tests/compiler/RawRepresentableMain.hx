@@ -1,3 +1,4 @@
+import compiler.CompileOptions;
 import compiler.Compiler;
 import compiler.backend.Backend.BackendTarget;
 import compiler.ir.Ir;
@@ -10,7 +11,8 @@ class RawRepresentableMain {
 		var c = new Compiler(null, compiler.runtime.CompilerIntrinsics.configuration());
 		c.addStandardLibrarySourceRoot("stdlib");
 		c.configure("raw-" + target + inlining, "raw",
-			CompilerDriver.targetDefines(target).concat(["haxeon-inline=" + (inlining ? 1 : 0)]));
+			CompilerDriver.targetDefines(target));
+		c.options = new CompileOptions({inlining: inlining});
 		return c;
 	}
 

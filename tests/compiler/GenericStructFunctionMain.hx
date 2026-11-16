@@ -1,3 +1,4 @@
+import compiler.CompileOptions;
 import compiler.Frontend;
 import compiler.ir.Ir;
 import sys.io.File;
@@ -68,7 +69,7 @@ class GenericStructFunctionMain {
 				false, true)];
 			compiler.ir.IrNullableScalarFlow.rewrite(program);
 			compiler.ir.IrInliner.run(program, new compiler.ir.IrInliner.IrInlineCache(),
-				compiler.ir.TargetProfile.wasm, inlineEnabled);
+				compiler.ir.TargetProfile.wasm, new CompileOptions({inlining: inlineEnabled}));
 			var bytes = new compiler.backend.wasm.WasmBackend().compile(program, {
 				target: WasmGc,
 				debugNames: true,

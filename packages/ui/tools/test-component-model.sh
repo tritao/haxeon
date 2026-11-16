@@ -43,7 +43,7 @@ for fixture in "${fixtures[@]}"; do
             else options+=(--wasm-gc-allocation-count); fi
         fi
         artifact="$tmp/$inline-$target"
-        if ! HAXEON_INLINE="$inline" "$hl" "$compiler" "${options[@]}" --output="$artifact" \
+        if ! "$hl" "$compiler" $( ((inline)) || echo --no-inline ) "${options[@]}" --output="$artifact" \
                 --entry=${fixture} --root="$ui/tests/haxeon" --root="${HAXEON_UI_SOURCE:-"$ui/haxe"}" \
                 --root="$ui/bindings/haxe" --root="$root/packages/editor/src" --root="$root/packages/platform/src" \
                 --ffi-interface="$platform_hxi" --ffi-projection="$root/packages/platform/bindings/nativekit.hxmap" \
@@ -112,7 +112,7 @@ JS
             if [[ $target != hl ]]; then
                 negative_options+=(--wasm-import-memory --wasm-memory-contract="$tmp/memory.json")
             fi
-            if HAXEON_INLINE="$inline" "$hl" "$compiler" "${negative_options[@]}" --output="$tmp/invalid-$target" \
+            if "$hl" "$compiler" $( ((inline)) || echo --no-inline ) "${negative_options[@]}" --output="$tmp/invalid-$target" \
                     --entry=KeyScopeString --root="$ui/tests/haxeon/negative" --root="${HAXEON_UI_SOURCE:-"$ui/haxe"}" \
                     --root="$ui/bindings/haxe" --root="$root/packages/editor/src" --root="$root/packages/platform/src" \
                     --ffi-interface="$platform_hxi" --ffi-projection="$root/packages/platform/bindings/nativekit.hxmap" \
@@ -130,7 +130,7 @@ JS
         fi
         if [[ $fixture == UiEventPhaseMain ]]; then
             for invalid in UiEventPhaseAssignment UiEventPhaseRegistration; do
-                if HAXEON_INLINE="$inline" "$hl" "$compiler" "${options[@]}" --output="$tmp/invalid-$target" \
+                if "$hl" "$compiler" $( ((inline)) || echo --no-inline ) "${options[@]}" --output="$tmp/invalid-$target" \
                     --entry="$invalid" --root="$ui/tests/haxeon/negative" --root="$ui/haxe" \
                     --root="$ui/bindings/haxe" --root="$root/packages/editor/src" --root="$root/packages/platform/src" \
                     --ffi-interface="$platform_hxi" --ffi-projection="$root/packages/platform/bindings/nativekit.hxmap" \
@@ -154,7 +154,7 @@ JS
         fi
         if [[ $fixture == ScopeResourceIdMain ]]; then
             for invalid in ScopeOwnerWidgetId ScopeOwnerInt WidgetStateScopeId; do
-                if HAXEON_INLINE="$inline" "$hl" "$compiler" "${options[@]}" --output="$tmp/invalid-$target" \
+                if "$hl" "$compiler" $( ((inline)) || echo --no-inline ) "${options[@]}" --output="$tmp/invalid-$target" \
                     --entry="$invalid" --root="$ui/tests/haxeon/negative" --root="$ui/haxe" \
                     --root="$ui/bindings/haxe" --root="$root/packages/editor/src" --root="$root/packages/platform/src" \
                     --ffi-interface="$platform_hxi" --ffi-projection="$root/packages/platform/bindings/nativekit.hxmap" \

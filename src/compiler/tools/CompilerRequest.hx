@@ -26,6 +26,9 @@ typedef CompilerRequest = {
 	final wasmGcStress:Bool;
 	final wasmRuntimeNeutral:Bool;
 
+	/** The passes and self-checks the compile runs (`--no-inline`, `--check-reuse`, ...). */
+	final options:compiler.CompileOptions;
+
 	/**
 	 * Keep the append-only function, symbol and stable-id history across requests so a running module can be
 	 * patched (`haxeon run --watch --live`). Without it every compile assembles from scratch and its bytes are a

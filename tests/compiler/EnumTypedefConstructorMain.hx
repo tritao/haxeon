@@ -1,4 +1,5 @@
 using compiler.compilation.BackendArtifact.BackendArtifacts;
+import compiler.CompileOptions;
 import compiler.Compiler;
 import compiler.Compiler.CompileResult;
 import compiler.backend.Backend.BackendTarget;
@@ -140,7 +141,8 @@ class EnumTypedefConstructorMain {
 				isolated.addStandardLibrarySourceRoot("stdlib");
 				isolated.configure("enum-typedef-" + target + inlineEnabled, "enum-typedef",
 					CompilerDriver.targetDefines(target == Wasm32
-					? "wasm32" : "wasm-gc").concat(["haxeon-inline=" + (inlineEnabled ? 1 : 0)]));
+					? "wasm32" : "wasm-gc"));
+				isolated.options = new CompileOptions({inlining: inlineEnabled});
 				for (name => state in source.modules)
 					isolated.update(state.source.path, state.source.text, name);
 				var result = isolated.compile("Main"),

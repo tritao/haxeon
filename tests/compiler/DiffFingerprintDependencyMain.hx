@@ -1,3 +1,4 @@
+import compiler.CompileOptions;
 import compiler.Compiler;
 import compiler.ir.IrInterpreter;
 
@@ -14,7 +15,8 @@ class DiffFingerprintDependencyMain {
 				+ 'function main():Int { var a=new Snapshot(42), b=new Snapshot(43); '
 				+ 'var hash=haxeon.Diff.fingerprint(a); '
 				+ 'return hash==17*31+42 && haxeon.Diff.fingerprint(b)!=hash ? 42 : 1; }');
-			compiler.configure("fingerprint-dependency", "test", ["haxeon-inline=" + (inlineEnabled ? "1" : "0")]);
+			compiler.configure("fingerprint-dependency", "test", []);
+			compiler.options = new CompileOptions({inlining: inlineEnabled});
 			if (new IrInterpreter(compiler.compile("Main").ir).run("main") != 42)
 				throw "fingerprint required a source Hashing dependency";
 		}

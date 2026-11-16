@@ -65,7 +65,7 @@ class IrStageHooks {
 		if (label != null && context.checkPrune)
 			IrEntryPrune.checkRemoved(label, functions, context.pruned);
 		if (stage.prunePoint) {
-			context.checkPrune = context.pruneFromEntry && IrEntryPrune.checking();
+			context.checkPrune = context.pruneFromEntry && context.options.checkReuse;
 			IrEntryPrune.watch(context.checkPrune ? context.pruned : null);
 		}
 	}

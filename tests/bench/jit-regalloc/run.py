@@ -40,11 +40,10 @@ def main():
                HAXE_STD_PATH=str(ROOT / '.tools/haxe/std'))
     env.pop('HL_JIT_REGSTATS', None)
     env.pop('HL_JIT_REGPROBE', None)
-    env['HAXEON_INLINE'] = '0'
     hl = str(Path(vm_dir) / 'hl')
     haxe = str(ROOT / '.tools/haxe/haxe')
     bytecode = work / 'micro.hl'
-    build = run([hl, args.compiler, '--target=hl', f'--output={bytecode}',
+    build = run([hl, args.compiler, '--target=hl', f'--output={bytecode}', '--no-inline',
                  '--entry=RegallocBench', '--root=tests/bench/jit-regalloc',
                  'tests/bench/jit-regalloc/RegallocBench.hx'], env)
     (work / 'compile.log').write_text(build.stdout + build.stderr)

@@ -1,4 +1,5 @@
 using compiler.compilation.BackendArtifact.BackendArtifacts;
+import compiler.CompileOptions;
 import compiler.Compiler;
 import compiler.compilation.CompilerPublication.ReconnectDecision;
 import compiler.core.Diagnostic.CompileError;
@@ -82,12 +83,11 @@ class ModuleMain {
 			throw "Cached IR was not tied to its source revision";
 		if (compiler.modules.get("Math").irVersions.get("Math.add") != 2)
 			throw "Edited function IR was not regenerated";
-		// Typing and IR regeneration touch only the edited function. With inlining, the caller that inlined it changes too.
-		var expectedChanged = IrInliner.enabled ? 2 : 1;
+		// Typing and IR regeneration touch only the edited function, and the caller that inlined it.
+		var expectedChanged = 2;
 		if (result.changedFunctions.length != expectedChanged
 			|| result.changedFunctions.indexOf(result.artifact.hashLink().functionIds.get("Math.add")) < 0
-			|| IrInliner.enabled
-			&& result.changedFunctions.indexOf(result.artifact.hashLink().functionIds.get("main")) < 0)
+			|| result.changedFunctions.indexOf(result.artifact.hashLink().functionIds.get("main")) < 0)
 			throw 'Wrong changed stable functions: ${result.changedFunctions}';
 		if (result.artifact.hashLink().patchBytes == null)
 			throw "Compatible body edit did not emit HLP bytes";
@@ -271,9 +271,8 @@ class ModuleMain {
 		if (HlPatchReader.decode(methodBuild.artifact.hashLink().patchBytes).functions.length == 0)
 			throw "Dynamic method HLP patch was empty";
 		// A call relocation only exists while the call does, so keep the inliner out of this check.
-		var inliningWas = IrInliner.enabled;
-		IrInliner.enabled = false;
 		var callManyCompiler = new Compiler();
+		callManyCompiler.options = new CompileOptions({inlining: false});
 		callManyCompiler.update("Main.hx",
 			"function sum(a:Int, b:Int, c:Int):Int { return a + b + c; } function main():Int { return sum(10, 20, 12); }");
 		callManyCompiler.compile("Main");
@@ -286,7 +285,6 @@ class ModuleMain {
 			callManyRelocations += fn.relocations.length;
 		if (callManyRelocations != 1)
 			throw "OCallN stable relocation was not emitted";
-		IrInliner.enabled = inliningWas;
 		var validationCompiler = new Compiler();
 		validationCompiler.registerNative("clock", "std", "sys_time", [], TFloat);
 		validationCompiler.update("Main.hx", "function main():Int { return 42; }");

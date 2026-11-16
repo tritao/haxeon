@@ -48,7 +48,6 @@ class ActionFingerprint {
 				appendCommand(fields, command, arguments, cwd, environment, digests);
 			case Compiler(command, arguments, cwd, environment, _):
 				appendCommand(fields, command, arguments, cwd, environment, digests);
-				appendCompilerOptions(fields);
 				appendCompilerInputs(fields, arguments, buildRoot, digests, compiledInputs);
 		}
 		for (input in action.inputs) {
@@ -96,14 +95,6 @@ class ActionFingerprint {
 		}
 	}
 
-	/** Options the compiler reads from its environment change what it emits, so a cached output is only valid for them. */
-	static function appendCompilerOptions(fields:FingerprintFields):Void {
-		// Inlining is on unless HAXEON_INLINE is "0" (see IrInliner.enabled).
-		fields.add("inline:" + (ProcessRunner.environmentValue("HAXEON_INLINE") == "0" ? "off" : "on"));
-		fields.add("loadstore:" + (ProcessRunner.environmentValue("HAXEON_LOADSTORE") == "0" ? "off" : "on"));
-		fields.add("strength:" + (ProcessRunner.environmentValue("HAXEON_STRENGTH") == "0" ? "off" : "on"));
-	}
-
 	/** Portable identity for the global artifact cache; project-local paths are excluded. */
 	public static function globalKey(action:ExecutionAction, target:String, dependencies:Array<Null<String>>,
 			?digests:ContentDigestCache):String {
@@ -121,7 +112,6 @@ class ActionFingerprint {
 				appendPortableCommand(fields, command, arguments, environment, action, digests);
 			case Compiler(command, arguments, _, environment, _):
 				appendPortableCommand(fields, command, arguments, environment, action, digests);
-				appendCompilerOptions(fields);
 		}
 		var inputIndex = 0;
 		for (input in action.inputs) {

@@ -26,7 +26,6 @@ for target in wasm32 wasm-gc; do
   (
     cd "$root_dir"
     haxeon_export_library_path
-    export HAXEON_WASM_LEGACY_EXCEPTIONS=1
     for fixture in wasm-host-shared-memory wasm-utf8-field; do
       source_dir=tests/programs
       [[ $fixture == wasm-utf8-field ]] && source_dir=tests/ffi
@@ -34,7 +33,7 @@ for target in wasm32 wasm-gc; do
       [[ $fixture == wasm-utf8-field ]] && exports=("--export=$fixture.copy" "--export=$fixture.verify")
       "$hashlink_dir/hl" "$compiler" \
         --target="$target" --entry="$fixture" --output="$build_dir/$fixture-$target.wasm" \
-        --wasm-import-memory --wasm-shared-memory --wasm-memory-contract="$build_dir/contract.json" \
+        --wasm-import-memory --wasm-shared-memory --wasm-memory-contract="$build_dir/contract.json" --wasm-legacy-exceptions \
         --root="$source_dir" "${exports[@]}" "$source_dir/$fixture.hx"
     done
   )

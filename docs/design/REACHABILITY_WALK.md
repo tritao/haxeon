@@ -109,7 +109,7 @@ test failure. Cost: one set lookup per call edge, check mode only.
 2. **Decision gate.** Record the kept functions, objects and providers of the conservative and the new walk for self-hosting and the app in
    this note. If both keep less than about 5% fewer functions than the conservative walk, stop after step 2 and do not do the prune.
 3. **Pruned and unpruned equal** (decision 6): the driver runs both on every program case, plain and live.
-4. **Warm equals cold with the prune on.** In step 3 the warm-edit sweep and `HAXEON_CHECK_REUSE=1` run with the prune on, not just in step
+4. **Warm equals cold with the prune on.** In step 3 the warm-edit sweep and `--check-reuse` run with the prune on, not just in step
    1. An edit that changes the reachable set must give the same bytes as a cold build. The walk's result must be a function of the
    program graph, so cached results stay valid; this is confirmed by those runs.
 5. Gates: `gate.sh wave` per commit (warm-edit sweep included), `full` and the outer app gates before publishing. The cold-build effect is
@@ -147,7 +147,7 @@ What the numbers say about the walk itself:
 - No `$` function without a kind in any of the three (kindless helpers: 0), so the prerequisite "no target-only helper without a kind" holds on these.
 - Not measured: the effect of the prune on pass time, which is step 3's evidence (`measure-cold.sh` before and after).
 
-## Step 3a, first cut (on by default for plain HashLink builds; HAXEON_EARLY_PRUNE=0 turns it off)
+## Step 3a, first cut (on by default for plain HashLink builds; `--no-early-prune` turns it off)
 
 `IrEntryPrune` prunes a plain HashLink build inside `IrProgramAssembler.assemble`, **after generic owner erasure** and before every later
 pass (value interface boxes, typed interface calls, checked casts, enum lowering, optional flows, reflection and, after `assemble`, the passes
@@ -165,14 +165,14 @@ and the erasure's own devirtualization silently did not happen. Erased-owner nam
   the rows of the created types), and the value method behind an optional-field request
   (`IrOptionalFieldStorage.requestedMethod`, read by the walk when it meets the request call). `IrValueDynamicDispatch` no longer falls back
   to a runtime "does not conform" throw for a struct that declares `Equatable`: a missing provider is an internal compile error.
-- **Detection, in check mode (HAXEON_CHECK_REUSE=1).** `IrProgram.prunedFunctions` is the set the prune removed.
+- **Detection, in check mode (`--check-reuse`).** `IrProgram.prunedFunctions` is the set the prune removed.
   - `checkRemoved` runs after each later pass in `assemble` and at the end of the pipeline: no call or closure may name a removed function.
   - `IrFunctionIndex` is the one by-name view of the function list for the nine passes that built their own maps; a lookup of a removed name
     throws, naming the pass and the function. A pass that needs a function the prune would remove must ask for it by (type, operation).
   - Method-table lookups (`IrProgramIndex.findMethod`, the erasure's and the typed interface dispatch's `findMethod`) throw when they visit a
     class whose entry for the method the prune removed. Other readers of `IrObject.methods` (about 30 files) are not covered yet.
 - **Evidence.** `tests/programs` is built plain, unpruned and pruned, with the driver's third run (`Main --no-early-prune`, the reference) and the warm-edit sweep
-  under HAXEON_CHECK_REUSE=1 (545 programs pruned warm: each rebuild equals a fresh build). On the 582 programs that build as HashLink: 0
+  under `--check-reuse` (545 programs pruned warm: each rebuild equals a fresh build). On the 582 programs that build as HashLink: 0
   differences in exit code, 0 invariant or lookup hits. Bytes differ in 64: in 51 only the runtime natives imported differ (a native only
   unreachable code needed is gone); in 10 the four `StringBuf` methods are gone (class mentioned, never created); in 3
   (`scoped-cleanup`, `key-path-semantics`, `enum-generated-dependencies`) types differ: the scalar ABI of key-path closure fields
@@ -182,7 +182,7 @@ and the erasure's own devirtualization silently did not happen. Erased-owner nam
 
 ### Removal and 3b items of step 3a
 
-- **Removal.** `HAXEON_EARLY_PRUNE=0`, `Main --no-early-prune` and the driver's unpruned reference run are a migration reference, not a product option, and
+- **Removal.** ``--no-early-prune``, `Main --no-early-prune` and the driver's unpruned reference run are a migration reference, not a product option, and
   there is no user-facing fallback. Delete the switch, the flag and the unpruned run (and the gate.sh coverage field for it) when 3b lands, or after
   the pruned path has been the default through two pushes, whichever comes first.
 - **3b: a closure field's ABI from its type.** The scalar-argument pass chooses the ABI of a closure field (the `$get` / `$set` fields of key-path classes)

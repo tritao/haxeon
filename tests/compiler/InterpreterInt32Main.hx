@@ -1,3 +1,4 @@
+import compiler.CompileOptions;
 import compiler.Compiler;
 import compiler.backend.Backend.BackendTarget;
 import compiler.ir.Ir;
@@ -40,7 +41,8 @@ class InterpreterInt32Main {
 		var c = new Compiler(null, compiler.runtime.CompilerIntrinsics.configuration());
 		c.addStandardLibrarySourceRoot("stdlib");
 		c.configure("interpreter-scalars-" + target + inlining, "interpreter-scalars",
-			CompilerDriver.targetDefines(target).concat(["haxeon-inline=" + (inlining ? 1 : 0)]));
+			CompilerDriver.targetDefines(target));
+		c.options = new CompileOptions({inlining: inlining});
 		c.update("Main.hx",
 			'function sub(value:Int):Int return value-1; function add(value:Int):Int return value+1; function mul(value:Int):Int return value*65536; function concat(a:String,b:String,c:String):String return a+b+c; function main():Int { if(sub(-2147483648)!=2147483647)return 1; if(add(2147483647)!=-2147483648)return 2; if(mul(65536)!=0)return 3; if(concat("one","two","three")!="onetwothree")return 4; return 42; }');
 		var p = c.compile("Main").ir;

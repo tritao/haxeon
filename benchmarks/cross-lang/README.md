@@ -50,7 +50,7 @@ and the quality of the JIT's loop code.
 
 ### Load/store forwarding
 
-`HAXEON_LOADSTORE=0` disables block-local field/array reload forwarding independently of the inliner. A fresh comparison
+`--no-load-store-forwarding` disables block-local field/array reload forwarding independently of the inliner. A fresh comparison
 with the same buffered-stdout runtime (nine runs, core 0, size 0) gives these medians in seconds:
 
 | Problem | Forwarding off | Forwarding on |
@@ -73,7 +73,7 @@ merkletrees 0/19 and lru 2/46. These static counts justified trying the pass; th
 
 ### Exact division strength reduction
 
-`HAXEON_STRENGTH=0` disables the post-inline rewrite of `x / 2^k` to `x * 2^-k`. The raw IEEE-754 bits must describe a
+`--no-strength-reduction` disables the post-inline rewrite of `x / 2^k` to `x * 2^-k`. The raw IEEE-754 bits must describe a
 finite, nonzero normal power of two, and the reciprocal must also be normal and exactly representable. Constants on the
 left and divisors such as 3 or 10 remain divides.
 
@@ -120,9 +120,9 @@ nine-run measurement, starting at load 3.96; it also verifies every benchmark's 
 Validation passed with the inliner both on and off. Details, mutation evidence and the native audit are in
 [`docs/reference/JIT_NATIVE_PROPERTIES.md`](../../docs/reference/JIT_NATIVE_PROPERTIES.md).
 
-Haxeon's IR inliner is on by default (`HAXEON_INLINE=0` turns it off). It matters mostly for nbody (0.34s without it)
+Haxeon's IR inliner is on by default (`--no-inline` turns it off). It matters mostly for nbody (0.34s without it)
 and spectral-norm (0.295s without it). The HashLink debugger shows inlined callee lines under the caller's frame and a
-function breakpoint on a fully inlined function does not stop, so build with `HAXEON_INLINE=0` when debugging.
+function breakpoint on a fully inlined function does not stop, so build with `--no-inline` when debugging.
 
 Where the time goes (`perf record` on HashLink, one core, measured before the inliner and JIT changes):
 

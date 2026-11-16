@@ -1,4 +1,5 @@
 using compiler.compilation.BackendArtifact.BackendArtifacts;
+import compiler.CompileOptions;
 import compiler.Compiler;
 import compiler.backend.wasm.WasmBackend;
 import compiler.hl.HlWriter;
@@ -40,7 +41,8 @@ class MethodClosureValueMain {
 				var c = new Compiler(null, compiler.runtime.CompilerIntrinsics.configuration());
 				c.addStandardLibrarySourceRoot("stdlib");
 				c.configure("method-" + target + inlining, "method",
-					CompilerDriver.targetDefines(target).concat(["haxeon-inline=" + (inlining ? 1 : 0)]));
+					CompilerDriver.targetDefines(target));
+				c.options = new CompileOptions({inlining: inlining});
 				c.update("Main.hx", sys.io.File.getContent("tests/programs/closure-method-value-arguments.hx"));
 				var result = c.compile("Main");
 				if (target == "wasm32" && !inlining)

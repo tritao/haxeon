@@ -1,3 +1,4 @@
+import compiler.CompileOptions;
 import compiler.Compiler;
 import compiler.ir.IrInterpreter;
 
@@ -28,7 +29,8 @@ class ObservableLayoutIncrementalMain {
 			c.update("Main.hx",
 				'function main():Int { var n = new Noise(); var c = new Child(); var result = Reader.read(c) + c.b + n.sentinel; '
 				+ 'return result + haxeon.reactive.ObservableSource.mask * 100 + haxeon.reactive.ObservableSource.lastCount * 10000; }');
-			c.configure("observable-layout", "test", ["haxeon-inline=" + (inlineEnabled ? "1" : "0")]);
+			c.configure("observable-layout", "test", []);
+			c.options = new CompileOptions({inlining: inlineEnabled});
 			if (new IrInterpreter(c.compile("Main").ir).run("main") != 20342) throw "initial layout failed";
 			c.update("Child.hx", 'class Child extends Base { public var x:Int; public var y:Int; public var b:Int; '
 				+ 'public function new() { super(); x = 0; y = 0; b = 41; } }');

@@ -71,8 +71,9 @@ class CompilerProvider {
 		arguments.push("--sources-file=" + sourceManifest);
 		for (define in project.manifest.defines.concat(context.extraDefines))
 			arguments.push("--define=" + define);
-		if (project.manifest.inlineEnabled != null)
-			arguments.push("--define=haxeon-inline=" + (project.manifest.inlineEnabled ? "1" : "0"));
+		// The passes are the request's (`CompileOptions`): the manifest's `inline: false` turns inlining off.
+		if (project.manifest.inlineEnabled == false)
+			arguments.push("--no-inline");
 		// Artifact builds are the default: the module depends only on the source. Live sessions opt in.
 		if (context.live)
 			arguments.push("--live");

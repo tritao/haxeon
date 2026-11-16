@@ -1,12 +1,12 @@
 # Inlining and value types
 
-Status: the inliner and non-escaping scalar replacement are implemented and on by default; set `HAXEON_INLINE=0` to
+Status: the inliner and non-escaping scalar replacement are implemented and on by default; set `--no-inline` to
 turn off inlining. HashLink also constructs eligible values directly in inline fields. Later optimization stages remain
 design. The inliner's incremental and hot-patch rules below are implemented and tested (`ModuleMain`,
 `CompilerSessionMain`, `InlinePatchMain`), and the build tool keys its compiler worker and artifact cache on the setting.
 The suite, the Wasm parity run, the differential tests and the self-hosting fixed point (`scripts/check-self-hosting.hx`)
 pass in both modes. Inlined code keeps its callee's provenance, so stack traces and profiles attribute it to the caller;
-use `HAXEON_INLINE=0` when you need exact frames.
+use `--no-inline` when you need exact frames.
 
 ## Why
 
@@ -150,7 +150,7 @@ instruction operands, phi inputs, terminators and debug bindings, with surviving
 are supplied by the inliner solely to identify value-class fields; unknown object-valued fields are excluded too.
 
 Forwarding runs on each function's final form inside `IrInliner.inlinedVersion`, before memoization and the encoded-byte
-publication comparison. It also runs with `HAXEON_INLINE=0`. `HAXEON_LOADSTORE=0` disables it independently; both switches
+publication comparison. It also runs with `--no-inline`. `--no-load-store-forwarding` disables it independently; both switches
 are included in the inliner memo fingerprint, compiler-worker identity and build artifact fingerprint. Wasm backends
 consume the same transformed IR.
 
@@ -160,7 +160,7 @@ consume the same transformed IR.
 is a `ConstFloat` whose raw bits are a normal power of two and whose reciprocal remains normal. It inserts a fresh exact
 reciprocal constant and changes the operation to `Mul`; the original constant is untouched because it may have other
 uses. Zero, subnormals, infinities, NaN, non-powers of two, `2^1023`, F32 operations and constant numerators are left
-unchanged. `HAXEON_STRENGTH=0` disables the pass and participates in the memo, worker and artifact fingerprints.
+unchanged. `--no-strength-reduction` disables the pass and is part of the memo and artifact keys.
 
 ## Scalar replacement
 

@@ -1,3 +1,4 @@
+import compiler.CompileOptions;
 import compiler.Frontend;
 import compiler.backend.Backend.BackendTarget;
 import compiler.ir.Ir;
@@ -116,7 +117,7 @@ class GenericStructOwnerMain {
 		for (inlineEnabled in [false, true]) for (target in [Wasm32, WasmGc]) {
 			var program = Frontend.compile(source);
 			compiler.ir.IrInliner.run(program, new compiler.ir.IrInliner.IrInlineCache(),
-				compiler.ir.TargetProfile.wasm, inlineEnabled);
+				compiler.ir.TargetProfile.wasm, new CompileOptions({inlining: inlineEnabled}));
 			var bytes = new compiler.backend.wasm.WasmBackend().compile(program, {
 				target: target,
 				debugNames: true,
@@ -298,7 +299,7 @@ class GenericStructOwnerMain {
 				false, true)];
 			compiler.ir.IrNullableScalarFlow.rewrite(program);
 			compiler.ir.IrInliner.run(program, new compiler.ir.IrInliner.IrInlineCache(),
-				compiler.ir.TargetProfile.wasm, inlineEnabled);
+				compiler.ir.TargetProfile.wasm, new CompileOptions({inlining: inlineEnabled}));
 			var bytes = new compiler.backend.wasm.WasmBackend().compile(program, {
 				target: WasmGc,
 				debugNames: true,

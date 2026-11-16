@@ -9,7 +9,6 @@ import runtime.Runtime;
 /** A callee edit must reach the live module in every function that inlined it, and only those. */
 class InlinePatchMain {
 	static function main():Void {
-		IrInliner.enabled = true;
 		var compiler = new Compiler();
 		var program = (body:String,
 			extra:String) -> "class Counter { public static var value:Int = 40; public static function bump():Int { "

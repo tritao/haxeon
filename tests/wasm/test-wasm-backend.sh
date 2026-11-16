@@ -150,7 +150,7 @@ for target in wasm32 wasm-gc; do
 		--target=$target --output="$out_dir/wasm-cli-host-streams-$target.wasm" --entry=wasm-host-services \
 		--wasm-import-memory --root=tests/programs tests/programs/wasm-host-services.hx
 	for inline in 0 1; do
-		HAXEON_INLINE="$inline" haxeon_compile_async \
+		haxeon_compile_async $( ((inline)) || echo --no-inline ) \
 			--target=$target --output="$out_dir/wasm-cli-host-callbacks-inline-$inline-$target.wasm" --entry=wasm-callbacks \
 			--root=tests/ffi --ffi-interface=tests/ffi/wasm_callbacks.hxi tests/ffi/wasm-callbacks.hx
 	done

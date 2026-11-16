@@ -1,3 +1,4 @@
+import compiler.CompileOptions;
 import compiler.Compiler;
 import compiler.backend.Backend.BackendTarget;
 import compiler.backend.wasm.WasmBackend;
@@ -18,7 +19,8 @@ class TextEditIntentInlineMain {
 		var driver = new Compiler(null, compiler.runtime.CompilerIntrinsics.configuration());
 		driver.addStandardLibrarySourceRoot("stdlib");
 		driver.configure("text-intent-" + target + "-" + inlining, "text-intent",
-			CompilerDriver.targetDefines(target).concat(["haxeon-inline=" + (inlining ? 1 : 0)]));
+			CompilerDriver.targetDefines(target));
+		driver.options = new CompileOptions({inlining: inlining});
 		driver.update("Main.hx", sys.io.File.getContent("tests/programs/inline-enum-callback-escape.hx"));
 		var result = driver.compile("Main"),
 			declaration = Lambda.find(result.ir.enums, entry -> entry.name == "TextIntent");

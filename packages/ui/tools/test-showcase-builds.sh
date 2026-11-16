@@ -26,15 +26,14 @@ for target in hl wasm32 wasm-gc; do
         [[ $target != wasm-gc ]] || entry=ShowcaseWebGcEntry
         options+=(--wasm-import-memory --wasm-memory-contract="$work/memory.json")
     fi
-    compiler_env=()
     if [[ $target != hl ]]; then
         for symbol in main configure configureMode configureUiVisual configureBenchmark frame status diagnostic caretOffset caretAffinity caretDirection shutdown; do
             options+=(--export="ShowcaseWeb.$symbol")
         done
     fi
-    [[ $target != wasm-gc ]] || compiler_env+=(HAXEON_WASM_LEGACY_EXCEPTIONS=1)
+    [[ $target != wasm-gc ]] || options+=(--wasm-legacy-exceptions)
     artifact="$work/showcase-$target"
-    if ! env "${compiler_env[@]}" "$hl" "$compiler" "${options[@]}" --entry="$entry" --output="$artifact" \
+    if ! "$hl" "$compiler" "${options[@]}" --entry="$entry" --output="$artifact" \
             --root="$ui/examples/ui_showcase" --root="$ui/haxe" --root="$ui/bindings/haxe" \
             --root="$root/packages/editor/src" --root="$root/packages/platform/src" --root="$root/packages/gpu/src" \
             --ffi-interface="$root/packages/platform/bindings/nativekit$suffix.hxi" \

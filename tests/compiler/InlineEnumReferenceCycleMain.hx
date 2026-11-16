@@ -1,3 +1,4 @@
+import compiler.CompileOptions;
 import compiler.Frontend;
 import compiler.backend.Backend.BackendTarget;
 import compiler.ir.Ir;
@@ -91,7 +92,7 @@ function main():Int return 42;
 		program.functions = [for (fn in program.functions) compiler.ir.IrScalarReplacement.rewrite(fn, table, false,
 			target == HashLink)];
 		compiler.ir.IrInliner.run(program, new compiler.ir.IrInliner.IrInlineCache(), compiler.ir.TargetProfile.wasm,
-			inlineEnabled);
+			new CompileOptions({inlining: inlineEnabled}));
 		IrVerifier.verify(program);
 		var temp = Sys.getEnv("TMPDIR"), directory = temp == null ? "/tmp" : temp;
 		var stem = directory + "/reference-cycle-" + Std.random(0x7fffffff) + "-" + Std.string(target);

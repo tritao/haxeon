@@ -24,7 +24,7 @@ for inline in 0 1; do
             ui_hxi="$ui/bindings/nativekit-ui-wasm.hxi"
         fi
         artifact="$tmp/$inline-$target"
-        if ! HAXEON_INLINE="$inline" "$hl" "$compiler" "${options[@]}" --output="$artifact" \
+        if ! "$hl" "$compiler" $( ((inline)) || echo --no-inline ) "${options[@]}" --output="$artifact" \
                 --entry=RetainedReorderMain --root="$ui/tests/haxeon" --root="$ui/haxe" \
                 --root="$ui/bindings/haxe" --root="$root/packages/editor/src" --root="$root/packages/platform/src" \
                 --ffi-interface="$platform_hxi" --ffi-projection="$root/packages/platform/bindings/nativekit.hxmap" \

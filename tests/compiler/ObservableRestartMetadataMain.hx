@@ -1,3 +1,4 @@
+import compiler.CompileOptions;
 import compiler.Compiler;
 import compiler.ir.IrInterpreter;
 
@@ -22,7 +23,8 @@ class ObservableRestartMetadataMain {
 			c.update("Reader.hx", 'class Reader { public static function read(value:Base):Int return value.a; }');
 			c.update("Main.hx",
 				'function main():Int { var b = new Base(); Reader.read(b); return haxeon.reactive.ObservableSource.mask; }');
-			c.configure("observable-restart", "test", ["haxeon-inline=" + (inlineEnabled ? "1" : "0")]);
+			c.configure("observable-restart", "test", []);
+			c.options = new CompileOptions({inlining: inlineEnabled});
 			if (new IrInterpreter(c.compile("Main").ir).run("main") != 1) throw "initial field was not tracked";
 			c.update("Base.hx",
 				'class Base implements Observable { @:unobservable public var a:Int; public function new() a = 1; }');

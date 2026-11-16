@@ -22,7 +22,7 @@ for inline in 0 1; do
     elif [[ "$target" == wasm-gc ]]; then
       ext=wasm; flags=(--wasm-import-memory --wasm-gc-allocation-count --export="$census.prepare" --export="$census.perform")
     fi
-    HAXEON_INLINE="$inline" "$("$root/scripts/hashlink-path.sh")/hl" "$compiler" --target="$target" --output="$tmp/test.$ext" --entry="$entry" "${roots[@]}" "${ffi[@]}" "${flags[@]}" "$source_file" > "$tmp/compile.log" 2>&1 || { cat "$tmp/compile.log" >&2; exit 1; }
+    "$("$root/scripts/hashlink-path.sh")/hl" "$compiler" $( ((inline)) || echo --no-inline ) --target="$target" --output="$tmp/test.$ext" --entry="$entry" "${roots[@]}" "${ffi[@]}" "${flags[@]}" "$source_file" > "$tmp/compile.log" 2>&1 || { cat "$tmp/compile.log" >&2; exit 1; }
     if [[ "$target" == hl ]]; then
       set +e; "$("$root/scripts/hashlink-path.sh")/hl" "$tmp/test.hl"; status=$?; set -e
       [[ "$status" == 42 ]] || { echo "HashLink inline=$inline exited $status" >&2; exit 1; }
@@ -50,7 +50,7 @@ done
 done
 
 # Root replacement snapshots IDs, then skips pointers cancelled by an earlier callback.
-HAXEON_INLINE=0 "$("$root/scripts/hashlink-path.sh")/hl" "$compiler" --target=hl --output="$tmp/pointer-behavior.hl" \
+"$("$root/scripts/hashlink-path.sh")/hl" "$compiler" --no-inline --target=hl --output="$tmp/pointer-behavior.hl" \
   --entry=PointerLocationBehavior "${roots[@]}" \
   --ffi-interface=packages/platform/bindings/nativekit.hxi --ffi-projection=packages/platform/bindings/nativekit.hxmap \
   --ffi-interface=packages/platform/bindings/nativekit-net.hxi --ffi-projection=packages/platform/bindings/nativekit-net.hxmap \

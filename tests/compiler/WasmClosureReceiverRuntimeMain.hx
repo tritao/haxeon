@@ -1,3 +1,4 @@
+import compiler.CompileOptions;
 import compiler.backend.wasm.WasmLayout;
 import compiler.backend.wasm.WasmModule;
 import compiler.backend.wasm.WasmTypeIdPlan;
@@ -72,7 +73,8 @@ class WasmClosureReceiverRuntimeMain {
 		var session = new compiler.Compiler(null, compiler.runtime.CompilerIntrinsics.configuration());
 		session.addStandardLibrarySourceRoot("stdlib");
 		session.configure("closure-receiver-sharing-" + target + inlining, "closure-receiver-sharing",
-			compiler.tools.CompilerDriver.targetDefines(target).concat(["haxeon-inline=" + (inlining ? 1 : 0)]));
+			compiler.tools.CompilerDriver.targetDefines(target));
+		session.options = new CompileOptions({inlining: inlining});
 		session.update("Main.hx",
 			'enum Tone { Dark; Light; } enum Heat { Cold; Hot; } '
 			+ 'class Source { public function new() {} public function tone(v:Tone):Tone return v; '

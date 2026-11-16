@@ -1,3 +1,4 @@
+import compiler.CompileOptions;
 import compiler.Compiler;
 import compiler.backend.Backend.BackendTarget;
 import compiler.ir.Ir;
@@ -17,7 +18,8 @@ class NullaryEnumCacheMain {
 		var session = new Compiler(null, compiler.runtime.CompilerIntrinsics.configuration());
 		session.addStandardLibrarySourceRoot("stdlib");
 		session.configure("nullary-" + target + inlining, "nullary",
-			CompilerDriver.targetDefines(target).concat(["haxeon-inline=" + (inlining ? 1 : 0)]));
+			CompilerDriver.targetDefines(target));
+		session.options = new CompileOptions({inlining: inlining});
 		session.update("Main.hx", sys.io.File.getContent("tests/fixtures/nullary-enum-cache/Main.hx"));
 		var program = session.compile("Main").ir, found = false;
 		for (declaration in program.enums)

@@ -135,10 +135,10 @@ lowering, with the dispatcher retained as a correctness fallback.
 The backend normally rewrites structured catches to the standardized
 `try_table` encoding. Some browsers that support Wasm GC still gate that
 encoding (and its `exnref` references) behind an experimental runtime flag.
-Set `HAXEON_WASM_LEGACY_EXCEPTIONS=1` to retain the legacy `try`/`catch`
+Compile with `--wasm-legacy-exceptions` to retain the legacy `try`/`catch`
 encoding for those runtimes; the NativeKit GC web showcase selects this
-compatibility mode by default. Leave the variable unset (or set it to `0`) to
-exercise the standardized encoding.
+compatibility mode by default. Without the flag the standardized encoding is
+emitted.
 
 ## Standard library on Wasm
 

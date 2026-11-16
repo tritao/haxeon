@@ -188,13 +188,11 @@ fi
 # the browser-facing GC artifact usable by default, while allowing the newer
 # encoding to be selected explicitly for experiments and runtimes that support
 # it.
-compiler_env=()
 if [[ $wasm_target == wasm-gc ]]; then
 	if [[ $exception_mode == legacy ]]; then
-		compiler_env+=(HAXEON_WASM_LEGACY_EXCEPTIONS=1)
+		compiler_args+=(--wasm-legacy-exceptions)
 		echo "showcase-wasm: using legacy Wasm exceptions for wasm-gc (no exnref flag required)"
 	else
-		compiler_env+=(HAXEON_WASM_LEGACY_EXCEPTIONS=0)
 		echo "showcase-wasm: using try_table Wasm exceptions for wasm-gc (experimental browser support)"
 	fi
 fi
@@ -210,9 +208,9 @@ fi
 
 if [[ -n ${NATIVEKIT_HAXEON_TIME_FILE:-} ]]; then
 	(cd "$haxeon_dir" && /usr/bin/time -f 'wall=%e user=%U sys=%S maxrss_kb=%M' \
-		-o "$NATIVEKIT_HAXEON_TIME_FILE" env "${compiler_env[@]}" "${compiler[@]}" "${compiler_args[@]}")
+		-o "$NATIVEKIT_HAXEON_TIME_FILE" "${compiler[@]}" "${compiler_args[@]}")
 else
-	(cd "$haxeon_dir" && env "${compiler_env[@]}" "${compiler[@]}" "${compiler_args[@]}")
+	(cd "$haxeon_dir" && "${compiler[@]}" "${compiler_args[@]}")
 fi
 
 node - "$artifact" <<'NODE'

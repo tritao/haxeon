@@ -1,4 +1,5 @@
 using compiler.compilation.BackendArtifact.BackendArtifacts;
+import compiler.CompileOptions;
 import compiler.Compiler;
 import compiler.backend.wasm.WasmBackend;
 import compiler.hl.HlWriter;
@@ -47,7 +48,8 @@ class ValueConstructorDestinationMain {
 		c.addStandardLibrarySourceRoot('stdlib');
 		c.setExportedFunctions(['ValueConstructorDestination.prepare', 'ValueConstructorDestination.perform']);
 		c.configure('value-destination-' + target + '-' + inlining, 'value-destination',
-			CompilerDriver.targetDefines(target).concat(['haxeon-inline=' + (inlining ? 1 : 0)]));
+			CompilerDriver.targetDefines(target));
+		c.options = new CompileOptions({inlining: inlining});
 		c.update('ValueConstructorDestination.hx', source);
 		var result = c.compile('ValueConstructorDestination');
 		if (target == 'hl') {

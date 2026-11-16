@@ -1,4 +1,5 @@
 using compiler.compilation.BackendArtifact.BackendArtifacts;
+import compiler.CompileOptions;
 import compiler.Compiler;
 import compiler.backend.wasm.WasmBackend;
 import compiler.hl.HlWriter;
@@ -64,7 +65,8 @@ class SourceInlineEnumMain {
 				var c = new Compiler(null, compiler.runtime.CompilerIntrinsics.configuration());
 				c.addStandardLibrarySourceRoot("stdlib");
 				c.configure("first-" + target + inlining, "first",
-					CompilerDriver.targetDefines(target).concat(["haxeon-inline=" + (inlining ? 1 : 0)]));
+					CompilerDriver.targetDefines(target));
+				c.options = new CompileOptions({inlining: inlining});
 				c.update("Main.hx", sys.io.File.getContent("tests/programs/source-inline-enum.hx"));
 				var result = c.compile("Main");
 				assertInline(result.ir, true);
@@ -112,7 +114,8 @@ class SourceInlineEnumMain {
 		var compiler = new Compiler(null, compiler.runtime.CompilerIntrinsics.configuration());
 		compiler.addStandardLibrarySourceRoot("stdlib");
 		compiler.configure("native-map-enum-" + target + inlining, "map-enum",
-			CompilerDriver.targetDefines(target).concat(["haxeon-inline=" + (inlining ? 1 : 0)]));
+			CompilerDriver.targetDefines(target));
+		compiler.options = new CompileOptions({inlining: inlining});
 		compiler.update("Main.hx", sys.io.File.getContent("tests/programs/enum-array-iterator-escape.hx"));
 		var compiled = compiler.compile("Main"),
 			declaration = Lambda.find(compiled.ir.enums, entry -> entry.name == "IteratorChoice");

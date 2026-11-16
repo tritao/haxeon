@@ -33,7 +33,8 @@ class CompilerArguments {
 			ffiProjections:Array<String> = [],
 			roots:Array<String> = [],
 			defines:Array<String> = [],
-			paths:Array<String> = [];
+			paths:Array<String> = [],
+			optionFlags:Array<String> = [];
 		var packageRoots:Array<PackageSourceRoot> = [];
 		var index = 0;
 		while (index < arguments.length) {
@@ -84,6 +85,8 @@ class CompilerArguments {
 				defines.push(parseDefine(value(argument, "--define=")));
 			else if (StringTools.startsWith(argument, "--dump-function="))
 				dumpFunction = parseIndex(value(argument, "--dump-function="));
+			else if (compiler.CompileOptions.isFlag(argument))
+				optionFlags.push(argument);
 			else if (argument == "--live")
 				live = true;
 			else if (argument == "--wasm-shared-memory")
@@ -164,6 +167,7 @@ class CompilerArguments {
 			wasmGcAllocationCount: wasmGcAllocationCount,
 			wasmGcStress: wasmGcStress,
 			wasmRuntimeNeutral: wasmRuntimeNeutral,
+			options: compiler.CompileOptions.fromArguments(optionFlags),
 			live: live,
 			exports: exports,
 			ffiHeader: ffiHeader,

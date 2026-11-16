@@ -1,3 +1,4 @@
+import compiler.CompileOptions;
 import compiler.backend.Backend.BackendTarget;
 import compiler.ir.Ir;
 import compiler.ir.IrBuilder;
@@ -318,7 +319,7 @@ class EnumTagStorageMain {
 					p = compiler.ir.codec.CanonicalIrCodec.decode(compiler.ir.codec.CanonicalIrCodec.encode(p));
 					compiler.ir.IrInliner.run(p, new compiler.ir.IrInliner.IrInlineCache(),
 						target == HashLink ? compiler.ir.TargetProfile.hashLink : compiler.ir.TargetProfile.wasm,
-						inlineEnabled);
+						new CompileOptions({inlining: inlineEnabled}));
 					IrVerifier.verify(p);
 					if (!arrays && new compiler.ir.IrInterpreter(p).run() != 42)
 						throw "Interpreter tag roundtrip failed";

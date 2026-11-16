@@ -1,4 +1,5 @@
 using compiler.compilation.BackendArtifact.BackendArtifacts;
+import compiler.CompileOptions;
 import compiler.Compiler;
 import compiler.hl.HlWriter;
 import compiler.runtime.CompilerIntrinsics;
@@ -13,11 +14,15 @@ class ValueConstructorWarmMain {
 		'class Holder { public var p:Point; public function new() {} } class Main { static var items:Array<Int>; static var holder:Holder; static function main():Int { if(items==null) items=[7]; if(holder==null) holder=new Holder(); var before=hl.Gc.totalAllocated(); var sum=0; for(i in 0...1024) { holder.p=new Point(items); sum+=holder.p.a+holder.p.b+holder.p.c+holder.p.d+holder.p.e+holder.p.f; } if(sum!=43008) return 2; if(hl.Gc.totalAllocated()!=before) return 3; return 42; } }';
 	static var useInlining:Bool = false;
 
+	/** Whether the compilers made from here check their reuse (`CompileOptions.checkReuse`). */
+	static var checking:Bool = false;
+
 	static function compiler(source:String, live:Bool):Compiler {
 		var c = new Compiler(null, CompilerIntrinsics.configuration());
 		c.livePatching = live;
 		c.configure('value-warm', 'value-warm',
-			CompilerDriver.targetDefines('hl').concat(['haxeon-inline=' + (useInlining ? 1 : 0)]));
+			CompilerDriver.targetDefines('hl'));
+		c.options = new CompileOptions({inlining: useInlining, checkReuse: checking});
 		c.addSourceRoot('stdlib');
 		c.update('Main.hx', mainSource);
 		c.update('Point.hx', source);
@@ -25,7 +30,7 @@ class ValueConstructorWarmMain {
 	}
 
 	static function warm(before:String, after:String, checked:Bool):Void {
-		Sys.putEnv('HAXEON_CHECK_REUSE', checked ? '1' : '0');
+		checking = checked;
 		var c = compiler(before, false);
 		c.compile('Main');
 		c.update('Point.hx', after);
@@ -52,7 +57,7 @@ class ValueConstructorWarmMain {
 	}
 
 	static function liveCheck():Void {
-		Sys.putEnv('HAXEON_CHECK_REUSE', '1');
+		checking = true;
 		var live = compiler(six, true);
 		var initial = live.compile('Main');
 		var module = runtime.Runtime.load(HlWriter.encode(initial.artifact.hashLink().module).flatten(),

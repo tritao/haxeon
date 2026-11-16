@@ -1,3 +1,4 @@
+import compiler.CompileOptions;
 import compiler.Compiler;
 import compiler.backend.Backend.BackendTarget;
 import compiler.ir.Ir;
@@ -18,7 +19,8 @@ class NativeEnumProjectionMain {
 			var compiler = new Compiler(null, compiler.runtime.CompilerIntrinsics.configuration());
 			compiler.addStandardLibrarySourceRoot("stdlib");
 			compiler.configure("native-enum-negative", "native-enum",
-				CompilerDriver.targetDefines(target).concat(["haxeon-inline=" + (inlining ? 1 : 0)]));
+				CompilerDriver.targetDefines(target));
+			compiler.options = new CompileOptions({inlining: inlining});
 			compiler.addFfiInterface("native_enums.hxi", schema);
 			compiler.update("Main.hx", 'import native_enums.*; function main():Int { $body return 42; }');
 			var rejected = false;
@@ -100,7 +102,8 @@ class NativeEnumProjectionMain {
 		var session = new Compiler(null, compiler.runtime.CompilerIntrinsics.configuration());
 		session.addStandardLibrarySourceRoot("stdlib");
 		session.configure("nullary-" + target + inlining, "nullary",
-			CompilerDriver.targetDefines(target).concat(["haxeon-inline=" + (inlining ? 1 : 0)]));
+			CompilerDriver.targetDefines(target));
+		session.options = new CompileOptions({inlining: inlining});
 		session.addFfiInterface("native_enums.hxi", schema);
 		session.update("Main.hx", sys.io.File.getContent("tests/fixtures/native-enum-projection/Main.hx"));
 		var program = session.compile("Main").ir;

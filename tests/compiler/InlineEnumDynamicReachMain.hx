@@ -1,3 +1,4 @@
+import compiler.CompileOptions;
 import compiler.Compiler;
 import compiler.backend.Backend.BackendTarget;
 import compiler.backend.wasm.WasmBackend;
@@ -19,7 +20,8 @@ class InlineEnumDynamicReachMain {
 		var driver = new Compiler(null, compiler.runtime.CompilerIntrinsics.configuration());
 		driver.addStandardLibrarySourceRoot("stdlib");
 		driver.configure("inline-dynamic-reach-" + target + "-" + inlining, "inline-dynamic-reach",
-			CompilerDriver.targetDefines(target).concat(["haxeon-inline=" + (inlining ? 1 : 0)]));
+			CompilerDriver.targetDefines(target));
+		driver.options = new CompileOptions({inlining: inlining});
 		driver.update("Main.hx", sys.io.File.getContent("tests/programs/inline-enum-dynamic-reach.hx"));
 		var program = driver.compile("Main").ir;
 		var laneTarget:compiler.ir.IrValueLaneLayout.IrValueLaneTarget = switch target {

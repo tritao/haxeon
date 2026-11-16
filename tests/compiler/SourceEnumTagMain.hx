@@ -1,3 +1,4 @@
+import compiler.CompileOptions;
 import compiler.Compiler;
 import compiler.backend.Backend.BackendTarget;
 import compiler.ir.Ir;
@@ -18,7 +19,8 @@ class SourceEnumTagMain {
 		var session = new Compiler(null, compiler.runtime.CompilerIntrinsics.configuration());
 		session.addStandardLibrarySourceRoot("stdlib");
 		session.configure("source-tag-" + target + inlining, "source-tag",
-			CompilerDriver.targetDefines(target).concat(["haxeon-inline=" + (inlining ? 1 : 0)]));
+			CompilerDriver.targetDefines(target));
+		session.options = new CompileOptions({inlining: inlining});
 		session.update("Main.hx", sys.io.File.getContent("tests/programs/enum-tag-storage.hx"));
 		var program = session.compile("Main").ir, found = false;
 		for (declaration in program.enums)

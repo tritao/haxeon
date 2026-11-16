@@ -1,3 +1,4 @@
+import compiler.CompileOptions;
 import compiler.ir.Ir;
 import compiler.ir.IrBuilder;
 import compiler.ir.IrFunction;
@@ -294,23 +295,20 @@ class LoadStoreMain {
 				throw "phi";
 		}
 		// Disabled inlining still publishes forwarding, and changing its switch invalidates memoized output.
-		var oldInline = IrInliner.enabled,
-			oldForward = IrLoadStoreForwarding.enabled;
-		IrInliner.enabled = false;
-		IrLoadStoreForwarding.enabled = true;
+		var forwarding = new CompileOptions({inlining: false}),
+			notForwarding = new CompileOptions({inlining: false, loadStoreForwarding: false});
 		var program = new IrProgram("test"), cache = new IrInlineCache();
 		program.functions = [fn];
-		IrInliner.run(program, cache, compiler.ir.TargetProfile.wasm);
+		IrInliner.run(program, cache, compiler.ir.TargetProfile.wasm, forwarding);
 		expect(loads(program.functions[0]) == 0, "forward with inliner off");
 		program.functions = [fn];
-		expect(IrInliner.run(program, cache, compiler.ir.TargetProfile.wasm).length == 0, "memo unchanged");
-		IrLoadStoreForwarding.enabled = false;
+		expect(IrInliner.run(program, cache, compiler.ir.TargetProfile.wasm,
+			forwarding).length == 0, "memo unchanged");
 		program.functions = [fn];
-		expect(IrInliner.run(program, cache, compiler.ir.TargetProfile.wasm).indexOf("test") >= 0,
+		expect(IrInliner.run(program, cache, compiler.ir.TargetProfile.wasm,
+			notForwarding).indexOf("test") >= 0,
 			"switch changes published bytes");
 		expect(program.functions[0] == fn, "disabled pass identity");
-		IrInliner.enabled = oldInline;
-		IrLoadStoreForwarding.enabled = oldForward;
 		crossBlockCases();
 		Sys.println("PASS: load/store forwarding");
 	}

@@ -1,3 +1,4 @@
+import compiler.CompileOptions;
 import compiler.Compiler;
 import compiler.compilation.BackendArtifact.BackendArtifacts;
 import compiler.hl.HlWriter;
@@ -26,8 +27,7 @@ class Main {
 	 * end of the input, ends the process: the end of a pipe is not seen while another process still holds its writing end.
 	 */
 	static function batch():Void {
-		var input = Sys.stdin(),
-			initialPrune = Sys.getEnv("HAXEON_EARLY_PRUNE");
+		var input = Sys.stdin();
 		while (true) {
 			var line:String;
 			try
@@ -36,8 +36,6 @@ class Main {
 				break;
 			if (line == "")
 				break;
-			// `--no-early-prune` sets this for its own request only.
-			Sys.putEnv("HAXEON_EARLY_PRUNE", initialPrune == null ? "" : initialPrune);
 			var status = 0;
 			try
 				compileRequest(line.split("\t"))
@@ -53,35 +51,35 @@ class Main {
 	static function compileRequest(arguments:Array<String>):Void {
 		// `--plain` builds as `haxeon build` does: not for live patching, so what nothing reaches is not in the module.
 		var plain = arguments.indexOf("--plain") >= 0;
-		// `--no-early-prune` is a migration reference, not a product option: it keeps every function through the passes (`IrEntryPrune`), as
-		// before the prune, so the driver can compare. It goes when the driver's unpruned run does (docs/design/REACHABILITY_WALK.md, "Removal").
-		if (arguments.indexOf("--no-early-prune") >= 0)
-			Sys.putEnv("HAXEON_EARLY_PRUNE", "0");
+		// The passes and self-checks (`--no-inline`, `--no-early-prune`, `--check-reuse`, ...) are this request's alone.
+		var options = CompileOptions.fromArguments(arguments);
 		// `--warm-edit` builds the program, edits it twice in the same session and rebuilds, and checks each rebuild against a fresh
 		// compiler's build of the edited source; the output is the last rebuild. It implies a plain build, the only kind that reuses.
 		var warmEdit = arguments.indexOf("--warm-edit") >= 0;
 		arguments = [
 			for (argument in arguments)
-				if (argument != "--plain" && argument != "--warm-edit" && argument != "--no-early-prune") argument
+				if (argument != "--plain" && argument != "--warm-edit" && !CompileOptions.isFlag(argument)) argument
 		];
 		var sourcePath = arguments.length > 0 ? arguments[0] : "tests/programs/add.hx";
 		var outputPath = arguments.length > 1 ? arguments[1] : "out/program.hl";
 		var directory = Path.directory(sourcePath);
 		var module = ModulePath.fromFile(Path.withoutDirectory(sourcePath));
 		if (warmEdit) {
-			warmEditBuild(sourcePath, outputPath, directory, module);
+			warmEditBuild(sourcePath, outputPath, directory, module, options);
 			return;
 		}
-		var compiler = newCompiler(plain, directory);
+		var compiler = newCompiler(plain, directory, options);
 		compiler.update(sourcePath, File.getContent(sourcePath), module);
 		var result = compiler.compile(module);
-		File.saveBytes(outputPath, HlWriter.encode(BackendArtifacts.hashLink(result.artifact).module).flatten());
+		File.saveBytes(outputPath,
+			HlWriter.encode(BackendArtifacts.hashLink(result.artifact).module, null, options.checkReuse).flatten());
 		Sys.println('compiled $sourcePath -> $outputPath');
 	}
 
-	static function newCompiler(plain:Bool, directory:String):Compiler {
+	static function newCompiler(plain:Bool, directory:String, options:CompileOptions):Compiler {
 		var compiler = new Compiler();
 		compiler.livePatching = !plain;
+		compiler.options = options;
 		CompilerIntrinsics.register(compiler);
 		compiler.addStandardLibrarySourceRoot("stdlib");
 		// Modules the file refers to are found beside it, as with `-cp .` in Haxe.
@@ -92,11 +90,12 @@ class Main {
 	/**
 	 * Warm-rebuild coverage for every program: build it, add a function nothing reaches, rebuild in the same session, add a kept
 	 * function (so the module changes) and rebuild, then put both inside the file and rebuild again. Each rebuild must be the bytes of a fresh compiler's build of the same text;
-	 * with HAXEON_CHECK_REUSE=1 the compiler also compares what it reused with what it would have built, and throws on a difference.
+	 * with `--check-reuse` the compiler also compares what it reused with what it would have built, and throws on a difference.
 	 */
-	static function warmEditBuild(sourcePath:String, outputPath:String, directory:String, module:String):Void {
+	static function warmEditBuild(sourcePath:String, outputPath:String, directory:String, module:String,
+			options:CompileOptions):Void {
 		var original = File.getContent(sourcePath),
-			compiler = newCompiler(true, directory);
+			compiler = newCompiler(true, directory, options);
 		compiler.update(sourcePath, original, module);
 		compiler.compile(module);
 		var unused = "\nfunction __warmEditUnused():Int return 1;\n";
@@ -115,7 +114,7 @@ class Main {
 			compiler.addStandardLibrarySourceRoot("stdlib");
 			compiler.addSourceRoot(directory == "" ? "." : directory);
 			var warm = HlWriter.encode(BackendArtifacts.hashLink(compiler.compile(module).artifact).module).flatten();
-			var fresh = newCompiler(true, directory);
+			var fresh = newCompiler(true, directory, options);
 			fresh.update(sourcePath, edited, module);
 			if (warm.compare(HlWriter.encode(BackendArtifacts.hashLink(fresh.compile(module).artifact).module)
 				.flatten()) != 0)

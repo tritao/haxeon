@@ -1,4 +1,5 @@
 using compiler.compilation.BackendArtifact.BackendArtifacts;
+import compiler.CompileOptions;
 import compiler.Compiler;
 import compiler.hl.HlWriter;
 import runtime.PatchSet;
@@ -13,8 +14,8 @@ class LiveOptionalScalarMain {
 	}
 	static function main():Void {
 		for (inlining in [false, true]) {
-			compiler.ir.IrInliner.enabled = inlining;
 			var compiler = new Compiler();
+			compiler.options = new CompileOptions({inlining: inlining});
 			compiler.update("Main.hx", source(1));
 			var first = compiler.compile("Main"),
 				live = Runtime.load(HlWriter.encode(first.artifact.hashLink().module).flatten(),

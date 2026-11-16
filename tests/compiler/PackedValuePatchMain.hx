@@ -1,4 +1,5 @@
 using compiler.compilation.BackendArtifact.BackendArtifacts;
+import compiler.CompileOptions;
 import compiler.Compiler;
 import compiler.hl.HlType;
 import compiler.hl.HlWriter;
@@ -22,7 +23,8 @@ class PackedValuePatchMain {
 	static function check(inlining:Bool):Void {
 		var compiler = new Compiler(null, CompilerIntrinsics.configuration());
 		compiler.configure('packed-patch-' + inlining, 'packed-patch',
-			CompilerDriver.targetDefines('hl').concat(['haxeon-inline=' + (inlining ? 1 : 0)]));
+			CompilerDriver.targetDefines('hl'));
+		compiler.options = new CompileOptions({inlining: inlining});
 		compiler.addSourceRoot('stdlib');
 		compiler.update('Point.hx', point);
 		compiler.update('Main.hx', mainSource);

@@ -51,6 +51,8 @@ class CompilerDriver {
 			wasmGcAllocationCount: request.wasmGcAllocationCount,
 			wasmGcStress: request.wasmGcStress,
 			wasmRuntimeNeutral: request.wasmRuntimeNeutral,
+			wasmLegacyExceptions: request.options.wasmLegacyExceptions,
+			checkReuse: request.options.checkReuse,
 			exports: request.exports
 		} : null;
 		var preparedAt = Sys.time() * 1000.0;

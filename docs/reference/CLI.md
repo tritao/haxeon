@@ -127,10 +127,14 @@ running program after `--`:
 ./scripts/haxeon run -- --verbose
 ```
 
-For function breakpoints during debugging, set `"inline": false` in `haxeon.json`. Omit the field to inherit
-`HAXEON_INLINE`; an explicit boolean overrides that environment default. The choice applies to the root project's
-compilation, including dependencies, and participates in action and compiler memo fingerprints. It does not disable
-the other IR passes. Direct compiler calls can use `--define=haxeon-inline=0` or `=1`.
+For function breakpoints during debugging, set `"inline": false` in `haxeon.json`; inlining is on otherwise. The
+choice applies to the root project's compilation, including dependencies, and participates in action and compiler memo
+fingerprints. It does not disable the other IR passes. Direct compiler calls turn it off with `--no-inline`.
+
+A compile states its passes and self-checks as flags, never through the environment, so one compile server serves any
+mix of them: `--no-inline`, `--no-load-store-forwarding`, `--no-strength-reduction`, `--no-early-prune` (a migration
+reference for the reachability walk), `--check-reuse` (compare everything a compile reuses with a fresh build; slow, for
+the test suites) and `--wasm-legacy-exceptions` (below).
 
 `run --profile[=SOURCES]` launches the program under `hl --diagnostics`, records it with `hlprof-live` into an HLPC
 capture directory (`profile.hlpc`, `profile.pftrace`, `capture.json`, the bytecode) and prints a report when it ends.

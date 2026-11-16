@@ -22,7 +22,7 @@ class HlWriterCacheMain {
 		expect(cache.get(function_) == null, "a new debug file list drops the encodings, which name files by index");
 		Sys.println("PASS: writer cache validation marks survive a new debug file list");
 
-		// The snapshot section is compared with its model only under HAXEON_CHECK_REUSE=1 (both come from the same model otherwise).
+		// The snapshot section is compared with its model only when the compile checks its reuse (both come from the same model otherwise).
 		var content = haxe.io.Bytes.ofString("class A {}"),
 			hash:Int = cast 0x811C9DC5;
 		for (index in 0...content.length)
@@ -31,16 +31,12 @@ class HlWriterCacheMain {
 		tampered.sourceSnapshots = [{sourceHash: hash, content: content}];
 		tampered.debugSections.push(HlDebugSection.of(HlWriter.SOURCE_SNAPSHOTS, 1, 0,
 			haxe.io.Bytes.ofString("not the model")));
-		var original = Sys.getEnv("HAXEON_CHECK_REUSE");
-		Sys.putEnv("HAXEON_CHECK_REUSE", "0");
-		HlValidator.validate(tampered);
-		Sys.putEnv("HAXEON_CHECK_REUSE", "1");
+		HlValidator.validate(tampered, null, false);
 		var caught = false;
 		try
-			HlValidator.validate(tampered)
+			HlValidator.validate(tampered, null, true)
 		catch (error:Dynamic)
 			caught = Std.string(error).indexOf("does not match its model") >= 0;
-		Sys.putEnv("HAXEON_CHECK_REUSE", original == null ? "0" : original);
 		expect(caught, "a snapshot section that differs from its model must be reported when checking");
 		Sys.println("PASS: the snapshot section is checked against its model when checking");
 	}

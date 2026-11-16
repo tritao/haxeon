@@ -1,3 +1,4 @@
+import compiler.CompileOptions;
 import compiler.Compiler;
 import compiler.core.Diagnostic.CompileError;
 import compiler.ir.IrInterpreter;
@@ -15,7 +16,8 @@ class ObservableTrackingMain {
 			compiler.update("haxeon/reactive/ObservableSource.hx", sourceSource());
 			compiler.update("Main.hx", programSource());
 			compiler.configure(inlineEnabled ? "observable-inline-on" : "observable-inline-off", "test",
-				["haxeon-inline=" + (inlineEnabled ? "1" : "0")]);
+				[]);
+			compiler.options = new CompileOptions({inlining: inlineEnabled});
 			var result = compiler.compile("Main");
 			var value = new IrInterpreter(result.ir).run("main");
 			if (value != 42)

@@ -65,7 +65,7 @@ A pass that builds a name (concatenation, prefix) builds it through `Names.of`, 
 ## Risks
 
 - A `Name` created in one process and compared in another is a bug that reads as "never equal". Mitigation: ids are never serialized, `Name` has
-  no public constructor, and check mode (`HAXEON_CHECK_REUSE=1`) compares the text form of reused entries against a fresh run.
+  no public constructor, and check mode (`--check-reuse`) compares the text form of reused entries against a fresh run.
 - Memory: a `Name` is a two-field object plus its string; the table pins them. At 10^5 names it is a few MB, against a 5 GB worker.
 - Wasm and C backends: they read names as text; the conversion is at their input. No behaviour change expected.
 

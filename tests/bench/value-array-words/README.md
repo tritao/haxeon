@@ -6,7 +6,7 @@ the candidate, using `--target=wasm-gc --wasm-gc-allocation-count`,
 `ArrayWordBench.prepare`, `ArrayWordBench.perform`, `ArrayWordBench.readRects`,
 `ArrayWordBench.writeRects`, `ArrayWordBench.reverseRects`,
 `ArrayWordBench.readTiny`, `ArrayWordBench.writeTiny` and `ArrayWordBench.reverseTiny`.
-Repeat with `HAXEON_INLINE=0` and `HAXEON_INLINE=1`.
+Repeat with and without `--no-inline`.
 
 Run with Node supporting Wasm GC:
 

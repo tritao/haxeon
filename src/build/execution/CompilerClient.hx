@@ -19,12 +19,6 @@ private typedef Connection = {
  * build root share one per-user session directory, so the resident limits bound the whole machine.
  */
 class CompilerClient {
-	/** Optimization switches are read once at startup, so each combination needs a separate worker. */
-	static function inlineOption():String
-		return (ProcessRunner.environmentValue("HAXEON_INLINE") == "0" ? "off" : "on") + ":loadstore="
-			+ (ProcessRunner.environmentValue("HAXEON_LOADSTORE") == "0" ? "off" : "on") + ":strength="
-			+ (ProcessRunner.environmentValue("HAXEON_STRENGTH") == "0" ? "off" : "on");
-
 	/**
 	 * The version that names a worker. Without a session it is fingerprinted on every call; with one it is computed once, and
 	 * logged then, so a worker left stale by edits to the compiler sources can be told apart from a fresh one.
@@ -32,7 +26,8 @@ class CompilerClient {
 	public static function workerVersion(command:String, compilerSource:String, home:String, buildRoot:String,
 			profilePort:Null<String>,
 			?session:build.BuildSession):String {
-		var identity = new ExecutionAction(new ActionId("compiler-session-v8:inline=" + inlineOption()
+		// A request states its passes and checks (`CompileOptions`), so one worker serves every combination of them.
+		var identity = new ExecutionAction(new ActionId("compiler-session-v9"
 			+ (profilePort == null ? "" : ":profile:" + profilePort)), [],
 			build.CompilerSources.roots(compilerSource).concat([Path.join([
 				home,

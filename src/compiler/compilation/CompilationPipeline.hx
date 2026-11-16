@@ -98,22 +98,22 @@ class CompilationPipeline {
 			frontendGraphDoneAt = frontend.frontendGraphDoneAt,
 			typingLoweringDoneAt = frontend.typingLoweringDoneAt,
 			irAssemblyDoneAt = frontend.irAssemblyDoneAt;
-		// A build whose pipeline inputs equal the last plain build's reuses its module too, unless HAXEON_CHECK_REUSE=1 assembles
-		// it again to compare.
+		// A build whose pipeline inputs equal the last plain build's reuses its module too, unless the compile checks its reuse
+		// (`CompileOptions.checkReuse`) and assembles it again to compare.
 		var session = context.state.backend,
 			backendKey = session.environmentKey(context),
 			reusedFrom = frontend.reused,
 			previousBackend = reusedFrom != null
 				&& reusedFrom.backend != null
 				&& reusedFrom.backendEnvironment == backendKey ? reusedFrom.backend : null,
-			checkingReuse = Sys.getEnv("HAXEON_CHECK_REUSE") == "1",
+			checkingReuse = context.options.checkReuse,
 			backendReused = previousBackend != null && !checkingReuse,
 			backend = backendReused ? session.reuse(previousBackend,
 				irAssemblyDoneAt) : session.assemble(context, ir, regenerated, frontend.relocated, token);
 		if (previousBackend != null && checkingReuse) {
 			var difference = session.difference(previousBackend, backend);
 			if (difference != null)
-				throw 'HAXEON_CHECK_REUSE: the module reused for equal pipeline inputs differs from a fresh assembly ($difference)';
+				throw '--check-reuse: the module reused for equal pipeline inputs differs from a fresh assembly ($difference)';
 		}
 		var snapshot = context.state.pipelineSnapshot;
 		if (snapshot != null && !backendReused) {

@@ -22,7 +22,6 @@ private typedef KnownElement = {
  * Runtime array-cast checks enforce concrete storage types; differently typed arrays cannot alias
  * the same elements. Erased dynamic array accesses use calls, which invalidate all known loads. */
 class IrLoadStoreForwarding {
-	public static var enabled:Bool = Sys.getEnv("HAXEON_LOADSTORE") != "0";
 
 	/** Object layouts are needed only to exclude inline value fields; unknown Obj fields are excluded too. */
 	public static function run(fn:IrFunction, ?objects:IrObjectTable):IrFunction {

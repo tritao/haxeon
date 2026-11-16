@@ -95,7 +95,7 @@ done is proportional to the change.
   So a live build puts its functions in the same `HlLoweredCache`, with no requests, and `HlLower` trusts every entry it is not
   told to regenerate (`trustCache`); plain builds compare the IR and link. The two modes are chosen by
   `HlModuleAssembler.livePatching`, and the assembler refuses a live build with a lowered cache and a plain one without.
-  Trust relies on the regenerated set being right, so `HAXEON_CHECK_REUSE=1` lowers each kept function again and throws,
+  Trust relies on the regenerated set being right, so `--check-reuse` lowers each kept function again and throws,
   naming it, if its code differs or the symbol tables grew. No second lowering path, no compat form.
 
 Cache entry: `LoweredEntry { relocatable function, facts }`.
@@ -178,7 +178,7 @@ specialization of it, and the inliner's `InlineMemo.dependencies` is the same id
 - A cached rewrite is reused while its input function is the same object and every recorded answer is unchanged. When a
   summary changes, only the rewrites that read the changed part run again. A read of `summary.closureTypes` is tracked per
   key (the closure type), not per summary, so one new closure type does not rerun every function.
-- `HAXEON_CHECK_REUSE=1` recomputes every reused rewrite, contribution and helper and compares; it throws naming the pass,
+- `--check-reuse` recomputes every reused rewrite, contribution and helper and compares; it throws naming the pass,
   the function and the first differing instruction. It is part of the warm == cold test and runs once on app warm builds
   before each port merges.
 - One cache per pass (rewrites + contributions), one engine, one invalidation rule. `IrStaticCheckCache`,
@@ -330,7 +330,7 @@ Safety:
 
 - `LoweringView` is the only way `HlLower` sees other entities. It must not hold the `IrProgram` or the object maps, so an
   unrecorded fact cannot be read.
-- Check mode (`HAXEON_CHECK_REUSE=1`): every reused entry (lowered function, later pass outputs) is also recomputed and
+- Check mode (`--check-reuse`): every reused entry (lowered function, later pass outputs) is also recomputed and
   compared; the build throws, naming the function and what differed. It runs in the warm == cold test and once on the app
   warm builds before each pass port. A test aid, not a fallback.
 - Worker RSS after a warm app build is reported before and after the caches.
@@ -387,7 +387,7 @@ Not traced: `IrInitializationCalls.calls()` beyond its fixpoint header, and the 
   reflection bodies, wire and JSON codecs, key-path helpers) are typed on request and are not in that table, so a warm build that
   does not request them again drops what they registered. None is known to register an anonymous type, and the app's cold and warm
   typed programs agree. Structured identities (ADR 0003 M3) give a helper the unit it needs; until then
-  `WarmRebuildReuseMain` compares the warm and the fresh typed program, which is the check. `HAXEON_CHECK_REUSE` cannot recompute a typed
+  `WarmRebuildReuseMain` compares the warm and the fresh typed program, which is the check. `--check-reuse` cannot recompute a typed
   program without typing every unit again, which is what a fresh compile is, so it does not cover this.
 - **Remaining cold/warm differences found while making the first no-op reuse** (all fixed): process-wide temporaries counters in
   `IrGenerator`, the typing-order list of reflectable classes, the anonymous types of unchanged units, generated helpers cached by two
@@ -430,7 +430,7 @@ inline cache, the pipeline snapshot, the lowered cache, the reachability cache a
 types, and `restore` puts them back together; the candidate of a build only ever works on copies. (Since 2026-11-16 all of these are one
 `SessionState`, and the snapshot is the state the build was copied from.) Before this, a rejected
 publication (the artifact write failed) restored the modules and the assembler but kept the caches of the rejected build, so the next
-build compared against the rejected sources and kept a stale `main` in the live module (found by `HAXEON_CHECK_REUSE=1`).
+build compared against the rejected sources and kept a stale `main` in the live module (found by `--check-reuse`).
 Test: `CompilerSessionMain` (build, failed write, rebuild runs the new value and still writes the output).
 
 ## Deferred options from the edit-build measurements (2026-11-10)

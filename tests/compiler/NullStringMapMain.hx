@@ -1,4 +1,5 @@
 using compiler.compilation.BackendArtifact.BackendArtifacts;
+import compiler.CompileOptions;
 import compiler.Compiler;
 import compiler.backend.wasm.WasmBackend;
 import compiler.hl.HlWriter;
@@ -16,7 +17,8 @@ class NullStringMapMain {
 			c.addStandardLibrarySourceRoot("stdlib");
 			c.setExportedFunctions(exports);
 			c.configure("null-map-" + target + inlining, "null-map",
-				CompilerDriver.targetDefines(target).concat(["haxeon-inline=" + (inlining ? 1 : 0)]));
+				CompilerDriver.targetDefines(target));
+			c.options = new CompileOptions({inlining: inlining});
 			var input = source;
 			if (target == "hl") input +=
 				'function census():Int { NullStringMapCensus.prepare(); var before=hl.Gc.totalAllocated(); var small=NullStringMapCensus.perform(8); if(small!=8 || hl.Gc.totalAllocated()!=before) return 1; before=hl.Gc.totalAllocated(); var result=NullStringMapCensus.perform(1024); return result==1024 && hl.Gc.totalAllocated()==before ? 42 : 1; }';

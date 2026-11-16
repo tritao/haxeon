@@ -1,4 +1,5 @@
 using compiler.compilation.BackendArtifact.BackendArtifacts;
+import compiler.CompileOptions;
 import compiler.Compiler;
 import compiler.hl.HlWriter;
 import compiler.runtime.CompilerIntrinsics;
@@ -10,7 +11,7 @@ import haxe.io.Bytes;
  *
  * The program has a generic class (`Box`), an enum (`Shape`), a library module and a user of both. Every scenario compiles it once,
  * applies an edit in the same session, compiles again, and compares the module with a fresh compiler's. An edit that changes the
- * program must not report a reused module; a build with no edit must. With HAXEON_CHECK_REUSE=1 the reused result is also assembled again
+ * program must not report a reused module; a build with no edit must. A compile that checks its reuse also assembles the reused result again
  * and compared inside the compiler, which throws on a difference.
  */
 class WarmRebuildReuseMain {
@@ -89,7 +90,7 @@ class WarmRebuildReuseMain {
 		Sys.println("PASS: a warm plain build equals a fresh one, and reuses its module when nothing changed");
 	}
 
-	/** An edit is built in a warm session twice: as it is, and with HAXEON_CHECK_REUSE=1, which also lowers every function afresh and compares. */
+	/** An edit is built in a warm session twice: as it is, and checking its reuse, which also lowers every function afresh and compares. */
 	static function edit(failures:Array<String>, label:String, change:Map<String, String>->Void,
 			shifts:Bool = false):Void {
 		attempt(failures, label, false, change, false, shifts);
@@ -99,10 +100,9 @@ class WarmRebuildReuseMain {
 	static function attempt(failures:Array<String>, label:String, expectReuse:Bool, change:Map<String, String>->Void,
 			?check:Bool = false,
 			?shifts:Bool = false):Void {
-		var checkBefore = Sys.getEnv("HAXEON_CHECK_REUSE");
 		try {
-			Sys.putEnv("HAXEON_CHECK_REUSE", check ? "1" : "0");
 			var files = initialSources(), compiler = newCompiler(files);
+			compiler.options = new CompileOptions({checkReuse: check});
 			var first = compiler.compile("Main");
 			var before = [for (path in files.keys()) path];
 			change(files);
@@ -141,7 +141,6 @@ class WarmRebuildReuseMain {
 		} catch (error:Dynamic) {
 			failures.push('$label: ${Std.string(error)}');
 		}
-		Sys.putEnv("HAXEON_CHECK_REUSE", checkBefore == null ? "0" : checkBefore);
 	}
 
 	/** The names of the anonymous types of the last typed program, sorted: a warm program lists what a fresh one does. */

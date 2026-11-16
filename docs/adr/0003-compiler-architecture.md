@@ -235,7 +235,7 @@ Go/no-go after decision 1 lands: measure memory and latency with an editor and a
 
 The invariant stays absolute: an incremental result equals a fresh compile, byte for byte for module output.
 
-- A check mode (`HAXEON_CHECK_REUSE=1`) recomputes every reused query and fails, naming the query and the difference.
+- A check mode (`--check-reuse`) recomputes every reused query and fails, naming the query and the difference.
 - The compiler tests run warm-versus-cold byte comparisons for edits to a body, a signature, a generic specialization, an
   added or removed function, and an added constant.
 - Before a migration step merges, check mode is run once on warm `app` builds.

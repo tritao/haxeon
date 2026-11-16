@@ -1,3 +1,4 @@
+import compiler.CompileOptions;
 import compiler.Compiler;
 import compiler.core.Diagnostic.CompileError;
 import compiler.ir.Ir;
@@ -55,7 +56,8 @@ class ReferenceIdentityMain {
 				+ 'var x:Equatable=new S(1), y:Equatable=new S(1), same=x; '
 				+ 'var box=new Box<Int>(); if(!sameBox(box,box) || sameBox(box,new Box<Int>()) || !absentBox(null)) return 2; '
 				+ 'return a!=b && a==a && a.equals(b) && va==alias && va!=vb && va==a && x!=y && x==same ? 42 : 0; }');
-			compiler.configure("reference-identity", "test", ["haxeon-inline=" + (inlineEnabled ? "1" : "0")]);
+			compiler.configure("reference-identity", "test", []);
+			compiler.options = new CompileOptions({inlining: inlineEnabled});
 			var p = compiler.compile("Main").ir;
 			if (new IrInterpreter(p).run("main") != 42) throw 'class/interface identity failed (inline=$inlineEnabled)';
 		}

@@ -1,3 +1,4 @@
+import compiler.CompileOptions;
 import compiler.backend.Backend.BackendTarget;
 import compiler.backend.wasm.EnumStringDescriptors;
 import compiler.backend.wasm.WasmLayout;
@@ -420,7 +421,8 @@ class WasmStringFinalizationMain {
 		var session = new compiler.Compiler(null, compiler.runtime.CompilerIntrinsics.configuration());
 		session.addStandardLibrarySourceRoot("stdlib");
 		session.configure("string-finalization-" + target + inlining, "string-finalization",
-			compiler.tools.CompilerDriver.targetDefines(target).concat(["haxeon-inline=" + (inlining ? 1 : 0)]));
+			compiler.tools.CompilerDriver.targetDefines(target));
+		session.options = new CompileOptions({inlining: inlining});
 		session.update("Main.hx",
 			'enum Tone { Dark; Light; Shade(value:Int); } enum Unused { NeverSeen(value:Int); } '
 			+ 'class Label { public function new() {} public function toString():String return "label"; } '

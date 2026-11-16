@@ -1,3 +1,4 @@
+import compiler.CompileOptions;
 import compiler.hl.HlWriter;
 import compiler.hl.lower.HlLower;
 import compiler.ir.Ir;
@@ -2287,7 +2288,7 @@ class ValueArrayAccessMain {
 					];
 					compiler.ir.IrNullableScalarFlow.rewrite(rangeProgram);
 					compiler.ir.IrInliner.run(rangeProgram, new compiler.ir.IrInliner.IrInlineCache(),
-						compiler.ir.TargetProfile.wasm, inlineEnabled);
+						compiler.ir.TargetProfile.wasm, new CompileOptions({inlining: inlineEnabled}));
 					var backendTarget:compiler.backend.Backend.BackendTarget = target == Wasm32 ? Wasm32 : WasmGc;
 					var bytes = new compiler.backend.wasm.WasmBackend().compile(rangeProgram, {
 						target: backendTarget,

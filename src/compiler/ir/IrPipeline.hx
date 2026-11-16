@@ -131,7 +131,7 @@ class IrPipeline {
 		return !context.livePatching && !context.isWasm();
 
 	static function checksVerification(program:IrProgram, context:IrPipelineContext):Bool
-		return !context.livePatching && !context.isWasm() && context.checkingReuse;
+		return !context.livePatching && !context.isWasm() && context.options.checkReuse;
 
 	// Assembly stages.
 
@@ -259,7 +259,7 @@ class IrPipeline {
 	/**
 	 * The prune point (docs/design/REACHABILITY_WALK.md): after the enum providers and generic owner erasure, which settle the class names and the
 	 * helpers, and before every later pass. The entry function is created last, so the roots are what it calls: main, and the
-	 * initializers `__init` runs. With HAXEON_CHECK_REUSE=1, after each later stage that checks the prune nothing may call a function it
+	 * initializers `__init` runs. With `--check-reuse`, after each later stage that checks the prune nothing may call a function it
 	 * removed (the failure of 2026-11-10).
 	 */
 	static function entryPrune(assembly:IrAssembly, context:IrPipelineContext):IrAssembly {
@@ -399,7 +399,7 @@ class IrPipeline {
 		var generator = assembly.generator;
 		assembly.natives = ObjectReflection.generate(generator.facts, assembly.natives, assembly.objects,
 			assembly.reflectableObjects, assembly.functions, generator.profile.nativeReflectionDispatch,
-			assembly.reachedNatives);
+			assembly.reachedNatives, context.options.checkReuse);
 		return assembly;
 	}
 
@@ -511,7 +511,7 @@ class IrPipeline {
 		var cache = context.inlineCache;
 		if (cache == null)
 			throw "The inliner stage needs the session's inline cache";
-		context.inlinerChanged = IrInliner.run(program, cache, context.profile, context.inlineEnabled,
+		context.inlinerChanged = IrInliner.run(program, cache, context.profile, context.options,
 			context.instrumentScope);
 		return program;
 	}
@@ -525,15 +525,15 @@ class IrPipeline {
 		return program;
 	}
 
-	/** `HAXEON_CHECK_REUSE=1`: the memoized verification accepted only what a full one accepts, and every provider call is declared. */
+	/** `--check-reuse`: the memoized verification accepted only what a full one accepts, and every provider call is declared. */
 	static function verifierCheck(program:IrProgram, context:IrPipelineContext):IrProgram {
 		try
 			IrVerifier.verify(program)
 		catch (error:String)
-			throw 'HAXEON_CHECK_REUSE: verification skipped a function that fails in full: $error';
+			throw '--check-reuse: verification skipped a function that fails in full: $error';
 		var providerProblem = IrProviders.check(program.functions);
 		if (providerProblem != null)
-			throw 'HAXEON_CHECK_REUSE: $providerProblem';
+			throw '--check-reuse: $providerProblem';
 		return program;
 	}
 }

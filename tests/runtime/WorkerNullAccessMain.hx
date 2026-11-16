@@ -1,4 +1,5 @@
 using compiler.compilation.BackendArtifact.BackendArtifacts;
+import compiler.CompileOptions;
 import compiler.Compiler;
 import compiler.hl.HlWriter;
 import compiler.runtime.CompilerIntrinsics;
@@ -11,7 +12,8 @@ class WorkerNullAccessMain {
 			var compiler = new Compiler();
 			CompilerIntrinsics.register(compiler);
 			compiler.addStandardLibrarySourceRoot("stdlib");
-			compiler.configure("worker-null", "test", ["haxeon-inline=" + (inlineEnabled ? "1" : "0")]);
+			compiler.configure("worker-null", "test", []);
+			compiler.options = new CompileOptions({inlining: inlineEnabled});
 			var input = inlineEnabled ? StringTools.replace(source, 'stack.indexOf("resolveTarget") >= 0',
 				"true") : source;
 			for (revision in 0...2) {

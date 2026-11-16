@@ -1,4 +1,5 @@
 using compiler.compilation.BackendArtifact.BackendArtifacts;
+import compiler.CompileOptions;
 import compiler.Compiler;
 import compiler.hl.HlWriter;
 import runtime.PatchSet;
@@ -55,18 +56,14 @@ class LiveSignaturePatchMain {
 	}
 
 	static function main():Void {
-		var wasEnabled = compiler.ir.IrInliner.enabled;
-		run();
-		if (wasEnabled) {
-			// A removed lambda still calls the old signature when its code was not inlined.
-			compiler.ir.IrInliner.enabled = false;
-			run();
-			compiler.ir.IrInliner.enabled = wasEnabled;
-		}
+		run(true);
+		// A removed lambda still calls the old signature when its code was not inlined.
+		run(false);
 	}
 
-	static function run():Void {
+	static function run(inlining:Bool):Void {
 		var compiler = new Compiler();
+		compiler.options = new CompileOptions({inlining: inlining});
 		compiler.update("Main.hx", program(1));
 		var build = compiler.compile("Main"),
 			live = Runtime.load(HlWriter.encode(build.artifact.hashLink().module).flatten(),

@@ -187,7 +187,7 @@ module builders still run the rest interleaved with the module they build: the b
 field flattening and the scalar ABI rewrite hand their state to the builder, so they are not separable stages yet.
 
 To add a pass, add a stage at its place in the list: `when` names the targets or inputs it runs for, `measured` gives it a line in the
-pass allocation report under the stage name, and `checksPrune` makes the early prune's check mode (`HAXEON_CHECK_REUSE=1`) hold after
+pass allocation report under the stage name, and `checksPrune` makes the early prune's check mode (`--check-reuse`) hold after
 it. The lists are built once; running one costs a predicate and a call per stage.
 
 ## Warm builds: what landed (M0 and M1 of ADR 0003)
@@ -233,7 +233,7 @@ while its reads do.
 
 ### Check mode
 
-`HAXEON_CHECK_REUSE=1` recomputes what a build reused and fails, naming the function, when the two differ: the shortcut is re-run, every
+`--check-reuse` recomputes what a build reused and fails, naming the function, when the two differ: the shortcut is re-run, every
 linked function is compared with a fresh lowering, the final IR is verified in full after the memoized run, and in a live build every kept
 function is lowered again (`HlFunctionEquality`: type, slot, registers, opcodes with labels compared one to one, debug data). Functions
 frozen on purpose (retired by a signature change, or dropped from the program) are skipped. The full driver suite and `test-hot-reload` pass

@@ -72,7 +72,7 @@ class IrProviders {
 		};
 
 	/**
-	 * HAXEON_CHECK_REUSE=1, once the producers of the typed operations have run: every typed operation in `functions` has a provider row.
+	 * `--check-reuse`, once the producers of the typed operations have run: every typed operation in `functions` has a provider row.
 	 * Returns the first problem found (function, operation, type), or null.
 	 */
 	public static function checkTypedOperations(functions:Array<IrFunction>):Null<String> {
@@ -114,7 +114,7 @@ class IrProviders {
 		return operation + "\n" + type.toString();
 
 	/**
-	 * HAXEON_CHECK_REUSE=1: every function whose name starts with `$` declares what it is (a kind other than `Ordinary`), and no two functions
+	 * `--check-reuse`: every function whose name starts with `$` declares what it is (a kind other than `Ordinary`), and no two functions
 	 * serve the same operation on the same type. Returns the first problem found, or null.
 	 */
 	public static function check(functions:Array<IrFunction>):Null<String> {

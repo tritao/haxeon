@@ -37,6 +37,9 @@ class CompilationContext {
 	public final developmentMetadata:Bool;
 	public final backendOptions:Null<compiler.backend.Backend.BackendOptions>;
 
+	/** The passes and self-checks this compile runs (`CompileOptions`). */
+	public final options:compiler.CompileOptions;
+
 	/** Why the frontend started over, one entry per module typing found it needed: each restart redoes the whole frontend. */
 	public final frontendRestarts:Array<String> = [];
 
@@ -65,6 +68,7 @@ class CompilationContext {
 		livePatching = owner.livePatching;
 		developmentMetadata = owner.developmentMetadata;
 		backendOptions = owner.backendOptions;
+		options = owner.options;
 		// A copy: the loader remembers the names no root holds, and each build probes again for those.
 		moduleAnalyzer = new ModuleAnalyzer(state.modules, state.types, natives, state.compiledOnce, defines,
 			owner.sourceLoader.copy(), buildSemanticModels,
@@ -103,14 +107,6 @@ class CompilationContext {
 	public function exportedFunctions():Array<String>
 		return owner.exportedFunctions.copy();
 
-	public function inlineEnabled():Bool {
-		var option = defines.get("haxeon-inline");
-		if (option == null)
-			return compiler.ir.IrInliner.enabled;
-		if (option != "0" && option != "1")
-			throw "haxeon-inline must be 0 or 1";
-		return option == "1";
-	}
 
 	/**
 	 * The functions an instrumented build probes, or null for an ordinary build. `haxeon-instrument=1` turns

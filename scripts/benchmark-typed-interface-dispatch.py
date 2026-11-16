@@ -81,8 +81,10 @@ def main():
         guest = output / (stem + (".hl" if target == "hl" else ".wasm"))
         source = output / f"source-{n}"
         flags = [] if target == "hl" else ["--wasm-memory-stats" if target == "wasm32" else "--wasm-gc-allocation-count", "--export=Scale.prepare", "--export=Scale.perform"]
+        if not inline:
+            flags.append("--no-inline")
         command = [str(ROOT/"scripts/hl"), str(compilers[label]), "--target="+target, "--output="+str(guest), f"--entry=DispatchScale{n}", "--root="+str(source), "--root=stdlib", *flags, str(source/f"DispatchScale{n}.hx")]
-        run = subprocess.run(command, cwd=ROOT, env=dict(os.environ, TMPDIR=str(output), HAXEON_INLINE=str(inline)), stdout=subprocess.PIPE, stderr=subprocess.STDOUT, text=True)
+        run = subprocess.run(command, cwd=ROOT, env=dict(os.environ, TMPDIR=str(output)), stdout=subprocess.PIPE, stderr=subprocess.STDOUT, text=True)
         (output/(stem+"-build.log")).write_text(run.stdout)
         if run.returncode:
             raise RuntimeError(f"Build failed: {stem}; see its build log")

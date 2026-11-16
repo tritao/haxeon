@@ -203,7 +203,7 @@ Pass<C, S>
 4. **Tables.** A pass names the tables it changes (objects, interfaces, enums, statics, natives). The change is part of its summary,
    not a side effect on a shared array. The ones that push into input arrays in place today (`IrValueInterfaceBoxes`,
    `IrOptionalScalarFlow`, `IrTypedInterfaceDispatch.generate`, `GenericOwnerErasure.generate`, `ObjectReflection`) change with their port.
-5. **Check mode.** `HAXEON_CHECK_REUSE=1` recomputes every reused rewrite, contribution and helper and compares with
+5. **Check mode.** `--check-reuse` recomputes every reused rewrite, contribution and helper and compares with
    `HlFunctionEquality`-style structural equality; it names the pass, the function and the first differing instruction.
 6. **Unported passes** run as one opaque step with the whole program, so every commit is correct.
 

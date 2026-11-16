@@ -148,32 +148,32 @@ done < "$root_dir/tests/programs/expected-exits.tsv"
 for inline in 0 1; do
 	for target in wasm32 wasm-gc; do
 		if [[ "$target" == wasm32 ]]; then iterator_census_flags=(--wasm-memory-stats --wasm-gc-stress); else iterator_census_flags=(--wasm-gc-allocation-count); fi
-		HAXEON_INLINE="$inline" haxeon_compile_async --target="$target" "${iterator_census_flags[@]}" \
+		haxeon_compile_async $( ((inline)) || echo --no-inline ) --target="$target" "${iterator_census_flags[@]}" \
 			--export=KeyPathCensus.prepare --export=KeyPathCensus.known --export=KeyPathCensus.knownComposition --export=KeyPathCensus.escapedClass \
 			--export=KeyPathCensus.escapedStruct --export=KeyPathCensus.escapedStructValue --export=KeyPathCensus.escapedStaticStruct --export=KeyPathCensus.escapedComposition \
 			--output="$parity_output_dir/wasm-parity-$target-key-path-census-inline-$inline.wasm" \
 			--entry=key-paths --root=tests/programs tests/programs/key-paths.hx
-		HAXEON_INLINE="$inline" haxeon_compile_async --target="$target" \
+		haxeon_compile_async $( ((inline)) || echo --no-inline ) --target="$target" \
 			--export=SpecPointers.foreign --export=SpecNullReads.prepare --export=SpecNullReads.direct --export=SpecNullReads.known --export=SpecNullReads.escaped \
 			--output="$parity_output_dir/wasm-parity-$target-key-path-semantics-inline-$inline.wasm" \
 			--entry=key-path-semantics --root=tests/programs tests/programs/key-path-semantics.hx
-		HAXEON_INLINE="$inline" haxeon_compile_async --target="$target" "${iterator_census_flags[@]}" \
+		haxeon_compile_async $( ((inline)) || echo --no-inline ) --target="$target" "${iterator_census_flags[@]}" \
 			--export=DeferCensus.perform --output="$parity_output_dir/wasm-parity-$target-defer-census-inline-$inline.wasm" \
 			--entry=defer-cleanup --root=tests/programs tests/programs/defer-cleanup.hx
-		HAXEON_INLINE="$inline" haxeon_compile_async --target="$target" "${iterator_census_flags[@]}" \
+		haxeon_compile_async $( ((inline)) || echo --no-inline ) --target="$target" "${iterator_census_flags[@]}" \
 			--export=ScopedCensus.prepare --export=ScopedCensus.perform --export=ScopedCensus.performValue --export=ScopedCensus.performNullableValue \
 			--export=ScopedCensus.performMutableValue --export=ScopedCensus.performNullableMutableValue --export=ScopedCensus.prepareComposite --export=ScopedCensus.performComposite \
 			--output="$parity_output_dir/wasm-parity-$target-scoped-census-inline-$inline.wasm" \
 			--entry=scoped-cleanup --root=tests/programs tests/programs/scoped-cleanup.hx
-		HAXEON_INLINE="$inline" haxeon_compile_async --target="$target" "${iterator_census_flags[@]}" \
+		haxeon_compile_async $( ((inline)) || echo --no-inline ) --target="$target" "${iterator_census_flags[@]}" \
 			--export=ArrayWordBench.prepare --export=ArrayWordBench.perform \
 			--output="$parity_output_dir/wasm-parity-$target-word-access-census-inline-$inline.wasm" \
 			--entry=struct-array-word-access --root=tests/programs tests/programs/struct-array-word-access.hx
-		HAXEON_INLINE="$inline" haxeon_compile_async --target="$target" "${iterator_census_flags[@]}" \
+		haxeon_compile_async $( ((inline)) || echo --no-inline ) --target="$target" "${iterator_census_flags[@]}" \
 			--export=LanePolicyCensus.prepare --export=LanePolicyCensus.perform \
 			--output="$parity_output_dir/wasm-parity-$target-lane-policy-census-inline-$inline.wasm" \
 			--entry=struct-array-lane-policy --root=tests/programs tests/programs/struct-array-lane-policy.hx
-		HAXEON_INLINE="$inline" haxeon_compile_async --target="$target" "${iterator_census_flags[@]}" \
+		haxeon_compile_async $( ((inline)) || echo --no-inline ) --target="$target" "${iterator_census_flags[@]}" \
 			--export=CarrierCensus.prepare --export=CarrierCensus.pointers --export=CarrierCensus.pointerGetter --export=CarrierCensus.ints \
 			--export=CarrierCensus.floats --export=CarrierCensus.values --export=CarrierCensus.genericPointers \
 			--export=CarrierCensus.genericInts --export=CarrierCensus.genericFloats --export=CarrierCensus.genericValues \
@@ -181,200 +181,200 @@ for inline in 0 1; do
 			--export=CarrierCensus.checkMutation --export=CarrierCensus.checkNullable --export=CarrierCensus.checkInvalid \
 			--output="$parity_output_dir/wasm-parity-$target-interface-carriers-inline-$inline.wasm" \
 			--entry=generic-interface-value-carriers --root=tests/programs tests/programs/generic-interface-value-carriers.hx
-		HAXEON_INLINE="$inline" haxeon_compile_async --target="$target" "${iterator_census_flags[@]}" \
+		haxeon_compile_async $( ((inline)) || echo --no-inline ) --target="$target" "${iterator_census_flags[@]}" \
 			--export=PointerBoundaryCensus.prepare --export=PointerBoundaryCensus.perform --export=PointerBoundaryCensus.clear \
 			--output="$parity_output_dir/wasm-parity-$target-raw-pointer-census-inline-$inline.wasm" \
 			--entry=generic-erased-raw-pointer --root=tests/programs tests/programs/generic-erased-raw-pointer.hx
-		HAXEON_INLINE="$inline" haxeon_compile_async --target="$target" "${iterator_census_flags[@]}" \
+		haxeon_compile_async $( ((inline)) || echo --no-inline ) --target="$target" "${iterator_census_flags[@]}" \
 			--export=ManagedClosureCensus.prepare --export=ManagedClosureCensus.perform --export=ManagedClosureCensus.literalOnly \
 			--output="$parity_output_dir/wasm-parity-$target-managed-closure-census-inline-$inline.wasm" \
 			--entry=generic-managed-reference-closure --root=tests/programs tests/programs/generic-managed-reference-closure.hx
-		HAXEON_INLINE="$inline" haxeon_compile_async --target="$target" "${iterator_census_flags[@]}" \
+		haxeon_compile_async $( ((inline)) || echo --no-inline ) --target="$target" "${iterator_census_flags[@]}" \
 			--export=BoundaryClosureCensus.prepare --export=BoundaryClosureCensus.perform \
 			--output="$parity_output_dir/wasm-parity-$target-erased-closure-census-inline-$inline.wasm" \
 			--entry=generic-erased-array-function-checks --root=tests/programs tests/programs/generic-erased-array-function-checks.hx
-		HAXEON_INLINE="$inline" haxeon_compile_async --target="$target" "${iterator_census_flags[@]}" \
+		haxeon_compile_async $( ((inline)) || echo --no-inline ) --target="$target" "${iterator_census_flags[@]}" \
 			--export=ScalarClosureIdentityCensus.prepare --export=ScalarClosureIdentityCensus.perform \
 			--output="$parity_output_dir/wasm-parity-$target-scalar-closure-identity-census-inline-$inline.wasm" \
 			--entry=scalar-closure-identity --root=tests/programs tests/programs/scalar-closure-identity.hx
-		HAXEON_INLINE="$inline" haxeon_compile_async --target="$target" "${iterator_census_flags[@]}" \
+		haxeon_compile_async $( ((inline)) || echo --no-inline ) --target="$target" "${iterator_census_flags[@]}" \
 			--export=ClosureSignatureCensus.prepare --export=ClosureSignatureCensus.perform \
 			--output="$parity_output_dir/wasm-parity-$target-closure-signature-census-inline-$inline.wasm" \
 			--entry=wasm-closure-signature-census --root=tests/programs tests/programs/wasm-closure-signature-census.hx
-		HAXEON_INLINE="$inline" haxeon_compile_async --target="$target" "${iterator_census_flags[@]}" \
+		haxeon_compile_async $( ((inline)) || echo --no-inline ) --target="$target" "${iterator_census_flags[@]}" \
 			--export=ScalarMapCensus.prepare --export=ScalarMapCensus.perform \
 			--output="$parity_output_dir/wasm-parity-$target-scalar-map-census-inline-$inline.wasm" \
 			--entry=specialized-map-scalar-keys --root=tests/programs tests/programs/specialized-map-scalar-keys.hx
-		HAXEON_INLINE="$inline" haxeon_compile_async --target="$target" "${iterator_census_flags[@]}" \
+		haxeon_compile_async $( ((inline)) || echo --no-inline ) --target="$target" "${iterator_census_flags[@]}" \
 			--export=FloatHashCensus.prepare --export=FloatHashCensus.perform \
 			--output="$parity_output_dir/wasm-parity-$target-float-hash-census-inline-$inline.wasm" \
 			--entry=hash-float-extremes --root=tests/programs tests/programs/hash-float-extremes.hx
-		HAXEON_INLINE="$inline" haxeon_compile_async --target="$target" "${iterator_census_flags[@]}" \
+		haxeon_compile_async $( ((inline)) || echo --no-inline ) --target="$target" "${iterator_census_flags[@]}" \
 			--export=FunctionGlobals.prepare --export=FunctionGlobals.perform \
 			--output="$parity_output_dir/wasm-parity-$target-function-global-census-inline-$inline.wasm" \
 			--entry=function-global-null --root=tests/programs tests/programs/function-global-null.hx
-		HAXEON_INLINE="$inline" haxeon_compile_async --target="$target" "${iterator_census_flags[@]}" \
+		haxeon_compile_async $( ((inline)) || echo --no-inline ) --target="$target" "${iterator_census_flags[@]}" \
 			--export=InterfaceValueCensus.prepare --export=InterfaceValueCensus.perform \
 			--output="$parity_output_dir/wasm-parity-$target-interface-value-census-inline-$inline.wasm" \
 			--entry=interface-value-carriers --root=tests/programs tests/programs/interface-value-carriers.hx
-		HAXEON_INLINE="$inline" haxeon_compile_async --target="$target" "${iterator_census_flags[@]}" \
+		haxeon_compile_async $( ((inline)) || echo --no-inline ) --target="$target" "${iterator_census_flags[@]}" \
 			--export=ValueArgumentCensus.prepare --export=ValueArgumentCensus.perform \
 			--output="$parity_output_dir/wasm-parity-$target-value-argument-census-inline-$inline.wasm" \
 			--entry=value-argument-snapshots --root=tests/programs tests/programs/value-argument-snapshots.hx
-		HAXEON_INLINE="$inline" haxeon_compile_async --target="$target" "${iterator_census_flags[@]}" \
+		haxeon_compile_async $( ((inline)) || echo --no-inline ) --target="$target" "${iterator_census_flags[@]}" \
 			--export=DynamicStoreCensus.prepare --export=DynamicStoreCensus.perform \
 			--output="$parity_output_dir/wasm-parity-$target-dynamic-store-census-inline-$inline.wasm" \
 			--entry=struct-array-dynamic-store --root=tests/programs tests/programs/struct-array-dynamic-store.hx
-		HAXEON_INLINE="$inline" haxeon_compile_async --target="$target" "${iterator_census_flags[@]}" \
+		haxeon_compile_async $( ((inline)) || echo --no-inline ) --target="$target" "${iterator_census_flags[@]}" \
 			--export=DynamicArrayEqualityCensus.prepare --export=DynamicArrayEqualityCensus.perform \
 			--output="$parity_output_dir/wasm-parity-$target-value-equality-census-inline-$inline.wasm" \
 			--entry=struct-array-dynamic-equality --root=tests/programs tests/programs/struct-array-dynamic-equality.hx
-		HAXEON_INLINE="$inline" haxeon_compile_async --target="$target" "${iterator_census_flags[@]}" \
+		haxeon_compile_async $( ((inline)) || echo --no-inline ) --target="$target" "${iterator_census_flags[@]}" \
 			--export=IteratorCensus.prepare --export=IteratorCensus.perform \
 			--output="$parity_output_dir/wasm-parity-$target-iterator-census-inline-$inline.wasm" \
 			--entry=struct-array-iterator-escape --root=tests/programs tests/programs/struct-array-iterator-escape.hx
-		HAXEON_INLINE="$inline" haxeon_compile_async --target="$target" "${iterator_census_flags[@]}" \
+		haxeon_compile_async $( ((inline)) || echo --no-inline ) --target="$target" "${iterator_census_flags[@]}" \
 			--export=ObservablePlaceCensus.prepare --export=ObservablePlaceCensus.perform \
 			--output="$parity_output_dir/wasm-parity-$target-observable-place-census-inline-$inline.wasm" \
 			--entry=observable-struct-place --root=stdlib --root=tests/programs tests/programs/observable-struct-place.hx
-		HAXEON_INLINE="$inline" haxeon_compile_async --target="$target" "${iterator_census_flags[@]}" \
+		haxeon_compile_async $( ((inline)) || echo --no-inline ) --target="$target" "${iterator_census_flags[@]}" \
 			--export=EffectAllocationCensus.prepare --export=EffectAllocationCensus.perform \
 			--output="$parity_output_dir/wasm-parity-$target-effect-census-inline-$inline.wasm" \
 			--entry=reactive-effect-allocations --root=stdlib --root=tests/programs tests/programs/reactive-effect-allocations.hx
-		HAXEON_INLINE="$inline" haxeon_compile_async --target="$target" "${iterator_census_flags[@]}" \
+		haxeon_compile_async $( ((inline)) || echo --no-inline ) --target="$target" "${iterator_census_flags[@]}" \
 			--export=ReactiveCaptureCensus.prepare --export=ReactiveCaptureCensus.perform \
 			--output="$parity_output_dir/wasm-parity-$target-reactive-capture-census-inline-$inline.wasm" \
 			--entry=reactive-capture-allocations --root=stdlib --root=tests/programs tests/programs/reactive-capture-allocations.hx
-		HAXEON_INLINE="$inline" haxeon_compile_async --target="$target" "${iterator_census_flags[@]}" \
+		haxeon_compile_async $( ((inline)) || echo --no-inline ) --target="$target" "${iterator_census_flags[@]}" \
 			--export=ReactiveScaleCensus.prepare --export=ReactiveScaleCensus.perform --export=ReactiveScaleCensus.performEffect \
 			--output="$parity_output_dir/wasm-parity-$target-reactive-scale-census-inline-$inline.wasm" \
 			--entry=reactive-dependency-scale --root=stdlib --root=tests/programs tests/programs/reactive-dependency-scale.hx
-		HAXEON_INLINE="$inline" haxeon_compile_async --target="$target" "${iterator_census_flags[@]}" \
+		haxeon_compile_async $( ((inline)) || echo --no-inline ) --target="$target" "${iterator_census_flags[@]}" \
 			--export=IdentityClassCensus.prepare --export=IdentityClassCensus.perform \
 			--output="$parity_output_dir/wasm-parity-$target-identity-class-census-inline-$inline.wasm" \
 			--entry=identity-class --root=stdlib --root=tests/programs tests/programs/identity-class.hx
-		HAXEON_INLINE="$inline" haxeon_compile_async --target="$target" "${iterator_census_flags[@]}" \
+		haxeon_compile_async $( ((inline)) || echo --no-inline ) --target="$target" "${iterator_census_flags[@]}" \
 			--export=ScopeCreationCensus.prepare --export=ScopeCreationCensus.perform \
 			--output="$parity_output_dir/wasm-parity-$target-scope-creation-census-inline-$inline.wasm" \
 			--entry=reactive-write-scope --root=stdlib --root=tests/programs tests/programs/reactive-write-scope.hx
 		for value_case in "${inline_cases[@]}"; do
-			HAXEON_INLINE="$inline" haxeon_compile_async \
+			haxeon_compile_async $( ((inline)) || echo --no-inline ) \
 				--target="$target" --output="$parity_output_dir/wasm-parity-$target-$value_case-inline-$inline.wasm" \
 				--entry="$value_case" --root=tests/programs "tests/programs/$value_case.hx"
 		done
-		HAXEON_INLINE="$inline" haxeon_compile_async \
+		haxeon_compile_async $( ((inline)) || echo --no-inline ) \
 			--target="$target" --output="$parity_output_dir/wasm-parity-$target-declared-equality-inline-$inline.wasm" \
 			--entry=declared-equality --root=tests/programs tests/programs/declared-equality.hx
-		HAXEON_INLINE="$inline" haxeon_compile_async \
+		haxeon_compile_async $( ((inline)) || echo --no-inline ) \
 			--target="$target" --output="$parity_output_dir/wasm-parity-$target-observable-tracking-inline-$inline.wasm" \
 			--entry=wasm-observable-tracking --root=stdlib --root=packages/ui/haxe --root=tests/programs \
 			tests/programs/wasm-observable-tracking.hx
-		HAXEON_INLINE="$inline" haxeon_compile_async \
+		haxeon_compile_async $( ((inline)) || echo --no-inline ) \
 			--target="$target" --output="$parity_output_dir/wasm-parity-$target-observable-generic-runtime-inline-$inline.wasm" \
 			--entry=observable-generic-runtime --root=stdlib --root=tests/programs \
 			tests/programs/observable-generic-runtime.hx
-		HAXEON_INLINE="$inline" haxeon_compile_async \
+		haxeon_compile_async $( ((inline)) || echo --no-inline ) \
 			--target="$target" --output="$parity_output_dir/wasm-parity-$target-generic-struct-reflected-closure-inline-$inline.wasm" \
 			--entry=wasm-generic-struct-reflected-closure --root=stdlib --root=tests/programs \
 			tests/programs/wasm-generic-struct-reflected-closure.hx
-		HAXEON_INLINE="$inline" haxeon_compile_async \
+		haxeon_compile_async $( ((inline)) || echo --no-inline ) \
 			--target="$target" --output="$parity_output_dir/wasm-parity-$target-value-interface-reflection-inline-$inline.wasm" \
 			--entry=wasm-value-interface-reflection --root=stdlib --root=tests/programs \
 			tests/programs/wasm-value-interface-reflection.hx
 		unbox_flags=(--wasm-gc-allocation-count)
 		if [[ "$target" == wasm32 ]]; then unbox_flags=(--wasm-memory-stats --wasm-gc-stress); fi
-		HAXEON_INLINE="$inline" haxeon_compile_async --target="$target" "${unbox_flags[@]}" \
+		haxeon_compile_async $( ((inline)) || echo --no-inline ) --target="$target" "${unbox_flags[@]}" \
 			--export=InterfaceUnboxCensus.prepare --export=InterfaceUnboxCensus.perform \
 			--output="$parity_output_dir/wasm-parity-$target-interface-unbox-census-inline-$inline.wasm" \
 			--entry=struct-interface-unbox-census --root=tests/programs tests/programs/struct-interface-unbox-census.hx
 		if [[ "$target" == wasm32 ]]; then
-			HAXEON_INLINE="$inline" haxeon_compile_async --target=wasm32 --wasm-gc-stress --wasm-memory-stats \
+			haxeon_compile_async $( ((inline)) || echo --no-inline ) --target=wasm32 --wasm-gc-stress --wasm-memory-stats \
 				--export=PointerGcLeafCensus.make --export=PointerGcLeafCensus.hold --export=PointerGcLeafCensus.collect \
 				--export=CallbackGcLeafCensus.make --export=CallbackGcLeafCensus.hold --export=CallbackGcLeafCensus.collect \
 				--output="$parity_output_dir/wasm-parity-wasm32-raw-pointer-gc-leaf-inline-$inline.wasm" \
 				--entry=wasm-raw-pointer-gc-leaf --root=tests/programs tests/programs/wasm-raw-pointer-gc-leaf.hx
-			HAXEON_INLINE="$inline" haxeon_compile_async --target=wasm32 --wasm-runtime-neutral \
+			haxeon_compile_async $( ((inline)) || echo --no-inline ) --target=wasm32 --wasm-runtime-neutral \
 				--export=PointerBoundaryCensus.prepare \
 				--output="$parity_output_dir/wasm-parity-wasm32-raw-pointer-neutral-inline-$inline.wasm" \
 				--entry=generic-erased-raw-pointer --root=tests/programs tests/programs/generic-erased-raw-pointer.hx
-			HAXEON_INLINE="$inline" haxeon_compile_async --target=wasm32 --wasm-memory-stats --wasm-gc-stress \
+			haxeon_compile_async $( ((inline)) || echo --no-inline ) --target=wasm32 --wasm-memory-stats --wasm-gc-stress \
 				--export=EnumEscapeCensus.prepare --export=EnumEscapeCensus.perform \
 				--output="$parity_output_dir/wasm-parity-wasm32-enum-escape-census-inline-$inline.wasm" \
 				--entry=enum-dynamic-allocations --root=stdlib --root=tests/programs tests/programs/enum-dynamic-allocations.hx
-			HAXEON_INLINE="$inline" haxeon_compile_async --target=wasm32 --wasm-memory-stats --wasm-gc-stress \
+			haxeon_compile_async $( ((inline)) || echo --no-inline ) --target=wasm32 --wasm-memory-stats --wasm-gc-stress \
 				--export=SignalCensus.prepare --export=SignalCensus.perform \
 				--output="$parity_output_dir/wasm-parity-wasm32-signal-census-inline-$inline.wasm" \
 				--entry=generic-struct-signal-allocations --root=stdlib --root=tests/programs tests/programs/generic-struct-signal-allocations.hx
-			HAXEON_INLINE="$inline" haxeon_compile_async --target=wasm32 --wasm-runtime-neutral \
+			haxeon_compile_async $( ((inline)) || echo --no-inline ) --target=wasm32 --wasm-runtime-neutral \
 				--output="$parity_output_dir/wasm-parity-wasm32-null-inlining-neutral-inline-$inline.wasm" \
 				--entry=null-method-inlining --root=stdlib --root=tests/programs tests/programs/null-method-inlining.hx
-			HAXEON_INLINE="$inline" haxeon_compile_async --target=wasm32 --wasm-memory-stats --wasm-gc-stress \
+			haxeon_compile_async $( ((inline)) || echo --no-inline ) --target=wasm32 --wasm-memory-stats --wasm-gc-stress \
 				--export=GenericRangeCensus.prepare --export=GenericRangeCensus.perform \
 				--output="$parity_output_dir/wasm-parity-wasm32-generic-ranges-census-inline-$inline.wasm" \
 				--entry=generic-struct-array-ranges --root=stdlib --root=tests/programs tests/programs/generic-struct-array-ranges.hx
-			HAXEON_INLINE="$inline" haxeon_compile_async --target=wasm32 --wasm-runtime-neutral \
+			haxeon_compile_async $( ((inline)) || echo --no-inline ) --target=wasm32 --wasm-runtime-neutral \
 				--output="$parity_output_dir/wasm-parity-wasm32-null-method-neutral-inline-$inline.wasm" \
 				--entry=wasm-null-method-dispatch --root=stdlib --root=tests/programs tests/programs/wasm-null-method-dispatch.hx
-			HAXEON_INLINE="$inline" haxeon_compile_async --target=wasm32 --wasm-memory-stats --wasm-gc-stress \
+			haxeon_compile_async $( ((inline)) || echo --no-inline ) --target=wasm32 --wasm-memory-stats --wasm-gc-stress \
 				--export=ClosureCensus.prepare --export=ClosureCensus.perform --export=ClosureCensus.stress \
 				--export=ClosureCensus.apply --export=ClosureCensus.isMissing --export=ClosureCensus.exposeNumber --export=ClosureCensus.applyNumber \
 				--output="$parity_output_dir/wasm-parity-wasm32-scalar-closure-census-inline-$inline.wasm" \
 				--entry=wasm-scalar-closure-census --root=stdlib --root=tests/programs tests/programs/wasm-scalar-closure-census.hx
-			HAXEON_INLINE="$inline" haxeon_compile_async --target=wasm32 --wasm-memory-stats --wasm-gc-stress \
+			haxeon_compile_async $( ((inline)) || echo --no-inline ) --target=wasm32 --wasm-memory-stats --wasm-gc-stress \
 				--export=MapCensus.prepare --export=MapCensus.perform --export=MapCensus.grow --export=MapCensus.empty \
 				--output="$parity_output_dir/wasm-parity-wasm32-specialized-map-census-inline-$inline.wasm" \
 				--entry=specialized-struct-map --root=stdlib --root=tests/programs tests/programs/specialized-struct-map.hx
-			HAXEON_INLINE="$inline" haxeon_compile_async --target=wasm32 --wasm-memory-stats --wasm-gc-stress \
+			haxeon_compile_async $( ((inline)) || echo --no-inline ) --target=wasm32 --wasm-memory-stats --wasm-gc-stress \
 				--export=LookupCensus.prepare --export=LookupCensus.perform --export=LookupCensus.stress \
 				--output="$parity_output_dir/wasm-parity-wasm32-constrained-lookup-census-inline-$inline.wasm" \
 				--entry=generic-constrained-owner-lookup-allocations --root=stdlib --root=tests/programs \
 				tests/programs/generic-constrained-owner-lookup-allocations.hx
-			HAXEON_INLINE="$inline" haxeon_compile_async --target=wasm32 --wasm-memory-stats \
+			haxeon_compile_async $( ((inline)) || echo --no-inline ) --target=wasm32 --wasm-memory-stats \
 				--export=Inspect.make --export=Inspect.makeMixed --export=Inspect.checkMixed --export=Census.prepare --export=Census.construct \
 				--output="$parity_output_dir/wasm-parity-wasm32-flat-object-layout-inline-$inline.wasm" \
 				--entry=wasm-flat-object-layout --root=tests/programs tests/programs/wasm-flat-object-layout.hx
-			HAXEON_INLINE="$inline" haxeon_compile_async --target=wasm32 --wasm-gc-stress \
+			haxeon_compile_async $( ((inline)) || echo --no-inline ) --target=wasm32 --wasm-gc-stress \
 				--output="$parity_output_dir/wasm-parity-wasm32-flat-object-stress-inline-$inline.wasm" \
 				--entry=wasm-flat-object-layout --root=tests/programs tests/programs/wasm-flat-object-layout.hx
 		else
-			HAXEON_INLINE="$inline" haxeon_compile_async --target=wasm-gc --wasm-gc-allocation-count \
+			haxeon_compile_async $( ((inline)) || echo --no-inline ) --target=wasm-gc --wasm-gc-allocation-count \
 				--export=Census.prepare --export=Census.construct \
 				--output="$parity_output_dir/wasm-parity-wasm-gc-flat-object-layout-inline-$inline.wasm" \
 				--entry=wasm-flat-object-layout --root=tests/programs tests/programs/wasm-flat-object-layout.hx
 		fi
 		if [[ "$target" == wasm-gc ]]; then
-			HAXEON_INLINE="$inline" haxeon_compile_async --target=wasm-gc --wasm-gc-allocation-count \
+			haxeon_compile_async $( ((inline)) || echo --no-inline ) --target=wasm-gc --wasm-gc-allocation-count \
 				--export=EnumEscapeCensus.prepare --export=EnumEscapeCensus.perform \
 				--output="$parity_output_dir/wasm-parity-wasm-gc-enum-escape-census-inline-$inline.wasm" \
 				--entry=enum-dynamic-allocations --root=stdlib --root=tests/programs tests/programs/enum-dynamic-allocations.hx
-			HAXEON_INLINE="$inline" haxeon_compile_async --target=wasm-gc --wasm-gc-allocation-count \
+			haxeon_compile_async $( ((inline)) || echo --no-inline ) --target=wasm-gc --wasm-gc-allocation-count \
 				--export=SignalCensus.prepare --export=SignalCensus.perform \
 				--output="$parity_output_dir/wasm-parity-wasm-gc-signal-census-inline-$inline.wasm" \
 				--entry=generic-struct-signal-allocations --root=stdlib --root=tests/programs tests/programs/generic-struct-signal-allocations.hx
-			HAXEON_INLINE="$inline" haxeon_compile_async --target=wasm-gc --wasm-gc-allocation-count \
+			haxeon_compile_async $( ((inline)) || echo --no-inline ) --target=wasm-gc --wasm-gc-allocation-count \
 				--export=GenericRangeCensus.prepare --export=GenericRangeCensus.perform \
 				--output="$parity_output_dir/wasm-parity-wasm-gc-generic-ranges-census-inline-$inline.wasm" \
 				--entry=generic-struct-array-ranges --root=stdlib --root=tests/programs tests/programs/generic-struct-array-ranges.hx
-			HAXEON_INLINE="$inline" haxeon_compile_async --target=wasm-gc --wasm-gc-allocation-count \
+			haxeon_compile_async $( ((inline)) || echo --no-inline ) --target=wasm-gc --wasm-gc-allocation-count \
 				--export=ClosureCensus.prepare --export=ClosureCensus.perform \
 				--export=ClosureCensus.apply --export=ClosureCensus.isMissing --export=ClosureCensus.exposeNumber --export=ClosureCensus.applyNumber \
 				--output="$parity_output_dir/wasm-parity-wasm-gc-scalar-closure-census-inline-$inline.wasm" \
 				--entry=wasm-scalar-closure-census --root=stdlib --root=tests/programs tests/programs/wasm-scalar-closure-census.hx
-			HAXEON_INLINE="$inline" haxeon_compile_async --target=wasm-gc --wasm-gc-allocation-count \
+			haxeon_compile_async $( ((inline)) || echo --no-inline ) --target=wasm-gc --wasm-gc-allocation-count \
 				--export=MapCensus.prepare --export=MapCensus.perform --export=MapCensus.grow --export=MapCensus.empty \
 				--output="$parity_output_dir/wasm-parity-wasm-gc-specialized-map-census-inline-$inline.wasm" \
 				--entry=specialized-struct-map --root=stdlib --root=tests/programs tests/programs/specialized-struct-map.hx
-			HAXEON_INLINE="$inline" haxeon_compile_async --target=wasm-gc --wasm-gc-allocation-count \
+			haxeon_compile_async $( ((inline)) || echo --no-inline ) --target=wasm-gc --wasm-gc-allocation-count \
 				--export=Main.prepare --export=Main.perform \
 				--output="$parity_output_dir/wasm-parity-wasm-gc-reflected-closure-census-inline-$inline.wasm" \
 				--entry=wasm-generic-struct-reflected-closure --root=stdlib --root=tests/programs \
 				tests/programs/wasm-generic-struct-reflected-closure.hx
-			HAXEON_INLINE="$inline" haxeon_compile_async --target=wasm-gc --wasm-gc-allocation-count \
+			haxeon_compile_async $( ((inline)) || echo --no-inline ) --target=wasm-gc --wasm-gc-allocation-count \
 				--export=LookupCensus.prepare --export=LookupCensus.perform \
 				--output="$parity_output_dir/wasm-parity-wasm-gc-constrained-lookup-census-inline-$inline.wasm" \
 				--entry=generic-constrained-owner-lookup-allocations --root=stdlib --root=tests/programs \
 				tests/programs/generic-constrained-owner-lookup-allocations.hx
-			HAXEON_INLINE="$inline" haxeon_compile_async --target=wasm-gc --wasm-gc-allocation-count \
+			haxeon_compile_async $( ((inline)) || echo --no-inline ) --target=wasm-gc --wasm-gc-allocation-count \
 				--export=AllocationCensus.prepare --export=AllocationCensus.perform \
 				--output="$parity_output_dir/wasm-parity-wasm-gc-constrained-owner-census-inline-$inline.wasm" \
 				--entry=generic-struct-owner-allocations --root=tests/programs \
@@ -395,7 +395,7 @@ fi
 
 # Struct array places and Observable instrumentation also run on HashLink in both modes.
 for inline in 0 1; do
-	HAXEON_INLINE="$inline" haxeon_compile --target=hl \
+	haxeon_compile $( ((inline)) || echo --no-inline ) --target=hl \
 		--output="$parity_output_dir/key-path-semantics-inline-$inline.hl" --entry=key-path-semantics --root=tests/programs tests/programs/key-path-semantics.hx
 	status=0
 		"$haxeon_hl" "$parity_output_dir/key-path-semantics-inline-$inline.hl" || status=$?
@@ -403,7 +403,7 @@ for inline in 0 1; do
 		echo "Key path HashLink semantics (inline=$inline) expected exit 42, got $status" >&2
 		exit 1
 	fi
-	HAXEON_INLINE="$inline" haxeon_compile --target=hl \
+	haxeon_compile $( ((inline)) || echo --no-inline ) --target=hl \
 		--output="$parity_output_dir/key-paths-inline-$inline.hl" --entry=key-paths --root=tests/programs tests/programs/key-paths.hx
 	status=0
 		"$haxeon_hl" "$parity_output_dir/key-paths-inline-$inline.hl" || status=$?
@@ -411,7 +411,7 @@ for inline in 0 1; do
 		echo "Key path HashLink census (inline=$inline) expected exit 42, got $status" >&2
 		exit 1
 	fi
-	HAXEON_INLINE="$inline" haxeon_compile --target=hl \
+	haxeon_compile $( ((inline)) || echo --no-inline ) --target=hl \
 		--output="$parity_output_dir/defer-allocation-hl-inline-$inline.hl" \
 		--entry=defer-allocation-hl --root=tests/fixtures/scoped-cleanup tests/fixtures/scoped-cleanup/defer-allocation-hl.hx
 	status=0
@@ -421,7 +421,7 @@ for inline in 0 1; do
 		exit 1
 	fi
 	for value_case in "${inline_cases[@]}"; do
-		HAXEON_INLINE="$inline" haxeon_compile \
+		haxeon_compile $( ((inline)) || echo --no-inline ) \
 			--target=hl --output="$parity_output_dir/$value_case-inline-$inline.hl" \
 			--entry="$value_case" --root=tests/programs "tests/programs/$value_case.hx"
 		status=0
@@ -432,7 +432,7 @@ for inline in 0 1; do
 		fi
 	done
 	for value_case in struct-managed-narrow struct-managed-nullable-narrow; do
-		HAXEON_INLINE="$inline" haxeon_compile \
+		haxeon_compile $( ((inline)) || echo --no-inline ) \
 			--target=hl --define=native-abi-target=portable-abi32 --define=managed_long32 \
 			--output="$parity_output_dir/$value_case-abi32-inline-$inline.hl" \
 			--entry="$value_case" --root=tests/programs "tests/programs/$value_case.hx"
@@ -443,15 +443,15 @@ for inline in 0 1; do
 			exit 1
 		fi
 	done
-	HAXEON_INLINE="$inline" haxeon_compile \
+	haxeon_compile $( ((inline)) || echo --no-inline ) \
 		--target=hl --output="$parity_output_dir/observable-tracking-inline-$inline.hl" \
 		--entry=wasm-observable-tracking --root=stdlib --root=packages/ui/haxe --root=tests/programs \
 		tests/programs/wasm-observable-tracking.hx
-	HAXEON_INLINE="$inline" haxeon_compile \
+	haxeon_compile $( ((inline)) || echo --no-inline ) \
 		--target=hl --output="$parity_output_dir/observable-generic-runtime-inline-$inline.hl" \
 		--entry=observable-generic-runtime --root=stdlib --root=tests/programs \
 		tests/programs/observable-generic-runtime.hx
-	HAXEON_INLINE="$inline" haxeon_compile \
+	haxeon_compile $( ((inline)) || echo --no-inline ) \
 		--target=hl --output="$parity_output_dir/generic-struct-reflected-closure-inline-$inline.hl" \
 		--entry=wasm-generic-struct-reflected-closure --root=stdlib --root=tests/programs \
 		tests/programs/wasm-generic-struct-reflected-closure.hx
@@ -461,7 +461,7 @@ for inline in 0 1; do
 		echo "Reflected struct closure fixture (inline=$inline) expected exit 42, got $status" >&2
 		exit 1
 	fi
-	HAXEON_INLINE="$inline" haxeon_compile \
+	haxeon_compile $( ((inline)) || echo --no-inline ) \
 		--target=hl --output="$parity_output_dir/value-interface-reflection-inline-$inline.hl" \
 		--entry=wasm-value-interface-reflection --root=stdlib --root=tests/programs \
 		tests/programs/wasm-value-interface-reflection.hx
@@ -471,7 +471,7 @@ for inline in 0 1; do
 		echo "Reflected value interface fixture (inline=$inline) expected exit 42, got $status" >&2
 		exit 1
 	fi
-	HAXEON_INLINE="$inline" haxeon_compile \
+	haxeon_compile $( ((inline)) || echo --no-inline ) \
 		--target=hl --output="$parity_output_dir/flat-object-layout-inline-$inline.hl" \
 		--entry=wasm-flat-object-layout --root=tests/programs tests/programs/wasm-flat-object-layout.hx
 	status=0

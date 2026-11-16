@@ -1,3 +1,4 @@
+import compiler.CompileOptions;
 import compiler.ir.Ir;
 import compiler.ir.IrBuilder;
 import compiler.ir.IrFunction;
@@ -168,7 +169,7 @@ class InlineEnumPayloadMain {
 		];
 		compiler.ir.IrNullableScalarFlow.rewrite(p);
 		compiler.ir.IrInliner.run(p, new compiler.ir.IrInliner.IrInlineCache(), compiler.ir.TargetProfile.wasm,
-			inlineEnabled);
+			new CompileOptions({inlining: inlineEnabled}));
 		compiler.ir.IrVerifier.verify(p);
 		var entry = new IrBuilder(),
 			censusPaths:Array<{path:String, count:Int}> = [];

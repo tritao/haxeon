@@ -82,7 +82,7 @@ class HlLower {
 
 	final checkingLinks:Bool;
 
-	/** HAXEON_CHECK_REUSE=1 on a build that trusts its cache: every kept function is lowered again and compared. */
+	/** `--check-reuse` on a build that trusts its cache: every kept function is lowered again and compared. */
 	final checkingTrust:Bool;
 
 	/** Kept functions whose code is frozen on purpose (retired by a signature change, or dropped from the program): check mode leaves them be. */
@@ -123,7 +123,7 @@ class HlLower {
 			fieldReserve:Int = 0,
 			developmentMetadata:Bool = true, recordLowering:Bool = false,
 			?loweredCache:compiler.hl.incremental.HlLoweredCache, irVerified:Bool = false,
-			trustCache:Bool = false, ?frozen:String->Bool):MeasuredHlCode {
+			trustCache:Bool = false, ?frozen:String->Bool, checkReuse:Bool = false):MeasuredHlCode {
 		var startedAt = Sys.time() * 1000.0;
 		var allocationAtStart = AllocationMeter.sample();
 		var affected = regenerated;
@@ -144,7 +144,7 @@ class HlLower {
 			allocationAfterVerification = AllocationMeter.sample(),
 			lowerer = new HlLower(symbols, indices, stableIds, affected, runtimeNatives, debugCache, fieldReserve,
 				developmentMetadata, recordLowering,
-				loweredCache, trustCache, frozen),
+				loweredCache, trustCache, frozen, checkReuse),
 			code = lowerer.lowerProgram(program);
 		return {
 			code: code,
@@ -195,13 +195,13 @@ class HlLower {
 			?runtimeNatives:Array<IrNative>, ?debugCache:HlDebugMetadataCache, fieldReserve:Int = 0,
 			developmentMetadata:Bool = true,
 			recordLowering:Bool = false, ?loweredCache:compiler.hl.incremental.HlLoweredCache, trustCache:Bool = false,
-			?frozen:String->Bool) {
+			?frozen:String->Bool, checkReuse:Bool = false) {
 		this.frozen = frozen;
 		this.symbols = symbols;
-		// HAXEON_CHECK_REUSE=1 lowers with requests recorded so the link step can be checked against this very lowering.
-		this.checkingLinks = !trustCache && Sys.getEnv("HAXEON_CHECK_REUSE") == "1";
+		// A compile that checks its reuse lowers with requests recorded so the link step can be checked against this very lowering.
+		this.checkingLinks = !trustCache && checkReuse;
 		this.loweredCache = loweredCache;
-		this.checkingTrust = trustCache && Sys.getEnv("HAXEON_CHECK_REUSE") == "1";
+		this.checkingTrust = trustCache && checkReuse;
 		this.recordLowering = !trustCache && (recordLowering || checkingLinks || loweredCache != null);
 		this.fieldReserve = fieldReserve;
 		this.stableIds = stableIds;
@@ -514,7 +514,7 @@ class HlLower {
 			if (!reportedSkips) {
 				reportedSkips = true;
 				Sys.stderr()
-					.writeString('HAXEON_CHECK_REUSE: kept functions could not be lowered again because their objects or fields are gone, e.g. ${skippedKept.slice(0, 3).join(", ")}\n');
+					.writeString('--check-reuse: kept functions could not be lowered again because their objects or fields are gone, e.g. ${skippedKept.slice(0, 3).join(", ")}\n');
 			}
 		}
 		if (environment != null && reusedFunctions == 0)
@@ -583,12 +583,12 @@ class HlLower {
 		for (fn in program.functions) {
 			var lowered = this.lowered.get(fn.name);
 			if (lowered == null)
-				throw 'HAXEON_CHECK_REUSE: no lowering was recorded for ${fn.name}';
+				throw '--check-reuse: no lowering was recorded for ${fn.name}';
 			var linked = compiler.hl.incremental.HlLink.link(lowered, environment, functionIndices, view);
 			if (linked.fn == null)
-				throw 'HAXEON_CHECK_REUSE: linking ${fn.name} against the tables it was lowered with failed: ${linked.reason}';
+				throw '--check-reuse: linking ${fn.name} against the tables it was lowered with failed: ${linked.reason}';
 			if (linked.fn != lowered.fn)
-				throw 'HAXEON_CHECK_REUSE: linking ${fn.name} against the tables it was lowered with moved its indices';
+				throw '--check-reuse: linking ${fn.name} against the tables it was lowered with moved its indices';
 		}
 
 		sameReplayTable("the integer", symbols.ints, environment.ints);
@@ -600,10 +600,10 @@ class HlLower {
 
 	static function sameReplayTable<T>(what:String, expected:Array<T>, actual:Array<T>):Void {
 		if (expected.length != actual.length)
-			throw 'HAXEON_CHECK_REUSE: replaying the requests made $what table of ${actual.length} entries, lowering made ${expected.length}';
+			throw '--check-reuse: replaying the requests made $what table of ${actual.length} entries, lowering made ${expected.length}';
 		for (index in 0...expected.length)
 			if (Std.string(expected[index]) != Std.string(actual[index]))
-				throw 'HAXEON_CHECK_REUSE: replaying the requests made $what ${index} different from lowering\'s: ${Std.string(actual[index])} and ${Std.string(expected[index])}';
+				throw '--check-reuse: replaying the requests made $what ${index} different from lowering\'s: ${Std.string(actual[index])} and ${Std.string(expected[index])}';
 	}
 
 	/**
@@ -627,15 +627,15 @@ class HlLower {
 			// Only an object type or field the program no longer holds excuses it: a removed lambda whose code stored closures still run
 			// keeps its old code on purpose, and there is nothing to compare it with. Lowering must have added nothing before it failed.
 			if (sizes() != before)
-				throw 'HAXEON_CHECK_REUSE: lowering kept function ${fn.name} added symbols (ints, floats, strings, types, globals $before -> ${sizes()}) before failing: $missing';
+				throw '--check-reuse: lowering kept function ${fn.name} added symbols (ints, floats, strings, types, globals $before -> ${sizes()}) before failing: $missing';
 			skippedKept.push('${fn.name} ($missing)');
 			return;
 		}
 		if (sizes() != before)
-			throw 'HAXEON_CHECK_REUSE: kept function ${fn.name} added symbols when lowered again (ints, floats, strings, types, globals $before -> ${sizes()})';
+			throw '--check-reuse: kept function ${fn.name} added symbols when lowered again (ints, floats, strings, types, globals $before -> ${sizes()})';
 		var difference = compiler.hl.HlFunctionEquality.difference(kept, fresh);
 		if (difference != null)
-			throw 'HAXEON_CHECK_REUSE: kept function ${fn.name} lowers to other code than its cached lowering: $difference';
+			throw '--check-reuse: kept function ${fn.name} lowers to other code than its cached lowering: $difference';
 	}
 
 	function cachedFunctionIdentity(fn:IrFunction):compiler.hl.HlCode.HlFunctionIdentity {

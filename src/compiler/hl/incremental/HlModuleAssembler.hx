@@ -168,6 +168,9 @@ class HlModuleAssembler {
 
 	public var developmentMetadata:Bool = true;
 
+	/** Lower what the lowering cache would reuse again and compare (`CompileOptions.checkReuse`). */
+	public var checkReuse:Bool = false;
+
 	/** The functions of the last plain build to link instead of lowering again, and the ones this build lowers (see `HlLoweredCache`). */
 	public var loweredCache:Null<HlLoweredCache>;
 
@@ -903,7 +906,7 @@ class HlModuleAssembler {
 			relocated == null ? regenerated : regenerated.concat(relocated),
 			runtimeNatives, debugMetadata, fieldReserve, developmentMetadata, false, liveCache, irVerified,
 			livePatching,
-			name -> RetiredName.is(name) || !present.exists(name)),
+			name -> RetiredName.is(name) || !present.exists(name), checkReuse),
 			module = lowered.code;
 		reusedFunctions = lowered.reusedFunctions;
 		movedFunctions = lowered.movedFunctions;

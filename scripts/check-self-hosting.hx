@@ -99,8 +99,8 @@ function main() {
 				step(hl, [
 					compiler, '--target=$target', "--entry=equality-self-hosting-guard", "--root=tests/programs",
 					'--output=$output', fixture
-				], root, '$work/equality-guard.log', 'equality guard did not compile $which',
-					["HAXEON_INLINE" => inlining]);
+				].concat(inlining == "0" ? ["--no-inline"] : []), root, '$work/equality-guard.log',
+					'equality guard did not compile $which');
 				if (target == "hl") {
 					var status = Script.run(hl, [output]);
 					if (status != 42)

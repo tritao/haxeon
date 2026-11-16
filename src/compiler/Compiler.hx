@@ -230,6 +230,18 @@ class Compiler {
 	 */
 	public var backendOptions:Null<compiler.backend.Backend.BackendOptions> = null;
 
+	/**
+	 * The passes and self-checks of the compiles this session runs, as its request states them (`CompileOptions`). Other
+	 * options make the next compile build again, as a source edit does; the caches below it key their entries by them.
+	 */
+	public var options(default, set):CompileOptions = new CompileOptions();
+
+	function set_options(value:CompileOptions):CompileOptions {
+		if (value.key() != options.key())
+			sourceGeneration++;
+		return options = value;
+	}
+
 	final graph = new ModuleGraph();
 	var sourceLoader = new ModuleSourceLoader();
 	final moduleId:Bytes;

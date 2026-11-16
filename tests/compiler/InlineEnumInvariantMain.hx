@@ -1,3 +1,4 @@
+import compiler.CompileOptions;
 import compiler.Compiler;
 import compiler.ir.Ir;
 import compiler.ir.IrBuilder;
@@ -24,8 +25,8 @@ class InlineEnumInvariantMain {
 				var c = new Compiler(null, compiler.runtime.CompilerIntrinsics.configuration());
 				c.addStandardLibrarySourceRoot("stdlib");
 				c.configure("enum-invariant-" + target + inlineEnabled, "enum-invariant",
-					compiler.tools.CompilerDriver.targetDefines(target)
-					.concat(["haxeon-inline=" + (inlineEnabled ? 1 : 0)]));
+					compiler.tools.CompilerDriver.targetDefines(target));
+				c.options = new CompileOptions({inlining: inlineEnabled});
 				c.update("Main.hx",
 					'enum E { Code(value:Int); } function main():Int { var values:Array<E>=[Code(42)]; return switch values[0] { case Code(value): value; }; }');
 				var base = c.compile("Main").ir,

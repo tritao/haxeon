@@ -1,7 +1,8 @@
+import compiler.CompileOptions;
 import compiler.Compiler;
-import compiler.compilation.BackendArtifact.BackendArtifacts;
 import compiler.backend.Backend.BackendTarget;
 import compiler.backend.wasm.WasmBackend;
+import compiler.compilation.BackendArtifact.BackendArtifacts;
 import compiler.ir.Ir;
 import compiler.ir.IrBuilder;
 import compiler.ir.IrFunction;
@@ -15,7 +16,6 @@ import sys.io.File;
  */
 class WasmClosureVerificationOrderMain {
 	static function main():Void {
-		Sys.putEnv("HAXEON_CHECK_REUSE", "1");
 		var source = File.getContent("tests/programs/inline-enum-callback-escape.hx");
 		for (target in ["hl", "wasm32", "wasm-gc"])
 			for (inlining in [false, true]) {
@@ -23,7 +23,8 @@ class WasmClosureVerificationOrderMain {
 				compiler.livePatching = false;
 				compiler.addStandardLibrarySourceRoot("stdlib");
 				compiler.configure("closure-verification-" + target + inlining, "closure-verification",
-					CompilerDriver.targetDefines(target).concat(["haxeon-inline=" + (inlining ? 1 : 0)]));
+					CompilerDriver.targetDefines(target));
+				compiler.options = new CompileOptions({inlining: inlining, checkReuse: true});
 				compiler.update("Main.hx", source);
 				var initial = compiler.compile("Main"),
 					edited = StringTools.replace(source, "Census.run(128) == 128", "Census.run(64) == 64");
@@ -37,7 +38,8 @@ class WasmClosureVerificationOrderMain {
 					fresh.livePatching = false;
 					fresh.addStandardLibrarySourceRoot("stdlib");
 					fresh.configure("closure-verification-" + target + inlining, "closure-verification",
-						CompilerDriver.targetDefines(target).concat(["haxeon-inline=" + (inlining ? 1 : 0)]));
+						CompilerDriver.targetDefines(target));
+					fresh.options = new CompileOptions({inlining: inlining, checkReuse: true});
 					fresh.update("Main.hx", edited);
 					var warmBytes = BackendArtifacts.wasm(changed.artifact).bytes;
 					if (warmBytes.compare(BackendArtifacts.wasm(initial.artifact).bytes) == 0)

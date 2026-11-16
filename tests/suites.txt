@@ -68,12 +68,12 @@ enum-typedef-wasm                ci          lane=wasm requires=wasmtime -- bash
 nullable-enum-pattern-wasm       ci          lane=wasm requires=wasmtime -- bash tests/integration/test-nullable-enum-pattern-wasm.sh
 wasm-gc-wasmtime                 ci          lane=wasm requires=wasmtime -- bash tests/wasm/test-wasm-gc-wasmtime.sh
 
-driver-default                   quick,ci    -- env -u HAXEON_CHECK_REUSE scripts/test-driver.sh {jobs}
+driver-default                   quick,ci    -- scripts/test-driver.sh {jobs}
 # Example callers are outside the compiler and UI fixture roots; final-prop API ports must check the app too.
 ui-showcase                      quick       -- env -u HAXEON_COMPILER_HL bash packages/ui/tools/test-showcase-builds.sh
 example-builds                   quick       -- python3 tests/integration/check-example-builds.py
 # Adds the warm-edit rebuilds and the reuse comparisons.
-driver-checked                   wave        -- env HAXEON_CHECK_REUSE=1 scripts/test-driver.sh {jobs}
+driver-checked                   wave        -- scripts/test-driver.sh {jobs} --check-reuse
 
 formatter-integration            ci          -- tests/integration/test-haxeon-formatter.sh
 native-publish-integration       ci          -- bash tests/integration/test-native-publish.sh

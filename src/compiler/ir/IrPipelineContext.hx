@@ -31,12 +31,11 @@ class IrPipelineContext {
 	public var developmentMetadata:Bool = false;
 	public var reflectable:Null<Array<String>> = null;
 	public var inlineCache:Null<IrInlineCache> = null;
-	public var inlineEnabled:Bool = true;
 	public var instrumentScope:Null<IrInstrumentation.IrInstrumentationScope> = null;
 	public var verifyMemo:Null<IrVerifyMemo> = null;
 
-	/** `HAXEON_CHECK_REUSE=1`: the memoized verification is followed by a full one. */
-	public var checkingReuse:Bool = false;
+	/** The compile's passes and self-checks (`CompileOptions`): with `checkReuse`, the memoized verification is followed by a full one. */
+	public var options = new compiler.CompileOptions();
 
 	/** The object table scalar replacement reads, taken before it runs. */
 	public var scalarObjects:Null<IrObjectTable> = null;

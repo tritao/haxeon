@@ -5,7 +5,7 @@ import compiler.hl.HlFunction.HlInstruction;
 
 /** Validates an in-memory HashLink module before serialization. */
 class HlValidator {
-	public static function validate(code:HlCode, ?cache:HlWriterCache):Void {
+	public static function validate(code:HlCode, ?cache:HlWriterCache, checkReuse:Bool = false):Void {
 		if (code.types.length == 0)
 			throw "HL module has no types";
 
@@ -142,8 +142,8 @@ class HlValidator {
 			cache.retainSnapshots([for (snapshot in code.sourceSnapshots) snapshot.content]);
 		if (code.sourceSnapshots.length > 0) {
 			// Both sides come from the same model in the same process, so comparing the encodings repeats the encoding of every source
-			// snapshot twice per build for nothing; it is a consistency check, kept for HAXEON_CHECK_REUSE=1.
-			var checking = Sys.getEnv("HAXEON_CHECK_REUSE") == "1",
+			// snapshot twice per build for nothing; it is a consistency check, kept for a compile that checks its reuse.
+			var checking = checkReuse,
 				encoded = checking ? HlWriter.encodeSourceSnapshots(code.sourceSnapshots) : null,
 				found = false;
 			for (section in code.debugSections)

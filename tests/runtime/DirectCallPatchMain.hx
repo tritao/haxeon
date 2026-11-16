@@ -1,4 +1,5 @@
 using compiler.compilation.BackendArtifact.BackendArtifacts;
+import compiler.CompileOptions;
 import compiler.Compiler;
 import compiler.hl.HlWriter;
 import compiler.ir.IrInliner;
@@ -12,8 +13,6 @@ import runtime.Runtime;
  */
 class DirectCallPatchMain {
 	static function main():Void {
-		// Small callees would otherwise be inlined, leaving no call to look at.
-		IrInliner.enabled = false;
 		var program = (v:Int, extra:Bool) -> "class Calc {\n"
 			+ "  public static function leaf(x:Int):Int { return x + "
 			+ v
@@ -57,6 +56,8 @@ class DirectCallPatchMain {
 			"Main.callCatch" => ("boom" + v).length * 100 + v
 		];
 		var compiler = new Compiler();
+		// Small callees would otherwise be inlined, leaving no call to look at.
+		compiler.options = new CompileOptions({inlining: false});
 		compiler.update("Main.hx", program(1, false));
 		var build = compiler.compile("Main"),
 			live = Runtime.load(HlWriter.encode(build.artifact.hashLink().module).flatten(),

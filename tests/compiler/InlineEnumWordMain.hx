@@ -1,3 +1,4 @@
+import compiler.CompileOptions;
 import compiler.backend.Backend.BackendTarget;
 import compiler.ir.Ir;
 import compiler.ir.IrBuilder;
@@ -215,7 +216,7 @@ class InlineEnumWordMain {
 				compiler.ir.IrScalarReplacement.rewrite(fn, table, false)
 		];
 		compiler.ir.IrInliner.run(program, new compiler.ir.IrInliner.IrInlineCache(), compiler.ir.TargetProfile.wasm,
-			inlineEnabled);
+			new CompileOptions({inlining: inlineEnabled}));
 		compiler.ir.IrVerifier.verify(program);
 		if (new IrInterpreter(program).run() != 42)
 			throw "packed enum payload changed its bits";

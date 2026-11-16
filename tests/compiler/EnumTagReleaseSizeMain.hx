@@ -1,3 +1,4 @@
+import compiler.CompileOptions;
 import compiler.Compiler;
 import compiler.backend.Backend.BackendTarget;
 import compiler.ir.Ir;
@@ -23,7 +24,8 @@ class EnumTagReleaseSizeMain {
 		var session = new Compiler(null, compiler.runtime.CompilerIntrinsics.configuration());
 		session.addStandardLibrarySourceRoot("stdlib");
 		session.configure("tag-release-size", "tag-release-size",
-			compiler.tools.CompilerDriver.targetDefines(target).concat(["haxeon-inline=" + (inlining ? 1 : 0)]));
+			compiler.tools.CompilerDriver.targetDefines(target));
+		session.options = new CompileOptions({inlining: inlining});
 		session.livePatching = false;
 		session.developmentMetadata = false;
 		return session;

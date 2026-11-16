@@ -1,4 +1,5 @@
 using compiler.compilation.BackendArtifact.BackendArtifacts;
+import compiler.CompileOptions;
 import compiler.Compiler;
 import compiler.Compiler.CompileResult;
 import compiler.backend.wasm.WasmBackend;
@@ -41,7 +42,8 @@ class HostExportRootsMain {
 			var compiler = new Compiler(null, CompilerIntrinsics.configuration());
 			compiler.addStandardLibrarySourceRoot("stdlib");
 			compiler.configure("host-roots-" + target + inlineEnabled, "host-roots",
-				CompilerDriver.targetDefines(target).concat(["haxeon-inline=" + (inlineEnabled ? 1 : 0)]));
+				CompilerDriver.targetDefines(target));
+			compiler.options = new CompileOptions({inlining: inlineEnabled});
 			compiler.update("Main.hx", source);
 			var cold = compiler.compile("Main");
 			if (retention(cold, "HostEnumExports.cached") != Reachable) throw "Unrequested function exposed";

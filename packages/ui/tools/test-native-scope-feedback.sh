@@ -11,7 +11,7 @@ compiler=${HAXEON_COMPILER_HL:-$("$root/scripts/haxeon" dev tool-path compiler.t
 export LD_LIBRARY_PATH="$native:$native/nativekit:$native/nativekit/modules/gpu:$root/out:$runtime${LD_LIBRARY_PATH:+:$LD_LIBRARY_PATH}"
 export NKUI_TEST_FONT_PATH=${NKUI_TEST_FONT_PATH:-"$ui/vendor/skribidi/example/data/IBMPlexSans-Regular.ttf"}
 for inline in 0 1; do
-  HAXEON_INLINE="$inline" "$runtime/hl" "$compiler" --output="$work/test.hl" \
+  "$runtime/hl" "$compiler" $( ((inline)) || echo --no-inline ) --output="$work/test.hl" \
     --entry=NativeScopeFeedbackMain --root="$ui/tests/haxeon" --root="$ui/haxe" \
     --root="$ui/bindings/haxe" --root="$root/packages/editor/src" --root="$root/packages/platform/src" \
     --ffi-interface="$root/packages/platform/bindings/nativekit.hxi" --ffi-projection="$root/packages/platform/bindings/nativekit.hxmap" \

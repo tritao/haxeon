@@ -68,6 +68,7 @@ class HashLinkBackendSession implements BackendSession {
 		return [
 			"live:" + context.livePatching,
 			"development:" + context.developmentMetadata,
+			"options:" + context.options.key(),
 			"fieldReserve:" + liveFieldReserve
 		].join(",");
 
@@ -153,7 +154,7 @@ class HashLinkBackendSession implements BackendSession {
 			// encoded, and a class no reachable function mentions loses its methods. The program in the result keeps everything
 			// (other backends and tools read it), and a live module keeps every function too, because its host can call any of
 			// them by id and a reachability change must not move its layout.
-			var plain = HlPlainBuild.reachable(ir), reachable = plain.reachable;
+			var plain = HlPlainBuild.reachable(ir, context.options.checkReuse), reachable = plain.reachable;
 			assemblyIr = plain.program;
 			regenerated = [for (name in regenerated) if (reachable.exists(name)) name];
 			relocated = [for (name in relocated) if (reachable.exists(name)) name];
@@ -194,6 +195,7 @@ class HashLinkBackendSession implements BackendSession {
 			&& PatchPlanner.requiresFreshLayout(decision) ? freshLayout(baseAssembler) : baseAssembler.copy();
 		candidateAssembler.fieldReserve = context.livePatching ? liveFieldReserve : 0;
 		candidateAssembler.developmentMetadata = context.developmentMetadata || context.livePatching;
+		candidateAssembler.checkReuse = context.options.checkReuse;
 		candidateAssembler.irVerified = !context.livePatching;
 		candidateAssembler.livePatching = context.livePatching;
 		if (loweredCache != null) {
@@ -213,7 +215,7 @@ class HashLinkBackendSession implements BackendSession {
 		var allocationAfterAssembly = AllocationMeter.sample();
 		if (candidateAssembler.developmentMetadata)
 			attachSourceSnapshots(context, assembly.module);
-		if (loweredCache != null && candidateAssembler.reusedFunctions > 0 && Sys.getEnv("HAXEON_CHECK_REUSE") == "1") {
+		if (loweredCache != null && candidateAssembler.reusedFunctions > 0 && context.options.checkReuse) {
 			// The module with functions linked from the last build must be the module lowering every function gives.
 			var fresh = new HlModuleAssembler();
 			fresh.fieldReserve = candidateAssembler.fieldReserve;
@@ -228,7 +230,7 @@ class HashLinkBackendSession implements BackendSession {
 				attachSourceSnapshots(context, freshAssembly.module);
 			var difference = moduleDifference(assembly.module, freshAssembly.module);
 			if (difference != null)
-				throw 'HAXEON_CHECK_REUSE: a module with ${candidateAssembler.reusedFunctions} functions linked from the last build differs from one lowered afresh ($difference)';
+				throw '--check-reuse: a module with ${candidateAssembler.reusedFunctions} functions linked from the last build differs from one lowered afresh ($difference)';
 		}
 		compiler.hl.HlOpportunityCensus.report(assembly.module, assembly.functionIndices);
 		var backendAssemblyDoneAt = Sys.time() * 1000.0;

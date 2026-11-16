@@ -1,3 +1,4 @@
+import compiler.CompileOptions;
 import compiler.Compiler;
 import compiler.ir.IrInterpreter;
 import compiler.runtime.CompilerIntrinsics;
@@ -9,7 +10,8 @@ class GeneratedDependencyCompletionMain {
 		for (inlineEnabled in [false, true]) {
 			var compiler = new Compiler(null, CompilerIntrinsics.configuration());
 			compiler.addStandardLibrarySourceRoot("stdlib");
-			compiler.configure("generated-dependencies", "test", ["haxeon-inline=" + (inlineEnabled ? "1" : "0")]);
+			compiler.configure("generated-dependencies", "test", []);
+			compiler.options = new CompileOptions({inlining: inlineEnabled});
 			compiler.update("Main.hx", source);
 			for (_ in 0...2)
 				if (new IrInterpreter(compiler.compile("Main").ir).run("main") != 42)
