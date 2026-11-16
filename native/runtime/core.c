@@ -221,6 +221,60 @@ HL_PRIM realtime_date *HL_NAME(__date_from_time)( double milliseconds ) {
 	return date;
 }
 
+/* The calendar fields of `date`, in local time or UTC. */
+static struct tm realtime_date_parts( realtime_date *date, bool utc ) {
+	time_t seconds = (time_t)floor(date->milliseconds / 1000.0);
+	struct tm parts;
+	memset(&parts, 0, sizeof(parts));
+#ifdef HL_WIN
+	if( utc ) gmtime_s(&parts, &seconds); else localtime_s(&parts, &seconds);
+#else
+	if( utc ) gmtime_r(&seconds, &parts); else localtime_r(&seconds, &parts);
+#endif
+	return parts;
+}
+
+#define REALTIME_DATE_FIELD(name, utc, value) \
+	HL_PRIM int HL_NAME(name)( realtime_date *date ) { struct tm parts = realtime_date_parts(date, utc); return value; }
+REALTIME_DATE_FIELD(__date_get_full_year, false, parts.tm_year + 1900)
+REALTIME_DATE_FIELD(__date_get_month, false, parts.tm_mon)
+REALTIME_DATE_FIELD(__date_get_date, false, parts.tm_mday)
+REALTIME_DATE_FIELD(__date_get_day, false, parts.tm_wday)
+REALTIME_DATE_FIELD(__date_get_hours, false, parts.tm_hour)
+REALTIME_DATE_FIELD(__date_get_minutes, false, parts.tm_min)
+REALTIME_DATE_FIELD(__date_get_seconds, false, parts.tm_sec)
+REALTIME_DATE_FIELD(__date_get_utc_full_year, true, parts.tm_year + 1900)
+REALTIME_DATE_FIELD(__date_get_utc_month, true, parts.tm_mon)
+REALTIME_DATE_FIELD(__date_get_utc_date, true, parts.tm_mday)
+REALTIME_DATE_FIELD(__date_get_utc_day, true, parts.tm_wday)
+REALTIME_DATE_FIELD(__date_get_utc_hours, true, parts.tm_hour)
+REALTIME_DATE_FIELD(__date_get_utc_minutes, true, parts.tm_min)
+REALTIME_DATE_FIELD(__date_get_utc_seconds, true, parts.tm_sec)
+
+/* The local time `year`-`month`-`day` `hour`:`minute`:`second` (month from 0), as Haxe's new Date. */
+HL_PRIM realtime_date *HL_NAME(__date_new)( int year, int month, int day, int hour, int minute, int second ) {
+	struct tm parts;
+	memset(&parts, 0, sizeof(parts));
+	parts.tm_year = year - 1900;
+	parts.tm_mon = month;
+	parts.tm_mday = day;
+	parts.tm_hour = hour;
+	parts.tm_min = minute;
+	parts.tm_sec = second;
+	parts.tm_isdst = -1;
+	return HL_NAME(__date_from_time)((double)mktime(&parts) * 1000.0);
+}
+
+static vstring *realtime_string_from_utf8( const char *utf8 );
+
+/* "YYYY-MM-DD HH:MM:SS" in local time, as Haxe's Date.toString. */
+HL_PRIM vstring *HL_NAME(__date_to_string)( realtime_date *date ) {
+	struct tm parts = realtime_date_parts(date, false);
+	char text[32];
+	strftime(text, sizeof(text), "%Y-%m-%d %H:%M:%S", &parts);
+	return realtime_string_from_utf8(text);
+}
+
 /* An `Unreachable` IR terminator on HashLink: not an exception, so no Haxe code can catch it. */
 HL_PRIM void HL_NAME(__unreachable)( void ) {
 	hl_fatal("unreachable: control reached a method of a class that has no instance");
