@@ -35,7 +35,6 @@ import compiler.abi.PatchPlanner.AbiChange;
 import compiler.abi.PatchPlanner.PatchDecision;
 import compiler.runtime.NativeRegistry;
 import compiler.runtime.NativeRegistry.NativeDefinition;
-import compiler.compilation.CompilerPublication.CompilerSnapshot;
 import compiler.compilation.CompilerPublication.PublicationStatus;
 import compiler.compilation.CompilerPublication.ReconnectDecision;
 import compiler.compilation.CompilerPublication.ReconnectReason;

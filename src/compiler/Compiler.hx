@@ -43,7 +43,7 @@ import compiler.compilation.HashLinkBackendSession;
 import compiler.compilation.WasmBackendSession;
 import compiler.compilation.CompilationTransaction;
 import compiler.compilation.CompilerPublication;
-import compiler.compilation.CompilerPublication.CompilerSnapshot;
+import compiler.compilation.SessionState;
 import compiler.compilation.CompilerPublication.PublicationStatus;
 import compiler.compilation.CompilerPublication.ReconnectDecision;
 import compiler.compilation.CompilerPublication.ReconnectReason;
@@ -174,12 +174,6 @@ typedef ValidationResult = {
 	final diagnostic:Null<Diagnostic>;
 }
 
-typedef ReachabilityCache = {
-	final names:Array<String>;
-	final dependencyKeys:Map<String, String>;
-	final initializationClasses:Array<String>;
-}
-
 /** Semantic analysis completed without runtime artifact assembly or publication. */
 typedef AnalysisResult = {
 	final moduleNames:Array<String>;
@@ -196,10 +190,23 @@ typedef AnalysisResult = {
 @:allow(compiler.compilation.AnalysisTransaction)
 @:allow(compiler.compilation.CompilationContext)
 class Compiler {
-	var genericSpecializations:GenericSpecializationRegistry;
+	/**
+	 * What the builds own (`SessionState`): the modules, the types, the caches of the last build and the backend. A build works on a
+	 * copy and replaces this state with it when it succeeds; a rejected publication puts back the state it was built from.
+	 */
+	public var state(default, null):SessionState;
 
-	public final modules:Map<String, ModuleState> = [];
-	public final semanticWorkspace:SemanticWorkspace;
+	public var modules(get, never):Map<String, ModuleState>;
+	public var semanticWorkspace(get, never):SemanticWorkspace;
+	public var types(get, never):TypeRegistry;
+
+	/** Last successfully assembled typed program; failed edits never replace it. */
+	public var lastTypedProgram(get, never):Null<TypedProgram>;
+
+	public var inlineCache(get, never):compiler.ir.IrInliner.IrInlineCache;
+	public var pipelineSnapshot(get, never):Null<compiler.compilation.PipelineSnapshot>;
+	public var backend(get, never):BackendSession;
+	public var verifyMemo(get, never):compiler.ir.IrVerifyMemo;
 	public var configurationIdentity(default, null):String = "default";
 
 	var configurationScopeIdentity:String = "default";
@@ -209,29 +216,6 @@ class Compiler {
 	public var backendTarget(default, null):BackendTarget = HashLink;
 
 	var exportedFunctions:Array<String> = [];
-
-	/** Last successfully assembled typed program; failed edits never replace it. */
-	public var lastTypedProgram:Null<TypedProgram> = null;
-
-	public var inlineCache:compiler.ir.IrInliner.IrInlineCache = new compiler.ir.IrInliner.IrInlineCache();
-
-	/**
-	 * What the last successful plain build made its final IR and module from (see `PipelineSnapshot`). A build whose inputs are equal
-	 * reuses both. It follows the candidate like `inlineCache` does: a failed build leaves the previous one in place.
-	 */
-	public var pipelineSnapshot:Null<compiler.compilation.PipelineSnapshot> = null;
-
-	/**
-	 * The backend of this session (`BackendSession`): what turns the final IR into the artifact, with the state it keeps between
-	 * builds (the HashLink assembler and lowered functions). It follows the candidate like `inlineCache` does.
-	 */
-	public var backend:BackendSession;
-
-	/**
-	 * What the last verification of the final IR accepted (see `IrVerifyMemo`). It belongs to the IR, not to a backend, so it is not
-	 * part of the lowered-function cache; candidate builds share it, since an acceptance holds only while the reads it recorded do.
-	 */
-	public var verifyMemo:compiler.ir.IrVerifyMemo = new compiler.ir.IrVerifyMemo();
 
 	/**
 	 * Whether backend assembly keeps its append-only history between compiles. Live sessions need it: patches
@@ -254,38 +238,23 @@ class Compiler {
 	var sourceLoader = new ModuleSourceLoader();
 	final moduleId:Bytes;
 
-	public var types(default, null):TypeRegistry;
-
 	final natives:NativeRegistry;
 
 	/** The FFI interfaces and projections this compiler was given (`addFfiInterface`, `addFfiProjection`). */
 	public final ffi:FfiRegistry;
 
-	var objectCache:Map<String, IrObject> = [];
-	var canonicalObjectCache:Map<String, IrObject> = [];
-	var publishedAbi:Null<RuntimeAbiDescriptor>;
-	var compiledOnce = false;
 	final publication = new CompilerPublication();
-	var rehydrationBaseline:Null<Map<String, Bytes>>;
 	var sourceGeneration = 0;
 	var cachedCompileGeneration = -1;
 	var cachedCompileEntry:Null<String>;
 	var cachedCompileResult:Null<CompileResult>;
-	var cachedSemanticProgram:Null<SemanticProgram>;
-	var reachabilityCache:Map<String, ReachabilityCache> = [];
-	var declarationOwners = new compiler.semantic.DeclarationOwners();
 
 	public function new(?identityState:Bytes, ?nativeConfiguration:Array<NativeFunction>,
 			?ffiConfiguration:FfiConfiguration, ?cloneFrom:Compiler) {
-		semanticWorkspace = new SemanticWorkspace(modules);
 		natives = cloneFrom == null ? new NativeRegistry(nativeConfiguration) : cloneFrom.natives.clone();
 		if (cloneFrom != null) {
-			genericSpecializations = cloneFrom.genericSpecializations.copy();
 			moduleId = cloneFrom.moduleId;
-			backend = cloneFrom.backend;
-			types = cloneFrom.types.copy();
-			publishedAbi = cloneFrom.publishedAbi;
-			compiledOnce = cloneFrom.compiledOnce;
+			state = cloneFrom.state.copyForCandidate();
 			// A clone is what actually compiles, so it must assemble the way its source was asked to.
 			livePatching = cloneFrom.livePatching;
 			developmentMetadata = cloneFrom.developmentMetadata;
@@ -294,31 +263,29 @@ class Compiler {
 			for (name in cloneFrom.rootModules)
 				rootModules.push(name);
 		} else if (identityState == null) {
-			genericSpecializations = new GenericSpecializationRegistry();
 			moduleId = HlRuntimeIdentity.createModuleId();
-			backend = new HashLinkBackendSession(new HlModuleAssembler());
-			types = new TypeRegistry();
+			state = new SessionState(new TypeRegistry(), new GenericSpecializationRegistry(),
+				new HashLinkBackendSession(new HlModuleAssembler()));
 		} else {
 			var identity = HlRuntimeIdentity.decodePersistent(identityState);
-			genericSpecializations = new GenericSpecializationRegistry(identity.specializationState);
 			moduleId = identity.moduleId;
 			var assemblerState = identity.assemblerState;
 			var assembler = assemblerState == null
 				? new HlModuleAssembler(identity.stableIds) : HlAssemblerStateCodec.decode(assemblerState);
-			backend = new HashLinkBackendSession(assembler);
 			for (name => id in identity.stableIds)
 				if (assembler.cache.stableIds.get(name) != id)
 					throw "Assembler stable identities do not match compiler state";
 			for (name => id in assembler.cache.stableIds)
 				if (identity.stableIds.get(name) != id)
 					throw "Assembler stable identities do not match compiler state";
-			types = new TypeRegistry(identity.typeState);
-			publishedAbi = identity.publishedAbi;
+			state = new SessionState(new TypeRegistry(identity.typeState),
+				new GenericSpecializationRegistry(identity.specializationState), new HashLinkBackendSession(assembler));
+			state.publishedAbi = identity.publishedAbi;
 			if (identity.publicationTracking)
 				publication.enable(identity.acknowledgedRevision, identity.acknowledgedAbi,
 					identity.assemblerState != null);
 			if (identity.assemblerState != null) {
-				compiledOnce = true;
+				state.compiledOnce = true;
 				beginRehydration(assembler);
 			}
 		}
@@ -332,15 +299,15 @@ class Compiler {
 	}
 
 	public function exportIdentityState():Bytes {
-		var state = publication.persistence(),
-			hashLink = backend.hashLink();
+		var persistence = publication.persistence(),
+			hashLink = state.backend.hashLink();
 		// Live patching, and with it the identity a later session resumes, is HashLink's; another backend persists no layout.
 		var assembler = hashLink == null ? null : hashLink.assembler,
-			assemblerState = state.tracking && state.revision > 0
+			assemblerState = persistence.tracking && persistence.revision > 0
 				&& assembler != null ? HlAssemblerStateCodec.encode(assembler) : null;
 		return HlRuntimeIdentity.encodePersistent(moduleId, assembler == null ? [] : assembler.cache.stableIds,
-			types.exportState(), publishedAbi, state.tracking, state.revision,
-			state.abi, assemblerState, genericSpecializations.exportState());
+			state.types.exportState(), state.publishedAbi, persistence.tracking, persistence.revision,
+			persistence.abi, assemblerState, state.genericSpecializations.exportState());
 	}
 
 	public function enablePublicationTracking():Void {
@@ -358,7 +325,7 @@ class Compiler {
 
 	function beginRehydration(restored:HlModuleAssembler):Void {
 		var baseline:Map<String, Bytes> = [];
-		rehydrationBaseline = baseline;
+		state.rehydrationBaseline = baseline;
 		for (name => fn in restored.cache.functions)
 			baseline.set(name, compiler.ir.codec.IrFunctionStateCodec.encode(fn));
 	}
@@ -367,9 +334,7 @@ class Compiler {
 		publication.acknowledge(revision);
 
 	public function rejectPublication(revision:Int):Void {
-		var candidate = publication.reject(revision);
-		restore(candidate.snapshot);
-		backend = candidate.backend;
+		state = publication.reject(revision).snapshot;
 	}
 
 	/**
@@ -378,28 +343,28 @@ class Compiler {
 	 * build. False when the compiler no longer holds that state.
 	 */
 	public function retractPublication(revision:Int):Bool {
-		var current = backend.hashLink();
+		var current = state.backend.hashLink();
 		if (current == null)
 			return false;
 		var latest = current.assembler.lastRevision(),
 			candidate = publication.retract(revision);
 		if (candidate == null)
 			return false;
-		restore(candidate.snapshot);
-		var retracted = candidate.backend.hashLink();
+		state = candidate.snapshot;
+		var retracted = state.backend.hashLink();
 		if (retracted == null)
 			return false;
 		var assembler = retracted.assembler.copy();
 		// The refused revisions were published; their numbers stay used.
 		assembler.continueRevisions(latest);
-		backend = new HashLinkBackendSession(assembler, retracted.loweredCache);
+		state.backend = new HashLinkBackendSession(assembler, retracted.loweredCache);
 		return true;
 	}
 
 	public function registerNative(name:String, library:String, symbol:String, arguments:Array<CompilerType>,
 			result:CompilerType,
 			?generatedFunctionDependencies:Array<String>):Void {
-		if (compiledOnce)
+		if (state.compiledOnce)
 			throw "Native registrations are frozen after the first compilation";
 		natives.registerNative(name, library, symbol, arguments, result, generatedFunctionDependencies);
 	}
@@ -410,14 +375,14 @@ class Compiler {
 
 	/** Parse and register one immutable target-specific ABI interface before compilation. */
 	public function addFfiInterface(path:String, source:String):Void {
-		if (compiledOnce)
+		if (state.compiledOnce)
 			throw "FFI interfaces are frozen after the first compilation";
 		ffi.registerInterface(path, source);
 	}
 
 	/** Register Haxe-only naming policy without changing the generated ABI model. */
 	public function addFfiProjection(path:String, source:String):Void {
-		if (compiledOnce)
+		if (state.compiledOnce)
 			throw "FFI projections are frozen after the first compilation";
 		ffi.registerProjection(path, source);
 	}
@@ -482,7 +447,7 @@ class Compiler {
 	}
 
 	public function compact(entryModule:String):CompileResult {
-		var hashLink = backend.hashLink();
+		var hashLink = state.backend.hashLink();
 		if (hashLink == null)
 			throw "Compacting a module is a HashLink operation";
 		var result = new CompilationTransaction(this, entryModule, null, hashLink.compacting()).run();
@@ -532,7 +497,7 @@ class Compiler {
 		if (!modules.exists(name))
 			return false;
 		modules.remove(name);
-		declarationOwners.release(name);
+		state.declarationOwners.release(name);
 		graph.rebuild(modules);
 		sourceGeneration++;
 		return true;
@@ -568,20 +533,20 @@ class Compiler {
 		var target = BackendTargets.parse(nextDefines.get("target"));
 		backendTarget = target == null ? HashLink : target;
 		// The session's backend builds for the target; one that builds for another starts over.
-		if (backend.backendTarget() != backendTarget)
-			backend = BackendTargets.isWasm(backendTarget)
+		if (state.backend.backendTarget() != backendTarget)
+			state.backend = BackendTargets.isWasm(backendTarget)
 				? new WasmBackendSession(backendTarget) : new HashLinkBackendSession(new HlModuleAssembler());
-		for (state in modules) {
+		for (module in modules) {
 			var affected = scopeChanged;
 			if (!affected)
-				for (name in state.conditionalDefines)
+				for (name in module.conditionalDefines)
 					if (changed.exists(name)) {
 						affected = true;
 						break;
 					}
 			if (affected)
-				state.render(new SourceFile(state.source.path, state.source.text,
-					state.source.isStandardLibrarySource));
+				module.render(new SourceFile(module.source.path, module.source.text,
+					module.source.isStandardLibrarySource));
 		}
 		sourceGeneration++;
 	}
@@ -755,141 +720,22 @@ class Compiler {
 		cachedCompileResult = result;
 	}
 
-	function executableEntryPoint(entryModule:String):String {
-		var state:ModuleState = modules.get(entryModule),
-			ast = state.parsedAst();
-		for (fn in ast.functions)
-			if (fn.name == "main")
-				return "main";
-		for (classDecl in ast.classes)
-			for (method in classDecl.methods)
-				if (method.name == "main" && method.isStatic)
-					return ModuleCanonicalizer.qualifiedTypeName(ast.packageName, classDecl.name) + ".main";
-		return "main";
-	}
-
-	function rehydratedChanges(regenerated:Array<String>, program:IrProgram):Array<String> {
-		var baseline = rehydrationBaseline;
-		if (baseline == null)
-			return regenerated;
-		var current:Map<String, compiler.ir.IrFunction> = [], changed = [];
-		for (fn in program.functions)
-			current.set(fn.name, fn);
-		for (name in regenerated) {
-			if (!baseline.exists(name) || !current.exists(name)) {
-				changed.push(name);
-				continue;
-			}
-			var old = baseline.get(name), next = current.get(name);
-			if (old.compare(compiler.ir.codec.IrFunctionStateCodec.encode(next)) != 0)
-				changed.push(name);
-		}
-		return changed;
-	}
-
-	function snapshot():CompilerSnapshot {
-		var moduleCopies:Map<String, ModuleState> = [],
-			objectCopies:Map<String, IrObject> = [];
-		for (name => state in modules)
-			moduleCopies.set(name, state);
-		for (name => object in objectCache)
-			objectCopies.set(name, object);
-		return {
-			modules: moduleCopies,
-			types: types.copy(),
-			objectCache: objectCopies,
-			canonicalObjectCache: [for (name => object in canonicalObjectCache) name => object],
-			lastTypedProgram: lastTypedProgram,
-			publishedAbi: publishedAbi,
-			compiledOnce: compiledOnce,
-			rehydrationBaseline: rehydrationBaseline,
-			semanticProgram: cachedSemanticProgram,
-			inlineCache: inlineCache,
-			pipelineSnapshot: pipelineSnapshot,
-			backend: backend,
-			reachabilityCache: reachabilityCache,
-			declarationOwners: declarationOwners
-		};
-	}
-
-	function createCandidate(snapshot:CompilerSnapshot, startingBackend:Null<BackendSession>):Compiler {
+	/** A compiler whose state is a copy of this one's, which a build works on (see `SessionState.copyForCandidate`). */
+	function createCandidate(startingBackend:Null<BackendSession>):Compiler {
 		var candidate = new Compiler(null, null, null, this);
 		candidate.sourceLoader = sourceLoader.copy();
 		candidate.configurationIdentity = configurationIdentity;
 		candidate.configurationScopeIdentity = configurationScopeIdentity;
 		candidate.defines = [for (name => value in defines) name => value];
 		candidate.backendTarget = backendTarget;
-		for (name in [for (name in candidate.modules.keys()) name])
-			candidate.modules.remove(name);
-		for (name => state in snapshot.modules)
-			candidate.modules.set(name, state);
-		candidate.types = snapshot.types;
-		candidate.objectCache = [for (name => object in snapshot.objectCache) name => object];
-		candidate.canonicalObjectCache = [for (name => object in snapshot.canonicalObjectCache) name => object];
-		candidate.lastTypedProgram = snapshot.lastTypedProgram;
-		// Shared, not copied: an acceptance holds only while the IR and everything it read are equal, so a build that fails leaves nothing wrong behind.
-		candidate.verifyMemo = verifyMemo;
-		candidate.inlineCache = inlineCache.copy();
-		candidate.pipelineSnapshot = pipelineSnapshot;
-		candidate.backend = (startingBackend == null ? backend : startingBackend).forCandidate();
-		candidate.publishedAbi = snapshot.publishedAbi;
-		candidate.compiledOnce = snapshot.compiledOnce;
-		candidate.rehydrationBaseline = snapshot.rehydrationBaseline;
-		candidate.cachedSemanticProgram = snapshot.semanticProgram;
-		candidate.reachabilityCache = copyReachabilityCache(reachabilityCache);
-		candidate.declarationOwners = declarationOwners.copy();
+		candidate.state = state.copyForCandidate(startingBackend);
 		return candidate;
 	}
 
+	/** Takes the state a successful build left. */
 	function adoptCandidate(candidate:Compiler):Void {
-		for (name in [for (name in modules.keys()) name])
-			modules.remove(name);
-		for (name => state in candidate.modules)
-			modules.set(name, state);
-		types = candidate.types;
-		objectCache = candidate.objectCache;
-		canonicalObjectCache = candidate.canonicalObjectCache;
-		lastTypedProgram = candidate.lastTypedProgram;
-		inlineCache = candidate.inlineCache;
-		pipelineSnapshot = candidate.pipelineSnapshot;
-		backend = candidate.backend;
-		publishedAbi = candidate.publishedAbi;
-		compiledOnce = candidate.compiledOnce;
-		rehydrationBaseline = candidate.rehydrationBaseline;
-		cachedSemanticProgram = candidate.cachedSemanticProgram;
-		reachabilityCache = candidate.reachabilityCache;
-		declarationOwners = candidate.declarationOwners;
-		genericSpecializations = candidate.genericSpecializations;
+		state = candidate.state;
 		graph.rebuild(modules);
-	}
-
-	function writableState(name:String, rollbackModules:Map<String, ModuleState>):ModuleState {
-		var state:ModuleState = modules.get(name);
-		if (rollbackModules.get(name) == state) {
-			state = state.copy();
-			modules.set(name, state);
-		}
-		return state;
-	}
-
-	function restore(snapshot:CompilerSnapshot):Void {
-		for (name in [for (name in modules.keys()) name])
-			modules.remove(name);
-		for (name => state in snapshot.modules)
-			modules.set(name, state);
-		types = snapshot.types;
-		objectCache = snapshot.objectCache;
-		canonicalObjectCache = snapshot.canonicalObjectCache;
-		lastTypedProgram = snapshot.lastTypedProgram;
-		publishedAbi = snapshot.publishedAbi;
-		compiledOnce = snapshot.compiledOnce;
-		rehydrationBaseline = snapshot.rehydrationBaseline;
-		cachedSemanticProgram = snapshot.semanticProgram;
-		inlineCache = snapshot.inlineCache;
-		pipelineSnapshot = snapshot.pipelineSnapshot;
-		backend = snapshot.backend;
-		reachabilityCache = snapshot.reachabilityCache;
-		declarationOwners = snapshot.declarationOwners;
 	}
 
 	static function explicitFunctionSignatures(functions:Array<AstFunction>):Bool {
@@ -909,22 +755,35 @@ class Compiler {
 		return true;
 	}
 
-	static function copyReachabilityCache(source:Map<String, ReachabilityCache>):Map<String, ReachabilityCache> {
-		var result:Map<String, ReachabilityCache> = [];
-		for (entry => cached in source)
-			result.set(entry, {
-				names: cached.names.copy(),
-				dependencyKeys: [for (name => key in cached.dependencyKeys) name => key],
-				initializationClasses: cached.initializationClasses.copy()
-			});
-		return result;
-	}
-
 	function nativeSignatures():Map<String, {arguments:Array<CompilerType>, result:CompilerType}> {
 		return natives.signatures();
 	}
 
 	/** What every module identity is mixed with: the compiler (or the `compiler-version` define, for tests) and the defines. */
+	function get_modules():Map<String, ModuleState>
+		return state.modules;
+
+	function get_semanticWorkspace():SemanticWorkspace
+		return state.semanticWorkspace;
+
+	function get_types():TypeRegistry
+		return state.types;
+
+	function get_lastTypedProgram():Null<TypedProgram>
+		return state.lastTypedProgram;
+
+	function get_inlineCache():compiler.ir.IrInliner.IrInlineCache
+		return state.inlineCache;
+
+	function get_pipelineSnapshot():Null<compiler.compilation.PipelineSnapshot>
+		return state.pipelineSnapshot;
+
+	function get_backend():BackendSession
+		return state.backend;
+
+	function get_verifyMemo():compiler.ir.IrVerifyMemo
+		return state.verifyMemo;
+
 	function identitySalt():String {
 		var version = defines.get("compiler-version");
 		if (version == null)

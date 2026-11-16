@@ -50,8 +50,8 @@ class CompilerMemoryLog {
 				return "no-compiler";
 			var result = compiler.cachedCompileResult == null
 				? null : BackendArtifacts.hashLink(compiler.cachedCompileResult.artifact).module,
-				snapshot = compiler.pipelineSnapshot == null || compiler.pipelineSnapshot.backend == null
-					? null : BackendArtifacts.hashLink(compiler.pipelineSnapshot.backend.artifact).module,
+				snapshot = compiler.state.pipelineSnapshot == null || compiler.state.pipelineSnapshot.backend == null
+					? null : BackendArtifacts.hashLink(compiler.state.pipelineSnapshot.backend.artifact).module,
 				encoded = session.encodedModule == null ? null : session.encodedModule.code;
 			return 'result==snapshot:${result == snapshot} result==encoded:${result == encoded} snapshot==encoded:${snapshot == encoded} result:${result != null} snapshot:${snapshot != null} encoded:${encoded != null}';
 		}

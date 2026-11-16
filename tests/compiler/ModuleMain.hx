@@ -394,6 +394,24 @@ class ModuleMain {
 			.compare(rejectedPublication.artifact.hashLink().patchBytes) != 0)
 			throw "Retry after runtime rejection disagreed with the rejected candidate";
 		publicationCompiler.acknowledgePublication(retriedPublication.revision);
+		// A rejected build leaves nothing of its own behind: not its types, nor the generic specializations it named.
+		var specializationCompiler = new Compiler();
+		specializationCompiler.enablePublicationTracking();
+		specializationCompiler.update("Main.hx",
+			"function first<T>(values:Array<T>):T { return values[0]; } function main():Int { return first([40]); }");
+		specializationCompiler.acknowledgePublication(specializationCompiler.compile("Main").revision);
+		var acknowledgedIdentity = specializationCompiler.exportIdentityState(),
+			acknowledgedSpecializations =
+				@:privateAccess specializationCompiler.state.genericSpecializations.exportState();
+		specializationCompiler.update("Main.hx",
+			"function first<T>(values:Array<T>):T { return values[0]; } function main():Int { return first([1.5]) > 1.0 ? first([40]) : 0; }");
+		var specializedBuild = specializationCompiler.compile("Main");
+		if (@:privateAccess specializationCompiler.state.genericSpecializations.exportState()
+			.compare(acknowledgedSpecializations) == 0)
+			throw "The edit that calls a generic function with another type named no new specialization";
+		specializationCompiler.rejectPublication(specializedBuild.revision);
+		if (specializationCompiler.exportIdentityState().compare(acknowledgedIdentity) != 0)
+			throw "Rejecting a build kept its types or generic specializations";
 		var structuralCompiler = new Compiler();
 		structuralCompiler.update("Main.hx",
 			"class Editor { public var value:Int; public function new():Void { this.value = 42; } } function main():Int { var editor = new Editor(); return editor.value; }");

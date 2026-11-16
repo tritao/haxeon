@@ -26,24 +26,23 @@ class CompilationTransaction {
 	public function run():CompileResult {
 		var transactionStartedAt = Sys.time() * 1000.0;
 		compiler.publication.beforeCompile();
-		var snapshot = compiler.snapshot();
+		var snapshot = compiler.state;
 		var snapshotDoneAt = Sys.time() * 1000.0;
-		var previousBackend = compiler.backend;
-		var candidate = compiler.createCandidate(snapshot, startingBackend);
+		var candidate = compiler.createCandidate(startingBackend);
 		try {
 			var context = new CompilationContext(candidate, indexSemantics);
 			var frontendStartedAt = Sys.time() * 1000.0;
 			var result = CompilationPipeline.compile(context, entryModule, token, snapshot.modules,
 				transactionStartedAt, snapshotDoneAt, frontendStartedAt,
 				indexSemantics, compiler.publication.baseline());
-			var abi = candidate.publishedAbi;
+			var abi = candidate.state.publishedAbi;
 			if (abi == null)
 				throw "Compilation did not produce a runtime ABI";
 			compiler.adoptCandidate(candidate);
 			if (result.unchanged)
 				compiler.publication.unchanged(result.revision);
 			else
-				compiler.publication.candidate(result.revision, abi, snapshot, previousBackend);
+				compiler.publication.candidate(result.revision, abi, snapshot);
 			return result;
 		} catch (error:Dynamic) {
 			var failedDiagnostics:Map<String, Array<Diagnostic>> = [];

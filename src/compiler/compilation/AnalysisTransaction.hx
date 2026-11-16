@@ -19,8 +19,8 @@ class AnalysisTransaction {
 	}
 
 	public function run():AnalysisResult {
-		var snapshot = compiler.snapshot(),
-			candidate = compiler.createCandidate(snapshot, null),
+		var snapshot = compiler.state,
+			candidate = compiler.createCandidate(null),
 			startedAt = Sys.time() * 1000.0;
 		var diagnosticWork = [entryModule],
 			diagnosticSeen:Map<String, Bool> = [],

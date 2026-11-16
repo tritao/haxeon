@@ -44,7 +44,7 @@ class CompilerMemoryCensus {
 					compiler.cachedCompileEntry = null;
 				}
 			},
-				{name: "pipeline snapshot (final IR, module)", release: () -> compiler.pipelineSnapshot = null},
+				{name: "pipeline snapshot (final IR, module)", release: () -> compiler.state.pipelineSnapshot = null},
 				{name: "encoded module bytes and writer cache",
 				release: () -> {
 					session.encodedModule = null;
@@ -67,18 +67,18 @@ class CompilerMemoryCensus {
 			},
 				{
 					name: "inline cache",
-					release: () -> compiler.inlineCache = new IrInlineCache()
+					release: () -> compiler.state.inlineCache = new IrInlineCache()
 				},
 				{name: "object cache",
 				release: () -> {
-					compiler.objectCache = [];
-					compiler.canonicalObjectCache = [];
+					compiler.state.objectCache = [];
+					compiler.state.canonicalObjectCache = [];
 				}
 			},
 				{name: "last typed program and semantic program",
 				release: () -> {
-					compiler.lastTypedProgram = null;
-					compiler.cachedSemanticProgram = null;
+					compiler.state.lastTypedProgram = null;
+					compiler.state.semanticProgram = null;
 				}
 			},
 				{name: "typed functions of modules",
@@ -128,8 +128,8 @@ class CompilerMemoryCensus {
 			},
 				{name: "reachability and declaration owners",
 				release: () -> {
-					compiler.reachabilityCache = [];
-					compiler.declarationOwners = new compiler.semantic.DeclarationOwners();
+					compiler.state.reachabilityCache = [];
+					compiler.state.declarationOwners = new compiler.semantic.DeclarationOwners();
 				}
 			},
 				];

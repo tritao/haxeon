@@ -1,7 +1,7 @@
 package compiler.compilation;
 
 import compiler.Compiler;
-import compiler.Compiler.ReachabilityCache;
+import compiler.compilation.SessionState.ReachabilityCache;
 import compiler.abi.RuntimeAbi.RuntimeAbiDescriptor;
 import compiler.core.AllocationMeter;
 import compiler.ir.Ir.IrCNative;
@@ -65,18 +65,19 @@ class CompilationContext {
 		this.owner = owner;
 		modules = owner.modules;
 		graph = owner.graph;
-		objectCache = owner.objectCache;
-		canonicalObjectCache = owner.canonicalObjectCache;
+		objectCache = owner.state.objectCache;
+		canonicalObjectCache = owner.state.canonicalObjectCache;
 		moduleId = owner.moduleId;
-		genericSpecializations = owner.genericSpecializations;
+		genericSpecializations = owner.state.genericSpecializations;
 		rootModules = owner.rootModules;
-		moduleAnalyzer = new ModuleAnalyzer(modules, owner.types, owner.natives, owner.compiledOnce, owner.defines,
+		moduleAnalyzer = new ModuleAnalyzer(modules, owner.state.types, owner.natives, owner.state.compiledOnce,
+			owner.defines,
 			owner.sourceLoader, buildSemanticModels,
-			owner.declarationOwners);
+			owner.state.declarationOwners);
 	}
 
 	public function writableState(name:String, rollback:Map<String, ModuleState>):ModuleState
-		return owner.writableState(name, rollback);
+		return owner.state.writableState(name, rollback);
 
 	public function parse(state:ModuleState, entry:String, body:Map<String, Bool>, signatures:Map<String, Bool>,
 			structural:Map<String, Bool>):Void {
@@ -101,7 +102,7 @@ class CompilationContext {
 		return moduleAnalyzer.importAliases(imports, explicit);
 
 	public function executableEntryPoint(entry:String):String
-		return owner.executableEntryPoint(entry);
+		return owner.state.executableEntryPoint(entry);
 
 	public function nativeSignatures():Map<String, {arguments:Array<CompilerType>, result:CompilerType}>
 		return owner.nativeSignatures();
@@ -126,25 +127,25 @@ class CompilationContext {
 		return owner.exportedFunctions.copy();
 
 	public function resolveSemanticSymbol(name:String):Null<SemanticSymbolId>
-		return owner.semanticWorkspace.resolveSymbolId(name);
+		return owner.state.semanticWorkspace.resolveSymbolId(name);
 
 	public function declarationOwner(name:String):Null<String>
-		return owner.declarationOwners.get(name);
+		return owner.state.declarationOwners.get(name);
 
 	public function resolveSemanticEnumCase(name:String, index:Int):Null<SemanticSymbolId>
-		return owner.semanticWorkspace.resolveEnumCaseId(name, index);
+		return owner.state.semanticWorkspace.resolveEnumCaseId(name, index);
 
 	public function resolveSemanticType(name:String):Null<SemanticSymbolId>
-		return owner.semanticWorkspace.resolveTypeSymbolId(name);
+		return owner.state.semanticWorkspace.resolveTypeSymbolId(name);
 
 	public function invalidateSemanticResolutionCache():Void
-		owner.semanticWorkspace.invalidateResolutionCache();
+		owner.state.semanticWorkspace.invalidateResolutionCache();
 
 	public function irNatives():Array<IrNative>
 		return owner.irNatives();
 
 	public function inlineCache():compiler.ir.IrInliner.IrInlineCache
-		return owner.inlineCache;
+		return owner.state.inlineCache;
 
 	public function inlineEnabled():Bool {
 		var option = owner.defines.get("haxeon-inline");
@@ -175,30 +176,19 @@ class CompilationContext {
 		return owner.ffi.cNatives();
 
 	public function rehydratedChanges(regenerated:Array<String>, program:IrProgram):Array<String>
-		return owner.rehydratedChanges(regenerated, program);
+		return owner.state.rehydratedChanges(regenerated, program);
 
 	public function setLastTypedProgram(value:TypedProgram):Void
-		owner.lastTypedProgram = value;
+		owner.state.lastTypedProgram = value;
 
 	public function clearRehydrationBaseline():Void
-		owner.rehydrationBaseline = null;
+		owner.state.rehydrationBaseline = null;
 
 	public function cachedReachability(entry:String):Null<ReachabilityCache>
-		return owner.reachabilityCache.get(entry);
+		return owner.state.cachedReachability(entry);
 
-	public function cacheReachability(entry:String, names:Array<String>, initializationClasses:Array<String>):Void {
-		var dependencyKeys:Map<String, String> = [];
-		for (name in names) {
-			var state = modules.get(name);
-			if (state != null)
-				dependencyKeys.set(name, dependencyKey(state.dependencies));
-		}
-		owner.reachabilityCache.set(entry, {
-			names: names.copy(),
-			dependencyKeys: dependencyKeys,
-			initializationClasses: initializationClasses.copy()
-		});
-	}
+	public function cacheReachability(entry:String, names:Array<String>, initializationClasses:Array<String>):Void
+		owner.state.cacheReachability(entry, names, initializationClasses);
 
 	/** Length-prefixed components preserve boundaries without binary separators in text keys. */
 	public static function dependencyKey(dependencies:Array<String>):String {
@@ -218,13 +208,13 @@ class CompilationContext {
 		return Compiler.copyIndices(source);
 
 	function get_verifyMemo():compiler.ir.IrVerifyMemo
-		return owner.verifyMemo;
+		return owner.state.verifyMemo;
 
 	function get_pipelineSnapshot():Null<PipelineSnapshot>
-		return owner.pipelineSnapshot;
+		return owner.state.pipelineSnapshot;
 
 	function set_pipelineSnapshot(value:Null<PipelineSnapshot>):Null<PipelineSnapshot> {
-		owner.pipelineSnapshot = value;
+		owner.state.pipelineSnapshot = value;
 		return value;
 	}
 
@@ -236,18 +226,18 @@ class CompilationContext {
 	}
 
 	function get_backend():BackendSession
-		return owner.backend;
+		return owner.state.backend;
 
 	function get_publishedAbi():Null<RuntimeAbiDescriptor>
-		return owner.publishedAbi;
+		return owner.state.publishedAbi;
 
 	function set_publishedAbi(value:Null<RuntimeAbiDescriptor>):Null<RuntimeAbiDescriptor> {
-		owner.publishedAbi = value;
+		owner.state.publishedAbi = value;
 		return value;
 	}
 
 	function get_compiledOnce():Bool
-		return owner.compiledOnce;
+		return owner.state.compiledOnce;
 
 	function get_livePatching():Bool
 		return owner.livePatching;
@@ -259,18 +249,18 @@ class CompilationContext {
 		return owner.backendOptions;
 
 	function set_compiledOnce(value:Bool):Bool {
-		owner.compiledOnce = value;
+		owner.state.compiledOnce = value;
 		return value;
 	}
 
 	function get_cachedSemanticProgram():Null<SemanticProgram>
-		return owner.cachedSemanticProgram;
+		return owner.state.semanticProgram;
 
 	function set_cachedSemanticProgram(value:Null<SemanticProgram>):Null<SemanticProgram> {
-		owner.cachedSemanticProgram = value;
+		owner.state.semanticProgram = value;
 		return value;
 	}
 
 	function get_lastTypedProgram():Null<TypedProgram>
-		return owner.lastTypedProgram;
+		return owner.state.lastTypedProgram;
 }

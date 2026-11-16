@@ -1,36 +1,6 @@
 package compiler.compilation;
 
 import compiler.abi.RuntimeAbi.RuntimeAbiDescriptor;
-import compiler.core.Diagnostic;
-import compiler.ir.Ir.IrObject;
-import compiler.modules.ModuleState;
-import compiler.semantic.SemanticProgram;
-import compiler.types.TypeRegistry;
-import compiler.types.TypedAst.TypedProgram;
-
-/** Compiler-owned semantic state captured before staging a publication. */
-typedef CompilerSnapshot = {
-	final modules:Map<String, ModuleState>;
-	final types:TypeRegistry;
-	final objectCache:Map<String, IrObject>;
-	final canonicalObjectCache:Map<String, IrObject>;
-	final lastTypedProgram:Null<TypedProgram>;
-	final publishedAbi:Null<RuntimeAbiDescriptor>;
-	final compiledOnce:Bool;
-	final rehydrationBaseline:Null<Map<String, haxe.io.Bytes>>;
-	final semanticProgram:Null<SemanticProgram>;
-
-	/**
-	 * The caches that define "the previous build": the candidate of a build works on copies, so these are the objects the last
-	 * successful build left, and putting them back with the rest returns the compiler to exactly that state.
-	 */
-	final inlineCache:compiler.ir.IrInliner.IrInlineCache;
-
-	final pipelineSnapshot:Null<compiler.compilation.PipelineSnapshot>;
-	final backend:BackendSession;
-	final reachabilityCache:Map<String, compiler.Compiler.ReachabilityCache>;
-	final declarationOwners:compiler.semantic.DeclarationOwners;
-}
 
 /** Runtime revision and ABI last acknowledged by the host. */
 typedef PublishedBaseline = {
@@ -44,10 +14,8 @@ typedef PendingPublication = {
 	final baseline:PublishedBaseline;
 	final revision:Int;
 	final abi:RuntimeAbiDescriptor;
-	final snapshot:CompilerSnapshot;
-
-	/** The backend session the build started from (see `CompilationTransaction`). */
-	final backend:BackendSession;
+	/** The state the build started from, which rejecting or retracting the publication returns to. */
+	final snapshot:SessionState;
 }
 
 /** Read-only summary of the current publication state machine. */
@@ -113,16 +81,14 @@ class CompilerPublication {
 			case Untracked, Ready(_):
 		}
 
-	public function candidate(revision:Int, abi:RuntimeAbiDescriptor, snapshot:CompilerSnapshot,
-			backend:BackendSession):Void
+	public function candidate(revision:Int, abi:RuntimeAbiDescriptor, snapshot:SessionState):Void
 		state = switch state {
 			case Untracked: Untracked;
 			case Ready(baseline): Pending({
 				baseline: baseline,
 				revision: revision,
 				abi: abi,
-				snapshot: snapshot,
-				backend: backend
+				snapshot: snapshot
 			});
 			case Pending(candidate): throw 'Publication revision ${candidate.revision} is still pending';
 		};
