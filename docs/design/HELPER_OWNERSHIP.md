@@ -8,11 +8,12 @@ Scheduled with ADR 0003 M4: the invalidation key is a query dependency there, so
 
 ## The failure
 
-`$hash$value$equality:<sha(T)>` is one function for a type `T`, however many functions need it. Each request is recorded in
-`TypingSession.hashRequests` by name, and the first request wins: its `origin` (the requesting function) and `span` become the
-helper's. In `enum-generated-dependencies` the requesters of the hash helper for `Key` are `$generic:...LateBox[constrained]<Key>.hash`
-and `$enum-custom:equals:...`. A fresh compiler types them in one order; a warm session, which types only the functions an edit
-touched, sees them in another, so the same helper gets a different `origin`. The origin decides the helper's owning module, when it
+`$hash$value$equality:<sha(T)>` is one function for a type `T`, however many functions need it. Each request is recorded by name in
+the requesting unit's `TypingOutput`, the outputs are merged in declaration order, and the first request wins: its `origin` (the
+requesting function) and `span` become the helper's. In `enum-generated-dependencies` the requesters of the hash helper for `Key` are
+`$generic:...LateBox[constrained]<Key>.hash` and `$enum-custom:equals:...`. A fresh compiler sees them in one order (the order of
+their units, whatever order the bodies were typed in); a warm session, which types only the functions an edit touched, sees a
+different set of requesters, so the same helper gets a different `origin`. The origin decides the helper's owning module, when it
 is regenerated, and its stable function identity (HLB section 1), so the two modules differ.
 
 The same shape is in every first-wins registry: `valueEqualityRequests`, `enumEqualityRequests`, `wireCodecRequests`,
