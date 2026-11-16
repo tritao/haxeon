@@ -118,13 +118,16 @@ class TestRegistration {
 			var name = Path.withoutDirectory(path);
 			if (Path.extension(name) == "hx")
 				name = Path.withoutExtension(name);
-			if (!byName.exists(name))
-				byName.set(name, []);
-			byName.get(name).push(path);
+			var named = byName.get(name);
+			if (named == null)
+				byName.set(name, named = []);
+			named.push(path);
 		}
 		var reached = new Map<String, String>(), queue = roots.copy();
-		while (queue.length > 0) {
+		while (true) {
 			var source = queue.shift();
+			if (source == null)
+				break;
 			for (word in words(source.text))
 				for (path in byName.get(word) ?? [])
 					if (path != source.path && !reached.exists(path)) {

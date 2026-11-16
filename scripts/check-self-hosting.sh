@@ -64,12 +64,9 @@ echo "PASS: the compiler builds itself to a fixed point"
 # list is cut as the gaps close.
 entry_sources="$work/entry-sources.txt"
 (cd "$root_dir" && find src stdlib lib/haxeon-io -name '*.hx' | LC_ALL=C sort) >"$entry_sources"
-building_entries=(compiler.tools.HaxeonCompiler Main FfiImportMain FfiAuditMain EditorServiceMain compiler.tools.CompilerServer build.HaxeonBuild)
+building_entries=(compiler.tools.HaxeonCompiler Main FfiImportMain FfiAuditMain EditorServiceMain compiler.tools.CompilerServer build.HaxeonBuild tools.HaxeonCli LspMain)
 # Each gap is "entry|why it does not build yet" (a plain list: macOS's bash 3.2 has no associative arrays).
-entry_gaps=(
-	"tools.HaxeonCli|the Haxeon stdlib has no DateTools.format, and its Date no local-time fields (ProfileCapture.hx)"
-	"LspMain|the Haxeon stdlib's haxe.Int64 has no mul (ProfilerSession.hx)"
-)
+entry_gaps=()
 build_entry() {
 	(cd "$root_dir" && "$hl" "$work/stage-1.hl" --entry="$1" --root=src --root=stdlib --root=lib/haxeon-io \
 		"--sources-file=$entry_sources" "--output=$work/entry-$1.hl") >"$work/entry-$1.log" 2>&1
@@ -81,7 +78,8 @@ for entry in "${building_entries[@]}"; do
 		exit 1
 	}
 done
-for gap in "${entry_gaps[@]}"; do
+# bash 3.2 (macOS) treats an empty array as unbound under set -u, so the list expands only when it has entries.
+for gap in ${entry_gaps[@]+"${entry_gaps[@]}"}; do
 	entry=${gap%%|*}
 	if build_entry "$entry"; then
 		echo "FAIL: $entry now builds with the self-hosted compiler (${gap#*|}); move it to building_entries" >&2
