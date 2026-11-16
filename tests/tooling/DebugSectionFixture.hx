@@ -1,7 +1,7 @@
 import compiler.Frontend;
 import compiler.core.Source.SourceFile;
 import compiler.hl.HlWriter;
-import compiler.ir.hl.HlLower;
+import compiler.hl.lower.HlLower;
 import haxe.io.Bytes;
 import sys.io.File;
 

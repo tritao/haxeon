@@ -100,7 +100,7 @@ class ReflectionTagProjectionMain {
 			+ '\nif(!Reflect.deleteField(d,"mode") || Reflect.deleteField(d,"absent") || Reflect.field(d,"mode")!=null || !Reflect.hasField(d,"mode")) return 5; '
 			+ '\nreturn 42; }');
 		var program = session.compile("Main").ir;
-		var binary = target == "hl" ? new compiler.backend.hl.HlBackend().compile(program, {
+		var binary = target == "hl" ? new compiler.hl.HlBackend().compile(program, {
 			target: HashLink,
 			debugNames: true
 		})

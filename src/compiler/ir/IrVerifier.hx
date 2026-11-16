@@ -1421,7 +1421,7 @@ class IrVerifier {
 				if (object == null || !object.isValue || !isObjectType(out.type, typeName))
 					throw 'Unknown or mismatched IR value "$typeName"';
 			case FieldGet(out, object, fieldName):
-				if (fieldName == compiler.backend.wasm.WasmFlattenValueFields.CHECK_FIELD) {
+				if (fieldName == IrReceiverCheck.CHECK_FIELD) {
 					requireObject(object, values, objects);
 					expect(out, I32);
 				} else {

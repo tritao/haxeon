@@ -199,7 +199,7 @@ class BackendAssembly {
 				throw 'HAXEON_CHECK_REUSE: a module with ${candidateAssembler.reusedFunctions} functions linked from the last build differs from one lowered afresh ($difference)';
 		}
 		if (!context.isWasmTarget())
-			compiler.ir.IrOpportunityCensus.reportHashLink(assembly.module, assembly.functionIndices);
+			compiler.hl.HlOpportunityCensus.report(assembly.module, assembly.functionIndices);
 		var backendAssemblyDoneAt = Sys.time() * 1000.0;
 		var allocationAfterSnapshots = AllocationMeter.sample();
 		if (token != null)

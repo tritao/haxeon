@@ -68,7 +68,7 @@ class NullableScalarResultAbiMain {
 		p.functions.push(new IrFunction("entry", b.arguments, Void, b.blocks, Ordinary));
 		p.entryPoint = target == HashLink ? "entry" : "main";
 		var bytes = target == HashLink
-			? new compiler.backend.hl.HlBackend().compile(p, {target: target, debugNames: true}).bytes
+			? new compiler.hl.HlBackend().compile(p, {target: target, debugNames: true}).bytes
 			: new compiler.backend.wasm.WasmBackend().compile(p, {
 				target: target,
 				debugNames: true,

@@ -223,7 +223,7 @@ class InlineEnumWordMain {
 			var path = stem + '-$target' + (target == HashLink ? ".hl" : ".wasm");
 			try {
 				program.entryPoint = target == HashLink ? "entry" : "main";
-				var bytes = target == HashLink ? new compiler.backend.hl.HlBackend().compile(program, {
+				var bytes = target == HashLink ? new compiler.hl.HlBackend().compile(program, {
 					target: target,
 					debugNames: true
 				})

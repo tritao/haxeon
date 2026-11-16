@@ -369,7 +369,7 @@ class InlineEnumLogicalArrayMain {
 		p.entryPoint = target == HashLink ? "entry" : "main";
 		var targetBackend:compiler.backend.Backend.BackendTarget = target == HashLink ? HashLink : target == Wasm32
 			? Wasm32 : WasmGc;
-		var bytes = target == HashLink ? new compiler.backend.hl.HlBackend().compile(p, {
+		var bytes = target == HashLink ? new compiler.hl.HlBackend().compile(p, {
 			target: targetBackend,
 			debugNames: true
 		}).bytes : new compiler.backend.wasm.WasmBackend().compile(p, {

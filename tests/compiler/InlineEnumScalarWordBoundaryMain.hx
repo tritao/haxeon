@@ -43,7 +43,7 @@ class InlineEnumScalarWordBoundaryMain {
 		p.functions = [new IrFunction("main", b.arguments, I32, b.blocks, Ordinary)];
 		compiler.ir.IrVerifier.verify(p);
 		var error = "";
-		try compiler.ir.hl.HlLower.lower(p) catch (e:Dynamic) error = Std.string(e);
+		try compiler.hl.lower.HlLower.lower(p) catch (e:Dynamic) error = Std.string(e);
 		if (error.indexOf("HashLink callbacks belong in the reference lane") < 0)
 			throw "HashLink callback word escape: " + error;
 		Sys.println("PASS: HashLink callback handles cannot enter scalar words");

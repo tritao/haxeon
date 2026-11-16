@@ -1,4 +1,4 @@
-package compiler.ir.hl;
+package compiler.ir;
 
 import compiler.ir.Ir;
 import compiler.ir.SourceProvenance.Located;

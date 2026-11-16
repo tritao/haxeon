@@ -1,6 +1,8 @@
-package compiler.ir.hl;
+package compiler.hl.lower;
 
 import compiler.ir.IrTypeIdentity;
+import compiler.ir.IrFunction;
+import compiler.ir.PhiEdges;
 import compiler.hl.HlCode;
 import compiler.hl.HlCode.HlTypeDef;
 import compiler.hl.HlFunction;
@@ -23,7 +25,7 @@ import compiler.ir.Ir.IrType;
 import compiler.ir.Ir.IrValue;
 import compiler.ir.Ir.IrEnum;
 import compiler.ir.IrVerifier;
-import compiler.ir.hl.HlScalarValueLocals.HlScalarValueLocal;
+import compiler.hl.lower.HlScalarValueLocals.HlScalarValueLocal;
 import compiler.hl.incremental.HlSymbolRequest;
 import compiler.hl.incremental.HlSymbolRequest.HlRemap;
 import compiler.ir.SourceProvenance;

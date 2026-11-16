@@ -172,7 +172,7 @@ class InlineEnumPointerWordMain {
 		p.functions.push(new IrFunction("entry", entry.arguments, Void, entry.blocks, Ordinary));
 		p.entryPoint = target == HashLink ? "entry" : "main";
 		compiler.ir.IrVerifier.verify(p);
-		var bytes = target == HashLink ? new compiler.backend.hl.HlBackend().compile(p, {
+		var bytes = target == HashLink ? new compiler.hl.HlBackend().compile(p, {
 			target: target,
 			debugNames: true
 		})

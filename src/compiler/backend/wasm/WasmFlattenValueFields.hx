@@ -7,8 +7,9 @@ import compiler.ir.IrInlineValueLayout.IrInlineValueSlot;
 import compiler.ir.IrInliner;
 import compiler.ir.IrOperands;
 import compiler.ir.IrObjectTable;
+import compiler.ir.IrReceiverCheck;
 import compiler.ir.IrScalarReplacement;
-import compiler.ir.hl.PhiEdges;
+import compiler.ir.PhiEdges;
 import compiler.ir.SourceProvenance.Located;
 
 private typedef FlattenedPlace = {
@@ -27,9 +28,6 @@ private typedef PlaceMethod = {
 
 /** Rewrites value field places to physical leaf accesses before Wasm type planning. */
 class WasmFlattenValueFields {
-	/** A pseudo-field lowered as a null check on the holder, with no actual storage slot. */
-	public static inline final CHECK_FIELD = "$wasm-gc:check-holder";
-
 	final program:IrProgram;
 	final declarations:Map<String, IrObject>;
 	final values:WasmValueLayout;
@@ -161,7 +159,8 @@ class WasmFlattenValueFields {
 						// Preserve the original null access point even when the field projection itself has no scalar load.
 						if (!fresh.exists(object.id) && !aliases.exists(object.id)) {
 							var check = new IrValue(next++, "$wasm-gc-holder-check", I32);
-							replacement.instructions.push(new Located(FieldGet(check, object, CHECK_FIELD),
+							replacement.instructions
+								.push(new Located(FieldGet(check, object, IrReceiverCheck.CHECK_FIELD),
 								located.provenance));
 						}
 					case FieldGet(out, object, field) if (aliases.exists(object.id)):
@@ -178,7 +177,8 @@ class WasmFlattenValueFields {
 						if (declared != null && values.isValue(declared.type)) {
 							if (!fresh.exists(owner.id)) {
 								var check = new IrValue(next++, "$wasm-gc-holder-check", I32);
-								replacement.instructions.push(new Located(FieldGet(check, owner, CHECK_FIELD),
+								replacement.instructions
+									.push(new Located(FieldGet(check, owner, IrReceiverCheck.CHECK_FIELD),
 									located.provenance));
 							}
 							var snapshot:Array<{field:String, value:IrValue}> = [];

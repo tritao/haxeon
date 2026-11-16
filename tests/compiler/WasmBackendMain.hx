@@ -2,7 +2,6 @@ import compiler.Compiler;
 import compiler.Frontend;
 import compiler.abi.PatchPlanner.PatchDecision;
 import compiler.backend.Backend.BackendTarget;
-import compiler.backend.hl.HlBackend;
 import compiler.backend.wasm.WasmBackend;
 import compiler.backend.wasm.WasmCfgAnalysis;
 import compiler.backend.wasm.WasmEncoder;
@@ -26,8 +25,10 @@ import compiler.backend.wasm.WasmTypes.WasmValueType;
 import compiler.backend.wasm.WasmValidator;
 import compiler.backend.wasm.gc.WasmGcRoots;
 import compiler.backend.wasm.gc.WasmGcTypePlan;
+import compiler.hl.HlBackend;
 import compiler.hl.HlCode;
 import compiler.hl.HlCode.HlTypeDef;
+import compiler.hl.lower.HlLower;
 import compiler.ir.Ir.IrBlock;
 import compiler.ir.Ir.IrInstruction;
 import compiler.ir.Ir.IrProgram;
@@ -41,7 +42,6 @@ import compiler.ir.IrReachability;
 import compiler.ir.SourceProvenance;
 import compiler.ir.SourceProvenance.Located;
 import compiler.ir.codec.CanonicalIrCodec;
-import compiler.ir.hl.HlLower;
 import compiler.runtime.CompilerIntrinsics;
 import sys.io.File;
 
@@ -244,7 +244,7 @@ class WasmBackendMain {
 					for (located in block.instructions)
 						switch located.value {
 							case FieldGet(_, _,
-								name) if (name == compiler.backend.wasm.WasmFlattenValueFields.CHECK_FIELD):
+								name) if (name == compiler.ir.IrReceiverCheck.CHECK_FIELD):
 								holderChecks++;
 							case FieldGet(_, _, _):
 								fieldReads++;

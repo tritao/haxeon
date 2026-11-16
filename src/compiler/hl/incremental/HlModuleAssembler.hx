@@ -1,12 +1,13 @@
 package compiler.hl.incremental;
 
 import compiler.ir.IrBuilder;
+import compiler.ir.IrProgramAssembler;
 import compiler.ir.IrFunction;
 import compiler.ir.Ir.IrDefault;
 import compiler.ir.Ir.IrType;
 import compiler.ir.Ir.IrValue;
 import compiler.semantic.LambdaName;
-import compiler.ir.hl.HlLower;
+import compiler.hl.lower.HlLower;
 import compiler.ir.Ir.IrProgram;
 import compiler.ir.codec.IrTypeCodec;
 import compiler.abi.NameRewrite;
@@ -23,7 +24,7 @@ import compiler.hl.persistence.HlFunctionCacheStateCodec;
 import compiler.hl.persistence.HlSymbolStateCodec;
 import compiler.hl.patch.HlPatchWriter;
 import compiler.ir.Ir.IrNative;
-import compiler.ir.hl.HlDebugMetadataCache;
+import compiler.hl.lower.HlDebugMetadataCache;
 import compiler.core.AllocationMeter.PhaseAllocation;
 
 /** Persisted append-only symbol and function baseline for incremental assembly. */
@@ -181,9 +182,6 @@ class HlModuleAssembler {
 
 	/** How many of those got other indices than they were lowered with. */
 	public var movedFunctions = 0;
-
-	/** The function a live build adds to initialize an object's added fields on existing instances (see `IrProgramAssembler`). */
-	public static inline final LIVE_INITIALIZER:String = "__liveinit";
 
 	/** Methods HashLink's runtime finds by name in the prototype, which a direct call cannot stand in for. */
 	static final runtimeMethods:Array<String> = ["__string", "__compare", "__cast", "__get_field"];
@@ -459,7 +457,7 @@ class HlModuleAssembler {
 				|| skip.exists(name)
 				|| RetiredName.movedFrom(name) != null
 				|| name == "__init"
-				|| StringTools.endsWith(name, "." + LIVE_INITIALIZER))
+				|| StringTools.endsWith(name, "." + IrProgramAssembler.LIVE_INITIALIZER))
 				continue;
 			// After a restore nothing says what the last program had, so every function no build has counts as dropped.
 			if (programNames != null && !programNames.exists(name))
@@ -598,7 +596,7 @@ class HlModuleAssembler {
 				default:
 					continue;
 			}
-			var initializer = object.name + "." + LIVE_INITIALIZER,
+			var initializer = object.name + "." + IrProgramAssembler.LIVE_INITIALIZER,
 				slot = slots.get(initializer);
 			if (functions.exists(initializer) && slot != null)
 				layout.migrations.push({type: published.index, slot: slot});

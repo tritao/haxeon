@@ -1,4 +1,4 @@
-package compiler.ir.hl;
+package compiler.hl.lower;
 
 import compiler.ir.Ir;
 import compiler.ir.IrFunction;

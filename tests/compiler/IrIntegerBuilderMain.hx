@@ -1,6 +1,6 @@
 import compiler.backend.Backend.BackendTarget;
-import compiler.backend.hl.HlBackend;
 import compiler.backend.wasm.WasmBackend;
+import compiler.hl.HlBackend;
 import compiler.ir.Ir.IrProgram;
 import compiler.ir.Ir.IrType;
 import compiler.ir.IrBuilder;

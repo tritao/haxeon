@@ -31,6 +31,9 @@ import compiler.semantic.SemanticSignature;
 
 /** Builds complete IR programs and selects their required runtime surface. */
 class IrProgramAssembler {
+	/** The function a live build adds to initialize an object's added fields on existing instances. */
+	public static inline final LIVE_INITIALIZER:String = "__liveinit";
+
 	public static function generate(typed:TypedProgram, profile:TargetProfile):IrProgram {
 		var bare = new IrGenerator(ProgramFacts.of(typed), profile),
 			objects = objectsFrom(bare, typed),
@@ -170,7 +173,7 @@ class IrProgramAssembler {
 			}
 			if (statements.length > 0)
 				functions.push(generator.generateFunction({name: classDecl.name + "."
-					+ compiler.hl.incremental.HlModuleAssembler.LIVE_INITIALIZER,
+					+ LIVE_INITIALIZER,
 					role: UserFunction,
 					owner: classDecl.name,
 					isStatic: false,

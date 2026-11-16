@@ -227,7 +227,7 @@ class InlineEnumPayloadMain {
 		p.entryPoint = target == HashLink ? "entry" : "main";
 		var backendTarget:compiler.backend.Backend.BackendTarget = target == HashLink ? HashLink : target == Wasm32
 			? Wasm32 : WasmGc;
-		var bytes = target == HashLink ? new compiler.backend.hl.HlBackend().compile(p, {
+		var bytes = target == HashLink ? new compiler.hl.HlBackend().compile(p, {
 			target: backendTarget,
 			debugNames: true
 		})

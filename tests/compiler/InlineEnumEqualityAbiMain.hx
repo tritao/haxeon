@@ -238,7 +238,7 @@ class InlineEnumEqualityAbiMain {
 		}
 		var backendTarget:compiler.backend.Backend.BackendTarget = target == HashLink ? HashLink : target == Wasm32
 			? Wasm32 : WasmGc,
-			bytes = target == HashLink ? new compiler.backend.hl.HlBackend().compile(program, {
+			bytes = target == HashLink ? new compiler.hl.HlBackend().compile(program, {
 				target: backendTarget,
 				debugNames: true
 			}).bytes

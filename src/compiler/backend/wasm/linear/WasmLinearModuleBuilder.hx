@@ -8,6 +8,7 @@ import compiler.backend.MemoryContract.MemoryContractCodec;
 import compiler.backend.wasm.WasmModuleSupport.WasmClosureTypes;
 import compiler.backend.wasm.WasmFunctionLower;
 import compiler.backend.wasm.WasmEncoder;
+import compiler.backend.wasm.WasmOpportunityCensus;
 import compiler.backend.wasm.gc.WasmGcRoots;
 import compiler.backend.wasm.WasmLayout;
 import compiler.backend.wasm.EnumStringDescriptors;
@@ -223,7 +224,7 @@ class WasmLinearModuleBuilder {
 		finalizeExports();
 		if (runtimeNeutral)
 			WasmFuelMetering.instrument(module, requiredFuelFunction());
-		compiler.ir.IrOpportunityCensus.reportWasm(module, "wasm32");
+		WasmOpportunityCensus.report(module, "wasm32");
 		return {
 			artifact: {target: options.target, bytes: WasmEncoder.encode(module)},
 			runtimeTypeIds: module.runtimeTypeIds

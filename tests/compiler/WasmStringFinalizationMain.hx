@@ -428,7 +428,7 @@ class WasmStringFinalizationMain {
 			+ 'return Std.string(number)=="17" && Std.string(tone)=="Light" && Std.string(payload)=="Shade(7)" && Std.string(label)=="label" '
 			+ '&& Std.string(true)=="true" && Std.string(null)=="null" ? 42 : 1; }');
 		var program = session.compile("Main").ir;
-		var binary = target == "hl" ? new compiler.backend.hl.HlBackend().compile(program, {
+		var binary = target == "hl" ? new compiler.hl.HlBackend().compile(program, {
 			target: HashLink,
 			debugNames: true
 		})

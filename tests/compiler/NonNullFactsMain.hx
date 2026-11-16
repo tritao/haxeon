@@ -144,7 +144,7 @@ class NonNullFactsMain {
 			}
 		];
 		var checks = 0;
-		for (function_ in compiler.ir.hl.HlLower.lower(program).functions)
+		for (function_ in compiler.hl.lower.HlLower.lower(program).functions)
 			for (opcode in function_.opcodes)
 				switch opcode {
 					case NullCheck(_):

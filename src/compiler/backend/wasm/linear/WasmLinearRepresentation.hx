@@ -114,7 +114,7 @@ class WasmLinearRepresentation implements WasmValueRepresentation implements Was
 			case FieldGet(out, owner, name):
 				var candidate = scalarLocals.get(owner);
 				if (candidate == null) null;
-				else if (name == compiler.backend.wasm.WasmFlattenValueFields.CHECK_FIELD)[];
+				else if (name == compiler.ir.IrReceiverCheck.CHECK_FIELD)[];
 				else [
 					LocalGet(requiredScalarField(candidate.fields, name)),
 					LocalSet(requiredScalarValue(locals, out.id))
@@ -253,7 +253,7 @@ class WasmLinearRepresentation implements WasmValueRepresentation implements Was
 				throw 'Missing scalar Wasm call result $fieldName';
 			return [LocalGet(results[index]), LocalSet(destination)];
 		}
-		if (fieldName == compiler.backend.wasm.WasmFlattenValueFields.CHECK_FIELD)
+		if (fieldName == compiler.ir.IrReceiverCheck.CHECK_FIELD)
 			return [LocalGet(objectLocal), I32Load(0), LocalSet(destination)];
 		var field = objectField(object, fieldName);
 		if (field.nativeLayout != null) {

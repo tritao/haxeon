@@ -71,6 +71,17 @@ boundary, linear-memory and collector contracts, GC target, and test commands.
 (`CancellationToken`, `CancellationError`) and the allocation and IR pass meters. Every other compiler package may import it, and it
 imports nothing else from the compiler.
 
+The other compiler packages depend in one direction: `core` <- `syntax` <- the front end (`types`, `semantic`, `modules`, `runtime`
+and `ffi`, which import each other) <- `ir` <- `abi` <- the backends <- `compilation` and the root `Compiler` <- `service` and
+`tools`. The backends are `compiler.hl`, the one home of HashLink (lowering in `compiler.hl.lower`, then the bytecode model, writer,
+incremental assembly, patches and persistence), and `compiler.backend.wasm`; both implement `compiler.backend.Backend` and neither
+imports the other. A name the IR and a backend both use, such as `IrProgramAssembler.LIVE_INITIALIZER` or
+`IrReceiverCheck.CHECK_FIELD`, is declared in `ir` and read by the backend. The exceptions that remain: `IrScalarArguments` asks
+HashLink lowering (`HlScalarValueLocals`, `HlLoweringView`) which value places stay in registers, also on Wasm; `ir` imports
+`runtime` and `ffi` and is imported by `runtime`, `ffi`, `modules.ModuleState` and `semantic.SemanticAssembly`;
+`semantic.SemanticAssembly` and `modules.CodeIdentityTable` import `compilation.CompilationContext`, which refers back to the root
+`Compiler`; and `syntax.Parser` calls `types.analysis.FinalLocalChecker`.
+
 ## Warm builds: what landed (M0 and M1 of ADR 0003)
 
 The current plan and the measurements are in [`WARM_REBUILD_REUSE.md`](WARM_REBUILD_REUSE.md) and

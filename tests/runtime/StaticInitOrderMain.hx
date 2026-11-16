@@ -3,7 +3,7 @@ import compiler.Frontend;
 import compiler.backend.Backend.BackendTarget;
 import compiler.backend.wasm.WasmBackend;
 import compiler.hl.HlWriter;
-import compiler.ir.hl.HlLower;
+import compiler.hl.lower.HlLower;
 import runtime.Runtime;
 import sys.io.File;
 

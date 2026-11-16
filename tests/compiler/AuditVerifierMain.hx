@@ -341,7 +341,7 @@ class AuditVerifierMain {
 			criticalFunction = new IrFunction("main", critical.arguments, I32, critical.blocks, Ordinary);
 		criticalProgram.functions.push(criticalFunction);
 		var before = compiler.ir.codec.IrFunctionStateCodec.encode(criticalFunction);
-		compiler.ir.hl.HlLower.lower(criticalProgram);
+		compiler.hl.lower.HlLower.lower(criticalProgram);
 		if (before.compare(compiler.ir.codec.IrFunctionStateCodec.encode(criticalFunction)) != 0)
 			throw "Phi edge splitting mutated cached SSA";
 		IrVerifier.verify(criticalProgram);

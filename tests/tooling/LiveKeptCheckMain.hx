@@ -3,7 +3,7 @@ import compiler.hl.HlFunction;
 import compiler.hl.incremental.HlLoweredCache;
 import compiler.hl.incremental.HlLoweredFunction;
 import compiler.hl.incremental.HlSymbolTable;
-import compiler.ir.hl.HlLower;
+import compiler.hl.lower.HlLower;
 
 /**
  * HAXEON_CHECK_REUSE=1 lowers every function a live build keeps again and compares it with the kept one. This shows the check can

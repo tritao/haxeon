@@ -66,7 +66,7 @@ class EnumTagReleaseSizeMain {
 	}
 
 	static function encode(program:IrProgram, target:String):haxe.io.Bytes
-		return target == "hl" ? new compiler.backend.hl.HlBackend().compile(program, {
+		return target == "hl" ? new compiler.hl.HlBackend().compile(program, {
 			target: HashLink,
 			developmentMetadata: false,
 			debugNames: true

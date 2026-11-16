@@ -45,7 +45,8 @@ class WasmScalarLocals {
 					if (roots.exists(input.id)) {
 						var allowed = switch instruction {
 							case FieldGet(_, owner, name) if (owner.id == input.id): name
-								== WasmFlattenValueFields.CHECK_FIELD || hasField(physicalFields(roots.get(input.id)),
+								== compiler.ir.IrReceiverCheck.CHECK_FIELD
+								|| hasField(physicalFields(roots.get(input.id)),
 								name);
 							case FieldSet(owner, name, value) if (owner.id == input.id && value.id != input.id):
 								hasField(physicalFields(roots.get(input.id)), name);

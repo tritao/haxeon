@@ -1,4 +1,5 @@
 import compiler.hl.HlWriter;
+import compiler.hl.lower.HlLower;
 import compiler.ir.Ir;
 import compiler.ir.IrBuilder;
 import compiler.ir.IrFunction;
@@ -14,7 +15,6 @@ import compiler.ir.IrValueLaneLayout.IrValueLaneTarget;
 import compiler.ir.IrVerifier;
 import compiler.ir.SourceProvenance;
 import compiler.ir.SourceProvenance.Located;
-import compiler.ir.hl.HlLower;
 
 /** Execute compiler-generated lane operations through the production HashLink native ABI. */
 class ValueArrayAccessMain {

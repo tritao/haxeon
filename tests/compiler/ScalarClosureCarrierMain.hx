@@ -200,7 +200,7 @@ class ScalarClosureCarrierMain {
 		}
 		var backendTarget:compiler.backend.Backend.BackendTarget = target == HashLink ? HashLink : target == Wasm32
 			? Wasm32 : WasmGc,
-			bytes = target == HashLink ? new compiler.backend.hl.HlBackend().compile(p, {
+			bytes = target == HashLink ? new compiler.hl.HlBackend().compile(p, {
 				target: backendTarget,
 				debugNames: true
 			}).bytes : new compiler.backend.wasm.WasmBackend().compile(p, {

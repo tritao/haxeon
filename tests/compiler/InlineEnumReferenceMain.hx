@@ -119,7 +119,7 @@ class InlineEnumReferenceMain {
 		];
 		IrVerifier.verify(p);
 		var casts = 0;
-		for (fn in compiler.ir.hl.HlLower.lower(p).functions)
+		for (fn in compiler.hl.lower.HlLower.lower(p).functions)
 			for (op in fn.opcodes)
 				switch op {
 					case UnsafeCast(_, _):
@@ -145,7 +145,7 @@ class InlineEnumReferenceMain {
 			compiler.backend.Backend.BackendTarget.WasmGc
 		]) {
 			p.entryPoint = target == HashLink ? "entry" : "main";
-			var bytes = target == HashLink ? new compiler.backend.hl.HlBackend().compile(p, {
+			var bytes = target == HashLink ? new compiler.hl.HlBackend().compile(p, {
 				target: target,
 				debugNames: true
 			})
@@ -251,7 +251,7 @@ class InlineEnumReferenceMain {
 				p.entryPoint = "entry";
 			}
 			IrVerifier.verify(p);
-			var bytes = target == HashLink ? new compiler.backend.hl.HlBackend().compile(p, {
+			var bytes = target == HashLink ? new compiler.hl.HlBackend().compile(p, {
 				target: target,
 				debugNames: true
 			})

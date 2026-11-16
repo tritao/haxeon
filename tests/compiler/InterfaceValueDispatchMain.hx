@@ -105,9 +105,9 @@ class InterfaceValueDispatchMain {
 			result: Bool
 		}];
 		IrVerifier.verify(p);
-		var tables = new compiler.ir.hl.HlTypedInterfaceTables(p), entries = tables.entries.get("Owner");
+		var tables = new compiler.hl.lower.HlTypedInterfaceTables(p), entries = tables.entries.get("Owner");
 		if (entries == null || entries.length != 2) throw "Missing per-class typed entries";
-		var lowered = compiler.ir.hl.HlLower.lower(p), privateEntries = 0;
+		var lowered = compiler.hl.lower.HlLower.lower(p), privateEntries = 0;
 		for (type in lowered.types) switch type {
 			case Object(_, _, _, _, methods, _): for (method in methods) if (method.prototype
 				== compiler.hl.HlCode.TYPED_METHOD_PROTOTYPE) privateEntries++;
@@ -131,7 +131,7 @@ class InterfaceValueDispatchMain {
 		invalid.objects = p.objects;
 		invalid.interfaces = p.interfaces;
 		var badRejected = false;
-		try new compiler.ir.hl.HlTypedInterfaceTables(invalid) catch (error:Dynamic) badRejected =
+		try new compiler.hl.lower.HlTypedInterfaceTables(invalid) catch (error:Dynamic) badRejected =
 			Std.string(error).indexOf("Invalid private typed interface entry") >= 0;
 		if (!badRejected) throw "Unchecked typed method ABI was accepted";
 		// Candidate discovery must be fresh even when an existing dispatcher has the same signature.

@@ -234,7 +234,7 @@ class GenericStructOwnerMain {
 		entry.returnValue(entry.constVoid());
 		hlProgram.functions =
 			program.functions.concat([new compiler.ir.IrFunction("__entry", [], Void, entry.blocks, Ordinary)]);
-		var hashlink = new compiler.backend.hl.HlBackend().compile(hlProgram, {target: HashLink, debugNames: true});
+		var hashlink = new compiler.hl.HlBackend().compile(hlProgram, {target: HashLink, debugNames: true});
 		var hlDirectory = Sys.getEnv("TMPDIR");
 		if (hlDirectory == null || hlDirectory == "") hlDirectory = Sys.getCwd() + "/out/test-tools";
 		if (!sys.FileSystem.exists(hlDirectory)) sys.FileSystem.createDirectory(hlDirectory);

@@ -95,7 +95,7 @@ class InlineValueLayoutMain {
 		nestedCheckProgram.functions = nestedFunctions;
 		nestedCheckProgram.natives = nestedHelpers.natives();
 		IrVerifier.verify(nestedCheckProgram);
-		compiler.ir.hl.HlLower.lower(nestedCheckProgram);
+		compiler.hl.lower.HlLower.lower(nestedCheckProgram);
 		objects.set("Mixed", {
 			name: "Mixed",
 			isValue: true,
@@ -207,7 +207,7 @@ class InlineValueLayoutMain {
 		checkProgram.functions = mixedHelpers.functions();
 		checkProgram.natives = mixedHelpers.natives();
 		IrVerifier.verify(checkProgram);
-		compiler.ir.hl.HlLower.lower(checkProgram);
+		compiler.hl.lower.HlLower.lower(checkProgram);
 		var access = new IrValueArrayAccess(mixed.scalarWordBits),
 			accessBuilder = new IrBuilder();
 		var accessArray = accessBuilder.argument("array", Array(Obj("Mixed"))),
@@ -226,7 +226,7 @@ class InlineValueLayoutMain {
 		];
 		accessProgram.natives = access.natives();
 		IrVerifier.verify(accessProgram);
-		compiler.ir.hl.HlLower.lower(accessProgram);
+		compiler.hl.lower.HlLower.lower(accessProgram);
 		var specialized = new compiler.backend.wasm.gc.WasmGcValueArrayAccessors(accessProgram),
 			scalarAccessCount = 0;
 		IrVerifier.verify(specialized.program);
@@ -593,7 +593,7 @@ class InlineValueLayoutMain {
 		IrVerifier.verify(referenceProgram);
 		if (new IrInterpreter(referenceProgram).run() != 42)
 			throw "lane reference casts must preserve identity";
-		var hlCode = compiler.ir.hl.HlLower.lower(referenceProgram), casts = 0;
+		var hlCode = compiler.hl.lower.HlLower.lower(referenceProgram), casts = 0;
 		for (fn in hlCode.functions)
 			for (opcode in fn.opcodes)
 				switch opcode {

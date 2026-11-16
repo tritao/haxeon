@@ -139,8 +139,8 @@ class IrScalarArguments {
 					// judging whether the specialized callee can keep its value arguments and result in registers.
 					prepared = IrValuePhiScalarization.rewriteFunction(prepared, objects, table, layouts);
 					var specialized = IrScalarReplacement.rewrite(prepared, table, true, true);
-					var scalarLocals = new compiler.ir.hl.HlScalarValueLocals(specialized,
-						new compiler.ir.hl.HlLoweringView([], objects), _ -> 0);
+					var scalarLocals = new compiler.hl.lower.HlScalarValueLocals(specialized,
+						new compiler.hl.lower.HlLoweringView([], objects), _ -> 0);
 					for (block in specialized.blocks)
 						for (located in block.instructions)
 							switch located.value {
@@ -180,8 +180,8 @@ class IrScalarArguments {
 						terminalOnly, argumentsOnly);
 					prepared = IrValuePhiScalarization.rewriteFunction(prepared, objects, table, layouts);
 					var specialized = IrScalarReplacement.rewrite(prepared, table, true, true);
-					var scalarLocals = new compiler.ir.hl.HlScalarValueLocals(specialized,
-						new compiler.ir.hl.HlLoweringView([], objects), _ -> 0);
+					var scalarLocals = new compiler.hl.lower.HlScalarValueLocals(specialized,
+						new compiler.hl.lower.HlLoweringView([], objects), _ -> 0);
 					for (block in specialized.blocks)
 						for (located in block.instructions)
 							switch located.value {

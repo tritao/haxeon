@@ -21,6 +21,7 @@ import compiler.backend.wasm.WasmModuleSupport.WasmClosureTypes;
 import compiler.backend.wasm.EnumStringDescriptors;
 import compiler.backend.wasm.WasmFunctionLower;
 import compiler.backend.wasm.WasmEncoder;
+import compiler.backend.wasm.WasmOpportunityCensus;
 import compiler.backend.wasm.WasmExceptionLowering;
 import compiler.backend.wasm.gc.WasmGcMaps;
 import compiler.backend.wasm.gc.WasmGcTypePlan;
@@ -400,7 +401,7 @@ class WasmGcModuleBuilder {
 			WasmExceptionLowering.lower(module);
 		if (options.wasmGcAllocationCount == true)
 			instrumentGcAllocations(module);
-		compiler.ir.IrOpportunityCensus.reportWasm(module, "wasm-gc");
+		WasmOpportunityCensus.report(module, "wasm-gc");
 		return {
 			artifact: {target: options.target, bytes: WasmEncoder.encode(module)},
 			runtimeTypeIds: plan.runtimeTypeIds

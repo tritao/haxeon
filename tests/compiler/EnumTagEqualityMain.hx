@@ -53,7 +53,7 @@ class EnumTagEqualityMain {
 					}
 		if (scalarComparisons != 1 || new IrInterpreter(program).run("main") != 42)
 			throw "Tag equality changed its scalar shape or nullable/field semantics";
-		var bytes = target == "hl" ? new compiler.backend.hl.HlBackend().compile(program, {
+		var bytes = target == "hl" ? new compiler.hl.HlBackend().compile(program, {
 			target: HashLink,
 			developmentMetadata: false,
 			debugNames: true

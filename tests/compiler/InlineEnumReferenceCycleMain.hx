@@ -128,7 +128,7 @@ function main():Int return 42;
 		program.entryPoint = target == HashLink ? "entry" : "probeRoots";
 		IrVerifier.verify(program);
 		var bytes = target == HashLink
-			? new compiler.backend.hl.HlBackend().compile(program, {target: target, debugNames: true}).bytes
+			? new compiler.hl.HlBackend().compile(program, {target: target, debugNames: true}).bytes
 			: new compiler.backend.wasm.WasmBackend().compile(program,
 			{
 				target: target,

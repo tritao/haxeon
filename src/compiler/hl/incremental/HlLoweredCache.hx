@@ -1,6 +1,6 @@
 package compiler.hl.incremental;
 
-import compiler.ir.hl.HlDebugMetadataCache;
+import compiler.hl.lower.HlDebugMetadataCache;
 
 /**
  * The lowered functions of the last plain build, by name, for the next one (see `HlLoweredFunction`), with the debugger metadata

@@ -190,7 +190,7 @@ class RawRepresentableMain {
 			p.functions.push(new IrFunction("rawEntry", b.arguments, Void, b.blocks, Ordinary));
 			p.entryPoint = "rawEntry";
 		}
-		var bytes = target == "hl" ? new compiler.backend.hl.HlBackend().compile(p,
+		var bytes = target == "hl" ? new compiler.hl.HlBackend().compile(p,
 			{target: HashLink, debugNames: true})
 			.bytes : new compiler.backend.wasm.WasmBackend().compile(p, {
 				target: target == "wasm32" ? Wasm32 : WasmGc,

@@ -3,7 +3,7 @@ import compiler.hl.HlCode.HlDebugSection;
 import compiler.hl.HlValidator;
 import compiler.hl.HlWriter;
 import compiler.hl.HlWriterCache;
-import compiler.ir.hl.HlLower;
+import compiler.hl.lower.HlLower;
 
 /** The writer cache keeps what it learned about a function when the list of debug files changes, except the function's encoding. */
 class HlWriterCacheMain {

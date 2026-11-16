@@ -1589,7 +1589,7 @@ class WasmFunctionLower {
 					context.representation.aggregates.newObject(compiler.ir.IrTypeTools.valueObjectName(output.type),
 					requiredLocal(values, output.id)));
 			case FieldGet(output,
-				object, fieldName) if (fieldName == compiler.backend.wasm.WasmFlattenValueFields.CHECK_FIELD):
+				object, fieldName) if (fieldName == compiler.ir.IrReceiverCheck.CHECK_FIELD):
 				var check:Array<WasmInstruction> = [
 					LocalGet(requiredLocal(values, object.id)),
 					Std.isOfType(context.representation.values, WasmGcRepresentation) ? RefIsNull : I32Eqz,

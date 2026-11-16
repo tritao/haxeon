@@ -59,7 +59,7 @@ class TextEditIntentInlineMain {
 			entry.returnValue(entry.constVoid());
 			program.functions.push(new IrFunction("entry", entry.arguments, Void, entry.blocks, Ordinary));
 			program.entryPoint = "entry";
-			sys.io.File.saveBytes(module, new compiler.backend.hl.HlBackend().compile(program, {
+			sys.io.File.saveBytes(module, new compiler.hl.HlBackend().compile(program, {
 				target: HashLink,
 				debugNames: true
 			}).bytes);

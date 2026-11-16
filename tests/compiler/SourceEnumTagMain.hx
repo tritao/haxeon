@@ -130,7 +130,7 @@ class SourceEnumTagMain {
 			program.entryPoint = "cacheEntry";
 		}
 		compiler.ir.IrVerifier.verify(program);
-		var bytes = target == "hl" ? new compiler.backend.hl.HlBackend().compile(program, {
+		var bytes = target == "hl" ? new compiler.hl.HlBackend().compile(program, {
 			target: HashLink,
 			debugNames: true
 		})

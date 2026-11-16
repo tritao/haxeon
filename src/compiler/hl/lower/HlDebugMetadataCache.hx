@@ -1,4 +1,4 @@
-package compiler.ir.hl;
+package compiler.hl.lower;
 
 import compiler.hl.HlCode.HlFunctionIdentity;
 import compiler.hl.HlFunction;

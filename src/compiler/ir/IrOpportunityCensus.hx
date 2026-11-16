@@ -8,7 +8,7 @@ private typedef CensusAllocation = {
 	final local:Bool;
 	final reason:String;
 }
-private typedef CensusOpcode = {
+typedef CensusOpcode = {
 	final opcode:String;
 	final count:Int;
 }
@@ -22,75 +22,10 @@ private typedef CensusRow = {
 
 /** Read-only post-pass census. Weights are static 8^natural-loop-depth, not measured execution counts. */
 class IrOpportunityCensus {
-	/** Report the actual lowered HashLink operations, after register allocation. */
-	public static function reportHashLink(code:compiler.hl.HlCode, indices:Map<String, Int>):Void {
-		if (Sys.getEnv("HAXEON_IR_CENSUS") != "1")
-			return;
-		compiler.hl.HlWriter.reportSize(code);
-		var names:Map<Int, String> = [];
-		for (name => index in indices)
-			names.set(index, name);
-		var functions = code.functions.copy();
-		functions.sort((a, b) -> a.functionIndex - b.functionIndex);
-		for (fn in functions) {
-			var histogram:Map<String, Int> = [];
-			for (op in fn.opcodes)
-				addOpcode(histogram, constructorName(Std.string(op)));
-			var name = names.get(fn.functionIndex);
-			Sys.stderr()
-				.writeString("EMITTED_CENSUS {\"target\":\"hl\",\"name\":"
-				+ haxe.Json.stringify(name == null ? "#" + fn.functionIndex : name)
-				+ ",\"index\":"
-				+ fn.functionIndex
-				+ ",\"instructions\":"
-				+ fn.opcodes.length
-				+ ",\"bytes\":"
-				+ compiler.hl.HlWriter.encodeFunction(fn).length
-				+ ",\"histogram\":"
-				+ encodeHistogram(sortedHistogram(histogram))
-				+ "}\n");
-		}
-	}
-
-	/** Report the final Wasm instruction model; linked pre-encoded functions are explicitly marked opaque. */
-	public static function reportWasm(module:compiler.backend.wasm.WasmModule, target:String):Void {
-		if (Sys.getEnv("HAXEON_IR_CENSUS") != "1")
-			return;
-		var segments = [
-			for (segment in module.data)
-				'{"category":'
-				+ haxe.Json.stringify(segment.censusCategory == null ? "unclassified data" : segment.censusCategory)
-				+ ',"bytes":'
-				+ compiler.backend.wasm.WasmEncoder.encodedDataSegmentLength(segment)
-				+ '}'
-		];
-		Sys.stderr().writeString('SIZE_DATA_CENSUS {"target":' + haxe.Json.stringify(target) + ',"segments":['
-			+ segments.join(",") + ']}\n');
-		for (fn in module.functions) {
-			var histogram:Map<String, Int> = [];
-			for (op in fn.body)
-				addOpcode(histogram, constructorName(Std.string(op)));
-			Sys.stderr()
-				.writeString("EMITTED_CENSUS {\"target\":"
-				+ haxe.Json.stringify(target)
-				+ ",\"name\":"
-				+ haxe.Json.stringify(fn.name)
-				+ ",\"instructions\":"
-				+ fn.body.length
-				+ ",\"opaqueBytes\":"
-				+ (fn.encodedBody == null ? 0 : fn.encodedBody.length)
-				+ ",\"bytes\":"
-				+ compiler.backend.wasm.WasmEncoder.encodeFunctionBody(fn).length
-				+ ",\"histogram\":"
-				+ encodeHistogram(sortedHistogram(histogram))
-				+ "}\n");
-		}
-	}
-
-	static function addOpcode(histogram:Map<String, Int>, opcode:String):Void
+	public static function addOpcode(histogram:Map<String, Int>, opcode:String):Void
 		histogram.set(opcode, (histogram.exists(opcode) ? histogram.get(opcode) : 0) + 1);
 
-	static function sortedHistogram(histogram:Map<String, Int>):Array<CensusOpcode> {
+	public static function sortedHistogram(histogram:Map<String, Int>):Array<CensusOpcode> {
 		var names = [for (name in histogram.keys()) name];
 		names.sort(Reflect.compare);
 		return [for (name in names) {
@@ -100,7 +35,7 @@ class IrOpportunityCensus {
 
 	// Anonymous object fields can be enumerated in different orders on HashLink. Construct JSON in a fixed order so
 	// diagnostic output is reproducible, including the per-opcode and allocation records.
-	static function encodeHistogram(histogram:Array<CensusOpcode>):String
+	public static function encodeHistogram(histogram:Array<CensusOpcode>):String
 		return "[" + [
 			for (entry in histogram)
 				"{\"opcode\":" + haxe.Json.stringify(entry.opcode) + ",\"count\":" + entry.count + "}"
@@ -476,7 +411,7 @@ class IrOpportunityCensus {
 		};
 	}
 
-	static function constructorName(value:String):String {
+	public static function constructorName(value:String):String {
 		var end = value.indexOf("(");
 		return end < 0 ? value : value.substr(0, end);
 	}

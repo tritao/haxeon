@@ -1,7 +1,7 @@
 package compiler.hl.incremental;
 
+import compiler.hl.lower.HlLoweringView.HlFact;
 import compiler.ir.IrFunction;
-import compiler.ir.hl.HlLoweringView.HlFact;
 
 /**
  * A lowered function with everything it leans on outside itself: the requests lowering made to the symbol tables and the function

@@ -58,7 +58,7 @@ class FunctionValueLanesMain {
 				program.entryPoint = "run";
 				var path = "out/function-value-lanes.hl";
 				sys.io.File.saveBytes(path,
-					compiler.hl.HlWriter.encode(compiler.ir.hl.HlLower.lower(program)).flatten());
+					compiler.hl.HlWriter.encode(compiler.hl.lower.HlLower.lower(program)).flatten());
 				var process = new sys.io.Process(Sys.getEnv("HAXEON_HASHLINK_DIR") + "/hl", [path]),
 					error = process.stderr.readAll().toString(),
 					status = process.exitCode();

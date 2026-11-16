@@ -165,7 +165,7 @@ class WasmGcRepresentation implements WasmValueRepresentation implements WasmAgg
 		}
 		var objectName = requireObjectName(object.type),
 			typeIndex = plan.objectType(objectName);
-		if (fieldName == WasmFlattenValueFields.CHECK_FIELD)
+		if (fieldName == compiler.ir.IrReceiverCheck.CHECK_FIELD)
 			return [LocalGet(objectLocal), StructGet(typeIndex, 0), Drop];
 		var field:IrObjectField = plan.objectField(objectName, fieldName);
 		if (plan.usesBytePayload(objectName) && field.nativeLayout != null)
@@ -430,7 +430,7 @@ class WasmGcRepresentation implements WasmValueRepresentation implements WasmAgg
 			case FieldGet(out, owner, name):
 				var candidate = functionState().scalarLocals.get(owner);
 				if (candidate == null) null;
-				else if (name == WasmFlattenValueFields.CHECK_FIELD)[];
+				else if (name == compiler.ir.IrReceiverCheck.CHECK_FIELD)[];
 				else [
 					LocalGet(scalarFieldLocal(candidate, name)),
 					LocalSet(scalarValueLocal(locals, out.id))

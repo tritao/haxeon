@@ -20,7 +20,7 @@ class FunctionGlobalAbiMain {
 		b.returnValue(b.callClosure(read, [], I32));
 		p.functions = [new IrFunction("main", b.arguments, I32, b.blocks, Ordinary)];
 		compiler.ir.IrVerifier.verify(p);
-		var code = compiler.ir.hl.HlLower.lower(p, new Map()), readSignature = -1;
+		var code = compiler.hl.lower.HlLower.lower(p, new Map()), readSignature = -1;
 		for (index in 0...2) switch code.types[code.globals[index]] {
 			case Parameterized(kind, parameter) if (kind == HlType.Null): switch code.types[parameter] {
 					case Function(arguments, result):

@@ -1,4 +1,4 @@
-package compiler.backend.hl;
+package compiler.hl;
 
 import compiler.backend.Backend;
 import compiler.backend.Backend.BackendOptions;
@@ -6,7 +6,7 @@ import compiler.backend.Backend.BackendResult;
 import compiler.backend.Backend.BackendTarget;
 import compiler.hl.HlWriter;
 import compiler.ir.Ir.IrProgram;
-import compiler.ir.hl.HlLower;
+import compiler.hl.lower.HlLower;
 
 /** Stateless HashLink backend adapter behind the same semantic backend seam. */
 class HlBackend implements Backend {

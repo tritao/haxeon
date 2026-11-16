@@ -3,7 +3,7 @@ package compiler.hl.incremental;
 import compiler.hl.HlFunction;
 import compiler.hl.HlFunction.HlInstruction;
 import compiler.hl.incremental.HlSymbolRequest.HlRemap;
-import compiler.ir.hl.HlLoweringView;
+import compiler.hl.lower.HlLoweringView;
 
 /** A lowered function given the indices of a build, or the reason it cannot have them. */
 typedef HlLinked = {

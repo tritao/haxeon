@@ -82,7 +82,7 @@ class WasmClosureReceiverRuntimeMain {
 			+ 'if(readTone(Light)!=Light || readHeat(Hot)!=Hot) return 1; '
 			+ 'try { var wrong:Heat->Heat=cast tone; wrong(Hot); return 2; } catch(error:Dynamic) {} return 42; }');
 		var program = session.compile("Main").ir;
-		var binary = target == "hl" ? new compiler.backend.hl.HlBackend().compile(program, {
+		var binary = target == "hl" ? new compiler.hl.HlBackend().compile(program, {
 			target: HashLink,
 			debugNames: true
 		})
