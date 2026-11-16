@@ -235,7 +235,13 @@ class Runtime {
 		});
 
 	public static function dispose(module:LoadedModule):Void {
+		// The collection that decides scans the stack conservatively: clear what earlier calls left below this frame, then
+		// decide in frames laid on the cleared stack (this frame was laid before the clearing).
 		RuntimeNative.clear_unused_stack();
+		disposeOnClearedStack(module);
+	}
+
+	static function disposeOnClearedStack(module:LoadedModule):Void {
 		retirementMutex.acquire();
 		try {
 			if (!tryDispose(module) && retirementBacklog.indexOf(module) < 0)
@@ -249,8 +255,12 @@ class Runtime {
 
 	/** Retry modules whose reclamation was delayed by retained or conservative borrowers. */
 	public static function retryRetirements():Int {
-		// The collection that decides scans the stack conservatively: clear what earlier calls left below this frame first.
+		// As in dispose: clear the stack, then decide in frames laid on it.
 		RuntimeNative.clear_unused_stack();
+		return retryRetirementsOnClearedStack();
+	}
+
+	static function retryRetirementsOnClearedStack():Int {
 		retirementMutex.acquire();
 		try {
 			var write = 0;
